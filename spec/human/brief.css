@@ -1,0 +1,35 @@
+/* Compact variant of page.css for the condensed brief: no cover page, no forced
+   section breaks, tighter vertical rhythm. Everything else is inherited by copy. */
+.cover {
+  height: auto;
+  break-after: auto;
+  margin: 0 0 6mm 0;
+  padding-bottom: 4mm;
+  border-bottom: 2px solid var(--accent);
+  display: block;
+}
+.cover-title { font-size: 21pt; margin-bottom: 2mm; }
+.cover-sub { font-size: 9.6pt; max-width: none; }
+
+h1 {
+  break-before: auto;
+  page-break-before: auto;
+  font-size: 14pt;
+  margin: 6mm 0 3mm;
+  padding-bottom: 1.5mm;
+  border-bottom: 1.5px solid var(--accent);
+}
+h1:first-of-type { margin-top: 0; }
+h2 { font-size: 11.5pt; margin: 4.5mm 0 2mm; }
+
+body { font-size: 9.7pt; line-height: 1.44; }
+p { margin-bottom: 2.2mm; }
+pre { font-size: 7.8pt; margin: 2mm 0 3mm; padding: 2mm 2.5mm; }
+table { font-size: 8.2pt; margin: 2mm 0 3mm; }
+th, td { padding: 1.1mm 1.7mm; }
+blockquote { margin: 2.5mm 0; padding: 2mm 3mm; }
+ul, ol { margin-bottom: 2.5mm; }
+li { margin-bottom: 0.9mm; }
+figure.diagram { margin: 3mm 0 3.5mm; }
+figure.diagram svg { max-height: 88mm; }
+hr { margin: 4mm 0; }

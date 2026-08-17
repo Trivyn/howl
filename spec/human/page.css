@@ -1,0 +1,170 @@
+/* Print stylesheet for the HOWL spec PDFs.
+   Optimised for reading a dense technical document on paper: generous measure,
+   tables that survive page breaks, and code that never overflows the column. */
+
+@page {
+  size: A4;
+  margin: 20mm 18mm 20mm 18mm;
+}
+
+:root {
+  --ink: #16181d;
+  --muted: #5b6270;
+  --rule: #d8dce4;
+  --accent: #1f4e79;
+  --code-bg: #f6f7f9;
+  --note-bg: #f4f7fb;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: "Charter", "Georgia", "Times New Roman", "Arial Unicode MS", serif;
+  font-size: 10.2pt;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+/* ---------- cover ---------- */
+.cover {
+  height: 232mm;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  border-bottom: none;
+  break-after: page;
+}
+.cover-title {
+  font-size: 30pt;
+  line-height: 1.15;
+  margin: 0 0 6mm 0;
+  border: none;
+  padding: 0;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.cover-sub {
+  font-size: 12pt;
+  color: var(--muted);
+  margin: 0;
+  max-width: 120mm;
+  line-height: 1.45;
+}
+
+/* ---------- headings ---------- */
+h1, h2, h3, h4 {
+  font-family: "Helvetica Neue", "Arial Unicode MS", sans-serif;
+  color: var(--ink);
+  line-height: 1.25;
+  break-after: avoid;
+  page-break-after: avoid;
+}
+h1 {
+  font-size: 17pt;
+  margin: 0 0 4mm 0;
+  padding-bottom: 2mm;
+  border-bottom: 2px solid var(--accent);
+  break-before: page;
+  page-break-before: always;
+}
+h1:first-of-type { break-before: auto; page-break-before: auto; }
+h2 { font-size: 13pt; margin: 7mm 0 2.5mm; color: var(--accent); }
+h3 { font-size: 11pt; margin: 5mm 0 2mm; }
+h4 { font-size: 10.2pt; margin: 4mm 0 1.5mm; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+p { margin: 0 0 2.6mm; orphans: 3; widows: 3; }
+
+/* ---------- code ---------- */
+code, pre, kbd {
+  font-family: "SF Mono", "Menlo", "Consolas", "Arial Unicode MS", monospace;
+  font-variant-ligatures: none;
+}
+code {
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.5pt 2pt;
+  border-radius: 2px;
+  word-break: break-word;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: 3px;
+  padding: 2.5mm 3mm;
+  margin: 2.5mm 0 3.5mm;
+  font-size: 8.1pt;
+  line-height: 1.4;
+  overflow-x: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+  break-inside: avoid-page;
+}
+pre code { background: none; padding: 0; font-size: inherit; }
+
+/* ---------- tables ---------- */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 2.5mm 0 4mm;
+  font-size: 8.6pt;
+  line-height: 1.38;
+}
+thead { display: table-header-group; }
+tr { break-inside: avoid; page-break-inside: avoid; }
+th, td {
+  border: 1px solid var(--rule);
+  padding: 1.4mm 2mm;
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  background: var(--note-bg);
+  font-family: "Helvetica Neue", sans-serif;
+  font-size: 8.2pt;
+  font-weight: 600;
+}
+td code { font-size: 0.92em; }
+
+/* ---------- blockquote: used throughout for rationale asides ---------- */
+blockquote {
+  margin: 3mm 0;
+  padding: 2.5mm 3.5mm;
+  background: var(--note-bg);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 3px 3px 0;
+  color: #23303f;
+  break-inside: avoid-page;
+}
+blockquote > :last-child { margin-bottom: 0; }
+blockquote table { font-size: 8.2pt; background: #fff; }
+
+/* ---------- lists ---------- */
+ul, ol { margin: 0 0 3mm; padding-left: 6mm; }
+li { margin-bottom: 1.2mm; }
+li > ul, li > ol { margin-top: 1.2mm; }
+
+/* ---------- diagrams ---------- */
+figure.diagram {
+  margin: 4mm 0 5mm;
+  text-align: center;
+  break-inside: avoid-page;
+  page-break-inside: avoid;
+}
+figure.diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+.diagram-missing { color: #b00; font-style: italic; }
+
+hr {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 6mm 0;
+}
+
+a { color: var(--accent); text-decoration: none; }
+strong { font-weight: 600; }
