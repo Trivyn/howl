@@ -1,0 +1,251 @@
+;; ============================================================
+;; HOWL test harness
+;;
+;; What is testable today is the VERDICT DISCIPLINE (§6.2) and the
+;; structural invariants — the reasoning pipeline is still M0/M1.
+;;
+;; These are not placeholder tests. §10 item 4 calls the verdict rule a
+;; SAFETY property and says to test it by trying to break it, in all
+;; three rows, because the failure modes are opposite: folding
+;; `inconclusive` into `coherent` gives CI a false pass, and folding it
+;; into `incoherent` makes every ontology with an unsupported construct
+;; look broken and trains users to ignore the gate.
+;;
+;; The sharpest row is #2 below — a finding under PARTIAL coverage is
+;; still definitive, because inference is monotone. An earlier draft of
+;; the spec got exactly that row wrong, sending every out-of-profile run
+;; to inconclusive and thereby discarding a sound result.
+;; ============================================================
+
+(module test
+  (@doc "Verdict-discipline and structural-invariant tests")
+
+  (import rdf (IRI Triple))
+  (import types (Node RoleId Derived Addressed EdgePair Context Saturation
+                 Omission Coverage Termination SubPair Findings Outcome Fault
+                 ReasonerConfig
+                 default-config emit-edge make-context
+                 outcome-is-complete findings-are-incoherent))
+  (import howl (Verdict verdict classify))
+
+  ;; ============================================================
+  ;; Fixture builders
+  ;; ============================================================
+
+  (fn empty-saturation ((arena Arena))
+    (@intent "A Saturation with no contexts — enough to hang an Outcome on")
+    (@spec ((Arena) -> Saturation))
+    (@alloc arena)
+    (record-new Saturation
+      (contexts  (map-new arena Node Context))
+      (active    (set-new arena Node))
+      (iteration 0)))
+
+  (fn make-findings ((arena Arena) (inconsistent Bool) (unsat-count Int))
+    (@intent "Findings with a controllable inconsistency flag and unsatisfiable-set size")
+    (@spec ((Arena Bool Int) -> Findings))
+    (@alloc arena)
+    (let ((mut unsat (list-new arena IRI)))
+      (do
+        (when (> unsat-count 0)
+          (list-push unsat (record-new IRI (value "http://example.org/Unsat"))))
+        (record-new Findings
+          (inconsistent  inconsistent)
+          (unsatisfiable unsat)
+          (subsumptions  (list-new arena SubPair))
+          (imports-seen  (list-new arena IRI))))))
+
+  (fn make-outcome ((arena Arena) (inconsistent Bool) (unsat-count Int)
+                    (omitted-count Int) (reached-fixpoint Bool))
+    (@intent "Assemble an Outcome across the three independent axes")
+    (@spec ((Arena Bool Int Int Bool) -> Outcome))
+    (@alloc arena)
+    (let ((mut omitted (list-new arena Omission)))
+      (do
+        (when (> omitted-count 0)
+          (list-push omitted
+            (union-new Omission unresolved-import
+              (record-new IRI (value "http://example.org/missing-import")))))
+        (record-new Outcome
+          (coverage    (record-new Coverage (omitted omitted)))
+          (termination (if reached-fixpoint
+                         (union-new Termination fixpoint)
+                         (union-new Termination resource-limit 1000)))
+          (findings    (make-findings arena inconsistent unsat-count))
+          (saturation  (empty-saturation arena))))))
+
+  (fn verdict-eq ((a Verdict) (b Verdict))
+    (@intent "Compare two verdicts")
+    (@spec ((Verdict Verdict) -> Bool))
+    (@pure)
+    (== a b))
+
+  ;; ============================================================
+  ;; Verdict discipline (§6.2, §10 item 4)
+  ;; ============================================================
+
+  ;; Row 3: nothing found, full coverage, fixpoint reached.
+  (fn test-coherent-requires-complete ((arena Arena))
+    (@intent "Clean findings + empty omissions + fixpoint => coherent")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (verdict-eq (verdict (make-outcome arena false 0 0 true)) 'verdict-coherent))
+
+  ;; Row 2, first half: coverage gap alone blocks a coherent verdict.
+  ;; This is the false-pass guard — the absence of a finding under
+  ;; partial coverage carries NO information.
+  (fn test-omission-blocks-coherent ((arena Arena))
+    (@intent "Clean findings but a non-empty omission list => inconclusive, never coherent")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (verdict-eq (verdict (make-outcome arena false 0 1 true)) 'verdict-inconclusive))
+
+  ;; Row 2, second half: hitting the round cap blocks it too.
+  (fn test-cap-blocks-coherent ((arena Arena))
+    (@intent "Clean findings but termination = resource-limit => inconclusive")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (verdict-eq (verdict (make-outcome arena false 0 0 false)) 'verdict-inconclusive))
+
+  ;; Row 1, THE IMPORTANT ONE. A contradiction derived from a SUBSET of
+  ;; the ontology is a contradiction in the whole ontology, because
+  ;; inference is monotone — restoring an omitted axiom can only add
+  ;; conclusions, never retract one. Reporting this as inconclusive
+  ;; would discard a sound result.
+  (fn test-finding-beats-partial-coverage ((arena Arena))
+    (@intent "Inconsistent findings under BOTH a coverage gap and a cap => still incoherent")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (verdict-eq (verdict (make-outcome arena true 0 1 false)) 'verdict-incoherent))
+
+  ;; Coherence is the WEAKEST of the three conditions: an unsatisfiable
+  ;; named class makes an ontology incoherent whether or not it is
+  ;; inconsistent. `consistent: true` with a non-empty unsatisfiable set
+  ;; is a valid report and a FAILING condition.
+  (fn test-consistent-but-incoherent ((arena Arena))
+    (@intent "inconsistent = false but unsatisfiable non-empty => incoherent")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (verdict-eq (verdict (make-outcome arena false 1 0 true)) 'verdict-incoherent)
+         (findings-are-incoherent (make-findings arena false 1))))
+
+  ;; ============================================================
+  ;; Structural invariants
+  ;; ============================================================
+
+  ;; §7 lists initialization as a Z3-reachable structural obligation,
+  ;; and §5.2 explains why: seeds written into the STORE leave every
+  ;; queue empty, so `active` is empty at round 0, the driver reports
+  ;; fixpoint before firing a single rule, and the run returns an
+  ;; instant empty classification that reads as success.
+  (fn test-context-starts-with-empty-store ((arena Arena))
+    (@intent "A fresh context has an EMPTY subsumer set — seeds belong in the delta")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((ctx (make-context arena
+                 (union-new Node class-node
+                   (record-new IRI (value "http://example.org/C"))))))
+      (== (list-len (set-elements (. ctx subsumers))) 0)))
+
+  (fn node-iri ((n Node))
+    (@intent "The IRI text of a class or individual node; empty for a fresh node")
+    (@spec ((Node) -> String))
+    (match n
+      ((class-node i)      (. i value))
+      ((individual-node i) (. i value))
+      ((fresh-node _)      "")))
+
+  ;; A logical edge is ONE fact stored as TWO halves, and which half
+  ;; goes where is the part that matters: emitting only the successor
+  ;; looks complete from the deriving context and fails only in the
+  ;; CONSUMING rules, since CR4/CR5 read `preds` and CR7 reads both
+  ;; sides. The symptom is under-derivation with no error.
+  ;;
+  ;; `EdgePair` now makes "both halves exist" a TYPE guarantee and the
+  ;; destinations a proven postcondition, so this test is a
+  ;; belt-and-braces check on the wiring rather than the primary
+  ;; defence it used to be.
+  (fn test-emit-edge-addresses-both-halves ((arena Arena))
+    (@intent "emit-edge sends the successor half to X and the predecessor half to Y")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (union-new Node class-node (record-new IRI (value "http://example.org/X"))))
+          (y (union-new Node class-node (record-new IRI (value "http://example.org/Y"))))
+          (r (union-new RoleId named-role (record-new IRI (value "http://example.org/r"))))
+          (pair (emit-edge arena x r y)))
+      (if (string-eq (node-iri (. (. pair succ-half) to)) "http://example.org/X")
+        (string-eq (node-iri (. (. pair pred-half) to)) "http://example.org/Y")
+        false)))
+
+  ;; The stub must not hand back an Outcome. An Outcome carries a
+  ;; verdict; a Fault does not. Until the rules land, silence must be
+  ;; unreadable as success.
+  (fn test-stub-refuses-rather-than-passing ((arena Arena))
+    (@intent "classify returns a Fault, never an Outcome that could read as coherent")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (classify arena (list-new arena Triple) (list-new arena IRI) (default-config))
+      ((ok _)    false)
+      ((error _) true)))
+
+  ;; ============================================================
+
+  (fn print-test-result ((name String) (passed Bool))
+    (@intent "Print a test result with a pass/fail indicator")
+    (@spec ((String Bool) -> Unit))
+    (if passed
+      (do (print "[PASS] ") (println name))
+      (do (print "[FAIL] ") (println name))))
+
+  (fn main ()
+    (@intent "Run the verdict-discipline and structural-invariant tests")
+    (@spec (() -> Int))
+    :c-name "main"
+    (with-arena 4194304
+      (let ((mut passed 0)
+            (mut failed 0))
+        (do
+          (println "HOWL — verdict discipline & structural invariants")
+          (println "========================================")
+
+          (let ((r (test-coherent-requires-complete arena)))
+            (print-test-result "verdict: complete + clean => coherent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-omission-blocks-coherent arena)))
+            (print-test-result "verdict: omission blocks coherent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-cap-blocks-coherent arena)))
+            (print-test-result "verdict: round cap blocks coherent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-finding-beats-partial-coverage arena)))
+            (print-test-result "verdict: finding beats partial coverage" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-consistent-but-incoherent arena)))
+            (print-test-result "verdict: consistent-but-incoherent => incoherent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-context-starts-with-empty-store arena)))
+            (print-test-result "init: context store starts empty" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-emit-edge-addresses-both-halves arena)))
+            (print-test-result "edges: emit-edge addresses both halves" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-stub-refuses-rather-than-passing arena)))
+            (print-test-result "stub: classify refuses, never passes" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (println "")
+          (println "========================================")
+          (print "Passed: ")
+          (println (int-to-string arena passed))
+          (print "Failed: ")
+          (println (int-to-string arena failed))
+          (println "========================================")
+
+          (if (== failed 0) 0 1))))))

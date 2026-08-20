@@ -1,0 +1,183 @@
+;; ============================================================
+;; The fixpoint driver  —  SPEC.md §6.5, §6.8
+;;
+;; GROWL's `engine-run` is a semi-naive fixpoint: apply rule groups to
+;; the delta, collect new facts, dedup, iterate until the delta is
+;; empty (bounded by max-iterations, cancellable via cancel-ptr).
+;; HOWL's saturation is THE SAME LOOP with Fact = Derived instead of
+;; Fact = Triple, and one structural difference: GROWL's delta is a
+;; single global set, while HOWL's is SHARDED ACROSS CONTEXTS. "The
+;; delta is empty" becomes "`active` is empty" — no context has
+;; anything in its inbox. The loop shape is unchanged; what it
+;; iterates over is not.
+;;
+;; ROUND SEMANTICS ARE BINDING, NOT AN IMPLEMENTATION CHOICE (§6.8).
+;; The driver advances in semi-naive rounds with a barrier: every
+;; context processes the messages it held at the start of round n, and
+;; messages produced during round n are delivered for round n+1. Round
+;; count is therefore a function of the input alone, so max-iterations
+;; cuts at the same point on every host at any worker count. Within a
+;; round, work distribution stays free.
+;;
+;; This costs throughput against pure ELK-style racing — a barrier
+;; idles workers that finish early. That is the price of a
+;; DECISION-BEARING cap: the consumer's max_iterations flips a verdict,
+;; so it cannot be allowed to depend on core count.
+;;
+;;   Sₙ   := Sₙ₋₁ ∪ Δₙ          freeze at round start, INCLUDING
+;;                              this round's arrivals
+;;   for δ ∈ Δₙ: join δ against Sₙ      so Δₙ × Δₙ is covered too
+;;   Δₙ₊₁ := conclusionsₙ \ Sₙ  NOVEL facts only
+;;   active := contexts with a non-empty Δₙ₊₁
+;;
+;; TWO SUBTLETIES, BOTH SILENT WHEN WRONG:
+;;
+;; 1. The snapshot must INCLUDE Δₙ. Scanning the pre-round state Sₙ₋₁
+;;    instead loses conclusions permanently: if a CR4 subsumer and its
+;;    matching predecessor edge both arrive in round n, neither sees
+;;    the other, and in round n+1 neither is in the delta any more — so
+;;    the conclusion is never derived, by any handler, ever. CR2 and
+;;    CR7 are self-joins and so are MORE exposed. Freezing Sₙ before
+;;    any joining begins keeps the round a pure function of its input,
+;;    so this costs no determinism.
+;;
+;; 2. The `\ Sₙ` is not an optimization — without it the loop does not
+;;    terminate. Conclusions must be subtracted from the ACCUMULATED
+;;    store, not merely deduplicated within the batch. Take A ⊑ B,
+;;    B ⊑ A: every round CR1 re-derives both, already stored, and a
+;;    batch-only dedup keeps them because they are distinct WITHIN the
+;;    batch. The frontier never empties and an ordinary cyclic
+;;    hierarchy burns its budget and returns inconclusive forever.
+;;
+;; Conclusions are held for Δₙ₊₁ rather than folded into Sₙ as they are
+;; produced — that is what keeps a round's own output from re-entering
+;; the same round and making the result order-dependent.
+;; ============================================================
+
+(module saturate
+  (@doc "Semi-naive barrier-synchronized saturation driver")
+
+  (import types (Node NormAxiom Derived Addressed Context Saturation
+                 Termination Fault ReasonerConfig
+                 context-is-active))
+  (import el (apply-el-rules))
+
+  (export
+    RoundResult
+    saturate
+    budget-exhausted
+    frontier-is-empty)
+
+  ;; The driver returns termination alongside the state, never a bare
+  ;; Saturation (§6.5): a capped run and a coherent ontology are
+  ;; indistinguishable at the Saturation level, and conflating them is
+  ;; how a validator returns a false pass.
+  (type RoundResult (record
+    (saturation  Saturation)
+    (termination Termination)))
+
+  ;; Takes an arena because `set-elements` materializes the element
+  ;; list; it allocates, so it is not `@pure`.
+  (fn frontier-is-empty ((arena Arena) (sat Saturation))
+    (@intent "The global fixpoint is reached when no context has anything in its inbox")
+    (@spec ((Arena Saturation) -> Bool))
+    (@alloc arena)
+    (== (list-len (set-elements (. sat active))) 0))
+
+  (fn budget-exhausted ((sat Saturation) (config ReasonerConfig))
+    (@intent "Whether the permitted number of completed rounds has been used up")
+    (@spec ((Saturation ReasonerConfig) -> Bool))
+    (@pure)
+    ;; `max-iterations = n` permits n COMPLETED global rounds.
+    ;; The @pre restates the field's own `(Int 0 ..)` range. That looks
+    ;; redundant and is not: the WP checker does not carry range
+    ;; constraints from a record field declaration into the proof, so
+    ;; without it the zero-budget property below is unprovable.
+    (@pre  {(. sat iteration) >= 0})
+    (@post {$result == ((. sat iteration) >= (. config max-iterations))})
+    ;; The budget-zero case, pinned as its own obligation because it is
+    ;; the boundary two conforming implementations most easily disagree
+    ;; on: max-iterations = 0 performs NO rounds and must always report
+    ;; the run incomplete. Δ₀ is never empty — the signature carries
+    ;; owl:Thing and owl:Nothing, every signature node gets a context,
+    ;; and every context is seeded with two delta facts — so there is no
+    ;; reachable empty-frontier case at budget zero.
+    (@post (implies {(. config max-iterations) == 0} {$result == true}))
+    (>= (. sat iteration) (. config max-iterations)))
+
+  (fn saturate ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (config ReasonerConfig))
+    (@intent "Run barrier-synchronized semi-naive saturation to fixpoint or the round cap")
+    (@spec ((Arena Saturation (List NormAxiom) ReasonerConfig) -> (Result RoundResult Fault)))
+    (@alloc arena)
+    ;; THE BUDGET BOUNDARY IS PINNED, because leaving it to "the test
+    ;; decides" lets two conforming implementations return different
+    ;; exit codes AND different report hashes at the same budget:
+    ;;
+    ;;   - The fixpoint check happens at a round boundary, BEFORE
+    ;;     consuming budget for the next round. So if the frontier
+    ;;     empties on the final permitted round the result is
+    ;;     `fixpoint`, NOT `resource-limit` — reaching the answer
+    ;;     exactly on budget is success.
+    ;;   - `max-iterations = 0` performs no rounds and ALWAYS yields
+    ;;     `resource-limit`. The signature is pre-populated with
+    ;;     owl:Thing and owl:Nothing, every signature node gets a
+    ;;     context, and every context is seeded with two delta facts,
+    ;;     so Δ₀ is never empty and there is no reachable
+    ;;     empty-frontier case at budget zero.
+    ;; THE BUDGET BOUND, discharged via the `@loop-invariant` below.
+    ;; §7 calls termination for v0 "expressible as a
+    ;; monotone-growth-toward-a-finite-cap loop invariant" — this is
+    ;; that invariant, and it holds even though `frontier-is-empty` and
+    ;; `advance-round` are both uninterpreted to the checker, because
+    ;; the bound is carried by the invariant rather than inferred from
+    ;; what those calls return.
+    (@post (match $result
+             ((ok r) {(. (. r saturation) iteration) <= (. config max-iterations)})
+             ((error _) true)))
+    ;;
+    ;; ⚠  M1, NOT YET IMPLEMENTED. The loop below is the correct SHAPE
+    ;;    but no rules are wired in (see rules/el.slop), so it reaches
+    ;;    an empty frontier after round 0 and reports `fixpoint` over
+    ;;    an empty derivation. That is precisely the "sound,
+    ;;    catastrophically incomplete, indistinguishable from success"
+    ;;    failure §5.2 warns about — which is why `howl.classify`
+    ;;    refuses rather than handing this to the verdict rule.
+    (let ((mut state sat))
+      (do
+        ;; Fixpoint first, budget second — in that order.
+        (while (not (frontier-is-empty arena state))
+          (@loop-invariant {(. state iteration) <= (. config max-iterations)})
+          (if (budget-exhausted state config)
+            (break)
+            (do
+              ;; A round: freeze Sₙ = Sₙ₋₁ ∪ Δₙ, join every δ ∈ Δₙ
+              ;; against it, hold conclusions for Δₙ₊₁, then subtract
+              ;; Sₙ and recompute `active`.
+              ;; Cancellation is observed HERE, at the barrier, and
+              ;; yields Fault::cancelled with no payload (§6.8).
+              (set! state (advance-round arena state axioms config)))))
+        (if (frontier-is-empty arena state)
+          (ok (record-new RoundResult
+                (saturation  state)
+                (termination (union-new Termination fixpoint))))
+          (ok (record-new RoundResult
+                (saturation  state)
+                (termination (union-new Termination resource-limit (. state iteration)))))))))
+
+  (fn advance-round ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (config ReasonerConfig))
+    (@intent "Execute one barrier-synchronized round: freeze, join, collect novel, re-frontier")
+    (@spec ((Arena Saturation (List NormAxiom) ReasonerConfig) -> Saturation))
+    (@alloc arena)
+    ;; Exactly one round per call. The round COUNT is what
+    ;; max-iterations cuts on, and it must be a function of the input
+    ;; alone — so a round that advanced the counter by anything other
+    ;; than one would make the cap depend on how work happened to be
+    ;; batched, and with it the verdict.
+    (@post {(. $result iteration) == ((. sat iteration) + 1)})
+    (@post {(. $result iteration) > (. sat iteration)})
+    ;; M1: no rules wired in, so this only advances the counter and
+    ;; drains the frontier.
+    (record-new Saturation
+      (contexts  (. sat contexts))
+      (active    (set-new arena Node))
+      (iteration (+ (. sat iteration) 1)))))

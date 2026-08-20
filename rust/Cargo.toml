@@ -1,0 +1,27 @@
+[package]
+name = "howl"
+version = "0.1.0"
+edition = "2021"
+description = "Rust bindings for the HOWL consequence-based description-logic reasoner"
+license = "Apache-2.0"
+repository = "https://github.com/Trivyn/howl"
+keywords = ["owl", "rdf", "reasoner", "ontology", "description-logic"]
+categories = ["science", "algorithms"]
+readme = "README.md"
+include = [
+    "src/**/*",
+    "tests/**/*",
+    "csrc/**/*",
+    "csrc_shim.c",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "LICENSE",
+]
+
+[dependencies]
+slop-std-sys = { git = "https://github.com/slop-lang/slop-sys", tag = "v0.2.1", version = "0.1.2" }
+slop-rdf-sys = { git = "https://github.com/slop-lang/slop-sys", tag = "v0.2.1", version = "0.3.0" }
+
+[build-dependencies]
+cc = "1"

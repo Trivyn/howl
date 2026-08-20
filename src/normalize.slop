@@ -1,0 +1,105 @@
+;; ============================================================
+;; Front end: RDF → gate → normal form  —  SPEC.md §6.3
+;;
+;; ⚠  M0, NOT YET IMPLEMENTED.
+;;
+;; THE STAGE ORDER IS LOAD-BEARING, and two of its constraints pull
+;; against each other: the RBox gates must see chains BEFORE
+;; decomposition, but they must also compare CLASS EXPRESSIONS, which
+;; only exist after RDF has been decoded. Decoding first resolves
+;; both, on the observation that DECODING AN AXIOM IS NOT ACCEPTING IT
+;; — the gate can still enumerate an unsupported AST variant as
+;; out-of-profile, so decoding first costs no permissiveness.
+;;
+;;   0  header      reconcile owl:imports against the caller's closure
+;;                  attestation; standardize blank nodes apart PER
+;;                  DOCUMENT before flattening (RDF merge, not
+;;                  concatenation — two documents both using _:x would
+;;                  otherwise weld unrelated nodes together); consume
+;;                  the ontology header and axiom-annotation reification
+;;   1  decode      RDF → RawAxiom, a LOSSLESS AST covering every OWL 2
+;;                  axiom form INCLUDING ones v0 rejects — without it an
+;;                  unsupported-but-well-formed axiom has nowhere to go
+;;                  but a parse error or the floor, and "never silently
+;;                  drop an axiom" is unimplementable. Tag every IRI by
+;;                  OPERAND POSITION; canonicalize expressions (flatten,
+;;                  dedup, sort); build the input signature, pre-populated
+;;                  with the OWL built-ins
+;;   1b expand      structural sugar the gates depend on:
+;;                  EquivalentObjectProperties → canonical bidirectional
+;;                  star, TransitiveObjectProperty → r ∘ r ⊑ r,
+;;                  EquivalentClasses → star, n-ary DisjointClasses → pairs.
+;;                  Must precede the gates, which read the TOLD role
+;;                  hierarchy
+;;   2  gate        three categories over the remaining logical
+;;                  vocabulary; regularity and range/composition over
+;;                  chains AS WRITTEN
+;;   3  normalize   polarity-correct fresh definitions; binary chain
+;;                  decomposition; range elimination
+;;   4  initialize  contexts from the SIGNATURE (not from axiom
+;;                  occurrence — that is what gives a declared-but-unused
+;;                  class a context at all); seeds into Δ₀, not the store
+;;
+;; POLARITY DECIDES THE DIRECTION OF EVERY FRESH DEFINITION, and
+;; getting it wrong loses the defining litmus test:
+;;
+;;   negative (left of ⊑)   emit  E ⊑ X    X must be IMPLIED BY E
+;;   positive (right of ⊑)  emit  X ⊑ E    X must IMPLY E
+;;
+;; `Person ⊓ ∃hasChild.Person ⊑ Parent` has the existential in
+;; NEGATIVE position, so it needs `∃hasChild.Person ⊑ X` before
+;; `Person ⊓ X ⊑ Parent` is in normal form. Emit only
+;; `X ⊑ ∃hasChild.Person` and `Mother ⊑ Parent` is never derived — the
+;; implementation fails the one test that defines the project while
+;; looking like it followed the spec's example.
+;;
+;; FRESH SYMBOLS ARE KEYED BY CANONICAL EXPRESSION ALONE — one node,
+;; up to two definitions. Each distinct canonicalized subexpression
+;; gets ONE fresh-node carrying a negative-definition bit and a
+;; positive-definition bit; an expression occurring at both polarities
+;; gets that single node with BOTH directions emitted, not two nodes.
+;; Keying by (expression, polarity) would change fresh IDs, saturation
+;; size, derivation depth, and therefore capped-run reports.
+;; ============================================================
+
+(module normalize
+  (@doc "RDF/OWL front end: header, decode, gate, normalize, initialize (M0)")
+
+  (import rdf (Triple IRI))
+  (import types (Node RoleId Concept NormAxiom Omission Coverage
+                 Saturation ReasonerConfig Fault))
+
+  (export
+    NormResult
+    normalize-input)
+
+  ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
+  ;; overstates the weaker one. Definitional fresh-name introduction is
+  ;; a genuine CONSERVATIVE EXTENSION. Range elimination is NOT: models
+  ;; of the range-free result need not satisfy the original range
+  ;; axioms, and the published proof establishes only preservation of
+  ;; SUBSUMPTION BETWEEN ORIGINAL CONCEPT NAMES. The preserved-query
+  ;; list is therefore explicit — subsumption between input concept
+  ;; names, unsatisfiability of input concept names, and
+  ;; unsatisfiability of the individual-proxy concepts. Anything
+  ;; outside it must not assume preservation.
+  (type NormResult (record
+    (axioms     (List NormAxiom))
+    (saturation Saturation)      ; contexts initialized, seeds in Δ₀
+    (coverage   Coverage)))      ; what the gate omitted
+
+  (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "Run the front end: header, decode, gate, normalize, initialize")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
+    (@alloc arena)
+    ;; ACCOUNTING, NOT "one normal form per axiom". Every accepted
+    ;; logical axiom must be discharged by ONE of: the NormAxioms it
+    ;; produced, the initial Derived facts it produced, or a named
+    ;; semantics-preserving elimination that consumed it. Requiring at
+    ;; least one NormAxiom each is unsatisfiable for correct input — a
+    ;; standalone `range(r) ⊑ C` legitimately vanishes when no
+    ;; existential GCI or asserted edge uses `r`, and a role assertion
+    ;; becomes edge messages rather than a NormAxiom at all.
+    ;;
+    ;; M0: not implemented.
+    (error (union-new Fault input-error "front end not implemented (M0)"))))

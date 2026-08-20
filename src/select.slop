@@ -1,0 +1,76 @@
+;; ============================================================
+;; Profile selection and calculus dispatch  —  SPEC.md §5.1
+;;
+;; ⚠  M0, NOT YET IMPLEMENTED.
+;;
+;; The rungs differ only in their CALCULUS — the rule set plus its
+;; normal form and saturation-state variant — while sharing the front
+;; end, the fixpoint driver, and the output stage. A profile is
+;; therefore a pluggable component behind a stable interface, and the
+;; seam is built in v0 even with only `profile-el` behind it: a
+;; dispatch point left in place is far cheaper than one retrofitted.
+;;
+;; SELECTION IS WHOLE-ONTOLOGY MEMBERSHIP IN A SINGLE IMPLEMENTED
+;; PROFILE — NEVER A UNION. Pick the cheapest implemented profile that
+;; contains EVERY construct in the ontology. If none does, the run is
+;; partial, and WHICH profile it runs under is fixed by rule rather
+;; than left open: choose the one leaving the fewest logical axioms
+;; omitted, breaking ties by the fixed order el < horn-shiq < sroiq.
+;; Without that rule two conforming implementations classify different
+;; sub-theories of the same input and return different findings — both
+;; sound, neither reproducible, and §6.8 violated ACROSS
+;; IMPLEMENTATIONS rather than across runs.
+;;
+;; This matters because EL++ and Horn-SHIQ are INCOMPARABLE: an
+;; ontology with both a role chain (v0, not v1) and an inverse (v1,
+;; not v0) is inside neither, and "escalate when constructs span
+;; fragments" would have an implementation pick one and silently drop
+;; the other's constructs. Calling that escalation is wrong until a
+;; rung actually CONTAINS the mixed language — which is v2's job.
+;;
+;; IN A v0-ONLY BUILD there is no rung to escalate to: an ontology
+;; outside §5.2 has nothing above it, and the run is inconclusive —
+;; never "coherent".
+;;
+;; THE GATE TESTS MEMBERSHIP IN HOWL'S IMPLEMENTED LANGUAGE, NOT IN
+;; OWL 2 EL. The two are not the same set, and testing the wrong one is
+;; precisely how an incomplete run gets reported as a complete one.
+;;
+;; Choosing a profile weaker than the ontology needs makes HOWL
+;; incomplete for it and, critically for validation, able to MISS AN
+;; INCOHERENCE. So an out-of-profile construct is never cosmetic: it
+;; records the axiom in coverage.omitted, which no command may report
+;; as coherent. It may still report INCOHERENT from that same run — a
+;; derived contradiction is definitive whatever the coverage.
+;; ============================================================
+
+(module select
+  (@doc "Syntactic profile detection and calculus dispatch (M0)")
+
+  (import types (Profile ProfileSelection Omission ReasonerConfig))
+
+  (export
+    select-profile)
+
+  (fn select-profile ((arena Arena) (selection ProfileSelection))
+    (@intent "Resolve a ProfileSelection to the calculus that will run")
+    (@spec ((Arena ProfileSelection) -> Profile))
+    (@alloc arena)
+    ;; An EXPLICIT request is honoured exactly; `auto` resolves to the
+    ;; cheapest implemented calculus, which in a v0-only build is the
+    ;; only one. Pinned as a contract because the failure mode is
+    ;; silent: a selector that quietly downgraded an explicit
+    ;; `horn-shiq` request to `el` would classify a strictly smaller
+    ;; theory than the caller asked for and report it as complete.
+    (@post (match selection
+             ((auto)       {$result == 'profile-el})
+             ((explicit p) {$result == p})))
+    ;; v0 has exactly one calculus wired in, so `auto` and any explicit
+    ;; request both land on profile-el. The DISPATCH POINT is what
+    ;; matters here, not the branching: when v1 lands, auto-selection
+    ;; must start returning profile-horn-shiq for ontologies using
+    ;; inverses or qualified number restrictions rather than reporting
+    ;; inconclusive, and that change belongs in this function alone.
+    (match selection
+      ((auto)       'profile-el)
+      ((explicit p) p))))

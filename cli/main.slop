@@ -1,0 +1,187 @@
+;; ============================================================
+;; HOWL CLI  —  SPEC.md §9
+;;
+;; THE CLI IS A HARNESS, NOT THE PRODUCT. HOWL's first consumer calls
+;; it through the FFI behind a reasoner port (§8.4); these commands are
+;; for CI, differential testing, and standalone use. Where the two
+;; disagree the PORT WINS — in particular the library path always runs
+;; non-strict and returns a report, while --strict is a CLI-only
+;; affordance. Every command stays a thin wrapper over the same library
+;; entry point, so the CLI cannot drift into being a second
+;; implementation with its own semantics.
+;;
+;;   howl validate    <ontology.ttl> [--profile P] [--strict] [-I DIR]
+;;   howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]
+;;   howl unsat       <ontology.ttl>
+;;   howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]
+;;   howl explain     <ontology.ttl> --sub A B          (post-M4)
+;;
+;; EXIT CODES ARE §6.2'S VERDICT TABLE, VERBATIM. A CI gate must
+;; distinguish "checked, fine" from "couldn't check", and must not
+;; downgrade a real finding just because coverage was partial:
+;;
+;;   0  COHERENT      not incoherent, omitted empty, fixpoint reached
+;;   1  INCOHERENT    inconsistent OR any unsatisfiable named class,
+;;                    REGARDLESS of coverage or termination
+;;   2  INCONCLUSIVE  not incoherent but omitted non-empty or no
+;;                    fixpoint, OR Fault::cancelled, OR Fault::refused
+;;   3  ERROR         Fault::input-error, or CLI usage failure
+;;
+;; The table is over `Result<Outcome, Fault>`, not over Outcome alone —
+;; an earlier draft defined every code in terms of an Outcome, leaving
+;; faults with no defined exit code even though the test plan asserts
+;; them.
+;;
+;; `cancelled` and `refused` both map to 2 because both are precisely
+;; inconclusive: the ontology may be perfectly coherent and no verdict
+;; was reached. Both print no report body. `input-error` stays on 3
+;; with usage failures, because a file that will not parse is a
+;; different kind of problem from a theory that could not be decided.
+;;
+;; THE SUBTLE ROW IS 1. Monotonicity means a ⊥ derived from part of the
+;; ontology is a ⊥ in all of it, so a finding under partial coverage is
+;; a DEFINITIVE failure, not a provisional one. Reporting it as
+;; inconclusive would discard a sound result. The reverse — treating
+;; absence of findings under partial coverage as success — is the
+;; hazard exit 2 exists for.
+;;
+;; So 2 must not be folded into either neighbour. Into 0 it gives CI a
+;; false pass; into 1 it makes every ontology with an unsupported
+;; construct look broken and trains users to ignore the gate. A CI
+;; CONFIGURATION THAT TREATS 2 AS SUCCESS REINTRODUCES EXACTLY THE
+;; HAZARD THE GATE EXISTS TO PREVENT — document 0 alone as the pass
+;; condition.
+;;
+;; EXIT 1 IS KEYED TO INCOHERENCE, NOT INCONSISTENCY, which is what
+;; `validate` advertises. An ontology with an unsatisfiable named class
+;; exits 1 even though it may be perfectly consistent. This is a
+;; deliberate divergence from the port, where `consistent` means
+;; `!inconsistent` and unsatisfiable classes ride in their own field
+;; for a consumer that distinguishes them downstream. A CLI gate has
+;; one bit to spend and should spend it on the weaker, more useful
+;; condition.
+;; ============================================================
+
+(module main
+  (@doc "CLI harness for the HOWL description-logic reasoner")
+
+  (import rdf (IRI Triple))
+  (import types (Outcome Fault ReasonerConfig default-config))
+  (import howl (Verdict verdict classify))
+
+  (ffi "string.h"
+    (strlen ((s (Ptr U8))) U64))
+
+  ;; ============================================================
+  ;; Exit codes (§9) — the verdict table in the CLI's dialect
+  ;; ============================================================
+
+  (const EXIT_COHERENT     Int 0)
+  (const EXIT_INCOHERENT   Int 1)
+  (const EXIT_INCONCLUSIVE Int 2)
+  (const EXIT_ERROR        Int 3)
+
+  (fn exit-code-for ((r (Result Outcome Fault)))
+    (@intent "Map a classify result to its CLI exit code — §6.2's table, in this dialect")
+    (@spec (((Result Outcome Fault)) -> Int))
+    ;; This function is the ONLY place the CLI decides a verdict. It
+    ;; delegates the Outcome case to `verdict` rather than re-deriving
+    ;; the rule, so the CLI cannot drift from the library.
+    ;;
+    ;; The exit code is the contract CI actually consumes, so pin it
+    ;; here rather than trusting the match arms to stay aligned. The
+    ;; codes are bounded and total, and NO FAULT MAY EVER YIELD 0 —
+    ;; every route through the error path is either "could not check"
+    ;; (2) or "could not run" (3), and a fault that exited 0 would be
+    ;; the false pass arriving through the error path rather than the
+    ;; reasoning path.
+    (@post {$result >= 0})
+    (@post {$result <= 3})
+    (@post (match r
+             ((ok o) {$result <= 2})
+             ((error f) (match f
+                          ((cancelled)     {$result == 2})
+                          ((refused _)     {$result == 2})
+                          ((input-error _) {$result == 3})))))
+    ;; The arms below return INTEGER LITERALS rather than the EXIT_*
+    ;; constants declared above, and that is not an oversight. `const`
+    ;; bindings are opaque to the WP checker — with the named form the
+    ;; postconditions fail on a counterexample of `$result = 4`, because
+    ;; nothing tells the prover what EXIT_ERROR is. Literals here buy a
+    ;; proof of the exact table CI depends on; the names survive in the
+    ;; declarations above, in the header table, and in `main`.
+    (match r
+      ((ok o)
+        (match (verdict o)
+          ('verdict-coherent     0)
+          ('verdict-incoherent   1)
+          ('verdict-inconclusive 2)))
+      ((error f)
+        (match f
+          ;; A cancelled run has no reproducible partial state to show,
+          ;; and --strict's refusal reached no verdict. Both are
+          ;; inconclusive; they differ only in the diagnostic line,
+          ;; which is correct — the VERDICT is identical.
+          ((cancelled)     2)
+          ((refused _)     2)
+          ((input-error _) 3)))))
+
+  ;; ============================================================
+  ;; Argument handling
+  ;; ============================================================
+
+  (fn argv-to-string ((argv (Ptr (Ptr U8))) (index Int))
+    (@intent "Convert argv[index] to a SLOP String")
+    (@spec (((Ptr (Ptr U8)) Int) -> String))
+    (let ((ptr (@ argv index)))
+      (String ptr (strlen ptr))))
+
+  (fn print-usage ()
+    (@intent "Print the command surface")
+    (@spec (() -> Unit))
+    (do
+      (println "HOWL — a consequence-based description-logic reasoner")
+      (println "")
+      (println "USAGE:")
+      (println "  howl validate    <ontology.ttl> [--profile P] [--strict] [-I DIR]")
+      (println "  howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]")
+      (println "  howl unsat       <ontology.ttl>")
+      (println "  howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]")
+      (println "")
+      (println "EXIT CODES:")
+      (println "  0  coherent       checked, no incoherence found")
+      (println "  1  incoherent     inconsistent, or an unsatisfiable named class")
+      (println "  2  inconclusive   could not check completely — NOT a pass")
+      (println "  3  error          usage, parse, or I/O failure")
+      (println "")
+      (println "Treat 0 alone as the pass condition. A CI job that accepts 2")
+      (println "reintroduces the silent-false-pass hazard the gate exists to prevent.")))
+
+  (fn main ((argc Int) (argv (Ptr (Ptr U8))))
+    (@intent "CLI entry point: parse args, run the library, map the result to an exit code")
+    (@spec ((Int (Ptr (Ptr U8))) -> Int))
+    :c-name "main"
+    (with-arena 268435456
+      (if (< argc 2)
+        (do (print-usage) EXIT_ERROR)
+        (let ((command (argv-to-string argv 1)))
+          ;; ⚠  M0/M1: the library refuses (returns Fault::input-error),
+          ;;    so every command below currently exits 3. That is the
+          ;;    honest result for an unimplemented pipeline — "couldn't
+          ;;    check" — and notably NOT 0. Turtle parsing and import
+          ;;    resolution (-I) land with M0.
+          (if (string-eq command "--help")
+            (do (print-usage) EXIT_ERROR)
+            (let ((result (classify arena
+                            (list-new arena Triple)
+                            (list-new arena IRI)
+                            (default-config))))
+              (do
+                (match result
+                  ((ok _) (println "howl: unexpected outcome from an unimplemented pipeline"))
+                  ((error f)
+                    (match f
+                      ((input-error msg) (do (print "howl: ") (println msg)))
+                      ((cancelled)       (println "howl: cancelled"))
+                      ((refused _)       (println "howl: refused (--strict): input carried out-of-profile axioms")))))
+                (exit-code-for result)))))))))

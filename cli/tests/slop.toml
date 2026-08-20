@@ -1,0 +1,22 @@
+# Test-entry project for the bootstrap C generator.
+#
+# `generate_c.py` reads [project].entry from whatever directory it is
+# pointed at, so the test harness needs its own manifest. The harness
+# itself lives at src/test.slop — it tests the LIBRARY (verdict
+# discipline, structural invariants), not the CLI, so it is not
+# duplicated here.
+[project]
+name = "howl-test"
+version = "0.1.0"
+entry = "../../src/test.slop"
+
+[build]
+output = "build/howl-test"
+no_arena_cap = true
+include = ["../../../slop-rdf/src", "../../../slop-rdf/src/parse", "../../../slop-rdf/src/serialize", "../../src", "../../src/rules", "${SLOP_HOME}/lib/std/"]
+type = "executable"
+debug = false
+
+[build.link]
+libraries = []
+library_paths = []

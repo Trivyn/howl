@@ -1,0 +1,176 @@
+;; ============================================================
+;; HOWL: a consequence-based description-logic reasoner
+;;
+;; Classifies a description logic — the complete subsumption
+;; hierarchy and coherence of a TBox — including the defined-class
+;; entailments that RL materialization structurally cannot see.
+;;
+;; Sibling to GROWL: GROWL materializes OWL 2 RL, HOWL classifies.
+;; They compose through RDF, never through shared internal state.
+;; ============================================================
+
+(module howl
+  (@doc "Consequence-based description-logic reasoner (v0: ELH⊥R+ with domain/range)")
+
+  (import rdf (Triple IRI))
+  (import types (Node RoleId Concept NormAxiom
+                 Derived Addressed Context Saturation
+                 EntityKind AxiomRef InputRef MissingDeclaration Omission Coverage Termination
+                 EdgePair
+                 SubPair Findings Outcome Fault
+                 Profile ProfileSelection ReasonerConfig
+                 default-config emit-edge make-context
+                 outcome-is-complete findings-are-incoherent))
+  (import normalize (NormResult normalize-input))
+  (import select (select-profile))
+  (import saturate (RoundResult saturate))
+  (import classify (extract-findings entails-sub))
+
+  (export
+    ;; Types (re-exported from types)
+    Node
+    RoleId
+    Concept
+    NormAxiom
+    Derived
+    Addressed
+    Context
+    Saturation
+    EntityKind
+    AxiomRef
+    InputRef
+    Omission
+    Coverage
+    Termination
+    SubPair
+    Findings
+    Outcome
+    Fault
+    Profile
+    ProfileSelection
+    ReasonerConfig
+    MissingDeclaration
+    ;; Configuration
+    default-config
+    ;; The pipeline
+    classify
+    ;; Verdict (§6.2) — the single statement of the rule
+    outcome-is-complete
+    findings-are-incoherent
+    verdict
+    Verdict
+    ;; Saturation helpers
+    EdgePair
+    emit-edge
+    make-context)
+
+  ;; ============================================================
+  ;; The verdict (§6.2)
+  ;;
+  ;; | Findings      | Coverage + termination            | Verdict      |
+  ;; |---------------|-----------------------------------|--------------|
+  ;; | incoherent    | ANYTHING                          | incoherent   |
+  ;; | not incoherent| omitted ≠ ∅, or termination ≠ fix | inconclusive |
+  ;; | not incoherent| omitted = ∅ AND fixpoint          | coherent     |
+  ;;
+  ;; The asymmetry between rows 1 and 2 is not a compromise; it falls
+  ;; out of MONOTONICITY. Every rule is faithful, so anything in
+  ;; findings is sound whatever the coverage; and restoring an omitted
+  ;; axiom can only ADD conclusions, never retract one. So a ⊥ derived
+  ;; from a subset of the ontology is a ⊥ in the whole ontology.
+  ;;
+  ;; The same monotonicity is why a partial run may still never report
+  ;; a COMPLETE hierarchy or a MINIMAL repair: those are claims about
+  ;; absence.
+  ;; ============================================================
+
+  (type Verdict (enum
+    verdict-coherent       ; exit 0
+    verdict-incoherent     ; exit 1
+    verdict-inconclusive)) ; exit 2
+
+  (fn verdict ((o Outcome))
+    (@intent "Map an Outcome to its verdict — the ONE statement of §6.2's rule")
+    (@spec ((Outcome) -> Verdict))
+    (@pure)
+    ;; THE SAFETY PROPERTY, in machine-checkable form: a coverage gap
+    ;; must be unable to produce a COHERENT verdict. This is the false
+    ;; pass the whole design exists to prevent — a validator that
+    ;; returns "coherent" when it could not actually tell is worse than
+    ;; no validator, because CI trains users to trust it.
+    ;;
+    ;; Provable only because the coverage test below is LOCAL. The WP
+    ;; checker does no interprocedural reasoning — it models a callee as
+    ;; an uninterpreted function, so delegating the whole test to
+    ;; `outcome-is-complete` lets it return True under a non-empty
+    ;; omission list and the property fails with exactly that
+    ;; counterexample.
+    (@post (implies {(list-len (. (. o coverage) omitted)) > 0}
+                    {$result != 'verdict-coherent}))
+    ;; A finding wins over incomplete coverage, always. Testing
+    ;; coverage first would implement an early `inconclusive` that
+    ;; DISCARDS a definitive finding — the precise inversion the rule
+    ;; forbids, and the one an earlier draft of the spec got wrong.
+    (if (findings-are-incoherent (. o findings))
+      'verdict-incoherent
+      ;; The explicit coverage early-out is REDUNDANT with
+      ;; `outcome-is-complete`, which tests the same conjunct — and it
+      ;; is kept deliberately. Its job is not to change the answer but
+      ;; to put the safety property within reach of the prover: with the
+      ;; test local, "a coverage gap cannot yield coherent" is a
+      ;; structural fact about this function rather than an inference
+      ;; across a call boundary the checker will not make.
+      ;;
+      ;; Defence in depth on the one property most worth having proved.
+      ;; The termination arm stays delegated, so the definition of
+      ;; `complete` still lives in one place.
+      (if (> (list-len (. (. o coverage) omitted)) 0)
+        'verdict-inconclusive
+        (if (outcome-is-complete o)
+          'verdict-coherent
+          'verdict-inconclusive))))
+
+  ;; ============================================================
+  ;; The pipeline
+  ;;
+  ;;   triples → normalize (header, decode, gate, normalize, init)
+  ;;           → saturate  (CR1–CR7 to fixpoint or the round cap)
+  ;;           → extract   (taxonomy + findings)
+  ;;           → Outcome
+  ;;
+  ;; Input is a flat, COPIED triple buffer, never a store handle, and
+  ;; reasoning is pure over it (§8.4). `imports-resolved` is the
+  ;; caller's closure attestation: HOWL is network-free and cannot
+  ;; resolve owl:imports itself, so the header pre-pass computes
+  ;; declared \ attested and puts each shortfall into coverage.omitted
+  ;; as `unresolved-import`. The run is then STRUCTURALLY incomplete and
+  ;; the verdict rule does the rest — no consumer has to remember to
+  ;; check anything.
+  ;;
+  ;; Be precise about what that catches: FORGETTING, NOT LYING. Once
+  ;; documents are flattened into one buffer, nothing ties an import
+  ;; IRI to any content, so a caller listing an IRI while supplying
+  ;; none of its triples passes silently. The attestation is a TRUST
+  ;; BOUNDARY, not a proof.
+  ;; ============================================================
+
+  (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;;
+    ;; ⚠  M0/M1, NOT YET IMPLEMENTED — AND IT REFUSES RATHER THAN
+    ;;    RETURNING AN OUTCOME. That choice is the whole point.
+    ;;
+    ;;    Every stage below exists in skeleton: the front end returns
+    ;;    `input-error`, the rules emit nothing, the driver would then
+    ;;    find an empty frontier after round 0 and report `fixpoint`
+    ;;    over full coverage. Fed to the verdict rule, that is a clean
+    ;;    `coherent` — sound, catastrophically incomplete, and
+    ;;    indistinguishable from success at every interface.
+    ;;
+    ;;    So the stub must not produce an Outcome at all. A Fault has no
+    ;;    verdict to misread; an Outcome would. This is the same
+    ;;    discipline §8.5 applies to the port — until a capability
+    ;;    lands, it is NOT DELIVERED, and it is NOT APPROXIMATED.
+    (error (union-new Fault input-error "HOWL v0 pipeline not implemented (M0/M1)"))))

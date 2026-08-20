@@ -1,0 +1,502 @@
+;; ============================================================
+;; HOWL Core Types  —  SPEC.md §6.2 (Data model)
+;;
+;; Concept and role expressions, the normal form, context-owned
+;; saturation state, and the result/fault types.
+;;
+;; Shared by every other module; declared here so the front end,
+;; the rules, and the driver do not form a dependency cycle.
+;; ============================================================
+
+(module types
+  (@doc "Core type definitions for the HOWL description-logic reasoner")
+
+  (import rdf (IRI))
+
+  (export
+    ;; identity
+    Node
+    RoleId
+    ;; expressions and normal form
+    Concept
+    NormAxiom
+    ;; saturation
+    Derived
+    Addressed
+    Context
+    Saturation
+    ;; coverage / reporting
+    EntityKind
+    EdgePair
+    AxiomRef
+    InputRef
+    MissingDeclaration
+    Omission
+    Coverage
+    Termination
+    SubPair
+    Findings
+    Outcome
+    Fault
+    ;; configuration
+    Profile
+    ProfileSelection
+    ReasonerConfig
+    ;; helpers
+    default-config
+    emit-edge
+    make-context
+    context-is-active
+    outcome-is-complete
+    findings-are-incoherent)
+
+  ;; ============================================================
+  ;; Internal identity
+  ;;
+  ;; NOT a bare IRI. OWL permits punning, so one IRI can denote a
+  ;; class AND an individual in the same ontology; §5.2's ABox
+  ;; encoding would otherwise merge them, and a class `:x ⊑ ⊥`
+  ;; would drag an unrelated individual `:x` into a FALSE
+  ;; inconsistency. Tagging keeps the populations disjoint by
+  ;; construction rather than by convention.
+  ;;
+  ;; `fresh-node` is a constructor, not a synthesized IRI: freshness
+  ;; is then a type guarantee instead of a naming convention that an
+  ;; adversarial or merely unlucky input can collide with.
+  ;; ============================================================
+
+  (type Node (union
+    (class-node      IRI)
+    (individual-node IRI)
+    (fresh-node      (Int 0 ..))))
+
+  ;; Roles need the same treatment for the same reason: decomposing
+  ;; an n-ary property chain into binary steps introduces fresh
+  ;; intermediate roles, and a synthesized role IRI could collide
+  ;; with a real one. Role punning against a class or individual name
+  ;; stays harmless — roles never share an index with nodes — so only
+  ;; freshness needs representing here, not the class/individual split.
+  (type RoleId (union
+    (named-role IRI)
+    (fresh-role (Int 0 ..))))
+
+  ;; ⊤ and ⊥ are reserved NODES, not reserved IRIs:
+  ;;   ⊤ = (class-node owl:Thing)     ⊥ = (class-node owl:Nothing)
+  ;; Both are class-tagged, and owl:Nothing can never name an
+  ;; individual (OWL 2 reserves it), so ⊥ has no punning hazard.
+
+  ;; ============================================================
+  ;; Concept expressions (pre-normalization)
+  ;;
+  ;; Atoms carry a `Node`, not a bare IRI, so the tags assigned at
+  ;; decode survive into normalization — otherwise the ABox encoding
+  ;; cannot state `individual(a) ⊑ C` at all.
+  ;; ============================================================
+
+  ;; `exists` rather than the spec's `some`: `some` is Option's
+  ;; built-in constructor, and shadowing it makes every `(some x)` in
+  ;; this codebase ambiguous to a reader even where the compiler
+  ;; disambiguates. Same constructor, unshadowed name.
+  (type Concept (union
+    (top)
+    (bottom)
+    (atom   Node)
+    (and    (List Concept))
+    (exists RoleId (Ptr Concept))))   ; ∃r.C
+
+  ;; ============================================================
+  ;; EL normal form — the output of normalization (§6.3)
+  ;;
+  ;; Operands are Node/RoleId rather than Concept/RoleId: eliminating
+  ;; STRUCTURE is normalization's job, while preserving IDENTITY is
+  ;; the tags' job. Flattening both at once reintroduces the punning
+  ;; bug the tags exist to prevent. So `A ⊓ B ⊑ ⊥` is simply
+  ;; (sub-and A B ⊥) with ⊥ the reserved node above — no special case
+  ;; in rule code.
+  ;;
+  ;; No range constructor: ranges are ELIMINATED during normalization
+  ;; by the published construction (§5.2), so they never reach normal
+  ;; form. Domain needs none either — domain(r) ⊑ A desugars to
+  ;; (sub-some-lhs r ⊤ A).
+  ;; ============================================================
+
+  (type NormAxiom (union
+    (sub-name     Node Node)              ; A ⊑ B
+    (sub-and      Node Node Node)         ; A₁ ⊓ A₂ ⊑ B
+    (sub-some-rhs Node RoleId Node)       ; A ⊑ ∃r.B
+    (sub-some-lhs RoleId Node Node)       ; ∃r.B ⊑ A
+    (sub-role     RoleId RoleId)          ; r ⊑ s
+    (role-chain   RoleId RoleId RoleId))) ; r ∘ s ⊑ t
+
+  ;; ============================================================
+  ;; Saturation state — the DL analogue of GROWL's Delta
+  ;;
+  ;; ELK's decomposition makes the CONTEXT — one concept plus
+  ;; everything derived about it — the unit of both storage and
+  ;; parallel work. Per-concept facts therefore live in the context
+  ;; that owns them; there are no global S(·)/R(·) maps to contend on.
+  ;; ============================================================
+
+  ;; A derived conclusion in transit, always addressed to exactly one
+  ;; context. The destination rides in the envelope, so it is not
+  ;; repeated in every payload.
+  (type Derived (union
+    (derived-sub  Node)            ; add this node to the target's S(·)
+    (derived-succ RoleId Node)     ; target gains a successor:   (role, node)
+    (derived-pred RoleId Node)))   ; target gains a predecessor: (role, node)
+
+  (type Addressed (record
+    (to   Node)
+    (what Derived)))
+
+  ;; A logical edge (X,Y) ∈ R(r) is ONE fact that the context
+  ;; decomposition stores as TWO halves — a successor at X and a
+  ;; predecessor at Y — and `Derived` can address only one context at a
+  ;; time. Deriving an edge is therefore never a single message.
+  ;;
+  ;; This is a RECORD rather than a list of two, so that "both halves"
+  ;; is enforced by the type instead of by a contract: an EdgePair
+  ;; cannot be constructed with a half missing. Emitting only the
+  ;; successor is the tempting version of this bug precisely because it
+  ;; looks complete from the deriving context and fails only in the
+  ;; CONSUMING rules — CR4/CR5 read `preds`, CR7 reads both sides — so
+  ;; the symptom is under-derivation with no error.
+  ;;
+  ;; It also makes the halves' destinations provable. A `(List
+  ;; Addressed)` would need `list-get` to state which half went where,
+  ;; and `list-get` is uninterpreted to the WP checker; named record
+  ;; fields are not.
+  (type EdgePair (record
+    (succ-half Addressed)    ; (addressed X (derived-succ r Y))
+    (pred-half Addressed)))  ; (addressed Y (derived-pred r X))
+
+  ;; `preds` is not redundant bookkeeping. CR4/CR5 carry a premise
+  ;; about Y (B ∈ S(Y)) to a conclusion about X (A ∈ S(X)), so a
+  ;; context that learns a new subsumer must be able to notify its
+  ;; predecessors. This is ELK's backward link, and it is why edges
+  ;; are stored twice.
+  (type Context (record
+    (root      Node)                     ; the concept this context reasons about
+    (subsumers (Set Node))               ; S(root)
+    (succs     (Map RoleId (Set Node)))  ; outgoing role edges
+    (preds     (Map RoleId (Set Node)))  ; incoming role edges
+    (queue     (List Derived))))         ; this context's inbox — its local delta
+
+  ;; The global state owns no per-concept facts — only the registry
+  ;; and run bookkeeping.
+  (type Saturation (record
+    (contexts  (Map Node Context))
+    (active    (Set Node))               ; contexts with a non-empty queue — the frontier
+    (iteration (Int 0 ..))))
+
+  ;; ============================================================
+  ;; Coverage and reporting
+  ;;
+  ;; THREE INDEPENDENT AXES (§6.2). A run can be BOTH out-of-profile
+  ;; (the input carried axioms outside §5.2) AND resource-limited (the
+  ;; in-profile subset still blew the cap). Collapsing them into one
+  ;; status union forces the report to lie about one of them.
+  ;; ============================================================
+
+  ;; Ordered: class < object-property < data-property
+  ;;          < annotation-property < individual < datatype
+  (type EntityKind (enum
+    entity-class
+    entity-object-property
+    entity-data-property
+    entity-annotation-property
+    entity-individual
+    entity-datatype))
+
+  ;; The identity of an input axiom. Load-bearing: it is what
+  ;; omissions name, what repairs remove, and what is hashed into the
+  ;; consumer's verdict identity (§6.8).
+  ;;
+  ;;   source : the document the axiom was read from, so imports stay
+  ;;            distinguishable. OPTIONAL, because the frozen port
+  ;;            flattens every document into one unlabelled buffer and
+  ;;            the information is simply not there (§8.5 A1). The CLI
+  ;;            populates it; the port degrades to text-only identity.
+  ;;   text   : canonical OWL functional syntax, canonicalization
+  ;;            already applied and annotations stripped. Blank nodes
+  ;;            are rendered by canonical position, never by
+  ;;            parser-assigned label.
+  (type AxiomRef (record
+    (source (Option IRI))
+    (text   String)))
+
+  ;; What an omission can point AT. Not every out-of-profile input is
+  ;; an OWL axiom: a triple decodable as neither a supported axiom nor
+  ;; an annotation assertion has NO canonical functional syntax to put
+  ;; in AxiomRef.text, and forcing it through would leave the front end
+  ;; choosing between inventing nonconforming text, rejecting valid
+  ;; input, and dropping it silently.
+  (type InputRef (union
+    (owl-axiom    AxiomRef)
+    (rdf-fragment String)    ; canonical N-Triples of the offending triples, sorted
+    (synthetic    String)))  ; the reserved forms below
+
+  ;; A class/property used without the declaration OWL 2 DL requires.
+  ;; NOT an out-of-profile AxiomRef: the missing declaration is by
+  ;; definition not an input axiom, so there is nothing to reference.
+  ;; Carries the entity and every referring axiom instead.
+  ;;
+  ;; A record rather than three inline union payloads, for two
+  ;; reasons: the fields have a canonical sort order to implement
+  ;; (kind, then IRI, then the referring list compared element-wise
+  ;; after its own sort), and the transpiler does not register a
+  ;; (List T) that appears only inside a multi-field union variant.
+  (type MissingDeclaration (record
+    (kind      EntityKind)
+    (entity    IRI)
+    (referring (List AxiomRef))))   ; canonically sorted
+
+  (type Omission (union
+    (out-of-profile      InputRef)
+    (unresolved-import   IRI)       ; declared owl:imports the caller did not attest to
+    (missing-declaration MissingDeclaration)))
+
+  ;; EMPTY means full coverage; anything here means the run saw less
+  ;; than the intended theory, whatever the reason.
+  (type Coverage (record
+    (omitted (List Omission))))
+
+  ;; NOTE cancellation is NOT here. A cancelled run stops at a
+  ;; scheduler-dependent point, so its partial state is not
+  ;; reproducible (§6.8) and must never be serialized or hashed.
+  ;; Modelling it as a Termination variant forced Outcome to carry
+  ;; maybe-absent findings AND maybe-absent saturation, and still left
+  ;; "are cancelled findings returned?" ambiguous. So cancellation
+  ;; leaves the result type entirely, as a Fault on the error path.
+  ;; Consequence: every Outcome that EXISTS is report-bearing and
+  ;; fully populated.
+  (type Termination (union
+    (fixpoint)                     ; the frontier emptied — saturation is closed
+    (resource-limit (Int 0 ..))))  ; max-iterations reached with a non-empty frontier
+
+  (type SubPair (record
+    (sub   Node)
+    (super Node)))
+
+  ;; Findings are separated from the raw saturation because they are
+  ;; the part that stays meaningful under partial coverage:
+  ;; monotonicity makes a derived ⊥ definitive even when axioms were
+  ;; omitted (§6.7).
+  (type Findings (record
+    (inconsistent  Bool)
+    (unsatisfiable (List IRI))      ; sorted; a LOWER BOUND unless complete
+    (subsumptions  (List SubPair))  ; sorted; produced by EXTRACTION, not by reading S(·)
+    (imports-seen  (List IRI))))    ; sorted; DIAGNOSTICS ONLY — the completeness
+                                    ; effect travels via Coverage.omitted, because a
+                                    ; field the consumer must remember to read is not
+                                    ; a safety mechanism (§8.4)
+
+  (type Outcome (record
+    (coverage    Coverage)
+    (termination Termination)
+    (findings    Findings)     ; what WAS derived — always present, always meaningful
+    (saturation  Saturation))) ; always present; PARTIAL unless the run was complete
+
+  ;; The error path. Distinct from an Outcome: these produce no result
+  ;; to report on.
+  (type Fault (union
+    (cancelled)                 ; cancel-ptr observed at a round boundary — no payload
+    (input-error String)        ; unparseable / structurally malformed input
+    (refused (List Omission)))) ; --strict: the gate found omissions and the caller
+                                ; asked to refuse rather than run partially
+
+  ;; ============================================================
+  ;; Configuration (§5.1)
+  ;; ============================================================
+
+  ;; The selectable unit. Each profile supplies its own normalization
+  ;; and rule set; the driver and I/O are shared across all of them.
+  (type Profile (enum
+    profile-el          ; v0 — CB EL, exactly §5.2  (the only one implemented)
+    profile-horn-shiq   ; v1
+    profile-sroiq))     ; v2 — object fragment; not yet OWL 2 DL
+
+  ;; What the caller asks for. `auto` is the DEFAULT and is NOT a
+  ;; Profile — typing the config field as `Profile` while calling
+  ;; `auto` the default is something the type cannot express.
+  (type ProfileSelection (union
+    (auto)
+    (explicit Profile)))
+
+  (type ReasonerConfig (record
+    (worker-count    (Int 1 .. 64))
+    (channel-buffer  (Int 64 .. 4096))
+    ;; 0 is legal and meaningful: it performs no rounds and ALWAYS
+    ;; yields resource-limit, since Δ₀ is never empty (§6.8).
+    (max-iterations  (Int 0 .. 10000))
+    (selection       ProfileSelection)
+    ;; CLI-only affordance. The library path always runs non-strict:
+    ;; out-of-profile is a report, not a refusal (§8.4).
+    (strict-profile  Bool)
+    (cancel-ptr      I64)
+    (verbose         Bool)))
+
+  (fn default-config ()
+    (@intent "Create the default reasoner configuration")
+    (@spec (() -> ReasonerConfig))
+    (@pure)
+    (@post {(. $result worker-count) == 4})
+    (@post {(. $result channel-buffer) == 256})
+    (@post {(. $result max-iterations) == 1000})
+    (@post {(. $result cancel-ptr) == 0})
+    (@post {(. $result verbose) == false})
+    ;; The library path always runs NON-STRICT: out-of-profile is a
+    ;; report, not a refusal, and the port always consumes it that way.
+    ;; --strict is a CLI affordance layered on top, never the default.
+    (@post {(. $result strict-profile) == false})
+    :c-name "howl_default_config"
+    (record-new ReasonerConfig
+      (worker-count 4)
+      (channel-buffer 256)
+      (max-iterations 1000)
+      (selection (union-new ProfileSelection auto))
+      (strict-profile false)
+      (cancel-ptr 0)
+      (verbose false)))
+
+  ;; ============================================================
+  ;; Helpers
+  ;; ============================================================
+
+  (fn make-context ((arena Arena) (root Node))
+    (@intent "Create an empty context for a node, with S(root) initially EMPTY")
+    (@spec ((Arena Node) -> Context))
+    (@alloc arena)
+    ;; The store starts empty and the seeds go in the DELTA (§5.2):
+    ;; S₋₁(N) := ∅, Δ₀(N) := { derived-sub(N), derived-sub(⊤) }.
+    ;; Writing the seeds into `subsumers` here would leave every queue
+    ;; empty, so `active` would be empty at round 0, the driver would
+    ;; report `fixpoint` before firing a single rule, and the run would
+    ;; return an instant, empty, apparently-COMPLETE classification.
+    (@post {(. $result root) == root})
+    (@post {(list-len (. $result queue)) == 0})
+    ;; The empty-store obligation is NOT stated as a @post, and the
+    ;; reason is worth recording rather than quietly omitting.
+    ;; `set-elements` is an uninterpreted function to the WP checker —
+    ;; it has no theory connecting `set-new` to an empty element list —
+    ;; so `(list-len (set-elements ...)) == 0` is unprovable and Z3
+    ;; returns a counterexample where it is nonzero.
+    ;;
+    ;; §7 lists initialization among the STRUCTURAL, Z3-reachable
+    ;; obligations. That is true of the obligation as a whole (contexts
+    ;; built from the signature, seeds in the queue, membership in
+    ;; `active`) but not of set emptiness through this builtin. So it is
+    ;; discharged EMPIRICALLY for now, by
+    ;; `test-context-starts-with-empty-store`, and stating an
+    ;; unprovable @post would be exactly the error §7 warns about —
+    ;; banking a verification claim on a postcondition that does not
+    ;; establish it.
+    (record-new Context
+      (root      root)
+      (subsumers (set-new arena Node))
+      (succs     (map-new arena RoleId (Set Node)))
+      (preds     (map-new arena RoleId (Set Node)))
+      (queue     (list-new arena Derived))))
+
+  (fn context-is-active ((ctx Context))
+    (@intent "A context is active exactly when its inbox is non-empty")
+    (@spec ((Context) -> Bool))
+    (@pure)
+    (@post {$result == ((list-len (. ctx queue)) > 0)})
+    ;; Both directions, because `active` is the driver's termination
+    ;; test: a context wrongly reported inactive is silently dropped
+    ;; from the frontier and its queued conclusions are never processed,
+    ;; which ends the run early and reports `fixpoint` over an
+    ;; incomplete derivation.
+    (@property empty-queue-is-inactive
+      (implies (== (list-len (. ctx queue)) 0) (not $result)))
+    (@property nonempty-queue-is-active
+      (implies (> (list-len (. ctx queue)) 0) $result))
+    (> (list-len (. ctx queue)) 0))
+
+  ;; EDGE-PAIR INVARIANT. A logical edge (X,Y) ∈ R(r) is ONE fact, but
+  ;; the context decomposition stores it twice — as a successor at X
+  ;; and a predecessor at Y — and `Derived` can address only one
+  ;; context at a time. So deriving an edge is never a single message.
+  ;; Emitting only one half is a silent under-derivation: CR4/CR5 read
+  ;; `preds` and CR7 reads both sides, so the edge simply does less
+  ;; work than it should, with no error. Rules emit via this helper
+  ;; rather than by hand.
+  (fn emit-edge ((arena Arena) (x Node) (r RoleId) (y Node))
+    (@intent "Derive the logical edge (x,y) ∈ R(r) as its two stored halves")
+    (@spec ((Arena Node RoleId Node) -> EdgePair))
+    (@alloc arena)
+    ;; The destinations, not merely the count. A count-of-two is
+    ;; satisfied by emitting the successor half twice; these are not.
+    (@post {(. (. $result succ-half) to) == x})
+    (@post {(. (. $result pred-half) to) == y})
+    ;; One helper for all three edge-concluding rules (CR3, CR6, CR7),
+    ;; so the invariant has a single site rather than three.
+    (record-new EdgePair
+      (succ-half (record-new Addressed (to x) (what (union-new Derived derived-succ r y))))
+      (pred-half (record-new Addressed (to y) (what (union-new Derived derived-pred r x))))))
+
+  ;; ============================================================
+  ;; The verdict rule (§6.2), in code — stated ONCE
+  ;;
+  ;; §8.4's fault precedence and §9's exit codes are both this pair of
+  ;; predicates in their own dialects. Neither may restate it.
+  ;; ============================================================
+
+  (fn outcome-is-complete ((o Outcome))
+    (@intent "A run is COMPLETE exactly when coverage is full and it reached fixpoint")
+    (@spec ((Outcome) -> Bool))
+    (@pure)
+    ;; That conjunction — not a status tag — is what licenses a
+    ;; COHERENT verdict, a complete hierarchy, or a minimal repair.
+    ;;
+    ;; Two implications rather than one equality, because the
+    ;; termination arm needs a match and the SAFETY direction is the one
+    ;; that matters: an omission must be unable to survive into a
+    ;; "complete" answer, since `complete` is what licenses a coherent
+    ;; verdict.
+    ;;
+    ;; `@post` rather than `@property`: the latter is for quantified
+    ;; forall/exists over collections and does not translate `implies`.
+    (@post (implies $result {(list-len (. (. o coverage) omitted)) == 0}))
+    (@post (implies {(list-len (. (. o coverage) omitted)) > 0}
+                    {$result == false}))
+    (and (== (list-len (. (. o coverage) omitted)) 0)
+         (match (. o termination)
+           ((fixpoint) true)
+           ((resource-limit _) false))))
+
+  (fn findings-are-incoherent ((f Findings))
+    (@intent "incoherent := inconsistent ∨ unsatisfiable ≠ ∅")
+    (@spec ((Findings) -> Bool))
+    (@pure)
+    ;; An unsatisfiable named class alone makes an ontology incoherent,
+    ;; whether or not it is inconsistent. This is the arm a draft of the
+    ;; spec omitted — it defined only `inconsistent`, and so under-reported
+    ;; exactly the case the tool exists to catch.
+    (@post (implies {(list-len (. f unsatisfiable)) > 0} {$result == true}))
+    ;; The mirror arm: an inconsistency alone also implies incoherence.
+    ;;
+    ;; This is reachable only because the body below is an `if` rather
+    ;; than a flat `or`. The blocker is not the boolean field — it is
+    ;; that `or`/`and` IN A FUNCTION BODY make the return value opaque
+    ;; to the WP checker, so an identical contract fails against an
+    ;; `or`-bodied version of this same function and verifies against
+    ;; the `if`-bodied one.
+    (@post (implies {(. f inconsistent) == true} {$result == true}))
+    ;; Coherence is the WEAKEST of the three conditions: an ontology
+    ;; with an unsatisfiable named class is incoherent whether or not
+    ;; it is inconsistent. A finding is DEFINITIVE whatever the
+    ;; coverage, because inference is monotone — restoring an omitted
+    ;; axiom can only add conclusions, never retract one. It is the
+    ;; ABSENCE of a finding that carries no information.
+    ;; Written as an `if` on the unsatisfiable-set size rather than a
+    ;; flat `or`, so the Z3-reachable branch is syntactically explicit.
+    ;; A flat `(or (. f inconsistent) (> ... 0))` makes the WHOLE
+    ;; expression untranslatable, because one operand is an opaque bool
+    ;; field — the checker cannot then discharge even the arm that is
+    ;; about an integer. Semantically identical; verifiable rather than
+    ;; not.
+    (if (> (list-len (. f unsatisfiable)) 0)
+      true
+      (. f inconsistent))))

@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            cc: gcc
+          - os: macos-14
+            platform: macos-arm64
+            cc: gcc-14
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install GCC 14 (macOS)
+        if: runner.os == 'macOS'
+        run: brew install gcc@14
+
+      # Builds from the committed C in csrc/ — no SLOP toolchain needed.
+      - name: Run tests
+        run: make test CC=${{ matrix.cc }}
+
+      # The layout guards live here. They are the reason this job is not
+      # optional: a mirror in rust/src/ffi.rs duplicates a struct
+      # definition that lives in another repository and changes without
+      # notice, and a drift is silent at both compile time and run time.
+      - name: Build and test Rust crate
+        run: make crate-test CC=${{ matrix.cc }}
+
+      - name: Build release CLI
+        run: make release CC=${{ matrix.cc }}
+
+      # A CI job that accepts exit 2 reintroduces the silent-false-pass
+      # hazard the gate exists to prevent, so assert the codes rather
+      # than assuming them. While the pipeline is unimplemented the
+      # library refuses and every command exits 3 — the point is that it
+      # is never 0.
+      - name: Assert CLI exit codes
+        run: |
+          set +e
+          ./build/howl > /dev/null 2>&1
+          usage=$?
+          ./build/howl validate /dev/null > /dev/null 2>&1
+          validate=$?
+          set -e
+          echo "no-args exit=$usage, validate exit=$validate"
+          if [ "$usage" -eq 0 ] || [ "$validate" -eq 0 ]; then
+            echo "FAIL: an unimplemented pipeline must never exit 0" >&2
+            exit 1
+          fi
+
+  verify:
+    # Z3 weakest-precondition contract checking (SPEC §7). This proves
+    # the implementation cannot drift from the calculus without a
+    # contract failing. It does NOT prove soundness or completeness,
+    # which are model-theoretic and come from the published proofs plus
+    # differential testing — "verified faithful to a proven calculus" is
+    # the honest phrase.
+    runs-on: ubuntu-latest
+    continue-on-error: true # until the SLOP toolchain is available in CI
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Z3
+        run: sudo apt-get update && sudo apt-get install -y z3
+      - name: Verify contracts
+        run: |
+          if command -v slop >/dev/null 2>&1; then
+            slop verify
+          else
+            echo "SLOP toolchain not available in CI; skipping contract verification."
+            echo "Run 'make verify' locally. See SPEC.md §7."
+          fi

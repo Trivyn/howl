@@ -1,0 +1,154 @@
+;; ============================================================
+;; Hierarchy extraction and findings  —  SPEC.md §6.4, §6.7
+;;
+;; ⚠  M1, NOT YET IMPLEMENTED.
+;;
+;; SUBSUMPTION IS NOT RAW S(·) MEMBERSHIP, and reading it that way is
+;; incomplete. If ⊥ ∈ S(A) then A ⊑ B is entailed for EVERY class B,
+;; yet nothing puts those Bs into S(A) — the completion rules have no
+;; reason to. The published formulation reads subsumption as a
+;; disjunction, and extraction must implement all three arms:
+;;
+;;   entails-sub(A,B)  iff  findings.inconsistent   (everything follows)
+;;                      or  ⊥ ∈ S(A)                (everything follows from A)
+;;                      or  B ∈ S(A)
+;;
+;; The first disjunct is not redundant with the second. Inconsistency
+;; can arrive through an INDIVIDUAL context — C(a) with C ⊑ ⊥ gives
+;; ⊥ ∈ S(individual(a)) — while leaving every CLASS context untouched.
+;; Omitting it makes an unrelated probe A ⊑ B answer FALSE on an
+;; ontology that entails everything, and it does so precisely when the
+;; inconsistency came from the ABox encoding v0 exists to support.
+;;
+;; TWO DIFFERENT OUTPUTS FOLLOW FROM THAT DISJUNCTION, and they must
+;; not be confused. They agree semantically and differ as data:
+;;
+;;   entails-sub(A,B)        the PROBE — all three disjuncts. Used by
+;;                           the agreement stage, `explain`,
+;;                           differential testing, subsumption_delta
+;;   Findings.subsumptions   the TAXONOMY — bottom-compressed: an
+;;                           unsatisfiable C is the single pair (C,⊥),
+;;                           never C against every class. Used for
+;;                           Turtle emission
+;;
+;; A probe for A ⊑ B where A is unsatisfiable must answer TRUE; the
+;; taxonomy must NOT contain that pair, or every unsatisfiable class
+;; explodes the list by the size of the signature. Reading one
+;; paragraph and implementing the other produces either false
+;; negatives on probes or a quadratic hierarchy — and a differential
+;; test reporting mismatches that are artifacts of representation.
+;;
+;; EXTRACTION IS A DEFINED PASS, NOT A PROJECTION OF THE STORE:
+;;   1. Unsatisfiable classes COLLAPSE INTO ⊥ — every C with ⊥ ∈ S(C)
+;;      is emitted as owl:equivalentClass owl:Nothing, not as a class
+;;      with whatever accidental subsumers it accrued.
+;;   2. ⊥ is below everything and ⊤ above everything BY CONSTRUCTION,
+;;      not by derivation.
+;;   3. On ontology inconsistency the hierarchy is NOT EMITTED AT ALL.
+;;      The entailed hierarchy is the full cross-product — useless to
+;;      serialize, misleading to truncate. `subsumptions` is empty and
+;;      documented as UNDEFINED-because-inconsistent, not
+;;      empty-because-nothing-follows.
+;;
+;; Without step 1 a partially-collapsed hierarchy leaks into the output
+;; and into subsumption_delta; without step 3 an inconsistent ontology
+;; yields a small, plausible, entirely meaningless hierarchy. Both are
+;; silent — the classification looks fine.
+;;
+;; OUTPUT IS PROJECTED BACK TO class-node CONTEXTS ONLY. Fresh names
+;; are normalization artifacts that appear in no input and must appear
+;; in no output; individual contexts encode assertions, not
+;; subsumptions, and emitting `:a rdfs:subClassOf :C` for an individual
+;; is a category error a downstream RL engine would then faithfully
+;; materialize. Unsatisfiability found in an individual context is
+;; still reported — as an INCONSISTENCY, which is what it is.
+;; ============================================================
+
+(module classify
+  (@doc "Hierarchy extraction, findings, and output projection (M1)")
+
+  (import rdf (IRI))
+  (import types (Node SubPair Findings Saturation Context))
+
+  (export
+    extract-findings
+    entails-sub)
+
+  (fn entails-sub ((arena Arena) (sat Saturation) (inconsistent Bool) (a Node) (b Node))
+    (@intent "The subsumption PROBE — all three disjuncts, not just B ∈ S(A)")
+    (@spec ((Arena Saturation Bool Node Node) -> Bool))
+    (@alloc arena)
+    ;; OWED: the three-disjunct contract, once the saturation is real.
+    ;;
+    ;;   (@post {$result == (or findings.inconsistent
+    ;;                          (set-has S(a) ⊥)
+    ;;                          (set-has S(a) b))})
+    ;;
+    ;; Not statable yet — it quantifies over saturation state this stub
+    ;; does not build. Note the first disjunct is NOT redundant with the
+    ;; second: inconsistency can arrive through an INDIVIDUAL context,
+    ;; leaving every class context untouched, and omitting it makes an
+    ;; unrelated probe answer `false` on an ontology that entails
+    ;; everything.
+    ;;
+    ;; M1: not implemented. Returning `false` under-claims entailment,
+    ;; which is the safe direction for a probe, but it is still wrong —
+    ;; which is why `classify` refuses rather than serving probes from a
+    ;; stub.
+    false)
+
+  (fn extract-findings ((arena Arena) (sat Saturation))
+    (@intent "Extract the taxonomy and coherence findings from a saturated state")
+    (@spec ((Arena Saturation) -> Findings))
+    (@alloc arena)
+    ;; The three conditions, defined separately (§6.2):
+    ;;
+    ;;   inconsistent  := ⊥ ∈ S(⊤) or ∃ individual a. ⊥ ∈ S(individual(a))
+    ;;   unsatisfiable := ∅ when inconsistent; otherwise
+    ;;                    { iri | class-node(iri) ∈ input signature,
+    ;;                            iri ≠ owl:Nothing, ⊥ ∈ S(class-node(iri)) }
+    ;;   incoherent    := inconsistent ∨ unsatisfiable ≠ ∅
+    ;;
+    ;; owl:Nothing MUST be excluded explicitly or every ontology reports
+    ;; itself incoherent: initialization seeds Δ₀(N) = {N, ⊤} for every
+    ;; node, so ⊥ ∈ S(⊥) holds BY CONSTRUCTION the moment owl:Nothing
+    ;; appears — which any disjointness axiom guarantees. Without the
+    ;; exclusion `unsatisfiable` is non-empty for essentially every real
+    ;; ontology and `howl validate` exits 1 universally. That is a FALSE
+    ;; FAIL — the mirror of the false pass everything else guards
+    ;; against, and less dangerous only because uselessly noisy surfaces
+    ;; on first use where dangerously quiet does not.
+    ;;
+    ;; Under inconsistency `unsatisfiable` is empty because it is
+    ;; UNDEFINED, not because nothing is unsatisfiable: an inconsistent
+    ;; ontology has no model, so every class is unsatisfiable, yet raw
+    ;; ⊥ ∈ S(A) finds none of them when the inconsistency arrived
+    ;; through an individual context. Reporting that set would be a
+    ;; lower bound so misleading it is worse than nothing —
+    ;; `inconsistent: true` alongside `unsatisfiable: []` reads as
+    ;; "consistent classes".
+    ;;
+    ;; THE TWO UNDEFINED-NOT-EMPTY RULES, as contracts. They are stated
+    ;; now, against the stub, precisely because a reader will otherwise
+    ;; implement them as "empty because nothing follows" — and the two
+    ;; readings are indistinguishable in the output while meaning
+    ;; opposite things. An inconsistent ontology entails EVERY
+    ;; subsumption and makes EVERY class unsatisfiable; reporting the
+    ;; raw sets would be a lower bound so misleading it is worse than
+    ;; nothing.
+    ;;
+    ;; Vacuously satisfied while the stub returns `inconsistent: false`,
+    ;; and binding the moment it does not. That is different in kind
+    ;; from a contract like `(list-len $result) >= 0`, which no
+    ;; implementation could ever violate.
+    (@post (implies {(. $result inconsistent) == true}
+                    {(list-len (. $result unsatisfiable)) == 0}))
+    (@post (implies {(. $result inconsistent) == true}
+                    {(list-len (. $result subsumptions)) == 0}))
+    ;;
+    ;; M1: not implemented.
+    (record-new Findings
+      (inconsistent  false)
+      (unsatisfiable (list-new arena IRI))
+      (subsumptions  (list-new arena SubPair))
+      (imports-seen  (list-new arena IRI)))))

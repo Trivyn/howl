@@ -1,0 +1,150 @@
+;; ============================================================
+;; v0 completion rules  —  SPEC.md §6.4  (CR1–CR7)
+;;
+;; ⚠  M1, NOT YET IMPLEMENTED. Every rule below returns the empty
+;;    list. See the warning at the foot of this header.
+;;
+;; Each rule is a pure function from (context, incoming Derived,
+;; axiom) to a list of outgoing Addressed messages. A rule reads only
+;; the context it is given and EMITS rather than mutates — that is the
+;; ownership invariant (§6.6) which makes context parallelism safe and
+;; the per-rule faithfulness contracts statable.
+;;
+;;   CR1  B ∈ S(X), B ⊑ A                     ⟹ A ∈ S(X)
+;;   CR2  B₁,B₂ ∈ S(X), B₁ ⊓ B₂ ⊑ A           ⟹ A ∈ S(X)
+;;   CR3  B ∈ S(X), B ⊑ ∃r.A                  ⟹ (X,A) ∈ R(r)
+;;   CR4  (X,Y) ∈ R(r), B ∈ S(Y), ∃r.B ⊑ A    ⟹ A ∈ S(X)
+;;   CR5  (X,Y) ∈ R(r), ⊥ ∈ S(Y)              ⟹ ⊥ ∈ S(X)
+;;   CR6  (X,Y) ∈ R(r), r ⊑ s                 ⟹ (X,Y) ∈ R(s)
+;;   CR7  (X,Y) ∈ R(r), (Y,Z) ∈ R(s), r∘s ⊑ t ⟹ (X,Z) ∈ R(t)
+;;
+;; THESE LOCAL NUMBERS ARE HOWL'S, NOT THE PAPER'S. In the cited 2005
+;; calculus, role hierarchy and role composition are CR10 and CR11;
+;; its CR6 is nominal propagation and CR7–CR9 are concrete domains,
+;; none of which v0 has. Cross-referencing "CR6" against the proof
+;; sends you to the wrong rule.
+;;
+;;   HOWL CR1–CR5  =  published CR1–CR5
+;;   HOWL CR6      =  published CR10   (role hierarchy)
+;;   HOWL CR7      =  published CR11   (role composition)
+;;
+;; RANGES ADD NO RULE. They are eliminated during normalization by the
+;; published construction (§5.2), so the rule set is exactly the cited
+;; CEL formulation. Domain adds none either: domain(r) ⊑ A desugars to
+;; ∃r.⊤ ⊑ A and is handled by CR4. The range/composition admissibility
+;; condition is a PRECONDITION of that elimination, which is why it
+;; lives in the gate rather than here.
+;;
+;; DELTA TRIGGERS: EVERY RULE FIRES ON EVERY PREMISE (§6.4). Semi-naive
+;; evaluation is complete only if a multi-premise rule is re-triggered
+;; by EACH premise independently. CR4 joins (X,Y) ∈ R(r) with B ∈ S(Y);
+;; a handler that fires only on new subsumers never revisits the pair
+;; when the edge arrives second, and WHICH order occurs is a scheduling
+;; artifact — so a missing handler is an incompleteness bug and a
+;; determinism bug at once. The trigger table is therefore part of the
+;; calculus, not an implementation detail:
+;;
+;;   Rule | on derived-sub b        | on derived-pred (r,x)   | on derived-succ (r,y)
+;;   -----|-------------------------|-------------------------|----------------------
+;;   CR1  | scan axioms B ⊑ A       | —                       | —
+;;   CR2  | scan S(X) for the OTHER | —                       | —
+;;        |   conjunct of B₁⊓B₂ ⊑ A |                         |
+;;   CR3  | scan axioms B ⊑ ∃r.A    | —                       | —
+;;   CR4  | scan stored preds(r)    | scan stored S(Y)        | —
+;;   CR5  | if b = ⊥, scan preds    | if ⊥ ∈ S(Y), emit to x  | —
+;;   CR6  | —                       | scan axioms r ⊑ s       | scan axioms r ⊑ s
+;;   CR7  | —                       | scan succs (second leg) | scan preds (first leg)
+;;
+;; CR2 and CR7 are SELF-JOINS, so same-round co-arrival is their main
+;; path rather than a corner case — which is exactly why the driver's
+;; round snapshot must be Sₙ = Sₙ₋₁ ∪ Δₙ and not Sₙ₋₁ (§6.4).
+;;
+;; ⚠  WHY EMPTY STUBS ARE DANGEROUS HERE, AND WHAT GUARDS THEM.
+;;    An implementation whose rules all emit nothing satisfies the
+;;    SOUNDNESS direction of every faithfulness contract while
+;;    deriving nothing at all — it is a disabled engine that passes
+;;    verification. That is why §7 requires BOTH directions per rule
+;;    (nothing unlicensed emitted, AND nothing licensed omitted) plus
+;;    dispatch coverage plus the initialization obligation. Until
+;;    those land, `howl.classify` refuses rather than returning an
+;;    Outcome, so no caller can read a false `coherent` out of this
+;;    module's silence.
+;; ============================================================
+
+(module el
+  (@doc "v0 EL completion rules CR1-CR7 — signatures and trigger structure (M1)")
+
+  (import types (Node RoleId NormAxiom Derived Addressed Context emit-edge))
+
+  (export
+    apply-el-rules)
+
+  ;; ============================================================
+  ;; Rule dispatch
+  ;; ============================================================
+
+  (fn apply-el-rules ((arena Arena) (ctx Context) (incoming Derived) (axioms (List NormAxiom)))
+    (@intent "Apply every v0 completion rule triggered by one incoming Derived fact")
+    (@spec ((Arena Context Derived (List NormAxiom)) -> (List Addressed)))
+    (@alloc arena)
+    ;; DISPATCH COVERAGE is a driver-level obligation (§7): this
+    ;; function must invoke every rule against every axiom, in every
+    ;; trigger-table direction above. Stated as a contract rather than
+    ;; left to inspection, because without it a disabled engine
+    ;; satisfies every per-rule contract vacuously.
+    ;;
+    ;; `ctx` is always the ROUND SNAPSHOT Sₙ = Sₙ₋₁ ∪ Δₙ, never a live
+    ;; mutating view — so `subsumers` and `preds` already include this
+    ;; round's arrivals, which is what makes the Δₙ × Δₙ joins
+    ;; reachable from here.
+    ;;
+    ;; OWED — THE TWO FAITHFULNESS CONTRACTS, one per direction. §7 is
+    ;; explicit that both are needed, and the reason is that the
+    ;; soundness direction ALONE IS SATISFIED BY EMITTING NOTHING: an
+    ;; implementation whose rules all return the empty list would pass
+    ;; it while deriving nothing, so "the implementation cannot drift
+    ;; from the calculus without a contract failing" would be simply
+    ;; false. Their shape, per rule, taking CR4 as the worked example:
+    ;;
+    ;;   (a) nothing unlicensed is emitted
+    ;;   (@post (forall (m $result)
+    ;;     (exists (r a x)
+    ;;       (and (= ax (sub-some-lhs r b a))
+    ;;            (set-has (preds-of ctx r) x)
+    ;;            (= m (addressed x (derived-sub a)))))))
+    ;;
+    ;;   (b) nothing licensed is omitted
+    ;;   (@post (forall (r a x)
+    ;;     (implies (and (= ax (sub-some-lhs r b a))
+    ;;                   (set-has (preds-of ctx r) x))
+    ;;              (list-has $result (addressed x (derived-sub a))))))
+    ;;
+    ;; These are TRANSCRIPTION, not design — CR1–CR7 are fully specified
+    ;; in the published CEL formulation, so each rule's premises and
+    ;; conclusion are given. They are absent here only because the
+    ;; per-rule functions they attach to do not exist yet: this module
+    ;; currently has a dispatcher and nothing to dispatch to. They land
+    ;; with the bodies, one contract pair per rule function.
+    ;;
+    ;; Two formulation notes carried forward, so the shape above is not
+    ;; taken literally:
+    ;;
+    ;; `list-has` is NOT a checker builtin, despite appearing in
+    ;; SPEC.md §6.4's sketch. Direction (b) should express membership
+    ;; as `(exists (m $result) (= m ...))` instead — `exists` and
+    ;; `forall` over a result list are both supported, and are what
+    ;; GROWL's own rule properties use.
+    ;;
+    ;; Premises read from the context need care: `set-has` is available,
+    ;; but `set-elements` is uninterpreted, so quantifying over a
+    ;; context's stored side may need the premise supplied as a `@pre`
+    ;; rather than scanned out of the context inside the contract.
+    ;;
+    ;; No vacuous @post stands in meanwhile. `(list-len $result) >= 0`
+    ;; is true of every possible implementation and would only make the
+    ;; verification summary look fuller than it is.
+    ;;
+    ;; M1: not implemented. Returns no conclusions; see the header
+    ;; warning. `classify` refuses while this is true.
+    (let ((result (list-new arena Addressed)))
+      result)))
