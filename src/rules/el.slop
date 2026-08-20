@@ -1,12 +1,9 @@
 ;; ============================================================
 ;; v0 completion rules  —  SPEC.md §6.4  (CR1–CR7)
 ;;
-;; ⚠  M1, NOT YET IMPLEMENTED. Every rule below returns the empty
-;;    list. See the warning at the foot of this header.
-;;
-;; Each rule is a pure function from (context, incoming Derived,
-;; axiom) to a list of outgoing Addressed messages. A rule reads only
-;; the context it is given and EMITS rather than mutates — that is the
+;; Each rule is a pure function from (context, incoming Derived, axiom)
+;; to a list of outgoing Addressed messages. A rule reads only the
+;; context it is given and EMITS rather than mutates — that is the
 ;; ownership invariant (§6.6) which makes context parallelism safe and
 ;; the per-rule faithfulness contracts statable.
 ;;
@@ -59,92 +56,505 @@
 ;; path rather than a corner case — which is exactly why the driver's
 ;; round snapshot must be Sₙ = Sₙ₋₁ ∪ Δₙ and not Sₙ₋₁ (§6.4).
 ;;
-;; ⚠  WHY EMPTY STUBS ARE DANGEROUS HERE, AND WHAT GUARDS THEM.
-;;    An implementation whose rules all emit nothing satisfies the
-;;    SOUNDNESS direction of every faithfulness contract while
-;;    deriving nothing at all — it is a disabled engine that passes
-;;    verification. That is why §7 requires BOTH directions per rule
-;;    (nothing unlicensed emitted, AND nothing licensed omitted) plus
-;;    dispatch coverage plus the initialization obligation. Until
-;;    those land, `howl.classify` refuses rather than returning an
-;;    Outcome, so no caller can read a false `coherent` out of this
-;;    module's silence.
+;; ============================================================
+;; TWO IMPLEMENTATION FACTS THAT SHAPE EVERY RULE BODY BELOW.
+;;
+;; 1. EACH RULE OWNS ITS RESULT LIST. A `(List T)` is a VALUE STRUCT
+;;    {len, cap, data}, so pushing into a list received as a parameter
+;;    writes through the shared `data` buffer while leaving the
+;;    caller's `len` untouched — the element is written and invisible.
+;;    So no rule takes an accumulator; each builds a local `mut result`
+;;    and returns it, and the dispatcher copies elements across.
+;;
+;; 2. EDGES ARE EMITTED VIA `emit-edge`, EXPANDED INLINE. The helper
+;;    returns an `EdgePair` — a record, so "both halves exist" is a type
+;;    guarantee and each half's destination is a proven postcondition —
+;;    and the rule pushes both halves onto its own list. Emitting only
+;;    the successor is the tempting version of this bug precisely
+;;    because it looks complete from the deriving context and fails only
+;;    in the CONSUMING rules (CR4/CR5 read `preds`, CR7 reads both
+;;    sides), so the symptom is under-derivation with no error.
+;;
+;; ============================================================
+;; OWED — THE TWO FAITHFULNESS DIRECTIONS, PER RULE (§7).
+;;
+;; Each rule below carries STRUCTURAL contracts: how many messages it
+;; may emit, where they are addressed, and which `Derived` shape they
+;; carry. Those are real constraints — they fail if a rule emits to the
+;; wrong context, emits an edge half without its partner, or emits a
+;; subsumer where an edge belongs.
+;;
+;; What is NOT yet stated is the full pair §7 requires:
+;;
+;;   (a) nothing unlicensed is emitted
+;;   (b) nothing licensed is omitted
+;;
+;; and (b) is the one that matters most, because SOUNDNESS ALONE IS
+;; SATISFIED BY EMITTING NOTHING — a disabled engine passes it while
+;; deriving nothing at all. Both are transcription rather than design:
+;; CR1–CR7 are fully specified in the published CEL formulation, so
+;; every premise and conclusion is given. The blocker is expressibility,
+;; and it is concrete: stating them needs (i) per-variant ACCESSORS on
+;; `NormAxiom` usable inside a contract, since a contract cannot
+;; `match`, and (ii) a `preds-of`-style function returning a Set for the
+;; premise `(X,Y) ∈ R(r)`, where `map-get` returns an `Option` that a
+;; contract equally cannot destructure. GROWL states its equivalents
+;; only because RDF gives it total accessors — `triple-subject` is
+;; defined for every triple, whereas `sub-some-lhs-role` is not defined
+;; for a `role-chain`.
+;;
+;; Their shape, taking CR4 as the worked example, follows GROWL's
+;; VERIFIED idiom (`rules/eq.slop:280-293`) rather than SPEC §6.4's
+;; sketch — the sketch uses `list-has`, which is not a contract builtin,
+;; and `implies`, which does not translate inside `@property`. The
+;; working forms are `list-contains` and a negated-premise disjunction:
+;;
+;;   (@property soundness
+;;     (forall (m $result)
+;;       (exists (x (preds-of ctx r))
+;;         (and (= ax (sub-some-lhs r b a))
+;;              (= m (addressed x (derived-sub a)))))))
+;;
+;;   (@property completeness
+;;     (forall (x (preds-of ctx r))
+;;       (or (not (= ax (sub-some-lhs r b a)))
+;;           (list-contains $result (addressed x (derived-sub a))))))
+;;
+;; Until the accessors exist, direction (b) is discharged EMPIRICALLY by
+;; the fixtures in test.slop — the §3.1 litmus for CR1–CR4, the polarity
+;; guard, the same-round co-arrival case for CR4's two-sided trigger,
+;; and the ⊥-propagation case for CR5. No vacuous `@post` stands in
+;; meanwhile: `(list-len $result) >= 0` is true of every possible
+;; implementation and would only make the verification summary look
+;; fuller than it is.
 ;; ============================================================
 
 (module el
-  (@doc "v0 EL completion rules CR1-CR7 — signatures and trigger structure (M1)")
+  (@doc "v0 EL completion rules CR1-CR7 (M1)")
 
-  (import types (Node RoleId NormAxiom Derived Addressed Context emit-edge))
+  (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge EdgePair Context
+                 node-bottom node-eq role-eq emit-edge))
 
   (export
-    apply-el-rules)
+    apply-el-rules
+    cr-sub-name-on-sub
+    cr-and-on-sub
+    cr-some-rhs-on-sub
+    cr-exists-lhs-on-sub
+    cr-exists-lhs-on-pred
+    cr-bottom-on-sub
+    cr-bottom-on-pred
+    cr-role-incl-on-pred
+    cr-role-incl-on-succ
+    cr-chain-on-pred
+    cr-chain-on-succ)
+
+  ;; ============================================================
+  ;; CR1 — B ∈ S(X), B ⊑ A ⟹ A ∈ S(X)
+  ;; ============================================================
+
+  (fn cr-sub-name-on-sub ((arena Arena) (ctx Context) (b Node) (ax NormAxiom))
+    (@intent "EL completion CR1: told subsumption closes S(X) upward")
+    (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    ;; CR1's premise (B ∈ S(X)) is the DRIVER's obligation, not this
+    ;; function's: the rule fires because `b` was delivered to this
+    ;; context this round. Stating it as a @post would assert something
+    ;; the body never establishes — the unprovable-claim error §7 warns
+    ;; about. It is not stated as a @pre either, because `set-has` on the
+    ;; snapshot is exactly the fact the driver guarantees by delivery.
+    ;;
+    ;; At most one conclusion: one axiom in, one subsumer out.
+    (@post {(list-len $result) <= 1})
+    ;; CR1 concludes only about its OWN context. A message addressed
+    ;; anywhere else would be a rule reaching outside the context it was
+    ;; given, breaking the §6.6 ownership invariant.
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-name b2 a)
+            (when (node-eq b b2)
+              (list-push result
+                (record-new Addressed
+                  (to   (. ctx root))
+                  (what (union-new Derived derived-sub a))))))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  ;; ============================================================
+  ;; CR2 — B₁,B₂ ∈ S(X), B₁ ⊓ B₂ ⊑ A ⟹ A ∈ S(X)
+  ;;
+  ;; A SELF-JOIN, so it must fire from EITHER conjunct: the incoming `b`
+  ;; may be B₁ with B₂ already stored, or B₂ with B₁ already stored.
+  ;; Testing only one side loses every conclusion whose conjuncts happen
+  ;; to arrive in the other order — and which order occurs is a
+  ;; scheduling artifact, so the bug is nondeterministic as well as
+  ;; incomplete. `(. ctx subsumers)` is Sₙ = Sₙ₋₁ ∪ Δₙ, which is what
+  ;; makes the same-round Δₙ × Δₙ case reachable at all (§6.4).
+  ;; ============================================================
+
+  (fn cr-and-on-sub ((arena Arena) (ctx Context) (b Node) (ax NormAxiom))
+    (@intent "EL completion CR2: conjunction, fired from either conjunct")
+    (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (@post {(list-len $result) <= 1})
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-and a1 a2 a)
+            ;; Nested `if` rather than a flat `(or (and ...) (and ...))`
+            ;; condition: `or`/`and` make the enclosing value opaque to
+            ;; the WP checker, and the two arms must not both fire when
+            ;; a1 = a2 = b (harmless in a set-valued delta, but it would
+            ;; break the length bound above).
+            (let ((mut fire false))
+              (do
+                (if (node-eq b a1)
+                  (when (set-has (. ctx subsumers) a2) (set! fire true))
+                  (when (node-eq b a2)
+                    (when (set-has (. ctx subsumers) a1) (set! fire true))))
+                ;; ONE push site, reached through a flag rather than two
+                ;; exclusive branches that each push. Semantically
+                ;; identical; the difference is that the checker can then
+                ;; discharge `<= 1`, whereas with two syntactic pushes it
+                ;; must assume both could fire and returns a 2-element
+                ;; counterexample.
+                (when fire
+                  (list-push result
+                    (record-new Addressed
+                      (to (. ctx root)) (what (union-new Derived derived-sub a))))))))
+          ((sub-name _ _)       (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  ;; ============================================================
+  ;; CR3 — B ∈ S(X), B ⊑ ∃r.A ⟹ (X,A) ∈ R(r)
+  ;; ============================================================
+
+  (fn cr-some-rhs-on-sub ((arena Arena) (ctx Context) (b Node) (ax NormAxiom))
+    (@intent "EL completion CR3: existential in superclass position derives an edge")
+    (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    ;; TWO messages, never one: an edge is one logical fact stored as a
+    ;; successor at X and a predecessor at A. The bound is `<= 2` and
+    ;; the both-halves guarantee comes from `emit-edge`'s EdgePair.
+    (@post {(list-len $result) <= 2})
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-some-rhs b2 r a)
+            (when (node-eq b b2)
+              (let ((pair (emit-edge arena
+                            (record-new LogicalEdge
+                              (from (. ctx root)) (role r) (to a)))))
+                (do
+                  (list-push result (. pair succ-half))
+                  (list-push result (. pair pred-half))))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  ;; ============================================================
+  ;; CR4 — (X,Y) ∈ R(r), B ∈ S(Y), ∃r.B ⊑ A ⟹ A ∈ S(X)
+  ;;
+  ;; TWO HANDLERS, and both are mandatory. The rule runs in context Y —
+  ;; the context owning the premise B ∈ S(Y) — and emits to each
+  ;; PREDECESSOR X, which is why `preds` is stored at all.
+  ;; ============================================================
+
+  (fn cr-exists-lhs-on-sub ((arena Arena) (ctx Context) (b Node) (ax NormAxiom))
+    (@intent "EL completion CR4, new-subsumer direction: scan the stored predecessors")
+    (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    ;; Unlike CR1–CR3 this rule emits OUTWARD, to every predecessor, so
+    ;; there is no own-context property to state. What is structurally
+    ;; true is that every conclusion is a subsumer assertion — CR4 never
+    ;; concludes an edge.
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-some-lhs r b2 a)
+            (when (node-eq b b2)
+              (match (map-get (. ctx preds) r)
+                ((some xs)
+                  (for-each (x xs)
+                    (list-push result
+                      (record-new Addressed
+                        (to x) (what (union-new Derived derived-sub a))))))
+                ((none) (do)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  (fn cr-exists-lhs-on-pred ((arena Arena) (ctx Context) (r RoleId) (x Node) (ax NormAxiom))
+    (@intent "EL completion CR4, new-edge direction: scan the stored subsumers")
+    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    ;; THE COMPANION HANDLER. Omitting it loses every conclusion whose
+    ;; edge happens to arrive AFTER its subsumer — silently, and
+    ;; permanently, since in the next round neither premise is in the
+    ;; delta any more. This is the case `test-same-round-co-arrival`
+    ;; exists to pin.
+    (@post {(list-len $result) <= 1})
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-some-lhs r2 b a)
+            (when (role-eq r r2)
+              (when (set-has (. ctx subsumers) b)
+                (list-push result
+                  (record-new Addressed
+                    (to x) (what (union-new Derived derived-sub a)))))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  ;; ============================================================
+  ;; CR5 — (X,Y) ∈ R(r), ⊥ ∈ S(Y) ⟹ ⊥ ∈ S(X)
+  ;;
+  ;; AXIOM-INDEPENDENT: unsatisfiability propagates backwards along any
+  ;; edge, with no axiom premise. Both handlers are therefore invoked
+  ;; ONCE per incoming message by the dispatcher, outside its axiom
+  ;; loop — firing them per axiom would emit |axioms| copies of every
+  ;; conclusion. Harmless in a set-valued delta, but pure waste.
+  ;; ============================================================
+
+  (fn cr-bottom-on-sub ((arena Arena) (ctx Context) (b Node))
+    (@intent "EL completion CR5, new-⊥ direction: tell every predecessor")
+    (@spec ((Arena Context Node) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut result (list-new arena Addressed))
+          (bottom (node-bottom)))
+      (do
+        (when (node-eq b bottom)
+          ;; Every role, not just one: a context is unsatisfiable
+          ;; regardless of WHICH role reaches it.
+          (for-each ((r xs) (. ctx preds))
+            (for-each (x xs)
+              (list-push result
+                (record-new Addressed
+                  (to x) (what (union-new Derived derived-sub bottom)))))))
+        result)))
+
+  (fn cr-bottom-on-pred ((arena Arena) (ctx Context) (x Node))
+    (@intent "EL completion CR5, new-edge direction: tell the arriving predecessor")
+    (@spec ((Arena Context Node) -> (List Addressed)))
+    (@alloc arena)
+    (@post {(list-len $result) <= 1})
+    (let ((mut result (list-new arena Addressed))
+          (bottom (node-bottom)))
+      (do
+        (when (set-has (. ctx subsumers) bottom)
+          (list-push result
+            (record-new Addressed
+              (to x) (what (union-new Derived derived-sub bottom)))))
+        result)))
+
+  ;; ============================================================
+  ;; CR6 — (X,Y) ∈ R(r), r ⊑ s ⟹ (X,Y) ∈ R(s)
+  ;;
+  ;; Fires from BOTH stored halves, because either half may be the one
+  ;; that just arrived. Each handler reconstructs the same logical edge
+  ;; from its own vantage point and re-emits it under the super-role.
+  ;; ============================================================
+
+  (fn cr-role-incl-on-pred ((arena Arena) (ctx Context) (r RoleId) (x Node) (ax NormAxiom))
+    (@intent "EL completion CR6, predecessor-half direction: role inclusion")
+    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (@post {(list-len $result) <= 2})
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-role r2 s)
+            (when (role-eq r r2)
+              ;; Incoming (derived-pred r x) at context Y IS the edge
+              ;; (x, r, Y) — so the super-role edge is (x, s, Y).
+              (let ((pair (emit-edge arena
+                            (record-new LogicalEdge
+                              (from x) (role s) (to (. ctx root))))))
+                (do
+                  (list-push result (. pair succ-half))
+                  (list-push result (. pair pred-half))))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  (fn cr-role-incl-on-succ ((arena Arena) (ctx Context) (r RoleId) (y Node) (ax NormAxiom))
+    (@intent "EL completion CR6, successor-half direction: role inclusion")
+    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (@post {(list-len $result) <= 2})
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-role r2 s)
+            (when (role-eq r r2)
+              ;; Incoming (derived-succ r y) at context X IS the edge
+              ;; (X, r, y) — so the super-role edge is (X, s, y).
+              (let ((pair (emit-edge arena
+                            (record-new LogicalEdge
+                              (from (. ctx root)) (role s) (to y)))))
+                (do
+                  (list-push result (. pair succ-half))
+                  (list-push result (. pair pred-half))))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((role-chain _ _ _)   (do)))
+        result)))
+
+  ;; ============================================================
+  ;; CR7 — (X,Y) ∈ R(r), (Y,Z) ∈ R(s), r∘s ⊑ t ⟹ (X,Z) ∈ R(t)
+  ;;
+  ;; The other SELF-JOIN, and the one whose two handlers are easiest to
+  ;; confuse: the rule runs in the MIDDLE context Y, joining an incoming
+  ;; edge on one side against stored edges on the other. Which side is
+  ;; which is decided by the incoming half, not by the axiom.
+  ;; ============================================================
+
+  (fn cr-chain-on-pred ((arena Arena) (ctx Context) (r RoleId) (x Node) (ax NormAxiom))
+    (@intent "EL completion CR7: new FIRST leg (x,r,Y), scan stored second legs")
+    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((role-chain r2 s t)
+            (when (role-eq r r2)
+              ;; Y = ctx.root is the join point: the arriving edge is
+              ;; (x, r, Y), and every stored s-successor z of Y completes
+              ;; the chain to (x, t, z).
+              (match (map-get (. ctx succs) s)
+                ((some zs)
+                  (for-each (z zs)
+                    (let ((pair (emit-edge arena
+                                  (record-new LogicalEdge
+                                    (from x) (role t) (to z)))))
+                      (do
+                        (list-push result (. pair succ-half))
+                        (list-push result (. pair pred-half))))))
+                ((none) (do)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do)))
+        result)))
+
+  (fn cr-chain-on-succ ((arena Arena) (ctx Context) (s RoleId) (z Node) (ax NormAxiom))
+    (@intent "EL completion CR7: new SECOND leg (Y,s,z), scan stored first legs")
+    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut result (list-new arena Addressed)))
+      (do
+        (match ax
+          ((role-chain r s2 t)
+            (when (role-eq s s2)
+              ;; Mirror image: the arriving edge is (Y, s, z), and every
+              ;; stored r-predecessor x of Y completes (x, t, z).
+              (match (map-get (. ctx preds) r)
+                ((some xs)
+                  (for-each (x xs)
+                    (let ((pair (emit-edge arena
+                                  (record-new LogicalEdge
+                                    (from x) (role t) (to z)))))
+                      (do
+                        (list-push result (. pair succ-half))
+                        (list-push result (. pair pred-half))))))
+                ((none) (do)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do)))
+        result)))
 
   ;; ============================================================
   ;; Rule dispatch
   ;; ============================================================
 
+  ;; THERE IS DELIBERATELY NO append-onto-an-accumulator HELPER.
+  ;; Passing the dispatcher's result list to each rule so it can append
+  ;; is the obvious way to write the dispatch below, and it cannot work:
+  ;; a `(List T)` is a VALUE STRUCT, so the callee receives a copy whose
+  ;; `len` the caller never sees, and `list-push` also needs an `arena`
+  ;; the callee has no reason to take. The collection is therefore
+  ;; written out at each call site, against the dispatcher's own local.
+  ;;
+  ;; The first attempt compiled to `use of undeclared identifier
+  ;; 'arena'`, which is the lucky failure — had the helper taken an
+  ;; arena it would have compiled and silently dropped every message
+  ;; past the shared buffer's initial length.
+
   (fn apply-el-rules ((arena Arena) (ctx Context) (incoming Derived) (axioms (List NormAxiom)))
     (@intent "Apply every v0 completion rule triggered by one incoming Derived fact")
     (@spec ((Arena Context Derived (List NormAxiom)) -> (List Addressed)))
     (@alloc arena)
-    ;; DISPATCH COVERAGE is a driver-level obligation (§7): this
+    ;; DISPATCH COVERAGE is the driver-level obligation §7 names: this
     ;; function must invoke every rule against every axiom, in every
-    ;; trigger-table direction above. Stated as a contract rather than
-    ;; left to inspection, because without it a disabled engine
-    ;; satisfies every per-rule contract vacuously.
+    ;; trigger-table direction in the header. Without it a disabled
+    ;; engine satisfies every per-rule contract vacuously — which is the
+    ;; reason the table is transcribed above the code rather than left
+    ;; to be inferred from it.
     ;;
     ;; `ctx` is always the ROUND SNAPSHOT Sₙ = Sₙ₋₁ ∪ Δₙ, never a live
-    ;; mutating view — so `subsumers` and `preds` already include this
-    ;; round's arrivals, which is what makes the Δₙ × Δₙ joins
-    ;; reachable from here.
-    ;;
-    ;; OWED — THE TWO FAITHFULNESS CONTRACTS, one per direction. §7 is
-    ;; explicit that both are needed, and the reason is that the
-    ;; soundness direction ALONE IS SATISFIED BY EMITTING NOTHING: an
-    ;; implementation whose rules all return the empty list would pass
-    ;; it while deriving nothing, so "the implementation cannot drift
-    ;; from the calculus without a contract failing" would be simply
-    ;; false. Their shape, per rule, taking CR4 as the worked example:
-    ;;
-    ;;   (a) nothing unlicensed is emitted
-    ;;   (@post (forall (m $result)
-    ;;     (exists (r a x)
-    ;;       (and (= ax (sub-some-lhs r b a))
-    ;;            (set-has (preds-of ctx r) x)
-    ;;            (= m (addressed x (derived-sub a)))))))
-    ;;
-    ;;   (b) nothing licensed is omitted
-    ;;   (@post (forall (r a x)
-    ;;     (implies (and (= ax (sub-some-lhs r b a))
-    ;;                   (set-has (preds-of ctx r) x))
-    ;;              (list-has $result (addressed x (derived-sub a))))))
-    ;;
-    ;; These are TRANSCRIPTION, not design — CR1–CR7 are fully specified
-    ;; in the published CEL formulation, so each rule's premises and
-    ;; conclusion are given. They are absent here only because the
-    ;; per-rule functions they attach to do not exist yet: this module
-    ;; currently has a dispatcher and nothing to dispatch to. They land
-    ;; with the bodies, one contract pair per rule function.
-    ;;
-    ;; Two formulation notes carried forward, so the shape above is not
-    ;; taken literally:
-    ;;
-    ;; `list-has` is NOT a checker builtin, despite appearing in
-    ;; SPEC.md §6.4's sketch. Direction (b) should express membership
-    ;; as `(exists (m $result) (= m ...))` instead — `exists` and
-    ;; `forall` over a result list are both supported, and are what
-    ;; GROWL's own rule properties use.
-    ;;
-    ;; Premises read from the context need care: `set-has` is available,
-    ;; but `set-elements` is uninterpreted, so quantifying over a
-    ;; context's stored side may need the premise supplied as a `@pre`
-    ;; rather than scanned out of the context inside the contract.
-    ;;
-    ;; No vacuous @post stands in meanwhile. `(list-len $result) >= 0`
-    ;; is true of every possible implementation and would only make the
-    ;; verification summary look fuller than it is.
-    ;;
-    ;; M1: not implemented. Returns no conclusions; see the header
-    ;; warning. `classify` refuses while this is true.
-    (let ((result (list-new arena Addressed)))
-      result)))
+    ;; mutating view — the store absorbed Δₙ at the previous barrier —
+    ;; so `subsumers` and `preds` already include this round's arrivals,
+    ;; which is what makes the Δₙ × Δₙ joins reachable from here.
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match incoming
+          ;; ---- a new subsumer arrived: CR1, CR2, CR3, CR4, CR5 ----
+          ((derived-sub b)
+            (do
+              (for-each (ax axioms)
+                (do
+                  (for-each (m (cr-sub-name-on-sub   arena ctx b ax)) (list-push out m))
+                  (for-each (m (cr-and-on-sub        arena ctx b ax)) (list-push out m))
+                  (for-each (m (cr-some-rhs-on-sub   arena ctx b ax)) (list-push out m))
+                  (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m))))
+              ;; CR5 takes no axiom premise — fired once, not per axiom.
+              (for-each (m (cr-bottom-on-sub arena ctx b)) (list-push out m))))
+          ;; ---- a new predecessor edge arrived: CR4, CR5, CR6, CR7 ----
+          ((derived-pred r x)
+            (do
+              (for-each (ax axioms)
+                (do
+                  (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))
+                  (for-each (m (cr-role-incl-on-pred  arena ctx r x ax)) (list-push out m))
+                  (for-each (m (cr-chain-on-pred      arena ctx r x ax)) (list-push out m))))
+              (for-each (m (cr-bottom-on-pred arena ctx x)) (list-push out m))))
+          ;; ---- a new successor edge arrived: CR6, CR7 ----
+          ;;
+          ;; No CR4/CR5 handler here, and that is the trigger table, not
+          ;; an omission: both conclude about a PREDECESSOR of the
+          ;; context they run in, so a new successor at X gives X nothing
+          ;; to say — the corresponding predecessor half arrives at the
+          ;; other endpoint in the same round and fires there.
+          ((derived-succ r y)
+            (for-each (ax axioms)
+              (do
+                (for-each (m (cr-role-incl-on-succ arena ctx r y ax)) (list-push out m))
+                (for-each (m (cr-chain-on-succ     arena ctx r y ax)) (list-push out m))))))
+        out))))

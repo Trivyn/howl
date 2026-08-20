@@ -8,10 +8,31 @@
 #include "slop_el.h"
 
 typedef struct saturate_RoundResult saturate_RoundResult;
+typedef struct saturate_RoundDelta saturate_RoundDelta;
+
+#ifndef SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_DEFINED
+SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
+#endif
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 #define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
+#define SLOP_OPTION_TYPES_NODE_DEFINED
+SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CONTEXT_DEFINED
+#define SLOP_OPTION_TYPES_CONTEXT_DEFINED
+SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
+#define SLOP_OPTION_TYPES_QUEUE_DEFINED
+SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
@@ -28,6 +49,16 @@ typedef struct saturate_RoundResult saturate_RoundResult;
 #ifndef SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 #define SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 SLOP_OPTION_DEFINE(saturate_RoundResult, slop_option_saturate_RoundResult)
+#endif
+
+struct saturate_RoundDelta {
+    slop_map* pending;
+};
+typedef struct saturate_RoundDelta saturate_RoundDelta;
+
+#ifndef SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 #endif
 
 
@@ -92,7 +123,6 @@ static inline bool slop_eq_types_Node(const void* a, const void* b) {
     }
     return false;
 }
-SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 #endif
 
 #ifndef SLOP_RESULT_SATURATE_ROUNDRESULT_TYPES_FAULT_DEFINED
@@ -100,14 +130,49 @@ SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 typedef struct { bool is_ok; union { saturate_RoundResult ok; types_Fault err; } data; } slop_result_saturate_RoundResult_types_Fault;
 #endif
 
-uint8_t saturate_frontier_is_empty(slop_arena* arena, types_Saturation sat);
+slop_option_types_Context saturate_context_of(types_Saturation sat, types_Node n);
+slop_option_types_Queue saturate_queue_of(types_Saturation sat, types_Node n);
+uint8_t saturate_store_has_sub(types_Saturation sat, types_Node x, types_Node b);
+uint8_t saturate_store_has_succ(types_Saturation sat, types_Node x, types_RoleId r, types_Node y);
+types_Context saturate_delta_context(slop_arena* arena, saturate_RoundDelta delta, types_Node x);
+void saturate_add_succ(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node y);
+void saturate_add_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x);
+void saturate_admit_sub(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Node x, types_Node b);
+void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_LogicalEdge e);
+void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
+void saturate_round_join(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, saturate_RoundDelta delta);
+types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
+types_Saturation saturate_round_commit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta);
+types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
+uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
+types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
+uint8_t saturate_frontier_is_empty(types_Saturation sat);
 uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config);
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
-types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
 
 #ifndef SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 #define SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 SLOP_OPTION_DEFINE(saturate_RoundResult, slop_option_saturate_RoundResult)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
+#define SLOP_OPTION_TYPES_NODE_DEFINED
+SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CONTEXT_DEFINED
+#define SLOP_OPTION_TYPES_CONTEXT_DEFINED
+SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
+#define SLOP_OPTION_TYPES_QUEUE_DEFINED
+SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED

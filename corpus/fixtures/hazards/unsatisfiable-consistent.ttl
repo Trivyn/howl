@@ -1,0 +1,17 @@
+# CONSISTENT AND INCOHERENT AT ONCE -- the case a reasoner keyed only on
+# inconsistency misses, and what `validate` actually advertises.
+# A subseteq B, A subseteq C, B AND C subseteq bottom.
+# Expect: inconsistent = FALSE, unsatisfiable = {A}, verdict INCOHERENT (exit 1).
+# The taxonomy must hold only the pair (A, bottom) -- bottom-compression -- while
+# the PROBE entails-sub(A, anything) answers true.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:A rdfs:subClassOf :B , :C .
+:B owl:disjointWith :C .

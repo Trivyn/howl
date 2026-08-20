@@ -19,54 +19,99 @@
 ;; cuts at the same point on every host at any worker count. Within a
 ;; round, work distribution stays free.
 ;;
-;; This costs throughput against pure ELK-style racing — a barrier
-;; idles workers that finish early. That is the price of a
-;; DECISION-BEARING cap: the consumer's max_iterations flips a verdict,
-;; so it cannot be allowed to depend on core count.
-;;
 ;;   Sₙ   := Sₙ₋₁ ∪ Δₙ          freeze at round start, INCLUDING
 ;;                              this round's arrivals
 ;;   for δ ∈ Δₙ: join δ against Sₙ      so Δₙ × Δₙ is covered too
-;;   Δₙ₊₁ := conclusionsₙ \ Sₙ  NOVEL facts only
+;;   Δₙ₊₁ := conclusions \ Sₙ   NOVEL facts only
 ;;   active := contexts with a non-empty Δₙ₊₁
 ;;
-;; TWO SUBTLETIES, BOTH SILENT WHEN WRONG:
+;; ============================================================
+;; HOW THE FREEZE IS ACHIEVED: Δₙ IS COMMITTED AT THE *PREVIOUS*
+;; BARRIER, SO NOTHING WRITES THE STORE DURING A ROUND.
 ;;
-;; 1. The snapshot must INCLUDE Δₙ. Scanning the pre-round state Sₙ₋₁
-;;    instead loses conclusions permanently: if a CR4 subsumer and its
-;;    matching predecessor edge both arrive in round n, neither sees
-;;    the other, and in round n+1 neither is in the delta any more — so
-;;    the conclusion is never derived, by any handler, ever. CR2 and
-;;    CR7 are self-joins and so are MORE exposed. Freezing Sₙ before
-;;    any joining begins keeps the round a pure function of its input,
-;;    so this costs no determinism.
+;; This is the load-bearing design decision in the file, and it is
+;; forced by SLOP's data representation rather than chosen for
+;; elegance. `(Set T)` and `(Map K V)` compile to `slop_map*` —
+;; POINTERS — so a `Context` read out of `sat.contexts` shares its sets
+;; with the stored one. The obvious implementation, which folds
+;; conclusions into `subsumers` as they are produced, therefore ALIASES
+;; the frozen snapshot Sₙ with the live store: a fact derived early in
+;; round n becomes instantly visible to rules still running in round n.
+;; That is exactly what §6.4 forbids, and here it is the DEFAULT
+;; BEHAVIOUR rather than an easy mistake to make.
 ;;
-;; 2. The `\ Sₙ` is not an optimization — without it the loop does not
-;;    terminate. Conclusions must be subtracted from the ACCUMULATED
-;;    store, not merely deduplicated within the batch. Take A ⊑ B,
-;;    B ⊑ A: every round CR1 re-derives both, already stored, and a
-;;    batch-only dedup keeps them because they are distinct WITHIN the
-;;    batch. The frontier never empties and an ordinary cyclic
-;;    hierarchy burns its budget and returns inconclusive forever.
+;; Two independent runtime hazards forbid mutate-as-you-go anyway:
+;; `slop_map_put` rehashes at 75% load while `for-each` re-reads `cap`
+;; each iteration (so mutating a set under iteration silently skips or
+;; revisits elements), and `slop_map_remove` clears `occupied` with no
+;; tombstone in a linear-probe table (so a removal can strand later
+;; members of a probe chain — hence `active` is REBUILT, never pruned).
 ;;
-;; Conclusions are held for Δₙ₊₁ rather than folded into Sₙ as they are
-;; produced — that is what keeps a round's own output from re-entering
-;; the same round and making the result order-dependent.
+;; The resolution: commit Δₙ into the store at the end of round n−1.
+;; Then during round n the store simply IS Sₙ = Sₙ₋₁ ∪ Δₙ, with no
+;; snapshot copy at all, and it is frozen because nothing writes it.
+;; Δₙ travels separately in `Saturation.queues`, so rules still know
+;; which facts are new. A round is then:
+;;
+;;   round-join    STRICTLY READ-ONLY over `sat`, emits into RoundDelta
+;;   round-commit  THE BARRIER — the only mutation site in this file
+;;
+;; Two alternatives were rejected. COPYING the subsumer sets at round
+;; start needs the whole store copied every round to be correct
+;; (O(rounds × |store|)), which will not meet the 5×-ELK budget.
+;; TWO-GENERATION CONTEXTS (a `pending` set beside `subsumers`) add a
+;; second `slop_map*` with identical aliasing character rather than
+;; removing the first, and let `extract-findings` read the uncommitted
+;; generation by mistake — a silent over-report with no error.
+;;
+;; WHY THIS IS HARD TO VIOLATE RATHER THAN MERELY DOCUMENTED. The
+;; invariant reduces to one reviewable property: `round-join` and
+;; everything it calls contain no `set-put`/`map-put`/`list-push` whose
+;; target is reachable from `sat`. And it is enforced mechanically —
+;; the read-only accessors below take NO `Arena` parameter, while
+;; `set-put`/`map-put`/`set-elements` all emit the bare C identifier
+;; `arena`. A store write in the join phase is therefore a COMPILE
+;; ERROR, not a review finding.
+;;
+;; TERMINATION. `A ⊑ B, B ⊑ A`: round 1 admits both against the empty
+;; store and commits them; round 2 re-derives both, `admit` finds them
+;; already stored, nothing is touched, the frontier empties, fixpoint.
+;; This is §6.4's `\ Sₙ` against the ACCUMULATED store — which works
+;; precisely because the store absorbed Δₙ at the previous barrier.
+;; Without it an ordinary cyclic hierarchy burns its budget forever.
+;;
+;; DETERMINISM. A round is a read-only fold producing a SET-VALUED
+;; Δₙ₊₁, committed by set union — commutative and idempotent, so the
+;; content of Sₙ₊₁, the touched set, and therefore the round count do
+;; not depend on visitation order. Set iteration order is bucket order
+;; and is NOT content-canonical, so queue list order must never escape
+;; into a report; it does not, because `classify.extract-findings` is
+;; the only path out and sorts (§6.7). That chain is what licenses
+;; "byte-identical across worker counts" without a canonical set order
+;; this runtime cannot provide.
 ;; ============================================================
 
 (module saturate
   (@doc "Semi-naive barrier-synchronized saturation driver")
 
-  (import types (Node NormAxiom Derived Addressed Context Saturation
+  (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge
+                 Context Queue Saturation
                  Termination Fault ReasonerConfig
-                 context-is-active))
+                 node-top node-bottom make-context make-queue))
   (import el (apply-el-rules))
 
   (export
+    RoundDelta
     RoundResult
     saturate
+    advance-round
+    make-initial-saturation
     budget-exhausted
-    frontier-is-empty)
+    frontier-is-empty
+    context-of
+    queue-of
+    store-has-sub
+    store-has-succ)
 
   ;; The driver returns termination alongside the state, never a bare
   ;; Saturation (§6.5): a capped run and a coherent ontology are
@@ -76,13 +121,386 @@
     (saturation  Saturation)
     (termination Termination)))
 
-  ;; Takes an arena because `set-elements` materializes the element
-  ;; list; it allocates, so it is not `@pure`.
-  (fn frontier-is-empty ((arena Arena) (sat Saturation))
-    (@intent "The global fixpoint is reached when no context has anything in its inbox")
-    (@spec ((Arena Saturation) -> Bool))
+  ;; Δₙ₊₁ under construction: for each touched node, the NEW facts only.
+  ;;
+  ;; Reusing `Context` as the payload is deliberate — the pending facts
+  ;; have exactly the shape of the facts they will be merged into, so
+  ;; commit is three parallel loops with no translation step, and the
+  ;; whole structure is built from `(Map Node Context)`, the one nesting
+  ;; already exercised by `Saturation`. It is DRIVER-OWNED and never
+  ;; stored in `Saturation`, which is what keeps it distinct from the
+  ;; rejected two-generation design: nothing downstream can read it.
+  ;;
+  ;; The touched set is the key set of `pending` — `for-each` over a Map
+  ;; iterates keys, so a separate `touched` field would be a second copy
+  ;; of the same information, free to drift.
+  (type RoundDelta (record
+    (pending (Map Node Context))))
+
+  ;; ============================================================
+  ;; READ-ONLY STORE ACCESSORS
+  ;;
+  ;; NO `Arena` PARAMETER, ON PURPOSE. `set-put`/`map-put` emit the bare
+  ;; identifier `arena`, so without one in scope a store write here does
+  ;; not compile. This is the mechanical half of the frozen-store
+  ;; invariant; the reviewable half is that `round-join` calls nothing
+  ;; that mutates.
+  ;; ============================================================
+
+  (fn context-of ((sat Saturation) (n Node))
+    (@intent "The stored context for a node, if the registry has one")
+    (@spec ((Saturation Node) -> (Option Context)))
+    (@pure)
+    (map-get (. sat contexts) n))
+
+  (fn queue-of ((sat Saturation) (n Node))
+    (@intent "Δₙ for a node — the messages it must process this round")
+    (@spec ((Saturation Node) -> (Option Queue)))
+    (@pure)
+    (map-get (. sat queues) n))
+
+  (fn store-has-sub ((sat Saturation) (x Node) (b Node))
+    (@intent "Is B ∈ S(X) already in the accumulated store?")
+    (@spec ((Saturation Node Node) -> Bool))
+    (@pure)
+    (match (map-get (. sat contexts) x)
+      ((some ctx) (set-has (. ctx subsumers) b))
+      ((none)     false)))
+
+  (fn store-has-succ ((sat Saturation) (x Node) (r RoleId) (y Node))
+    (@intent "Is the logical edge (X,Y) ∈ R(r) already stored?")
+    (@spec ((Saturation Node RoleId Node) -> Bool))
+    (@pure)
+    ;; Tested on the SUCCESSOR side only, and that is sufficient rather
+    ;; than sloppy: `round-commit` never writes a successor half without
+    ;; its predecessor half, so `succ(X,r,Y) ∈ store ⟺ pred(Y,r,X) ∈
+    ;; store` is a store invariant maintained by construction — the same
+    ;; guarantee `EdgePair` provides at the point of creation.
+    (match (map-get (. sat contexts) x)
+      ((some ctx)
+        (match (map-get (. ctx succs) r)
+          ((some ys) (set-has ys y))
+          ((none)    false)))
+      ((none) false)))
+
+  ;; ============================================================
+  ;; NOVELTY — the `\ Sₙ` test, at ONE site
+  ;;
+  ;; Not inside the rules: CR4 runs in Y and emits to X, so a rule
+  ;; cannot see its conclusion's destination context, and a store read
+  ;; there would poison the per-rule faithfulness contracts. Not at
+  ;; commit either: testing there still terminates, but every context
+  ;; that derived nothing new would land in `touched` and the frontier
+  ;; would be wrong.
+  ;; ============================================================
+
+  (fn delta-context ((arena Arena) (delta RoundDelta) (x Node))
+    (@intent "The pending-facts context for x, created on first touch")
+    (@spec ((Arena RoundDelta Node) -> Context))
     (@alloc arena)
-    (== (list-len (set-elements (. sat active))) 0))
+    (match (map-get (. delta pending) x)
+      ((some c) c)
+      ((none)
+        (let ((c (make-context arena x)))
+          (do
+            ;; `map-put` stores a COPY of the record — but every field of
+            ;; a Context is a `slop_map*`, so the copy shares its sets
+            ;; with `c` and later mutations through either are the same
+            ;; mutation. That uniformity is why `queue` was moved out of
+            ;; `Context` (types.slop).
+            (map-put (. delta pending) x c)
+            c)))))
+
+  ;; `succs`/`preds` are `(Map RoleId (Set Node))`, and neither a Map nor
+  ;; a Set may appear in a function signature — the checker has no type
+  ;; for them there, and nothing in the toolchain, GROWL or slop-rdf
+  ;; passes one. So the per-role insert is written twice against
+  ;; `Context` rather than once against the map. Two small functions
+  ;; beat one that cannot be declared.
+  (fn add-succ ((arena Arena) (ctx Context) (r RoleId) (y Node))
+    (@intent "Record y as an r-successor of this context, creating the filler set if needed")
+    (@spec ((Arena Context RoleId Node) -> Unit))
+    (@alloc arena)
+    (match (map-get (. ctx succs) r)
+      ((some s) (set-put s y))
+      ((none)
+        (let ((s (set-new arena Node)))
+          (do (set-put s y) (map-put (. ctx succs) r s))))))
+
+  (fn add-pred ((arena Arena) (ctx Context) (r RoleId) (x Node))
+    (@intent "Record x as an r-predecessor of this context, creating the set if needed")
+    (@spec ((Arena Context RoleId Node) -> Unit))
+    (@alloc arena)
+    (match (map-get (. ctx preds) r)
+      ((some s) (set-put s x))
+      ((none)
+        (let ((s (set-new arena Node)))
+          (do (set-put s x) (map-put (. ctx preds) r s))))))
+
+  (fn admit-sub ((arena Arena) (sat Saturation) (delta RoundDelta) (x Node) (b Node))
+    (@intent "Admit B ∈ S(X) into Δₙ₊₁ if it is not already in Sₙ")
+    (@spec ((Arena Saturation RoundDelta Node Node) -> Unit))
+    (@alloc arena)
+    (when (not (store-has-sub sat x b))
+      (let ((dc (delta-context arena delta x)))
+        (set-put (. dc subsumers) b))))
+
+  (fn admit-edge ((arena Arena) (sat Saturation) (delta RoundDelta) (e LogicalEdge))
+    (@intent "Admit the LOGICAL edge, both halves or neither")
+    (@spec ((Arena Saturation RoundDelta LogicalEdge) -> Unit))
+    (@alloc arena)
+    ;; §6.4: novelty is tested on the logical edge BEFORE `emit-edge`
+    ;; expands it into two halves. Testing the halves separately lets a
+    ;; half already present in one context re-enter because the other
+    ;; was novel; requiring BOTH novel is also wrong, since it would
+    ;; refuse to repair a half-written edge. One test, both writes.
+    (when (not (store-has-succ sat (. e from) (. e role) (. e to)))
+      (let ((dx (delta-context arena delta (. e from)))
+            (dy (delta-context arena delta (. e to)))
+            (r  (. e role))
+            (x  (. e from))
+            (y  (. e to)))
+        (do
+          (add-succ arena dx r y)
+          (add-pred arena dy r x)))))
+
+  (fn admit ((arena Arena) (sat Saturation) (delta RoundDelta) (m Addressed))
+    (@intent "Route one emitted conclusion through the novelty test")
+    (@spec ((Arena Saturation RoundDelta Addressed) -> Unit))
+    (@alloc arena)
+    ;; Both edge halves normalize back to the SAME logical edge — a
+    ;; `derived-pred (r,x)` addressed to y IS the edge (x,r,y), exactly
+    ;; as `derived-succ (r,y)` addressed to x is. So whichever half the
+    ;; driver happens to see reaches the same single test, which is what
+    ;; makes "tested on the logical edge" implementable at all: this is
+    ;; the only place that can see both endpoints.
+    (match (. m what)
+      ((derived-sub b)
+        (admit-sub arena sat delta (. m to) b))
+      ((derived-succ r y)
+        (admit-edge arena sat delta
+          (record-new LogicalEdge (from (. m to)) (role r) (to y))))
+      ((derived-pred r x)
+        (admit-edge arena sat delta
+          (record-new LogicalEdge (from x) (role r) (to (. m to)))))))
+
+  ;; ============================================================
+  ;; THE ROUND
+  ;; ============================================================
+
+  (fn round-join ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (delta RoundDelta))
+    (@intent "Join every δ ∈ Δₙ against the frozen Sₙ, accumulating novel conclusions")
+    (@spec ((Arena Saturation (List NormAxiom) RoundDelta) -> Unit))
+    (@alloc arena)
+    ;; READ-ONLY OVER `sat`. Every write below targets `delta`. If this
+    ;; function ever grows a `set-put`/`map-put`/`list-push` against
+    ;; anything reachable from `sat`, the freeze is broken and the
+    ;; determinism guarantee goes with it.
+    (for-each (n (. sat active))
+      (match (context-of sat n)
+        ((some ctx)
+          (match (queue-of sat n)
+            ((some q)
+              ;; `ctx` is the ROUND SNAPSHOT Sₙ = Sₙ₋₁ ∪ Δₙ: the store
+              ;; already absorbed Δₙ at the previous barrier, so the
+              ;; Δₙ × Δₙ joins CR2 and CR7 depend on are reachable here.
+              ;; The whole axiom list goes in, not one axiom at a
+              ;; time: CR5 has no axiom premise, so a per-axiom
+              ;; dispatcher would emit |axioms| copies of every
+              ;; ⊥-propagation. The dispatcher owns that distinction.
+              (for-each (d (. q items))
+                (for-each (m (apply-el-rules arena ctx d axioms))
+                  (admit arena sat delta m))))
+            ((none) (do))))
+        ((none) (do)))))
+
+  (fn ensure-context ((arena Arena) (sat Saturation) (n Node))
+    (@intent "The stored context for a node, created if the registry lacks one")
+    (@spec ((Arena Saturation Node) -> Context))
+    (@alloc arena)
+    ;; Only ever called from `round-commit`, and never while iterating
+    ;; `sat.contexts` — `map-put` rehashes at 75% load, and a `for-each`
+    ;; re-reads `cap` every iteration.
+    (match (map-get (. sat contexts) n)
+      ((some c) c)
+      ((none)
+        (let ((c (make-context arena n)))
+          (do (map-put (. sat contexts) n c) c)))))
+
+  (fn round-commit ((arena Arena) (sat Saturation) (delta RoundDelta))
+    (@intent "The barrier: fold Δₙ₊₁ into the store and rebuild the frontier")
+    (@spec ((Arena Saturation RoundDelta) -> Saturation))
+    (@alloc arena)
+    ;; Exactly one round per call. The round COUNT is what
+    ;; max-iterations cuts on, and it must be a function of the input
+    ;; alone — a round advancing the counter by anything other than one
+    ;; would make the cap depend on how work happened to be batched, and
+    ;; with it the verdict.
+    (@post {(. $result iteration) == ((. sat iteration) + 1)})
+    (@post {(. $result iteration) > (. sat iteration)})
+    ;; `active-count` is redundant with `active`, so it is pinned here
+    ;; rather than trusted: both are written by the single loop below.
+    (@post {(. $result active-count) >= 0})
+    (let ((new-queues (map-new arena Node Queue))
+          (new-active (set-new arena Node))
+          (mut count 0))
+      (do
+        (for-each ((x dc) (. delta pending))
+          (let ((store (ensure-context arena sat x))
+                (q     (make-queue arena)))
+            (do
+              (for-each (b (. dc subsumers))
+                (do
+                  (set-put (. store subsumers) b)
+                  (list-push (. q items) (union-new Derived derived-sub b))))
+              (for-each ((r ys) (. dc succs))
+                (for-each (y ys)
+                  (do
+                    (add-succ arena store r y)
+                    (list-push (. q items) (union-new Derived derived-succ r y)))))
+              (for-each ((r ps) (. dc preds))
+                (for-each (p ps)
+                  (do
+                    (add-pred arena store r p)
+                    (list-push (. q items) (union-new Derived derived-pred r p)))))
+              ;; `q` is written into the map AFTER every push. A `(List
+              ;; T)` is a value struct, so `list-push` updates only the
+              ;; local `q`; storing it earlier would persist a copy whose
+              ;; `len` is zero and drop the entire round's delta for this
+              ;; context — under-derivation with no error.
+              (map-put new-queues x q)
+              (set-put new-active x)
+              (set! count (+ count 1)))))
+        (record-new Saturation
+          (contexts     (. sat contexts))
+          (queues       new-queues)
+          (active       new-active)
+          (active-count count)
+          (iteration    (+ (. sat iteration) 1))))))
+
+  (fn advance-round ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (config ReasonerConfig))
+    (@intent "Execute one barrier-synchronized round: join read-only, then commit")
+    (@spec ((Arena Saturation (List NormAxiom) ReasonerConfig) -> Saturation))
+    (@alloc arena)
+    ;; The round-count contract lives on `round-commit`, where the body
+    ;; is a `record-new` and the checker can discharge it. Restating it
+    ;; here would be unprovable — there is no interprocedural reasoning,
+    ;; so a callee is an uninterpreted function — and a @post the
+    ;; checker cannot establish reads as coverage without being any (§7).
+    (let ((delta (record-new RoundDelta (pending (map-new arena Node Context)))))
+      (do
+        (round-join arena sat axioms delta)
+        (round-commit arena sat delta))))
+
+  ;; ============================================================
+  ;; INITIALIZATION (§6.3 step 4)
+  ;; ============================================================
+
+  (fn seed-node ((arena Arena) (sat Saturation) (n Node))
+    (@intent "One context per signature node: empty store, both seeds in the DELTA")
+    (@spec ((Arena Saturation Node) -> Bool))
+    (@alloc arena)
+    ;; Takes the whole `Saturation` because a Map may not be a parameter
+    ;; type. That costs nothing: every collection field is a pointer, so
+    ;; writes land in the caller's record. Only `active-count` — a
+    ;; scalar — has to be tallied by the caller and written once.
+    ;; Returns whether a context was actually added, so the caller can
+    ;; keep `active-count` exact without a second pass.
+    (if (map-has (. sat contexts) n)
+      false
+      (let ((ctx (make-context arena n))
+            (q   (make-queue arena))
+            (top (node-top)))
+        (do
+          ;; Δ₀(N) := { derived-sub(N), derived-sub(⊤) }, and S₋₁(N) := ∅.
+          ;; The seeds go in the QUEUE, because writing them ONLY into
+          ;; `subsumers` would leave every queue empty, so `active` would
+          ;; be empty at round 0, the driver would report `fixpoint`
+          ;; before firing a single rule, and the run would return an
+          ;; instant, empty, apparently COMPLETE classification (§5.2).
+          ;;
+          ;; THEY GO IN THE STORE AS WELL, and that is not a
+          ;; contradiction of §6.3 step 4's "empty `subsumers` set". That
+          ;; sentence describes S₋₁. What this function returns is the
+          ;; state at the START OF ROUND 0, which §6.4 defines as
+          ;; S₀ = S₋₁ ∪ Δ₀ = Δ₀ — and in this driver the store IS the
+          ;; frozen snapshot, because Δ is committed at the previous
+          ;; barrier. Initialization is that barrier.
+          ;;
+          ;; Omitting the store write is silent and total: S(N) would be
+          ;; empty throughout round 0, so CR2 could never find the OTHER
+          ;; conjunct of a `sub-and` and CR4 could never satisfy B ∈ S(Y)
+          ;; against a seed. The §3.1 litmus needs exactly that — CR4
+          ;; joins the arriving edge against `Person ∈ S(Person)`, which
+          ;; is a SEED — so `Mother ⊑ Parent` would never be derived and
+          ;; the engine would look like a materializer again.
+          (list-push (. q items) (union-new Derived derived-sub n))
+          (list-push (. q items) (union-new Derived derived-sub top))
+          (set-put (. ctx subsumers) n)
+          (set-put (. ctx subsumers) top)
+          (map-put (. sat contexts) n ctx)
+          (map-put (. sat queues) n q)
+          (set-put (. sat active) n)
+          true))))
+
+  (fn make-initial-saturation ((arena Arena) (signature (List Node)))
+    (@intent "§6.3 step 4: build the context registry from the input SIGNATURE")
+    (@spec ((Arena (List Node)) -> Saturation))
+    (@alloc arena)
+    ;; Keyed on the signature rather than on occurrence-in-an-axiom,
+    ;; which is what gives a DECLARED-BUT-UNUSED class a context at all:
+    ;; `:C a owl:Class .` with no other mention contributes no axiom, and
+    ;; an axiom-driven registry would never create `class-node(:C)` — so
+    ;; HOWL could not answer `C ⊑ ⊤`, could not list C in a hierarchy,
+    ;; and could not serve a probe naming it.
+    ;;
+    ;; ⊤ and ⊥ are added here rather than left to the caller. §6.3 step 1
+    ;; pre-populates the signature with the OWL built-ins, and two
+    ;; downstream claims depend on it being true unconditionally: Δ₀ is
+    ;; never empty (so `max-iterations = 0` always reports
+    ;; resource-limit, per `budget-exhausted`), and CR5 has a ⊥ context
+    ;; to propagate through. Making it a caller obligation would leave
+    ;; both silently false for a hand-built fixture.
+    (@post {(. $result iteration) == 0})
+    (let ((acc (record-new Saturation
+                 (contexts     (map-new arena Node Context))
+                 (queues       (map-new arena Node Queue))
+                 (active       (set-new arena Node))
+                 (active-count 0)
+                 (iteration    0)))
+          (mut count 0))
+      (do
+        (for-each (n signature)
+          (when (seed-node arena acc n)
+            (set! count (+ count 1))))
+        (when (seed-node arena acc (node-top))
+          (set! count (+ count 1)))
+        (when (seed-node arena acc (node-bottom))
+          (set! count (+ count 1)))
+        ;; Rebuilt rather than mutated: `active-count` is a scalar, so a
+        ;; write through `acc` would land in this frame's copy only.
+        (record-new Saturation
+          (contexts     (. acc contexts))
+          (queues       (. acc queues))
+          (active       (. acc active))
+          (active-count count)
+          (iteration    0)))))
+
+  ;; ============================================================
+  ;; THE LOOP
+  ;; ============================================================
+
+  (fn frontier-is-empty ((sat Saturation))
+    (@intent "The global fixpoint is reached when no context has anything in its inbox")
+    (@spec ((Saturation) -> Bool))
+    (@pure)
+    ;; Reading the count rather than `(list-len (set-elements ...))`
+    ;; buys two things: no per-round allocation of the whole frontier
+    ;; array, and a test the WP checker can actually SEE — `set-elements`
+    ;; is uninterpreted, an `(Int 0 ..)` field is not.
+    (@pre  {(. sat active-count) >= 0})
+    (@post {$result == ((. sat active-count) == 0)})
+    (== (. sat active-count) 0))
 
   (fn budget-exhausted ((sat Saturation) (config ReasonerConfig))
     (@intent "Whether the permitted number of completed rounds has been used up")
@@ -98,10 +516,9 @@
     ;; The budget-zero case, pinned as its own obligation because it is
     ;; the boundary two conforming implementations most easily disagree
     ;; on: max-iterations = 0 performs NO rounds and must always report
-    ;; the run incomplete. Δ₀ is never empty — the signature carries
-    ;; owl:Thing and owl:Nothing, every signature node gets a context,
-    ;; and every context is seeded with two delta facts — so there is no
-    ;; reachable empty-frontier case at budget zero.
+    ;; the run incomplete. Δ₀ is never empty — `make-initial-saturation`
+    ;; guarantees ⊤ and ⊥ contexts and seeds every context with two delta
+    ;; facts — so there is no reachable empty-frontier case at budget zero.
     (@post (implies {(. config max-iterations) == 0} {$result == true}))
     (>= (. sat iteration) (. config max-iterations)))
 
@@ -119,65 +536,42 @@
     ;;     `fixpoint`, NOT `resource-limit` — reaching the answer
     ;;     exactly on budget is success.
     ;;   - `max-iterations = 0` performs no rounds and ALWAYS yields
-    ;;     `resource-limit`. The signature is pre-populated with
-    ;;     owl:Thing and owl:Nothing, every signature node gets a
-    ;;     context, and every context is seeded with two delta facts,
-    ;;     so Δ₀ is never empty and there is no reachable
-    ;;     empty-frontier case at budget zero.
+    ;;     `resource-limit`, since Δ₀ is never empty.
+    ;;
     ;; THE BUDGET BOUND, discharged via the `@loop-invariant` below.
     ;; §7 calls termination for v0 "expressible as a
     ;; monotone-growth-toward-a-finite-cap loop invariant" — this is
-    ;; that invariant, and it holds even though `frontier-is-empty` and
-    ;; `advance-round` are both uninterpreted to the checker, because
-    ;; the bound is carried by the invariant rather than inferred from
-    ;; what those calls return.
+    ;; that invariant, and it holds even though `advance-round` is
+    ;; uninterpreted to the checker, because the bound is carried by the
+    ;; invariant rather than inferred from what that call returns.
     (@post (match $result
              ((ok r) {(. (. r saturation) iteration) <= (. config max-iterations)})
              ((error _) true)))
-    ;;
-    ;; ⚠  M1, NOT YET IMPLEMENTED. The loop below is the correct SHAPE
-    ;;    but no rules are wired in (see rules/el.slop), so it reaches
-    ;;    an empty frontier after round 0 and reports `fixpoint` over
-    ;;    an empty derivation. That is precisely the "sound,
-    ;;    catastrophically incomplete, indistinguishable from success"
-    ;;    failure §5.2 warns about — which is why `howl.classify`
-    ;;    refuses rather than handing this to the verdict rule.
-    (let ((mut state sat))
+    (let ((mut state sat)
+          (mut cancelled false))
       (do
         ;; Fixpoint first, budget second — in that order.
-        (while (not (frontier-is-empty arena state))
+        (while (not (frontier-is-empty state))
           (@loop-invariant {(. state iteration) <= (. config max-iterations)})
-          (if (budget-exhausted state config)
-            (break)
-            (do
-              ;; A round: freeze Sₙ = Sₙ₋₁ ∪ Δₙ, join every δ ∈ Δₙ
-              ;; against it, hold conclusions for Δₙ₊₁, then subtract
-              ;; Sₙ and recompute `active`.
-              ;; Cancellation is observed HERE, at the barrier, and
-              ;; yields Fault::cancelled with no payload (§6.8).
-              (set! state (advance-round arena state axioms config)))))
-        (if (frontier-is-empty arena state)
-          (ok (record-new RoundResult
-                (saturation  state)
-                (termination (union-new Termination fixpoint))))
-          (ok (record-new RoundResult
-                (saturation  state)
-                (termination (union-new Termination resource-limit (. state iteration)))))))))
-
-  (fn advance-round ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (config ReasonerConfig))
-    (@intent "Execute one barrier-synchronized round: freeze, join, collect novel, re-frontier")
-    (@spec ((Arena Saturation (List NormAxiom) ReasonerConfig) -> Saturation))
-    (@alloc arena)
-    ;; Exactly one round per call. The round COUNT is what
-    ;; max-iterations cuts on, and it must be a function of the input
-    ;; alone — so a round that advanced the counter by anything other
-    ;; than one would make the cap depend on how work happened to be
-    ;; batched, and with it the verdict.
-    (@post {(. $result iteration) == ((. sat iteration) + 1)})
-    (@post {(. $result iteration) > (. sat iteration)})
-    ;; M1: no rules wired in, so this only advances the counter and
-    ;; drains the frontier.
-    (record-new Saturation
-      (contexts  (. sat contexts))
-      (active    (set-new arena Node))
-      (iteration (+ (. sat iteration) 1)))))
+          (do
+            ;; Cancellation is observed HERE, at the barrier, BEFORE the
+            ;; budget test — a cancelled run must not be reported as
+            ;; resource-limited, because the two differ in what the
+            ;; consumer may conclude (§6.8). It yields Fault::cancelled
+            ;; with no payload: a cancelled partial state stops at a
+            ;; scheduler-dependent point and so is not reproducible.
+            (c-inline "if (config.cancel_ptr && __atomic_load_n((uint32_t*)(uintptr_t)config.cancel_ptr, __ATOMIC_RELAXED)) { cancelled = 1; }")
+            (if cancelled
+              (break)
+              (if (budget-exhausted state config)
+                (break)
+                (set! state (advance-round arena state axioms config))))))
+        (if cancelled
+          (error (union-new Fault cancelled))
+          (if (frontier-is-empty state)
+            (ok (record-new RoundResult
+                  (saturation  state)
+                  (termination (union-new Termination fixpoint))))
+            (ok (record-new RoundResult
+                  (saturation  state)
+                  (termination (union-new Termination resource-limit (. state iteration)))))))))))

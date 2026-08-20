@@ -1,0 +1,21 @@
+# FALSE-FAIL GUARD for the RBox gate (Lesson: a generic cycle detector over role
+# inclusions rejects things OWL expressly permits).
+# BOTH of these are LEGAL and must be ACCEPTED:
+#   - equivalent simple roles: r subseteq s AND s subseteq r
+#   - transitivity as a chain: t o t subseteq t
+# A naive cycle detector flags both. Rejecting them looks rigorous and is wrong in
+# the accepting direction, which also invalidates any completeness claim
+# conditioned on the gate.
+# Expect: coverage.omitted EMPTY.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:r rdfs:subPropertyOf :s .
+:s rdfs:subPropertyOf :r .
+:t owl:propertyChainAxiom ( :t :t ) .

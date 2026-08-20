@@ -1,0 +1,13 @@
+# M0 ACCEPTANCE (b). A declared owl:imports the caller did NOT attest to supplying
+# must append (unresolved-import IRI) to coverage.omitted.
+# Expect: coverage.omitted NON-EMPTY -> verdict inconclusive, exit 2, NEVER coherent.
+# This closes the false pass through a dangling import at the earliest point.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology ;
+   owl:imports <http://example.org/does-not-exist> .
+:A a owl:Class . :B a owl:Class .
+:A rdfs:subClassOf :B .

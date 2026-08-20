@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_vocab.h"
 
 typedef struct types_Node types_Node;
 typedef struct types_RoleId types_RoleId;
@@ -12,8 +13,10 @@ typedef struct types_Concept types_Concept;
 typedef struct types_NormAxiom types_NormAxiom;
 typedef struct types_Derived types_Derived;
 typedef struct types_Addressed types_Addressed;
+typedef struct types_LogicalEdge types_LogicalEdge;
 typedef struct types_EdgePair types_EdgePair;
 typedef struct types_Context types_Context;
+typedef struct types_Queue types_Queue;
 typedef struct types_Saturation types_Saturation;
 typedef struct types_AxiomRef types_AxiomRef;
 typedef struct types_InputRef types_InputRef;
@@ -200,6 +203,18 @@ typedef struct types_Addressed types_Addressed;
 SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #endif
 
+struct types_LogicalEdge {
+    types_Node from;
+    types_RoleId role;
+    types_Node to;
+};
+typedef struct types_LogicalEdge types_LogicalEdge;
+
+#ifndef SLOP_OPTION_TYPES_LOGICALEDGE_DEFINED
+#define SLOP_OPTION_TYPES_LOGICALEDGE_DEFINED
+SLOP_OPTION_DEFINE(types_LogicalEdge, slop_option_types_LogicalEdge)
+#endif
+
 struct types_EdgePair {
     types_Addressed succ_half;
     types_Addressed pred_half;
@@ -216,7 +231,6 @@ struct types_Context {
     slop_map* subsumers;
     slop_map* succs;
     slop_map* preds;
-    slop_list_types_Derived queue;
 };
 typedef struct types_Context types_Context;
 
@@ -225,9 +239,21 @@ typedef struct types_Context types_Context;
 SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
 #endif
 
+struct types_Queue {
+    slop_list_types_Derived items;
+};
+typedef struct types_Queue types_Queue;
+
+#ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
+#define SLOP_OPTION_TYPES_QUEUE_DEFINED
+SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
+#endif
+
 struct types_Saturation {
     slop_map* contexts;
+    slop_map* queues;
     slop_map* active;
+    int64_t active_count;
     int64_t iteration;
 };
 typedef struct types_Saturation types_Saturation;
@@ -579,9 +605,14 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
 #endif
 
 types_ReasonerConfig howl_default_config(void);
+types_Node types_node_top(void);
+types_Node types_node_bottom(void);
+uint8_t types_node_eq(types_Node a, types_Node b);
+uint8_t types_role_eq(types_RoleId a, types_RoleId b);
 types_Context types_make_context(slop_arena* arena, types_Node root);
-uint8_t types_context_is_active(types_Context ctx);
-types_EdgePair types_emit_edge(slop_arena* arena, types_Node x, types_RoleId r, types_Node y);
+types_Queue types_make_queue(slop_arena* arena);
+uint8_t types_queue_is_active(types_Queue q);
+types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
 
@@ -618,6 +649,11 @@ SLOP_OPTION_DEFINE(types_Derived, slop_option_types_Derived)
 SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_LOGICALEDGE_DEFINED
+#define SLOP_OPTION_TYPES_LOGICALEDGE_DEFINED
+SLOP_OPTION_DEFINE(types_LogicalEdge, slop_option_types_LogicalEdge)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_EDGEPAIR_DEFINED
 #define SLOP_OPTION_TYPES_EDGEPAIR_DEFINED
 SLOP_OPTION_DEFINE(types_EdgePair, slop_option_types_EdgePair)
@@ -631,6 +667,11 @@ SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
 #ifndef SLOP_OPTION_TYPES_CONTEXT_DEFINED
 #define SLOP_OPTION_TYPES_CONTEXT_DEFINED
 SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
+#define SLOP_OPTION_TYPES_QUEUE_DEFINED
+SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_SATURATION_DEFINED

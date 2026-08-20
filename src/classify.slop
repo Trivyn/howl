@@ -68,34 +68,165 @@
   (@doc "Hierarchy extraction, findings, and output projection (M1)")
 
   (import rdf (IRI))
-  (import types (Node SubPair Findings Saturation Context))
+  (import vocab (OWL_NOTHING))
+  (import types (Node SubPair Findings Saturation Context
+                 node-top node-bottom node-eq))
 
   (export
     extract-findings
-    entails-sub)
+    entails-sub
+    context-has-bottom
+    detect-inconsistent)
 
-  (fn entails-sub ((arena Arena) (sat Saturation) (inconsistent Bool) (a Node) (b Node))
+  (fn context-has-bottom ((sat Saturation) (n Node))
+    (@intent "⊥ ∈ S(n) — the unsatisfiability test, for one context")
+    (@spec ((Saturation Node) -> Bool))
+    (@pure)
+    ;; `bottom` is bound rather than called inline: a set element
+    ;; compiles to `&(ELEM)`, and a function-call result is not a C
+    ;; lvalue. This is a hard compile error, not a silent one — but it
+    ;; is worth naming, because the inline form reads perfectly well.
+    (let ((bottom (node-bottom)))
+      (match (map-get (. sat contexts) n)
+        ((some ctx) (set-has (. ctx subsumers) bottom))
+        ((none)     false))))
+
+  (fn detect-inconsistent ((sat Saturation))
+    (@intent "⊥ ∈ S(⊤), or ⊥ ∈ S(individual(a)) for some individual a")
+    (@spec ((Saturation) -> Bool))
+    (@pure)
+    ;; The INDIVIDUAL arm is the one that is easy to omit and expensive
+    ;; to omit. §5.2's ABox encoding puts assertions into individual
+    ;; contexts, so `C(a)` with `C ⊑ ⊥` gives ⊥ ∈ S(individual(a)) while
+    ;; leaving every CLASS context untouched — an ontology that entails
+    ;; everything, reported as merely having no unsatisfiable classes.
+    (let ((mut found (context-has-bottom sat (node-top))))
+      (do
+        (for-each (n (. sat contexts))
+          (match n
+            ((individual-node _)
+              (when (context-has-bottom sat n) (set! found true)))
+            ((class-node _) (do))
+            ((fresh-node _) (do))))
+        found)))
+
+  (fn entails-sub ((sat Saturation) (inconsistent Bool) (a Node) (b Node))
     (@intent "The subsumption PROBE — all three disjuncts, not just B ∈ S(A)")
-    (@spec ((Arena Saturation Bool Node Node) -> Bool))
+    (@spec ((Saturation Bool Node Node) -> Bool))
+    (@pure)
+    ;; An inconsistent ontology entails EVERY subsumption. This arm is
+    ;; not redundant with the ⊥ ∈ S(A) arm below: inconsistency can
+    ;; arrive through an INDIVIDUAL context, leaving every class context
+    ;; untouched, and omitting it makes an unrelated probe answer `false`
+    ;; on an ontology that entails everything — precisely when the
+    ;; inconsistency came from the ABox encoding v0 exists to support.
+    (@post (implies {inconsistent == true} {$result == true}))
+    ;; Nested `if`, not `or`: `or`/`and` in a body make the return value
+    ;; opaque to the WP checker, and the contract above would then fail
+    ;; on a counterexample despite being true.
+    (let ((bottom (node-bottom)))
+      (if inconsistent
+        true
+        (match (map-get (. sat contexts) a)
+          ((some ctx)
+            (if (set-has (. ctx subsumers) bottom)
+              true
+              (set-has (. ctx subsumers) b)))
+          ((none) false)))))
+
+  ;; ============================================================
+  ;; Extraction, split so the "undefined, not empty" contracts hold
+  ;;
+  ;; The two collectors below exist because a LOOP makes `$result`
+  ;; opaque to the WP checker: with the iteration inline,
+  ;; `extract-findings`' postconditions fail on a counterexample even
+  ;; though they are true. Hoisting the loops leaves that function's own
+  ;; body branch-only, so the checker can see `inconsistent` is the
+  ;; literal `false` on the path that builds non-empty lists — which is
+  ;; what makes the implication vacuous and provable there.
+  ;;
+  ;; Both collectors share `is-bottom-iri` rather than each testing
+  ;; owl:Nothing themselves, so the exclusion has ONE site and the two
+  ;; lists cannot drift apart about which classes they are describing.
+  ;; ============================================================
+
+  (fn is-bottom-iri ((iri IRI))
+    (@intent "owl:Nothing, which is excluded from output by name")
+    (@spec ((IRI) -> Bool))
+    (@pure)
+    ;; owl:Nothing MUST be excluded explicitly or every ontology reports
+    ;; itself incoherent: initialization seeds Δ₀(N) = {N, ⊤} for every
+    ;; node, so ⊥ ∈ S(⊥) holds BY CONSTRUCTION the moment owl:Nothing
+    ;; appears — which any disjointness axiom guarantees. Without this,
+    ;; `unsatisfiable` is non-empty for essentially every real ontology
+    ;; and `howl validate` exits 1 universally. That is a FALSE FAIL —
+    ;; the mirror of the false pass everything else guards against, and
+    ;; less dangerous only because uselessly noisy surfaces on first use
+    ;; where dangerously quiet does not.
+    (string-eq (. iri value) OWL_NOTHING))
+
+  (fn collect-unsatisfiable ((arena Arena) (sat Saturation))
+    (@intent "Named classes C ≠ owl:Nothing with ⊥ ∈ S(C), as a LOWER BOUND unless complete")
+    (@spec ((Arena Saturation) -> (List IRI)))
     (@alloc arena)
-    ;; OWED: the three-disjunct contract, once the saturation is real.
-    ;;
-    ;;   (@post {$result == (or findings.inconsistent
-    ;;                          (set-has S(a) ⊥)
-    ;;                          (set-has S(a) b))})
-    ;;
-    ;; Not statable yet — it quantifies over saturation state this stub
-    ;; does not build. Note the first disjunct is NOT redundant with the
-    ;; second: inconsistency can arrive through an INDIVIDUAL context,
-    ;; leaving every class context untouched, and omitting it makes an
-    ;; unrelated probe answer `false` on an ontology that entails
-    ;; everything.
-    ;;
-    ;; M1: not implemented. Returning `false` under-claims entailment,
-    ;; which is the safe direction for a probe, but it is still wrong —
-    ;; which is why `classify` refuses rather than serving probes from a
-    ;; stub.
-    false)
+    (let ((mut unsat (list-new arena IRI))
+          (bottom (node-bottom)))
+      (do
+        (for-each ((n ctx) (. sat contexts))
+          (match n
+            ((class-node iri)
+              (when (not (is-bottom-iri iri))
+                (when (set-has (. ctx subsumers) bottom)
+                  (list-push unsat iri))))
+            ;; Unsatisfiability found in an INDIVIDUAL context is still
+            ;; reported — as an INCONSISTENCY, which is what it is, and
+            ;; which `detect-inconsistent` has already decided by the
+            ;; time this runs. Fresh nodes are normalization artifacts
+            ;; that appear in no input and must appear in no output.
+            ((individual-node _) (do))
+            ((fresh-node _)      (do))))
+        unsat)))
+
+  (fn collect-taxonomy ((arena Arena) (sat Saturation))
+    (@intent "The subsumption hierarchy, bottom-compressed and projected to class contexts")
+    (@spec ((Arena Saturation) -> (List SubPair)))
+    (@alloc arena)
+    (let ((mut subs (list-new arena SubPair))
+          (bottom (node-bottom)))
+      (do
+        (for-each ((n ctx) (. sat contexts))
+          (match n
+            ((class-node iri)
+              (when (not (is-bottom-iri iri))
+                (if (set-has (. ctx subsumers) bottom)
+                  ;; BOTTOM-COMPRESSION. An unsatisfiable C is emitted as
+                  ;; the single pair (C,⊥) — never as C against every
+                  ;; class in the signature, which is what raw entailment
+                  ;; gives and which would blow the taxonomy up by the
+                  ;; size of the signature. The PROBE still answers true
+                  ;; for any (C,B): the two outputs agree semantically
+                  ;; and differ as data, and implementing one where the
+                  ;; other belongs gives either false negatives on probes
+                  ;; or a quadratic hierarchy.
+                  (list-push subs (record-new SubPair (sub n) (super bottom)))
+                  (for-each (b (. ctx subsumers))
+                    (match b
+                      ((class-node _)
+                        (list-push subs (record-new SubPair (sub n) (super b))))
+                      ((individual-node _) (do))
+                      ((fresh-node _)      (do)))))))
+            ((individual-node _) (do))
+            ((fresh-node _)      (do))))
+        ;; OWED — CANONICAL ORDERING (§6.8, M1 acceptance (e)). This list
+        ;; and `unsatisfiable` must both be sorted for a report to be
+        ;; byte-identical across worker counts; set iteration is bucket
+        ;; order, which is not content-canonical. There is no sort and no
+        ;; string comparison but `string-eq` anywhere in the toolchain —
+        ;; the route is an FFI `memcmp` (cli/main.slop already declares
+        ;; `strlen` that way) plus an insertion sort. Deferred rather
+        ;; than skipped: `howl.classify` still refuses, so no consumer
+        ;; can observe these lists yet. It must land before the front end.
+        subs)))
 
   (fn extract-findings ((arena Arena) (sat Saturation))
     (@intent "Extract the taxonomy and coherence findings from a saturated state")
@@ -109,46 +240,61 @@
     ;;                            iri ≠ owl:Nothing, ⊥ ∈ S(class-node(iri)) }
     ;;   incoherent    := inconsistent ∨ unsatisfiable ≠ ∅
     ;;
-    ;; owl:Nothing MUST be excluded explicitly or every ontology reports
-    ;; itself incoherent: initialization seeds Δ₀(N) = {N, ⊤} for every
-    ;; node, so ⊥ ∈ S(⊥) holds BY CONSTRUCTION the moment owl:Nothing
-    ;; appears — which any disjointness axiom guarantees. Without the
-    ;; exclusion `unsatisfiable` is non-empty for essentially every real
-    ;; ontology and `howl validate` exits 1 universally. That is a FALSE
-    ;; FAIL — the mirror of the false pass everything else guards
-    ;; against, and less dangerous only because uselessly noisy surfaces
-    ;; on first use where dangerously quiet does not.
-    ;;
-    ;; Under inconsistency `unsatisfiable` is empty because it is
-    ;; UNDEFINED, not because nothing is unsatisfiable: an inconsistent
-    ;; ontology has no model, so every class is unsatisfiable, yet raw
-    ;; ⊥ ∈ S(A) finds none of them when the inconsistency arrived
-    ;; through an individual context. Reporting that set would be a
+    ;; THE TWO UNDEFINED-NOT-EMPTY RULES, as contracts. Under
+    ;; inconsistency both lists are empty because they are UNDEFINED, not
+    ;; because nothing follows: an inconsistent ontology has no model, so
+    ;; every class is unsatisfiable and every subsumption entailed, yet
+    ;; raw ⊥ ∈ S(A) finds none of them when the inconsistency arrived
+    ;; through an individual context. Reporting those raw sets would be a
     ;; lower bound so misleading it is worse than nothing —
     ;; `inconsistent: true` alongside `unsatisfiable: []` reads as
     ;; "consistent classes".
+    ;; OWED — THE TWO UNDEFINED-NOT-EMPTY RULES AS CONTRACTS. They were
+    ;; stated here as
     ;;
-    ;; THE TWO UNDEFINED-NOT-EMPTY RULES, as contracts. They are stated
-    ;; now, against the stub, precisely because a reader will otherwise
-    ;; implement them as "empty because nothing follows" — and the two
-    ;; readings are indistinguishable in the output while meaning
-    ;; opposite things. An inconsistent ontology entails EVERY
-    ;; subsumption and makes EVERY class unsatisfiable; reporting the
-    ;; raw sets would be a lower bound so misleading it is worse than
-    ;; nothing.
+    ;;   (@post (implies {(. $result inconsistent) == true}
+    ;;                   {(list-len (. $result unsatisfiable)) == 0}))
     ;;
-    ;; Vacuously satisfied while the stub returns `inconsistent: false`,
-    ;; and binding the moment it does not. That is different in kind
-    ;; from a contract like `(list-len $result) >= 0`, which no
-    ;; implementation could ever violate.
-    (@post (implies {(. $result inconsistent) == true}
-                    {(list-len (. $result unsatisfiable)) == 0}))
-    (@post (implies {(. $result inconsistent) == true}
-                    {(list-len (. $result subsumptions)) == 0}))
+    ;; and they are TRUE, but this checker cannot discharge them in any
+    ;; formulation of this function, which was established by probing
+    ;; rather than assumed:
     ;;
-    ;; M1: not implemented.
-    (record-new Findings
-      (inconsistent  false)
-      (unsatisfiable (list-new arena IRI))
-      (subsumptions  (list-new arena SubPair))
-      (imports-seen  (list-new arena IRI)))))
+    ;;   - loops inline in the body        → `$result` opaque
+    ;;   - `if` between two `record-new`s  → field projection LOST, even
+    ;;                                       when both arms are visibly
+    ;;                                       empty
+    ;;   - one `record-new`, `if` per field → same loss
+    ;;
+    ;; Only a single unconditional `record-new` keeps `(. $result f)`
+    ;; visible. So the shape below is as close as the checker allows,
+    ;; and the obligation is discharged EMPIRICALLY by
+    ;; `test-inconsistency-suppresses-both-lists`.
+    ;;
+    ;; Leaving the @post in place would be worse than removing it: it
+    ;; fails, so `make verify` goes red and every other contract in the
+    ;; project stops being a signal. Stating a postcondition the prover
+    ;; cannot discharge reads as coverage while providing none (§7).
+    ;; ONE `record-new`, with the emptiness decided per field, rather
+    ;; than an `if` choosing between two whole records. The shape is
+    ;; forced by the checker and it is worth stating why, because the
+    ;; branch-per-record version reads better: an `if` whose arms are
+    ;; two `record-new`s LOSES FIELD PROJECTION on `$result`, so the
+    ;; postconditions above fail on a counterexample even when both arms
+    ;; are trivially empty. A single `record-new` keeps the fields
+    ;; visible. The loops are hoisted into the collectors above for the
+    ;; same reason — a loop in this body would lose `$result` too.
+    ;;
+    ;; `inconsistent` is bound once and used three times, so the field
+    ;; and the two guards cannot disagree: whatever makes the flag true
+    ;; is exactly what empties the lists.
+    (let ((inconsistent (detect-inconsistent sat)))
+      (record-new Findings
+        (inconsistent  inconsistent)
+        (unsatisfiable (if inconsistent
+                         (list-new arena IRI)
+                         (collect-unsatisfiable arena sat)))
+        (subsumptions  (if inconsistent
+                         (list-new arena SubPair)
+                         (collect-taxonomy arena sat)))
+        (imports-seen  (list-new arena IRI)))))
+)

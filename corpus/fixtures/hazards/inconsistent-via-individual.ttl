@@ -1,0 +1,19 @@
+# INCONSISTENCY THROUGH AN INDIVIDUAL CONTEXT. C(a) with C subseteq bottom gives
+# bottom IN S(individual(a)) while leaving every CLASS context untouched.
+# This is why entails-sub's first disjunct (findings.inconsistent) is NOT redundant
+# with the second (bottom IN S(A)): omitting it makes an unrelated probe D subseteq E
+# answer FALSE on an ontology that entails everything -- and does so precisely when
+# the inconsistency came from the ABox encoding v0 exists to support.
+# Expect: inconsistent = TRUE; unsatisfiable and subsumptions both EMPTY (undefined,
+# not empty); every probe answers true.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :D a owl:Class . :E a owl:Class .
+:C rdfs:subClassOf owl:Nothing .
+:a a owl:NamedIndividual , :C .

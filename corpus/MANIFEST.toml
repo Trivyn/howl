@@ -1,0 +1,69 @@
+# HOWL test corpus — pinned external ontologies.
+#
+# NOT COMMITTED. These are fetched on demand and verified by SHA-256; see
+# corpus/fetch.sh and `make corpus`. Sizes make committing them impractical
+# (GO alone is 129 MB) and their licences differ from HOWL's.
+#
+# EVERY `url` IS A VERSIONED PURL, NEVER A "LATEST" ONE. `.../obo/ro.owl`
+# redirects to whatever the current release is, so a hash pinned against it
+# breaks on the next release and the corpus silently stops being reproducible.
+# The versioned PURLs are immutable — verified for ro.owl, whose versioned and
+# latest fetches are byte-identical at this release.
+#
+# `out_of_profile` is measured by corpus/census.py against SPEC.md §5.2 and is
+# the reason each entry does or does not need a projection (§10 item 2). A
+# benchmark or differential run over an entry with non-empty coverage.omitted
+# compares different theories, and a TIMING run makes HOWL look fast precisely
+# to the extent that it skipped work.
+
+[[ontology]]
+name           = "ro"
+version        = "2025-12-17"
+url            = "http://purl.obolibrary.org/obo/ro/releases/2025-12-17/ro.owl"
+sha256         = "a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10aaf"
+bytes          = 1_226_000
+licence        = "CC BY 4.0"
+logical_axioms = 1983
+in_v0          = 1465
+out_of_profile = 518
+projection     = "required"
+role           = "RBOX. 160 property chains, 45 transitive properties, 801 sub-property axioms — by far the best exercise available for CR6/CR7, which have no fixtures of their own. Also the SWRL case: 25 rules, 2 of which derive owl:Nothing."
+
+[[ontology]]
+name           = "obi"
+version        = "2026-07-27"
+url            = "http://purl.obolibrary.org/obo/obi/2026-07-27/obi.owl"
+sha256         = "8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b946"
+bytes          = 9_961_000
+licence        = "CC BY 4.0"
+logical_axioms = 26813
+in_v0          = 26403
+out_of_profile = 410
+projection     = "required"
+role           = "PRIMARY v0 ENTRY. Only 1.5% out-of-profile over 26k in-profile axioms — the closest fit to v0 of anything measured, and large enough to be a real differential and benchmark target."
+
+[[ontology]]
+name           = "go"
+version        = "2026-07-26"
+url            = "http://purl.obolibrary.org/obo/go/releases/2026-07-26/go.owl"
+sha256         = "653ce47cd7b02304e67eb67c54d3be02ec5b0ba5e00eb7384dfa0da00f9682ec"
+bytes          = 135_000_000
+licence        = "CC BY 4.0"
+logical_axioms = 117791
+in_v0          = 117790
+out_of_profile = 1
+projection     = "one axiom"
+role           = "BENCHMARK, and the headline result of the census: 1.4M triples, 117,790 in-profile logical axioms, and exactly ONE out-of-profile axiom — a single owl:inverseOf. The canonical EL benchmark named in §12 is essentially inside v0 already, and its projection is a one-axiom diff that a human can audit by eye. The hash above is from the latest-PURL fetch; the versioned URL is pinned on the strength of ro.owl's verified byte-identical match, and fetch.sh catches it loudly if that assumption is wrong."
+
+# ---------------------------------------------------------------------------
+# NOT YET PINNED — open items, listed so they are scheduled rather than
+# rediscovered.
+#
+#   GALEN    §12 requires it, and warns that "GALEN" names several ontologies of
+#            wildly differing difficulty, so the VARIANT is part of the pin.
+#            Needs a canonical source decided before it can be hashed.
+#   SNOMED CT  requires an affiliate licence; never vendored, never fetched by
+#            CI. Opt-in local path only, per §12.
+#   BFO/CCO  measured (33.8% / 8.2% out-of-profile) and available in ../growl,
+#            but BFO is a poor v0 fit — projecting it would gut it. Both belong
+#            to the M5 / Horn-SHIQ corpus, not v0.

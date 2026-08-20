@@ -1,0 +1,15 @@
+# range(r) subseteq A. ELIMINATED during normalization by the published
+# construction, never by a completion rule (the rejected CR8).
+# NOTE ELK has historically not supported ranges -- route this to a
+# capability-probed complete oracle (SPEC 10 item 1).
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:r a owl:ObjectProperty . :A a owl:Class . :B a owl:Class .
+:r rdfs:range :A .
+:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Thing ] .

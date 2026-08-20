@@ -1,0 +1,35 @@
+# M0 ACCEPTANCE (a). A versioned, annotation-heavy, axiom-annotated ontology must
+# gate CLEAN -- no label, declaration or reification triple may reach the
+# out-of-profile list. Get this wrong and NOTHING downstream ever classifies.
+# Expect: coverage.omitted EMPTY; entails A subseteq B.
+# The independent census in corpus/census.py got exactly this wrong on its first
+# run, bucketing 350 owl:annotatedTarget triples as out-of-profile.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology ;
+   owl:versionIRI <http://example.org/t/1.0.0> ;
+   owl:versionInfo "1.0.0" ;
+   rdfs:comment "header metadata, consumed by the pre-pass" .
+:A a owl:Class ;
+   rdfs:label "A class"@en ;
+   rdfs:comment "Documentation is semantically inert, not unsupported." ;
+   :curatorNote "custom annotation property" .
+:B a owl:Class ; rdfs:label "B class"@en .
+:curatorNote a owl:AnnotationProperty .
+
+:A rdfs:subClassOf :B .
+
+# The subclass axiom above, reified and annotated (OWL 2 RDF mapping).
+[] a owl:Axiom ;
+   owl:annotatedSource :A ;
+   owl:annotatedProperty rdfs:subClassOf ;
+   owl:annotatedTarget :B ;
+   rdfs:comment "provenance for the axiom, discarded semantically" ;
+   :curatorNote "still inert" .
+
+:Deprecated a owl:Class ; owl:deprecated true .

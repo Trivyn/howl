@@ -1,0 +1,25 @@
+# MANDATORY REGRESSION (SPEC 5.2 / the ABox-encoding decision).
+# DisjointClasses(C,D), range(r)=C, range(s)=D, r(a,b), s(c,b).
+# This theory is INCONSISTENT: b is forced into both C and D.
+# It is the smallest case distinguishing the two candidate ABox encodings. Under the
+# REJECTED existential encoding (individual(a) subseteq EXISTS r.individual(b)) the
+# r-successor and s-successor may be DIFFERENT members, no proxy becomes
+# unsatisfiable, and HOWL reports COHERENT -- a silent false pass. The direct-edge
+# encoding preserves the identity of the repeated name b and catches it.
+# Expect: INCONSISTENT (exit 1).
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :D a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty .
+:C owl:disjointWith :D .
+:r rdfs:range :C .
+:s rdfs:range :D .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual . :c a owl:NamedIndividual .
+:a :r :b .
+:c :s :b .

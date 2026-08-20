@@ -32,7 +32,7 @@ ALL_SRCS    := $(wildcard $(CSRC)/*.c)
 SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
-.PHONY: all cli lib test clean release dist csrc slop-build verify \
+.PHONY: all cli lib test clean release dist csrc slop-build verify corpus census \
         crate-vendor crate-build crate-test crate-publish
 
 PLATFORM ?= unknown
@@ -96,6 +96,17 @@ csrc:
 # testing.
 verify:
 	slop verify
+
+# Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
+# Not committed: GO alone is 129 MB, and their licences differ from HOWL's.
+corpus:
+	./corpus/fetch.sh
+
+# Construct census against SPEC.md §5.2. Run over the committed fixtures it is a
+# self-check on both: every v0/ fixture must gate clean, every out-of-profile/
+# fixture must yield at least one omission.
+census:
+	python3 corpus/census.py corpus/fixtures/*/*.ttl
 
 dist:
 	rm -rf dist

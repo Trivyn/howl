@@ -747,8 +747,43 @@ judgement call.
 | `SameIndividual`, `DifferentIndividuals`, `NegativeObjectPropertyAssertion` | **out-of-profile** |
 | Datatype properties, data ranges, literals in class positions | **out-of-profile** |
 | `AnnotationAssertion`, `SubAnnotationPropertyOf`, `AnnotationPropertyDomain`, `AnnotationPropertyRange` | **inert** — annotation axioms are semantically inert in OWL 2; treating them as unsupported returns false inconclusive on ordinary documentation |
+| **SWRL rules** (`swrl:Imp`, `swrl:AtomList`, `swrl:ClassAtom`, `swrl:IndividualPropertyAtom`, …) | **out-of-profile** — see below |
 | Declarations | **consumed** (below) — not "ignored" |
 | `owl:imports`, ontology header, axiom-annotation reification | **header pre-pass** ([§6.3](#63-normalization) step 0) |
+
+**SWRL is out-of-profile, and will not be implemented at any rung.** It is not an omission to fix
+later. SWRL is a 2004 W3C Member *Submission*, not a Recommendation, and is in neither OWL 2 DL nor
+OWL 2 EL — so omitting it costs nothing against the completeness claim, and ELK does not support it
+either. Decisively: **unrestricted SWRL is undecidable**, so implementing it would forfeit
+[§3.1](#31-the-litmus-test-also-the-v0-acceptance-criterion)'s claim to be complete for a *named*
+logic, which is the whole basis for calling HOWL a DL reasoner. DL-safe SWRL is decidable but sits
+outside the cited EL++ completeness results and would need its own proof, while silently restricting
+rule variables to named individuals — a change in what the author's rules mean.
+
+This is not hypothetical: **RO ships 25 SWRL rules**, so the decoder meets them in a mainstream OBO
+ontology. Their shapes, measured:
+
+| Shape | Count | Note |
+|---|---|---|
+| Plain v0 role chains | 6 | already in the fragment — written as rules rather than `owl:propertyChainAxiom` |
+| Require inverses | 5 | v1 territory |
+| **Derive `owl:Nothing`** | 2 | unsatisfiability conditions — exactly what `validate` exists to catch |
+| Class-guarded chains, 3+ atoms | 12 | no DL in the roadmap expresses these |
+
+The two `owl:Nothing` rules are the real cost, and they are why the disposition must be
+**out-of-profile and enumerated** rather than inert: dropping them silently would let an ontology
+whose authors *encoded* an incoherence come back `coherent`. Enumerated, the run is inconclusive —
+HOWL says it could not check, which is true.
+
+**Lint opportunity, not a rewrite.** Since 6 of the 25 are role-chain-shaped, the omission diagnostic
+should say whether an equivalent v0 axiom exists — turning a dead end into advice for the author.
+HOWL must never perform that rewrite itself: transforming input to enlarge coverage would break
+[§6.8](#68-determinism-binding)'s input-determined reports and decide a modelling question that
+belongs to the ontology's owner.
+
+**If rules are wanted, GROWL is where they go.** DL-safe rules are Datalog, and GROWL is already a
+forward-chaining RL materializer; the [§8.2](#82-composition--via-rdf-never-shared-state) composition
+seam gives them a home without touching HOWL's calculus or its completeness claim.
 
 Two rows are easy to miss because the *abstract grammar* already covers them while the *RDF surface*
 has its own vocabulary: `owl:equivalentProperty` and `owl:TransitiveProperty` are ordinary v0
@@ -983,18 +1018,44 @@ GROWL's `Delta`.
   (root      Node)                      ; the concept this context reasons about
   (subsumers (Set Node))                ; S(root)
   (succs     (Map RoleId (Set Node)))   ; outgoing role edges: role → target nodes
-  (preds     (Map RoleId (Set Node)))   ; incoming role edges: role → source nodes
-  (queue     (List Derived))))          ; this context's inbox — its local delta
+  (preds     (Map RoleId (Set Node))))) ; incoming role edges: role → source nodes
 
 ;; `preds` is not redundant bookkeeping. CR4/CR5 take a premise about Y (B ∈ S(Y)) to a
 ;; conclusion about X (A ∈ S(X)), so a context that learns a new subsumer must be able to
 ;; notify its predecessors. This is ELK's backward link, and it is why edges are stored twice.
 
-;; The global state owns no per-concept facts — only the registry and run bookkeeping.
+;; Δₙ for one context — its inbox for the round about to run.
+(type Queue (record
+  (items (List Derived))))
+
+;; The global state owns no per-concept facts — only the registry, the current round's
+;; deltas, and run bookkeeping.
 (type Saturation (record
-  (contexts  (Map Node Context))
-  (active    (Set Node))              ; contexts with a non-empty queue — the frontier
-  (iteration (Int 0 ..))))
+  (contexts     (Map Node Context))
+  (queues       (Map Node Queue))     ; Δₙ, keyed by destination context
+  (active       (Set Node))           ; contexts with a non-empty Δₙ — the frontier
+  (active-count (Int 0 ..))           ; |active|, so the fixpoint test is cheap and provable
+  (iteration    (Int 0 ..))))
+
+;; THE QUEUE LIVES IN `Saturation`, NOT IN `Context`, and the reason is representational
+;; rather than conceptual. An earlier draft of this section gave `Context` a
+;; `(queue (List Derived))` field. In SLOP, `(Set T)` and `(Map K V)` compile to POINTERS
+;; while `(List T)` compiles to a VALUE STRUCT — so in a record stored in a
+;; `(Map Node Context)`, `set-put` through a retrieved copy is visible in the map and
+;; `list-push` through the same copy is not. Four fields needing no write-back and one
+;; needing it, one keystroke apart, failing silently as a dropped conclusion.
+;;
+;; Splitting them makes `Context` uniformly aliased-by-pointer, so "a Context read out of
+;; the map IS the one in the map" holds without exception. It also unwelds two lifetimes:
+;; `subsumers`/`succs`/`preds` are the monotone result that survives into
+;; `Outcome.saturation`, while a queue is per-round scratch — which is what §6.4 already
+;; says by making the frontier a property of the ROUND (`active := contexts with a
+;; non-empty Δₙ₊₁`) rather than of the concept.
+;;
+;; `active-count` is redundant with `active` and earns it: `set-elements` allocates the
+;; whole frontier array and is uninterpreted to the WP checker, so testing emptiness
+;; through it costs a copy per round and a proof. Both are written by the same loop at the
+;; barrier, and the commit carries a postcondition tying them together.
 
 ;; A derived conclusion in transit, always addressed to exactly one context.
 ;; The destination rides in the envelope, so it is not repeated in every payload;
@@ -1469,8 +1530,17 @@ accepting it** — the gate can still enumerate an unsupported AST variant as ou
    naming it ([§8.4](#84-the-moose-tboxreasoner-port)'s agreement stage). Not an error, just a class
    the reasoner silently does not know exists.
 
-   Writing the seeds into `subsumers` instead of the queue would leave every queue empty and the
+   Writing the seeds into `subsumers` *instead of* the queue would leave every queue empty and the
    driver would report `fixpoint` before firing a single rule.
+
+   **"Empty `subsumers`" describes S₋₁, not the state the driver first sees.** [§6.4](#64-completion-rules)
+   defines the round-0 snapshot as S₀ = S₋₁ ∪ Δ₀ = Δ₀, so the seeds must be visible in the store
+   *as well as* queued by the time round 0 joins — in an implementation that commits Δ at the
+   preceding barrier, initialization **is** that barrier. Reading this step as "queue only" is silent
+   and total: S(N) stays empty throughout round 0, so CR2 can never find the other conjunct of a
+   `sub-and` and CR4 can never satisfy `B ∈ S(Y)` against a seed. The [§3.1](#31-the-litmus-test-also-the-v0-acceptance-criterion)
+   litmus needs exactly that — CR4 joins the arriving edge against `Person ∈ S(Person)`, which is a
+   seed — so `Mother ⊑ Parent` is never derived and the engine silently reverts to a materializer.
 
 Normalization makes **two different guarantees**, and conflating them overstates the weaker one:
 

@@ -12,6 +12,7 @@
   (@doc "Core type definitions for the HOWL description-logic reasoner")
 
   (import rdf (IRI))
+  (import vocab (OWL_THING OWL_NOTHING))
 
   (export
     ;; identity
@@ -23,7 +24,9 @@
     ;; saturation
     Derived
     Addressed
+    LogicalEdge
     Context
+    Queue
     Saturation
     ;; coverage / reporting
     EntityKind
@@ -44,9 +47,14 @@
     ReasonerConfig
     ;; helpers
     default-config
+    node-top
+    node-bottom
+    node-eq
+    role-eq
     emit-edge
     make-context
-    context-is-active
+    make-queue
+    queue-is-active
     outcome-is-complete
     findings-are-incoherent)
 
@@ -80,7 +88,32 @@
     (named-role IRI)
     (fresh-role (Int 0 ..))))
 
-  ;; ⊤ and ⊥ are reserved NODES, not reserved IRIs:
+  ;; ============================================================
+;; ⚠  MULTI-PAYLOAD UNION VARIANTS ARE NOT HASHABLE. NEVER USE
+;;    `Concept`, `NormAxiom` OR `Derived` AS A SET ELEMENT OR MAP KEY.
+;;
+;; The transpiler registers only a variant's FIRST payload type for
+;; hash/eq generation (`register-union-variants` keeps just
+;; `(list-get vl-items 1)`), and `emit-union-variant-eq` has no
+;; multi-field branch. So for `(derived-succ RoleId Node)` it emits
+;;
+;;     case types_Derived_derived_succ:
+;;         return slop_eq_types_RoleId(&_a->data.derived_succ, ...);
+;;
+;; — the anonymous struct's first field is the RoleId at offset 0, so
+;; that compares correctly and the `Node` IS NEVER COMPARED AT ALL.
+;; `(derived-succ r Y₁)` and `(derived-succ r Y₂)` are then EQUAL to a
+;; `(Set Derived)`, and every filler after the first is swallowed by a
+;; novelty test. It compiles clean and under-derives in silence.
+;;
+;; `Node` and `RoleId` above are safe — every variant carries exactly
+;; one payload, which is the correct codegen path and the one already
+;; exercised by `(Set Node)` and `(Map Node Context)` below. The driver
+;; therefore keys its round delta on `Node`/`RoleId` only (see
+;; saturate.slop's RoundDelta), never on a `Derived`.
+;; ============================================================
+
+;; ⊤ and ⊥ are reserved NODES, not reserved IRIs:
   ;;   ⊤ = (class-node owl:Thing)     ⊥ = (class-node owl:Nothing)
   ;; Both are class-tagged, and owl:Nothing can never name an
   ;; individual (OWL 2 reserves it), so ⊥ has no punning hazard.
@@ -97,6 +130,7 @@
   ;; built-in constructor, and shadowing it makes every `(some x)` in
   ;; this codebase ambiguous to a reader even where the compiler
   ;; disambiguates. Same constructor, unshadowed name.
+  ;; NOT HASHABLE — `exists` carries two payloads. See the warning above.
   (type Concept (union
     (top)
     (bottom)
@@ -120,6 +154,8 @@
   ;; (sub-some-lhs r ⊤ A).
   ;; ============================================================
 
+  ;; NOT HASHABLE — every variant carries two or three payloads. See the
+  ;; warning above. Normal-form axioms travel in a `(List NormAxiom)`.
   (type NormAxiom (union
     (sub-name     Node Node)              ; A ⊑ B
     (sub-and      Node Node Node)         ; A₁ ⊓ A₂ ⊑ B
@@ -140,6 +176,9 @@
   ;; A derived conclusion in transit, always addressed to exactly one
   ;; context. The destination rides in the envelope, so it is not
   ;; repeated in every payload.
+  ;; NOT HASHABLE — `derived-succ`/`derived-pred` carry two payloads, so a
+  ;; `(Set Derived)` would compare the role and ignore the node. See the
+  ;; warning above; the driver's novelty test keys on Node/RoleId instead.
   (type Derived (union
     (derived-sub  Node)            ; add this node to the target's S(·)
     (derived-succ RoleId Node)     ; target gains a successor:   (role, node)
@@ -148,6 +187,22 @@
   (type Addressed (record
     (to   Node)
     (what Derived)))
+
+  ;; ONE logical edge (X,Y) ∈ R(r), before the context decomposition
+  ;; splits it in two.
+  ;;
+  ;; §6.4 requires the novelty test to run on the LOGICAL edge rather
+  ;; than on either stored half — testing the halves separately lets a
+  ;; half already present in one context re-enter because the other was
+  ;; novel. Without a type for it, "the logical edge" existed only as
+  ;; three loose positional arguments that vanished inside `emit-edge`,
+  ;; so the driver had nothing to state that requirement about. Naming
+  ;; it also makes normalizing a `derived-pred` half BACK to its edge a
+  ;; total function rather than an argument swap someone can invert.
+  (type LogicalEdge (record
+    (from Node)
+    (role RoleId)
+    (to   Node)))
 
   ;; A logical edge (X,Y) ∈ R(r) is ONE fact that the context
   ;; decomposition stores as TWO halves — a successor at X and a
@@ -175,19 +230,59 @@
   ;; context that learns a new subsumer must be able to notify its
   ;; predecessors. This is ELK's backward link, and it is why edges
   ;; are stored twice.
+  ;;
+  ;; EVERY FIELD IS A `slop_map*`, AND THAT UNIFORMITY IS DELIBERATE.
+  ;; SPEC §6.2 also gave `Context` a `queue (List Derived)`; it lives in
+  ;; `Saturation.queues` instead, because `(Set T)`/`(Map K V)` compile
+  ;; to POINTERS while `(List T)` compiles to a VALUE STRUCT. In a
+  ;; record stored in a `(Map Node Context)` that difference is a trap:
+  ;; `set-put` through a `map-get` copy is visible in the map, while
+  ;; `list-push` through the same copy updates only the copy's `len` —
+  ;; and if `cap` allows, writes into the shared buffer past the stored
+  ;; `len`. Four fields needing no write-back and one needing it, one
+  ;; keystroke apart, failing silently as a dropped conclusion.
+  ;;
+  ;; With the list gone, "a Context read out of the map IS the one in
+  ;; the map" holds without exception, and the write-back question
+  ;; disappears for this type entirely. It also unwelds two lifetimes:
+  ;; these three fields are the monotone result that survives into
+  ;; `Outcome.saturation`, while a queue is per-round scratch — which is
+  ;; what §6.4 already says by making the frontier a property of the
+  ;; ROUND (`active := contexts with a non-empty Δₙ₊₁`), not of the
+  ;; concept.
   (type Context (record
     (root      Node)                     ; the concept this context reasons about
     (subsumers (Set Node))               ; S(root)
     (succs     (Map RoleId (Set Node)))  ; outgoing role edges
-    (preds     (Map RoleId (Set Node)))  ; incoming role edges
-    (queue     (List Derived))))         ; this context's inbox — its local delta
+    (preds     (Map RoleId (Set Node))))); incoming role edges
 
-  ;; The global state owns no per-concept facts — only the registry
-  ;; and run bookkeeping.
+  ;; Δₙ for one context — its inbox for the round about to run.
+  ;;
+  ;; A record wrapping the list rather than a bare `(List Derived)` as
+  ;; the map value: a bare list as a Map VALUE is unexercised in this
+  ;; ecosystem (the transpiler keeps `(List T)` on the `__auto_type`
+  ;; path precisely because it is a 24-byte struct rather than a
+  ;; `void*`), while a record value is the well-trodden case.
+  (type Queue (record
+    (items (List Derived))))
+
+  ;; The global state owns no per-concept facts — only the registry,
+  ;; the current round's deltas, and run bookkeeping.
   (type Saturation (record
-    (contexts  (Map Node Context))
-    (active    (Set Node))               ; contexts with a non-empty queue — the frontier
-    (iteration (Int 0 ..))))
+    (contexts     (Map Node Context))
+    (queues       (Map Node Queue))      ; Δₙ, keyed by destination context
+    (active       (Set Node))            ; contexts with a non-empty Δₙ — the frontier
+    ;; Redundant with `active`, and earning it: `set-elements` is an
+    ;; uninterpreted function to the WP checker AND allocates the whole
+    ;; frontier array, so testing emptiness through it costs a proof and
+    ;; a copy per round. An `(Int 0 ..)` is interpreted, which moves the
+    ;; fixpoint test inside Z3's reach and lets `frontier-is-empty` be
+    ;; `@pure` with no Arena — which in turn is what makes a store write
+    ;; during the join phase a COMPILE error (§6.4, saturate.slop).
+    ;; Both are written by the same loop at the barrier, and
+    ;; `round-commit` carries a @post tying them together.
+    (active-count (Int 0 ..))
+    (iteration    (Int 0 ..))))
 
   ;; ============================================================
   ;; Coverage and reporting
@@ -363,6 +458,63 @@
   ;; Helpers
   ;; ============================================================
 
+  ;; ⊤ and ⊥ as NODES. Both class-tagged: owl:Nothing can never name an
+  ;; individual (OWL 2 reserves it), so ⊥ has no punning hazard.
+  ;; Constructors rather than consts because a `Node` is a union value,
+  ;; and because §6.3 step 4 pre-populates the signature with them —
+  ;; the driver must be able to mint them without a front end.
+  (fn node-top ()
+    (@intent "⊤ = (class-node owl:Thing)")
+    (@spec (() -> Node))
+    (@pure)
+    (union-new Node class-node (record-new IRI (value OWL_THING))))
+
+  (fn node-bottom ()
+    (@intent "⊥ = (class-node owl:Nothing)")
+    (@spec (() -> Node))
+    (@pure)
+    (union-new Node class-node (record-new IRI (value OWL_NOTHING))))
+
+  ;; Structural equality, written out rather than left to `==`, because
+  ;; the CROSS-TAG arms are the point: OWL permits punning, so the same
+  ;; IRI can denote a class and an individual, and `class-node(:x)` must
+  ;; NOT equal `individual-node(:x)`. Spelling every arm makes that
+  ;; disjointness reviewable instead of trusting generated equality.
+  (fn node-eq ((a Node) (b Node))
+    (@intent "Structural node equality — tag-sensitive, so punning stays disjoint")
+    (@spec ((Node Node) -> Bool))
+    (@pure)
+    (match a
+      ((class-node ai)
+        (match b
+          ((class-node bi)      (string-eq (. ai value) (. bi value)))
+          ((individual-node _)  false)
+          ((fresh-node _)       false)))
+      ((individual-node ai)
+        (match b
+          ((individual-node bi) (string-eq (. ai value) (. bi value)))
+          ((class-node _)       false)
+          ((fresh-node _)       false)))
+      ((fresh-node ai)
+        (match b
+          ((fresh-node bi)      (== ai bi))
+          ((class-node _)       false)
+          ((individual-node _)  false)))))
+
+  (fn role-eq ((a RoleId) (b RoleId))
+    (@intent "Structural role equality — a fresh role never equals a named one")
+    (@spec ((RoleId RoleId) -> Bool))
+    (@pure)
+    (match a
+      ((named-role ai)
+        (match b
+          ((named-role bi) (string-eq (. ai value) (. bi value)))
+          ((fresh-role _)  false)))
+      ((fresh-role ai)
+        (match b
+          ((fresh-role bi) (== ai bi))
+          ((named-role _)  false)))))
+
   (fn make-context ((arena Arena) (root Node))
     (@intent "Create an empty context for a node, with S(root) initially EMPTY")
     (@spec ((Arena Node) -> Context))
@@ -373,8 +525,10 @@
     ;; empty, so `active` would be empty at round 0, the driver would
     ;; report `fixpoint` before firing a single rule, and the run would
     ;; return an instant, empty, apparently-COMPLETE classification.
+    ;; The seeds therefore go into `Saturation.queues` — see
+    ;; `make-initial-saturation` in saturate.slop, which is §6.3 step 4's
+    ;; initializer and the function normalization will call.
     (@post {(. $result root) == root})
-    (@post {(list-len (. $result queue)) == 0})
     ;; The empty-store obligation is NOT stated as a @post, and the
     ;; reason is worth recording rather than quietly omitting.
     ;; `set-elements` is an uninterpreted function to the WP checker —
@@ -395,24 +549,30 @@
       (root      root)
       (subsumers (set-new arena Node))
       (succs     (map-new arena RoleId (Set Node)))
-      (preds     (map-new arena RoleId (Set Node)))
-      (queue     (list-new arena Derived))))
+      (preds     (map-new arena RoleId (Set Node)))))
 
-  (fn context-is-active ((ctx Context))
+  (fn make-queue ((arena Arena))
+    (@intent "An empty round delta for one context")
+    (@spec ((Arena) -> Queue))
+    (@alloc arena)
+    (@post {(list-len (. $result items)) == 0})
+    (record-new Queue (items (list-new arena Derived))))
+
+  (fn queue-is-active ((q Queue))
     (@intent "A context is active exactly when its inbox is non-empty")
-    (@spec ((Context) -> Bool))
+    (@spec ((Queue) -> Bool))
     (@pure)
-    (@post {$result == ((list-len (. ctx queue)) > 0)})
+    (@post {$result == ((list-len (. q items)) > 0)})
     ;; Both directions, because `active` is the driver's termination
     ;; test: a context wrongly reported inactive is silently dropped
     ;; from the frontier and its queued conclusions are never processed,
     ;; which ends the run early and reports `fixpoint` over an
     ;; incomplete derivation.
     (@property empty-queue-is-inactive
-      (implies (== (list-len (. ctx queue)) 0) (not $result)))
+      (implies (== (list-len (. q items)) 0) (not $result)))
     (@property nonempty-queue-is-active
-      (implies (> (list-len (. ctx queue)) 0) $result))
-    (> (list-len (. ctx queue)) 0))
+      (implies (> (list-len (. q items)) 0) $result))
+    (> (list-len (. q items)) 0))
 
   ;; EDGE-PAIR INVARIANT. A logical edge (X,Y) ∈ R(r) is ONE fact, but
   ;; the context decomposition stores it twice — as a successor at X
@@ -422,19 +582,26 @@
   ;; `preds` and CR7 reads both sides, so the edge simply does less
   ;; work than it should, with no error. Rules emit via this helper
   ;; rather than by hand.
-  (fn emit-edge ((arena Arena) (x Node) (r RoleId) (y Node))
-    (@intent "Derive the logical edge (x,y) ∈ R(r) as its two stored halves")
-    (@spec ((Arena Node RoleId Node) -> EdgePair))
+  (fn emit-edge ((arena Arena) (e LogicalEdge))
+    (@intent "Derive the logical edge (e.from, e.to) ∈ R(e.role) as its two stored halves")
+    (@spec ((Arena LogicalEdge) -> EdgePair))
     (@alloc arena)
     ;; The destinations, not merely the count. A count-of-two is
     ;; satisfied by emitting the successor half twice; these are not.
-    (@post {(. (. $result succ-half) to) == x})
-    (@post {(. (. $result pred-half) to) == y})
+    ;; Taking a `LogicalEdge` rather than three positional arguments is
+    ;; what lets the driver state its novelty test against the same
+    ;; thing this function expands (§6.4).
+    (@post {(. (. $result succ-half) to) == (. e from)})
+    (@post {(. (. $result pred-half) to) == (. e to)})
     ;; One helper for all three edge-concluding rules (CR3, CR6, CR7),
     ;; so the invariant has a single site rather than three.
     (record-new EdgePair
-      (succ-half (record-new Addressed (to x) (what (union-new Derived derived-succ r y))))
-      (pred-half (record-new Addressed (to y) (what (union-new Derived derived-pred r x))))))
+      (succ-half (record-new Addressed
+                   (to   (. e from))
+                   (what (union-new Derived derived-succ (. e role) (. e to)))))
+      (pred-half (record-new Addressed
+                   (to   (. e to))
+                   (what (union-new Derived derived-pred (. e role) (. e from)))))))
 
   ;; ============================================================
   ;; The verdict rule (§6.2), in code — stated ONCE

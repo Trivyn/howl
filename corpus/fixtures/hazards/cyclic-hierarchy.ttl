@@ -1,0 +1,16 @@
+# TERMINATION. A subseteq B, B subseteq A is an ordinary equivalence, not an error.
+# Without subtracting conclusions from the ACCUMULATED store, CR1 re-derives both
+# every round, a batch-only dedup keeps them, the frontier never empties, and this
+# perfectly coherent ontology burns its budget and returns inconclusive forever.
+# Expect: FIXPOINT, coherent, and A/B mutually subsuming.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:A rdfs:subClassOf :B .
+:B rdfs:subClassOf :A .

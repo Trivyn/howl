@@ -1,0 +1,32 @@
+# EVERY fixture here must be ENUMERATED on the out-of-profile path, never
+# silently dropped and never merely counted -- a dropped axiom is an incoherence
+# the reasoner subsequently cannot see. Each yields non-empty coverage.omitted,
+# so the verdict is INCONCLUSIVE (exit 2), never coherent.
+# #
+# SWRL rules -- SPEC 5.2. Not OWL (a 2004 W3C Member Submission), in neither
+# OWL 2 DL nor OWL 2 EL, and unrestricted SWRL is UNDECIDABLE, so implementing it
+# would forfeit completeness for a named logic. Present in RO (25 rules), so the
+# decoder meets this in a mainstream OBO ontology.
+# The rule below derives owl:Nothing -- 2 of RO's 25 do exactly this, which is why
+# the disposition must be ENUMERATED: dropping it silently lets an ontology whose
+# authors ENCODED an incoherence come back coherent.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix swrl: <http://www.w3.org/2003/11/swrl#> .
+
+<http://example.org/t> a owl:Ontology .
+:overlaps a owl:ObjectProperty . :downstreamOf a owl:ObjectProperty .
+
+[] a swrl:Imp ;
+   swrl:body (
+     [ a swrl:IndividualPropertyAtom ; swrl:propertyPredicate :downstreamOf ;
+       swrl:argument1 [ a swrl:Variable ] ; swrl:argument2 [ a swrl:Variable ] ]
+   ) ;
+   swrl:head (
+     [ a swrl:ClassAtom ; swrl:classPredicate owl:Nothing ;
+       swrl:argument1 [ a swrl:Variable ] ]
+   ) .

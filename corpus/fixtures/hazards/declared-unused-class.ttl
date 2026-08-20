@@ -1,0 +1,16 @@
+# M0 ACCEPTANCE (c). A class that is declared and otherwise unmentioned must still
+# GET A CONTEXT, because the registry is keyed on the input SIGNATURE rather than on
+# axiom occurrence. Otherwise HOWL cannot answer Unused subseteq top, cannot list it
+# in a hierarchy, and cannot serve a probe naming it -- not an error, just a class
+# the reasoner silently does not know exists.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:A rdfs:subClassOf :B .
+:Unused a owl:Class .

@@ -1,0 +1,14 @@
+# The two ABox forms, and exactly those: C(a) and r(a,b).
+# C(a) -> the GCI individual(a) subseteq C; r(a,b) -> an EDGE, not an existential.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :r a owl:ObjectProperty .
+:a a owl:NamedIndividual , :C .
+:b a owl:NamedIndividual .
+:a :r :b .

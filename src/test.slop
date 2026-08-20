@@ -21,11 +21,15 @@
   (@doc "Verdict-discipline and structural-invariant tests")
 
   (import rdf (IRI Triple))
-  (import types (Node RoleId Derived Addressed EdgePair Context Saturation
+  (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
+                 Context Queue Saturation
                  Omission Coverage Termination SubPair Findings Outcome Fault
                  ReasonerConfig
-                 default-config emit-edge make-context
+                 default-config emit-edge make-context make-queue
+                 node-top node-bottom node-eq role-eq
                  outcome-is-complete findings-are-incoherent))
+  (import saturate (RoundResult saturate make-initial-saturation))
+  (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify))
 
   ;; ============================================================
@@ -37,9 +41,11 @@
     (@spec ((Arena) -> Saturation))
     (@alloc arena)
     (record-new Saturation
-      (contexts  (map-new arena Node Context))
-      (active    (set-new arena Node))
-      (iteration 0)))
+      (contexts     (map-new arena Node Context))
+      (queues       (map-new arena Node Queue))
+      (active       (set-new arena Node))
+      (active-count 0)
+      (iteration    0)))
 
   (fn make-findings ((arena Arena) (inconsistent Bool) (unsat-count Int))
     (@intent "Findings with a controllable inconsistency flag and unsatisfiable-set size")
@@ -172,7 +178,7 @@
     (let ((x (union-new Node class-node (record-new IRI (value "http://example.org/X"))))
           (y (union-new Node class-node (record-new IRI (value "http://example.org/Y"))))
           (r (union-new RoleId named-role (record-new IRI (value "http://example.org/r"))))
-          (pair (emit-edge arena x r y)))
+          (pair (emit-edge arena (record-new LogicalEdge (from x) (role r) (to y)))))
       (if (string-eq (node-iri (. (. pair succ-half) to)) "http://example.org/X")
         (string-eq (node-iri (. (. pair pred-half) to)) "http://example.org/Y")
         false)))
@@ -187,6 +193,372 @@
     (match (classify arena (list-new arena Triple) (list-new arena IRI) (default-config))
       ((ok _)    false)
       ((error _) true)))
+
+  ;; ============================================================
+  ;; M1 — the reasoning fixtures
+  ;;
+  ;; These drive `saturate` DIRECTLY rather than through
+  ;; `howl.classify`, which still refuses. That is deliberate: until the
+  ;; §5.2 gate exists to populate `coverage.omitted`, a partial rule set
+  ;; behind a non-refusing `classify` would present as full coverage, a
+  ;; reached fixpoint and no findings — which the verdict rule reads as
+  ;; a clean COHERENT. The rules can be exercised without granting that.
+  ;;
+  ;; Axioms are hand-normalized. That is not a shortcut around the front
+  ;; end; it is also how M0 gets its expected-canonical-`NormAxiom`
+  ;; fixtures, since §6.3 requires normalization to be checked against
+  ;; exactly this.
+  ;; ============================================================
+
+  (fn cls ((name String))
+    (@intent "A class node")
+    (@spec ((String) -> Node))
+    (@pure)
+    (union-new Node class-node (record-new IRI (value name))))
+
+  (fn rol ((name String))
+    (@intent "A named role")
+    (@spec ((String) -> RoleId))
+    (@pure)
+    (union-new RoleId named-role (record-new IRI (value name))))
+
+  (fn run-fixture ((arena Arena) (signature (List Node)) (axioms (List NormAxiom)))
+    (@intent "Initialize from a signature and saturate to fixpoint")
+    (@spec ((Arena (List Node) (List NormAxiom)) -> (Result RoundResult Fault)))
+    (@alloc arena)
+    (saturate arena (make-initial-saturation arena signature) axioms (default-config)))
+
+  ;; ------------------------------------------------------------
+  ;; §3.1 THE LITMUS. This is the test that decides whether HOWL is a
+  ;; DL reasoner or a materialization engine.
+  ;;
+  ;;   Parent ≡ Person ⊓ ∃hasChild.Person
+  ;;   Mother ⊑ Person ⊓ ∃hasChild.Person        ⟹  Mother ⊑ Parent
+  ;;
+  ;; Entailed only THROUGH the existential on the defining side, which
+  ;; is exactly what forward materialization cannot see. Normalized, the
+  ;; defining side's ∃ sits in NEGATIVE position, so it needs
+  ;; `∃hasChild.Person ⊑ X` — see `test-polarity-guard` for what happens
+  ;; if that direction is flipped.
+  ;; ------------------------------------------------------------
+
+  (fn litmus-signature ((arena Arena))
+    (@intent "Person, Parent, Mother, and the fresh node normalization introduces")
+    (@spec ((Arena) -> (List Node)))
+    (@alloc arena)
+    (let ((mut sig (list-new arena Node)))
+      (do
+        (list-push sig (cls "http://example.org/Person"))
+        (list-push sig (cls "http://example.org/Parent"))
+        (list-push sig (cls "http://example.org/Mother"))
+        (list-push sig (union-new Node fresh-node 0))
+        sig)))
+
+  (fn litmus-axioms ((arena Arena) (correct-polarity Bool))
+    (@intent "The §3.1 litmus in normal form; `false` flips the fresh definition")
+    (@spec ((Arena Bool) -> (List NormAxiom)))
+    (@alloc arena)
+    (let ((person (cls "http://example.org/Person"))
+          (parent (cls "http://example.org/Parent"))
+          (mother (cls "http://example.org/Mother"))
+          (x      (union-new Node fresh-node 0))
+          (has-child (rol "http://example.org/hasChild"))
+          (mut ax (list-new arena NormAxiom)))
+      (do
+        ;; ∃hasChild.Person ⊑ X — NEGATIVE position, the load-bearing one.
+        (if correct-polarity
+          (list-push ax (union-new NormAxiom sub-some-lhs has-child person x))
+          ;; The conservative-but-incomplete rewrite: X ⊑ ∃hasChild.Person.
+          (list-push ax (union-new NormAxiom sub-some-rhs x has-child person)))
+        ;; Person ⊓ X ⊑ Parent
+        (list-push ax (union-new NormAxiom sub-and person x parent))
+        ;; Parent ⊑ Person, Parent ⊑ ∃hasChild.Person
+        (list-push ax (union-new NormAxiom sub-name parent person))
+        (list-push ax (union-new NormAxiom sub-some-rhs parent has-child person))
+        ;; Mother ⊑ Person, Mother ⊑ ∃hasChild.Person
+        (list-push ax (union-new NormAxiom sub-name mother person))
+        (list-push ax (union-new NormAxiom sub-some-rhs mother has-child person))
+        ax)))
+
+  (fn litmus-derives-parent ((arena Arena) (correct-polarity Bool))
+    (@intent "Run the litmus and probe Mother ⊑ Parent")
+    (@spec ((Arena Bool) -> Bool))
+    (@alloc arena)
+    (match (run-fixture arena (litmus-signature arena) (litmus-axioms arena correct-polarity))
+      ((ok r)
+        (let ((f (extract-findings arena (. r saturation))))
+          (entails-sub (. r saturation) (. f inconsistent)
+            (cls "http://example.org/Mother") (cls "http://example.org/Parent"))))
+      ((error _) false)))
+
+  (fn test-litmus ((arena Arena))
+    (@intent "§3.1: HOWL derives Mother ⊑ Parent — the DL-reasoner threshold")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (litmus-derives-parent arena true))
+
+  ;; The mirror, and it is a REAL test rather than a curiosity. §6.3
+  ;; step 3 warns that the one-sided "definitional" rewrite is
+  ;; conservative, incomplete, and looks like it followed the spec's
+  ;; example. If this ever passes, normalization has silently lost the
+  ;; only entailment that defines the project.
+  (fn test-polarity-guard ((arena Arena))
+    (@intent "With the fresh definition at the WRONG polarity, Mother ⊑ Parent is NOT derivable")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (not (litmus-derives-parent arena false)))
+
+  ;; ------------------------------------------------------------
+  ;; Termination. §6.4: the `\ Sₙ` novelty test is not an optimization —
+  ;; without it, `A ⊑ B, B ⊑ A` re-derives both subsumers every round,
+  ;; a batch-only dedup keeps them because they are distinct WITHIN the
+  ;; batch, the frontier never empties, and an ordinary cyclic hierarchy
+  ;; burns its budget and returns inconclusive forever.
+  ;; ------------------------------------------------------------
+
+  (fn test-cyclic-hierarchy-terminates ((arena Arena))
+    (@intent "A ⊑ B, B ⊑ A reaches FIXPOINT rather than the round cap")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((a (cls "http://example.org/A"))
+          (b (cls "http://example.org/B"))
+          (mut sig (list-new arena Node))
+          (mut ax  (list-new arena NormAxiom)))
+      (do
+        (list-push sig a)
+        (list-push sig b)
+        (list-push ax (union-new NormAxiom sub-name a b))
+        (list-push ax (union-new NormAxiom sub-name b a))
+        (match (run-fixture arena sig ax)
+          ((ok r)
+            (match (. r termination)
+              ((fixpoint)         true)
+              ((resource-limit _) false)))
+          ((error _) false)))))
+
+  ;; ------------------------------------------------------------
+  ;; CR4's two-sided trigger, and the round snapshot that makes it work.
+  ;;
+  ;;   E ⊑ ∃r.F,  F ⊑ G,  ∃r.G ⊑ H     ⟹  E ⊑ H
+  ;;
+  ;; The edge (E,r,F) and the subsumer G ∈ S(F) are derived in the SAME
+  ;; round, so both land in F's inbox together. §6.4 calls this the
+  ;; silent-and-permanent case: if the driver joined against the
+  ;; PRE-round state Sₙ₋₁, neither premise would see the other, and in
+  ;; the next round neither is in the delta any more — so the conclusion
+  ;; is never derived, by any handler, ever. Sₙ = Sₙ₋₁ ∪ Δₙ is what
+  ;; makes it reachable.
+  ;; ------------------------------------------------------------
+
+  (fn test-same-round-co-arrival ((arena Arena))
+    (@intent "A CR4 subsumer and its matching predecessor edge arriving together still conclude")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((e (cls "http://example.org/E"))
+          (f (cls "http://example.org/F"))
+          (g (cls "http://example.org/G"))
+          (h (cls "http://example.org/H"))
+          (r (rol "http://example.org/r"))
+          (mut sig (list-new arena Node))
+          (mut ax  (list-new arena NormAxiom)))
+      (do
+        (list-push sig e) (list-push sig f) (list-push sig g) (list-push sig h)
+        (list-push ax (union-new NormAxiom sub-some-rhs e r f))   ; E ⊑ ∃r.F
+        (list-push ax (union-new NormAxiom sub-name f g))          ; F ⊑ G
+        (list-push ax (union-new NormAxiom sub-some-lhs r g h))    ; ∃r.G ⊑ H
+        (match (run-fixture arena sig ax)
+          ((ok res)
+            (let ((fi (extract-findings arena (. res saturation))))
+              (entails-sub (. res saturation) (. fi inconsistent) e h)))
+          ((error _) false)))))
+
+  ;; The MIRROR, and it exists because mutation testing found a hole:
+  ;; deleting `cr-exists-lhs-on-sub` from the dispatcher broke no test
+  ;; at all. Both the litmus and the co-arrival fixture happen to have
+  ;; the edge arrive no earlier than the subsumer, so CR4's *other*
+  ;; handler covered them and this one was never needed.
+  ;;
+  ;;   E ⊑ ∃r.F,  F ⊑ F1,  F1 ⊑ G,  ∃r.G ⊑ H     ⟹  E ⊑ H
+  ;;
+  ;; The chain F ⊑ F1 ⊑ G DELAYS G by one round, so the edge (E,r,F)
+  ;; has already arrived and been processed by the time G reaches S(F).
+  ;; Only the new-subsumer handler, scanning the STORED predecessors,
+  ;; can close it. §6.4's point exactly: a multi-premise rule must be
+  ;; re-triggered by EACH premise independently, and which premise
+  ;; arrives last is a scheduling artifact.
+  ;; ------------------------------------------------------------
+
+  (fn test-late-subsumer-still-concludes ((arena Arena))
+    (@intent "CR4 concludes when the subsumer arrives AFTER its edge — pins the new-subsumer handler")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((e  (cls "http://example.org/E"))
+          (f  (cls "http://example.org/F"))
+          (f1 (cls "http://example.org/F1"))
+          (g  (cls "http://example.org/G"))
+          (h  (cls "http://example.org/H"))
+          (r  (rol "http://example.org/r"))
+          (mut sig (list-new arena Node))
+          (mut ax  (list-new arena NormAxiom)))
+      (do
+        (list-push sig e) (list-push sig f) (list-push sig f1)
+        (list-push sig g) (list-push sig h)
+        (list-push ax (union-new NormAxiom sub-some-rhs e r f))   ; E ⊑ ∃r.F
+        (list-push ax (union-new NormAxiom sub-name f f1))         ; F ⊑ F1
+        (list-push ax (union-new NormAxiom sub-name f1 g))         ; F1 ⊑ G  (the delay)
+        (list-push ax (union-new NormAxiom sub-some-lhs r g h))    ; ∃r.G ⊑ H
+        (match (run-fixture arena sig ax)
+          ((ok res)
+            (let ((fi (extract-findings arena (. res saturation))))
+              (entails-sub (. res saturation) (. fi inconsistent) e h)))
+          ((error _) false)))))
+
+  ;; ------------------------------------------------------------
+  ;; Unsatisfiability, and the two outputs that follow from it.
+  ;;
+  ;;   A ⊑ B,  A ⊑ C,  B ⊓ C ⊑ ⊥       ⟹  ⊥ ∈ S(A)
+  ;;
+  ;; Note this ontology is CONSISTENT and INCOHERENT at once — exactly
+  ;; the case `validate` exists to catch and the one a reasoner keyed
+  ;; only on inconsistency misses.
+  ;; ------------------------------------------------------------
+
+  (fn unsat-fixture ((arena Arena))
+    (@intent "A ⊑ B, A ⊑ C, B ⊓ C ⊑ ⊥")
+    (@spec ((Arena) -> (Result RoundResult Fault)))
+    (@alloc arena)
+    (let ((a (cls "http://example.org/A"))
+          (b (cls "http://example.org/B"))
+          (c (cls "http://example.org/C"))
+          (mut sig (list-new arena Node))
+          (mut ax  (list-new arena NormAxiom)))
+      (do
+        (list-push sig a) (list-push sig b) (list-push sig c)
+        (list-push ax (union-new NormAxiom sub-name a b))
+        (list-push ax (union-new NormAxiom sub-name a c))
+        (list-push ax (union-new NormAxiom sub-and b c (node-bottom)))
+        (run-fixture arena sig ax))))
+
+  (fn test-unsatisfiable-class-detected ((arena Arena))
+    (@intent "⊥ ∈ S(A) surfaces as a non-empty unsatisfiable set, and owl:Nothing does NOT")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (unsat-fixture arena)
+      ((ok r)
+        (let ((f (extract-findings arena (. r saturation))))
+          ;; Exactly one unsatisfiable class: A. If owl:Nothing leaked in
+          ;; — and it satisfies ⊥ ∈ S(⊥) by construction, since every
+          ;; context is seeded with itself — this would be 2, and every
+          ;; real ontology would exit 1.
+          (if (== (list-len (. f unsatisfiable)) 1)
+            (findings-are-incoherent f)
+            false)))
+      ((error _) false)))
+
+  (fn test-bottom-compression ((arena Arena))
+    (@intent "The PROBE answers true for an unsatisfiable A; the TAXONOMY holds only (A,⊥)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (unsat-fixture arena)
+      ((ok r)
+        (let ((a (cls "http://example.org/A"))
+              (b (cls "http://example.org/B"))
+              (f (extract-findings arena (. r saturation)))
+              (mut pairs-about-a 0))
+          (do
+            (for-each (p (. f subsumptions))
+              (when (node-eq (. p sub) a)
+                (set! pairs-about-a (+ pairs-about-a 1))))
+            ;; A is unsatisfiable, so A ⊑ B is entailed for EVERY B and
+            ;; the probe must say so. The taxonomy must NOT say so, or an
+            ;; unsatisfiable class explodes the hierarchy by the size of
+            ;; the signature. Both readings are defensible in isolation;
+            ;; implementing one where the other belongs gives either
+            ;; false negatives on probes or a quadratic hierarchy.
+            (if (entails-sub (. r saturation) (. f inconsistent) a b)
+              (== pairs-about-a 1)
+              false))))
+      ((error _) false)))
+
+  ;; ------------------------------------------------------------
+  ;; UNDEFINED, NOT EMPTY. Under inconsistency both output lists are
+  ;; empty because they are UNDEFINED — an inconsistent ontology has no
+  ;; model, so every class is unsatisfiable and every subsumption
+  ;; entailed, yet raw ⊥ ∈ S(A) finds none of them when the
+  ;; inconsistency arrived through ⊤ or an individual. `inconsistent:
+  ;; true` alongside a populated `unsatisfiable` would read as a partial
+  ;; census of the damage; alongside an empty one it reads as
+  ;; "consistent classes". Neither is what the fields mean.
+  ;;
+  ;; This carries the obligation that `extract-findings` states as OWED:
+  ;; the contracts are true but undischargeable by the checker, so the
+  ;; guarantee lives here instead of nowhere.
+  ;;
+  ;;   ⊤ ⊑ ⊥   ⟹   ⊥ ∈ S(⊤)   ⟹   inconsistent
+  ;; ------------------------------------------------------------
+
+  (fn test-inconsistency-suppresses-both-lists ((arena Arena))
+    (@intent "An inconsistent ontology reports EMPTY lists, not a partial census")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((a (cls "http://example.org/A"))
+          (mut sig (list-new arena Node))
+          (mut ax  (list-new arena NormAxiom)))
+      (do
+        (list-push sig a)
+        ;; ⊤ ⊑ ⊥ — the smallest inconsistency there is.
+        (list-push ax (union-new NormAxiom sub-name (node-top) (node-bottom)))
+        (match (run-fixture arena sig ax)
+          ((ok r)
+            (let ((f (extract-findings arena (. r saturation))))
+              (if (. f inconsistent)
+                (if (== (list-len (. f unsatisfiable)) 0)
+                  (== (list-len (. f subsumptions)) 0)
+                  false)
+                false)))
+          ((error _) false)))))
+
+  ;; ------------------------------------------------------------
+  ;; Order independence (§6.8). Set iteration is bucket order, which is
+  ;; not content-canonical, so a round must not depend on it. Feeding
+  ;; the same theory with the signature in the opposite order perturbs
+  ;; map insertion order without changing content; the round count and
+  ;; the findings sizes must be identical.
+  ;;
+  ;; This checks SIZES rather than element order, because canonical
+  ;; ordering of the findings lists is still OWED (see classify.slop) —
+  ;; asserting element order here would be asserting something the
+  ;; implementation does not yet claim.
+  ;; ------------------------------------------------------------
+
+  (fn test-order-independence ((arena Arena))
+    (@intent "Reversing the signature changes neither the round count nor the findings")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((a (cls "http://example.org/A"))
+          (b (cls "http://example.org/B"))
+          (c (cls "http://example.org/C"))
+          (mut fwd (list-new arena Node))
+          (mut rev (list-new arena Node))
+          (mut ax  (list-new arena NormAxiom)))
+      (do
+        (list-push fwd a) (list-push fwd b) (list-push fwd c)
+        (list-push rev c) (list-push rev b) (list-push rev a)
+        (list-push ax (union-new NormAxiom sub-name a b))
+        (list-push ax (union-new NormAxiom sub-name b c))
+        (match (run-fixture arena fwd ax)
+          ((ok r1)
+            (match (run-fixture arena rev ax)
+              ((ok r2)
+                (let ((f1 (extract-findings arena (. r1 saturation)))
+                      (f2 (extract-findings arena (. r2 saturation))))
+                  (if (== (. (. r1 saturation) iteration) (. (. r2 saturation) iteration))
+                    (if (== (list-len (. f1 subsumptions)) (list-len (. f2 subsumptions)))
+                      (== (list-len (. f1 unsatisfiable)) (list-len (. f2 unsatisfiable)))
+                      false)
+                    false)))
+              ((error _) false)))
+          ((error _) false)))))
 
   ;; ============================================================
 
@@ -238,6 +610,42 @@
 
           (let ((r (test-stub-refuses-rather-than-passing arena)))
             (print-test-result "stub: classify refuses, never passes" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-litmus arena)))
+            (print-test-result "§3.1 LITMUS: derives Mother ⊑ Parent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-polarity-guard arena)))
+            (print-test-result "polarity: wrong-direction fresh definition loses the litmus" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-cyclic-hierarchy-terminates arena)))
+            (print-test-result "termination: A ⊑ B, B ⊑ A reaches fixpoint" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-same-round-co-arrival arena)))
+            (print-test-result "CR4: same-round co-arrival still concludes" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-late-subsumer-still-concludes arena)))
+            (print-test-result "CR4: subsumer arriving after its edge still concludes" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-unsatisfiable-class-detected arena)))
+            (print-test-result "unsat: ⊥ ∈ S(A) found, owl:Nothing excluded" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-bottom-compression arena)))
+            (print-test-result "output: probe entails all, taxonomy holds only (A,⊥)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-inconsistency-suppresses-both-lists arena)))
+            (print-test-result "findings: inconsistency empties both lists (undefined, not empty)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-order-independence arena)))
+            (print-test-result "determinism: signature order changes nothing" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

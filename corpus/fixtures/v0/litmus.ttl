@@ -1,0 +1,23 @@
+# SPEC.md 3.1 THE LITMUS. Parent = Person AND EXISTS hasChild.Person,
+# Mother subseteq Person AND EXISTS hasChild.Person.
+# Expect: entails Mother subseteq Parent. Derivable ONLY through the existential
+# on the defining side -- what materialization cannot see. If HOWL derives this it
+# is a DL reasoner; if not it is a materialization engine.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:Person a owl:Class . :Parent a owl:Class . :Mother a owl:Class .
+:hasChild a owl:ObjectProperty .
+
+:Parent owl:equivalentClass
+  [ a owl:Class ; owl:intersectionOf
+    ( :Person [ a owl:Restriction ; owl:onProperty :hasChild ; owl:someValuesFrom :Person ] ) ] .
+
+:Mother rdfs:subClassOf
+  [ a owl:Class ; owl:intersectionOf
+    ( :Person [ a owl:Restriction ; owl:onProperty :hasChild ; owl:someValuesFrom :Person ] ) ] .

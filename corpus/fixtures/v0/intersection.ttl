@@ -1,0 +1,13 @@
+# CR2. A1 AND A2 subseteq B -- the self-join rule.
+# Expect: gate clean; entails C subseteq B for any C under both conjuncts.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A1 a owl:Class . :A2 a owl:Class . :B a owl:Class . :C a owl:Class .
+:C rdfs:subClassOf :A1, :A2 .
+[ a owl:Class ; owl:intersectionOf ( :A1 :A2 ) ] rdfs:subClassOf :B .

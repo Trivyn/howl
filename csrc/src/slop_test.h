@@ -6,7 +6,29 @@
 #include <stdbool.h>
 #include "slop_rdf.h"
 #include "slop_types.h"
+#include "slop_saturate.h"
+#include "slop_classify.h"
 #include "slop_howl.h"
+
+#ifndef SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_DEFINED
+SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
+#endif
+
+#ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
+#define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
+SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
+#define SLOP_OPTION_TYPES_NODE_DEFINED
+SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
 
 
 /* Hash/eq functions and list types for struct map/set keys */
@@ -70,7 +92,11 @@ static inline bool slop_eq_types_Node(const void* a, const void* b) {
     }
     return false;
 }
-SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
+#endif
+
+#ifndef SLOP_RESULT_SATURATE_ROUNDRESULT_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_SATURATE_ROUNDRESULT_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { saturate_RoundResult ok; types_Fault err; } data; } slop_result_saturate_RoundResult_types_Fault;
 #endif
 
 types_Saturation test_empty_saturation(slop_arena* arena);
@@ -86,8 +112,34 @@ uint8_t test_test_context_starts_with_empty_store(slop_arena* arena);
 slop_string test_node_iri(types_Node n);
 uint8_t test_test_emit_edge_addresses_both_halves(slop_arena* arena);
 uint8_t test_test_stub_refuses_rather_than_passing(slop_arena* arena);
+types_Node test_cls(slop_string name);
+types_RoleId test_rol(slop_string name);
+slop_result_saturate_RoundResult_types_Fault test_run_fixture(slop_arena* arena, slop_list_types_Node signature, slop_list_types_NormAxiom axioms);
+slop_list_types_Node test_litmus_signature(slop_arena* arena);
+slop_list_types_NormAxiom test_litmus_axioms(slop_arena* arena, uint8_t correct_polarity);
+uint8_t test_litmus_derives_parent(slop_arena* arena, uint8_t correct_polarity);
+uint8_t test_test_litmus(slop_arena* arena);
+uint8_t test_test_polarity_guard(slop_arena* arena);
+uint8_t test_test_cyclic_hierarchy_terminates(slop_arena* arena);
+uint8_t test_test_same_round_co_arrival(slop_arena* arena);
+uint8_t test_test_late_subsumer_still_concludes(slop_arena* arena);
+slop_result_saturate_RoundResult_types_Fault test_unsat_fixture(slop_arena* arena);
+uint8_t test_test_unsatisfiable_class_detected(slop_arena* arena);
+uint8_t test_test_bottom_compression(slop_arena* arena);
+uint8_t test_test_inconsistency_suppresses_both_lists(slop_arena* arena);
+uint8_t test_test_order_independence(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
 int main(int argc, char** _c_argv);
+
+#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
+#define SLOP_OPTION_TYPES_NODE_DEFINED
+SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
 
 
 #endif

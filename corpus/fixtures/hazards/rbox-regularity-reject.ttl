@@ -1,0 +1,18 @@
+# The ACCEPTING side's mirror: a genuinely non-regular RBox.
+# r o s subseteq s together with s o r subseteq r has no strict linear order on roles
+# making both chains regular, so the RBox is inadmissible.
+# Expect: a COLLECTIVE RBox failure -- the ENTIRE RBox goes to coverage.omitted and
+# the run is inconclusive, with the witness reported as a diagnostic. HOWL does not
+# delete a witness and classify the projected RBox: a witness is not a removal set,
+# and the choice among alternative deletions is not canonical.
+
+@prefix :    <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty .
+:s owl:propertyChainAxiom ( :r :s ) .
+:r owl:propertyChainAxiom ( :s :r ) .

@@ -1,0 +1,22 @@
+# EVERY fixture here must be ENUMERATED on the out-of-profile path, never
+# silently dropped and never merely counted -- a dropped axiom is an incoherence
+# the reasoner subsequently cannot see. Each yields non-empty coverage.omitted,
+# so the verdict is INCONCLUSIVE (exit 2), never coherent.
+# #
+# Functional, inverse-functional, symmetric, asymmetric, irreflexive, reflexive.
+# Note TransitiveObjectProperty is NOT here -- it is in v0, desugaring to r o r subseteq r.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix swrl: <http://www.w3.org/2003/11/swrl#> .
+
+<http://example.org/t> a owl:Ontology .
+:f a owl:ObjectProperty , owl:FunctionalProperty .
+:g a owl:ObjectProperty , owl:InverseFunctionalProperty .
+:h a owl:ObjectProperty , owl:SymmetricProperty .
+:i a owl:ObjectProperty , owl:AsymmetricProperty .
+:j a owl:ObjectProperty , owl:IrreflexiveProperty .
+:k a owl:ObjectProperty , owl:ReflexiveProperty .

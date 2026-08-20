@@ -13,33 +13,33 @@ int main(int argc, char** _c_argv);
 
 int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r) {
     int64_t _retval = {0};
-    __auto_type _mv_11 = r;
-    if (_mv_11.is_ok) {
-        __auto_type o = _mv_11.data.ok;
-        __auto_type _mv_12 = howl_verdict(o);
-        if (_mv_12 == howl_Verdict_verdict_coherent) {
+    __auto_type _mv_47 = r;
+    if (_mv_47.is_ok) {
+        __auto_type o = _mv_47.data.ok;
+        __auto_type _mv_48 = howl_verdict(o);
+        if (_mv_48 == howl_Verdict_verdict_coherent) {
             return 0;
-        } else if (_mv_12 == howl_Verdict_verdict_incoherent) {
+        } else if (_mv_48 == howl_Verdict_verdict_incoherent) {
             return 1;
-        } else if (_mv_12 == howl_Verdict_verdict_inconclusive) {
+        } else if (_mv_48 == howl_Verdict_verdict_inconclusive) {
             return 2;
         }
-    } else if (!_mv_11.is_ok) {
-        __auto_type f = _mv_11.data.err;
-        __auto_type _mv_13 = f;
-        switch (_mv_13.tag) {
+    } else if (!_mv_47.is_ok) {
+        __auto_type f = _mv_47.data.err;
+        __auto_type _mv_49 = f;
+        switch (_mv_49.tag) {
             case types_Fault_cancelled:
             {
                 return 2;
             }
             case types_Fault_refused:
             {
-                __auto_type _ = _mv_13.data.refused;
+                __auto_type _ = _mv_49.data.refused;
                 return 2;
             }
             case types_Fault_input_error:
             {
-                __auto_type _ = _mv_13.data.input_error;
+                __auto_type _ = _mv_49.data.input_error;
                 return 3;
             }
         }
@@ -99,17 +99,17 @@ int main(int argc, char** _c_argv) {
                 } else {
                     {
                         __auto_type result = howl_classify(arena, ((slop_list_rdf_Triple){ .data = (rdf_Triple*)slop_arena_alloc(arena, 16 * sizeof(rdf_Triple)), .len = 0, .cap = 16 }), ((slop_list_rdf_IRI){ .data = (rdf_IRI*)slop_arena_alloc(arena, 16 * sizeof(rdf_IRI)), .len = 0, .cap = 16 }), howl_default_config());
-                        __auto_type _mv_14 = result;
-                        if (_mv_14.is_ok) {
-                            __auto_type _ = _mv_14.data.ok;
+                        __auto_type _mv_50 = result;
+                        if (_mv_50.is_ok) {
+                            __auto_type _ = _mv_50.data.ok;
                             printf("%s\n", "howl: unexpected outcome from an unimplemented pipeline");
-                        } else if (!_mv_14.is_ok) {
-                            __auto_type f = _mv_14.data.err;
-                            __auto_type _mv_15 = f;
-                            switch (_mv_15.tag) {
+                        } else if (!_mv_50.is_ok) {
+                            __auto_type f = _mv_50.data.err;
+                            __auto_type _mv_51 = f;
+                            switch (_mv_51.tag) {
                                 case types_Fault_input_error:
                                 {
-                                    __auto_type msg = _mv_15.data.input_error;
+                                    __auto_type msg = _mv_51.data.input_error;
                                     printf("%s", "howl: ");
                                     printf("%.*s\n", (int)(msg).len, (msg).data);
                                     break;
@@ -121,7 +121,7 @@ int main(int argc, char** _c_argv) {
                                 }
                                 case types_Fault_refused:
                                 {
-                                    __auto_type _ = _mv_15.data.refused;
+                                    __auto_type _ = _mv_51.data.refused;
                                     printf("%s\n", "howl: refused (--strict): input carried out-of-profile axioms");
                                     break;
                                 }
