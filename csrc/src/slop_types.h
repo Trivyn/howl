@@ -53,6 +53,7 @@ SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
@@ -84,6 +85,7 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 
 #ifndef SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 #endif
 
@@ -108,6 +110,7 @@ SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 
 #ifndef SLOP_LIST_TYPES_ROLEID_DEFINED
 #define SLOP_LIST_TYPES_ROLEID_DEFINED
+#define SLOP_LIST_TYPES_ROLEID_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_RoleId, slop_list_types_RoleId)
 #endif
 
@@ -189,6 +192,7 @@ SLOP_OPTION_DEFINE(types_Derived, slop_option_types_Derived)
 
 #ifndef SLOP_LIST_TYPES_DERIVED_DEFINED
 #define SLOP_LIST_TYPES_DERIVED_DEFINED
+#define SLOP_LIST_TYPES_DERIVED_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Derived, slop_list_types_Derived)
 #endif
 
@@ -276,6 +280,7 @@ SLOP_OPTION_DEFINE(types_AxiomRef, slop_option_types_AxiomRef)
 
 #ifndef SLOP_LIST_TYPES_AXIOMREF_DEFINED
 #define SLOP_LIST_TYPES_AXIOMREF_DEFINED
+#define SLOP_LIST_TYPES_AXIOMREF_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_AxiomRef, slop_list_types_AxiomRef)
 #endif
 
@@ -335,6 +340,7 @@ SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 
 #ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
@@ -379,6 +385,7 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 
 #ifndef SLOP_LIST_TYPES_SUBPAIR_DEFINED
 #define SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 #endif
 
@@ -542,7 +549,7 @@ static inline uint64_t slop_hash_types_Node(const void* key) {
         case types_Node_individual_node:
             return slop_hash_rdf_IRI(&_k->data.individual_node);
         case types_Node_fresh_node:
-            { int64_t _tmp = (int64_t)_k->data.fresh_node; return slop_hash_int(&_tmp); }
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_node });
     }
     return 0;
 }
@@ -586,7 +593,7 @@ static inline uint64_t slop_hash_types_RoleId(const void* key) {
         case types_RoleId_named_role:
             return slop_hash_rdf_IRI(&_k->data.named_role);
         case types_RoleId_fresh_role:
-            { int64_t _tmp = (int64_t)_k->data.fresh_role; return slop_hash_int(&_tmp); }
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
     }
     return 0;
 }
@@ -612,6 +619,8 @@ uint8_t types_role_eq(types_RoleId a, types_RoleId b);
 types_Context types_make_context(slop_arena* arena, types_Node root);
 types_Queue types_make_queue(slop_arena* arena);
 uint8_t types_queue_is_active(types_Queue q);
+uint8_t types_derived_eq(types_Derived a, types_Derived b);
+uint8_t types_addressed_eq(types_Addressed a, types_Addressed b);
 types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
@@ -742,6 +751,11 @@ SLOP_OPTION_DEFINE(types_ProfileSelection, slop_option_types_ProfileSelection)
 #ifndef SLOP_OPTION_TYPES_REASONERCONFIG_DEFINED
 #define SLOP_OPTION_TYPES_REASONERCONFIG_DEFINED
 SLOP_OPTION_DEFINE(types_ReasonerConfig, slop_option_types_ReasonerConfig)
+#endif
+
+#ifndef SLOP_LIST_TYPES_CONCEPT_IMPL_DEFINED
+#define SLOP_LIST_TYPES_CONCEPT_IMPL_DEFINED
+SLOP_LIST_IMPL(types_Concept, slop_list_types_Concept)
 #endif
 
 

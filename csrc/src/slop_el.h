@@ -4,15 +4,18 @@
 #include "../runtime/slop_runtime.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "slop_rdf.h"
 #include "slop_types.h"
 
 #ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
 #define SLOP_LIST_TYPES_ADDRESSED_DEFINED
+#define SLOP_LIST_TYPES_ADDRESSED_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
 #endif
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 #define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
+#define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
@@ -26,6 +29,13 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
+types_Node el_ex_x(void);
+types_Node el_ex_a(void);
+types_Node el_ex_b(void);
+types_Node el_ex_c(void);
+types_RoleId el_ex_r(void);
+types_Context el_ex_ctx(slop_arena* arena);
+types_Context el_ex_ctx_bottom(slop_arena* arena);
 slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax);

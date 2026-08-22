@@ -47,6 +47,7 @@ make          # build the CLI from the committed C in csrc/ — no SLOP toolchai
 make test     # verdict-discipline and structural-invariant tests
 make lib      # static library
 make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
+make example      # executable @example blocks on the completion rules
 make crate-test   # Rust crate, including the FFI layout guards
 ```
 
@@ -91,20 +92,24 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` discharges **23 contracts, 0 failing**. The boundary is not obvious, it is not
-documented upstream, and every row below was established by *probing* — writing the minimal pair of
-functions that differ in one construct and seeing which verifies. Recorded here so it is not
-rediscovered a third time.
+`make verify` discharges **23 contracts, 0 failing**, and `make example` runs **6 executable
+per-rule examples**. The boundary is not obvious, it is not documented upstream, and every row below
+was established by *probing* — writing the minimal pair of functions that differ in one construct and
+seeing which verifies. Recorded here so it is not rediscovered a third time.
+
+**Toolchain: slop 0.2.1.** Re-probed on the bump rather than assumed from release notes; two of the
+rows below were retired by it and two survived.
 
 | Works | Does not |
 |---|---|
 | Record fields — **including `Bool`** — and `list-len` | **`or` / `and` in a function BODY** — makes the return value opaque |
-| `(@post (implies {braced} {$result == X}))` | **`@property` quantifying over a push-built `$result`** — fails outright, *and* makes any `@post` on the same function fail |
+| `(@post (implies {braced} {$result == X}))` | **`@property` quantifying over a push-built `$result`** — fails outright, *and* makes any `@post` on the same function fail ([#69](https://github.com/slop-lang/slop/issues/69), open) |
 | `match` in a `@post`, enum-valued results | **A loop in the body** — `$result` becomes opaque |
-| `while` loops, with or without `@loop-invariant` | **`if` between two `record-new`s** — loses field projection on `$result` |
+| `while` loops, with or without `@loop-invariant` | **`if` between two `record-new`s** — loses field projection on `$result` ([#70](https://github.com/slop-lang/slop/issues/70), open) |
 | A single unconditional `record-new` — fields stay visible | `const` values — opaque, so `{$result == EXIT_ERROR}` cannot be proved |
 | A guarded push inside a `match` arm — bounds like `<= 1` prove | `set-elements`, `list-get` — uninterpreted functions |
 | `(Int 0 ..)` fields — interpreted, unlike `set-elements` | Reasoning **across a call** |
+| **`@example` — genuinely executes** (0.2.1) | — |
 
 Four consequences worth knowing before writing a contract:
 
@@ -124,8 +129,20 @@ branch and a single push, it proves. Same semantics, same message count.
 cost real time. A `@property (forall (m $result) …)` over a list built with `list-push` does not
 merely go *unknown* — it **fails**, and its presence causes the sibling `@post` on the same function
 to fail too. The per-rule faithfulness properties were removed for this reason and the obligation
-moved to `OWED` plus fixtures; GROWL's equivalents survive because they come back *unknown*, which is
-not a failure.
+moved to `OWED`; GROWL's equivalents survive because they come back *unknown*, which is not a
+failure. Still reproducible on 0.2.1 — re-probed, not assumed.
+
+**`@example` is now the substitute, and it was not before.** Through 0.1.2 an example ran only when
+every argument was a scalar literal; any fixture call was reported `SKIP (wildcard args)` and then
+**counted as a pass**. HOWL's six rule examples reported green while executing nothing, and GROWL's
+47 did the same. Fixed in 0.2.1 ([#71](https://github.com/slop-lang/slop/issues/71)): skips are
+reported as `unrunnable` and excluded from the pass count. The examples are mutation-tested —
+removing CR2's second self-join arm turns one red.
+
+One syntax trap, because it fails confusingly: a list-returning example's expected value is **splat**
+as literal elements, so it is `(list <elem> …)` with no type argument and `(list)` for empty. Writing
+`(list Addressed)` — the valid empty-list literal in ordinary code — makes the harness treat the type
+name as an element.
 
 **There is no interprocedural reasoning.** A callee is an uninterpreted function, so a property that
 depends on what a helper returns is unprovable — the counterexample says so literally
@@ -165,11 +182,18 @@ updates only the copy's `len`, and if `cap` allows it writes into the shared buf
 length. This is why `Context` no longer carries a queue, why rules never take an accumulator
 parameter, and why `round-commit` writes a queue into its map only after every push.
 
-**Multi-payload union variants compare only their FIRST payload.** The transpiler registers one
-payload type per variant and emits no multi-field branch, so a `(Set Derived)` would treat
-`(derived-succ r Y₁)` and `(derived-succ r Y₂)` as **equal** and swallow every filler after the first.
-It compiles clean and under-derives in silence. `Derived`, `Concept` and `NormAxiom` are therefore
-never Set elements or Map keys — the driver keys its round delta on `Node`/`RoleId` only.
+**Multi-payload union variants compared only their FIRST payload** — fixed in 0.2.1
+([#66](https://github.com/slop-lang/slop/issues/66)), verified here by direct test. Through 0.1.2 a
+`(Set Derived)` treated `(derived-succ r Y₁)` and `(derived-succ r Y₂)` as **equal**, swallowing
+every filler after the first: clean compile, silent under-derivation. The driver still keys its round
+delta on `Node`/`RoleId` only, which is no longer a workaround — it is the shape the
+commit-at-barrier design wants anyway, since the delta mirrors `Context` field-for-field.
+
+**`set-remove`/`map-remove` could strand still-present keys** — fixed in 0.2.1
+([#67](https://github.com/slop-lang/slop/issues/67)). Clearing `occupied` without a tombstone in a
+linear-probe table truncated any chain passing through the hole; 10 of 180 surviving keys became
+unfindable in a minimal repro. `active` is still rebuilt each barrier rather than pruned, for the
+independent reason that §6.4 makes the frontier a pure function of Δₙ₊₁.
 
 **A `Map` or `Set` may not appear in a function signature, and a set element must be an lvalue.**
 Neither is documented; the first is an "Unknown type" at check time and the second a "cannot take the

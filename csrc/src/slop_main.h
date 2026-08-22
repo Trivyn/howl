@@ -19,5 +19,27 @@ slop_string main_argv_to_string(uint8_t** argv, int64_t index);
 void main_print_usage(void);
 int main(int argc, char** _c_argv);
 
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
+#endif
+
+#ifndef SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
+#endif
+
 
 #endif

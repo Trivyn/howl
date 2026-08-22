@@ -26,7 +26,8 @@ licence        = "CC BY 4.0"
 logical_axioms = 1983
 in_v0          = 1465
 out_of_profile = 518
-projection     = "required"
+projection     = "corpus/projections/ro-2025-12-17.removals"
+projection_removes = { axioms = 342, triples = 1361, in_v0_swept_in = 66 }
 role           = "RBOX. 160 property chains, 45 transitive properties, 801 sub-property axioms — by far the best exercise available for CR6/CR7, which have no fixtures of their own. Also the SWRL case: 25 rules, 2 of which derive owl:Nothing."
 
 [[ontology]]
@@ -39,7 +40,8 @@ licence        = "CC BY 4.0"
 logical_axioms = 26813
 in_v0          = 26403
 out_of_profile = 410
-projection     = "required"
+projection     = "corpus/projections/obi-2026-07-27.removals"
+projection_removes = { axioms = 379, triples = 5828, in_v0_swept_in = 1244 }
 role           = "PRIMARY v0 ENTRY. Only 1.5% out-of-profile over 26k in-profile axioms — the closest fit to v0 of anything measured, and large enough to be a real differential and benchmark target."
 
 [[ontology]]
@@ -52,7 +54,8 @@ licence        = "CC BY 4.0"
 logical_axioms = 117791
 in_v0          = 117790
 out_of_profile = 1
-projection     = "one axiom"
+projection     = "corpus/projections/go-2026-07-26.removals"
+projection_removes = { axioms = 1, triples = 1, in_v0_swept_in = 0 }
 role           = "BENCHMARK, and the headline result of the census: 1.4M triples, 117,790 in-profile logical axioms, and exactly ONE out-of-profile axiom — a single owl:inverseOf. The canonical EL benchmark named in §12 is essentially inside v0 already, and its projection is a one-axiom diff that a human can audit by eye. The hash above is from the latest-PURL fetch; the versioned URL is pinned on the strength of ro.owl's verified byte-identical match, and fetch.sh catches it loudly if that assumption is wrong."
 
 # ---------------------------------------------------------------------------

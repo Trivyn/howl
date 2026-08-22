@@ -30,51 +30,55 @@ slop_option_types_Queue saturate_queue_of(types_Saturation sat, types_Node n) {
 }
 
 uint8_t saturate_store_has_sub(types_Saturation sat, types_Node x, types_Node b) {
-    __auto_type _mv_36 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-    if (_mv_36.has_value) {
-        __auto_type ctx = _mv_36.value;
+    __auto_type _mv_48 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+    if (_mv_48.has_value) {
+        __auto_type ctx = _mv_48.value;
         return (slop_map_get(ctx.subsumers, &(b)) != NULL);
-    } else if (!_mv_36.has_value) {
+    } else if (!_mv_48.has_value) {
         return 0;
     }
+    SLOP_UNREACHABLE();
 }
 
 uint8_t saturate_store_has_succ(types_Saturation sat, types_Node x, types_RoleId r, types_Node y) {
-    __auto_type _mv_37 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-    if (_mv_37.has_value) {
-        __auto_type ctx = _mv_37.value;
-        __auto_type _mv_38 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
-        if (_mv_38.has_value) {
-            __auto_type ys = _mv_38.value;
+    __auto_type _mv_49 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+    if (_mv_49.has_value) {
+        __auto_type ctx = _mv_49.value;
+        __auto_type _mv_50 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+        if (_mv_50.has_value) {
+            __auto_type ys = _mv_50.value;
             return (slop_map_get(ys, &(y)) != NULL);
-        } else if (!_mv_38.has_value) {
+        } else if (!_mv_50.has_value) {
             return 0;
         }
-    } else if (!_mv_37.has_value) {
+        SLOP_UNREACHABLE();
+    } else if (!_mv_49.has_value) {
         return 0;
     }
+    SLOP_UNREACHABLE();
 }
 
 types_Context saturate_delta_context(slop_arena* arena, saturate_RoundDelta delta, types_Node x) {
-    __auto_type _mv_39 = ({ void* _ptr = slop_map_get(delta.pending, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-    if (_mv_39.has_value) {
-        __auto_type c = _mv_39.value;
+    __auto_type _mv_51 = ({ void* _ptr = slop_map_get(delta.pending, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+    if (_mv_51.has_value) {
+        __auto_type c = _mv_51.value;
         return c;
-    } else if (!_mv_39.has_value) {
+    } else if (!_mv_51.has_value) {
         {
             __auto_type c = types_make_context(arena, x);
             ({ __auto_type _val = c; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, delta.pending, &(x), _vptr); });
             return c;
         }
     }
+    SLOP_UNREACHABLE();
 }
 
 void saturate_add_succ(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node y) {
-    __auto_type _mv_40 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
-    if (_mv_40.has_value) {
-        __auto_type s = _mv_40.value;
+    __auto_type _mv_52 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+    if (_mv_52.has_value) {
+        __auto_type s = _mv_52.value;
         ({ uint8_t _dummy = 1; slop_map_put(arena, s, &(y), &_dummy); });
-    } else if (!_mv_40.has_value) {
+    } else if (!_mv_52.has_value) {
         {
             __auto_type s = slop_map_new_ptr(arena, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node);
             ({ uint8_t _dummy = 1; slop_map_put(arena, s, &(y), &_dummy); });
@@ -84,11 +88,11 @@ void saturate_add_succ(slop_arena* arena, types_Context ctx, types_RoleId r, typ
 }
 
 void saturate_add_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x) {
-    __auto_type _mv_41 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
-    if (_mv_41.has_value) {
-        __auto_type s = _mv_41.value;
+    __auto_type _mv_53 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+    if (_mv_53.has_value) {
+        __auto_type s = _mv_53.value;
         ({ uint8_t _dummy = 1; slop_map_put(arena, s, &(x), &_dummy); });
-    } else if (!_mv_41.has_value) {
+    } else if (!_mv_53.has_value) {
         {
             __auto_type s = slop_map_new_ptr(arena, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node);
             ({ uint8_t _dummy = 1; slop_map_put(arena, s, &(x), &_dummy); });
@@ -121,25 +125,25 @@ void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_Round
 }
 
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m) {
-    __auto_type _mv_42 = m.what;
-    switch (_mv_42.tag) {
+    __auto_type _mv_54 = m.what;
+    switch (_mv_54.tag) {
         case types_Derived_derived_sub:
         {
-            __auto_type b = _mv_42.data.derived_sub;
+            __auto_type b = _mv_54.data.derived_sub;
             saturate_admit_sub(arena, sat, delta, m.to, b);
             break;
         }
         case types_Derived_derived_succ:
         {
-            __auto_type r = _mv_42.data.derived_succ.f0;
-            __auto_type y = _mv_42.data.derived_succ.f1;
+            __auto_type r = _mv_54.data.derived_succ.f0;
+            __auto_type y = _mv_54.data.derived_succ.f1;
             saturate_admit_edge(arena, sat, delta, ((types_LogicalEdge){.from = m.to, .role = r, .to = y}));
             break;
         }
         case types_Derived_derived_pred:
         {
-            __auto_type r = _mv_42.data.derived_pred.f0;
-            __auto_type x = _mv_42.data.derived_pred.f1;
+            __auto_type r = _mv_54.data.derived_pred.f0;
+            __auto_type x = _mv_54.data.derived_pred.f1;
             saturate_admit_edge(arena, sat, delta, ((types_LogicalEdge){.from = x, .role = r, .to = m.to}));
             break;
         }
@@ -152,12 +156,12 @@ void saturate_round_join(slop_arena* arena, types_Saturation sat, slop_list_type
         for (size_t _i = 0; _i < _coll->cap; _i++) {
             if (_coll->entries[_i].occupied) {
                 types_Node n = *(types_Node*)_coll->entries[_i].key;
-                __auto_type _mv_43 = saturate_context_of(sat, n);
-                if (_mv_43.has_value) {
-                    __auto_type ctx = _mv_43.value;
-                    __auto_type _mv_44 = saturate_queue_of(sat, n);
-                    if (_mv_44.has_value) {
-                        __auto_type q = _mv_44.value;
+                __auto_type _mv_55 = saturate_context_of(sat, n);
+                if (_mv_55.has_value) {
+                    __auto_type ctx = _mv_55.value;
+                    __auto_type _mv_56 = saturate_queue_of(sat, n);
+                    if (_mv_56.has_value) {
+                        __auto_type q = _mv_56.value;
                         {
                             __auto_type _coll = q.items;
                             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -171,9 +175,9 @@ void saturate_round_join(slop_arena* arena, types_Saturation sat, slop_list_type
                                 }
                             }
                         }
-                    } else if (!_mv_44.has_value) {
+                    } else if (!_mv_56.has_value) {
                     }
-                } else if (!_mv_43.has_value) {
+                } else if (!_mv_55.has_value) {
                 }
             }
         }
@@ -181,17 +185,18 @@ void saturate_round_join(slop_arena* arena, types_Saturation sat, slop_list_type
 }
 
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n) {
-    __auto_type _mv_45 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-    if (_mv_45.has_value) {
-        __auto_type c = _mv_45.value;
+    __auto_type _mv_57 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+    if (_mv_57.has_value) {
+        __auto_type c = _mv_57.value;
         return c;
-    } else if (!_mv_45.has_value) {
+    } else if (!_mv_57.has_value) {
         {
             __auto_type c = types_make_context(arena, n);
             ({ __auto_type _val = c; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, sat.contexts, &(n), _vptr); });
             return c;
         }
     }
+    SLOP_UNREACHABLE();
 }
 
 types_Saturation saturate_round_commit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta) {

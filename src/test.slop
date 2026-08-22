@@ -26,7 +26,7 @@
                  Omission Coverage Termination SubPair Findings Outcome Fault
                  ReasonerConfig
                  default-config emit-edge make-context make-queue
-                 node-top node-bottom node-eq role-eq
+                 node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
   (import saturate (RoundResult saturate make-initial-saturation))
   (import classify (extract-findings entails-sub))
@@ -518,6 +518,41 @@
                 false)))
           ((error _) false)))))
 
+  ;; The equality the toolchain does not give us. `==` on a `Derived` compares
+  ;; ONLY the first payload (slop-lang/slop#66): `(derived-succ r Y₁)` and
+  ;; `(derived-succ r Y₂)` come back equal, because the role matches and the
+  ;; node is never examined. Nothing in HOWL keys a Set on `Derived`, so the
+  ;; broken function is not even emitted today — but this test pins the
+  ;; behaviour we DO rely on, and it is the check that will still be here if
+  ;; someone reaches for `==` after 0.1.3 lands and the hazard looks retired.
+  (fn test-derived-eq-compares-both-payloads ((arena Arena))
+    (@intent "derived-eq distinguishes a second payload that generated `==` ignores")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((r  (rol "http://example.org/r"))
+          (y1 (cls "http://example.org/Y1"))
+          (y2 (cls "http://example.org/Y2"))
+          (x  (cls "http://example.org/X")))
+      (do
+        (if (derived-eq (union-new Derived derived-succ r y1)
+                        (union-new Derived derived-succ r y2))
+          false
+          (if (not (derived-eq (union-new Derived derived-succ r y1)
+                               (union-new Derived derived-succ r y1)))
+            false
+            ;; Cross-variant: same role, same node, different direction.
+            (if (derived-eq (union-new Derived derived-succ r y1)
+                            (union-new Derived derived-pred r y1))
+              false
+              ;; Addressed must compare destination AND payload.
+              (if (addressed-eq
+                    (record-new Addressed (to x) (what (union-new Derived derived-sub y1)))
+                    (record-new Addressed (to y2) (what (union-new Derived derived-sub y1))))
+                false
+                (addressed-eq
+                  (record-new Addressed (to x) (what (union-new Derived derived-sub y1)))
+                  (record-new Addressed (to x) (what (union-new Derived derived-sub y1)))))))))))
+
   ;; ------------------------------------------------------------
   ;; Order independence (§6.8). Set iteration is bucket order, which is
   ;; not content-canonical, so a round must not depend on it. Feeding
@@ -642,6 +677,10 @@
 
           (let ((r (test-inconsistency-suppresses-both-lists arena)))
             (print-test-result "findings: inconsistency empties both lists (undefined, not empty)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-derived-eq-compares-both-payloads arena)))
+            (print-test-result "equality: derived-eq compares BOTH payloads (slop#66)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-order-independence arena)))

@@ -132,8 +132,9 @@
 (module el
   (@doc "v0 EL completion rules CR1-CR7 (M1)")
 
+  (import rdf (IRI))
   (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge EdgePair Context
-                 node-bottom node-eq role-eq emit-edge))
+                 node-bottom node-eq role-eq emit-edge make-context addressed-eq))
 
   (export
     apply-el-rules
@@ -148,6 +149,63 @@
     cr-role-incl-on-succ
     cr-chain-on-pred
     cr-chain-on-succ)
+
+  ;; ============================================================
+  ;; Fixtures for the @example blocks below
+  ;;
+  ;; §7 wants a faithfulness contract PAIR on every rule, and the `@property`
+  ;; form those need is currently unusable: quantified over a push-built
+  ;; `$result` it fails outright AND makes any sibling `@post` fail
+  ;; (slop-lang/slop#69). `@example` is the obvious substitute.
+  ;;
+  ;; These EXECUTE as of slop 0.2.1 (`make example`). Under 0.1.2 they did not:
+  ;; an example was run only when every argument was a scalar literal, so any
+  ;; fixture call was reported `SKIP (wildcard args)` and then COUNTED AS A
+  ;; PASS — a green line over zero assertions (slop-lang/slop#71, fixed; skips
+  ;; are now reported as `unrunnable` and excluded from the pass count).
+  ;;
+  ;; One syntax trap worth knowing, because it fails confusingly. The expected
+  ;; value of a list-returning example is SPLAT as literal elements, so it is
+  ;; `(list <elem> …)` with NO type argument, and `(list)` for empty. Writing
+  ;; `(list Addressed)` — which in ordinary code is the valid empty-list-of-
+  ;; Addressed literal — makes the harness treat the TYPE NAME as an element
+  ;; and emit `{types_Addressed}`, failing to compile. Likewise an expected
+  ;; value built by a call is splat into its own arguments.
+  ;; ============================================================
+
+  (fn ex-x () (@intent "The context root used by the examples")
+    (@spec (() -> Node)) (@pure)
+    (union-new Node class-node (record-new IRI (value "http://example.org/X"))))
+
+  (fn ex-a () (@intent "A conclusion node") (@spec (() -> Node)) (@pure)
+    (union-new Node class-node (record-new IRI (value "http://example.org/A"))))
+
+  (fn ex-b () (@intent "An incoming subsumer") (@spec (() -> Node)) (@pure)
+    (union-new Node class-node (record-new IRI (value "http://example.org/B"))))
+
+  (fn ex-c () (@intent "A second conjunct") (@spec (() -> Node)) (@pure)
+    (union-new Node class-node (record-new IRI (value "http://example.org/C"))))
+
+  (fn ex-r () (@intent "The role used by the examples") (@spec (() -> RoleId)) (@pure)
+    (union-new RoleId named-role (record-new IRI (value "http://example.org/r"))))
+
+  (fn ex-ctx ((arena Arena))
+    (@intent "Context X with S(X) = {B, C} and no edges")
+    (@spec ((Arena) -> Context))
+    (@alloc arena)
+    (let ((ctx (make-context arena (ex-x)))
+          (b (ex-b)) (c (ex-c)))
+      (do (set-put (. ctx subsumers) b)
+          (set-put (. ctx subsumers) c)
+          ctx)))
+
+  (fn ex-ctx-bottom ((arena Arena))
+    (@intent "Context X whose S(X) contains ⊥ — an unsatisfiable context")
+    (@spec ((Arena) -> Context))
+    (@alloc arena)
+    (let ((ctx (make-context arena (ex-x)))
+          (bot (node-bottom)))
+      (do (set-put (. ctx subsumers) bot) ctx)))
 
   ;; ============================================================
   ;; CR1 — B ∈ S(X), B ⊑ A ⟹ A ∈ S(X)
@@ -166,6 +224,17 @@
     ;;
     ;; At most one conclusion: one axiom in, one subsumer out.
     (@post {(list-len $result) <= 1})
+    (@example
+      ;; B ∈ S(X) and the axiom B ⊑ A, so A joins S(X).
+      :eq addressed-eq
+      (arena (ex-ctx arena) (ex-b) (union-new NormAxiom sub-name (ex-b) (ex-a)))
+      -> (list (record-new Addressed (to (ex-x))
+                 (what (union-new Derived derived-sub (ex-a))))))
+    (@example
+      ;; The axiom is about a DIFFERENT subsumer, so CR1 does not fire.
+      :eq addressed-eq
+      (arena (ex-ctx arena) (ex-b) (union-new NormAxiom sub-name (ex-c) (ex-a)))
+      -> (list))
     ;; CR1 concludes only about its OWN context. A message addressed
     ;; anywhere else would be a rule reaching outside the context it was
     ;; given, breaking the §6.6 ownership invariant.
@@ -202,6 +271,22 @@
     (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
     (@alloc arena)
     (@post {(list-len $result) <= 1})
+    (@example
+      ;; B arrives; C is ALREADY stored; the axiom is B ⊓ C ⊑ A. Fires.
+      :eq addressed-eq
+      (arena (ex-ctx arena) (ex-b) (union-new NormAxiom sub-and (ex-b) (ex-c) (ex-a)))
+      -> (list (record-new Addressed (to (ex-x))
+                 (what (union-new Derived derived-sub (ex-a))))))
+    (@example
+      ;; THE SELF-JOIN'S OTHER SIDE. Same axiom, but C is the arriving conjunct
+      ;; and B is the stored one. A rule that only tested the first conjunct
+      ;; would return empty here and lose every conclusion whose conjuncts
+      ;; happen to arrive in the other order — a bug that is also nondeterministic,
+      ;; since which order occurs is a scheduling artifact.
+      :eq addressed-eq
+      (arena (ex-ctx arena) (ex-c) (union-new NormAxiom sub-and (ex-b) (ex-c) (ex-a)))
+      -> (list (record-new Addressed (to (ex-x))
+                 (what (union-new Derived derived-sub (ex-a))))))
     (let ((mut result (list-new arena Addressed)))
       (do
         (match ax
@@ -357,6 +442,17 @@
     (@spec ((Arena Context Node) -> (List Addressed)))
     (@alloc arena)
     (@post {(list-len $result) <= 1})
+    (@example
+      ;; ⊥ ∈ S(X) and a new predecessor B arrives, so B is unsatisfiable too.
+      :eq addressed-eq
+      (arena (ex-ctx-bottom arena) (ex-b))
+      -> (list (record-new Addressed (to (ex-b))
+                 (what (union-new Derived derived-sub (node-bottom))))))
+    (@example
+      ;; S(X) has no ⊥, so nothing propagates backwards.
+      :eq addressed-eq
+      (arena (ex-ctx arena) (ex-b))
+      -> (list))
     (let ((mut result (list-new arena Addressed))
           (bottom (node-bottom)))
       (do

@@ -1,0 +1,365 @@
+# HOWL v0 projection — REMOVAL LIST
+#
+# projected theory == pinned source MINUS the axioms below.
+#
+# source                  ro-2025-12-17.owl
+# source_sha256           a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10aaf
+# source_triples          11,640
+# axioms_removed          342
+# triples_removed         1,361
+# in_v0_swept_in          66   <- collateral from blank-node closures
+# projected_triples       10,279
+# projected_ground_sha256 79679dc93b7cb41e9c851b1fedddd616a1172bd8b4f5eaa54037e1caa4c3619c
+# projected_bnode_triples 2,817
+#
+# The ground hash covers every triple with no blank node on either
+# end -- the overwhelming majority, and the part that is canonical
+# without URDNA2015, which is impractical at this size. Blank-node
+# triples are pinned by count plus the source hash and this file.
+#
+# Anchors are named subjects; blank nodes print as _:_ because parser
+# -assigned labels differ run to run and would churn the file.
+#
+
+<http://purl.obolibrary.org/obo/BFO_0000002> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [3fa8cbd6]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000002> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [acaedf6e]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000002> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [d75580c8]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000003> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [8ccbe8fd]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000003> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [c14cd032]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000004> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [34749c04]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [20ba3aae]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000017> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [681b32cd]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000019> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [a5ec8adb]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000020> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [dc31074f]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000031> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [282002b7]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000050> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000051> .    # InverseObjectProperties [9b5b4186]
+<http://purl.obolibrary.org/obo/BFO_0000054> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000055> .    # InverseObjectProperties [2635afde]
+<http://purl.obolibrary.org/obo/BFO_0000062> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000063> .    # InverseObjectProperties [4f79ed38]
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000067> .    # InverseObjectProperties [556a17e2]
+<http://purl.obolibrary.org/obo/CL_0000540> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectHasSelf [7da20425]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/GO_0004842> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasSelf [cdaf615b]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/GO_0016301> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasSelf [2670356c]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/GO_0019107> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasSelf [6b417258]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/IAO_0000078> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectOneOf (nominals) [e53121d2]  (+20 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0000052> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [308975bd]
+<http://purl.obolibrary.org/obo/RO_0000052> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000053> .    # InverseObjectProperties [40bb7b83]
+<http://purl.obolibrary.org/obo/RO_0000053> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#InverseFunctionalProperty> .    # InverseFunctionalObjectProperty [0f9c5217]
+<http://purl.obolibrary.org/obo/RO_0000056> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000057> .    # InverseObjectProperties [2b3fb0a0]
+<http://purl.obolibrary.org/obo/RO_0000058> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [0f3d6a59]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0000058> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000059> .    # InverseObjectProperties [e950e6f6]
+<http://purl.obolibrary.org/obo/RO_0000059> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [560ae020]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0000079> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000085> .    # InverseObjectProperties [2a4c1e97]
+<http://purl.obolibrary.org/obo/RO_0000080> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000086> .    # InverseObjectProperties [e5d95af7]
+<http://purl.obolibrary.org/obo/RO_0000081> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000087> .    # InverseObjectProperties [7c9e74c9]
+<http://purl.obolibrary.org/obo/RO_0000091> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000092> .    # InverseObjectProperties [c39d0d00]
+<http://purl.obolibrary.org/obo/RO_0001000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001001> .    # InverseObjectProperties [de46f4a8]
+<http://purl.obolibrary.org/obo/RO_0001015> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001025> .    # InverseObjectProperties [bee4f93b]
+<http://purl.obolibrary.org/obo/RO_0001020> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001022> .    # InverseObjectProperties [dcbe5eb7]
+<http://purl.obolibrary.org/obo/RO_0001021> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001023> .    # InverseObjectProperties [dd238626]
+<http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf [c36cdf5b]  (+8 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf [d58354f8]  (+8 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002002> .    # InverseObjectProperties [49e13b2a]
+<http://purl.obolibrary.org/obo/RO_0002005> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002134> .    # InverseObjectProperties [6a51d52a]
+<http://purl.obolibrary.org/obo/RO_0002006> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002130> .    # InverseObjectProperties [6fe103e6]
+<http://purl.obolibrary.org/obo/RO_0002022> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002578> .    # InverseObjectProperties [11ea7427]
+<http://purl.obolibrary.org/obo/RO_0002023> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002630> .    # InverseObjectProperties [74b80456]
+<http://purl.obolibrary.org/obo/RO_0002024> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002629> .    # InverseObjectProperties [e4e4b610]
+<http://purl.obolibrary.org/obo/RO_0002025> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [91d1e7db]
+<http://purl.obolibrary.org/obo/RO_0002029> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # DataPropertyDomain/Range + DatatypeDefinition + datatype / literal in logical position [16ca7858]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002082> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [9ae94338]
+<http://purl.obolibrary.org/obo/RO_0002084> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002093> .    # InverseObjectProperties [bbcef099]
+<http://purl.obolibrary.org/obo/RO_0002085> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002092> .    # InverseObjectProperties [96aea484]
+<http://purl.obolibrary.org/obo/RO_0002087> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002090> .    # InverseObjectProperties [82634d43]
+<http://purl.obolibrary.org/obo/RO_0002088> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002091> .    # InverseObjectProperties [e5a9964a]
+<http://purl.obolibrary.org/obo/RO_0002101> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002132> .    # InverseObjectProperties [039eb396]
+<http://purl.obolibrary.org/obo/RO_0002103> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [9aecdb18]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002103> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002120> .    # InverseObjectProperties [a936c6ad]
+<http://purl.obolibrary.org/obo/RO_0002105> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002109> .    # InverseObjectProperties [eebb70d8]
+<http://purl.obolibrary.org/obo/RO_0002106> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002112> .    # InverseObjectProperties [7eea96fb]
+<http://purl.obolibrary.org/obo/RO_0002107> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002108> .    # InverseObjectProperties [fdaf025f]
+<http://purl.obolibrary.org/obo/RO_0002110> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002113> .    # InverseObjectProperties [aac74710]
+<http://purl.obolibrary.org/obo/RO_0002114> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002115> .    # InverseObjectProperties [9466701f]
+<http://purl.obolibrary.org/obo/RO_0002120> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [feecb44e]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002131> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [5e7caa85]
+<http://purl.obolibrary.org/obo/RO_0002132> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [e66d921b]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002150> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [701798ff]
+<http://purl.obolibrary.org/obo/RO_0002156> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002157> .    # InverseObjectProperties [6e1ec6c4]
+<http://purl.obolibrary.org/obo/RO_0002158> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [d1568f55]
+<http://purl.obolibrary.org/obo/RO_0002159> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [7d6ae965]
+<http://purl.obolibrary.org/obo/RO_0002170> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [58a5d7d7]  (+5 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002200> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [cb101b20]  (+8 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002200> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002201> .    # InverseObjectProperties [9cb0119f]
+<http://purl.obolibrary.org/obo/RO_0002201> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [a64689c5]
+<http://purl.obolibrary.org/obo/RO_0002202> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002203> .    # InverseObjectProperties [10cf7c2e]
+<http://purl.obolibrary.org/obo/RO_0002204> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [dd5c3889]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002204> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [32730583]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002204> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002205> .    # InverseObjectProperties [94820a83]
+<http://purl.obolibrary.org/obo/RO_0002206> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [4b03ad00]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002206> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002292> .    # InverseObjectProperties [e86d5130]
+<http://purl.obolibrary.org/obo/RO_0002207> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [03e15cd0]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002207> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [24b29f2e]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002207> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002210> .    # InverseObjectProperties [20f7bd45]
+<http://purl.obolibrary.org/obo/RO_0002208> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002209> .    # InverseObjectProperties [dfbbecd3]
+<http://purl.obolibrary.org/obo/RO_0002211> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002334> .    # InverseObjectProperties [7846bdbe]
+<http://purl.obolibrary.org/obo/RO_0002212> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002335> .    # InverseObjectProperties [51ec15dc]
+<http://purl.obolibrary.org/obo/RO_0002213> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002336> .    # InverseObjectProperties [d4745dae]
+<http://purl.obolibrary.org/obo/RO_0002214> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [99f11ae4]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002219> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002221> .    # InverseObjectProperties [1246092e]
+<http://purl.obolibrary.org/obo/RO_0002223> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002224> .    # InverseObjectProperties [82cca5f9]
+<http://purl.obolibrary.org/obo/RO_0002229> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002230> .    # InverseObjectProperties [b100ed7f]
+<http://purl.obolibrary.org/obo/RO_0002233> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002352> .    # InverseObjectProperties [67670003]
+<http://purl.obolibrary.org/obo/RO_0002234> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002353> .    # InverseObjectProperties [bae5eeb4]
+<http://purl.obolibrary.org/obo/RO_0002248> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002249> .    # InverseObjectProperties [d106fccc]
+<http://purl.obolibrary.org/obo/RO_0002252> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002253> .    # InverseObjectProperties [5f5abd9b]
+<http://purl.obolibrary.org/obo/RO_0002254> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002255> .    # InverseObjectProperties [181f7df9]
+<http://purl.obolibrary.org/obo/RO_0002256> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002257> .    # InverseObjectProperties [5b05272a]
+<http://purl.obolibrary.org/obo/RO_0002258> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002286> .    # InverseObjectProperties [8fd291f6]
+<http://purl.obolibrary.org/obo/RO_0002291> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002293> .    # InverseObjectProperties [a03e5177]
+<http://purl.obolibrary.org/obo/RO_0002297> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002354> .    # InverseObjectProperties [7a0b4778]
+<http://purl.obolibrary.org/obo/RO_0002302> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002606> .    # InverseObjectProperties [83eaad1e]
+<http://purl.obolibrary.org/obo/RO_0002327> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002333> .    # InverseObjectProperties [b1a218d4]
+<http://purl.obolibrary.org/obo/RO_0002350> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002351> .    # InverseObjectProperties [cc4b78eb]
+<http://purl.obolibrary.org/obo/RO_0002351> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [6718d79d]
+<http://purl.obolibrary.org/obo/RO_0002371> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [60ab26ae]
+<http://purl.obolibrary.org/obo/RO_0002378> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> _:_ .    # InverseObjectProperties [52edc47b]  (+1 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002378> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_0002382> .    # DisjointObjectProperties [48323cf2]
+<http://purl.obolibrary.org/obo/RO_0002378> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_0002383> .    # DisjointObjectProperties [aa82309a]
+<http://purl.obolibrary.org/obo/RO_0002379> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [22f469be]  (+5 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002380> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002569> .    # InverseObjectProperties [d5793b08]
+<http://purl.obolibrary.org/obo/RO_0002404> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002411> .    # InverseObjectProperties [c68e882b]
+<http://purl.obolibrary.org/obo/RO_0002405> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002412> .    # InverseObjectProperties [877e1fce]
+<http://purl.obolibrary.org/obo/RO_0002418> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002427> .    # InverseObjectProperties [a2145354]
+<http://purl.obolibrary.org/obo/RO_0002425> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [39cfe308]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002434> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [04877f2e]
+<http://purl.obolibrary.org/obo/RO_0002435> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [98ec52ab]
+<http://purl.obolibrary.org/obo/RO_0002436> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [b40ebb84]
+<http://purl.obolibrary.org/obo/RO_0002437> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c81c61db]
+<http://purl.obolibrary.org/obo/RO_0002439> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002458> .    # InverseObjectProperties [47b5fe52]
+<http://purl.obolibrary.org/obo/RO_0002440> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [4783ae01]
+<http://purl.obolibrary.org/obo/RO_0002440> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [347c602e]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002441> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [9ccd473a]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002442> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [99797241]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002443> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [e9994c0c]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002444> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002445> .    # InverseObjectProperties [e960359f]
+<http://purl.obolibrary.org/obo/RO_0002444> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [3228b140]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002452> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0017007> .    # InverseObjectProperties [2a4a84d8]
+<http://purl.obolibrary.org/obo/RO_0002455> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002456> .    # InverseObjectProperties [47e91062]
+<http://purl.obolibrary.org/obo/RO_0002457> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002469> .    # InverseObjectProperties [27626e07]
+<http://purl.obolibrary.org/obo/RO_0002459> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002460> .    # InverseObjectProperties [96eaec7c]
+<http://purl.obolibrary.org/obo/RO_0002472> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002558> .    # InverseObjectProperties [b6fb622e]
+<http://purl.obolibrary.org/obo/RO_0002485> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002486> .    # InverseObjectProperties [f6232cbf]
+<http://purl.obolibrary.org/obo/RO_0002496> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [f3f22822]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002497> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [b14a5227]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002500> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002608> .    # InverseObjectProperties [33c784c6]
+<http://purl.obolibrary.org/obo/RO_0002507> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002508> .    # InverseObjectProperties [e02597c1]
+<http://purl.obolibrary.org/obo/RO_0002510> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [ce0f1ed8]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002510> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [243c9734]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002510> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002511> .    # InverseObjectProperties [39af645b]
+<http://purl.obolibrary.org/obo/RO_0002512> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [d11cb6e8]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002512> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [bebb1c0b]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002512> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002513> .    # InverseObjectProperties [b965db58]
+<http://purl.obolibrary.org/obo/RO_0002513> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [8e7972da]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002513> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [dbfeae50]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002516> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002517> .    # InverseObjectProperties [1a93d288]
+<http://purl.obolibrary.org/obo/RO_0002518> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002519> .    # InverseObjectProperties [44589283]
+<http://purl.obolibrary.org/obo/RO_0002521> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [3f99ff8d]
+<http://purl.obolibrary.org/obo/RO_0002522> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002523> .    # InverseObjectProperties [4a348e85]
+<http://purl.obolibrary.org/obo/RO_0002524> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002525> .    # InverseObjectProperties [b4edea5c]
+<http://purl.obolibrary.org/obo/RO_0002526> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [6872d33a]
+<http://purl.obolibrary.org/obo/RO_0002527> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [6589d48e]
+<http://purl.obolibrary.org/obo/RO_0002529> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002529> .    # InverseObjectProperties [3bec8abc]
+<http://purl.obolibrary.org/obo/RO_0002551> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AsymmetricProperty> .    # AsymmetricObjectProperty [bfc1f4c8]
+<http://purl.obolibrary.org/obo/RO_0002551> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [9c3d7e87]
+<http://purl.obolibrary.org/obo/RO_0002551> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002576> .    # InverseObjectProperties [24c433d9]
+<http://purl.obolibrary.org/obo/RO_0002553> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002554> .    # InverseObjectProperties [c5be9fe3]
+<http://purl.obolibrary.org/obo/RO_0002555> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0020301> .    # InverseObjectProperties [acaa452b]
+<http://purl.obolibrary.org/obo/RO_0002556> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002557> .    # InverseObjectProperties [b23face9]
+<http://purl.obolibrary.org/obo/RO_0002559> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002566> .    # InverseObjectProperties [b24d3b66]
+<http://purl.obolibrary.org/obo/RO_0002607> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0017011> .    # InverseObjectProperties [a0458298]
+<http://purl.obolibrary.org/obo/RO_0002615> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0003301> .    # InverseObjectProperties [eda2c023]
+<http://purl.obolibrary.org/obo/RO_0002618> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002619> .    # InverseObjectProperties [0e08a16b]
+<http://purl.obolibrary.org/obo/RO_0002622> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002623> .    # InverseObjectProperties [364f13b5]
+<http://purl.obolibrary.org/obo/RO_0002624> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002625> .    # InverseObjectProperties [8b9f6d85]
+<http://purl.obolibrary.org/obo/RO_0002626> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002627> .    # InverseObjectProperties [36eb159d]
+<http://purl.obolibrary.org/obo/RO_0002632> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002633> .    # InverseObjectProperties [c190bafc]
+<http://purl.obolibrary.org/obo/RO_0002634> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002635> .    # InverseObjectProperties [edb79323]
+<http://purl.obolibrary.org/obo/RO_0002636> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002637> .    # InverseObjectProperties [dba81f55]
+<http://purl.obolibrary.org/obo/RO_0002638> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002639> .    # InverseObjectProperties [3d08767b]
+<http://purl.obolibrary.org/obo/RO_0002640> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002641> .    # InverseObjectProperties [7ff4d936]
+<http://purl.obolibrary.org/obo/RO_0002801> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [2cfc368f]
+<http://purl.obolibrary.org/obo/RO_0002802> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002803> .    # InverseObjectProperties [32d5c837]
+<http://purl.obolibrary.org/obo/RO_0002804> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002805> .    # InverseObjectProperties [7b011642]
+<http://purl.obolibrary.org/obo/RO_0002806> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002807> .    # InverseObjectProperties [12d28d46]
+<http://purl.obolibrary.org/obo/RO_0003000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0003001> .    # InverseObjectProperties [012829b8]
+<http://purl.obolibrary.org/obo/RO_0003000> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [26790049]  (+5 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0003301> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AsymmetricProperty> .    # AsymmetricObjectProperty [b3d2c073]
+<http://purl.obolibrary.org/obo/RO_0003301> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [145f713f]
+<http://purl.obolibrary.org/obo/RO_0004000> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [6b3b2b4f]  (+8 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004010> .    # InverseObjectProperties [b9073c53]
+<http://purl.obolibrary.org/obo/RO_0004001> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004011> .    # InverseObjectProperties [2c826f01]
+<http://purl.obolibrary.org/obo/RO_0004002> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004012> .    # InverseObjectProperties [97dbeef5]
+<http://purl.obolibrary.org/obo/RO_0004003> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004013> .    # InverseObjectProperties [0314f84e]
+<http://purl.obolibrary.org/obo/RO_0004004> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004014> .    # InverseObjectProperties [6e620b3a]
+<http://purl.obolibrary.org/obo/RO_0004005> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004015> .    # InverseObjectProperties [adf23854]
+<http://purl.obolibrary.org/obo/RO_0004006> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004016> .    # InverseObjectProperties [d3415b79]
+<http://purl.obolibrary.org/obo/RO_0004017> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004018> .    # InverseObjectProperties [1a590ea3]
+<http://purl.obolibrary.org/obo/RO_0004022> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [02d7d596]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004026> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [624d60b6]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004027> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [318d72b0]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004029> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [0448f252]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0008501> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0008502> .    # InverseObjectProperties [a222447e]
+<http://purl.obolibrary.org/obo/RO_0008503> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0008504> .    # InverseObjectProperties [29594191]
+<http://purl.obolibrary.org/obo/RO_0008506> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a152c653]
+<http://purl.obolibrary.org/obo/RO_0008507> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0008508> .    # InverseObjectProperties [4434ab8e]
+<http://purl.obolibrary.org/obo/RO_0009001> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [1e7077c8]
+<http://purl.obolibrary.org/obo/RO_0009002> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [60567e0e]
+<http://purl.obolibrary.org/obo/RO_0009003> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [0dbf3ebd]
+<http://purl.obolibrary.org/obo/RO_0009005> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [6d5b9409]
+<http://purl.obolibrary.org/obo/RO_0009006> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0009007> .    # InverseObjectProperties [8de50b5b]
+<http://purl.obolibrary.org/obo/RO_0010001> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0010002> .    # InverseObjectProperties [22542cef]
+<http://purl.obolibrary.org/obo/RO_0012000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0012004> .    # InverseObjectProperties [76e97615]
+<http://purl.obolibrary.org/obo/RO_0012001> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0012005> .    # InverseObjectProperties [d059e5b4]
+<http://purl.obolibrary.org/obo/RO_0012002> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0012006> .    # InverseObjectProperties [fe35e0d0]
+<http://purl.obolibrary.org/obo/RO_0013008> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0013009> .    # InverseObjectProperties [e366fc94]
+<http://purl.obolibrary.org/obo/RO_0015001> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> <http://www.w3.org/2002/07/owl#topObjectProperty> .    # built-in role (top/bottomObjectProperty) [2aed1897]
+<http://purl.obolibrary.org/obo/RO_0015001> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0015002> .    # InverseObjectProperties [f800cdc5]
+<http://purl.obolibrary.org/obo/RO_0015002> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> <http://www.w3.org/2002/07/owl#topObjectProperty> .    # built-in role (top/bottomObjectProperty) [f30b7b0e]
+<http://purl.obolibrary.org/obo/RO_0017002> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0017010> .    # InverseObjectProperties [d15cf443]
+<http://purl.obolibrary.org/obo/RO_0017003> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [1caf27b3]
+<http://purl.obolibrary.org/obo/RO_0017004> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [ff9a2d7d]
+<http://purl.obolibrary.org/obo/RO_0017004> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [122a994c]
+<http://purl.obolibrary.org/obo/RO_0017008> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0017009> .    # InverseObjectProperties [70aeb785]
+<http://purl.obolibrary.org/obo/RO_0018002> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0018003> .    # InverseObjectProperties [88dc7ab2]
+<http://purl.obolibrary.org/obo/RO_0018031> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0018032> .    # InverseObjectProperties [18dfb090]
+<http://purl.obolibrary.org/obo/RO_0018033> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0018034> .    # InverseObjectProperties [02bbccae]
+<http://purl.obolibrary.org/obo/RO_0018035> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [7fb3d5bc]
+<http://purl.obolibrary.org/obo/RO_0018036> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [0ab20d14]
+<http://purl.obolibrary.org/obo/RO_0018039> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [77ebbc10]
+<http://purl.obolibrary.org/obo/RO_0019003> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [15bc9d92]
+<http://purl.obolibrary.org/obo/RO_0020338> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [07194a52]
+<http://purl.obolibrary.org/obo/RO_0020339> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [24184fd9]
+<http://purl.obolibrary.org/obo/RO_HOM0000000> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [fd3836e0]
+<http://purl.obolibrary.org/obo/RO_HOM0000001> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [69bdc8d4]
+<http://purl.obolibrary.org/obo/RO_HOM0000001> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000002> .    # DisjointObjectProperties [4075b2e2]
+<http://purl.obolibrary.org/obo/RO_HOM0000002> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [6f3079f9]
+<http://purl.obolibrary.org/obo/RO_HOM0000003> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [516b1245]
+<http://purl.obolibrary.org/obo/RO_HOM0000004> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [6af07224]
+<http://purl.obolibrary.org/obo/RO_HOM0000005> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [f75bd568]
+<http://purl.obolibrary.org/obo/RO_HOM0000006> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [0267bde8]
+<http://purl.obolibrary.org/obo/RO_HOM0000007> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [eda5122a]
+<http://purl.obolibrary.org/obo/RO_HOM0000008> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [8a73f3d1]
+<http://purl.obolibrary.org/obo/RO_HOM0000009> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [501d16bf]
+<http://purl.obolibrary.org/obo/RO_HOM0000010> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [36e9cb94]
+<http://purl.obolibrary.org/obo/RO_HOM0000011> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [055a518f]
+<http://purl.obolibrary.org/obo/RO_HOM0000011> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000017> .    # DisjointObjectProperties [05603a53]
+<http://purl.obolibrary.org/obo/RO_HOM0000012> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [f7c63b62]
+<http://purl.obolibrary.org/obo/RO_HOM0000013> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [eb4925d1]
+<http://purl.obolibrary.org/obo/RO_HOM0000014> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c5cece00]
+<http://purl.obolibrary.org/obo/RO_HOM0000015> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [461e71da]
+<http://purl.obolibrary.org/obo/RO_HOM0000016> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [74ee6a62]
+<http://purl.obolibrary.org/obo/RO_HOM0000016> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000062> .    # DisjointObjectProperties [ac15b14f]
+<http://purl.obolibrary.org/obo/RO_HOM0000017> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [176b0455]
+<http://purl.obolibrary.org/obo/RO_HOM0000018> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [9550fe90]
+<http://purl.obolibrary.org/obo/RO_HOM0000019> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [d3696fe4]
+<http://purl.obolibrary.org/obo/RO_HOM0000020> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [40186b04]
+<http://purl.obolibrary.org/obo/RO_HOM0000022> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [41ac0ed0]
+<http://purl.obolibrary.org/obo/RO_HOM0000023> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [42bb399c]
+<http://purl.obolibrary.org/obo/RO_HOM0000023> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000024> .    # DisjointObjectProperties [0856fe67]
+<http://purl.obolibrary.org/obo/RO_HOM0000024> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [313f2d66]
+<http://purl.obolibrary.org/obo/RO_HOM0000025> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [46ce0b27]
+<http://purl.obolibrary.org/obo/RO_HOM0000026> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [f406c865]
+<http://purl.obolibrary.org/obo/RO_HOM0000027> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [beaecd65]
+<http://purl.obolibrary.org/obo/RO_HOM0000028> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [51bcbd16]
+<http://purl.obolibrary.org/obo/RO_HOM0000029> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c751db4d]
+<http://purl.obolibrary.org/obo/RO_HOM0000029> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000030> .    # DisjointObjectProperties [6ff02d7a]
+<http://purl.obolibrary.org/obo/RO_HOM0000030> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [4e11cb7a]
+<http://purl.obolibrary.org/obo/RO_HOM0000031> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [9c5e8d6a]
+<http://purl.obolibrary.org/obo/RO_HOM0000032> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a9680230]
+<http://purl.obolibrary.org/obo/RO_HOM0000033> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a31956ab]
+<http://purl.obolibrary.org/obo/RO_HOM0000034> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [2b4dabed]
+<http://purl.obolibrary.org/obo/RO_HOM0000036> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [61cc7ee5]
+<http://purl.obolibrary.org/obo/RO_HOM0000037> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [94028ee5]
+<http://purl.obolibrary.org/obo/RO_HOM0000042> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [8e6a01ad]
+<http://purl.obolibrary.org/obo/RO_HOM0000042> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000043> .    # DisjointObjectProperties [7215e6c7]
+<http://purl.obolibrary.org/obo/RO_HOM0000043> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [d3fbdaa0]
+<http://purl.obolibrary.org/obo/RO_HOM0000044> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [8885d354]
+<http://purl.obolibrary.org/obo/RO_HOM0000045> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [9db8969f]
+<http://purl.obolibrary.org/obo/RO_HOM0000046> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [ef1e9a1e]
+<http://purl.obolibrary.org/obo/RO_HOM0000047> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c29fa8dd]
+<http://purl.obolibrary.org/obo/RO_HOM0000048> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [d05dca20]
+<http://purl.obolibrary.org/obo/RO_HOM0000049> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [0cbf91f6]
+<http://purl.obolibrary.org/obo/RO_HOM0000049> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000050> .    # DisjointObjectProperties [739dd754]
+<http://purl.obolibrary.org/obo/RO_HOM0000050> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c2af90b6]
+<http://purl.obolibrary.org/obo/RO_HOM0000051> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [50402a71]
+<http://purl.obolibrary.org/obo/RO_HOM0000052> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a554c291]
+<http://purl.obolibrary.org/obo/RO_HOM0000053> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a3f97bdc]
+<http://purl.obolibrary.org/obo/RO_HOM0000054> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [ad79a6ce]
+<http://purl.obolibrary.org/obo/RO_HOM0000055> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c018de67]
+<http://purl.obolibrary.org/obo/RO_HOM0000057> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [ab6635ec]
+<http://purl.obolibrary.org/obo/RO_HOM0000058> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [c48a53ec]
+<http://purl.obolibrary.org/obo/RO_HOM0000060> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a0ef7de4]
+<http://purl.obolibrary.org/obo/RO_HOM0000061> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [51525c0f]
+<http://purl.obolibrary.org/obo/RO_HOM0000062> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [f1d7889f]
+<http://purl.obolibrary.org/obo/RO_HOM0000063> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [acb24317]
+<http://purl.obolibrary.org/obo/RO_HOM0000065> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [cf49f6fd]
+<http://purl.obolibrary.org/obo/RO_HOM0000066> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [2dede835]
+<http://purl.obolibrary.org/obo/RO_HOM0000068> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [03ce86a5]
+<http://purl.obolibrary.org/obo/RO_HOM0000069> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [bcd7404a]
+<http://purl.obolibrary.org/obo/RO_HOM0000071> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [157646e6]
+<http://purl.obolibrary.org/obo/RO_HOM0000071> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_HOM0000072> .    # DisjointObjectProperties [fa197582]
+<http://purl.obolibrary.org/obo/RO_HOM0000072> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [f3c53bf6]
+<http://purl.obolibrary.org/obo/RO_HOM0000073> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [1c095dea]
+<http://purl.obolibrary.org/obo/RO_HOM0000074> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [b56f1139]
+<http://purl.obolibrary.org/obo/RO_HOM0000075> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [873a549a]
+<http://purl.obolibrary.org/obo/UBERON_0001062> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectHasSelf [e89008bb]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/ro.owl#x> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [d0acc89c]
+<http://purl.obolibrary.org/obo/ro.owl#y> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [fdb75532]
+<http://purl.obolibrary.org/obo/ro.owl#z> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [161739b1]
+<urn:swrl:var#A> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [ecdb6cfe]
+<urn:swrl:var#B> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [7b1ac648]
+<urn:swrl:var#C> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [1817d678]
+<urn:swrl:var#D> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [9d0b73da]
+<urn:swrl:var#a1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [53fc940f]
+<urn:swrl:var#a2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [038649cd]
+<urn:swrl:var#d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [ce2a25ac]
+<urn:swrl:var#e> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [fc84f686]
+<urn:swrl:var#eff> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [771756f4]
+<urn:swrl:var#g1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [043ab523]
+<urn:swrl:var#g2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [bd2d6cbd]
+<urn:swrl:var#in> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [adb0569d]
+<urn:swrl:var#mf2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [4cecd3a1]
+<urn:swrl:var#mf> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [e13defcf]
+<urn:swrl:var#p> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [38490804]
+<urn:swrl:var#q> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [09df9d91]
+<urn:swrl:var#u> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [1f3500a0]
+<urn:swrl:var#w> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [3ed4fba7]
+<urn:swrl:var#x> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [0149d7f9]
+<urn:swrl:var#y> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [26c02eec]
+<urn:swrl:var#z> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [a24cf0e2]
+_:_ <http://swrl.stanford.edu/ontologies/3.3/swrla.owl#isRuleEnabled> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .    # SWRL rule [9148a561]  (+32 in blank-node closure)
+_:_ <http://swrl.stanford.edu/ontologies/3.3/swrla.owl#isRuleEnabled> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .    # SWRL rule [d7c8225f]  (+38 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> <http://purl.obolibrary.org/obo/IAO_0000120> .    # AllDifferent [eef66252]  (+17 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # ObjectUnionOf [0cdecddf]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [05bce9a6]  (+29 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [0642caaa]  (+31 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [07261edc]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [24d41d92]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [2c732eb2]  (+31 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [3232ac5c]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [49c31870]  (+28 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [65c34d3e]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [925bebbb]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [adb01e24]  (+31 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [b217b6c0]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [b643499a]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [c8caf109]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [d6fa4b9e]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [d9b887bd]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [ece8089c]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [ed445c0a]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f296bd87]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f296bd87]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f3ed057a]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f50224f3]  (+36 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f820f903]  (+32 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [fde41528]  (+29 in blank-node closure)

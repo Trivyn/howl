@@ -12,11 +12,13 @@ typedef struct saturate_RoundDelta saturate_RoundDelta;
 
 #ifndef SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 #endif
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 #define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
+#define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
@@ -105,7 +107,7 @@ static inline uint64_t slop_hash_types_Node(const void* key) {
         case types_Node_individual_node:
             return slop_hash_rdf_IRI(&_k->data.individual_node);
         case types_Node_fresh_node:
-            { int64_t _tmp = (int64_t)_k->data.fresh_node; return slop_hash_int(&_tmp); }
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_node });
     }
     return 0;
 }

@@ -11,6 +11,8 @@ corpus/
   MANIFEST.toml      pinned external ontologies: versioned URL + SHA-256
   fetch.sh           fetch + verify           (`make corpus`)
   census.py          construct census against SPEC.md §5.2
+  project.py         v0 projections as removal lists (`make project`)
+  projections/       committed — 122 KB total, one file per pinned entry
   vendor/            fetched ontologies — gitignored
 ```
 
@@ -76,12 +78,74 @@ make corpus                     # fetch + verify everything in MANIFEST.toml
 python3 corpus/census.py FILE…  # construct census
 ```
 
+## Projections are removal lists, not projected copies
+
+§10 requires each entry's v0 projection to be **pinned in the repo, never computed
+on the fly** — otherwise neither the benchmark numbers nor the differential diff
+are reproducible. But a projected copy of GO is still ~124 MB, over GitHub's
+per-file limit and 50× this repo's entire history.
+
+So `projections/<name>-<version>.removals` records the axioms **removed**:
+
+```
+projected theory  ==  pinned source  MINUS  the removal list
+```
+
+GO's entire projection is one line:
+
+```
+<...obo/BFO_0000050> <owl#inverseOf> <...obo/BFO_0000051> .    # InverseObjectProperties
+```
+
+Three properties a projected copy would not have. It is **small** — 122 KB for all
+three entries against 135 MB of copies. It is **auditable** — you read exactly
+which axioms went and why, which is what §5.1 demands when it says an
+out-of-profile axiom must be enumerated, never silently dropped. And it is
+**reviewable** — a projection that quietly grows appears in a git diff instead of
+hiding inside a large blob.
+
+`make project` regenerates; `make project-verify` re-derives and **fails on
+drift**, which is what CI should run.
+
+### Two things the implementation had to get right
+
+**Removal is a closure, not a triple.** An OWL axiom is rarely one triple — a
+restriction, union or chain is a blank-node structure. Deleting the seed alone
+leaves a dangling reference to a half-deleted structure: not a smaller ontology,
+a malformed one. So a blank node's whole description goes, plus whatever points
+at it, recursively.
+
+**Determinism had to be built in, not sorted in.** The first version produced a
+*different* removal list on every run, because grouping followed graph iteration
+order and that depends on parser-assigned blank-node labels. Closures sharing a
+triple are now merged into connected components, which is order-independent by
+construction; ordering keys render blank nodes uniformly so the unstable labels
+cannot re-enter through the back door. A projection that cannot be re-derived is
+worse than none — every number taken against it is unreproducible.
+
+### Collateral is reported, never hidden
+
+Removing an out-of-profile conjunct takes its whole intersection with it,
+including in-profile existentials nested alongside — you cannot keep half an
+intersection. Each removal list reports `in_v0_swept_in` for exactly this:
+
+| Entry | axioms removed | triples | in-v0 swept in |
+|---|---:|---:|---:|
+| GO | 1 | 1 | **0** |
+| RO | 342 | 1,361 | 66 |
+| OBI | 379 | 5,828 | **1,244** |
+
+**This changes corpus selection.** OBI looks like a 1.5% out-of-profile entry, but
+its projection costs ~4.7% of its in-profile content. GO's costs nothing at all —
+which makes it not merely the best benchmark entry but the only one whose
+projected theory is essentially the ontology as published.
+
 ## Owed
 
-- **Projections.** Each pinned entry needs its v0 projection generated, hashed,
-  and recorded beside the source hash. Projection is part of the fixture, never a
-  step the benchmark performs on the fly — otherwise neither the numbers nor the
-  diff are reproducible.
+- **Cross-check the projections against HOWL's gate**, once M0 lands. The removal
+  lists are produced independently on purpose; the gate agreeing with them is a
+  real check, and disagreement is a finding either way. Until then neither has
+  been validated against a second implementation.
 - **GALEN**, per §12 — and the *variant* is part of the pin, since "GALEN" names
   several ontologies of very different difficulty.
 - **Oracle pins.** ELK and HermiT versions, with a capability probe per v0

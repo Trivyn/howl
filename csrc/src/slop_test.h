@@ -12,11 +12,13 @@
 
 #ifndef SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 #endif
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 #define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
+#define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
@@ -74,7 +76,7 @@ static inline uint64_t slop_hash_types_Node(const void* key) {
         case types_Node_individual_node:
             return slop_hash_rdf_IRI(&_k->data.individual_node);
         case types_Node_fresh_node:
-            { int64_t _tmp = (int64_t)_k->data.fresh_node; return slop_hash_int(&_tmp); }
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_node });
     }
     return 0;
 }
@@ -127,6 +129,7 @@ slop_result_saturate_RoundResult_types_Fault test_unsat_fixture(slop_arena* aren
 uint8_t test_test_unsatisfiable_class_detected(slop_arena* arena);
 uint8_t test_test_bottom_compression(slop_arena* arena);
 uint8_t test_test_inconsistency_suppresses_both_lists(slop_arena* arena);
+uint8_t test_test_derived_eq_compares_both_payloads(slop_arena* arena);
 uint8_t test_test_order_independence(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
 int main(int argc, char** _c_argv);
@@ -139,6 +142,50 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
+#endif
+
+#ifndef SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
+#endif
+
+#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
+#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #endif
 
 

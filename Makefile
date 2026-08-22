@@ -32,7 +32,7 @@ ALL_SRCS    := $(wildcard $(CSRC)/*.c)
 SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
-.PHONY: all cli lib test clean release dist csrc slop-build verify corpus census \
+.PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
         crate-vendor crate-build crate-test crate-publish
 
 PLATFORM ?= unknown
@@ -97,6 +97,12 @@ csrc:
 verify:
 	slop verify
 
+# Executable @example blocks on the completion rules. These are real coverage
+# as of slop 0.2.1 -- under 0.1.2 any example with a non-scalar argument was
+# skipped AND counted as a pass, so a green line meant nothing.
+example:
+	slop test src/rules/el.slop
+
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.
 corpus:
@@ -107,6 +113,16 @@ corpus:
 # fixture must yield at least one omission.
 census:
 	python3 corpus/census.py corpus/fixtures/*/*.ttl
+
+# Regenerate the pinned v0 projections as removal lists (corpus/projections/).
+# `make project-verify` re-derives them and fails on drift, which is what CI
+# should run -- a projection that silently changes invalidates every benchmark
+# number and every differential diff taken against it.
+project: corpus
+	python3 corpus/project.py
+
+project-verify:
+	python3 corpus/project.py --verify
 
 dist:
 	rm -rf dist

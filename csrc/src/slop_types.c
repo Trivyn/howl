@@ -9,6 +9,8 @@ uint8_t types_role_eq(types_RoleId a, types_RoleId b);
 types_Context types_make_context(slop_arena* arena, types_Node root);
 types_Queue types_make_queue(slop_arena* arena);
 uint8_t types_queue_is_active(types_Queue q);
+uint8_t types_derived_eq(types_Derived a, types_Derived b);
+uint8_t types_addressed_eq(types_Addressed a, types_Addressed b);
 types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
@@ -34,121 +36,128 @@ types_Node types_node_bottom(void) {
 }
 
 uint8_t types_node_eq(types_Node a, types_Node b) {
-    __auto_type _mv_10 = a;
-    switch (_mv_10.tag) {
+    __auto_type _mv_12 = a;
+    switch (_mv_12.tag) {
         case types_Node_class_node:
         {
-            __auto_type ai = _mv_10.data.class_node;
-            __auto_type _mv_11 = b;
-            switch (_mv_11.tag) {
-                case types_Node_class_node:
-                {
-                    __auto_type bi = _mv_11.data.class_node;
-                    return string_eq(ai.value, bi.value);
-                }
-                case types_Node_individual_node:
-                {
-                    __auto_type _ = _mv_11.data.individual_node;
-                    return 0;
-                }
-                case types_Node_fresh_node:
-                {
-                    __auto_type _ = _mv_11.data.fresh_node;
-                    return 0;
-                }
-            }
-        }
-        case types_Node_individual_node:
-        {
-            __auto_type ai = _mv_10.data.individual_node;
-            __auto_type _mv_12 = b;
-            switch (_mv_12.tag) {
-                case types_Node_individual_node:
-                {
-                    __auto_type bi = _mv_12.data.individual_node;
-                    return string_eq(ai.value, bi.value);
-                }
-                case types_Node_class_node:
-                {
-                    __auto_type _ = _mv_12.data.class_node;
-                    return 0;
-                }
-                case types_Node_fresh_node:
-                {
-                    __auto_type _ = _mv_12.data.fresh_node;
-                    return 0;
-                }
-            }
-        }
-        case types_Node_fresh_node:
-        {
-            __auto_type ai = _mv_10.data.fresh_node;
+            __auto_type ai = _mv_12.data.class_node;
             __auto_type _mv_13 = b;
             switch (_mv_13.tag) {
-                case types_Node_fresh_node:
-                {
-                    __auto_type bi = _mv_13.data.fresh_node;
-                    return (ai == bi);
-                }
                 case types_Node_class_node:
                 {
-                    __auto_type _ = _mv_13.data.class_node;
-                    return 0;
+                    __auto_type bi = _mv_13.data.class_node;
+                    return string_eq(ai.value, bi.value);
                 }
                 case types_Node_individual_node:
                 {
                     __auto_type _ = _mv_13.data.individual_node;
                     return 0;
                 }
+                case types_Node_fresh_node:
+                {
+                    __auto_type _ = _mv_13.data.fresh_node;
+                    return 0;
+                }
             }
+            SLOP_UNREACHABLE();
+        }
+        case types_Node_individual_node:
+        {
+            __auto_type ai = _mv_12.data.individual_node;
+            __auto_type _mv_14 = b;
+            switch (_mv_14.tag) {
+                case types_Node_individual_node:
+                {
+                    __auto_type bi = _mv_14.data.individual_node;
+                    return string_eq(ai.value, bi.value);
+                }
+                case types_Node_class_node:
+                {
+                    __auto_type _ = _mv_14.data.class_node;
+                    return 0;
+                }
+                case types_Node_fresh_node:
+                {
+                    __auto_type _ = _mv_14.data.fresh_node;
+                    return 0;
+                }
+            }
+            SLOP_UNREACHABLE();
+        }
+        case types_Node_fresh_node:
+        {
+            __auto_type ai = _mv_12.data.fresh_node;
+            __auto_type _mv_15 = b;
+            switch (_mv_15.tag) {
+                case types_Node_fresh_node:
+                {
+                    __auto_type bi = _mv_15.data.fresh_node;
+                    return (ai == bi);
+                }
+                case types_Node_class_node:
+                {
+                    __auto_type _ = _mv_15.data.class_node;
+                    return 0;
+                }
+                case types_Node_individual_node:
+                {
+                    __auto_type _ = _mv_15.data.individual_node;
+                    return 0;
+                }
+            }
+            SLOP_UNREACHABLE();
         }
     }
+    SLOP_UNREACHABLE();
 }
 
 uint8_t types_role_eq(types_RoleId a, types_RoleId b) {
-    __auto_type _mv_14 = a;
-    switch (_mv_14.tag) {
+    __auto_type _mv_16 = a;
+    switch (_mv_16.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type ai = _mv_14.data.named_role;
-            __auto_type _mv_15 = b;
-            switch (_mv_15.tag) {
+            __auto_type ai = _mv_16.data.named_role;
+            __auto_type _mv_17 = b;
+            switch (_mv_17.tag) {
                 case types_RoleId_named_role:
                 {
-                    __auto_type bi = _mv_15.data.named_role;
+                    __auto_type bi = _mv_17.data.named_role;
                     return string_eq(ai.value, bi.value);
                 }
                 case types_RoleId_fresh_role:
                 {
-                    __auto_type _ = _mv_15.data.fresh_role;
+                    __auto_type _ = _mv_17.data.fresh_role;
                     return 0;
                 }
             }
+            SLOP_UNREACHABLE();
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type ai = _mv_14.data.fresh_role;
-            __auto_type _mv_16 = b;
-            switch (_mv_16.tag) {
+            __auto_type ai = _mv_16.data.fresh_role;
+            __auto_type _mv_18 = b;
+            switch (_mv_18.tag) {
                 case types_RoleId_fresh_role:
                 {
-                    __auto_type bi = _mv_16.data.fresh_role;
+                    __auto_type bi = _mv_18.data.fresh_role;
                     return (ai == bi);
                 }
                 case types_RoleId_named_role:
                 {
-                    __auto_type _ = _mv_16.data.named_role;
+                    __auto_type _ = _mv_18.data.named_role;
                     return 0;
                 }
             }
+            SLOP_UNREACHABLE();
         }
     }
+    SLOP_UNREACHABLE();
 }
 
 types_Context types_make_context(slop_arena* arena, types_Node root) {
     types_Context _retval = {0};
     _retval = ((types_Context){.root = root, .subsumers = slop_map_new_ptr(arena, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .succs = slop_map_new_ptr(arena, 16, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .preds = slop_map_new_ptr(arena, 16, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId)});
-    SLOP_POST(((_retval.root == root)), "(== (. $result root) root)");
+    SLOP_POST((({ types_Node _eq_l_19 = (_retval.root); types_Node _eq_r_20 = (root); slop_eq_types_Node(&_eq_l_19, &_eq_r_20); })), "(== (. $result root) root)");
     return _retval;
 }
 
@@ -166,11 +175,103 @@ uint8_t types_queue_is_active(types_Queue q) {
     return _retval;
 }
 
+uint8_t types_derived_eq(types_Derived a, types_Derived b) {
+    __auto_type _mv_21 = a;
+    switch (_mv_21.tag) {
+        case types_Derived_derived_sub:
+        {
+            __auto_type an = _mv_21.data.derived_sub;
+            __auto_type _mv_22 = b;
+            switch (_mv_22.tag) {
+                case types_Derived_derived_sub:
+                {
+                    __auto_type bn = _mv_22.data.derived_sub;
+                    return types_node_eq(an, bn);
+                }
+                case types_Derived_derived_succ:
+                {
+                    return 0;
+                }
+                case types_Derived_derived_pred:
+                {
+                    return 0;
+                }
+            }
+            SLOP_UNREACHABLE();
+        }
+        case types_Derived_derived_succ:
+        {
+            __auto_type ar = _mv_21.data.derived_succ.f0;
+            __auto_type an = _mv_21.data.derived_succ.f1;
+            __auto_type _mv_23 = b;
+            switch (_mv_23.tag) {
+                case types_Derived_derived_succ:
+                {
+                    __auto_type br = _mv_23.data.derived_succ.f0;
+                    __auto_type bn = _mv_23.data.derived_succ.f1;
+                    if (types_role_eq(ar, br)) {
+                        return types_node_eq(an, bn);
+                    } else {
+                        return 0;
+                    }
+                }
+                case types_Derived_derived_sub:
+                {
+                    __auto_type _ = _mv_23.data.derived_sub;
+                    return 0;
+                }
+                case types_Derived_derived_pred:
+                {
+                    return 0;
+                }
+            }
+            SLOP_UNREACHABLE();
+        }
+        case types_Derived_derived_pred:
+        {
+            __auto_type ar = _mv_21.data.derived_pred.f0;
+            __auto_type an = _mv_21.data.derived_pred.f1;
+            __auto_type _mv_24 = b;
+            switch (_mv_24.tag) {
+                case types_Derived_derived_pred:
+                {
+                    __auto_type br = _mv_24.data.derived_pred.f0;
+                    __auto_type bn = _mv_24.data.derived_pred.f1;
+                    if (types_role_eq(ar, br)) {
+                        return types_node_eq(an, bn);
+                    } else {
+                        return 0;
+                    }
+                }
+                case types_Derived_derived_sub:
+                {
+                    __auto_type _ = _mv_24.data.derived_sub;
+                    return 0;
+                }
+                case types_Derived_derived_succ:
+                {
+                    return 0;
+                }
+            }
+            SLOP_UNREACHABLE();
+        }
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t types_addressed_eq(types_Addressed a, types_Addressed b) {
+    if (types_node_eq(a.to, b.to)) {
+        return types_derived_eq(a.what, b.what);
+    } else {
+        return 0;
+    }
+}
+
 types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e) {
     types_EdgePair _retval = {0};
     _retval = ((types_EdgePair){.succ_half = ((types_Addressed){.to = e.from, .what = ((types_Derived){ .tag = types_Derived_derived_succ, .data.derived_succ = { .f0 = e.role, .f1 = e.to } })}), .pred_half = ((types_Addressed){.to = e.to, .what = ((types_Derived){ .tag = types_Derived_derived_pred, .data.derived_pred = { .f0 = e.role, .f1 = e.from } })})});
-    SLOP_POST(((_retval.succ_half.to == e.from)), "(== (. (. $result succ-half) to) (. e from))");
-    SLOP_POST(((_retval.pred_half.to == e.to)), "(== (. (. $result pred-half) to) (. e to))");
+    SLOP_POST((({ types_Node _eq_l_25 = (_retval.succ_half.to); types_Node _eq_r_26 = (e.from); slop_eq_types_Node(&_eq_l_25, &_eq_r_26); })), "(== (. (. $result succ-half) to) (. e from))");
+    SLOP_POST((({ types_Node _eq_l_27 = (_retval.pred_half.to); types_Node _eq_r_28 = (e.to); slop_eq_types_Node(&_eq_l_27, &_eq_r_28); })), "(== (. (. $result pred-half) to) (. e to))");
     return _retval;
 }
 

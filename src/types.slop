@@ -51,6 +51,8 @@
     node-bottom
     node-eq
     role-eq
+    derived-eq
+    addressed-eq
     emit-edge
     make-context
     make-queue
@@ -89,28 +91,32 @@
     (fresh-role (Int 0 ..))))
 
   ;; ============================================================
-;; ⚠  MULTI-PAYLOAD UNION VARIANTS ARE NOT HASHABLE. NEVER USE
-;;    `Concept`, `NormAxiom` OR `Derived` AS A SET ELEMENT OR MAP KEY.
+;; MULTI-PAYLOAD UNION VARIANTS: FIXED IN SLOP 0.2.1, AND WHY THE DESIGN
+;; STILL DOES NOT DEPEND ON IT.
 ;;
-;; The transpiler registers only a variant's FIRST payload type for
-;; hash/eq generation (`register-union-variants` keeps just
-;; `(list-get vl-items 1)`), and `emit-union-variant-eq` has no
-;; multi-field branch. So for `(derived-succ RoleId Node)` it emits
+;; Through slop 0.1.2 the transpiler registered only a variant's FIRST payload
+;; type for generated eq/hash and emitted no multi-field branch, so for
+;; `(derived-succ RoleId Node)` it produced
 ;;
 ;;     case types_Derived_derived_succ:
 ;;         return slop_eq_types_RoleId(&_a->data.derived_succ, ...);
 ;;
-;; — the anonymous struct's first field is the RoleId at offset 0, so
-;; that compares correctly and the `Node` IS NEVER COMPARED AT ALL.
-;; `(derived-succ r Y₁)` and `(derived-succ r Y₂)` are then EQUAL to a
-;; `(Set Derived)`, and every filler after the first is swallowed by a
-;; novelty test. It compiles clean and under-derives in silence.
+;; — comparing the role and NEVER the node. `(derived-succ r Y₁)` and
+;; `(derived-succ r Y₂)` were equal to a `(Set Derived)`, so every filler after
+;; the first was swallowed by a novelty test. It compiled clean and
+;; under-derived in silence (slop-lang/slop#66, fixed in 0.2.1 and verified
+;; here by direct test).
 ;;
-;; `Node` and `RoleId` above are safe — every variant carries exactly
-;; one payload, which is the correct codegen path and the one already
-;; exercised by `(Set Node)` and `(Map Node Context)` below. The driver
-;; therefore keys its round delta on `Node`/`RoleId` only (see
-;; saturate.slop's RoundDelta), never on a `Derived`.
+;; The driver still keys its round delta on `Node`/`RoleId` only, and that is
+;; no longer a workaround — it is the shape the commit-at-barrier design wants
+;; anyway, since the delta mirrors `Context` field-for-field and commit is three
+;; parallel loops with no translation step. Nothing was reverted because
+;; nothing was bent out of shape to begin with.
+;;
+;; `derived-eq` / `addressed-eq` below likewise stay. Generated `==` is correct
+;; again, but the explicit forms spell out the CROSS-VARIANT arms — that
+;; `(derived-succ r y)` is not `(derived-pred r y)` — which is the part a reader
+;; has to trust rather than read when it is generated.
 ;; ============================================================
 
 ;; ⊤ and ⊥ are reserved NODES, not reserved IRIs:
@@ -130,7 +136,6 @@
   ;; built-in constructor, and shadowing it makes every `(some x)` in
   ;; this codebase ambiguous to a reader even where the compiler
   ;; disambiguates. Same constructor, unshadowed name.
-  ;; NOT HASHABLE — `exists` carries two payloads. See the warning above.
   (type Concept (union
     (top)
     (bottom)
@@ -154,8 +159,6 @@
   ;; (sub-some-lhs r ⊤ A).
   ;; ============================================================
 
-  ;; NOT HASHABLE — every variant carries two or three payloads. See the
-  ;; warning above. Normal-form axioms travel in a `(List NormAxiom)`.
   (type NormAxiom (union
     (sub-name     Node Node)              ; A ⊑ B
     (sub-and      Node Node Node)         ; A₁ ⊓ A₂ ⊑ B
@@ -176,9 +179,6 @@
   ;; A derived conclusion in transit, always addressed to exactly one
   ;; context. The destination rides in the envelope, so it is not
   ;; repeated in every payload.
-  ;; NOT HASHABLE — `derived-succ`/`derived-pred` carry two payloads, so a
-  ;; `(Set Derived)` would compare the role and ignore the node. See the
-  ;; warning above; the driver's novelty test keys on Node/RoleId instead.
   (type Derived (union
     (derived-sub  Node)            ; add this node to the target's S(·)
     (derived-succ RoleId Node)     ; target gains a successor:   (role, node)
@@ -573,6 +573,45 @@
     (@property nonempty-queue-is-active
       (implies (> (list-len (. q items)) 0) $result))
     (> (list-len (. q items)) 0))
+
+  ;; EQUALITY FOR THE MULTI-PAYLOAD UNIONS, WRITTEN OUT BY HAND.
+  ;;
+  ;; Written out rather than left to generated `==`, which is correct again as
+  ;; of slop 0.2.1 (#66). The value of spelling them is the CROSS-VARIANT arms:
+  ;; `(derived-succ r y)` must not equal `(derived-pred r y)`, and OWL punning
+  ;; means `class-node(:x)` must not equal `individual-node(:x)`. Those are
+  ;; exactly the cases a reader would otherwise have to take on trust.
+  (fn derived-eq ((a Derived) (b Derived))
+    (@intent "Structural equality over ALL payloads — `==` compares only the first")
+    (@spec ((Derived Derived) -> Bool))
+    (@pure)
+    (match a
+      ((derived-sub an)
+        (match b
+          ((derived-sub bn)    (node-eq an bn))
+          ((derived-succ _ _)  false)
+          ((derived-pred _ _)  false)))
+      ((derived-succ ar an)
+        (match b
+          ((derived-succ br bn) (if (role-eq ar br) (node-eq an bn) false))
+          ((derived-sub _)      false)
+          ((derived-pred _ _)   false)))
+      ((derived-pred ar an)
+        (match b
+          ((derived-pred br bn) (if (role-eq ar br) (node-eq an bn) false))
+          ((derived-sub _)      false)
+          ((derived-succ _ _)   false)))))
+
+  (fn addressed-eq ((a Addressed) (b Addressed))
+    (@intent "Structural equality on an addressed conclusion — destination AND payload")
+    (@spec ((Addressed Addressed) -> Bool))
+    (@pure)
+    ;; Both halves. Comparing only the payload would call two conclusions equal
+    ;; that go to different contexts, which is the whole content of an
+    ;; `Addressed`; comparing only the destination is worse still.
+    (if (node-eq (. a to) (. b to))
+      (derived-eq (. a what) (. b what))
+      false))
 
   ;; EDGE-PAIR INVARIANT. A logical edge (X,Y) ∈ R(r) is ONE fact, but
   ;; the context decomposition stores it twice — as a successor at X

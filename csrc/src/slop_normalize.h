@@ -11,16 +11,19 @@ typedef struct normalize_NormResult normalize_NormResult;
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 #define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
+#define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
 #ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 

@@ -12,13 +12,14 @@ types_Findings classify_extract_findings(slop_arena* arena, types_Saturation sat
 uint8_t classify_context_has_bottom(types_Saturation sat, types_Node n) {
     {
         __auto_type bottom = types_node_bottom();
-        __auto_type _mv_30 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-        if (_mv_30.has_value) {
-            __auto_type ctx = _mv_30.value;
+        __auto_type _mv_42 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+        if (_mv_42.has_value) {
+            __auto_type ctx = _mv_42.value;
             return (slop_map_get(ctx.subsumers, &(bottom)) != NULL);
-        } else if (!_mv_30.has_value) {
+        } else if (!_mv_42.has_value) {
             return 0;
         }
+        SLOP_UNREACHABLE();
     }
 }
 
@@ -30,11 +31,11 @@ uint8_t classify_detect_inconsistent(types_Saturation sat) {
             for (size_t _i = 0; _i < _coll->cap; _i++) {
                 if (_coll->entries[_i].occupied) {
                     types_Node n = *(types_Node*)_coll->entries[_i].key;
-                    __auto_type _mv_31 = n;
-                    switch (_mv_31.tag) {
+                    __auto_type _mv_43 = n;
+                    switch (_mv_43.tag) {
                         case types_Node_individual_node:
                         {
-                            __auto_type _ = _mv_31.data.individual_node;
+                            __auto_type _ = _mv_43.data.individual_node;
                             if (classify_context_has_bottom(sat, n)) {
                                 found = 1;
                             }
@@ -42,12 +43,12 @@ uint8_t classify_detect_inconsistent(types_Saturation sat) {
                         }
                         case types_Node_class_node:
                         {
-                            __auto_type _ = _mv_31.data.class_node;
+                            __auto_type _ = _mv_43.data.class_node;
                             break;
                         }
                         case types_Node_fresh_node:
                         {
-                            __auto_type _ = _mv_31.data.fresh_node;
+                            __auto_type _ = _mv_43.data.fresh_node;
                             break;
                         }
                     }
@@ -65,17 +66,18 @@ uint8_t classify_entails_sub(types_Saturation sat, uint8_t inconsistent, types_N
         if (inconsistent) {
             _retval = 1;
         } else {
-            __auto_type _mv_32 = ({ void* _ptr = slop_map_get(sat.contexts, &(a)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-            if (_mv_32.has_value) {
-                __auto_type ctx = _mv_32.value;
+            __auto_type _mv_44 = ({ void* _ptr = slop_map_get(sat.contexts, &(a)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+            if (_mv_44.has_value) {
+                __auto_type ctx = _mv_44.value;
                 if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
                     return 1;
                 } else {
                     return (slop_map_get(ctx.subsumers, &(b)) != NULL);
                 }
-            } else if (!_mv_32.has_value) {
+            } else if (!_mv_44.has_value) {
                 return 0;
             }
+            SLOP_UNREACHABLE();
         }
     }
     return _retval;
@@ -95,11 +97,11 @@ slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Satura
                 if (_coll->entries[_i].occupied) {
                     types_Node n = *(types_Node*)_coll->entries[_i].key;
                     types_Context ctx = *(types_Context*)_coll->entries[_i].value;
-                    __auto_type _mv_33 = n;
-                    switch (_mv_33.tag) {
+                    __auto_type _mv_45 = n;
+                    switch (_mv_45.tag) {
                         case types_Node_class_node:
                         {
-                            __auto_type iri = _mv_33.data.class_node;
+                            __auto_type iri = _mv_45.data.class_node;
                             if (!(classify_is_bottom_iri(iri))) {
                                 if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
                                     ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -109,12 +111,12 @@ slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Satura
                         }
                         case types_Node_individual_node:
                         {
-                            __auto_type _ = _mv_33.data.individual_node;
+                            __auto_type _ = _mv_45.data.individual_node;
                             break;
                         }
                         case types_Node_fresh_node:
                         {
-                            __auto_type _ = _mv_33.data.fresh_node;
+                            __auto_type _ = _mv_45.data.fresh_node;
                             break;
                         }
                     }
@@ -135,11 +137,11 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
                 if (_coll->entries[_i].occupied) {
                     types_Node n = *(types_Node*)_coll->entries[_i].key;
                     types_Context ctx = *(types_Context*)_coll->entries[_i].value;
-                    __auto_type _mv_34 = n;
-                    switch (_mv_34.tag) {
+                    __auto_type _mv_46 = n;
+                    switch (_mv_46.tag) {
                         case types_Node_class_node:
                         {
-                            __auto_type iri = _mv_34.data.class_node;
+                            __auto_type iri = _mv_46.data.class_node;
                             if (!(classify_is_bottom_iri(iri))) {
                                 if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
                                     ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -149,22 +151,22 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
                                         for (size_t _i = 0; _i < _coll->cap; _i++) {
                                             if (_coll->entries[_i].occupied) {
                                                 types_Node b = *(types_Node*)_coll->entries[_i].key;
-                                                __auto_type _mv_35 = b;
-                                                switch (_mv_35.tag) {
+                                                __auto_type _mv_47 = b;
+                                                switch (_mv_47.tag) {
                                                     case types_Node_class_node:
                                                     {
-                                                        __auto_type _ = _mv_35.data.class_node;
+                                                        __auto_type _ = _mv_47.data.class_node;
                                                         ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = b})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                         break;
                                                     }
                                                     case types_Node_individual_node:
                                                     {
-                                                        __auto_type _ = _mv_35.data.individual_node;
+                                                        __auto_type _ = _mv_47.data.individual_node;
                                                         break;
                                                     }
                                                     case types_Node_fresh_node:
                                                     {
-                                                        __auto_type _ = _mv_35.data.fresh_node;
+                                                        __auto_type _ = _mv_47.data.fresh_node;
                                                         break;
                                                     }
                                                 }
@@ -177,12 +179,12 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
                         }
                         case types_Node_individual_node:
                         {
-                            __auto_type _ = _mv_34.data.individual_node;
+                            __auto_type _ = _mv_46.data.individual_node;
                             break;
                         }
                         case types_Node_fresh_node:
                         {
-                            __auto_type _ = _mv_34.data.fresh_node;
+                            __auto_type _ = _mv_46.data.fresh_node;
                             break;
                         }
                     }
