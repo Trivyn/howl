@@ -28,6 +28,7 @@
                  default-config emit-edge make-context make-queue
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
+  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range))
   (import saturate (RoundResult saturate make-initial-saturation))
   (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify))
@@ -597,6 +598,177 @@
 
   ;; ============================================================
 
+  ;; ============================================================
+  ;; Canonical ordering (§6.8) — src/canon.slop
+  ;; ============================================================
+
+  (fn mk-iri ((v String))
+    (@intent "An IRI record from a string")
+    (@spec ((String) -> IRI))
+    (@pure)
+    (record-new IRI (value v)))
+
+  (fn test-string-cmp-is-length-safe ((arena Arena))
+    (@intent "A prefix orders by LENGTH, not by the bytes that follow it in the buffer")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE HAZARD, DEMONSTRATED. `strlib.compare` is `strcmp` over
+    ;; `(. a data)`, so it reads to the first NUL. Every IRI HOWL
+    ;; orders is a slice into a parsed Turtle buffer, where the byte
+    ;; after an IRI is the rest of the document. `apple` below is
+    ;; exactly such a slice — it shares its storage with `applesauce`
+    ;; and has no NUL at offset 5 — so `strcmp` would compare
+    ;; "applesauce" against "applesauce" and report EQUAL, silently
+    ;; merging two distinct IRIs in a sorted report. `string-cmp` uses
+    ;; the length and gets it right.
+    (let ((buf   "applesauce")
+          (apple (String (. buf data) 5)))
+      (and (== (string-cmp apple buf) -1)
+        (and (== (string-cmp buf apple) 1)
+          (and (== (string-cmp apple "apple") 0)
+               (== (string-cmp apple apple) 0))))))
+
+  (fn test-node-cmp-separates-punned-iris ((arena Arena))
+    (@intent "class-node(:x) and individual-node(:x) are DISTINCT under the order")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; §6.2: OWL permits punning, so the same IRI can denote a class
+    ;; AND an individual. A comparator reading only the IRI would call
+    ;; these equal, collapsing the two populations the tags exist to
+    ;; keep apart — and §6.2's own example shows the cost: a class
+    ;; `:x ⊑ ⊥` merged with an unrelated individual `:x` manufactures a
+    ;; FALSE inconsistency.
+    (let ((c (union-new Node class-node (mk-iri "http://example.org/x")))
+          (i (union-new Node individual-node (mk-iri "http://example.org/x"))))
+      (and (!= (node-cmp c i) 0)
+        (and (== (node-cmp c i) -1)          ; class-node sorts first
+          (and (== (node-cmp i c) 1)
+               (== (node-cmp c c) 0))))))
+
+  (fn test-sort-orders-and-is-input-determined ((arena Arena))
+    (@intent "Sorting is a function of CONTENT, not of insertion order (§6.8)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The §6.8 property in miniature: the same four IRIs presented in
+    ;; two different orders must produce byte-identical output. This is
+    ;; what makes a report hashable into a durable verdict.
+    (let ((mut a (list-new arena IRI))
+          (mut b (list-new arena IRI)))
+      (do
+        (list-push a (mk-iri "http://example.org/zebra"))
+        (list-push a (mk-iri "http://example.org/apple"))
+        (list-push a (mk-iri "http://example.org/apple2"))
+        (list-push a (mk-iri "http://example.org/mango"))
+        (list-push b (mk-iri "http://example.org/mango"))
+        (list-push b (mk-iri "http://example.org/apple2"))
+        (list-push b (mk-iri "http://example.org/zebra"))
+        (list-push b (mk-iri "http://example.org/apple"))
+        (let ((sa (sort-iris arena a))
+              (sb (sort-iris arena b))
+              (mut ok true)
+              (mut i 0)
+              (n  (cast Int (list-len sa))))
+          (do
+            ;; same length as the input, and as each other
+            (if (!= n 4) (set! ok false) (do))
+            (if (!= (cast Int (list-len sb)) 4) (set! ok false) (do))
+            ;; element-wise identical, and ascending
+            (while (< i n)
+              (do
+                (if (!= (iri-cmp (iri-at sa i) (iri-at sb i)) 0)
+                  (set! ok false) (do))
+                (if (and (> i 0) (>= (iri-cmp (iri-at sa (- i 1)) (iri-at sa i)) 0))
+                  (set! ok false) (do))
+                (set! i (+ i 1))))
+            ;; and the least really is the least
+            (if (!= (iri-cmp (iri-at sa 0) (mk-iri "http://example.org/apple")) 0)
+              (set! ok false) (do))
+            ok)))))
+
+  (fn test-sort-is-stable ((arena Arena))
+    (@intent "Ties keep their input order — what §6.8 determinism rests on")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Stability is INVISIBLE through `sort-iris`: `iri-cmp` is a total
+    ;; order, so two elements that tie are byte-identical and any
+    ;; permutation of them looks correct. It is observable only through a
+    ;; comparator that returns 0 for elements the test can still tell
+    ;; apart, which is what the raw `sort-range` entry point allows.
+    ;;
+    ;; This is not a tidiness property. A comparator here may legitimately
+    ;; tie two DISTINCT values — `missing-declaration-cmp` ties on equal
+    ;; referring-lists, and an out-of-profile omission list can hold two
+    ;; entries a comparator does not separate. If ties resolved by run
+    ;; boundaries, their order would be a function of list LENGTH, and
+    ;; §6.8 requires the report to be a function of content alone.
+    ;;
+    ;; The key descends in blocks of three, so a correct sort must move
+    ;; every block and a stable answer is NOT the identity permutation:
+    ;;   indices 0 1 2 -> key 2  |  3 4 5 -> key 1  |  6 7 8 -> key 0
+    ;; Stable ascending order is therefore exactly 6 7 8 3 4 5 0 1 2; an
+    ;; unstable sort still orders the blocks but scrambles within one.
+    (let ((idx (sort-range arena 9
+                 (fn ((a Int) (b Int))
+                   (let ((ka (- 2 (/ a 3)))
+                         (kb (- 2 (/ b 3))))
+                     (cond ((< ka kb) -1)
+                           ((> ka kb) 1)
+                           (else 0))))))
+          (mut expect (list-new arena Int))
+          (mut ok true)
+          (mut i 0))
+      (do
+        (list-push expect 6) (list-push expect 7) (list-push expect 8)
+        (list-push expect 3) (list-push expect 4) (list-push expect 5)
+        (list-push expect 0) (list-push expect 1) (list-push expect 2)
+        (if (!= (cast Int (list-len idx)) 9) (set! ok false) (do))
+        (while (< i 9)
+          (do
+            (if (!= (int-at idx i) (int-at expect i)) (set! ok false) (do))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn test-sort-is-a-permutation ((arena Arena))
+    (@intent "Sorting preserves length and multiset — nothing dropped, nothing invented")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; This is the obligation `sort-range` states but cannot prove: the
+    ;; buffers are filled by `list-push` in a loop and then permuted by
+    ;; `list-set`, and slop#124 withholds the provenance axioms for any
+    ;; body that calls `list-set`. Duplicates are included deliberately —
+    ;; a sort that silently deduplicated would still pass a
+    ;; sortedness-only test while changing the report.
+    (let ((mut xs (list-new arena IRI)))
+      (do
+        (list-push xs (mk-iri "b"))
+        (list-push xs (mk-iri "a"))
+        (list-push xs (mk-iri "b"))
+        (list-push xs (mk-iri "c"))
+        (list-push xs (mk-iri "a"))
+        (let ((s (sort-iris arena xs))
+              (mut ok true)
+              (mut i 0)
+              (n (cast Int (list-len xs))))
+          (do
+            (if (!= (cast Int (list-len s)) 5) (set! ok false) (do))
+            ;; every input element occurs in the output
+            (while (< i n)
+              (let ((mut found false)
+                    (mut j 0))
+                (do
+                  (while (< j 5)
+                    (do
+                      (if (== (iri-cmp (iri-at xs i) (iri-at s j)) 0)
+                        (set! found true) (do))
+                      (set! j (+ j 1))))
+                  (if found (do) (set! ok false))
+                  (set! i (+ i 1)))))
+            ;; a a b b c
+            (if (!= (iri-cmp (iri-at s 0) (mk-iri "a")) 0) (set! ok false) (do))
+            (if (!= (iri-cmp (iri-at s 1) (mk-iri "a")) 0) (set! ok false) (do))
+            (if (!= (iri-cmp (iri-at s 4) (mk-iri "c")) 0) (set! ok false) (do))
+            ok)))))
+
   (fn print-test-result ((name String) (passed Bool))
     (@intent "Print a test result with a pass/fail indicator")
     (@spec ((String Bool) -> Unit))
@@ -685,6 +857,26 @@
 
           (let ((r (test-order-independence arena)))
             (print-test-result "determinism: signature order changes nothing" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-string-cmp-is-length-safe arena)))
+            (print-test-result "order: string-cmp is length-safe (no NUL assumption)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-node-cmp-separates-punned-iris arena)))
+            (print-test-result "order: punned IRIs stay distinct under node-cmp" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sort-orders-and-is-input-determined arena)))
+            (print-test-result "order: sort is input-determined, not insertion-ordered" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sort-is-a-permutation arena)))
+            (print-test-result "order: sort preserves length and multiset" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sort-is-stable arena)))
+            (print-test-result "order: sort is stable, so ties are content-determined" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

@@ -1,0 +1,504 @@
+;; ============================================================
+;; Canonical total order  —  SPEC.md §6.3 step 1, §6.8
+;;
+;; §6.8 is BINDING: byte-identical canonicalized input plus the same
+;; budget must produce an identical canonical report, because the
+;; consumer content-hashes that report into a verdict identity and
+;; stores it as an immutable record. A report that varies run-over-run
+;; does not merely look untidy — it breaks verdict identity and every
+;; downstream guarantee built on it.
+;;
+;; Almost everything in the front end inherits that obligation from
+;; ONE primitive, a total order on identities:
+;;
+;;   §6.3 step 1   canonicalize `and` operands — flatten, dedup, SORT —
+;;                 so `A ⊓ B` compares equal to `B ⊓ A` however the RDF
+;;                 list was serialized. Skip it and normalization mints
+;;                 two fresh-nodes for one expression, the range gate
+;;                 becomes order-sensitive, and RDF serialization order
+;;                 lands in the hashed report.
+;;   §6.3 step 1b  the bidirectional star around the LEAST operand, and
+;;                 n-ary DisjointClasses pairs in canonical order
+;;   §6.3 step 3   fresh-node ids assigned in order of first occurrence
+;;                 under the canonical axiom ordering
+;;   §6.7          Findings.unsatisfiable / subsumptions / imports-seen
+;;   §5.2          MissingDeclaration.referring, and every Omission list
+;;
+;; WHY memcmp AND NOT `strlib.compare`. strlib exports a `compare`
+;; returning -1/0/1 and it is the obvious import — but it is
+;; implemented as `strcmp` over `(. a data)` (strlib.slop:804), which
+;; assumes NUL termination. A SLOP `String` is `{len, data}`, and the
+;; Strings this module actually orders are IRIs sliced out of a parsed
+;; Turtle buffer: the byte after an IRI is the rest of the document,
+;; not a NUL. `strcmp` would run past the IRI and order two entries by
+;; whatever happened to follow them in the file — input-determined by
+;; accident, and different for the same ontology written two ways.
+;; That is precisely the §6.8 violation this module exists to prevent,
+;; so the length-safe primitive is declared here rather than imported.
+;;
+;; WHY MERGE SORT AND NOT INSERTION SORT. The toolchain has no sort at
+;; all — not in lib/std, not in slop-rdf, not in GROWL — so one is
+;; hand-written, and the shape matters. `list-set` does not exist
+;; either, so an in-place sort is impossible and every sort rebuilds.
+;; Insertion sort would then be O(n²) in both time and allocation:
+;; fine for an omission list, hopeless for GO's 73,634 subsumptions.
+;; Merge sort over an index permutation is O(n log n) and costs one
+;; small gather per element type.
+;; ============================================================
+
+(module canon
+  (@doc "A canonical total order over identities, and the merge sort built on it (§6.8)")
+
+  (import rdf (IRI))
+  (import types (Node RoleId SubPair AxiomRef InputRef EntityKind
+                 MissingDeclaration Omission))
+
+  ;; Length-safe by construction: memcmp takes an explicit n, so it can
+  ;; never read past the shorter operand. See the header note.
+  (ffi "string.h"
+    (memcmp ((a (Ptr U8)) (b (Ptr U8)) (n U64)) Int))
+
+  (export
+    string-cmp iri-cmp node-cmp role-cmp sub-pair-cmp
+    entity-kind-rank axiom-ref-cmp input-ref-cmp
+    missing-declaration-cmp omission-cmp
+    sort-range
+    sort-strings sort-iris sort-nodes sort-sub-pairs
+    sort-axiom-refs sort-omissions
+    int-at str-at iri-at)
+
+  ;; ============================================================
+  ;; The primitive
+  ;; ============================================================
+
+  (fn string-cmp ((a String) (b String))
+    (@intent "Lexicographic byte order over the FULL length — no NUL assumption")
+    (@spec ((String String) -> Int))
+    (@pure)
+    ;; Trichotomy. Every branch returns a literal, so this is provable
+    ;; even though `memcmp` itself is uninterpreted to the WP checker —
+    ;; which is the honest division of labour: Z3 pins the SHAPE of the
+    ;; answer, the C library supplies its meaning.
+    (@post (or {$result == -1} (or {$result == 0} {$result == 1})))
+    (@example ("abc" "abd") -> -1)
+    (@example ("abd" "abc") -> 1)
+    (@example ("abc" "abc") -> 0)
+    ;; The case strcmp gets wrong on a non-NUL-terminated slice: a
+    ;; proper prefix orders BEFORE the longer string, by length, and
+    ;; never by whatever bytes follow it in the buffer.
+    (@example ("apple" "apple2") -> -1)
+    (@example ("apple2" "apple") -> 1)
+    (@example ("" "a") -> -1)
+    (@example ("" "") -> 0)
+    (let ((alen (cast I64 (. a len)))
+          (blen (cast I64 (. b len)))
+          (n    (min alen blen))
+          (r    (memcmp (cast (Ptr U8) (. a data))
+                        (cast (Ptr U8) (. b data))
+                        (cast U64 n))))
+      (cond
+        ((< r 0)        -1)
+        ((> r 0)         1)
+        ((< alen blen)  -1)
+        ((> alen blen)   1)
+        (else            0))))
+
+  ;; ============================================================
+  ;; Identity comparators
+  ;;
+  ;; Every union comparator orders BY TAG FIRST. For `Node` that is not
+  ;; a stylistic choice: OWL permits punning, so `class-node(:x)` and
+  ;; `individual-node(:x)` are different nodes carrying the same IRI
+  ;; (§6.2), and a comparator that looked only at the IRI would report
+  ;; them equal — collapsing the two populations the tags exist to keep
+  ;; apart, which is the false-inconsistency bug in §6.2's own example.
+  ;; ============================================================
+
+  (fn iri-cmp ((a IRI) (b IRI))
+    (@intent "Canonical order on IRIs")
+    (@spec ((IRI IRI) -> Int))
+    (@pure)
+    (string-cmp (. a value) (. b value)))
+
+  (fn node-tag-rank ((n Node))
+    (@intent "Tag order: class-node < individual-node < fresh-node")
+    (@spec ((Node) -> Int))
+    (@pure)
+    (match n
+      ((class-node      _) 0)
+      ((individual-node _) 1)
+      ((fresh-node      _) 2)))
+
+  (fn node-cmp ((a Node) (b Node))
+    (@intent "Canonical order on nodes — TAG FIRST, so punned IRIs stay distinct")
+    (@spec ((Node Node) -> Int))
+    (@pure)
+    (let ((ra (node-tag-rank a))
+          (rb (node-tag-rank b)))
+      (cond
+        ((< ra rb) -1)
+        ((> ra rb)  1)
+        (else
+          (match a
+            ((class-node ia)
+              (match b ((class-node ib) (iri-cmp ia ib))
+                       ((individual-node _) 0)
+                       ((fresh-node _) 0)))
+            ((individual-node ia)
+              (match b ((individual-node ib) (iri-cmp ia ib))
+                       ((class-node _) 0)
+                       ((fresh-node _) 0)))
+            ((fresh-node fa)
+              (match b ((fresh-node fb)
+                         (cond ((< fa fb) -1) ((> fa fb) 1) (else 0)))
+                       ((class-node _) 0)
+                       ((individual-node _) 0))))))))
+
+  (fn role-cmp ((a RoleId) (b RoleId))
+    (@intent "Canonical order on roles — named-role < fresh-role")
+    (@spec ((RoleId RoleId) -> Int))
+    (@pure)
+    (match a
+      ((named-role ia)
+        (match b ((named-role ib) (iri-cmp ia ib))
+                 ((fresh-role _)  -1)))
+      ((fresh-role fa)
+        (match b ((named-role _)   1)
+                 ((fresh-role fb)
+                   (cond ((< fa fb) -1) ((> fa fb) 1) (else 0)))))))
+
+  (fn sub-pair-cmp ((a SubPair) (b SubPair))
+    (@intent "Canonical order on subsumption pairs: sub, then super")
+    (@spec ((SubPair SubPair) -> Int))
+    (@pure)
+    (let ((c (node-cmp (. a sub) (. b sub))))
+      (if (!= c 0) c (node-cmp (. a super) (. b super)))))
+
+  (fn entity-kind-rank ((k EntityKind))
+    (@intent "Declaration order on entity kinds")
+    (@spec ((EntityKind) -> Int))
+    (@pure)
+    (match k
+      ('entity-class               0)
+      ('entity-object-property     1)
+      ('entity-data-property       2)
+      ('entity-annotation-property 3)
+      ('entity-individual          4)
+      ('entity-datatype            5)))
+
+  (fn axiom-ref-cmp ((a AxiomRef) (b AxiomRef))
+    (@intent "Canonical order on axiom references: text, then source")
+    (@spec ((AxiomRef AxiomRef) -> Int))
+    (@pure)
+    ;; `text` leads because it IS the axiom's identity — canonical
+    ;; functional syntax with annotations stripped. `source` is
+    ;; optional (§8.5 A1: the frozen port flattens every document into
+    ;; one unlabelled buffer), so it can only break ties, never lead;
+    ;; a none-first order keeps the port's degraded refs stable.
+    (let ((c (string-cmp (. a text) (. b text))))
+      (if (!= c 0)
+        c
+        (match (. a source)
+          ((none)
+            (match (. b source) ((none) 0) ((some _) -1)))
+          ((some ia)
+            (match (. b source) ((none) 1) ((some ib) (iri-cmp ia ib))))))))
+
+  (fn input-ref-cmp ((a InputRef) (b InputRef))
+    (@intent "Canonical order on input references — tag first")
+    (@spec ((InputRef InputRef) -> Int))
+    (@pure)
+    (match a
+      ((owl-axiom ra)
+        (match b ((owl-axiom rb)   (axiom-ref-cmp ra rb))
+                 ((rdf-fragment _) -1)
+                 ((synthetic _)    -1)))
+      ((rdf-fragment sa)
+        (match b ((owl-axiom _)      1)
+                 ((rdf-fragment sb) (string-cmp sa sb))
+                 ((synthetic _)     -1)))
+      ((synthetic sa)
+        (match b ((owl-axiom _)      1)
+                 ((rdf-fragment _)   1)
+                 ((synthetic sb)    (string-cmp sa sb))))))
+
+  (fn missing-declaration-cmp ((a MissingDeclaration) (b MissingDeclaration))
+    (@intent "Canonical order: kind, then entity, then referring element-wise")
+    (@spec ((MissingDeclaration MissingDeclaration) -> Int))
+    (@pure)
+    ;; The element-wise comparison of `referring` ASSUMES both lists are
+    ;; already sorted — which types.slop states as the field's invariant
+    ;; and every construction site must honour. Comparing two unsorted
+    ;; lists element-wise is not an order at all.
+    (let ((ka (entity-kind-rank (. a kind)))
+          (kb (entity-kind-rank (. b kind))))
+      (cond
+        ((< ka kb) -1)
+        ((> ka kb)  1)
+        (else
+          (let ((c (iri-cmp (. a entity) (. b entity))))
+            (if (!= c 0)
+              c
+              (let ((la (cast Int (list-len (. a referring))))
+                    (lb (cast Int (list-len (. b referring))))
+                    (n  (min la lb))
+                    (mut i 0)
+                    (mut r 0))
+                (do
+                  (while (and (< i n) (== r 0))
+                    (do
+                      (set! r (axiom-ref-cmp (axiom-ref-at (. a referring) i)
+                                             (axiom-ref-at (. b referring) i)))
+                      (set! i (+ i 1))))
+                  (cond
+                    ((!= r 0)  r)
+                    ((< la lb) -1)
+                    ((> la lb)  1)
+                    (else       0))))))))))
+
+  (fn omission-cmp ((a Omission) (b Omission))
+    (@intent "Canonical order on omissions — tag first, then payload")
+    (@spec ((Omission Omission) -> Int))
+    (@pure)
+    (match a
+      ((out-of-profile ra)
+        (match b ((out-of-profile rb)      (input-ref-cmp ra rb))
+                 ((unresolved-import _)    -1)
+                 ((missing-declaration _)  -1)))
+      ((unresolved-import ia)
+        (match b ((out-of-profile _)        1)
+                 ((unresolved-import ib)   (iri-cmp ia ib))
+                 ((missing-declaration _)  -1)))
+      ((missing-declaration ma)
+        (match b ((out-of-profile _)        1)
+                 ((unresolved-import _)     1)
+                 ((missing-declaration mb) (missing-declaration-cmp ma mb))))))
+
+  ;; ============================================================
+  ;; Element access
+  ;;
+  ;; `list-get` returns `(Option T)`, so every indexed read needs an
+  ;; unwrap. The `@pre` is what makes the none branch honest: it is
+  ;; unreachable under the precondition rather than papered over with a
+  ;; default that would silently corrupt a sort.
+  ;; ============================================================
+
+  (fn int-at ((xs (List Int)) (i Int))
+    (@intent "Element at i; none is unreachable under the precondition")
+    (@spec (((List Int) Int) -> Int))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i) ((some v) v) ((none) 0)))
+
+  (fn str-at ((xs (List String)) (i Int))
+    (@spec (((List String) Int) -> String))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i) ((some v) v) ((none) "")))
+
+  (fn iri-at ((xs (List IRI)) (i Int))
+    (@spec (((List IRI) Int) -> IRI))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i) ((some v) v) ((none) (record-new IRI (value "")))))
+
+  (fn node-at ((xs (List Node)) (i Int))
+    (@spec (((List Node) Int) -> Node))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new Node fresh-node 0))))
+
+  (fn sub-pair-at ((xs (List SubPair)) (i Int))
+    (@spec (((List SubPair) Int) -> SubPair))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (record-new SubPair (sub (union-new Node fresh-node 0))
+                                    (super (union-new Node fresh-node 0))))))
+
+  (fn axiom-ref-at ((xs (List AxiomRef)) (i Int))
+    (@spec (((List AxiomRef) Int) -> AxiomRef))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (record-new AxiomRef (source (none)) (text "")))))
+
+  (fn omission-at ((xs (List Omission)) (i Int))
+    (@spec (((List Omission) Int) -> Omission))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new Omission unresolved-import (record-new IRI (value ""))))))
+
+  ;; ============================================================
+  ;; The sort — an in-place bottom-up merge over two index buffers
+  ;;
+  ;; SLOP has no generics, so sorting N element types would otherwise
+  ;; mean N copies of the algorithm. Sorting a permutation of indices
+  ;; under a caller-supplied comparator reduces each type to a six-line
+  ;; gather, and lets Slice 2/3 sort RawConcept/RawAxiom without this
+  ;; module ever knowing those types exist.
+  ;;
+  ;; BOTTOM-UP, NOT TOP-DOWN, AND THE REASON IS THE ARENA. The obvious
+  ;; merge sort splits recursively and allocates a fresh list at every
+  ;; level: O(n log n) allocation. Under -DSLOP_ARENA_NO_CAP nothing is
+  ;; ever freed, so that is not transient scratch — it is RETAINED. At
+  ;; GO's 73,634 subsumptions the recursive form retains ~2n·log2(n) ≈
+  ;; 2.5M index slots against this form's 2n ≈ 147K. The recursive form
+  ;; was not a mistake; it was the only shape expressible before slop
+  ;; 0.2.3, whose `list-set` (slop-lang/slop#124, filed off #121) made
+  ;; overwriting an element possible for the first time. Two buffers are
+  ;; allocated once and merged into alternately, swapping roles per pass.
+  ;;
+  ;; That it is a WIDTH-DOUBLING pass over runs, rather than a recursive
+  ;; split, also removes the recursion depth entirely.
+  ;; ============================================================
+
+  (fn merge-run ((src (List Int)) (dst (List Int))
+                 (lo Int) (mid Int) (hi Int) (cmp (Fn (Int Int) Int)))
+    (@intent "Merge the sorted runs src[lo,mid) and src[mid,hi) into dst[lo,hi)")
+    (@spec (((List Int) (List Int) Int Int Int (Fn (Int Int) Int)) -> Bool))
+    ;; `<=` rather than `<` makes the sort STABLE. That matters beyond
+    ;; tidiness: a comparator that returns 0 for two distinct elements
+    ;; (an incomparable pair) would otherwise let their relative order
+    ;; depend on the run boundaries, which are a function of length —
+    ;; reintroducing exactly the input-order dependence §6.8 forbids.
+    ;; `test-sort-is-stable` pins it.
+    ;;
+    ;; A `(List Int)` compiles to a VALUE struct {len, cap, data}, so
+    ;; `dst` here is a copy — but `list-set` writes through `data` and
+    ;; never reallocates, so the caller's buffer is what changes. This
+    ;; works ONLY because the write is length-preserving; the same shape
+    ;; with `list-push` would grow the copy and drop it on return.
+    ;;
+    ;; The Bool that `list-set` returns is deliberately discarded. It is
+    ;; false only for an out-of-range index, and `k` is bounded by
+    ;; lo <= k < hi <= n with both buffers holding exactly n elements,
+    ;; so a false here means the algorithm is wrong, not the input. It
+    ;; is not silently absorbed: a dropped write leaves a stale index in
+    ;; `dst`, which duplicates one entry and loses another, and
+    ;; `test-sort-is-a-permutation` checks the multiset.
+    (let ((mut i lo)
+          (mut j mid)
+          (mut k lo))
+      (do
+        (while (and (< i mid) (< j hi))
+          (if (<= (cmp (int-at src i) (int-at src j)) 0)
+            (do (list-set dst k (int-at src i)) (set! i (+ i 1)) (set! k (+ k 1)))
+            (do (list-set dst k (int-at src j)) (set! j (+ j 1)) (set! k (+ k 1)))))
+        (while (< i mid)
+          (do (list-set dst k (int-at src i)) (set! i (+ i 1)) (set! k (+ k 1))))
+        (while (< j hi)
+          (do (list-set dst k (int-at src j)) (set! j (+ j 1)) (set! k (+ k 1))))
+        true)))
+
+  (fn sort-range ((arena Arena) (n Int) (cmp (Fn (Int Int) Int)))
+    (@intent "The permutation of 0..n-1 that sorts it under `cmp` — stable")
+    (@spec ((Arena Int (Fn (Int Int) Int)) -> (List Int)))
+    (@alloc arena)
+    ;; NO SORTEDNESS OR LENGTH @post. Both buffers are filled by
+    ;; `list-push` in a loop and then permuted by `list-set`, and the WP
+    ;; checker tracks neither: it does not relate a pushed length to the
+    ;; loop bound, and slop#124 explicitly WITHHOLDS the provenance
+    ;; axioms for any body that calls `list-set`, so even the multiset
+    ;; claim is out of reach by construction rather than by weakness.
+    ;; The obligation is stated here and discharged empirically, the
+    ;; same answer M1 reached for `make-context`'s empty-store
+    ;; obligation: `test-sort-is-a-permutation` covers length and
+    ;; multiset, `test-sort-orders-and-is-input-determined` the order,
+    ;; `test-sort-is-stable` the tie rule. An unprovable contract left
+    ;; in place would fail the gate forever and teach the next reader to
+    ;; ignore it.
+    (let ((mut src (list-new arena Int))
+          (mut dst (list-new arena Int))
+          (mut i 0)
+          (mut width 1))
+      (do
+        (while (< i n)
+          (do (list-push src i) (list-push dst i) (set! i (+ i 1))))
+        (while (< width n)
+          (do
+            (let ((mut lo 0))
+              (while (< lo n)
+                (let ((mid (min (+ lo width) n))
+                      (hi  (min (+ lo (+ width width)) n)))
+                  (do (merge-run src dst lo mid hi cmp)
+                      (set! lo hi)))))
+            ;; Every index in [0,n) was written this pass — a trailing
+            ;; run shorter than `width` has mid = hi = n, which the
+            ;; second loop of `merge-run` copies across rather than
+            ;; dropping. So `dst` is complete and the swap loses nothing.
+            (let ((tmp src))
+              (do (set! src dst) (set! dst tmp)))
+            (set! width (+ width width))))
+        src)))
+
+  ;; ============================================================
+  ;; Per-type gathers
+  ;; ============================================================
+
+  (fn sort-strings ((arena Arena) (xs (List String)))
+    (@intent "Canonically sorted copy")
+    (@spec ((Arena (List String)) -> (List String)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (string-cmp (str-at xs i) (str-at xs j)))))
+          (mut out (list-new arena String)))
+      (do (for-each (k idx) (list-push out (str-at xs k))) out)))
+
+  (fn sort-iris ((arena Arena) (xs (List IRI)))
+    (@intent "Canonically sorted copy")
+    (@spec ((Arena (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (iri-cmp (iri-at xs i) (iri-at xs j)))))
+          (mut out (list-new arena IRI)))
+      (do (for-each (k idx) (list-push out (iri-at xs k))) out)))
+
+  (fn sort-nodes ((arena Arena) (xs (List Node)))
+    (@intent "Canonically sorted copy")
+    (@spec ((Arena (List Node)) -> (List Node)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (node-cmp (node-at xs i) (node-at xs j)))))
+          (mut out (list-new arena Node)))
+      (do (for-each (k idx) (list-push out (node-at xs k))) out)))
+
+  (fn sort-sub-pairs ((arena Arena) (xs (List SubPair)))
+    (@intent "Canonically sorted copy — §6.7's subsumption list")
+    (@spec ((Arena (List SubPair)) -> (List SubPair)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (sub-pair-cmp (sub-pair-at xs i) (sub-pair-at xs j)))))
+          (mut out (list-new arena SubPair)))
+      (do (for-each (k idx) (list-push out (sub-pair-at xs k))) out)))
+
+  (fn sort-axiom-refs ((arena Arena) (xs (List AxiomRef)))
+    (@intent "Canonically sorted copy — MissingDeclaration.referring")
+    (@spec ((Arena (List AxiomRef)) -> (List AxiomRef)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (axiom-ref-cmp (axiom-ref-at xs i) (axiom-ref-at xs j)))))
+          (mut out (list-new arena AxiomRef)))
+      (do (for-each (k idx) (list-push out (axiom-ref-at xs k))) out)))
+
+  (fn sort-omissions ((arena Arena) (xs (List Omission)))
+    (@intent "Canonically sorted copy — Coverage.omitted, which is hashed (§6.8)")
+    (@spec ((Arena (List Omission)) -> (List Omission)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (omission-cmp (omission-at xs i) (omission-at xs j)))))
+          (mut out (list-new arena Omission)))
+      (do (for-each (k idx) (list-push out (omission-at xs k))) out))))

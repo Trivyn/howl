@@ -30,7 +30,7 @@ could not see.
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | types, front end, normalization | types done; front end stubbed |
+| M0 | types, front end, normalization | canonical ordering done; decode/gate/normalize stubbed |
 | M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
@@ -158,7 +158,9 @@ only testable.
 
 **Obligations that cannot be discharged are marked `OWED` in-source, with the reason**, and covered
 by test meanwhile. Two are outstanding: the per-rule faithfulness pairs (`src/rules/el.slop`) and the
-undefined-not-empty rules (`src/classify.slop`). No vacuous contracts stand in:
+undefined-not-empty rules (`src/classify.slop`). A third — canonical ordering of
+`Findings.unsatisfiable` and `subsumptions` — has been **discharged**: `src/canon.slop` supplies a
+total order over identities and both lists now sort on the way out. No vacuous contracts stand in:
 `(list-len $result) >= 0` is true of every possible implementation and would only make the summary
 look fuller than it is. Stating a postcondition the prover cannot discharge is worse than stating
 none, because it reads as coverage — and because a red `make verify` destroys the signal from every

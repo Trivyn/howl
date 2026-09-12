@@ -12,7 +12,16 @@
 CC      ?= cc
 # Version is sourced from slop.toml [project]; override with `make HOWL_VERSION=x.y.z`
 HOWL_VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' slop.toml | head -1)
-CFLAGS  ?= -O2 -Wall -Wno-unused-function -Wno-unused-variable \
+# -Werror=switch IS A CORRECTNESS GATE, NOT A STYLE FLAG. SPEC.md §5.2
+# requires the disposition matrix to be "a total function over RawAxiom
+# ... generated from it rather than maintained by hand", so that adding
+# a construct cannot silently leave it undispositioned. SLOP's own
+# checker only WARNS on a non-exhaustive match, but the transpiler
+# emits SLOP_UNREACHABLE() after the switch rather than as a default
+# arm, specifically so -Wswitch still fires (csrc/runtime:86-88). This
+# promotes that to a hard build error naming the missing variant.
+# Without it the failure surfaces as an abort() on a real ontology.
+CFLAGS  ?= -O2 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
            -Wno-return-type -Wno-pointer-sign \
            -DSLOP_ARENA_NO_CAP \
            -DSLOP_INTERN_THREADSAFE \
@@ -68,7 +77,7 @@ test: $(BIN)
 clean:
 	rm -rf $(BIN) dist
 
-release: CFLAGS = -O3 -Wall -Wno-unused-function -Wno-unused-variable \
+release: CFLAGS = -O3 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
                   -Wno-return-type -Wno-pointer-sign -DNDEBUG \
                   -DSLOP_ARENA_NO_CAP \
                   -DSLOP_INTERN_THREADSAFE \
@@ -102,6 +111,7 @@ verify:
 # skipped AND counted as a pass, so a green line meant nothing.
 example:
 	slop test src/rules/el.slop
+	slop test src/canon.slop
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.

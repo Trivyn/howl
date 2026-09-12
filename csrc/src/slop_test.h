@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "slop_rdf.h"
 #include "slop_types.h"
+#include "slop_canon.h"
 #include "slop_saturate.h"
 #include "slop_classify.h"
 #include "slop_howl.h"
@@ -131,6 +132,12 @@ uint8_t test_test_bottom_compression(slop_arena* arena);
 uint8_t test_test_inconsistency_suppresses_both_lists(slop_arena* arena);
 uint8_t test_test_derived_eq_compares_both_payloads(slop_arena* arena);
 uint8_t test_test_order_independence(slop_arena* arena);
+rdf_IRI test_mk_iri(slop_string v);
+uint8_t test_test_string_cmp_is_length_safe(slop_arena* arena);
+uint8_t test_test_node_cmp_separates_punned_iris(slop_arena* arena);
+uint8_t test_test_sort_orders_and_is_input_determined(slop_arena* arena);
+uint8_t test_test_sort_is_stable(slop_arena* arena);
+uint8_t test_test_sort_is_a_permutation(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
 int main(int argc, char** _c_argv);
 

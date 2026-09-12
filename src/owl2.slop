@@ -1,0 +1,334 @@
+;; ============================================================
+;; The OWL 2 decode layer  —  SPEC.md §6.3 step 1, §5.2
+;;
+;; `RawAxiom` is deliberately WIDER than §6.2's `Concept`/`NormAxiom`.
+;; Those hold only v0 constructs, so a union, a cardinality restriction
+;; or a nominal has NO REPRESENTABLE VALUE in them — and a gate cannot
+;; enumerate as out-of-profile something it cannot hold. Without this
+;; layer an unsupported-but-well-formed axiom has nowhere to go but a
+;; parse error or the floor, and §5.1's "never silently drop an axiom"
+;; is unimplementable.
+;;
+;; DECODING IS NOT ACCEPTING. Every variant below decodes; the GATE
+;; then decides its disposition. That separation is what lets the
+;; front end run in the only order that works (§6.3): the RBox gates
+;; need chains as written AND need to compare class expressions, and
+;; only decoding first satisfies both.
+;;
+;; HOW MUCH STRUCTURE EACH VARIANT CARRIES, and why it differs. Where
+;; v0's own vocabulary can hold an operand — a `RoleId`, a `Node`, a
+;; `RawConcept` — the variant carries it, because the signature, the
+;; RBox gates and the normalizer all read those operands. Where the
+;; construct is built from vocabulary v0 has no types for at all (the
+;; data side, SWRL), the variant carries an `InputRef` instead. That
+;; is not a loss of the losslessness §6.3 asks for: the requirement is
+;; that every axiom be REPRESENTABLE AND NAMEABLE in a report, and an
+;; `InputRef` names it exactly — as canonical functional syntax where
+;; one exists, as canonical N-Triples where it does not. Inventing a
+;; `RawDataRange` tree that nothing would ever read would be shape for
+;; its own sake.
+;;
+;; THE DISPOSITION MATRIX IS A TOTAL FUNCTION, AND THE COMPILER
+;; ENFORCES IT. §5.2 requires exhaustiveness to be a compile-time
+;; property rather than a proofreading exercise. `disposition` is a
+;; `match` with NO catch-all arm — but note that SLOP itself only
+;; WARNS on a non-exhaustive match. The hard gate is `-Werror=switch`
+;; in the Makefile: the transpiler emits `SLOP_UNREACHABLE()` after
+;; the switch rather than as a `default:` arm precisely so `-Wswitch`
+;; still fires, so a new `RawAxiom` variant fails the BUILD, naming
+;; itself, until it is given a disposition.
+;; ============================================================
+
+(module owl2
+  (@doc "The lossless OWL 2 axiom AST, its disposition matrix, and the input signature (§5.2, §6.3)")
+
+  (import rdf (IRI))
+  (import types (Node RoleId EntityKind InputRef))
+
+  (export
+    OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY OWL_ANNOTATED_TARGET
+    OWL_ANNOTATION OWL_DISJOINT_UNION_OF
+    OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
+    OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
+    SWRL_NS SWRL_IMP SWRL_BODY SWRL_HEAD
+    CardKind PropCharacteristic
+    RawConcept RawChain RawEdge RawClassAssertion RawAnnotation RawDeclaration
+    RawAxiom Disposition
+    Signature
+    disposition
+    make-signature signature-has-class signature-has-object-property
+    signature-has-annotation-property signature-size)
+
+  ;; ============================================================
+  ;; Vocabulary slop-rdf's `vocab` module does not carry
+  ;;
+  ;; Confirmed absent from ../slop-rdf/src/vocab.slop, which is
+  ;; otherwise thorough for OWL 2. Defined here rather than upstream so
+  ;; M0 does not block on a sibling release; an upstream PR is owed.
+  ;; ============================================================
+
+  ;; Axiom-annotation reification (§6.3 step 0). WITHOUT THESE THE
+  ;; HEADER PRE-PASS CANNOT RUN, and every annotated `rdfs:subClassOf`
+  ;; in a real ontology would reach the gate as four unrecognized
+  ;; triples — marking every versioned, annotation-heavy ontology
+  ;; out-of-profile, which is M0 acceptance (a) failing outright.
+  (const OWL_AXIOM              String "http://www.w3.org/2002/07/owl#Axiom")
+  (const OWL_ANNOTATED_SOURCE   String "http://www.w3.org/2002/07/owl#annotatedSource")
+  (const OWL_ANNOTATED_PROPERTY String "http://www.w3.org/2002/07/owl#annotatedProperty")
+  (const OWL_ANNOTATED_TARGET   String "http://www.w3.org/2002/07/owl#annotatedTarget")
+  (const OWL_ANNOTATION         String "http://www.w3.org/2002/07/owl#Annotation")
+
+  (const OWL_DISJOINT_UNION_OF  String "http://www.w3.org/2002/07/owl#disjointUnionOf")
+
+  ;; THE BUILT-IN OBJECT PROPERTIES. §5.2 requires these to be
+  ;; RECOGNIZED and gated OUT — never treated as ordinary role names —
+  ;; and the reason `bottomObjectProperty` matters is a false pass, not
+  ;; a missing feature: it connects no pair, so `A ⊑ ∃⊥ᵣ.⊤` entails
+  ;; `A ⊑ ⊥`. Treated as an ordinary role, CR3 happily builds an edge
+  ;; and `A` is reported SATISFIABLE — a missed unsatisfiability.
+  ;; `topObjectProperty` interacts with every existential in the
+  ;; ontology and nothing in CR1–CR7 accounts for it.
+  (const OWL_TOP_OBJECT_PROPERTY    String "http://www.w3.org/2002/07/owl#topObjectProperty")
+  (const OWL_BOTTOM_OBJECT_PROPERTY String "http://www.w3.org/2002/07/owl#bottomObjectProperty")
+  (const OWL_TOP_DATA_PROPERTY      String "http://www.w3.org/2002/07/owl#topDataProperty")
+  (const OWL_BOTTOM_DATA_PROPERTY   String "http://www.w3.org/2002/07/owl#bottomDataProperty")
+
+  ;; SWRL. Out-of-profile at every rung and never to be implemented
+  ;; (unrestricted SWRL is undecidable), but it must be RECOGNIZED —
+  ;; RO, a mainstream OBO ontology, carries 25 rules, and treating them
+  ;; as inert would drop logical content two of them use to derive
+  ;; disjointness.
+  (const SWRL_NS   String "http://www.w3.org/2003/11/swrl#")
+  (const SWRL_IMP  String "http://www.w3.org/2003/11/swrl#Imp")
+  (const SWRL_BODY String "http://www.w3.org/2003/11/swrl#body")
+  (const SWRL_HEAD String "http://www.w3.org/2003/11/swrl#head")
+
+  ;; ============================================================
+  ;; Class expressions
+  ;; ============================================================
+
+  (type CardKind (enum card-min card-max card-exact))
+
+  (type PropCharacteristic (enum
+    prop-functional
+    prop-inverse-functional
+    prop-symmetric
+    prop-asymmetric
+    prop-reflexive
+    prop-irreflexive))
+
+  ;; The v0 arms (`rc-name`/`rc-thing`/`rc-nothing`/`rc-and`/`rc-some`)
+  ;; lower to §6.2's `Concept` after gating. The rest exist ONLY so the
+  ;; gate can name what it rejected.
+  (type RawConcept (union
+    (rc-name    Node)
+    (rc-thing)
+    (rc-nothing)
+    (rc-and     (List RawConcept))
+    (rc-some    RoleId (Ptr RawConcept))
+    ;; --- out-of-profile, but representable ---
+    (rc-or      (List RawConcept))
+    (rc-not     (Ptr RawConcept))
+    (rc-all     RoleId (Ptr RawConcept))
+    (rc-oneof   (List Node))
+    (rc-has-value RoleId Node)
+    (rc-has-self  RoleId)
+    (rc-card    CardKind RoleId (Int 0 ..))
+    (rc-qcard   CardKind RoleId (Ptr RawConcept))
+    (rc-data    InputRef)      ; a data range in a class position
+    (rc-anon    InputRef)))    ; a blank node HOWL cannot decode
+
+  ;; ============================================================
+  ;; Axiom payloads that need a record
+  ;;
+  ;; A multi-field union variant containing a `(List T)` does not get
+  ;; that list type registered by the transpiler — the same reason
+  ;; `MissingDeclaration` is a record in types.slop. So any variant
+  ;; that would pair a list with another field becomes a record here.
+  ;; ============================================================
+
+  (type RawChain (record
+    (steps (List RoleId))     ; AS WRITTEN, any n >= 2 — the RBox gates
+    (super RoleId)))          ; read this before decomposition (§6.3)
+
+  (type RawEdge (record
+    (role RoleId)
+    (from Node)
+    (to   Node)))
+
+  (type RawClassAssertion (record
+    (concept (Ptr RawConcept))
+    (subject Node)))
+
+  (type RawAnnotation (record
+    (property IRI)
+    (subject  InputRef)
+    (target   String)))
+
+  (type RawDeclaration (record
+    (kind   EntityKind)
+    (entity IRI)))
+
+  ;; ============================================================
+  ;; The axiom AST
+  ;; ============================================================
+
+  (type RawAxiom (union
+    ;; --- in v0 (§5.2's grammar) ---
+    (ra-sub-class-of          (Ptr RawConcept) (Ptr RawConcept))
+    (ra-equivalent-classes    (List RawConcept))
+    (ra-disjoint-classes      (List RawConcept))
+    (ra-sub-object-property   RoleId RoleId)
+    (ra-property-chain        RawChain)
+    (ra-equivalent-properties (List RoleId))
+    (ra-transitive-property   RoleId)
+    (ra-object-property-domain RoleId (Ptr RawConcept))
+    (ra-object-property-range  RoleId (Ptr RawConcept))
+    (ra-class-assertion       RawClassAssertion)
+    (ra-object-property-assertion RawEdge)
+
+    ;; --- consumed: no axiom, but READ (§5.2). Discarding these loses
+    ;;     declared-but-unused classes, which M0 acceptance (c) requires. ---
+    (ra-declaration           RawDeclaration)
+
+    ;; --- inert: semantically empty in OWL 2. Treating these as
+    ;;     unsupported returns false-inconclusive on every documented
+    ;;     ontology, which is the failure mode that makes a reasoner
+    ;;     useless rather than merely incomplete. ---
+    (ra-annotation-assertion  RawAnnotation)
+    (ra-annotation-axiom      InputRef)
+
+    ;; --- out-of-profile: object side, structure retained ---
+    (ra-inverse-properties    RoleId RoleId)
+    (ra-property-characteristic PropCharacteristic RoleId)
+    (ra-disjoint-properties   (List RoleId))
+    (ra-same-individual       (List Node))
+    (ra-different-individuals (List Node))
+    (ra-negative-assertion    InputRef)
+    (ra-disjoint-union        InputRef)
+    (ra-has-key               InputRef)
+
+    ;; --- out-of-profile: built on vocabulary v0 has no types for ---
+    (ra-data-axiom            InputRef)   ; the whole data side (§5.2)
+    (ra-builtin-role          InputRef)   ; owl:top/bottomObjectProperty
+    (ra-anonymous-individual  InputRef)
+    (ra-reserved-vocabulary   InputRef)   ; e.g. owl:Nothing as an individual
+    (ra-swrl-rule             InputRef)
+
+    ;; --- well-formed, unrecognized. NOT a catch-all for laziness: it
+    ;;     is what lets a FUTURE profile's axiom decode and gate rather
+    ;;     than failing to parse (§6.3 step 1). ---
+    (ra-unrecognized          InputRef)))
+
+  (type Disposition (enum
+    d-in-profile        ; classified
+    d-inert             ; contributes nothing, costs nothing
+    d-consumed          ; produces no NormAxiom, but is READ
+    d-out-of-profile))  ; enumerated in the report; verdict inconclusive
+
+  ;; §5.2's four-disposition table, as a total function. See the module
+  ;; header for why this has no catch-all arm and what enforces it.
+  ;;
+  ;; The two failure modes are OPPOSITE and both silent: a permissive
+  ;; mapping drops an unsupported LOGICAL axiom and returns a false
+  ;; coherent; a conservative one marks ANNOTATION axioms out-of-profile
+  ;; and returns false inconclusive on every real ontology. Neither
+  ;; announces itself, which is why the table is the authority and a
+  ;; construct absent from it is a spec bug rather than a judgement call.
+  (fn disposition ((ax RawAxiom))
+    (@intent "The §5.2 disposition of a decoded axiom — total by construction")
+    (@spec ((RawAxiom) -> Disposition))
+    (@pure)
+    (match ax
+      ((ra-sub-class-of _ _)            'd-in-profile)
+      ((ra-equivalent-classes _)        'd-in-profile)
+      ((ra-disjoint-classes _)          'd-in-profile)
+      ((ra-sub-object-property _ _)     'd-in-profile)
+      ((ra-property-chain _)            'd-in-profile)
+      ((ra-equivalent-properties _)     'd-in-profile)
+      ((ra-transitive-property _)       'd-in-profile)
+      ((ra-object-property-domain _ _)  'd-in-profile)
+      ((ra-object-property-range _ _)   'd-in-profile)
+      ((ra-class-assertion _)           'd-in-profile)
+      ((ra-object-property-assertion _) 'd-in-profile)
+
+      ((ra-declaration _)               'd-consumed)
+
+      ((ra-annotation-assertion _)      'd-inert)
+      ((ra-annotation-axiom _)          'd-inert)
+
+      ((ra-inverse-properties _ _)      'd-out-of-profile)
+      ((ra-property-characteristic _ _) 'd-out-of-profile)
+      ((ra-disjoint-properties _)       'd-out-of-profile)
+      ((ra-same-individual _)           'd-out-of-profile)
+      ((ra-different-individuals _)     'd-out-of-profile)
+      ((ra-negative-assertion _)        'd-out-of-profile)
+      ((ra-disjoint-union _)            'd-out-of-profile)
+      ((ra-has-key _)                   'd-out-of-profile)
+      ((ra-data-axiom _)                'd-out-of-profile)
+      ((ra-builtin-role _)              'd-out-of-profile)
+      ((ra-anonymous-individual _)      'd-out-of-profile)
+      ((ra-reserved-vocabulary _)       'd-out-of-profile)
+      ((ra-swrl-rule _)                 'd-out-of-profile)
+      ((ra-unrecognized _)              'd-out-of-profile)))
+
+  ;; ============================================================
+  ;; The input signature (§6.3 step 1)
+  ;;
+  ;; "Occurs in the input" means THE SIGNATURE, everywhere else in the
+  ;; spec — not the set of axioms. §6.2's `unsatisfiable` and §6.7's
+  ;; output projection are both defined against it, and §6.3 step 4
+  ;; keys the context registry on it rather than on axiom occurrence,
+  ;; which is the ONLY thing that gives a declared-but-unused class a
+  ;; context at all (M0 acceptance (c)).
+  ;;
+  ;; A record of Sets rather than a bare Map: M1 established that
+  ;; `Map`/`Set` cannot be function PARAMETER types in SLOP, so the
+  ;; signature has to travel wrapped.
+  ;; ============================================================
+
+  (type Signature (record
+    (classes     (Set IRI))
+    (obj-props   (Set IRI))
+    (data-props  (Set IRI))
+    (annot-props (Set IRI))
+    (individuals (Set IRI))
+    (datatypes   (Set IRI))))
+
+  (fn make-signature ((arena Arena))
+    (@intent "An empty signature; the built-ins are added by the decoder")
+    (@spec ((Arena) -> Signature))
+    (@alloc arena)
+    (record-new Signature
+      (classes     (set-new arena IRI))
+      (obj-props   (set-new arena IRI))
+      (data-props  (set-new arena IRI))
+      (annot-props (set-new arena IRI))
+      (individuals (set-new arena IRI))
+      (datatypes   (set-new arena IRI))))
+
+  (fn signature-has-class ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig classes) i))
+
+  (fn signature-has-object-property ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig obj-props) i))
+
+  (fn signature-has-annotation-property ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig annot-props) i))
+
+  (fn signature-size ((arena Arena) (sig Signature))
+    (@intent "Total declared entities — every context comes from one of these")
+    (@spec ((Arena Signature) -> Int))
+    ;; Takes an Arena because `set-elements` allocates the element
+    ;; array and emits the bare identifier `arena` — the same mechanism
+    ;; that makes a store write inside `round-join` a compile error.
+    (@alloc arena)
+    (+ (cast Int (list-len (set-elements (. sig classes))))
+      (+ (cast Int (list-len (set-elements (. sig obj-props))))
+        (+ (cast Int (list-len (set-elements (. sig data-props))))
+          (+ (cast Int (list-len (set-elements (. sig annot-props))))
+            (+ (cast Int (list-len (set-elements (. sig individuals))))
+               (cast Int (list-len (set-elements (. sig datatypes)))))))))))
