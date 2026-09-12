@@ -120,9 +120,10 @@
                 RawAxiom RawChain RawEdge RawClassAssertion
                 RawAnnotation RawDeclaration PropCharacteristic
                 signature-has-annotation-property
-                signature-has-object-property))
+                signature-has-object-property
+                signature-has-data-property))
   (import types (Omission Fault Node RoleId InputRef EntityKind))
-  (import strlib (parse-int))
+  (import strlib (parse-int starts-with))
   (import canon (string-cmp iri-cmp sort-iris sort-omissions))
 
   (export
@@ -135,7 +136,8 @@
     term-iri-value
     CONCEPT_FUEL box-concept decode-concept
     build-signature
-    Stage1 decode-axioms render-triple)
+    Stage1 decode-axioms render-triple
+    declaration-conflict)
 
   ;; ============================================================
   ;; Element access
@@ -586,7 +588,7 @@
                       (match (decode-concept arena g qt (- fuel 1))
                         ((error m) (error m))
                         ((ok qc)
-                          (ok (union-new RawConcept rc-qcard kind r (box-concept arena qc)))))))))))))))
+                          (ok (union-new RawConcept rc-qcard kind r n (box-concept arena qc)))))))))))))))
 
   (fn decode-anon ((arena Arena) (g IndexedGraph) (b Term) (fuel Int))
     (@intent "A blank node in a class position — dispatch on its vocabulary")
@@ -1065,6 +1067,27 @@
                 ((none)
                   (ok (union-new RawAxiom ra-anonymous-individual (frag arena t)))))))))))
 
+  (fn is-reserved-iri ((v String))
+    (@intent "Is this IRI in a specification-reserved namespace?")
+    (@spec ((String) -> Bool))
+    (@pure)
+    ;; The distinction this draws is between "vocabulary from a
+    ;; specification HOWL does not implement" and "a user's property
+    ;; that was never declared". The first is a future profile's axiom
+    ;; and must decode and gate rather than fail to parse; the second is
+    ;; ambiguous input. Conflating them either fails a document for
+    ;; mentioning unknown OWL vocabulary, or silently accepts an
+    ;; undeclared user property whose kind nobody can determine.
+    ;;
+    ;; `starts-with` is bounded by the PREFIX length and length-checks
+    ;; first, so unlike `strlib.compare` it is safe on a String that
+    ;; slices into a larger buffer (slop-lang/slop#161).
+    (or (starts-with v "http://www.w3.org/2002/07/owl#")
+      (or (starts-with v "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
+        (or (starts-with v "http://www.w3.org/2000/01/rdf-schema#")
+          (or (starts-with v "http://www.w3.org/2003/11/swrl#")
+              (starts-with v "http://www.w3.org/2001/XMLSchema#"))))))
+
   (fn decode-axiom ((arena Arena) (g IndexedGraph) (sig Signature) (t Triple))
     (@intent "One triple → one RawAxiom, per §5.2's disposition table")
     (@spec ((Arena IndexedGraph Signature Triple) -> (Result RawAxiom String)))
@@ -1223,11 +1246,28 @@
                                   (from (union-new Node individual-node sfrom))
                                   (to   (union-new Node individual-node sto)))))))))))) 
 
-            ;; Well-formed but unrecognized. NOT a laziness catch-all:
-            ;; it is what lets a future profile's axiom decode and gate
-            ;; rather than fail to parse.
+            ;; Reserved vocabulary HOWL does not implement. NOT a
+            ;; laziness catch-all: this is what lets a future profile's
+            ;; axiom decode and gate rather than fail to parse.
+            ((is-reserved-iri pv)
+              (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
+
+            ((signature-has-data-property sig p)
+              (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+
+            ;; AN UNDECLARED USER PROPERTY IS AN input-error, NOT AN
+            ;; OMISSION. `:a :p :b` with `:p` undeclared is ambiguous
+            ;; between an object property assertion and an annotation
+            ;; assertion, and `:a :p "x"` between a data property and an
+            ;; annotation property. OWL's RDF parsing uses declarations
+            ;; precisely to settle this. Neither reading can be reported
+            ;; as `missing-declaration(EntityKind, …)`, because there is
+            ;; no determinate EntityKind to name — so the recoverable
+            ;; omission is unavailable and the honest answer is a fault.
             (else
-              (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))))) 
+              (error (string-concat arena
+                       "undeclared property, ambiguous between object, data and annotation property: "
+                       pv)))))))) 
 
   (fn decode-axioms ((arena Arena) (triples (List Triple)))
     (@intent "Stage 1: every logical triple → a RawAxiom, plus the signature")
@@ -1242,6 +1282,7 @@
           (mut out (list-new arena RawAxiom))
           (mut fault (Option String) (none)))
       (do
+        (set! fault (declaration-conflict arena sig triples))
         (for-each (t triples)
           (when (not (structural-triple t))
             (match (decode-axiom arena ig sig t)
@@ -1250,4 +1291,34 @@
         (match fault
           ((some m) (error (union-new Fault input-error m)))
           ((none)   (ok (record-new Stage1 (axioms out) (signature sig))))))))
+
+  (fn declaration-conflict ((arena Arena) (sig Signature) (triples (List Triple)))
+    (@intent "An IRI declared under two mutually exclusive kinds")
+    (@spec ((Arena Signature (List Triple)) -> (Option String)))
+    (@alloc arena)
+    ;; OWL 2 DL PUNNING IS NOT UNRESTRICTED. A class may share an IRI
+    ;; with an individual — that is legal punning, and `node-cmp`
+    ;; compares the tag first precisely so the two stay distinct. But
+    ;; the three property kinds are pairwise DISJOINT, and so are
+    ;; classes and datatypes. An IRI declared as both an object and an
+    ;; annotation property has no determinate reading for
+    ;; `:a :p :b`, which is the same ambiguity an undeclared property
+    ;; has and gets the same answer: input-error, not an omission,
+    ;; because there is no determinate EntityKind to report.
+    (let ((type-pred (make-iri arena RDF_TYPE))
+          (mut bad (Option String) (none)))
+      (do
+        (for-each (t triples)
+          (when (term-eq (. t predicate) type-pred)
+            (match (term-iri-value (. t subject))
+              ((some e)
+                (let ((np (+ (if (signature-has-object-property sig e) 1 0)
+                          (+ (if (signature-has-data-property sig e) 1 0)
+                             (if (signature-has-annotation-property sig e) 1 0)))))
+                  (when (> np 1)
+                    (set! bad (some (string-concat arena
+                                      "IRI declared under two disjoint property kinds: "
+                                      (. e value)))))))
+              ((none) (do)))))
+        bad)))
 )

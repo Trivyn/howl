@@ -43,8 +43,8 @@
   (@doc "The lossless OWL 2 axiom AST, its disposition matrix, and the input signature (§5.2, §6.3)")
 
   (import rdf (IRI))
-  (import canon (string-cmp))
-  (import types (Node RoleId EntityKind InputRef))
+  (import canon (string-cmp node-cmp role-cmp sort-range))
+  (import types (Node RoleId EntityKind InputRef AxiomRef))
 
   (export
     OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY OWL_ANNOTATED_TARGET
@@ -57,8 +57,11 @@
     RawAxiom Disposition
     Signature
     disposition concept-in-profile axiom-in-profile role-in-profile
+    concept-tag-rank concept-cmp concept-at sort-concepts
+    render-concept render-axiom render-role
     make-signature signature-has-class signature-has-object-property
-    signature-has-annotation-property signature-size)
+    signature-has-annotation-property signature-has-data-property
+    signature-size)
 
   ;; ============================================================
   ;; Vocabulary slop-rdf's `vocab` module does not carry
@@ -135,7 +138,7 @@
     (rc-has-value RoleId Node)
     (rc-has-self  RoleId)
     (rc-card    CardKind RoleId (Int 0 ..))
-    (rc-qcard   CardKind RoleId (Ptr RawConcept))
+    (rc-qcard   CardKind RoleId (Int 0 ..) (Ptr RawConcept))
     (rc-data    InputRef)      ; a data range in a class position
     (rc-anon    InputRef)))    ; a blank node HOWL cannot decode
 
@@ -320,6 +323,10 @@
     (@spec ((Signature IRI) -> Bool))
     (set-has (. sig annot-props) i))
 
+  (fn signature-has-data-property ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig data-props) i))
+
   (fn signature-size ((arena Arena) (sig Signature))
     (@intent "Total declared entities — every context comes from one of these")
     (@spec ((Arena Signature) -> Int))
@@ -415,7 +422,7 @@
       ((rc-has-value _ _) false)
       ((rc-has-self _)    false)
       ((rc-card _ _ _)    false)
-      ((rc-qcard _ _ _)   false)
+      ((rc-qcard _ _ _ _) false)
       ((rc-data _)        false)
       ((rc-anon _)        false)))
 
@@ -464,4 +471,341 @@
         ((ra-reserved-vocabulary _)      false)
         ((ra-swrl-rule _)                false)
         ((ra-unrecognized _)             false))))
+
+  ;; ============================================================
+  ;; Canonical order on class expressions
+  ;;
+  ;; §6.3 needs this in three places: canonicalizing `and` operands,
+  ;; building the equivalence star "around the canonically LEAST
+  ;; operand", and keying fresh nodes by canonical expression. It lives
+  ;; here rather than in canon.slop because canon cannot import owl2 —
+  ;; owl2 already imports canon, and the cycle would not resolve.
+  ;; ============================================================
+
+  (fn concept-tag-rank ((c RawConcept))
+    (@intent "Variant rank, so unlike shapes order deterministically")
+    (@spec ((RawConcept) -> Int))
+    (@pure)
+    ;; TAG FIRST, for the same reason node-cmp ranks tags first: two
+    ;; shapes that are not the same construct must never compare equal
+    ;; because their payloads happen to line up.
+    (match c
+      ((rc-thing)          0)
+      ((rc-nothing)        1)
+      ((rc-name _)         2)
+      ((rc-and _)          3)
+      ((rc-some _ _)       4)
+      ((rc-or _)           5)
+      ((rc-not _)          6)
+      ((rc-all _ _)        7)
+      ((rc-oneof _)        8)
+      ((rc-has-value _ _)  9)
+      ((rc-has-self _)    10)
+      ((rc-card _ _ _)    11)
+      ((rc-qcard _ _ _ _) 12)
+      ((rc-data _)        13)
+      ((rc-anon _)        14)))
+
+  (fn concept-list-cmp ((a (List RawConcept)) (b (List RawConcept)))
+    (@intent "Lexicographic order on operand lists, length as tiebreak")
+    (@spec (((List RawConcept) (List RawConcept)) -> Int))
+    (@pure)
+    (let ((alen (cast Int (list-len a)))
+          (blen (cast Int (list-len b)))
+          (n    (min alen blen))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do
+            (set! r (concept-cmp (concept-at a i) (concept-at b i)))
+            (set! i (+ i 1))))
+        (cond ((!= r 0) r)
+              ((< alen blen) -1)
+              ((> alen blen) 1)
+              (else 0)))))
+
+  (fn concept-at ((xs (List RawConcept)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List RawConcept) Int) -> RawConcept))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new RawConcept rc-thing))))
+
+  (fn concept-cmp ((a RawConcept) (b RawConcept))
+    (@intent "Total structural order on class expressions")
+    (@spec ((RawConcept RawConcept) -> Int))
+    (@pure)
+    (let ((ra (concept-tag-rank a))
+          (rb (concept-tag-rank b)))
+      (if (!= ra rb)
+        (if (< ra rb) -1 1)
+        ;; Same variant: compare payloads. Only the arms that can
+        ;; actually pair with themselves need a body; the outer rank
+        ;; check has already separated everything else.
+        (match a
+          ((rc-name na)
+            (match b ((rc-name nb) (node-cmp na nb)) (_ 0)))
+          ((rc-and as)
+            (match b ((rc-and bs) (concept-list-cmp as bs)) (_ 0)))
+          ((rc-some ra2 fa)
+            (match b
+              ((rc-some rb2 fb)
+                (let ((rr (role-cmp ra2 rb2)))
+                  (if (!= rr 0) rr (concept-cmp (deref fa) (deref fb)))))
+              (_ 0)))
+          ((rc-or as)
+            (match b ((rc-or bs) (concept-list-cmp as bs)) (_ 0)))
+          ((rc-not fa)
+            (match b ((rc-not fb) (concept-cmp (deref fa) (deref fb))) (_ 0)))
+          ((rc-all ra2 fa)
+            (match b
+              ((rc-all rb2 fb)
+                (let ((rr (role-cmp ra2 rb2)))
+                  (if (!= rr 0) rr (concept-cmp (deref fa) (deref fb)))))
+              (_ 0)))
+          ((rc-has-value ra2 na)
+            (match b
+              ((rc-has-value rb2 nb)
+                (let ((rr (role-cmp ra2 rb2)))
+                  (if (!= rr 0) rr (node-cmp na nb))))
+              (_ 0)))
+          ((rc-has-self ra2)
+            (match b ((rc-has-self rb2) (role-cmp ra2 rb2)) (_ 0)))
+          ;; The remaining variants are either payload-free (rc-thing,
+          ;; rc-nothing) or carry payloads no canonical order is defined
+          ;; on yet (rc-oneof's node list, the cardinality counts, the
+          ;; InputRef strings). They are all OUT OF PROFILE, so they
+          ;; never reach a position where their relative order changes a
+          ;; classification — only an omission list, which sorts by
+          ;; omission-cmp rather than by this. Returning 0 makes them
+          ;; tie, and the sort is STABLE, so input order decides and the
+          ;; result stays input-determined.
+          (_ 0)))))
+
+  ;; ============================================================
+  ;; Canonical rendering — OWL functional syntax
+  ;;
+  ;; This is what `AxiomRef.text` and every out-of-profile `InputRef`
+  ;; carry, and it is load-bearing rather than cosmetic: omissions are
+  ;; hashed into the consumer's verdict identity (§6.8), and two
+  ;; distinct rejected axioms that render identically would MERGE in
+  ;; the omission list. That is an axiom silently dropped from the
+  ;; report — the failure §5.2 exists to prevent — so every payload
+  ;; that distinguishes two axioms has to appear here. It is why
+  ;; `rc-qcard` carries its count: `max 1 r.C` and `max 2 r.C` are
+  ;; different axioms and must not collapse to one omission.
+  ;; ============================================================
+
+  (fn render-role ((r RoleId))
+    (@intent "A role in functional syntax")
+    (@spec ((RoleId) -> String))
+    (@pure)
+    (match r
+      ((named-role i) (. i value))
+      ;; A fresh role cannot appear here: only ACCEPTED chains are
+      ;; decomposed, so decomposition runs strictly after the gate and
+      ;; no fresh-role ever reaches a rendered axiom.
+      ((fresh-role _) "_:fresh-role")))
+
+  (fn render-node ((n Node))
+    (@intent "A node in functional syntax")
+    (@spec ((Node) -> String))
+    (@pure)
+    (match n
+      ((class-node i)      (. i value))
+      ((individual-node i) (. i value))
+      ((fresh-node _)      "_:fresh-node")))
+
+  (fn render-card-kind ((k CardKind))
+    (@intent "The functional-syntax name of a cardinality kind")
+    (@spec ((CardKind) -> String))
+    (@pure)
+    (match k
+      ('card-min   "ObjectMinCardinality")
+      ('card-max   "ObjectMaxCardinality")
+      ('card-exact "ObjectExactCardinality")))
+
+  (fn render-concept-list ((arena Arena) (cs (List RawConcept)))
+    (@intent "Space-separated operands")
+    (@spec ((Arena (List RawConcept)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (c cs)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (render-concept arena c)))
+            (set! first false)))
+        out)))
+
+  (fn render-node-list ((arena Arena) (ns (List Node)))
+    (@intent "Space-separated individuals")
+    (@spec ((Arena (List Node)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (n ns)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (render-node n)))
+            (set! first false)))
+        out)))
+
+  (fn render-role-list ((arena Arena) (rs (List RoleId)))
+    (@intent "Space-separated roles")
+    (@spec ((Arena (List RoleId)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (r rs)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (render-role r)))
+            (set! first false)))
+        out)))
+
+  (fn wrap ((arena Arena) (head String) (body String))
+    (@intent "head(body)")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena head (string-concat arena "(" (string-concat arena body ")"))))
+
+  (fn join2 ((arena Arena) (a String) (b String))
+    (@intent "a b")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena a (string-concat arena " " b)))
+
+  (fn render-concept ((arena Arena) (c RawConcept))
+    (@intent "A class expression in OWL functional syntax")
+    (@spec ((Arena RawConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((rc-thing)   "owl:Thing")
+      ((rc-nothing) "owl:Nothing")
+      ((rc-name n)  (render-node n))
+      ((rc-and cs)  (wrap arena "ObjectIntersectionOf" (render-concept-list arena cs)))
+      ((rc-or cs)   (wrap arena "ObjectUnionOf" (render-concept-list arena cs)))
+      ((rc-not f)   (wrap arena "ObjectComplementOf" (render-concept arena (deref f))))
+      ((rc-some r f)
+        (wrap arena "ObjectSomeValuesFrom"
+          (join2 arena (render-role r) (render-concept arena (deref f)))))
+      ((rc-all r f)
+        (wrap arena "ObjectAllValuesFrom"
+          (join2 arena (render-role r) (render-concept arena (deref f)))))
+      ((rc-oneof ns) (wrap arena "ObjectOneOf" (render-node-list arena ns)))
+      ((rc-has-value r n)
+        (wrap arena "ObjectHasValue" (join2 arena (render-role r) (render-node n))))
+      ((rc-has-self r) (wrap arena "ObjectHasSelf" (render-role r)))
+      ((rc-card k r n)
+        (wrap arena (render-card-kind k)
+          (join2 arena (int-to-string arena n) (render-role r))))
+      ((rc-qcard k r n f)
+        (wrap arena (render-card-kind k)
+          (join2 arena (int-to-string arena n)
+            (join2 arena (render-role r) (render-concept arena (deref f))))))
+      ;; An undecodable operand keeps the fragment it was decoded from,
+      ;; so two different anonymous classes stay distinguishable.
+      ((rc-data ref) (wrap arena "DataRange" (render-input-ref ref)))
+      ((rc-anon ref) (wrap arena "AnonymousClass" (render-input-ref ref)))))
+
+  (fn render-input-ref ((r InputRef))
+    (@intent "The text an InputRef carries")
+    (@spec ((InputRef) -> String))
+    (@pure)
+    (match r
+      ((owl-axiom a)    (. a text))
+      ((rdf-fragment s) s)
+      ((synthetic s)    s)))
+
+  (fn render-axiom ((arena Arena) (ax RawAxiom))
+    (@intent "An axiom in OWL functional syntax, annotations stripped")
+    (@spec ((Arena RawAxiom) -> String))
+    (@alloc arena)
+    ;; No catch-all: a new RawAxiom variant must be given a rendering,
+    ;; or two of them collapse into one omission.
+    (match ax
+      ((ra-sub-class-of l r)
+        (wrap arena "SubClassOf"
+          (join2 arena (render-concept arena (deref l)) (render-concept arena (deref r)))))
+      ((ra-equivalent-classes cs)
+        (wrap arena "EquivalentClasses" (render-concept-list arena cs)))
+      ((ra-disjoint-classes cs)
+        (wrap arena "DisjointClasses" (render-concept-list arena cs)))
+      ((ra-sub-object-property a b)
+        (wrap arena "SubObjectPropertyOf" (join2 arena (render-role a) (render-role b))))
+      ((ra-property-chain ch)
+        (wrap arena "SubObjectPropertyOf"
+          (join2 arena
+            (wrap arena "ObjectPropertyChain" (render-role-list arena (. ch steps)))
+            (render-role (. ch super)))))
+      ((ra-equivalent-properties rs)
+        (wrap arena "EquivalentObjectProperties" (render-role-list arena rs)))
+      ((ra-transitive-property r)
+        (wrap arena "TransitiveObjectProperty" (render-role r)))
+      ((ra-object-property-domain r c)
+        (wrap arena "ObjectPropertyDomain"
+          (join2 arena (render-role r) (render-concept arena (deref c)))))
+      ((ra-object-property-range r c)
+        (wrap arena "ObjectPropertyRange"
+          (join2 arena (render-role r) (render-concept arena (deref c)))))
+      ((ra-class-assertion ca)
+        (wrap arena "ClassAssertion"
+          (join2 arena (render-concept arena (deref (. ca concept)))
+                       (render-node (. ca subject)))))
+      ((ra-object-property-assertion e)
+        (wrap arena "ObjectPropertyAssertion"
+          (join2 arena (render-role (. e role))
+            (join2 arena (render-node (. e from)) (render-node (. e to))))))
+      ((ra-declaration d)
+        (wrap arena "Declaration" (. (. d entity) value)))
+      ((ra-annotation-assertion a)
+        (wrap arena "AnnotationAssertion"
+          (join2 arena (. (. a property) value) (. a target))))
+      ((ra-annotation-axiom ref)      (wrap arena "AnnotationAxiom" (render-input-ref ref)))
+      ((ra-inverse-properties a b)
+        (wrap arena "InverseObjectProperties" (join2 arena (render-role a) (render-role b))))
+      ((ra-property-characteristic c r)
+        (wrap arena (render-characteristic c) (render-role r)))
+      ((ra-disjoint-properties rs)
+        (wrap arena "DisjointObjectProperties" (render-role-list arena rs)))
+      ((ra-same-individual ns)       (wrap arena "SameIndividual" (render-node-list arena ns)))
+      ((ra-different-individuals ns) (wrap arena "DifferentIndividuals" (render-node-list arena ns)))
+      ((ra-negative-assertion ref)   (wrap arena "NegativeAssertion" (render-input-ref ref)))
+      ((ra-disjoint-union ref)       (wrap arena "DisjointUnion" (render-input-ref ref)))
+      ((ra-has-key ref)              (wrap arena "HasKey" (render-input-ref ref)))
+      ((ra-data-axiom ref)           (wrap arena "DataAxiom" (render-input-ref ref)))
+      ((ra-builtin-role ref)         (wrap arena "BuiltinRole" (render-input-ref ref)))
+      ((ra-anonymous-individual ref) (wrap arena "AnonymousIndividual" (render-input-ref ref)))
+      ((ra-reserved-vocabulary ref)  (wrap arena "ReservedVocabulary" (render-input-ref ref)))
+      ((ra-swrl-rule ref)            (wrap arena "SWRLRule" (render-input-ref ref)))
+      ((ra-unrecognized ref)         (wrap arena "Unrecognized" (render-input-ref ref)))))
+
+  (fn render-characteristic ((c PropCharacteristic))
+    (@intent "The functional-syntax axiom name for a property characteristic")
+    (@spec ((PropCharacteristic) -> String))
+    (@pure)
+    (match c
+      ('prop-functional         "FunctionalObjectProperty")
+      ('prop-inverse-functional "InverseFunctionalObjectProperty")
+      ('prop-symmetric          "SymmetricObjectProperty")
+      ('prop-asymmetric         "AsymmetricObjectProperty")
+      ('prop-reflexive          "ReflexiveObjectProperty")
+      ('prop-irreflexive        "IrreflexiveObjectProperty")))
+
+  (fn sort-concepts ((arena Arena) (xs (List RawConcept)))
+    (@intent "Canonically sorted copy — the order n-ary operands are read in")
+    (@spec ((Arena (List RawConcept)) -> (List RawConcept)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (concept-cmp (concept-at xs i) (concept-at xs j)))))
+          (mut out (list-new arena RawConcept)))
+      (do (for-each (k idx) (list-push out (concept-at xs k))) out)))
 )

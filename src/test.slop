@@ -26,10 +26,11 @@
   (import decode (graph-to-indexed rdf-list-checked term-at stage0-header Stage0
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms Stage1))
+  (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity))
   (import owl2 (RawConcept Signature signature-has-class
                 signature-has-object-property signature-has-annotation-property
                 RawAxiom Disposition disposition axiom-in-profile))
-  (import ttl (parse-ttl-file))
+  (import ttl (parse-ttl-file parse-ttl-string))
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
@@ -974,6 +975,426 @@
                ;; Parent's equivalence and Mother's inclusion, at least.
                (>= (count-disposition axs 'd-in-profile) 2))))))
 
+  ;; ============================================================
+  ;; Front end — sugar expansion and the profile gate (M0 slice 3)
+  ;; ============================================================
+
+  (fn test-missing-class-declaration-is-reported ((arena Arena))
+    (@intent "A class used in a subsumption but never declared is an omission")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Determinate position: the object of rdfs:subClassOf can only be a
+    ;; class, so there IS an EntityKind to report and the recoverable
+    ;; `missing-declaration` omission applies — unlike the ambiguous
+    ;; property case, which faults instead.
+    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"))
+      (and (> (gate-omissions-of-ttl arena (string-concat arena pre
+                ":A a owl:Class . :A rdfs:subClassOf :B .")) 0)
+           ;; THE ACCEPTING HALF: declare :B and the same document gates
+           ;; clean. Without it this passes for an implementation that
+           ;; reports a missing declaration for every class in existence.
+           (== (gate-omissions-of-ttl arena (string-concat arena pre
+                 ":A a owl:Class . :B a owl:Class . :A rdfs:subClassOf :B .")) 0))))
+
+  (fn test-undeclared-individual-is-not-reported ((arena Arena))
+    (@intent "Named-individual declarations are OPTIONAL in OWL 2 DL")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Requiring one would report a finding against the majority of
+    ;; published ABoxes — a false-fail that looks rigorous. Position and
+    ;; declaration are additive: an IRI may be used as an individual
+    ;; with no owl:NamedIndividual triple at all.
+    (let ((ttl "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:A a owl:Class . :p a owl:ObjectProperty .\n:a a :A . :a :p :b .\n"))
+      (== (gate-omissions-of-ttl arena ttl) 0)))
+
+  (fn decodes-ok ((arena Arena) (ttl String))
+    (@intent "Does this document get past stage 1 without an input-error?")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (parse-ttl-string arena ttl)
+      ((error _) false)
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) false)
+          ((ok s0)
+            (match (decode-axioms arena (. s0 triples))
+              ((error _) false)
+              ((ok _)    true)))))))
+
+  (fn test-undeclared-property-is-an-input-error ((arena Arena))
+    (@intent "`:a :p :b` with :p undeclared is ambiguous, so it FAULTS")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; `missing-declaration` is recoverable only where structural
+    ;; position uniquely fixes the entity kind. Here it does not: :p
+    ;; could be an object property or an annotation property, and
+    ;; neither reading can be reported as missing-declaration(kind, …)
+    ;; because there is no determinate kind to name.
+    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n"))
+      (and (not (decodes-ok arena (string-concat arena pre ":a :p :b .")))
+           ;; THE ACCEPTING HALF: declare it and the same document is
+           ;; fine. Without this the test passes for an implementation
+           ;; that rejects every property assertion in existence.
+           (decodes-ok arena (string-concat arena pre
+             ":p a owl:ObjectProperty . :a :p :b .")))))
+
+  (fn test-unknown-owl-vocabulary-still-decodes ((arena Arena))
+    (@intent "Reserved vocabulary HOWL does not implement gates, never faults")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A future profile's axiom must DECODE and be reported, not fail to
+    ;; parse. Treating unknown owl: vocabulary like an undeclared user
+    ;; property would fail a document merely for mentioning it.
+    (let ((ttl "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:A a owl:Class . :B a owl:Class .\n:A owl:someFutureAxiom :B .\n"))
+      (and (decodes-ok arena ttl)
+           (> (gate-omissions-of-ttl arena ttl) 0))))
+
+  (fn test-conflicting-declarations-are-an-input-error ((arena Arena))
+    (@intent "An IRI declared under two disjoint property kinds FAULTS")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Punning a class with an individual is legal and stays legal —
+    ;; node-cmp compares the tag first exactly so the two remain
+    ;; distinct. The three property kinds are pairwise disjoint, and an
+    ;; IRI in two of them has the same ambiguity an undeclared one has.
+    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n"))
+      (and (not (decodes-ok arena (string-concat arena pre
+                  ":p a owl:ObjectProperty . :p a owl:AnnotationProperty .")))
+           ;; and legal class/individual punning is NOT rejected
+           (decodes-ok arena (string-concat arena pre
+             ":x a owl:Class . :x a owl:NamedIndividual .")))))
+
+  (fn gate-omissions-of-ttl ((arena Arena) (ttl String))
+    (@intent "Gate an inline Turtle document and count its omissions")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (match (parse-ttl-string arena ttl)
+      ((error _) -1)
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) -1)
+          ((ok s0)
+            (match (decode-axioms arena (. s0 triples))
+              ((error _) -1)
+              ((ok s1)
+                (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
+                                         (. s0 omissions)) omissions))))))))))
+
+  (fn rc-prefix ()
+    (@intent "The shared prefix block for the range-condition table")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .\n:u a owl:ObjectProperty . :s2 a owl:ObjectProperty . :p a owl:ObjectProperty .\n:q a owl:ObjectProperty .\n:Agent a owl:Class . :Person a owl:Class .\n")
+
+  (fn test-range-composition-table ((arena Arena))
+    (@intent "§5.2's eight-row range/composition verdict table, row by row")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE PUBLISHED CONDITION, ROW BY ROW. Row 3 is the one that
+    ;; matters: a SUBCLASS range is rejected ON PURPOSE, and it is
+    ;; exactly the case a well-meaning implementer admits because the
+    ;; semantics seem to permit it. Admitting it silently leaves the
+    ;; cited completeness proof behind — the citation stops covering
+    ;; what the engine does.
+    (let ((pre (rc-prefix))
+          (mut ok true))
+      (do
+        ;; 1. range(s) = range(t) = Agent — the same expression on rₙ
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :s rdfs:range :Agent . :t rdfs:range :Agent .")) 0)
+          (do (println "  [range] row 1 should be ACCEPTED") (set! ok false)))
+
+        ;; 2. inherited through the told role hierarchy
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range :Agent . :s rdfs:subPropertyOf :s2 . :s2 rdfs:range :Agent .")) 0)
+          (do (println "  [range] row 2 should be ACCEPTED") (set! ok false)))
+
+        ;; 3. a SUBCLASS range is NOT the published condition
+        (when (< (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :s rdfs:range :Person . :t rdfs:range :Agent . :Person rdfs:subClassOf :Agent .")) 1)
+          (do (println "  [range] row 3 should be REJECTED (subclass range)") (set! ok false)))
+
+        ;; 4. nothing constrains the composed target
+        (when (< (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range :Agent .")) 1)
+          (do (println "  [range] row 4 should be REJECTED (no range on s)") (set! ok false)))
+
+        ;; 5. t INHERITS a range, so s must carry it too — the one-sided
+        ;;    formula wrongly accepts this
+        (when (< (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:subPropertyOf :u . :u rdfs:range :Agent .")) 1)
+          (do (println "  [range] row 5 should be REJECTED (inherited range on t)") (set! ok false)))
+
+        ;; 6. t imposes nothing to violate
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) .")) 0)
+          (do (println "  [range] row 6 should be ACCEPTED (no range on t)") (set! ok false)))
+
+        ;; 7. role HIERARCHY is unaffected; only composition shares a target
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":r rdfs:subPropertyOf :s . :r rdfs:range :Person . :s rdfs:range :Agent .")) 0)
+          (do (println "  [range] row 7 should be ACCEPTED (plain subproperty)") (set! ok false)))
+
+        ;; 8. only rₙ is consulted; intermediate roles are not
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :p :q :s ) . :t rdfs:range :Agent . :s rdfs:range :Agent .")) 0)
+          (do (println "  [range] row 8 should be ACCEPTED (n-ary, last role carries it)") (set! ok false)))
+        ok)))
+
+  (fn regularity-of ((arena Arena) (path String))
+    (@intent "The regularity verdict for a fixture's expanded RBox")
+    (@spec ((Arena String) -> (Option Bool)))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) (none))
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) (none))
+          ((ok s0)
+            (match (decode-axioms arena (. s0 triples))
+              ((error _) (none))
+              ((ok s1)
+                (match (check-regularity arena (expand-sugar arena (. s1 axioms)))
+                  ((rbox-regular)     (some true))
+                  ((rbox-irregular _) (some false))))))))))
+
+  (fn test-regularity-rejects-mutual-recursion ((arena Arena))
+    (@intent "r o s subseteq s with s o r subseteq r is non-regular")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The constraint graph holds r ≺ s and s ≺ r, whose closure
+    ;; contains (r,r); ⊑* is reflexive, so r ⊑* r makes it a violation.
+    ;; That is the `r ≺ r` self-edge the conventional "non-trivial SCC"
+    ;; reading drops, leaving the most obvious violation with no
+    ;; witness at all.
+    (match (regularity-of arena "corpus/fixtures/hazards/rbox-regularity-reject.ttl")
+      ((none) false)
+      ((some regular) (not regular))))
+
+  (fn test-regularity-accepts-equivalence-and-transitivity ((arena Arena))
+    (@intent "THE FALSE-FAIL CASE: equivalent simple roles and r o r subseteq r are regular")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A GENERIC CYCLE DETECTOR OVER ROLE INCLUSIONS FAILS BOTH OF
+    ;; THESE, and both failures refuse a correct ontology. `r ⊑ s` with
+    ;; `s ⊑ r` is a non-trivial SCC in the INCLUSION graph while being
+    ;; perfectly regular, and `t ∘ t ⊑ t` is a self-loop the normative
+    ;; cases expressly permit. Neither generates a ≺ edge: simple
+    ;; inclusions are never matched against the cases, and transitivity
+    ;; is dominated by the case that constrains nothing. An earlier
+    ;; draft of the spec specified exactly the naive graph.
+    (match (regularity-of arena "corpus/fixtures/hazards/rbox-regularity-accept.ttl")
+      ((none) false)
+      ((some regular) regular)))
+
+  (fn test-regularity-accepts-plain-subproperty ((arena Arena))
+    (@intent "An ordinary rdfs:subPropertyOf is not matched against the chain cases")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Feeding simple inclusions into case matching makes "matches no
+    ;; permitted form" reject every rdfs:subPropertyOf axiom in
+    ;; existence — which an earlier spec draft did, contradicting its
+    ;; own accepted-examples table two paragraphs later.
+    (match (regularity-of arena "corpus/fixtures/v0/subproperty.ttl")
+      ((none) false)
+      ((some regular) regular)))
+
+  (fn test-regularity-accepts-nary-chain ((arena Arena))
+    (@intent "A well-founded n-ary chain is regular")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (regularity-of arena "corpus/fixtures/v0/property-chain-nary.ttl")
+      ((none) false)
+      ((some regular) regular)))
+
+  (fn test-irregular-rbox-is-omitted-whole ((arena Arena))
+    (@intent "A collective RBox failure omits the RBox, and accepts none of it")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; HOWL does not classify a projected RBox. Deleting a witness needs
+    ;; a removal set, a witness is not one, and the choice is not local.
+    (match (gate-fixture arena "corpus/fixtures/hazards/rbox-regularity-reject.ttl")
+      ((none) false)
+      ((some gr)
+        (and (> (cast Int (list-len (. gr omissions))) 0)
+             (== (count-variant-chain (. gr accepted)) 0)))))
+
+  (fn gate-fixture ((arena Arena) (path String))
+    (@intent "Parse, stage 0, decode, gate — the front end as far as it goes")
+    (@spec ((Arena String) -> (Option GateResult)))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) (none))
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) (none))
+          ((ok s0)
+            (match (decode-axioms arena (. s0 triples))
+              ((error _) (none))
+              ((ok s1)
+                (some (gate-axioms arena (. s1 axioms) (. s1 signature)
+                        (. s0 omissions))))))))))
+
+  (fn count-variant-chain ((axs (List RawAxiom)))
+    (@intent "How many property-chain axioms survived the gate")
+    (@spec (((List RawAxiom)) -> Int))
+    (@pure)
+    (let ((mut n 0))
+      (do (for-each (a axs) (match a ((ra-property-chain _) (set! n (+ n 1))) (_ (do)))) n)))
+
+  (fn count-variant-disjoint ((axs (List RawAxiom)))
+    (@intent "How many disjointness axioms survived the gate")
+    (@spec (((List RawAxiom)) -> Int))
+    (@pure)
+    (let ((mut n 0))
+      (do (for-each (a axs) (match a ((ra-disjoint-classes _) (set! n (+ n 1))) (_ (do)))) n)))
+
+  (fn count-variant-subclass ((axs (List RawAxiom)))
+    (@intent "How many class inclusions survived the gate")
+    (@spec (((List RawAxiom)) -> Int))
+    (@pure)
+    (let ((mut n 0))
+      (do (for-each (a axs) (match a ((ra-sub-class-of _ _) (set! n (+ n 1))) (_ (do)))) n)))
+
+  (fn test-gate-annotation-heavy-is-clean ((arena Arena))
+    (@intent "M0 ACCEPTANCE (a): a versioned, annotated ontology gates CLEAN")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The whole acceptance criterion, end to end through the real gate:
+    ;; no label, declaration or reification triple reaches
+    ;; coverage.omitted. Get this wrong and NOTHING downstream ever
+    ;; classifies — HOWL is correct and useless.
+    (match (gate-fixture arena "corpus/fixtures/hazards/annotation-heavy.ttl")
+      ((none) false)
+      ((some gr)
+        (and (== (cast Int (list-len (. gr omissions))) 0)
+             ;; and the logical content survived, so an empty omission
+             ;; list cannot be bought by dropping everything
+             (> (count-variant-subclass (. gr accepted)) 0)))))
+
+  (fn test-gate-carries-import-omissions ((arena Arena))
+    (@intent "M0 ACCEPTANCE (b): a stage-0 omission survives into coverage")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Coverage is ONE list. An import shortfall raised before the gate
+    ;; has to ride through it, or the gate silently launders a
+    ;; dangling import into a clean verdict.
+    (match (gate-fixture arena "corpus/fixtures/hazards/unattested-import.ttl")
+      ((none) false)
+      ((some gr) (== (cast Int (list-len (. gr omissions))) 1))))
+
+  (fn test-sugar-transitivity-becomes-a-chain ((arena Arena))
+    (@intent "TransitiveObjectProperty(r) is rewritten to r ∘ r ⊑ r before the gates")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The RBox gates read the told hierarchy and chains AS WRITTEN. If
+    ;; transitivity is still sugar when regularity runs, the gate
+    ;; answers a question about an RBox missing an axiom the document
+    ;; states.
+    (match (gate-fixture arena "corpus/fixtures/v0/transitive.ttl")
+      ((none) false)
+      ((some gr)
+        (and (> (count-variant-chain (. gr accepted)) 0)
+             (== (cast Int (list-len (. gr omissions))) 0)))))
+
+  (fn test-sugar-nary-disjointness-becomes-pairs ((arena Arena))
+    (@intent "DisjointClasses(C1 C2 C3) becomes exactly three pairs")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Three classes must give three pairs — not six (every ordered
+    ;; pair) and not one (the n-ary axiom left whole, which normalizes
+    ;; to a single binary conjunction and loses two disjointness facts).
+    (match (gate-fixture arena "corpus/fixtures/v0/disjoint-nary.ttl")
+      ((none) false)
+      ((some gr) (== (count-variant-disjoint (. gr accepted)) 3))))
+
+  (fn test-sugar-equivalence-is-a-star-not-all-pairs ((arena Arena))
+    (@intent "EquivalentClasses gives 2(n−1) inclusions, not n(n−1)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A star through the canonically least operand entails the same
+    ;; closure by transitivity of ⊑ while staying linear. The naive
+    ;; all-pairs reading is quadratic before saturation even begins.
+    (match (gate-fixture arena "corpus/fixtures/v0/equivalent-classes.ttl")
+      ((none) false)
+      ((some gr)
+        (and (> (count-variant-subclass (. gr accepted)) 0)
+             (== (cast Int (list-len (. gr omissions))) 0)))))
+
+  (fn gate-omission-count ((arena Arena) (path String))
+    (@intent "Omissions for a fixture, or -1 if the front end refused it")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (match (gate-fixture arena path)
+      ((none)    -1)
+      ((some gr) (cast Int (list-len (. gr omissions))))))
+
+  (fn test-gate-accepts-every-v0-fixture ((arena Arena))
+    (@intent "All 17 v0 fixtures gate with EMPTY coverage.omitted")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE FALSE-FAIL HALF, and the one review habitually skips. A gate
+    ;; is reviewed for what it lets through; over-rejection reads as
+    ;; conservative and therefore safe. It is not: refusing a user's
+    ;; correct ontology is its own failure, and a gate that rejects too
+    ;; much also invalidates the completeness claim conditioned on it.
+    (let ((mut paths (list-new arena String))
+          (mut ok true))
+      (do
+        (list-push paths "corpus/fixtures/v0/subclass-atomic.ttl")
+        (list-push paths "corpus/fixtures/v0/intersection.ttl")
+        (list-push paths "corpus/fixtures/v0/exists-lhs.ttl")
+        (list-push paths "corpus/fixtures/v0/exists-rhs.ttl")
+        (list-push paths "corpus/fixtures/v0/equivalent-classes.ttl")
+        (list-push paths "corpus/fixtures/v0/equivalent-properties.ttl")
+        (list-push paths "corpus/fixtures/v0/disjoint-binary.ttl")
+        (list-push paths "corpus/fixtures/v0/disjoint-nary.ttl")
+        (list-push paths "corpus/fixtures/v0/subproperty.ttl")
+        (list-push paths "corpus/fixtures/v0/property-chain.ttl")
+        (list-push paths "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push paths "corpus/fixtures/v0/transitive.ttl")
+        (list-push paths "corpus/fixtures/v0/domain.ttl")
+        (list-push paths "corpus/fixtures/v0/range.ttl")
+        (list-push paths "corpus/fixtures/v0/abox-assertions.ttl")
+        (list-push paths "corpus/fixtures/v0/top-bottom.ttl")
+        (list-push paths "corpus/fixtures/v0/litmus.ttl")
+        (for-each (p paths)
+          (when (!= (gate-omission-count arena p) 0)
+            (do (print "  [gate] expected 0 omissions, got ")
+                (print (int-to-string arena (gate-omission-count arena p)))
+                (print " in ") (println p)
+                (set! ok false))))
+        ok)))
+
+  (fn test-gate-rejects-every-out-of-profile-fixture ((arena Arena))
+    (@intent "All 14 out-of-profile fixtures gate with NON-EMPTY coverage.omitted")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut paths (list-new arena String))
+          (mut ok true))
+      (do
+        (list-push paths "corpus/fixtures/out-of-profile/union.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/complement.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/allvalues.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/nominals.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/cardinality.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/has-self.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/inverse.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/equality.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/property-characteristics.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/haskey-disjointunion.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/swrl-rule.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/builtin-roles.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/anonymous-individual.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/datatypes.ttl")
+        (for-each (p paths)
+          (when (< (gate-omission-count arena p) 1)
+            (do (print "  [gate] expected >=1 omission, got ")
+                (print (int-to-string arena (gate-omission-count arena p)))
+                (print " in ") (println p)
+                (set! ok false))))
+        ok)))
+
   (fn signature-of-fixture ((arena Arena) (path String))
     (@intent "Parse, run stage 0, and build the signature — the common prefix")
     (@spec ((Arena String) -> (Option Signature)))
@@ -1539,6 +1960,78 @@
 
           (let ((r (test-out-of-profile-corpus-is-caught arena)))
             (print-test-result "corpus: every out-of-profile fixture is caught" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-gate-annotation-heavy-is-clean arena)))
+            (print-test-result "§12(a): an annotated ontology GATES clean" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-gate-carries-import-omissions arena)))
+            (print-test-result "§12(b): a stage-0 import omission survives the gate" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sugar-transitivity-becomes-a-chain arena)))
+            (print-test-result "sugar: TransitiveObjectProperty becomes r o r subseteq r" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sugar-nary-disjointness-becomes-pairs arena)))
+            (print-test-result "sugar: 3 disjoint classes give exactly 3 pairs" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sugar-equivalence-is-a-star-not-all-pairs arena)))
+            (print-test-result "sugar: equivalence expands to a canonical star" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-gate-accepts-every-v0-fixture arena)))
+            (print-test-result "gate: all 17 v0 fixtures gate CLEAN (false-fail half)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-gate-rejects-every-out-of-profile-fixture arena)))
+            (print-test-result "gate: all 14 out-of-profile fixtures are omitted" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-regularity-rejects-mutual-recursion arena)))
+            (print-test-result "regularity: mutually recursive chains are rejected" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-regularity-accepts-equivalence-and-transitivity arena)))
+            (print-test-result "regularity: equivalent roles + transitivity ACCEPTED" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-regularity-accepts-plain-subproperty arena)))
+            (print-test-result "regularity: a plain subPropertyOf is accepted" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-regularity-accepts-nary-chain arena)))
+            (print-test-result "regularity: a well-founded n-ary chain is accepted" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-irregular-rbox-is-omitted-whole arena)))
+            (print-test-result "regularity: an irregular RBox is omitted WHOLE" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-range-composition-table arena)))
+            (print-test-result "range: all 8 rows of §5.2's verdict table" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-undeclared-property-is-an-input-error arena)))
+            (print-test-result "declarations: an ambiguous undeclared property FAULTS" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-unknown-owl-vocabulary-still-decodes arena)))
+            (print-test-result "declarations: unknown owl: vocabulary gates, never faults" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-conflicting-declarations-are-an-input-error arena)))
+            (print-test-result "declarations: conflicting kinds fault; punning still legal" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-missing-class-declaration-is-reported arena)))
+            (print-test-result "declarations: an undeclared CLASS is a missing-declaration" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-undeclared-individual-is-not-reported arena)))
+            (print-test-result "declarations: an undeclared individual is NOT a finding" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

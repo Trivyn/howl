@@ -347,8 +347,10 @@ slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, 
 slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena, index_IndexedGraph g, rdf_Triple t);
 slop_option_rdf_Term decode_members_head(slop_arena* arena, index_IndexedGraph g, rdf_Term s);
 slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, index_IndexedGraph g, rdf_Triple t, rdf_IRI obj);
+uint8_t decode_is_reserved_iri(slop_string v);
 slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, index_IndexedGraph g, owl2_Signature sig, rdf_Triple t);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, slop_list_rdf_Triple triples);
+slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature sig, slop_list_rdf_Triple triples);
 
 #define decode_CONCEPT_FUEL (64)
 

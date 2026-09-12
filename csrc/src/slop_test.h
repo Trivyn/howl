@@ -7,6 +7,7 @@
 #include "slop_rdf.h"
 #include "slop_vocab.h"
 #include "slop_decode.h"
+#include "slop_gate.h"
 #include "slop_owl2.h"
 #include "slop_ttl.h"
 #include "slop_types.h"
@@ -14,6 +15,11 @@
 #include "slop_saturate.h"
 #include "slop_classify.h"
 #include "slop_howl.h"
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
 
 #ifndef SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_DEFINED
@@ -62,6 +68,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
+#define SLOP_OPTION_GATE_GATERESULT_DEFINED
+SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
@@ -187,6 +198,33 @@ uint8_t test_test_v0_corpus_decodes_clean(slop_arena* arena);
 uint8_t test_test_out_of_profile_corpus_is_caught(slop_arena* arena);
 uint8_t test_test_annotation_heavy_decodes_clean(slop_arena* arena);
 uint8_t test_test_litmus_decodes_clean(slop_arena* arena);
+uint8_t test_test_missing_class_declaration_is_reported(slop_arena* arena);
+uint8_t test_test_undeclared_individual_is_not_reported(slop_arena* arena);
+uint8_t test_decodes_ok(slop_arena* arena, slop_string ttl);
+uint8_t test_test_undeclared_property_is_an_input_error(slop_arena* arena);
+uint8_t test_test_unknown_owl_vocabulary_still_decodes(slop_arena* arena);
+uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena);
+int64_t test_gate_omissions_of_ttl(slop_arena* arena, slop_string ttl);
+slop_string test_rc_prefix(void);
+uint8_t test_test_range_composition_table(slop_arena* arena);
+slop_option_u8 test_regularity_of(slop_arena* arena, slop_string path);
+uint8_t test_test_regularity_rejects_mutual_recursion(slop_arena* arena);
+uint8_t test_test_regularity_accepts_equivalence_and_transitivity(slop_arena* arena);
+uint8_t test_test_regularity_accepts_plain_subproperty(slop_arena* arena);
+uint8_t test_test_regularity_accepts_nary_chain(slop_arena* arena);
+uint8_t test_test_irregular_rbox_is_omitted_whole(slop_arena* arena);
+slop_option_gate_GateResult test_gate_fixture(slop_arena* arena, slop_string path);
+int64_t test_count_variant_chain(slop_list_owl2_RawAxiom axs);
+int64_t test_count_variant_disjoint(slop_list_owl2_RawAxiom axs);
+int64_t test_count_variant_subclass(slop_list_owl2_RawAxiom axs);
+uint8_t test_test_gate_annotation_heavy_is_clean(slop_arena* arena);
+uint8_t test_test_gate_carries_import_omissions(slop_arena* arena);
+uint8_t test_test_sugar_transitivity_becomes_a_chain(slop_arena* arena);
+uint8_t test_test_sugar_nary_disjointness_becomes_pairs(slop_arena* arena);
+uint8_t test_test_sugar_equivalence_is_a_star_not_all_pairs(slop_arena* arena);
+int64_t test_gate_omission_count(slop_arena* arena, slop_string path);
+uint8_t test_test_gate_accepts_every_v0_fixture(slop_arena* arena);
+uint8_t test_test_gate_rejects_every_out_of_profile_fixture(slop_arena* arena);
 slop_option_owl2_Signature test_signature_of_fixture(slop_arena* arena, slop_string path);
 uint8_t test_test_declared_unused_class_reaches_the_signature(slop_arena* arena);
 uint8_t test_test_builtins_are_declared(slop_arena* arena);
@@ -228,6 +266,16 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
+#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
+#define SLOP_OPTION_GATE_GATERESULT_DEFINED
+SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
