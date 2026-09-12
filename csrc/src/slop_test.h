@@ -5,6 +5,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_vocab.h"
+#include "slop_decode.h"
+#include "slop_owl2.h"
+#include "slop_ttl.h"
 #include "slop_types.h"
 #include "slop_canon.h"
 #include "slop_saturate.h"
@@ -23,6 +27,18 @@ SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
+#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
+#endif
+
+#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
@@ -31,6 +47,26 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
+#define SLOP_OPTION_DECODE_STAGE1_DEFINED
+SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+#define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #endif
 
 
@@ -136,6 +172,34 @@ rdf_IRI test_mk_iri(slop_string v);
 uint8_t test_test_string_cmp_is_length_safe(slop_arena* arena);
 uint8_t test_test_node_cmp_separates_punned_iris(slop_arena* arena);
 uint8_t test_test_sort_orders_and_is_input_determined(slop_arena* arena);
+rdf_Term test_ex_iri(slop_arena* arena, slop_string local);
+int64_t test_count_subclass_triples(slop_list_rdf_Triple ts, rdf_Term pred);
+uint8_t test_test_unattested_import_yields_an_omission(slop_arena* arena);
+uint8_t test_test_attested_import_yields_none(slop_arena* arena);
+uint8_t test_test_header_and_reification_are_consumed(slop_arena* arena);
+int64_t test_count_out_of_profile(slop_list_owl2_RawAxiom axs);
+int64_t test_count_disposition(slop_list_owl2_RawAxiom axs, owl2_Disposition want);
+slop_option_decode_Stage1 test_decode_fixture(slop_arena* arena, slop_string path);
+int64_t test_nary_disjoint_member_count(slop_list_owl2_RawAxiom axs);
+uint8_t test_test_nary_disjointness_keeps_its_members(slop_arena* arena);
+int64_t test_out_of_profile_count_of(slop_arena* arena, slop_string path);
+uint8_t test_test_v0_corpus_decodes_clean(slop_arena* arena);
+uint8_t test_test_out_of_profile_corpus_is_caught(slop_arena* arena);
+uint8_t test_test_annotation_heavy_decodes_clean(slop_arena* arena);
+uint8_t test_test_litmus_decodes_clean(slop_arena* arena);
+slop_option_owl2_Signature test_signature_of_fixture(slop_arena* arena, slop_string path);
+uint8_t test_test_declared_unused_class_reaches_the_signature(slop_arena* arena);
+uint8_t test_test_builtins_are_declared(slop_arena* arena);
+uint8_t test_test_custom_annotation_property_is_recognized(slop_arena* arena);
+uint8_t test_is_named_class(owl2_RawConcept c, slop_string iri);
+uint8_t test_is_some_person(owl2_RawConcept c, slop_string role_iri, slop_string filler_iri);
+uint8_t test_test_decode_litmus_class_expression(slop_arena* arena);
+uint8_t test_test_decode_represents_out_of_profile_rather_than_failing(slop_arena* arena);
+uint8_t test_test_decode_blank_node_cycle_is_bounded(slop_arena* arena);
+uint8_t test_test_rdf_list_well_formed(slop_arena* arena);
+uint8_t test_test_rdf_list_truncation_is_a_fault(slop_arena* arena);
+uint8_t test_test_rdf_list_cycle_terminates(slop_arena* arena);
+uint8_t test_test_rdf_list_branching_is_a_fault(slop_arena* arena);
 uint8_t test_test_sort_is_stable(slop_arena* arena);
 uint8_t test_test_sort_is_a_permutation(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
@@ -151,6 +215,26 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
+#define SLOP_OPTION_DECODE_STAGE1_DEFINED
+SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+#define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
+#endif
+
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
@@ -164,11 +248,6 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
-#endif
-
-#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
-#define SLOP_OPTION_RDF_TRIPLE_DEFINED
-SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
@@ -187,12 +266,6 @@ SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 #define SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
-#endif
-
-#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
-#define SLOP_LIST_RDF_TRIPLE_DEFINED
-#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
-SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #endif
 
 

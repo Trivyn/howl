@@ -30,7 +30,7 @@ could not see.
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | types, front end, normalization | canonical ordering done; decode/gate/normalize stubbed |
+| M0 | types, front end, normalization | canonical ordering + decode done (Turtle → RawAxiom + signature); gate/normalize stubbed |
 | M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |

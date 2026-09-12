@@ -43,6 +43,7 @@
   (@doc "The lossless OWL 2 axiom AST, its disposition matrix, and the input signature (§5.2, §6.3)")
 
   (import rdf (IRI))
+  (import canon (string-cmp))
   (import types (Node RoleId EntityKind InputRef))
 
   (export
@@ -55,7 +56,7 @@
     RawConcept RawChain RawEdge RawClassAssertion RawAnnotation RawDeclaration
     RawAxiom Disposition
     Signature
-    disposition
+    disposition concept-in-profile axiom-in-profile role-in-profile
     make-signature signature-has-class signature-has-object-property
     signature-has-annotation-property signature-size)
 
@@ -331,4 +332,136 @@
         (+ (cast Int (list-len (set-elements (. sig data-props))))
           (+ (cast Int (list-len (set-elements (. sig annot-props))))
             (+ (cast Int (list-len (set-elements (. sig individuals))))
-               (cast Int (list-len (set-elements (. sig datatypes)))))))))))
+               (cast Int (list-len (set-elements (. sig datatypes))))))))))
+  ;; ============================================================
+  ;; The fragment restriction on OPERANDS
+  ;;
+  ;; §5.2's table classifies axiom FORMS. That is necessary and not
+  ;; sufficient: `SubClassOf(A, ObjectUnionOf(B, C))` is a
+  ;; SubClassOf — an in-profile form — carrying a concept ELH⊥R+ has
+  ;; no constructor for. Judging it by `disposition` alone accepts it,
+  ;; and the union is then either silently ignored or, worse, read as
+  ;; something it is not.
+  ;;
+  ;; The two conditions are kept separate rather than folded together
+  ;; because they answer different questions and are established at
+  ;; different points: the form is known as soon as the axiom decodes,
+  ;; while the operands are only known once the class expressions are
+  ;; built. The gate combines them.
+  ;; ============================================================
+
+  (fn role-in-profile ((r RoleId))
+    (@intent "Is this role an ordinary one, rather than an OWL built-in?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    ;; THE FALSE PASS THIS CLOSES IS A MISSED UNSATISFIABILITY, which
+    ;; is the one direction that makes a reasoner dangerous rather than
+    ;; merely incomplete. `owl:bottomObjectProperty` connects no pair,
+    ;; so `A ⊑ ∃⊥ᵣ.⊤` entails `A ⊑ ⊥`. Decoded as an ordinary named
+    ;; role it is an in-profile existential, CR3 happily builds an
+    ;; edge, and `A` is reported SATISFIABLE. `owl:topObjectProperty`
+    ;; interacts with every existential in the ontology and nothing in
+    ;; CR1–CR7 accounts for it.
+    ;;
+    ;; Checked at the ROLE, not at the axiom shape, so a built-in is
+    ;; caught wherever it occurs — in a restriction, a subproperty
+    ;; axiom, a chain, a domain, or an edge assertion.
+    (match r
+      ((fresh-role _) true)
+      ((named-role i)
+        (and (!= (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0)
+          (and (!= (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0)
+            (and (!= (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)
+                 (!= (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)))))))
+
+  (fn roles-in-profile ((rs (List RoleId)))
+    (@intent "Is every role in this list an ordinary one?")
+    (@spec (((List RoleId)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (r rs)
+          (when (not (role-in-profile r)) (set! ok false)))
+        ok)))
+
+  (fn concepts-in-profile ((cs (List RawConcept)))
+    (@intent "Is every concept in this list within the fragment?")
+    (@spec (((List RawConcept)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (c cs)
+          (when (not (concept-in-profile c)) (set! ok false)))
+        ok)))
+
+  (fn concept-in-profile ((c RawConcept))
+    (@intent "Is this class expression inside ELH⊥R+?")
+    (@spec ((RawConcept) -> Bool))
+    (@pure)
+    ;; No catch-all: a new RawConcept variant must be given an answer
+    ;; here, and -Werror=switch makes forgetting a build error. The
+    ;; unsafe default would be `true`, which admits a constructor the
+    ;; calculus cannot reason about.
+    (match c
+      ((rc-name _)        true)
+      ((rc-thing)         true)
+      ((rc-nothing)       true)
+      ((rc-and cs)        (concepts-in-profile cs))
+      ((rc-some r f)      (and (role-in-profile r) (concept-in-profile (deref f))))
+      ((rc-or _)          false)
+      ((rc-not _)         false)
+      ((rc-all _ _)       false)
+      ((rc-oneof _)       false)
+      ((rc-has-value _ _) false)
+      ((rc-has-self _)    false)
+      ((rc-card _ _ _)    false)
+      ((rc-qcard _ _ _)   false)
+      ((rc-data _)        false)
+      ((rc-anon _)        false)))
+
+  (fn axiom-in-profile ((ax RawAxiom))
+    (@intent "In-profile FORM whose operands are also in the fragment")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (if (!= (disposition ax) 'd-in-profile)
+      false
+      ;; Every variant named, no catch-all. A catch-all would mean a
+      ;; future concept-carrying axiom form silently skips the operand
+      ;; check — the exact gap this function exists to close.
+      (match ax
+        ((ra-sub-class-of l r)
+          (and (concept-in-profile (deref l)) (concept-in-profile (deref r))))
+        ((ra-equivalent-classes cs)      (concepts-in-profile cs))
+        ((ra-disjoint-classes cs)        (concepts-in-profile cs))
+        ((ra-object-property-domain r c)
+          (and (role-in-profile r) (concept-in-profile (deref c))))
+        ((ra-object-property-range r c)
+          (and (role-in-profile r) (concept-in-profile (deref c))))
+        ((ra-class-assertion ca)         (concept-in-profile (deref (. ca concept))))
+        ((ra-sub-object-property a b)    (and (role-in-profile a) (role-in-profile b)))
+        ((ra-property-chain ch)
+          (and (roles-in-profile (. ch steps)) (role-in-profile (. ch super))))
+        ((ra-equivalent-properties rs)   (roles-in-profile rs))
+        ((ra-transitive-property r)      (role-in-profile r))
+        ((ra-object-property-assertion e) (role-in-profile (. e role)))
+        ;; The remainder are not d-in-profile, so the guard above has
+        ;; already returned. They are named anyway so that the switch
+        ;; stays total and a disposition change cannot slip past.
+        ((ra-declaration _)              false)
+        ((ra-annotation-assertion _)     false)
+        ((ra-annotation-axiom _)         false)
+        ((ra-inverse-properties _ _)     false)
+        ((ra-property-characteristic _ _) false)
+        ((ra-disjoint-properties _)      false)
+        ((ra-same-individual _)          false)
+        ((ra-different-individuals _)    false)
+        ((ra-negative-assertion _)       false)
+        ((ra-disjoint-union _)           false)
+        ((ra-has-key _)                  false)
+        ((ra-data-axiom _)               false)
+        ((ra-builtin-role _)             false)
+        ((ra-anonymous-individual _)     false)
+        ((ra-reserved-vocabulary _)      false)
+        ((ra-swrl-rule _)                false)
+        ((ra-unrecognized _)             false))))
+)
