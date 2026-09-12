@@ -27,6 +27,7 @@
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms Stage1))
   (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity))
+  (import normalize (NormOutput normalize-accepted))
   (import owl2 (RawConcept Signature signature-has-class
                 signature-has-object-property signature-has-annotation-property
                 RawAxiom Disposition disposition axiom-in-profile))
@@ -198,13 +199,80 @@
   ;; The stub must not hand back an Outcome. An Outcome carries a
   ;; verdict; a Fault does not. Until the rules land, silence must be
   ;; unreadable as success.
-  (fn test-stub-refuses-rather-than-passing ((arena Arena))
-    (@intent "classify returns a Fault, never an Outcome that could read as coherent")
+  (fn classify-fixture ((arena Arena) (path String))
+    (@intent "The whole pipeline: Turtle in, Outcome out")
+    (@spec ((Arena String) -> (Option Outcome)))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) (none))
+      ((ok g)
+        (match (classify arena (. g triples) (list-new arena IRI) (default-config))
+          ((error _) (none))
+          ((ok o)    (some o))))))
+
+  (fn test-litmus-end-to-end ((arena Arena))
+    (@intent "§12: Turtle in, Mother ⊑ Parent out, verdict COHERENT")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (match (classify arena (list-new arena Triple) (list-new arena IRI) (default-config))
-      ((ok _)    false)
-      ((error _) true)))
+    ;; THE WHOLE PROJECT, END TO END. M1 derived this from a hand-built
+    ;; NormAxiom fixture; this derives it from the document. It is
+    ;; reachable ONLY through the existential on the defining side —
+    ;; what materialization cannot see — so if HOWL answers it from
+    ;; Turtle, it is a DL reasoner rather than a materialization engine.
+    (let ((parent (cls "http://example.org/t#Parent"))
+          (mother (cls "http://example.org/t#Mother")))
+      (match (classify-fixture arena "corpus/fixtures/v0/litmus.ttl")
+        ((none) false)
+        ((some o)
+          (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
+            (and (entails-sub (. o saturation) (. (. o findings) inconsistent) mother parent)
+                 (match (verdict o) ('verdict-coherent true) (_ false))))))))
+
+  (fn test-unattested-import-is-inconclusive ((arena Arena))
+    (@intent "M0 ACCEPTANCE (b) end to end: a dangling import is never COHERENT")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE FALSE PASS THE WHOLE VERDICT RULE EXISTS FOR. The axioms here
+    ;; are trivially coherent; what makes the run inconclusive is the
+    ;; coverage gap, and a pipeline that quietly emptied coverage would
+    ;; report a clean COHERENT over an ontology it only partly read.
+    (match (classify-fixture arena "corpus/fixtures/hazards/unattested-import.ttl")
+      ((none) false)
+      ((some o)
+        (and (> (cast Int (list-len (. (. o coverage) omitted))) 0)
+             (match (verdict o) ('verdict-inconclusive true) (_ false))))))
+
+  (fn test-declared-unused-class-gets-a-context ((arena Arena))
+    (@intent "M0 ACCEPTANCE (c) end to end: :Unused is a class HOWL knows exists")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Not an error if this fails — just silence. HOWL would be unable
+    ;; to answer `Unused ⊑ ⊤`, unable to list it in a hierarchy, and
+    ;; unable to serve a probe naming it, while reporting a clean
+    ;; coherent verdict over an ontology it silently knows less about.
+    (let ((unused (cls "http://example.org/t#Unused")))
+      (match (classify-fixture arena "corpus/fixtures/hazards/declared-unused-class.ttl")
+        ((none) false)
+        ((some o)
+          (and (entails-sub (. o saturation) (. (. o findings) inconsistent)
+                 unused (node-top))
+               (match (verdict o) ('verdict-coherent true) (_ false)))))))
+
+  (fn test-abox-disjoint-range-is-incoherent ((arena Arena))
+    (@intent "THE MANDATORY IDENTITY FIXTURE: disjoint ranges on a shared target")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Disjoint(C,D), range(r)=C, range(s)=D, r(a,b), s(c,b). This is
+    ;; INCONSISTENT, and it is the fixture that fails if role assertions
+    ;; went through `∃` instead of edges — individual(b) is an ordinary
+    ;; concept name, not a singleton, so the r- and s-successors could
+    ;; be different members and nothing would collide. It also fails if
+    ;; asserted edges do not seed ran_T, because the published range
+    ;; rewrite touches only existential GCIs.
+    (match (classify-fixture arena "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+      ((none) false)
+      ((some o)
+        (match (verdict o) ('verdict-incoherent true) (_ false)))))
 
   ;; ============================================================
   ;; M1 — the reasoning fixtures
@@ -1141,6 +1209,179 @@
           (do (println "  [range] row 8 should be ACCEPTED (n-ary, last role carries it)") (set! ok false)))
         ok)))
 
+  ;; ============================================================
+  ;; Front end — normalization (M0 slice 4)
+  ;; ============================================================
+
+  (fn norm-eq ((a NormAxiom) (b NormAxiom))
+    (@intent "Structural equality on normal-form axioms")
+    (@spec ((NormAxiom NormAxiom) -> Bool))
+    (@pure)
+    (match a
+      ((sub-name x y)
+        (match b ((sub-name p q) (and (node-eq x p) (node-eq y q))) (_ false)))
+      ((sub-and x y z)
+        (match b ((sub-and p q r)
+                   (and (node-eq x p) (and (node-eq y q) (node-eq z r)))) (_ false)))
+      ((sub-some-rhs x r y)
+        (match b ((sub-some-rhs p q z)
+                   (and (node-eq x p) (and (role-eq r q) (node-eq y z)))) (_ false)))
+      ((sub-some-lhs r x y)
+        (match b ((sub-some-lhs q p z)
+                   (and (role-eq r q) (and (node-eq x p) (node-eq y z)))) (_ false)))
+      ((sub-role r s2)
+        (match b ((sub-role q t2) (and (role-eq r q) (role-eq s2 t2))) (_ false)))
+      ((role-chain r s2 t2)
+        (match b ((role-chain q u v)
+                   (and (role-eq r q) (and (role-eq s2 u) (role-eq t2 v)))) (_ false)))))
+
+  (fn norm-contains ((xs (List NormAxiom)) (a NormAxiom))
+    (@intent "Is this axiom present?")
+    (@spec (((List NormAxiom) NormAxiom) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (x xs) (when (norm-eq x a) (set! found true))) found)))
+
+  (fn normalize-fixture ((arena Arena) (path String))
+    (@intent "The full front end as far as normalization")
+    (@spec ((Arena String) -> (Option NormOutput)))
+    (@alloc arena)
+    (match (gate-fixture arena path)
+      ((none) (none))
+      ((some gr) (some (normalize-accepted arena (. gr accepted))))))
+
+  (fn test-litmus-reproduces-the-m1-normal-form ((arena Arena))
+    (@intent "§12: litmus.ttl normalizes to M1's canonical NormAxiom set, fresh ids included")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE SEAM TEST FOR THE WHOLE PROJECT. M1 derived Mother ⊑ Parent
+    ;; from a HAND-BUILT NormAxiom fixture; this asserts the real front
+    ;; end produces that same set from Turtle. If it does not, M1's
+    ;; litmus proved something about a fixture rather than about HOWL.
+    ;;
+    ;; The load-bearing axiom is `∃hasChild.Person ⊑ X` — the NEGATIVE
+    ;; direction. Emit `X ⊑ ∃hasChild.Person` instead and every other
+    ;; axiom here is still right, the normal form still looks
+    ;; plausible, and Mother ⊑ Parent is simply never derived.
+    (let ((person (cls "http://example.org/t#Person"))
+          (parent (cls "http://example.org/t#Parent"))
+          (mother (cls "http://example.org/t#Mother"))
+          (hc     (rol "http://example.org/t#hasChild"))
+          (x      (union-new Node fresh-node 0)))
+      (match (normalize-fixture arena "corpus/fixtures/v0/litmus.ttl")
+        ((none) false)
+        ((some no)
+          (let ((ax (. no axioms)))
+            (and (== (cast Int (list-len ax)) 6)
+              (and (== (. no fresh-count) 1)
+                (and (norm-contains ax (union-new NormAxiom sub-some-lhs hc person x))
+                  (and (norm-contains ax (union-new NormAxiom sub-and person x parent))
+                    (and (norm-contains ax (union-new NormAxiom sub-name parent person))
+                      (and (norm-contains ax (union-new NormAxiom sub-some-rhs parent hc person))
+                        (and (norm-contains ax (union-new NormAxiom sub-name mother person))
+                             (norm-contains ax (union-new NormAxiom sub-some-rhs mother hc person))))))))))))))
+
+  (fn test-normalization-polarity-is-negative-on-the-left ((arena Arena))
+    (@intent "The defining existential is normalized in the NEGATIVE direction")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Stated separately from the set equality above so the failure
+    ;; message points at polarity rather than at "the set differs".
+    (let ((person (cls "http://example.org/t#Person"))
+          (hc     (rol "http://example.org/t#hasChild"))
+          (x      (union-new Node fresh-node 0)))
+      (match (normalize-fixture arena "corpus/fixtures/v0/litmus.ttl")
+        ((none) false)
+        ((some no)
+          (and (norm-contains (. no axioms) (union-new NormAxiom sub-some-lhs hc person x))
+               ;; and the WRONG direction is absent
+               (not (norm-contains (. no axioms)
+                      (union-new NormAxiom sub-some-rhs x hc person))))))))
+
+  (fn test-range-elimination-introduces-a-shared-filler ((arena Arena))
+    (@intent "B ⊑ ∃r.⊤ with range(r)=A becomes B ⊑ ∃r.X, X ⊑ ⊤, X ⊑ A")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Ranges are ELIMINATED, not given a completion rule. A draft added
+    ;; "CR8" — (X,Y) ∈ R(r), range(r) ⊑ A ⟹ A ∈ S(Y) — derived from
+    ;; first principles. Plausible, maybe even correct, but the
+    ;; published extension of EL++ with ranges gets its tractability and
+    ;; completeness by eliminating ranges through fresh concepts.
+    ;; Shipping CR8 would claim completeness from a proof that does not
+    ;; cover the calculus implemented.
+    (let ((a-cls (cls "http://example.org/t#A"))
+          (b-cls (cls "http://example.org/t#B"))
+          (r     (rol "http://example.org/t#r")))
+      (match (normalize-fixture arena "corpus/fixtures/v0/range.ttl")
+        ((none) false)
+        ((some no)
+          (let ((ax (. no axioms))
+                (mut filler (Option Node) (none)))
+            (do
+              ;; find the existential's target after rewriting
+              (for-each (a ax)
+                (match a
+                  ((sub-some-rhs c rr d)
+                    (when (and (node-eq c b-cls) (role-eq rr r)) (set! filler (some d))))
+                  (_ (do))))
+              (match filler
+                ((none) false)
+                ((some x)
+                  ;; the target is FRESH, not owl:Thing, and it carries
+                  ;; the inherited range A
+                  (and (match x ((fresh-node _) true) (_ false))
+                       (norm-contains ax (union-new NormAxiom sub-name x a-cls)))))))))))
+
+  (fn test-asserted-edges-seed-their-range ((arena Arena))
+    (@intent "THE MANDATORY IDENTITY FIXTURE's precondition: r(a,b) seeds ran_T(r) into S(b)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE EXTENSION THE PUBLISHED REWRITE DOES NOT GIVE YOU. That
+    ;; transformation touches only existential GCIs; asserted edges are
+    ;; installed directly, so nothing propagates a range onto their
+    ;; target. Without these seeds, Disjoint(C,D), range(r)=C,
+    ;; range(s)=D, r(a,b), s(c,b) reports COHERENT — the ranges are
+    ;; dropped and no propagation rule is left to notice.
+    (let ((c-cls (cls "http://example.org/t#C"))
+          (d-cls (cls "http://example.org/t#D"))
+          (b-ind (union-new Node individual-node
+                   (record-new IRI (value "http://example.org/t#b")))))
+      (match (normalize-fixture arena "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        ((none) false)
+        ((some no)
+          (let ((mut saw-c false)
+                (mut saw-d false)
+                (mut edges (cast Int (list-len (. no edges)))))
+            (do
+              (for-each (sd (. no seeds))
+                (when (node-eq (. sd to) b-ind)
+                  (match (. sd what)
+                    ((derived-sub x)
+                      (do (when (node-eq x c-cls) (set! saw-c true))
+                          (when (node-eq x d-cls) (set! saw-d true))))
+                    (_ (do)))))
+              ;; both edges installed, and BOTH ranges land on :b — which
+              ;; is what makes the disjointness detectable at all
+              (and (== edges 2) (and saw-c saw-d))))))))
+
+  (fn test-nary-chain-decomposes-left-associated ((arena Arena))
+    (@intent "An n-ary chain becomes binary role-chain steps through fresh roles")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Decomposition runs AFTER the gates, so a fresh-role never appears
+    ;; in a gate question — a fresh intermediate is unconstrained by any
+    ;; ≺ the original chain had to respect, and decomposing first would
+    ;; let a non-regular dependency split across two innocuous steps.
+    (match (normalize-fixture arena "corpus/fixtures/v0/property-chain-nary.ttl")
+      ((none) false)
+      ((some no)
+        (let ((mut chains 0))
+          (do
+            (for-each (a (. no axioms))
+              (match a ((role-chain _ _ _) (set! chains (+ chains 1))) (_ (do))))
+            ;; a 3-step chain becomes exactly 2 binary steps
+            (== chains 2))))))
+
   (fn regularity-of ((arena Arena) (path String))
     (@intent "The regularity verdict for a fixture's expanded RBox")
     (@spec ((Arena String) -> (Option Bool)))
@@ -1826,8 +2067,20 @@
             (print-test-result "edges: emit-edge addresses both halves" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
-          (let ((r (test-stub-refuses-rather-than-passing arena)))
-            (print-test-result "stub: classify refuses, never passes" r)
+          (let ((r (test-litmus-end-to-end arena)))
+            (print-test-result "§12 LITMUS: Turtle in, Mother subseteq Parent out, COHERENT" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-unattested-import-is-inconclusive arena)))
+            (print-test-result "§12(b) e2e: a dangling import is INCONCLUSIVE, never coherent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-declared-unused-class-gets-a-context arena)))
+            (print-test-result "§12(c) e2e: a declared, unused class has a context" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-abox-disjoint-range-is-incoherent arena)))
+            (print-test-result "identity fixture: disjoint ranges on one target => INCOHERENT" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-litmus arena)))
@@ -2032,6 +2285,26 @@
 
           (let ((r (test-undeclared-individual-is-not-reported arena)))
             (print-test-result "declarations: an undeclared individual is NOT a finding" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-litmus-reproduces-the-m1-normal-form arena)))
+            (print-test-result "§12: litmus.ttl reproduces M1's canonical normal form" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-normalization-polarity-is-negative-on-the-left arena)))
+            (print-test-result "normalize: the defining existential is NEGATIVE" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-nary-chain-decomposes-left-associated arena)))
+            (print-test-result "normalize: an n-ary chain becomes binary steps" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-range-elimination-introduces-a-shared-filler arena)))
+            (print-test-result "normalize: range elimination rewrites the existential" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-asserted-edges-seed-their-range arena)))
+            (print-test-result "normalize: asserted edges seed ran_T into the target" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

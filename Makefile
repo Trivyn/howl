@@ -42,7 +42,7 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        crate-vendor crate-build crate-test crate-publish
+        acceptance crate-vendor crate-build crate-test crate-publish
 
 PLATFORM ?= unknown
 
@@ -112,6 +112,25 @@ verify:
 example:
 	slop test src/rules/el.slop
 	slop test src/canon.slop
+
+# SPEC.md §12's acceptance criteria, as exit codes. These are the contract a
+# consumer actually observes, and they are checked here rather than only
+# in-process because the CLI is where the verdict becomes a number: a test
+# asserting `verdict-inconclusive` still passes if the exit-code table drifts.
+# 2 is deliberately NOT a pass.
+acceptance: cli
+	@rc=0; fail=0; \
+	check() { ./$(BIN)/howl validate $$1 >/dev/null 2>&1; rc=$$?; \
+	          if [ "$$rc" -eq "$$2" ]; then echo "  ok   $$1 -> $$rc"; \
+	          else echo "  FAIL $$1 -> $$rc (expected $$2)"; fail=1; fi; }; \
+	check corpus/fixtures/v0/litmus.ttl 0; \
+	check corpus/fixtures/hazards/unattested-import.ttl 2; \
+	check corpus/fixtures/hazards/abox-disjoint-range.ttl 1; \
+	check corpus/fixtures/hazards/annotation-heavy.ttl 0; \
+	check corpus/fixtures/hazards/declared-unused-class.ttl 0; \
+	check corpus/fixtures/hazards/rbox-regularity-reject.ttl 2; \
+	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
+	else echo "  ACCEPTANCE FAILED"; exit 1; fi
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.

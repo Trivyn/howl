@@ -30,7 +30,7 @@ could not see.
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | types, front end, normalization | canonical ordering, decode and gate done (Turtle → gated axioms + coverage); normalize/CLI stubbed |
+| M0 | types, front end, normalization | **done** — Turtle in, classified out; `howl validate` exits 0/1/2 (`make acceptance`) |
 | M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |

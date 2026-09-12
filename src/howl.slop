@@ -158,19 +158,25 @@
     (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")
     (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Outcome Fault)))
     (@alloc arena)
+    ;; THE PIPELINE, AND WHY IT STILL REFUSES ON A FRONT-END FAULT.
+    ;; An `input-error` has no verdict to misread; an Outcome would.
+    ;; Returning a partial Outcome when the front end could not decode
+    ;; the document would present as full coverage over an empty
+    ;; saturation, which §6.2's verdict rule reads as a clean
+    ;; `coherent` — sound, catastrophically incomplete, and
+    ;; indistinguishable from success at every interface.
     ;;
-    ;; ⚠  M0/M1, NOT YET IMPLEMENTED — AND IT REFUSES RATHER THAN
-    ;;    RETURNING AN OUTCOME. That choice is the whole point.
-    ;;
-    ;;    Every stage below exists in skeleton: the front end returns
-    ;;    `input-error`, the rules emit nothing, the driver would then
-    ;;    find an empty frontier after round 0 and report `fixpoint`
-    ;;    over full coverage. Fed to the verdict rule, that is a clean
-    ;;    `coherent` — sound, catastrophically incomplete, and
-    ;;    indistinguishable from success at every interface.
-    ;;
-    ;;    So the stub must not produce an Outcome at all. A Fault has no
-    ;;    verdict to misread; an Outcome would. This is the same
-    ;;    discipline §8.5 applies to the port — until a capability
-    ;;    lands, it is NOT DELIVERED, and it is NOT APPROXIMATED.
-    (error (union-new Fault input-error "HOWL v0 pipeline not implemented (M0/M1)"))))
+    ;; Coverage travels from the gate UNCHANGED. It is what makes a
+    ;; run with omissions report `inconclusive` rather than `coherent`,
+    ;; so nothing downstream may quietly empty it.
+    (match (normalize-input arena triples imports-resolved config)
+      ((error f) (error f))
+      ((ok nr)
+        (match (saturate arena (. nr saturation) (. nr axioms) config)
+          ((error f) (error f))
+          ((ok rr)
+            (ok (record-new Outcome
+                  (coverage    (. nr coverage))
+                  (termination (. rr termination))
+                  (findings    (extract-findings arena (. rr saturation)))
+                  (saturation  (. rr saturation))))))))))

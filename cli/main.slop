@@ -65,9 +65,13 @@
 (module main
   (@doc "CLI harness for the HOWL description-logic reasoner")
 
-  (import rdf (IRI Triple))
+  (import rdf (IRI Triple Term BlankNode make-blank make-triple make-triple-term
+               term-eq make-iri))
   (import types (Outcome Fault ReasonerConfig default-config))
   (import howl (Verdict verdict classify))
+  (import ttl (parse-ttl-file))
+  (import vocab (RDF_TYPE OWL_ONTOLOGY))
+  (import canon (string-cmp))
 
   (ffi "string.h"
     (strlen ((s (Ptr U8))) U64))
@@ -126,6 +130,87 @@
           ((refused _)     2)
           ((input-error _) 3)))))
 
+
+  ;; ============================================================
+  ;; Multi-document loading
+  ;;
+  ;; BLANK NODES MUST BE STANDARDIZED APART PER DOCUMENT. The Turtle
+  ;; parser restarts its blank counter at 0 for every parse, so two
+  ;; documents both using `_:x` arrive with the same id — and merging
+  ;; them by concatenation WELDS UNRELATED NODES TOGETHER. RDF merge is
+  ;; defined to rename them apart; concatenation is not RDF merge.
+  ;;
+  ;; This lives in the CLI rather than in `decode` because `classify`
+  ;; receives one flat triple list and never sees document boundaries
+  ;; (§8.5 A1). The CLI is the last place that still knows.
+  ;; ============================================================
+
+  (fn max-blank-in-term ((t Term))
+    (@intent "Highest blank-node id in a term, recursing into triple terms")
+    (@spec ((Term) -> Int))
+    (@pure)
+    (match t
+      ((term-blank b)   (. b id))
+      ((term-iri _)     0)
+      ((term-literal _) 0)
+      ((term-triple tt)
+        (let ((tr (deref tt)))
+          (max (max-blank-in-term (. tr subject))
+            (max (max-blank-in-term (. tr predicate))
+                 (max-blank-in-term (. tr object))))))))
+
+  (fn max-blank-id ((ts (List Triple)))
+    (@intent "Highest blank-node id across a triple list")
+    (@spec (((List Triple)) -> Int))
+    (@pure)
+    ;; Starts at 0, so a graph with no blank nodes is indistinguishable
+    ;; from one whose only blank node is _:0 — the caller adds 1, which
+    ;; is correct either way.
+    (let ((mut m 0))
+      (do
+        (for-each (t ts)
+          (do
+            (set! m (max m (max-blank-in-term (. t subject))))
+            (set! m (max m (max-blank-in-term (. t predicate))))
+            (set! m (max m (max-blank-in-term (. t object))))))
+        m)))
+
+  (fn remap-blank ((arena Arena) (t Term) (offset Int))
+    (@intent "Shift a term's blank-node ids by an offset")
+    (@spec ((Arena Term Int) -> Term))
+    (@alloc arena)
+    (match t
+      ((term-blank b)   (make-blank arena (+ (. b id) offset)))
+      ((term-iri _)     t)
+      ((term-literal _) t)
+      ((term-triple tt)
+        (let ((tr (deref tt)))
+          (make-triple-term arena
+            (make-triple arena
+              (remap-blank arena (. tr subject) offset)
+              (remap-blank arena (. tr predicate) offset)
+              (remap-blank arena (. tr object) offset)))))))
+
+  (fn ontology-iri-of ((ts (List Triple)))
+    (@intent "The IRI asserted to be an owl:Ontology, if there is one")
+    (@spec (((List Triple)) -> (Option IRI)))
+    (@pure)
+    (let ((mut found (Option IRI) (none)))
+      (do
+        (for-each (t ts)
+          (match (. t predicate)
+            ((term-iri p)
+              (when (== (string-cmp (. p value) RDF_TYPE) 0)
+                (match (. t object)
+                  ((term-iri o)
+                    (when (== (string-cmp (. o value) OWL_ONTOLOGY) 0)
+                      (match (. t subject)
+                        ((term-iri sub) (set! found (some sub)))
+                        (_ (do)))))
+                  (_ (do)))))
+            (_ (do))))
+        found)))
+
   ;; ============================================================
   ;; Argument handling
   ;; ============================================================
@@ -158,30 +243,85 @@
       (println "reintroduces the silent-false-pass hazard the gate exists to prevent.")))
 
   (fn main ((argc Int) (argv (Ptr (Ptr U8))))
-    (@intent "CLI entry point: parse args, run the library, map the result to an exit code")
+    (@intent "CLI entry point: load, run the library, map the result to an exit code")
     (@spec ((Int (Ptr (Ptr U8))) -> Int))
     :c-name "main"
     (with-arena 268435456
       (if (< argc 2)
         (do (print-usage) EXIT_ERROR)
         (let ((command (argv-to-string argv 1)))
-          ;; ⚠  M0/M1: the library refuses (returns Fault::input-error),
-          ;;    so every command below currently exits 3. That is the
-          ;;    honest result for an unimplemented pipeline — "couldn't
-          ;;    check" — and notably NOT 0. Turtle parsing and import
-          ;;    resolution (-I) land with M0.
           (if (string-eq command "--help")
             (do (print-usage) EXIT_ERROR)
-            (let ((result (classify arena
-                            (list-new arena Triple)
-                            (list-new arena IRI)
-                            (default-config))))
-              (do
-                (match result
-                  ((ok _) (println "howl: unexpected outcome from an unimplemented pipeline"))
-                  ((error f)
-                    (match f
-                      ((input-error msg) (do (print "howl: ") (println msg)))
-                      ((cancelled)       (println "howl: cancelled"))
-                      ((refused _)       (println "howl: refused (--strict): input carried out-of-profile axioms")))))
-                (exit-code-for result)))))))))
+            (if (< argc 3)
+              (do (print-usage) EXIT_ERROR)
+              (let ((mut triples  (list-new arena Triple))
+                    (mut resolved (list-new arena IRI))
+                    (mut failed   false)
+                    (mut i 2)
+                    (input (argv-to-string argv 2)))
+                (do
+                  ;; The root document.
+                  (match (parse-ttl-file arena input)
+                    ((error _)
+                      (do (print "howl: cannot parse ") (println input) (set! failed true)))
+                    ((ok g) (for-each (t (. g triples)) (list-push triples t))))
+
+                  ;; -I FILE: load an imported document and ATTEST it.
+                  ;; The attestation is what turns a declared owl:imports
+                  ;; from an omission into resolved coverage — HOWL never
+                  ;; fetches anything itself, so an unattested import
+                  ;; stays a coverage gap and the run stays inconclusive.
+                  (set! i 3)
+                  (while (< i argc)
+                    (let ((arg (argv-to-string argv i)))
+                      (do
+                        (when (and (string-eq arg "-I") (< (+ i 1) argc))
+                          (let ((path (argv-to-string argv (+ i 1))))
+                            (match (parse-ttl-file arena path)
+                              ((error _)
+                                (do (print "howl: cannot parse import ") (println path)
+                                    (set! failed true)))
+                              ((ok ig)
+                                (let ((offset (+ (max-blank-id triples) 1)))
+                                  (do
+                                    (for-each (t (. ig triples))
+                                      (list-push triples
+                                        (make-triple arena
+                                          (remap-blank arena (. t subject) offset)
+                                          (. t predicate)
+                                          (remap-blank arena (. t object) offset))))
+                                    (match (ontology-iri-of (. ig triples))
+                                      ((some o) (list-push resolved o))
+                                      ((none)   (do)))))))))
+                        (set! i (+ i 1)))))
+
+                  (if failed
+                    EXIT_ERROR
+                    (let ((result (classify arena triples resolved (default-config))))
+                      (do
+                        (match result
+                          ((ok o)
+                            (do
+                              (print "howl: ")
+                              (print (int-to-string arena
+                                       (cast Int (list-len (. (. o findings) subsumptions)))))
+                              (print " subsumptions, ")
+                              (print (int-to-string arena
+                                       (cast Int (list-len (. (. o findings) unsatisfiable)))))
+                              (print " unsatisfiable, ")
+                              (print (int-to-string arena
+                                       (cast Int (list-len (. (. o coverage) omitted)))))
+                              (println " omitted")
+                              (match (verdict o)
+                                ('verdict-coherent     (println "howl: coherent"))
+                                ('verdict-incoherent   (println "howl: INCOHERENT"))
+                                ;; Spelled out, because 2 is the code a CI
+                                ;; job is most tempted to accept as a pass.
+                                ('verdict-inconclusive
+                                  (println "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass")))))
+                          ((error f)
+                            (match f
+                              ((input-error msg) (do (print "howl: ") (println msg)))
+                              ((cancelled)       (println "howl: cancelled"))
+                              ((refused _)       (println "howl: refused (--strict)")))))
+                        (exit-code-for result)))))))))))))

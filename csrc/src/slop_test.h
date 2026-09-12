@@ -8,6 +8,7 @@
 #include "slop_vocab.h"
 #include "slop_decode.h"
 #include "slop_gate.h"
+#include "slop_normalize.h"
 #include "slop_owl2.h"
 #include "slop_ttl.h"
 #include "slop_types.h"
@@ -45,6 +46,11 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
+#define SLOP_OPTION_TYPES_OUTCOME_DEFINED
+SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
@@ -68,6 +74,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+#define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 #endif
 
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
@@ -161,7 +172,11 @@ uint8_t test_test_consistent_but_incoherent(slop_arena* arena);
 uint8_t test_test_context_starts_with_empty_store(slop_arena* arena);
 slop_string test_node_iri(types_Node n);
 uint8_t test_test_emit_edge_addresses_both_halves(slop_arena* arena);
-uint8_t test_test_stub_refuses_rather_than_passing(slop_arena* arena);
+slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string path);
+uint8_t test_test_litmus_end_to_end(slop_arena* arena);
+uint8_t test_test_unattested_import_is_inconclusive(slop_arena* arena);
+uint8_t test_test_declared_unused_class_gets_a_context(slop_arena* arena);
+uint8_t test_test_abox_disjoint_range_is_incoherent(slop_arena* arena);
 types_Node test_cls(slop_string name);
 types_RoleId test_rol(slop_string name);
 slop_result_saturate_RoundResult_types_Fault test_run_fixture(slop_arena* arena, slop_list_types_Node signature, slop_list_types_NormAxiom axioms);
@@ -207,6 +222,14 @@ uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena)
 int64_t test_gate_omissions_of_ttl(slop_arena* arena, slop_string ttl);
 slop_string test_rc_prefix(void);
 uint8_t test_test_range_composition_table(slop_arena* arena);
+uint8_t test_norm_eq(types_NormAxiom a, types_NormAxiom b);
+uint8_t test_norm_contains(slop_list_types_NormAxiom xs, types_NormAxiom a);
+slop_option_normalize_NormOutput test_normalize_fixture(slop_arena* arena, slop_string path);
+uint8_t test_test_litmus_reproduces_the_m1_normal_form(slop_arena* arena);
+uint8_t test_test_normalization_polarity_is_negative_on_the_left(slop_arena* arena);
+uint8_t test_test_range_elimination_introduces_a_shared_filler(slop_arena* arena);
+uint8_t test_test_asserted_edges_seed_their_range(slop_arena* arena);
+uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
 slop_option_u8 test_regularity_of(slop_arena* arena, slop_string path);
 uint8_t test_test_regularity_rejects_mutual_recursion(slop_arena* arena);
 uint8_t test_test_regularity_accepts_equivalence_and_transitivity(slop_arena* arena);
@@ -243,6 +266,11 @@ uint8_t test_test_sort_is_a_permutation(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
 int main(int argc, char** _c_argv);
 
+#ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
+#define SLOP_OPTION_TYPES_OUTCOME_DEFINED
+SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
@@ -266,6 +294,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+#define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED

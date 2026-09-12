@@ -142,13 +142,23 @@ impl Reasoner {
     /// # Status
     ///
     /// Always returns [`Fault::NotImplemented`] — see the module docs.
+    /// NOT YET WIRED TO THE ENGINE — and as of M0 that is a statement
+    /// about THIS BINDING, not about HOWL. The C library classifies:
+    /// `howl validate` reads Turtle, gates, normalizes, saturates and
+    /// exits 0/1/2 (see `make acceptance`). What is missing here is the
+    /// marshalling of triples across the FFI boundary and back, which
+    /// is M2 scope along with the frozen port's amendments.
+    ///
+    /// It refuses rather than returning a Verdict for the same reason
+    /// the engine stub did: a `Verdict` has a reading that can be
+    /// mistaken for success, and `NotImplemented` has none.
     pub fn classify(
         &self,
         _triples: &[ffi::RdfTriple],
         _imports_resolved: &[String],
     ) -> Result<Verdict, Fault> {
         Err(Fault::NotImplemented(
-            "HOWL v0 pipeline not implemented (M0/M1)".into(),
+            "Rust binding not wired to the engine yet (M2); the C library is implemented".into(),
         ))
     }
 }
@@ -174,10 +184,13 @@ mod tests {
     /// guard the SLOP test harness applies to `classify`, restated at
     /// the boundary a consumer actually calls.
     #[test]
-    fn stub_refuses_rather_than_passing() {
+    /// Pins the BINDING's refusal, not the engine's. The engine stopped
+    /// refusing in M0; if this test is ever read as evidence that the
+    /// pipeline is unimplemented, it is being read wrong.
+    fn binding_refuses_rather_than_passing() {
         let r = Reasoner::new();
         match r.classify(&[], &[]) {
-            Ok(v) => panic!("stub returned a verdict ({v:?}) instead of refusing"),
+            Ok(v) => panic!("binding returned a verdict ({v:?}) instead of refusing"),
             Err(Fault::NotImplemented(_)) => {}
             Err(e) => panic!("unexpected fault: {e}"),
         }

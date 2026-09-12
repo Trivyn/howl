@@ -46,25 +46,25 @@ slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax);
 slop_string owl2_render_characteristic(owl2_PropCharacteristic c);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);
 
-typedef struct { slop_list_owl2_RawConcept xs; } owl2__lambda_169_env_t;
+typedef struct { slop_list_owl2_RawConcept xs; } owl2__lambda_116_env_t;
 
-static int64_t owl2__lambda_169(owl2__lambda_169_env_t* _env, int64_t i, int64_t j) { return owl2_concept_cmp(owl2_concept_at(_env->xs, i), owl2_concept_at(_env->xs, j)); }
+static int64_t owl2__lambda_116(owl2__lambda_116_env_t* _env, int64_t i, int64_t j) { return owl2_concept_cmp(owl2_concept_at(_env->xs, i), owl2_concept_at(_env->xs, j)); }
 
 owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
-    __auto_type _mv_143 = ax;
-    switch (_mv_143.tag) {
+    __auto_type _mv_90 = ax;
+    switch (_mv_90.tag) {
         case owl2_RawAxiom_ra_sub_class_of:
         {
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_equivalent_classes:
         {
-            __auto_type _ = _mv_143.data.ra_equivalent_classes;
+            __auto_type _ = _mv_90.data.ra_equivalent_classes;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_disjoint_classes:
         {
-            __auto_type _ = _mv_143.data.ra_disjoint_classes;
+            __auto_type _ = _mv_90.data.ra_disjoint_classes;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_sub_object_property:
@@ -73,17 +73,17 @@ owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type _ = _mv_143.data.ra_property_chain;
+            __auto_type _ = _mv_90.data.ra_property_chain;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_equivalent_properties:
         {
-            __auto_type _ = _mv_143.data.ra_equivalent_properties;
+            __auto_type _ = _mv_90.data.ra_equivalent_properties;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_transitive_property:
         {
-            __auto_type _ = _mv_143.data.ra_transitive_property;
+            __auto_type _ = _mv_90.data.ra_transitive_property;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_object_property_domain:
@@ -96,27 +96,27 @@ owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_class_assertion:
         {
-            __auto_type _ = _mv_143.data.ra_class_assertion;
+            __auto_type _ = _mv_90.data.ra_class_assertion;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_object_property_assertion:
         {
-            __auto_type _ = _mv_143.data.ra_object_property_assertion;
+            __auto_type _ = _mv_90.data.ra_object_property_assertion;
             return owl2_Disposition_d_in_profile;
         }
         case owl2_RawAxiom_ra_declaration:
         {
-            __auto_type _ = _mv_143.data.ra_declaration;
+            __auto_type _ = _mv_90.data.ra_declaration;
             return owl2_Disposition_d_consumed;
         }
         case owl2_RawAxiom_ra_annotation_assertion:
         {
-            __auto_type _ = _mv_143.data.ra_annotation_assertion;
+            __auto_type _ = _mv_90.data.ra_annotation_assertion;
             return owl2_Disposition_d_inert;
         }
         case owl2_RawAxiom_ra_annotation_axiom:
         {
-            __auto_type _ = _mv_143.data.ra_annotation_axiom;
+            __auto_type _ = _mv_90.data.ra_annotation_axiom;
             return owl2_Disposition_d_inert;
         }
         case owl2_RawAxiom_ra_inverse_properties:
@@ -129,62 +129,62 @@ owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_disjoint_properties:
         {
-            __auto_type _ = _mv_143.data.ra_disjoint_properties;
+            __auto_type _ = _mv_90.data.ra_disjoint_properties;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_same_individual:
         {
-            __auto_type _ = _mv_143.data.ra_same_individual;
+            __auto_type _ = _mv_90.data.ra_same_individual;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_different_individuals:
         {
-            __auto_type _ = _mv_143.data.ra_different_individuals;
+            __auto_type _ = _mv_90.data.ra_different_individuals;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_negative_assertion:
         {
-            __auto_type _ = _mv_143.data.ra_negative_assertion;
+            __auto_type _ = _mv_90.data.ra_negative_assertion;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_disjoint_union:
         {
-            __auto_type _ = _mv_143.data.ra_disjoint_union;
+            __auto_type _ = _mv_90.data.ra_disjoint_union;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_has_key:
         {
-            __auto_type _ = _mv_143.data.ra_has_key;
+            __auto_type _ = _mv_90.data.ra_has_key;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_data_axiom:
         {
-            __auto_type _ = _mv_143.data.ra_data_axiom;
+            __auto_type _ = _mv_90.data.ra_data_axiom;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_builtin_role:
         {
-            __auto_type _ = _mv_143.data.ra_builtin_role;
+            __auto_type _ = _mv_90.data.ra_builtin_role;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_anonymous_individual:
         {
-            __auto_type _ = _mv_143.data.ra_anonymous_individual;
+            __auto_type _ = _mv_90.data.ra_anonymous_individual;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_reserved_vocabulary:
         {
-            __auto_type _ = _mv_143.data.ra_reserved_vocabulary;
+            __auto_type _ = _mv_90.data.ra_reserved_vocabulary;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_swrl_rule:
         {
-            __auto_type _ = _mv_143.data.ra_swrl_rule;
+            __auto_type _ = _mv_90.data.ra_swrl_rule;
             return owl2_Disposition_d_out_of_profile;
         }
         case owl2_RawAxiom_ra_unrecognized:
         {
-            __auto_type _ = _mv_143.data.ra_unrecognized;
+            __auto_type _ = _mv_90.data.ra_unrecognized;
             return owl2_Disposition_d_out_of_profile;
         }
     }
@@ -216,16 +216,16 @@ int64_t owl2_signature_size(slop_arena* arena, owl2_Signature sig) {
 }
 
 uint8_t owl2_role_in_profile(types_RoleId r) {
-    __auto_type _mv_148 = r;
-    switch (_mv_148.tag) {
+    __auto_type _mv_95 = r;
+    switch (_mv_95.tag) {
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_148.data.fresh_role;
+            __auto_type _ = _mv_95.data.fresh_role;
             return 1;
         }
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_148.data.named_role;
+            __auto_type i = _mv_95.data.named_role;
             return ((canon_string_cmp(i.value, owl2_OWL_TOP_OBJECT_PROPERTY) != 0) && ((canon_string_cmp(i.value, owl2_OWL_BOTTOM_OBJECT_PROPERTY) != 0) && ((canon_string_cmp(i.value, owl2_OWL_TOP_DATA_PROPERTY) != 0) && (canon_string_cmp(i.value, owl2_OWL_BOTTOM_DATA_PROPERTY) != 0))));
         }
     }
@@ -265,11 +265,11 @@ uint8_t owl2_concepts_in_profile(slop_list_owl2_RawConcept cs) {
 }
 
 uint8_t owl2_concept_in_profile(owl2_RawConcept c) {
-    __auto_type _mv_149 = c;
-    switch (_mv_149.tag) {
+    __auto_type _mv_96 = c;
+    switch (_mv_96.tag) {
         case owl2_RawConcept_rc_name:
         {
-            __auto_type _ = _mv_149.data.rc_name;
+            __auto_type _ = _mv_96.data.rc_name;
             return 1;
         }
         case owl2_RawConcept_rc_thing:
@@ -282,23 +282,23 @@ uint8_t owl2_concept_in_profile(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_149.data.rc_and;
+            __auto_type cs = _mv_96.data.rc_and;
             return owl2_concepts_in_profile(cs);
         }
         case owl2_RawConcept_rc_some:
         {
-            __auto_type r = _mv_149.data.rc_some.f0;
-            __auto_type f = _mv_149.data.rc_some.f1;
+            __auto_type r = _mv_96.data.rc_some.f0;
+            __auto_type f = _mv_96.data.rc_some.f1;
             return (owl2_role_in_profile(r) && owl2_concept_in_profile((*f)));
         }
         case owl2_RawConcept_rc_or:
         {
-            __auto_type _ = _mv_149.data.rc_or;
+            __auto_type _ = _mv_96.data.rc_or;
             return 0;
         }
         case owl2_RawConcept_rc_not:
         {
-            __auto_type _ = _mv_149.data.rc_not;
+            __auto_type _ = _mv_96.data.rc_not;
             return 0;
         }
         case owl2_RawConcept_rc_all:
@@ -307,7 +307,7 @@ uint8_t owl2_concept_in_profile(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_oneof:
         {
-            __auto_type _ = _mv_149.data.rc_oneof;
+            __auto_type _ = _mv_96.data.rc_oneof;
             return 0;
         }
         case owl2_RawConcept_rc_has_value:
@@ -316,7 +316,7 @@ uint8_t owl2_concept_in_profile(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_has_self:
         {
-            __auto_type _ = _mv_149.data.rc_has_self;
+            __auto_type _ = _mv_96.data.rc_has_self;
             return 0;
         }
         case owl2_RawConcept_rc_card:
@@ -329,12 +329,12 @@ uint8_t owl2_concept_in_profile(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_data:
         {
-            __auto_type _ = _mv_149.data.rc_data;
+            __auto_type _ = _mv_96.data.rc_data;
             return 0;
         }
         case owl2_RawConcept_rc_anon:
         {
-            __auto_type _ = _mv_149.data.rc_anon;
+            __auto_type _ = _mv_96.data.rc_anon;
             return 0;
         }
     }
@@ -345,80 +345,80 @@ uint8_t owl2_axiom_in_profile(owl2_RawAxiom ax) {
     if (owl2_disposition(ax) != owl2_Disposition_d_in_profile) {
         return 0;
     } else {
-        __auto_type _mv_150 = ax;
-        switch (_mv_150.tag) {
+        __auto_type _mv_97 = ax;
+        switch (_mv_97.tag) {
             case owl2_RawAxiom_ra_sub_class_of:
             {
-                __auto_type l = _mv_150.data.ra_sub_class_of.f0;
-                __auto_type r = _mv_150.data.ra_sub_class_of.f1;
+                __auto_type l = _mv_97.data.ra_sub_class_of.f0;
+                __auto_type r = _mv_97.data.ra_sub_class_of.f1;
                 return (owl2_concept_in_profile((*l)) && owl2_concept_in_profile((*r)));
             }
             case owl2_RawAxiom_ra_equivalent_classes:
             {
-                __auto_type cs = _mv_150.data.ra_equivalent_classes;
+                __auto_type cs = _mv_97.data.ra_equivalent_classes;
                 return owl2_concepts_in_profile(cs);
             }
             case owl2_RawAxiom_ra_disjoint_classes:
             {
-                __auto_type cs = _mv_150.data.ra_disjoint_classes;
+                __auto_type cs = _mv_97.data.ra_disjoint_classes;
                 return owl2_concepts_in_profile(cs);
             }
             case owl2_RawAxiom_ra_object_property_domain:
             {
-                __auto_type r = _mv_150.data.ra_object_property_domain.f0;
-                __auto_type c = _mv_150.data.ra_object_property_domain.f1;
+                __auto_type r = _mv_97.data.ra_object_property_domain.f0;
+                __auto_type c = _mv_97.data.ra_object_property_domain.f1;
                 return (owl2_role_in_profile(r) && owl2_concept_in_profile((*c)));
             }
             case owl2_RawAxiom_ra_object_property_range:
             {
-                __auto_type r = _mv_150.data.ra_object_property_range.f0;
-                __auto_type c = _mv_150.data.ra_object_property_range.f1;
+                __auto_type r = _mv_97.data.ra_object_property_range.f0;
+                __auto_type c = _mv_97.data.ra_object_property_range.f1;
                 return (owl2_role_in_profile(r) && owl2_concept_in_profile((*c)));
             }
             case owl2_RawAxiom_ra_class_assertion:
             {
-                __auto_type ca = _mv_150.data.ra_class_assertion;
+                __auto_type ca = _mv_97.data.ra_class_assertion;
                 return owl2_concept_in_profile((*ca.concept));
             }
             case owl2_RawAxiom_ra_sub_object_property:
             {
-                __auto_type a = _mv_150.data.ra_sub_object_property.f0;
-                __auto_type b = _mv_150.data.ra_sub_object_property.f1;
+                __auto_type a = _mv_97.data.ra_sub_object_property.f0;
+                __auto_type b = _mv_97.data.ra_sub_object_property.f1;
                 return (owl2_role_in_profile(a) && owl2_role_in_profile(b));
             }
             case owl2_RawAxiom_ra_property_chain:
             {
-                __auto_type ch = _mv_150.data.ra_property_chain;
+                __auto_type ch = _mv_97.data.ra_property_chain;
                 return (owl2_roles_in_profile(ch.steps) && owl2_role_in_profile(ch.super));
             }
             case owl2_RawAxiom_ra_equivalent_properties:
             {
-                __auto_type rs = _mv_150.data.ra_equivalent_properties;
+                __auto_type rs = _mv_97.data.ra_equivalent_properties;
                 return owl2_roles_in_profile(rs);
             }
             case owl2_RawAxiom_ra_transitive_property:
             {
-                __auto_type r = _mv_150.data.ra_transitive_property;
+                __auto_type r = _mv_97.data.ra_transitive_property;
                 return owl2_role_in_profile(r);
             }
             case owl2_RawAxiom_ra_object_property_assertion:
             {
-                __auto_type e = _mv_150.data.ra_object_property_assertion;
+                __auto_type e = _mv_97.data.ra_object_property_assertion;
                 return owl2_role_in_profile(e.role);
             }
             case owl2_RawAxiom_ra_declaration:
             {
-                __auto_type _ = _mv_150.data.ra_declaration;
+                __auto_type _ = _mv_97.data.ra_declaration;
                 return 0;
             }
             case owl2_RawAxiom_ra_annotation_assertion:
             {
-                __auto_type _ = _mv_150.data.ra_annotation_assertion;
+                __auto_type _ = _mv_97.data.ra_annotation_assertion;
                 return 0;
             }
             case owl2_RawAxiom_ra_annotation_axiom:
             {
-                __auto_type _ = _mv_150.data.ra_annotation_axiom;
+                __auto_type _ = _mv_97.data.ra_annotation_axiom;
                 return 0;
             }
             case owl2_RawAxiom_ra_inverse_properties:
@@ -431,62 +431,62 @@ uint8_t owl2_axiom_in_profile(owl2_RawAxiom ax) {
             }
             case owl2_RawAxiom_ra_disjoint_properties:
             {
-                __auto_type _ = _mv_150.data.ra_disjoint_properties;
+                __auto_type _ = _mv_97.data.ra_disjoint_properties;
                 return 0;
             }
             case owl2_RawAxiom_ra_same_individual:
             {
-                __auto_type _ = _mv_150.data.ra_same_individual;
+                __auto_type _ = _mv_97.data.ra_same_individual;
                 return 0;
             }
             case owl2_RawAxiom_ra_different_individuals:
             {
-                __auto_type _ = _mv_150.data.ra_different_individuals;
+                __auto_type _ = _mv_97.data.ra_different_individuals;
                 return 0;
             }
             case owl2_RawAxiom_ra_negative_assertion:
             {
-                __auto_type _ = _mv_150.data.ra_negative_assertion;
+                __auto_type _ = _mv_97.data.ra_negative_assertion;
                 return 0;
             }
             case owl2_RawAxiom_ra_disjoint_union:
             {
-                __auto_type _ = _mv_150.data.ra_disjoint_union;
+                __auto_type _ = _mv_97.data.ra_disjoint_union;
                 return 0;
             }
             case owl2_RawAxiom_ra_has_key:
             {
-                __auto_type _ = _mv_150.data.ra_has_key;
+                __auto_type _ = _mv_97.data.ra_has_key;
                 return 0;
             }
             case owl2_RawAxiom_ra_data_axiom:
             {
-                __auto_type _ = _mv_150.data.ra_data_axiom;
+                __auto_type _ = _mv_97.data.ra_data_axiom;
                 return 0;
             }
             case owl2_RawAxiom_ra_builtin_role:
             {
-                __auto_type _ = _mv_150.data.ra_builtin_role;
+                __auto_type _ = _mv_97.data.ra_builtin_role;
                 return 0;
             }
             case owl2_RawAxiom_ra_anonymous_individual:
             {
-                __auto_type _ = _mv_150.data.ra_anonymous_individual;
+                __auto_type _ = _mv_97.data.ra_anonymous_individual;
                 return 0;
             }
             case owl2_RawAxiom_ra_reserved_vocabulary:
             {
-                __auto_type _ = _mv_150.data.ra_reserved_vocabulary;
+                __auto_type _ = _mv_97.data.ra_reserved_vocabulary;
                 return 0;
             }
             case owl2_RawAxiom_ra_swrl_rule:
             {
-                __auto_type _ = _mv_150.data.ra_swrl_rule;
+                __auto_type _ = _mv_97.data.ra_swrl_rule;
                 return 0;
             }
             case owl2_RawAxiom_ra_unrecognized:
             {
-                __auto_type _ = _mv_150.data.ra_unrecognized;
+                __auto_type _ = _mv_97.data.ra_unrecognized;
                 return 0;
             }
         }
@@ -495,8 +495,8 @@ uint8_t owl2_axiom_in_profile(owl2_RawAxiom ax) {
 }
 
 int64_t owl2_concept_tag_rank(owl2_RawConcept c) {
-    __auto_type _mv_151 = c;
-    switch (_mv_151.tag) {
+    __auto_type _mv_98 = c;
+    switch (_mv_98.tag) {
         case owl2_RawConcept_rc_thing:
         {
             return 0;
@@ -507,12 +507,12 @@ int64_t owl2_concept_tag_rank(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_name:
         {
-            __auto_type _ = _mv_151.data.rc_name;
+            __auto_type _ = _mv_98.data.rc_name;
             return 2;
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type _ = _mv_151.data.rc_and;
+            __auto_type _ = _mv_98.data.rc_and;
             return 3;
         }
         case owl2_RawConcept_rc_some:
@@ -521,12 +521,12 @@ int64_t owl2_concept_tag_rank(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_or:
         {
-            __auto_type _ = _mv_151.data.rc_or;
+            __auto_type _ = _mv_98.data.rc_or;
             return 5;
         }
         case owl2_RawConcept_rc_not:
         {
-            __auto_type _ = _mv_151.data.rc_not;
+            __auto_type _ = _mv_98.data.rc_not;
             return 6;
         }
         case owl2_RawConcept_rc_all:
@@ -535,7 +535,7 @@ int64_t owl2_concept_tag_rank(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_oneof:
         {
-            __auto_type _ = _mv_151.data.rc_oneof;
+            __auto_type _ = _mv_98.data.rc_oneof;
             return 8;
         }
         case owl2_RawConcept_rc_has_value:
@@ -544,7 +544,7 @@ int64_t owl2_concept_tag_rank(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_has_self:
         {
-            __auto_type _ = _mv_151.data.rc_has_self;
+            __auto_type _ = _mv_98.data.rc_has_self;
             return 10;
         }
         case owl2_RawConcept_rc_card:
@@ -557,12 +557,12 @@ int64_t owl2_concept_tag_rank(owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_data:
         {
-            __auto_type _ = _mv_151.data.rc_data;
+            __auto_type _ = _mv_98.data.rc_data;
             return 13;
         }
         case owl2_RawConcept_rc_anon:
         {
-            __auto_type _ = _mv_151.data.rc_anon;
+            __auto_type _ = _mv_98.data.rc_anon;
             return 14;
         }
     }
@@ -595,11 +595,11 @@ int64_t owl2_concept_list_cmp(slop_list_owl2_RawConcept a, slop_list_owl2_RawCon
 owl2_RawConcept owl2_concept_at(slop_list_owl2_RawConcept xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_152 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_owl2_RawConcept _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_152.has_value) {
-        __auto_type v = _mv_152.value;
+    __auto_type _mv_99 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_owl2_RawConcept _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_99.has_value) {
+        __auto_type v = _mv_99.value;
         return v;
-    } else if (!_mv_152.has_value) {
+    } else if (!_mv_99.has_value) {
         return ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_thing });
     }
     SLOP_UNREACHABLE();
@@ -616,16 +616,16 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 return 1;
             }
         } else {
-            __auto_type _mv_153 = a;
-            switch (_mv_153.tag) {
+            __auto_type _mv_100 = a;
+            switch (_mv_100.tag) {
                 case owl2_RawConcept_rc_name:
                 {
-                    __auto_type na = _mv_153.data.rc_name;
-                    __auto_type _mv_154 = b;
-                    switch (_mv_154.tag) {
+                    __auto_type na = _mv_100.data.rc_name;
+                    __auto_type _mv_101 = b;
+                    switch (_mv_101.tag) {
                         case owl2_RawConcept_rc_name:
                         {
-                            __auto_type nb = _mv_154.data.rc_name;
+                            __auto_type nb = _mv_101.data.rc_name;
                             return canon_node_cmp(na, nb);
                         }
                         default: {
@@ -635,12 +635,12 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_and:
                 {
-                    __auto_type as = _mv_153.data.rc_and;
-                    __auto_type _mv_155 = b;
-                    switch (_mv_155.tag) {
+                    __auto_type as = _mv_100.data.rc_and;
+                    __auto_type _mv_102 = b;
+                    switch (_mv_102.tag) {
                         case owl2_RawConcept_rc_and:
                         {
-                            __auto_type bs = _mv_155.data.rc_and;
+                            __auto_type bs = _mv_102.data.rc_and;
                             return owl2_concept_list_cmp(as, bs);
                         }
                         default: {
@@ -650,14 +650,14 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_some:
                 {
-                    __auto_type ra2 = _mv_153.data.rc_some.f0;
-                    __auto_type fa = _mv_153.data.rc_some.f1;
-                    __auto_type _mv_156 = b;
-                    switch (_mv_156.tag) {
+                    __auto_type ra2 = _mv_100.data.rc_some.f0;
+                    __auto_type fa = _mv_100.data.rc_some.f1;
+                    __auto_type _mv_103 = b;
+                    switch (_mv_103.tag) {
                         case owl2_RawConcept_rc_some:
                         {
-                            __auto_type rb2 = _mv_156.data.rc_some.f0;
-                            __auto_type fb = _mv_156.data.rc_some.f1;
+                            __auto_type rb2 = _mv_103.data.rc_some.f0;
+                            __auto_type fb = _mv_103.data.rc_some.f1;
                             {
                                 __auto_type rr = canon_role_cmp(ra2, rb2);
                                 if (rr != 0) {
@@ -674,12 +674,12 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_or:
                 {
-                    __auto_type as = _mv_153.data.rc_or;
-                    __auto_type _mv_157 = b;
-                    switch (_mv_157.tag) {
+                    __auto_type as = _mv_100.data.rc_or;
+                    __auto_type _mv_104 = b;
+                    switch (_mv_104.tag) {
                         case owl2_RawConcept_rc_or:
                         {
-                            __auto_type bs = _mv_157.data.rc_or;
+                            __auto_type bs = _mv_104.data.rc_or;
                             return owl2_concept_list_cmp(as, bs);
                         }
                         default: {
@@ -689,12 +689,12 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_not:
                 {
-                    __auto_type fa = _mv_153.data.rc_not;
-                    __auto_type _mv_158 = b;
-                    switch (_mv_158.tag) {
+                    __auto_type fa = _mv_100.data.rc_not;
+                    __auto_type _mv_105 = b;
+                    switch (_mv_105.tag) {
                         case owl2_RawConcept_rc_not:
                         {
-                            __auto_type fb = _mv_158.data.rc_not;
+                            __auto_type fb = _mv_105.data.rc_not;
                             return owl2_concept_cmp((*fa), (*fb));
                         }
                         default: {
@@ -704,14 +704,14 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_all:
                 {
-                    __auto_type ra2 = _mv_153.data.rc_all.f0;
-                    __auto_type fa = _mv_153.data.rc_all.f1;
-                    __auto_type _mv_159 = b;
-                    switch (_mv_159.tag) {
+                    __auto_type ra2 = _mv_100.data.rc_all.f0;
+                    __auto_type fa = _mv_100.data.rc_all.f1;
+                    __auto_type _mv_106 = b;
+                    switch (_mv_106.tag) {
                         case owl2_RawConcept_rc_all:
                         {
-                            __auto_type rb2 = _mv_159.data.rc_all.f0;
-                            __auto_type fb = _mv_159.data.rc_all.f1;
+                            __auto_type rb2 = _mv_106.data.rc_all.f0;
+                            __auto_type fb = _mv_106.data.rc_all.f1;
                             {
                                 __auto_type rr = canon_role_cmp(ra2, rb2);
                                 if (rr != 0) {
@@ -728,14 +728,14 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_has_value:
                 {
-                    __auto_type ra2 = _mv_153.data.rc_has_value.f0;
-                    __auto_type na = _mv_153.data.rc_has_value.f1;
-                    __auto_type _mv_160 = b;
-                    switch (_mv_160.tag) {
+                    __auto_type ra2 = _mv_100.data.rc_has_value.f0;
+                    __auto_type na = _mv_100.data.rc_has_value.f1;
+                    __auto_type _mv_107 = b;
+                    switch (_mv_107.tag) {
                         case owl2_RawConcept_rc_has_value:
                         {
-                            __auto_type rb2 = _mv_160.data.rc_has_value.f0;
-                            __auto_type nb = _mv_160.data.rc_has_value.f1;
+                            __auto_type rb2 = _mv_107.data.rc_has_value.f0;
+                            __auto_type nb = _mv_107.data.rc_has_value.f1;
                             {
                                 __auto_type rr = canon_role_cmp(ra2, rb2);
                                 if (rr != 0) {
@@ -752,12 +752,12 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
                 }
                 case owl2_RawConcept_rc_has_self:
                 {
-                    __auto_type ra2 = _mv_153.data.rc_has_self;
-                    __auto_type _mv_161 = b;
-                    switch (_mv_161.tag) {
+                    __auto_type ra2 = _mv_100.data.rc_has_self;
+                    __auto_type _mv_108 = b;
+                    switch (_mv_108.tag) {
                         case owl2_RawConcept_rc_has_self:
                         {
-                            __auto_type rb2 = _mv_161.data.rc_has_self;
+                            __auto_type rb2 = _mv_108.data.rc_has_self;
                             return canon_role_cmp(ra2, rb2);
                         }
                         default: {
@@ -774,16 +774,16 @@ int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b) {
 }
 
 slop_string owl2_render_role(types_RoleId r) {
-    __auto_type _mv_162 = r;
-    switch (_mv_162.tag) {
+    __auto_type _mv_109 = r;
+    switch (_mv_109.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_162.data.named_role;
+            __auto_type i = _mv_109.data.named_role;
             return i.value;
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_162.data.fresh_role;
+            __auto_type _ = _mv_109.data.fresh_role;
             return SLOP_STR("_:fresh-role");
         }
     }
@@ -791,21 +791,21 @@ slop_string owl2_render_role(types_RoleId r) {
 }
 
 slop_string owl2_render_node(types_Node n) {
-    __auto_type _mv_163 = n;
-    switch (_mv_163.tag) {
+    __auto_type _mv_110 = n;
+    switch (_mv_110.tag) {
         case types_Node_class_node:
         {
-            __auto_type i = _mv_163.data.class_node;
+            __auto_type i = _mv_110.data.class_node;
             return i.value;
         }
         case types_Node_individual_node:
         {
-            __auto_type i = _mv_163.data.individual_node;
+            __auto_type i = _mv_110.data.individual_node;
             return i.value;
         }
         case types_Node_fresh_node:
         {
-            __auto_type _ = _mv_163.data.fresh_node;
+            __auto_type _ = _mv_110.data.fresh_node;
             return SLOP_STR("_:fresh-node");
         }
     }
@@ -813,12 +813,12 @@ slop_string owl2_render_node(types_Node n) {
 }
 
 slop_string owl2_render_card_kind(owl2_CardKind k) {
-    __auto_type _mv_164 = k;
-    if (_mv_164 == owl2_CardKind_card_min) {
+    __auto_type _mv_111 = k;
+    if (_mv_111 == owl2_CardKind_card_min) {
         return SLOP_STR("ObjectMinCardinality");
-    } else if (_mv_164 == owl2_CardKind_card_max) {
+    } else if (_mv_111 == owl2_CardKind_card_max) {
         return SLOP_STR("ObjectMaxCardinality");
-    } else if (_mv_164 == owl2_CardKind_card_exact) {
+    } else if (_mv_111 == owl2_CardKind_card_exact) {
         return SLOP_STR("ObjectExactCardinality");
     }
     SLOP_UNREACHABLE();
@@ -890,8 +890,8 @@ slop_string owl2_join2(slop_arena* arena, slop_string a, slop_string b) {
 }
 
 slop_string owl2_render_concept(slop_arena* arena, owl2_RawConcept c) {
-    __auto_type _mv_165 = c;
-    switch (_mv_165.tag) {
+    __auto_type _mv_112 = c;
+    switch (_mv_112.tag) {
         case owl2_RawConcept_rc_thing:
         {
             return SLOP_STR("owl:Thing");
@@ -902,75 +902,75 @@ slop_string owl2_render_concept(slop_arena* arena, owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_name:
         {
-            __auto_type n = _mv_165.data.rc_name;
+            __auto_type n = _mv_112.data.rc_name;
             return owl2_render_node(n);
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_165.data.rc_and;
+            __auto_type cs = _mv_112.data.rc_and;
             return owl2_wrap(arena, SLOP_STR("ObjectIntersectionOf"), owl2_render_concept_list(arena, cs));
         }
         case owl2_RawConcept_rc_or:
         {
-            __auto_type cs = _mv_165.data.rc_or;
+            __auto_type cs = _mv_112.data.rc_or;
             return owl2_wrap(arena, SLOP_STR("ObjectUnionOf"), owl2_render_concept_list(arena, cs));
         }
         case owl2_RawConcept_rc_not:
         {
-            __auto_type f = _mv_165.data.rc_not;
+            __auto_type f = _mv_112.data.rc_not;
             return owl2_wrap(arena, SLOP_STR("ObjectComplementOf"), owl2_render_concept(arena, (*f)));
         }
         case owl2_RawConcept_rc_some:
         {
-            __auto_type r = _mv_165.data.rc_some.f0;
-            __auto_type f = _mv_165.data.rc_some.f1;
+            __auto_type r = _mv_112.data.rc_some.f0;
+            __auto_type f = _mv_112.data.rc_some.f1;
             return owl2_wrap(arena, SLOP_STR("ObjectSomeValuesFrom"), owl2_join2(arena, owl2_render_role(r), owl2_render_concept(arena, (*f))));
         }
         case owl2_RawConcept_rc_all:
         {
-            __auto_type r = _mv_165.data.rc_all.f0;
-            __auto_type f = _mv_165.data.rc_all.f1;
+            __auto_type r = _mv_112.data.rc_all.f0;
+            __auto_type f = _mv_112.data.rc_all.f1;
             return owl2_wrap(arena, SLOP_STR("ObjectAllValuesFrom"), owl2_join2(arena, owl2_render_role(r), owl2_render_concept(arena, (*f))));
         }
         case owl2_RawConcept_rc_oneof:
         {
-            __auto_type ns = _mv_165.data.rc_oneof;
+            __auto_type ns = _mv_112.data.rc_oneof;
             return owl2_wrap(arena, SLOP_STR("ObjectOneOf"), owl2_render_node_list(arena, ns));
         }
         case owl2_RawConcept_rc_has_value:
         {
-            __auto_type r = _mv_165.data.rc_has_value.f0;
-            __auto_type n = _mv_165.data.rc_has_value.f1;
+            __auto_type r = _mv_112.data.rc_has_value.f0;
+            __auto_type n = _mv_112.data.rc_has_value.f1;
             return owl2_wrap(arena, SLOP_STR("ObjectHasValue"), owl2_join2(arena, owl2_render_role(r), owl2_render_node(n)));
         }
         case owl2_RawConcept_rc_has_self:
         {
-            __auto_type r = _mv_165.data.rc_has_self;
+            __auto_type r = _mv_112.data.rc_has_self;
             return owl2_wrap(arena, SLOP_STR("ObjectHasSelf"), owl2_render_role(r));
         }
         case owl2_RawConcept_rc_card:
         {
-            __auto_type k = _mv_165.data.rc_card.f0;
-            __auto_type r = _mv_165.data.rc_card.f1;
-            __auto_type n = _mv_165.data.rc_card.f2;
+            __auto_type k = _mv_112.data.rc_card.f0;
+            __auto_type r = _mv_112.data.rc_card.f1;
+            __auto_type n = _mv_112.data.rc_card.f2;
             return owl2_wrap(arena, owl2_render_card_kind(k), owl2_join2(arena, int_to_string(arena, n), owl2_render_role(r)));
         }
         case owl2_RawConcept_rc_qcard:
         {
-            __auto_type k = _mv_165.data.rc_qcard.f0;
-            __auto_type r = _mv_165.data.rc_qcard.f1;
-            __auto_type n = _mv_165.data.rc_qcard.f2;
-            __auto_type f = _mv_165.data.rc_qcard.f3;
+            __auto_type k = _mv_112.data.rc_qcard.f0;
+            __auto_type r = _mv_112.data.rc_qcard.f1;
+            __auto_type n = _mv_112.data.rc_qcard.f2;
+            __auto_type f = _mv_112.data.rc_qcard.f3;
             return owl2_wrap(arena, owl2_render_card_kind(k), owl2_join2(arena, int_to_string(arena, n), owl2_join2(arena, owl2_render_role(r), owl2_render_concept(arena, (*f)))));
         }
         case owl2_RawConcept_rc_data:
         {
-            __auto_type ref = _mv_165.data.rc_data;
+            __auto_type ref = _mv_112.data.rc_data;
             return owl2_wrap(arena, SLOP_STR("DataRange"), owl2_render_input_ref(ref));
         }
         case owl2_RawConcept_rc_anon:
         {
-            __auto_type ref = _mv_165.data.rc_anon;
+            __auto_type ref = _mv_112.data.rc_anon;
             return owl2_wrap(arena, SLOP_STR("AnonymousClass"), owl2_render_input_ref(ref));
         }
     }
@@ -978,21 +978,21 @@ slop_string owl2_render_concept(slop_arena* arena, owl2_RawConcept c) {
 }
 
 slop_string owl2_render_input_ref(types_InputRef r) {
-    __auto_type _mv_166 = r;
-    switch (_mv_166.tag) {
+    __auto_type _mv_113 = r;
+    switch (_mv_113.tag) {
         case types_InputRef_owl_axiom:
         {
-            __auto_type a = _mv_166.data.owl_axiom;
+            __auto_type a = _mv_113.data.owl_axiom;
             return a.text;
         }
         case types_InputRef_rdf_fragment:
         {
-            __auto_type s = _mv_166.data.rdf_fragment;
+            __auto_type s = _mv_113.data.rdf_fragment;
             return s;
         }
         case types_InputRef_synthetic:
         {
-            __auto_type s = _mv_166.data.synthetic;
+            __auto_type s = _mv_113.data.synthetic;
             return s;
         }
     }
@@ -1000,152 +1000,152 @@ slop_string owl2_render_input_ref(types_InputRef r) {
 }
 
 slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax) {
-    __auto_type _mv_167 = ax;
-    switch (_mv_167.tag) {
+    __auto_type _mv_114 = ax;
+    switch (_mv_114.tag) {
         case owl2_RawAxiom_ra_sub_class_of:
         {
-            __auto_type l = _mv_167.data.ra_sub_class_of.f0;
-            __auto_type r = _mv_167.data.ra_sub_class_of.f1;
+            __auto_type l = _mv_114.data.ra_sub_class_of.f0;
+            __auto_type r = _mv_114.data.ra_sub_class_of.f1;
             return owl2_wrap(arena, SLOP_STR("SubClassOf"), owl2_join2(arena, owl2_render_concept(arena, (*l)), owl2_render_concept(arena, (*r))));
         }
         case owl2_RawAxiom_ra_equivalent_classes:
         {
-            __auto_type cs = _mv_167.data.ra_equivalent_classes;
+            __auto_type cs = _mv_114.data.ra_equivalent_classes;
             return owl2_wrap(arena, SLOP_STR("EquivalentClasses"), owl2_render_concept_list(arena, cs));
         }
         case owl2_RawAxiom_ra_disjoint_classes:
         {
-            __auto_type cs = _mv_167.data.ra_disjoint_classes;
+            __auto_type cs = _mv_114.data.ra_disjoint_classes;
             return owl2_wrap(arena, SLOP_STR("DisjointClasses"), owl2_render_concept_list(arena, cs));
         }
         case owl2_RawAxiom_ra_sub_object_property:
         {
-            __auto_type a = _mv_167.data.ra_sub_object_property.f0;
-            __auto_type b = _mv_167.data.ra_sub_object_property.f1;
+            __auto_type a = _mv_114.data.ra_sub_object_property.f0;
+            __auto_type b = _mv_114.data.ra_sub_object_property.f1;
             return owl2_wrap(arena, SLOP_STR("SubObjectPropertyOf"), owl2_join2(arena, owl2_render_role(a), owl2_render_role(b)));
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type ch = _mv_167.data.ra_property_chain;
+            __auto_type ch = _mv_114.data.ra_property_chain;
             return owl2_wrap(arena, SLOP_STR("SubObjectPropertyOf"), owl2_join2(arena, owl2_wrap(arena, SLOP_STR("ObjectPropertyChain"), owl2_render_role_list(arena, ch.steps)), owl2_render_role(ch.super)));
         }
         case owl2_RawAxiom_ra_equivalent_properties:
         {
-            __auto_type rs = _mv_167.data.ra_equivalent_properties;
+            __auto_type rs = _mv_114.data.ra_equivalent_properties;
             return owl2_wrap(arena, SLOP_STR("EquivalentObjectProperties"), owl2_render_role_list(arena, rs));
         }
         case owl2_RawAxiom_ra_transitive_property:
         {
-            __auto_type r = _mv_167.data.ra_transitive_property;
+            __auto_type r = _mv_114.data.ra_transitive_property;
             return owl2_wrap(arena, SLOP_STR("TransitiveObjectProperty"), owl2_render_role(r));
         }
         case owl2_RawAxiom_ra_object_property_domain:
         {
-            __auto_type r = _mv_167.data.ra_object_property_domain.f0;
-            __auto_type c = _mv_167.data.ra_object_property_domain.f1;
+            __auto_type r = _mv_114.data.ra_object_property_domain.f0;
+            __auto_type c = _mv_114.data.ra_object_property_domain.f1;
             return owl2_wrap(arena, SLOP_STR("ObjectPropertyDomain"), owl2_join2(arena, owl2_render_role(r), owl2_render_concept(arena, (*c))));
         }
         case owl2_RawAxiom_ra_object_property_range:
         {
-            __auto_type r = _mv_167.data.ra_object_property_range.f0;
-            __auto_type c = _mv_167.data.ra_object_property_range.f1;
+            __auto_type r = _mv_114.data.ra_object_property_range.f0;
+            __auto_type c = _mv_114.data.ra_object_property_range.f1;
             return owl2_wrap(arena, SLOP_STR("ObjectPropertyRange"), owl2_join2(arena, owl2_render_role(r), owl2_render_concept(arena, (*c))));
         }
         case owl2_RawAxiom_ra_class_assertion:
         {
-            __auto_type ca = _mv_167.data.ra_class_assertion;
+            __auto_type ca = _mv_114.data.ra_class_assertion;
             return owl2_wrap(arena, SLOP_STR("ClassAssertion"), owl2_join2(arena, owl2_render_concept(arena, (*ca.concept)), owl2_render_node(ca.subject)));
         }
         case owl2_RawAxiom_ra_object_property_assertion:
         {
-            __auto_type e = _mv_167.data.ra_object_property_assertion;
+            __auto_type e = _mv_114.data.ra_object_property_assertion;
             return owl2_wrap(arena, SLOP_STR("ObjectPropertyAssertion"), owl2_join2(arena, owl2_render_role(e.role), owl2_join2(arena, owl2_render_node(e.from), owl2_render_node(e.to))));
         }
         case owl2_RawAxiom_ra_declaration:
         {
-            __auto_type d = _mv_167.data.ra_declaration;
+            __auto_type d = _mv_114.data.ra_declaration;
             return owl2_wrap(arena, SLOP_STR("Declaration"), d.entity.value);
         }
         case owl2_RawAxiom_ra_annotation_assertion:
         {
-            __auto_type a = _mv_167.data.ra_annotation_assertion;
+            __auto_type a = _mv_114.data.ra_annotation_assertion;
             return owl2_wrap(arena, SLOP_STR("AnnotationAssertion"), owl2_join2(arena, a.property.value, a.target));
         }
         case owl2_RawAxiom_ra_annotation_axiom:
         {
-            __auto_type ref = _mv_167.data.ra_annotation_axiom;
+            __auto_type ref = _mv_114.data.ra_annotation_axiom;
             return owl2_wrap(arena, SLOP_STR("AnnotationAxiom"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_inverse_properties:
         {
-            __auto_type a = _mv_167.data.ra_inverse_properties.f0;
-            __auto_type b = _mv_167.data.ra_inverse_properties.f1;
+            __auto_type a = _mv_114.data.ra_inverse_properties.f0;
+            __auto_type b = _mv_114.data.ra_inverse_properties.f1;
             return owl2_wrap(arena, SLOP_STR("InverseObjectProperties"), owl2_join2(arena, owl2_render_role(a), owl2_render_role(b)));
         }
         case owl2_RawAxiom_ra_property_characteristic:
         {
-            __auto_type c = _mv_167.data.ra_property_characteristic.f0;
-            __auto_type r = _mv_167.data.ra_property_characteristic.f1;
+            __auto_type c = _mv_114.data.ra_property_characteristic.f0;
+            __auto_type r = _mv_114.data.ra_property_characteristic.f1;
             return owl2_wrap(arena, owl2_render_characteristic(c), owl2_render_role(r));
         }
         case owl2_RawAxiom_ra_disjoint_properties:
         {
-            __auto_type rs = _mv_167.data.ra_disjoint_properties;
+            __auto_type rs = _mv_114.data.ra_disjoint_properties;
             return owl2_wrap(arena, SLOP_STR("DisjointObjectProperties"), owl2_render_role_list(arena, rs));
         }
         case owl2_RawAxiom_ra_same_individual:
         {
-            __auto_type ns = _mv_167.data.ra_same_individual;
+            __auto_type ns = _mv_114.data.ra_same_individual;
             return owl2_wrap(arena, SLOP_STR("SameIndividual"), owl2_render_node_list(arena, ns));
         }
         case owl2_RawAxiom_ra_different_individuals:
         {
-            __auto_type ns = _mv_167.data.ra_different_individuals;
+            __auto_type ns = _mv_114.data.ra_different_individuals;
             return owl2_wrap(arena, SLOP_STR("DifferentIndividuals"), owl2_render_node_list(arena, ns));
         }
         case owl2_RawAxiom_ra_negative_assertion:
         {
-            __auto_type ref = _mv_167.data.ra_negative_assertion;
+            __auto_type ref = _mv_114.data.ra_negative_assertion;
             return owl2_wrap(arena, SLOP_STR("NegativeAssertion"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_disjoint_union:
         {
-            __auto_type ref = _mv_167.data.ra_disjoint_union;
+            __auto_type ref = _mv_114.data.ra_disjoint_union;
             return owl2_wrap(arena, SLOP_STR("DisjointUnion"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_has_key:
         {
-            __auto_type ref = _mv_167.data.ra_has_key;
+            __auto_type ref = _mv_114.data.ra_has_key;
             return owl2_wrap(arena, SLOP_STR("HasKey"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_data_axiom:
         {
-            __auto_type ref = _mv_167.data.ra_data_axiom;
+            __auto_type ref = _mv_114.data.ra_data_axiom;
             return owl2_wrap(arena, SLOP_STR("DataAxiom"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_builtin_role:
         {
-            __auto_type ref = _mv_167.data.ra_builtin_role;
+            __auto_type ref = _mv_114.data.ra_builtin_role;
             return owl2_wrap(arena, SLOP_STR("BuiltinRole"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_anonymous_individual:
         {
-            __auto_type ref = _mv_167.data.ra_anonymous_individual;
+            __auto_type ref = _mv_114.data.ra_anonymous_individual;
             return owl2_wrap(arena, SLOP_STR("AnonymousIndividual"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_reserved_vocabulary:
         {
-            __auto_type ref = _mv_167.data.ra_reserved_vocabulary;
+            __auto_type ref = _mv_114.data.ra_reserved_vocabulary;
             return owl2_wrap(arena, SLOP_STR("ReservedVocabulary"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_swrl_rule:
         {
-            __auto_type ref = _mv_167.data.ra_swrl_rule;
+            __auto_type ref = _mv_114.data.ra_swrl_rule;
             return owl2_wrap(arena, SLOP_STR("SWRLRule"), owl2_render_input_ref(ref));
         }
         case owl2_RawAxiom_ra_unrecognized:
         {
-            __auto_type ref = _mv_167.data.ra_unrecognized;
+            __auto_type ref = _mv_114.data.ra_unrecognized;
             return owl2_wrap(arena, SLOP_STR("Unrecognized"), owl2_render_input_ref(ref));
         }
     }
@@ -1153,18 +1153,18 @@ slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax) {
 }
 
 slop_string owl2_render_characteristic(owl2_PropCharacteristic c) {
-    __auto_type _mv_168 = c;
-    if (_mv_168 == owl2_PropCharacteristic_prop_functional) {
+    __auto_type _mv_115 = c;
+    if (_mv_115 == owl2_PropCharacteristic_prop_functional) {
         return SLOP_STR("FunctionalObjectProperty");
-    } else if (_mv_168 == owl2_PropCharacteristic_prop_inverse_functional) {
+    } else if (_mv_115 == owl2_PropCharacteristic_prop_inverse_functional) {
         return SLOP_STR("InverseFunctionalObjectProperty");
-    } else if (_mv_168 == owl2_PropCharacteristic_prop_symmetric) {
+    } else if (_mv_115 == owl2_PropCharacteristic_prop_symmetric) {
         return SLOP_STR("SymmetricObjectProperty");
-    } else if (_mv_168 == owl2_PropCharacteristic_prop_asymmetric) {
+    } else if (_mv_115 == owl2_PropCharacteristic_prop_asymmetric) {
         return SLOP_STR("AsymmetricObjectProperty");
-    } else if (_mv_168 == owl2_PropCharacteristic_prop_reflexive) {
+    } else if (_mv_115 == owl2_PropCharacteristic_prop_reflexive) {
         return SLOP_STR("ReflexiveObjectProperty");
-    } else if (_mv_168 == owl2_PropCharacteristic_prop_irreflexive) {
+    } else if (_mv_115 == owl2_PropCharacteristic_prop_irreflexive) {
         return SLOP_STR("IrreflexiveObjectProperty");
     }
     SLOP_UNREACHABLE();
@@ -1172,7 +1172,7 @@ slop_string owl2_render_characteristic(owl2_PropCharacteristic c) {
 
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ owl2__lambda_169_env_t* owl2__lambda_169_env = (owl2__lambda_169_env_t*)slop_arena_alloc(arena, sizeof(owl2__lambda_169_env_t)); *owl2__lambda_169_env = (owl2__lambda_169_env_t){ .xs = xs }; (slop_closure_t){ (void*)owl2__lambda_169, (void*)owl2__lambda_169_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ owl2__lambda_116_env_t* owl2__lambda_116_env = (owl2__lambda_116_env_t*)slop_arena_alloc(arena, sizeof(owl2__lambda_116_env_t)); *owl2__lambda_116_env = (owl2__lambda_116_env_t){ .xs = xs }; (slop_closure_t){ (void*)owl2__lambda_116, (void*)owl2__lambda_116_env }; }));
         __auto_type out = ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 });
         {
             __auto_type _coll = idx;
