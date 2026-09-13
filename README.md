@@ -11,22 +11,27 @@ RDF: HOWL classifies → emits inferred `subClassOf` → GROWL materializes/enri
   targets (CB-EL, Horn-SHIQ) are Horn fragments.
 - **Design:** [`SPEC.md`](./SPEC.md) — approved 2026-08-17.
 
-## Status: the calculus runs; the front end does not
+## Status: Turtle in, classified out
 
-**HOWL derives `Mother ⊑ Parent`** — the [§3.1](./SPEC.md#31-the-litmus-test-also-the-v0-acceptance-criterion)
-litmus, and the line between a DL reasoner and a materialization engine. CR1–CR7, the
-barrier-synchronized driver, and hierarchy extraction all work, driven from hand-normalized
-`NormAxiom` fixtures.
+**HOWL derives `Mother ⊑ Parent` from a Turtle document** — the
+[§3.1](./SPEC.md#31-the-litmus-test-also-the-v0-acceptance-criterion) litmus, and the line between a
+DL reasoner and a materialization engine. It is reachable only through the existential on the
+*defining* side, which is what materialization cannot see.
 
-**There is still no front end**, so `classify` returns a `Fault` rather than a report: nothing yet
-parses Turtle, gates against [§5.2](./SPEC.md#52-the-exact-v0-language), or normalizes.
+```
+$ howl validate corpus/fixtures/v0/litmus.ttl
+howl: 10 subsumptions, 0 unsatisfiable, 0 omitted
+howl: coherent                                                    # exit 0
 
-That refusal is deliberate and it is the safety-relevant choice, and it outlives the rules landing.
-Without the gate there is nothing to populate `coverage.omitted`, so a report handed back now would
-present as full coverage, a reached fixpoint, and whatever the rules found — which the verdict rule
-reads as a clean **coherent**. Sound, catastrophically incomplete, and indistinguishable from success
-at every interface. The engine stays unable to express a verdict until it can also say what it
-could not see.
+$ howl validate corpus/fixtures/hazards/unattested-import.ttl
+howl: INCONCLUSIVE — coverage gaps, this is NOT a pass            # exit 2
+```
+
+`classify` no longer refuses. It still returns a `Fault` rather than a report when the front end
+cannot decode the input, and that is the safety-relevant choice: a `Fault` has no verdict to
+misread, an `Outcome` does. Coverage travels from the gate unchanged, so a run with omissions
+reports **inconclusive** — never **coherent**. Treat exit 0 alone as the pass condition; a CI job
+that accepts 2 reintroduces the silent false pass the gate exists to prevent.
 
 | Milestone | Scope | State |
 |---|---|---|
@@ -36,6 +41,55 @@ could not see.
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
 | M4 | alignment + minimal repair | not started |
+
+## What v0 accepts, and what it only reports
+
+**v0 is not EL++, and saying so would overclaim.** Named, it is **ELH<sub>⊥</sub><sup>R+</sup> with
+domain and range axioms** — EL with role hierarchies, ⊥, role composition, and property
+domains/ranges — which is a *strict subset* of EL++ and, subject to the two RBox conditions, of the
+OWL 2 EL profile. The gap is **not** just nominals and concrete domains; the complete list is below.
+[§5.2](./SPEC.md#52-the-exact-v0-language) is the authority and this table summarises it.
+
+Every recognized construct has exactly one of four dispositions, and the matrix is a catch-all-free
+`match` over `RawAxiom` compiled with `-Werror=switch` — so adding a construct without dispositioning
+it is a **build error**, not a proofreading exercise.
+
+| Disposition | Meaning | Constructs |
+|---|---|---|
+| **in v0** | reasoned over | `SubClassOf`, `EquivalentClasses`, `DisjointClasses` (n-ary), `ObjectIntersectionOf`, `ObjectSomeValuesFrom`, `owl:Thing`, `owl:Nothing`, `SubObjectPropertyOf`, `ObjectPropertyChain` (n-ary), `EquivalentObjectProperties`, `TransitiveObjectProperty`, `ObjectPropertyDomain`, `ObjectPropertyRange`, `ClassAssertion`, `ObjectPropertyAssertion` |
+| **consumed** | read, yields no axiom | declarations — *not* "ignored": dropping them loses declared-but-unused classes |
+| **inert** | semantically empty in OWL 2 | `AnnotationAssertion`, `SubAnnotationPropertyOf`, `AnnotationProperty{Domain,Range}`, the ontology header, axiom-annotation reification |
+| **out-of-profile** | recognized, **enumerated**, never silently dropped | everything below |
+
+**Rejected, with the reason each is rejected:**
+
+| Construct | Why it is out |
+|---|---|
+| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities | outside EL entirely — v2 (SROIQ) |
+| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — v1 (Horn-SHIQ) |
+| `ObjectOneOf` (nominals), `ObjectHasValue` | **in OWL 2 EL**, deferred |
+| `ObjectHasSelf` | **in OWL 2 EL**, but not in the cited EL++ constructor syntax |
+| `ReflexiveObjectProperty` | **in OWL 2 EL**, and in the updated EL++ paper — deferred |
+| `owl:topObjectProperty`, `owl:bottomObjectProperty` | **in OWL 2 EL**; CR1–CR7 do not implement built-in role semantics, and treating `⊥ᵣ` as an ordinary role is a *missed unsatisfiability* |
+| Concrete domains, datatype properties, data ranges | the consumer partitions these and keeps a told-coherence side-check |
+| Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |
+| `SameIndividual`, `DifferentIndividuals`, negative assertions, `HasKey`, `DisjointUnion`, `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL |
+| SWRL rules | **never**, at any rung — unrestricted SWRL is undecidable, and it is in neither OWL 2 DL nor OWL 2 EL |
+
+The five rows marked **in OWL 2 EL** are the honest distance between v0 and that profile. Everything
+else v0 rejects, OWL 2 EL rejects too.
+
+**Why "recognized and enumerated" rather than "unsupported".** A rejected axiom lands in
+`coverage.omitted` with a canonical `AxiomRef`, which forces the verdict to **inconclusive**. That is
+the whole safety property: HOWL will not report *coherent* over an ontology it only partly read. The
+corpus pins both directions — all 17 `v0/` fixtures gate clean, and all 14 `out-of-profile/` fixtures
+yield at least one omission (`make test`), cross-checked by an independently written census
+(`make census`).
+
+**Two conditions, not one.** §5.2's table classifies axiom *forms*; ELH<sub>⊥</sub><sup>R+</sup> also
+restricts the *operands* those forms carry. `SubClassOf(A, ObjectUnionOf(B,C))` is an in-profile form
+carrying a concept the fragment has no constructor for, so the gate checks both — and a built-in role
+is caught wherever it occurs, not only in the shape a fixture happens to use.
 
 ## Build
 

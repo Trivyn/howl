@@ -998,8 +998,19 @@
           (match (term-iri-value (. t subject))
             ((some s)
               (match (entity-kind-of ov)
-                ((some k) (ok (union-new RawAxiom ra-declaration
-                                (record-new RawDeclaration (kind k) (entity s)))))
+                ;; OWL 2 FORBIDS RESERVED IRIs AS NAMED INDIVIDUALS, and
+                ;; `owl:Nothing` as an individual is the case that
+                ;; matters: it is a distinct node from `class-node(⊥)`
+                ;; under tag-first comparison, so it would NOT collide
+                ;; with ⊥ and would instead be silently consumed as an
+                ;; ordinary declaration. Declaring `owl:Thing a owl:Class`
+                ;; stays legitimate — that one IS a class, and rejecting
+                ;; it would refuse ordinary documents.
+                ((some k)
+                  (if (and (== k 'entity-individual) (is-reserved-iri (. s value)))
+                    (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+                    (ok (union-new RawAxiom ra-declaration
+                          (record-new RawDeclaration (kind k) (entity s))))))
                 ((none)   (error "unreachable: declaration type vanished"))))
             ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))
 
@@ -1060,10 +1071,12 @@
             ((ok c)
               (match (term-iri-value (. t subject))
                 ((some s)
-                  (ok (union-new RawAxiom ra-class-assertion
-                        (record-new RawClassAssertion
-                          (concept (box-concept arena c))
-                          (subject (union-new Node individual-node s))))))
+                  (if (is-reserved-iri (. s value))
+                    (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+                    (ok (union-new RawAxiom ra-class-assertion
+                          (record-new RawClassAssertion
+                            (concept (box-concept arena c))
+                            (subject (union-new Node individual-node s)))))))
                 ((none)
                   (ok (union-new RawAxiom ra-anonymous-individual (frag arena t)))))))))))
 
@@ -1087,6 +1100,27 @@
         (or (starts-with v "http://www.w3.org/2000/01/rdf-schema#")
           (or (starts-with v "http://www.w3.org/2003/11/swrl#")
               (starts-with v "http://www.w3.org/2001/XMLSchema#"))))))
+
+  (fn property-axiom-kind ((sig Signature) (subj Term))
+    (@intent "Which property kind a property axiom's SUBJECT is declared as")
+    (@spec ((Signature Term) -> Int))
+    (@pure)
+    ;; 0 = object (or undeclared, which the caller has already faulted
+    ;; on elsewhere), 1 = annotation, 2 = data.
+    ;;
+    ;; rdfs:subPropertyOf, rdfs:domain and rdfs:range are SHARED SPELLINGS:
+    ;; the same predicate expresses SubObjectPropertyOf,
+    ;; SubAnnotationPropertyOf and SubDataPropertyOf, and only the
+    ;; subject's declared kind separates them. Dispatching on the
+    ;; predicate alone reads every annotation-property axiom as an
+    ;; object-property one.
+    (match (term-iri-value subj)
+      ((none) 0)
+      ((some i)
+        (cond
+          ((signature-has-annotation-property sig i) 1)
+          ((signature-has-data-property sig i)       2)
+          (else                                       0)))))
 
   (fn decode-axiom ((arena Arena) (g IndexedGraph) (sig Signature) (t Triple))
     (@intent "One triple → one RawAxiom, per §5.2's disposition table")
@@ -1136,12 +1170,22 @@
                             (record-new RawChain (steps steps) (super super)))))))))
 
             ((== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)
+              ;; ANNOTATION AXIOMS ARE SEMANTICALLY INERT IN OWL 2.
+              ;; Decoding SubAnnotationPropertyOf as a role inclusion
+              ;; injects an edge into the TOLD HIERARCHY that both RBox
+              ;; gates read, and can reject a valid RBox.
+              (cond
+                ((== (property-axiom-kind sig (. t subject)) 1)
+                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                ((== (property-axiom-kind sig (. t subject)) 2)
+                  (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+                (else
               (match (role-of-term (. t subject))
                 ((none) (error "rdfs:subPropertyOf on a non-IRI subject"))
                 ((some sub)
                   (match (role-of-term (. t object))
                     ((none) (error "rdfs:subPropertyOf with a non-IRI object"))
-                    ((some sup) (ok (union-new RawAxiom ra-sub-object-property sub sup)))))))
+                    ((some sup) (ok (union-new RawAxiom ra-sub-object-property sub sup)))))))))
 
             ((== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
               (match (role-of-term (. t subject))
@@ -1174,22 +1218,44 @@
                     ((some b) (ok (union-new RawAxiom ra-inverse-properties a b)))))))
 
             ((== (string-cmp pv RDFS_DOMAIN) 0)
+              ;; AnnotationPropertyDomain has NO semantics in OWL 2.
+              ;; Decoding it as ObjectPropertyDomain injects the GCI
+              ;; `∃p.⊤ ⊑ C` — content the document does not state — so
+              ;; HOWL would derive subsumptions that do not hold. That
+              ;; is unsoundness, not incompleteness.
+              (cond
+                ((== (property-axiom-kind sig (. t subject)) 1)
+                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                ((== (property-axiom-kind sig (. t subject)) 2)
+                  (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+                (else
               (match (role-of-term (. t subject))
                 ((none) (error "rdfs:domain on a non-IRI subject"))
                 ((some r)
                   (match (decode-concept arena g (. t object) CONCEPT_FUEL)
                     ((error m) (error m))
                     ((ok c) (ok (union-new RawAxiom ra-object-property-domain
-                                  r (box-concept arena c))))))))
+                                  r (box-concept arena c))))))))))
 
             ((== (string-cmp pv RDFS_RANGE) 0)
+              ;; Same shared spelling: AnnotationPropertyRange and
+              ;; DataPropertyRange both write rdfs:range. Reading an
+              ;; annotation range as an object-property range is worse
+              ;; here than elsewhere, because ranges feed ran_T and are
+              ;; then eliminated into real GCIs.
+              (cond
+                ((== (property-axiom-kind sig (. t subject)) 1)
+                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                ((== (property-axiom-kind sig (. t subject)) 2)
+                  (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+                (else
               (match (role-of-term (. t subject))
                 ((none) (error "rdfs:range on a non-IRI subject"))
                 ((some r)
                   (match (decode-concept arena g (. t object) CONCEPT_FUEL)
                     ((error m) (error m))
                     ((ok c) (ok (union-new RawAxiom ra-object-property-range
-                                  r (box-concept arena c))))))))
+                                  r (box-concept arena c))))))))))
 
             ((== (string-cmp pv OWL_SAME_AS) 0)
               (let ((mut ns (list-new arena Node)))
@@ -1240,11 +1306,14 @@
                       (match (term-iri-value (. t object))
                         ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
                         ((some sto)
-                          (ok (union-new RawAxiom ra-object-property-assertion
-                                (record-new RawEdge
-                                  (role r)
-                                  (from (union-new Node individual-node sfrom))
-                                  (to   (union-new Node individual-node sto)))))))))))) 
+                          (if (or (is-reserved-iri (. sfrom value))
+                                  (is-reserved-iri (. sto value)))
+                            (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+                            (ok (union-new RawAxiom ra-object-property-assertion
+                                  (record-new RawEdge
+                                    (role r)
+                                    (from (union-new Node individual-node sfrom))
+                                    (to   (union-new Node individual-node sto))))))))))))) 
 
             ;; Reserved vocabulary HOWL does not implement. NOT a
             ;; laziness catch-all: this is what lets a future profile's

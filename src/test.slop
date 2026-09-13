@@ -1075,6 +1075,62 @@
     (let ((ttl "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:A a owl:Class . :p a owl:ObjectProperty .\n:a a :A . :a :p :b .\n"))
       (== (gate-omissions-of-ttl arena ttl) 0)))
 
+  (fn accepted-count-of-ttl ((arena Arena) (ttl String))
+    (@intent "How many axioms the gate ACCEPTED for an inline document")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (match (parse-ttl-string arena ttl)
+      ((error _) -1)
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) -1)
+          ((ok s0)
+            (match (decode-axioms arena (. s0 triples))
+              ((error _) -1)
+              ((ok s1)
+                (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
+                                         (. s0 omissions)) accepted))))))))))
+
+  (fn test-reserved-iri-as-individual-is-out-of-profile ((arena Arena))
+    (@intent "owl:Nothing used as a named individual is REPORTED, not consumed")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; OWL 2 forbids reserved IRIs as named individuals, and this one
+    ;; hides well: `individual-node(owl:Nothing)` is a DISTINCT node
+    ;; from `class-node(owl:Nothing)` under tag-first comparison — which
+    ;; is exactly the property that makes punning safe — so it never
+    ;; collides with ⊥ and would otherwise be consumed as an ordinary
+    ;; declaration and silently given a context.
+    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:A a owl:Class . :p a owl:ObjectProperty . :a a owl:NamedIndividual .\n"))
+      (and (> (gate-omissions-of-ttl arena (string-concat arena pre
+                "owl:Nothing a owl:NamedIndividual .")) 0)
+        (and (> (gate-omissions-of-ttl arena (string-concat arena pre
+                  ":a :p owl:Nothing .")) 0)
+             ;; THE ACCEPTING HALF: `owl:Thing a owl:Class` is
+             ;; legitimate — it IS a class — and rejecting it would
+             ;; refuse ordinary published documents.
+             (== (gate-omissions-of-ttl arena (string-concat arena pre
+                   "owl:Thing a owl:Class .")) 0)))))
+
+  (fn test-annotation-property-axioms-are-inert ((arena Arena))
+    (@intent "SubAnnotationPropertyOf / AnnotationPropertyDomain carry NO logical content")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; ANNOTATION AXIOMS ARE SEMANTICALLY INERT IN OWL 2. Decoding
+    ;; `:note rdfs:domain :A` as an ObjectPropertyDomain injects the GCI
+    ;; `∃note.⊤ ⊑ A` — real logical content the document does not state
+    ;; — and `:note rdfs:subPropertyOf :other` injects a role inclusion
+    ;; into the TOLD HIERARCHY that both RBox gates then read. The first
+    ;; is unsound (derives subsumptions that do not hold); the second
+    ;; can reject a valid RBox.
+    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class .\n:note a owl:AnnotationProperty . :other a owl:AnnotationProperty .\n"))
+      (and (== (accepted-count-of-ttl arena (string-concat arena pre
+                 ":note rdfs:domain :A .")) 0)
+        (and (== (accepted-count-of-ttl arena (string-concat arena pre
+                   ":note rdfs:range :A .")) 0)
+             (== (accepted-count-of-ttl arena (string-concat arena pre
+                   ":note rdfs:subPropertyOf :other .")) 0)))))
+
   (fn decodes-ok ((arena Arena) (ttl String))
     (@intent "Does this document get past stage 1 without an input-error?")
     (@spec ((Arena String) -> Bool))
@@ -2285,6 +2341,14 @@
 
           (let ((r (test-undeclared-individual-is-not-reported arena)))
             (print-test-result "declarations: an undeclared individual is NOT a finding" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-annotation-property-axioms-are-inert arena)))
+            (print-test-result "inert: annotation property domain/range/subPropertyOf" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-reserved-iri-as-individual-is-out-of-profile arena)))
+            (print-test-result "reserved: owl:Nothing as an individual is reported" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-litmus-reproduces-the-m1-normal-form arena)))
