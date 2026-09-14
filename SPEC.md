@@ -2311,7 +2311,7 @@ Mirrors GROWL's CLI conventions (separate `cli/` SLOP executable project).
 > drift into being a second implementation with its own semantics.
 
 ```
-howl validate    <ontology.ttl> [--profile P] [--strict] [-I DIR] # FLAGSHIP — coherence; see exit codes
+howl validate    <ontology.ttl> [--profile P] [--strict] [-I FILE]...  # FLAGSHIP — coherence; see exit codes
 howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]  # inferred subsumption hierarchy
 howl unsat       <ontology.ttl>                                    # list unsatisfiable classes
 howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       # merged coherence + minimal repair
@@ -2325,9 +2325,14 @@ complete; [§5.1](#51-profiles-are-selectable)) — `sroiq`, not `dl`, because t
 outright — yielding `Fault::refused` and exit `2` ([§6.2](#62-data-model)) — instead of returning an
 explicitly partial result.
 
-**The CLI resolves imports; it does not ignore them.** `-I DIR` (repeatable) supplies search paths
-for `owl:imports` resolution, and the CLI builds the closure before calling the library — being a
-front end, it may touch the filesystem where the library may not. Any import it cannot resolve
+**The CLI resolves imports; it does not ignore them.** `-I FILE` (repeatable) names a document the
+caller attests as an `owl:imports` target: the CLI loads it, standardizes its blank nodes apart, reads
+its `owl:Ontology` IRI, and passes the attested set to the library — being a front end, it may touch
+the filesystem where the library may not. A `-I` document that declares no ontology IRI is a usage
+error, since it would attest nothing while its triples were still merged. `-I` takes a **file, not a
+directory**: attestation is a claim the caller makes about specific documents, and a directory scan
+would attest whatever happened to sit there (and needs a platform-specific `dirent` binding SLOP does
+not provide). Any declared import left unattested
 becomes `unresolved-import` in `coverage.omitted` ([§6.2](#62-data-model)), so
 `howl validate root.ttl` on an ontology with a dangling import exits `2`, never `0`. That case
 previously slipped through: the spec made the caller responsible for closure while giving the CLI —

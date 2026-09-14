@@ -232,6 +232,26 @@ uint8_t test_test_litmus_reproduces_the_m1_normal_form(slop_arena* arena);
 uint8_t test_test_normalization_polarity_is_negative_on_the_left(slop_arena* arena);
 uint8_t test_test_range_elimination_introduces_a_shared_filler(slop_arena* arena);
 uint8_t test_test_asserted_edges_seed_their_range(slop_arena* arena);
+uint8_t test_test_range_complex_fillers_stay_apart(slop_arena* arena);
+uint8_t test_complex_range_fillers_distinct(slop_arena* arena, slop_string path);
+uint8_t test_test_inverse_expressions_are_omissions(slop_arena* arena);
+slop_list_string test_m0_fixture_paths(slop_arena* arena);
+uint8_t test_accounting_exempt(owl2_RawAxiom ax);
+uint8_t test_axiom_accounted(slop_arena* arena, owl2_RawAxiom ax);
+uint8_t test_test_accounting_holds(slop_arena* arena);
+uint8_t test_same_rendering(slop_arena* arena, slop_list_owl2_RawAxiom xs, slop_list_owl2_RawAxiom ys);
+uint8_t test_test_canonicalization_is_idempotent(slop_arena* arena);
+slop_list_types_Node test_norm_nodes(slop_arena* arena, types_NormAxiom ax);
+uint8_t test_fresh_ids_dense(slop_arena* arena, normalize_NormOutput no);
+uint8_t test_test_fresh_nodes_are_fresh(slop_arena* arena);
+slop_list_rdf_Triple test_reversed_triples(slop_arena* arena, slop_list_rdf_Triple ts);
+slop_option_normalize_NormOutput test_normalize_triples(slop_arena* arena, slop_list_rdf_Triple ts);
+uint8_t test_same_normal_form(normalize_NormOutput a, normalize_NormOutput b);
+uint8_t test_same_report(types_Outcome a, types_Outcome b);
+uint8_t test_order_independent(slop_arena* arena, slop_string path);
+uint8_t test_test_triple_order_independence(slop_arena* arena);
+int64_t test_strict_outcome(slop_arena* arena, slop_string path);
+uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
 uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
 slop_option_u8 test_regularity_of(slop_arena* arena, slop_string path);
 uint8_t test_test_regularity_rejects_mutual_recursion(slop_arena* arena);
@@ -350,6 +370,12 @@ SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 #define SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
+#ifndef SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #endif
 
 

@@ -42,7 +42,8 @@
                 concept-cmp sort-concepts concept-at
                 render-axiom render-role
                 signature-has-class signature-has-object-property))
-  (import canon (role-cmp sort-omissions sort-range iri-cmp sort-axiom-refs))
+  (import canon (role-cmp sort-omissions sort-range iri-cmp sort-axiom-refs string-cmp str-at))
+  (import owl2 (render-axiom))
 
   (export
     GateResult RboxVerdict
@@ -55,7 +56,7 @@
     EntityRef collect-entity-refs missing-declarations)
 
   (type GateResult (record
-    (accepted  (List RawAxiom))    ; in profile, sugar already expanded
+    (accepted  (List RawAxiom))    ; in profile, sugar already expanded, canonically sorted
     (omissions (List Omission))    ; canonically sorted
     (signature Signature)))
 
@@ -260,9 +261,49 @@
                        (collect-entity-refs arena accepted)))
           (list-push omitted o))
         (record-new GateResult
-          (accepted  accepted)
+          (accepted  (sort-axioms arena accepted))
           (omissions (sort-omissions arena omitted))
           (signature sig)))))
+
+  ;; ACCEPTED AXIOMS LEAVE THE GATE IN CANONICAL ORDER, or fresh ids do
+  ;; not. §6.3 assigns fresh-node ids "in order of first occurrence under
+  ;; the canonical axiom ordering", and the normalizer mints them in the
+  ;; order it is handed axioms. Handing it DOCUMENT order made the normal
+  ;; form a function of triple order: litmus.ttl with its triples reversed
+  ;; normalized differently (test-triple-order-independence).
+  ;;
+  ;; The key is the canonical functional-syntax rendering. It is a total
+  ;; order independent of serialization — an in-profile axiom carries no
+  ;; blank-node label — and two axioms that render identically ARE the
+  ;; same axiom, so how a tie resolves cannot change the normal form.
+  (fn sort-axioms ((arena Arena) (xs (List RawAxiom)))
+    (@intent "Accepted axioms, ordered by their canonical rendering")
+    (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((texts (axiom-texts arena xs)))
+      (let ((idx (sort-range arena (cast Int (list-len xs))
+                   (fn ((i Int) (j Int)) (string-cmp (str-at texts i) (str-at texts j)))))
+            (mut out (list-new arena RawAxiom)))
+        (do (for-each (k idx) (list-push out (axiom-at xs k))) out))))
+
+  (fn axiom-texts ((arena Arena) (xs (List RawAxiom)))
+    (@intent "Each axiom's canonical rendering, computed once rather than per comparison")
+    (@spec ((Arena (List RawAxiom)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (ax xs) (list-push out (render-axiom arena ax))) out)))
+
+  (fn axiom-at ((xs (List RawAxiom)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List RawAxiom) Int) -> RawAxiom))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new RawAxiom ra-unrecognized
+                  (union-new InputRef synthetic "unreachable: axiom index out of range")))))
+
   ;; ============================================================
   ;; RBox gate 1 — property-chain regularity (§5.2)
   ;;

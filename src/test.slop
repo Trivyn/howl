@@ -30,7 +30,7 @@
   (import normalize (NormOutput normalize-accepted))
   (import owl2 (RawConcept Signature signature-has-class
                 signature-has-object-property signature-has-annotation-property
-                RawAxiom Disposition disposition axiom-in-profile))
+                RawAxiom Disposition disposition axiom-in-profile render-axiom))
   (import ttl (parse-ttl-file parse-ttl-string))
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
@@ -40,7 +40,8 @@
                  default-config emit-edge make-context make-queue
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
-  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range))
+  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range
+                 sub-pair-cmp omission-cmp))
   (import saturate (RoundResult saturate make-initial-saturation))
   (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify))
@@ -977,7 +978,7 @@
         ok)))
 
   (fn test-out-of-profile-corpus-is-caught ((arena Arena))
-    (@intent "All 14 out-of-profile fixtures yield at least one rejected axiom")
+    (@intent "All 15 out-of-profile fixtures yield at least one rejected axiom")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; The other half, and the one that matters for soundness: a
@@ -1001,6 +1002,7 @@
         (list-push paths "corpus/fixtures/out-of-profile/builtin-roles.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/anonymous-individual.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/datatypes.ttl")
+        (list-push paths "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
         (for-each (p paths)
           (when (< (out-of-profile-count-of arena p) 1)
             (do (print "  [sweep] expected >=1 out-of-profile, got ")
@@ -1419,6 +1421,432 @@
               ;; both edges installed, and BOTH ranges land on :b — which
               ;; is what makes the disjointness detectable at all
               (and (== edges 2) (and saw-c saw-d))))))))
+
+  (fn test-range-complex-fillers-stay-apart ((arena Arena))
+    (@intent "X_{r,D} is keyed by the whole filler: two complex fillers, two X")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A KEY THAT DROPS A PAYLOAD MERGES DISTINCT OBJECTS. Both fillers
+    ;; here are complex, so each is a fresh node; rendering every fresh
+    ;; node alike gave both one shared X, which inherited P and U —
+    ;; disjoint — and made C1 and C2 unsatisfiable. That is how OBI
+    ;; reported itself inconsistent. Every other range test uses a NAMED
+    ;; filler, which is why none of them noticed.
+    (let ((path "corpus/fixtures/hazards/range-complex-fillers.ttl"))
+      (and (complex-range-fillers-distinct arena path)
+        (match (classify-fixture arena path)
+          ((none) false)
+          ((some o)
+            (and (== (cast Int (list-len (. (. o findings) unsatisfiable))) 0)
+                 (match (verdict o) ('verdict-coherent true) (_ false))))))))
+
+  (fn complex-range-fillers-distinct ((arena Arena) (path String))
+    (@intent "Do C1's and C2's existentials on r target different nodes after elimination?")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    ;; A SEPARATE FUNCTION ON PURPOSE. Inlined as an operand of `and`,
+    ;; this `match` sits in expression position, and the transpiler then
+    ;; lowers `(sub-some-rhs c rr d)` by binding `c` to the whole payload
+    ;; and never declaring `rr` or `d` — a C compile error. In statement
+    ;; position, as here, it destructures all three fields.
+    (let ((c1 (cls "http://example.org/t#C1"))
+          (c2 (cls "http://example.org/t#C2"))
+          (r  (rol "http://example.org/t#r")))
+      (match (normalize-fixture arena path)
+        ((none) false)
+        ((some no)
+          (let ((mut f1 (Option Node) (none))
+                (mut f2 (Option Node) (none)))
+            (do
+              (for-each (a (. no axioms))
+                (match a
+                  ((sub-some-rhs c rr d)
+                    (when (role-eq rr r)
+                      (do (when (node-eq c c1) (set! f1 (some d)))
+                          (when (node-eq c c2) (set! f2 (some d))))))
+                  (_ (do))))
+              (match f1
+                ((none) false)
+                ((some x1)
+                  (match f2
+                    ((none) false)
+                    ((some x2) (not (node-eq x1 x2))))))))))))
+
+  (fn test-inverse-expressions-are-omissions ((arena Arena))
+    (@intent "ObjectInverseOf is out-of-profile: enumerated, never an input-error")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; RO writes ten property chains with an inverse step. Faulting on
+    ;; them made a mainstream OBO ontology exit 3 — "could not run" — for
+    ;; a construct that is well-formed OWL 2 and simply outside OWL 2 EL.
+    (let ((path "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
+          (pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:p a owl:ObjectProperty . :q a owl:ObjectProperty .\n"))
+      (and
+        ;; The chain and the inclusion decode as out-of-profile axioms.
+        ;; The restriction decodes as an in-profile SubClassOf carrying an
+        ;; out-of-profile operand, so the GATE omits it — hence 2 here and
+        ;; 3 after classification.
+        (>= (out-of-profile-count-of arena path) 2)
+        (and
+          (match (classify-fixture arena path)
+            ((none) false)
+            ((some o)
+              (and (>= (cast Int (list-len (. (. o coverage) omitted))) 3)
+                   (match (verdict o) ('verdict-inconclusive true) (_ false)))))
+          ;; THE REJECTING HALF: a blank node naming no property at all is
+          ;; malformed and must still fault, or the inverse check launders
+          ;; every broken property axiom into a quiet omission.
+          (and (decodes-ok arena (string-concat arena pre ":q rdfs:subPropertyOf [ owl:inverseOf :p ] ."))
+               (not (decodes-ok arena (string-concat arena pre ":q rdfs:subPropertyOf [ ] ."))))))))
+
+  ;; ============================================================
+  ;; SPEC §12's structural invariants and §6.8 order-independence
+  ;;
+  ;; Each helper that destructures a multi-payload variant is its own
+  ;; function, so its `match` sits in statement position: inside an
+  ;; `and`/`or` operand the transpiler drops the extra pattern bindings.
+  ;; ============================================================
+
+  (fn m0-fixture-paths ((arena Arena))
+    (@intent "Every v0 fixture, plus the hazards that exercise normalization hardest")
+    (@spec ((Arena) -> (List String)))
+    (@alloc arena)
+    (let ((mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/subclass-atomic.ttl")
+        (list-push ps "corpus/fixtures/v0/intersection.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-lhs.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-rhs.ttl")
+        (list-push ps "corpus/fixtures/v0/equivalent-classes.ttl")
+        (list-push ps "corpus/fixtures/v0/equivalent-properties.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-binary.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/subproperty.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/transitive.ttl")
+        (list-push ps "corpus/fixtures/v0/domain.ttl")
+        (list-push ps "corpus/fixtures/v0/range.ttl")
+        (list-push ps "corpus/fixtures/v0/abox-assertions.ttl")
+        (list-push ps "corpus/fixtures/v0/top-bottom.ttl")
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        ps)))
+
+  (fn accounting-exempt ((ax RawAxiom))
+    (@intent "Accepted axioms a named elimination may consume without a trace")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    ;; A standalone range(r) ⊑ A legitimately vanishes when no existential
+    ;; or asserted edge uses r (§12), and a declaration is consumed rather
+    ;; than logical. Everything else must leave a NormAxiom, an edge or a
+    ;; seed behind.
+    ;; `C ⊑ ⊤` holds in every model, and normalize-gci drops it by name
+    ;; ("C ⊑ ⊤ is vacuous") — a semantics-preserving elimination, not a loss.
+    (match ax
+      ((ra-object-property-range _ _) true)
+      ((ra-declaration _)             true)
+      ((ra-sub-class-of _ r)          (match (deref r) ((rc-thing) true) (_ false)))
+      (_                              false)))
+
+  (fn axiom-accounted ((arena Arena) (ax RawAxiom))
+    (@intent "Does one accepted axiom, normalized alone, discharge itself?")
+    (@spec ((Arena RawAxiom) -> Bool))
+    (@alloc arena)
+    (let ((mut one (list-new arena RawAxiom)))
+      (do
+        (list-push one ax)
+        (let ((no (normalize-accepted arena one)))
+          (or (accounting-exempt ax)
+            (or (> (cast Int (list-len (. no axioms))) 0)
+              (or (> (cast Int (list-len (. no edges))) 0)
+                  (> (cast Int (list-len (. no seeds))) 0))))))))
+
+  (fn test-accounting-holds ((arena Arena))
+    (@intent "§12: every accepted logical axiom is discharged by NormAxioms, edges/seeds, or a named elimination")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; NOT "one normal form per axiom", which is unsatisfiable for correct
+    ;; input. What this catches is an accepted axiom the normalizer
+    ;; silently DROPS: counted as covered, contributing nothing, and
+    ;; invisible to every coverage check because it was accepted.
+    (let ((mut ok true))
+      (do
+        (for-each (p (m0-fixture-paths arena))
+          (match (gate-fixture arena p)
+            ((none) (do (print "  [accounting] did not gate: ") (println p) (set! ok false)))
+            ((some gr)
+              (for-each (ax (. gr accepted))
+                (when (not (axiom-accounted arena ax))
+                  (do (print "  [accounting] undischarged in ") (print p) (print ": ")
+                      (println (render-axiom arena ax))
+                      (set! ok false)))))))
+        ok)))
+
+  (fn same-rendering ((arena Arena) (xs (List RawAxiom)) (ys (List RawAxiom)))
+    (@intent "The same axioms, as the same canonical text, in the same order")
+    (@spec ((Arena (List RawAxiom) (List RawAxiom)) -> Bool))
+    (@alloc arena)
+    (let ((mut ok (== (list-len xs) (list-len ys)))
+          (mut i 0)
+          (n (cast Int (list-len xs))))
+      (do
+        (while (and ok (< i n))
+          (do
+            (match (list-get xs i)
+              ((some x)
+                (match (list-get ys i)
+                  ((some y)
+                    (when (not (string-eq (render-axiom arena x) (render-axiom arena y)))
+                      (set! ok false)))
+                  ((none) (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn test-canonicalization-is-idempotent ((arena Arena))
+    (@intent "§12: gating the gate's own accepted output changes nothing, text or order")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; If canonical form were not a fixed point, the same ontology read
+    ;; back from HOWL's own output would hash differently — the §6.8
+    ;; failure, arriving one round trip later.
+    (let ((mut ok true))
+      (do
+        (for-each (p (m0-fixture-paths arena))
+          (match (gate-fixture arena p)
+            ((none) (set! ok false))
+            ((some gr)
+              (let ((again (gate-axioms arena (. gr accepted) (. gr signature)
+                             (list-new arena Omission))))
+                (when (not (same-rendering arena (. gr accepted) (. again accepted)))
+                  (do (print "  [idempotence] regating changed ") (println p)
+                      (set! ok false)))))))
+        ok)))
+
+  (fn norm-nodes ((arena Arena) (ax NormAxiom))
+    (@intent "The concept-position nodes of a normal-form axiom")
+    (@spec ((Arena NormAxiom) -> (List Node)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Node)))
+      (do
+        (match ax
+          ((sub-name a b)       (do (list-push out a) (list-push out b)))
+          ((sub-and a b c)      (do (list-push out a) (list-push out b) (list-push out c)))
+          ((sub-some-lhs r a b) (do (list-push out a) (list-push out b)))
+          ((sub-some-rhs a r b) (do (list-push out a) (list-push out b)))
+          ((sub-role r s)       (do))
+          ((role-chain r s t)   (do)))
+        out)))
+
+  (fn fresh-ids-dense ((arena Arena) (no NormOutput))
+    (@intent "Every fresh id is below fresh-count, and every id below it is used")
+    (@spec ((Arena NormOutput) -> Bool))
+    (@alloc arena)
+    ;; Fresh nodes cannot COLLIDE with input names: `fresh-node` is its own
+    ;; tag, compared tag-first. What can go wrong is the numbering — an id
+    ;; past fresh-count addresses a context nobody initialized, and an
+    ;; unused id below it means a symbol was minted and its definition lost.
+    (let ((n (. no fresh-count))
+          (mut seen (list-new arena Bool))
+          (mut ok true)
+          (mut i 0))
+      (do
+        (while (< i n) (do (list-push seen false) (set! i (+ i 1))))
+        (for-each (ax (. no axioms))
+          (for-each (nd (norm-nodes arena ax))
+            (match nd
+              ((fresh-node k)
+                (do (when (< k n)  (list-set seen k true))
+                    (when (>= k n) (set! ok false))))
+              ((class-node _)      (do))
+              ((individual-node _) (do)))))
+        (for-each (b seen) (when (not b) (set! ok false)))
+        ok)))
+
+  (fn test-fresh-nodes-are-fresh ((arena Arena))
+    (@intent "§12: fresh ids are bounded by fresh-count and dense below it")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
+      (do
+        (for-each (p (m0-fixture-paths arena))
+          (match (normalize-fixture arena p)
+            ((none) (set! ok false))
+            ((some no)
+              (when (not (fresh-ids-dense arena no))
+                (do (print "  [freshness] ") (println p) (set! ok false))))))
+        ok)))
+
+  (fn reversed-triples ((arena Arena) (ts (List Triple)))
+    (@intent "The same triples, last first")
+    (@spec ((Arena (List Triple)) -> (List Triple)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Triple))
+          (mut k (- (cast Int (list-len ts)) 1)))
+      (do
+        (while (>= k 0)
+          (do
+            (match (list-get ts k)
+              ((some t) (list-push out t))
+              ((none)   (do)))
+            (set! k (- k 1))))
+        out)))
+
+  (fn normalize-triples ((arena Arena) (ts (List Triple)))
+    (@intent "The front end as far as normalization, over a triple list")
+    (@spec ((Arena (List Triple)) -> (Option NormOutput)))
+    (@alloc arena)
+    (match (stage0-header arena ts (list-new arena IRI))
+      ((error _) (none))
+      ((ok s0)
+        (match (decode-axioms arena (. s0 triples))
+          ((error _) (none))
+          ((ok s1)
+            (some (normalize-accepted arena
+                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions))
+                       accepted))))))))
+
+  (fn same-normal-form ((a NormOutput) (b NormOutput))
+    (@intent "The same fresh-count, and the same normal-form axioms in the same order")
+    (@spec ((NormOutput NormOutput) -> Bool))
+    (@pure)
+    (let ((mut ok (and (== (. a fresh-count) (. b fresh-count))
+                       (== (list-len (. a axioms)) (list-len (. b axioms)))))
+          (mut i 0)
+          (n (cast Int (list-len (. a axioms)))))
+      (do
+        (while (and ok (< i n))
+          (do
+            (match (list-get (. a axioms) i)
+              ((some x)
+                (match (list-get (. b axioms) i)
+                  ((some y) (when (not (norm-eq x y)) (set! ok false)))
+                  ((none)   (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn same-report ((a Outcome) (b Outcome))
+    (@intent "Identical subsumptions, unsatisfiable classes and omissions, in order")
+    (@spec ((Outcome Outcome) -> Bool))
+    (@pure)
+    (let ((sa (. (. a findings) subsumptions))  (sb (. (. b findings) subsumptions))
+          (ua (. (. a findings) unsatisfiable)) (ub (. (. b findings) unsatisfiable))
+          (oa (. (. a coverage) omitted))       (ob (. (. b coverage) omitted))
+          (mut ok true)
+          (mut i 0))
+      (do
+        (when (or (!= (list-len sa) (list-len sb))
+                  (or (!= (list-len ua) (list-len ub))
+                      (!= (list-len oa) (list-len ob))))
+          (set! ok false))
+        (while (and ok (< i (cast Int (list-len sa))))
+          (do
+            (match (list-get sa i)
+              ((some x)
+                (match (list-get sb i)
+                  ((some y) (when (!= (sub-pair-cmp x y) 0) (set! ok false)))
+                  ((none)   (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        (set! i 0)
+        (while (and ok (< i (cast Int (list-len ua))))
+          (do
+            (match (list-get ua i)
+              ((some x)
+                (match (list-get ub i)
+                  ((some y) (when (!= (iri-cmp x y) 0) (set! ok false)))
+                  ((none)   (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        (set! i 0)
+        (while (and ok (< i (cast Int (list-len oa))))
+          (do
+            (match (list-get oa i)
+              ((some x)
+                (match (list-get ob i)
+                  ((some y) (when (!= (omission-cmp x y) 0) (set! ok false)))
+                  ((none)   (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn order-independent ((arena Arena) (path String))
+    (@intent "The same document with its triples reversed: identical normal form and report")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) false)
+      ((ok g)
+        (let ((fwd (. g triples))
+              (rev (reversed-triples arena (. g triples))))
+          (match (normalize-triples arena fwd)
+            ((none) false)
+            ((some n1)
+              (match (normalize-triples arena rev)
+                ((none) false)
+                ((some n2)
+                  (if (not (same-normal-form n1 n2))
+                    (do (print "  [order] normal form differs: ") (println path) false)
+                    (match (classify arena fwd (list-new arena IRI) (default-config))
+                      ((error _) false)
+                      ((ok o1)
+                        (match (classify arena rev (list-new arena IRI) (default-config))
+                          ((error _) false)
+                          ((ok o2)
+                            (if (same-report o1 o2)
+                              true
+                              (do (print "  [order] report differs: ") (println path) false)))))))))))))))
+
+  (fn test-triple-order-independence ((arena Arena))
+    (@intent "§6.8: reversing a document's triples changes neither the normal form nor the report")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The consumer content-hashes the report. Serialization order is not
+    ;; content, so two writings of one ontology must hash alike — fresh-node
+    ;; ids included, since they are assigned by first occurrence and would
+    ;; follow triple order the moment the canonical ordering slipped.
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/rbox-regularity-reject.ttl")
+        (list-push ps "corpus/fixtures/hazards/annotation-heavy.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
+        (for-each (p ps) (when (not (order-independent arena p)) (set! ok false)))
+        ok)))
+
+  (fn strict-outcome ((arena Arena) (path String))
+    (@intent "Under strict-profile: 1 refused with omissions, 0 ran to an Outcome, -1 otherwise")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg strict-profile true)
+        (match (parse-ttl-file arena path)
+          ((error _) -1)
+          ((ok g)
+            (match (classify arena (. g triples) (list-new arena IRI) cfg)
+              ((ok _) 0)
+              ((error f)
+                (match f
+                  ((refused os)    (if (> (cast Int (list-len os)) 0) 1 -1))
+                  ((cancelled)     -1)
+                  ((input-error _) -1)))))))))
+
+  (fn test-strict-refuses-past-omissions ((arena Arena))
+    (@intent "§10 item 12: strict yields refused carrying the omissions, and only when there are some")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Both halves matter. A refusal without the omissions tells the caller
+    ;; nothing to fix; a refusal on a fully covered document makes strict
+    ;; mode a CI gate that fails every ontology in existence.
+    (and (== (strict-outcome arena "corpus/fixtures/out-of-profile/union.ttl") 1)
+         (== (strict-outcome arena "corpus/fixtures/v0/litmus.ttl") 0)))
 
   (fn test-nary-chain-decomposes-left-associated ((arena Arena))
     (@intent "An n-ary chain becomes binary role-chain steps through fresh roles")
@@ -2369,6 +2797,34 @@
 
           (let ((r (test-asserted-edges-seed-their-range arena)))
             (print-test-result "normalize: asserted edges seed ran_T into the target" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-range-complex-fillers-stay-apart arena)))
+            (print-test-result "normalize: complex range fillers get distinct X_{r,D}" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-inverse-expressions-are-omissions arena)))
+            (print-test-result "decode: ObjectInverseOf is an omission, not an input-error" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-accounting-holds arena)))
+            (print-test-result "§12: every accepted axiom is discharged (accounting)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-canonicalization-is-idempotent arena)))
+            (print-test-result "§12: canonicalization is idempotent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-fresh-nodes-are-fresh arena)))
+            (print-test-result "§12: fresh ids are bounded and dense" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-triple-order-independence arena)))
+            (print-test-result "§6.8: reversed triples give the same normal form and report" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-strict-refuses-past-omissions arena)))
+            (print-test-result "§10.12: strict refuses with omissions, and only then" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

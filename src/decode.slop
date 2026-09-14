@@ -491,10 +491,79 @@
       ((ok pt)
         (match (term-iri-value pt)
           ((some i) (ok (union-new RoleId named-role i)))
-          ;; A blank-node onProperty is an inverse property expression.
-          ;; Not v0, and not representable as a RoleId — the gate sees
-          ;; it as the enclosing axiom being undecodable.
-          ((none) (error "owl:onProperty is not an IRI (inverse property expression)"))))))
+          ;; Not an ObjectInverseOf: `decode-anon` routes those to
+          ;; `rc-anon` before any restriction reaches here, so a blank
+          ;; onProperty that arrives names no property at all — malformed
+          ;; input, not an out-of-profile construct.
+          ((none) (error "owl:onProperty is a blank node that is not an inverse property expression"))))))
+
+  ;; ============================================================
+  ;; ObjectInverseOf — `[ owl:inverseOf :p ]`
+  ;;
+  ;; WELL-FORMED OWL 2, EXCLUDED BY OWL 2 EL (ObjectPropertyExpression :=
+  ;; ObjectProperty), so it is an OMISSION and never an input-error.
+  ;; Decoding it as malformed turned RO — ten property chains written
+  ;; with an inverse step — into exit 3 for the whole document instead of
+  ;; enumerated omissions, while the independent census counted those
+  ;; same chains out-of-profile.
+  ;; ============================================================
+
+  (fn inverse-expression-term ((arena Arena) (g IndexedGraph) (t Term))
+    (@intent "Is this term an ObjectInverseOf: a blank node inverting exactly one named property?")
+    (@spec ((Arena IndexedGraph Term) -> Bool))
+    (@alloc arena)
+    (match t
+      ((term-blank _)
+        (match (obj-of arena g t OWL_INVERSE_OF)
+          ((ok pt)   (match (term-iri-value pt) ((some _) true) ((none) false)))
+          ((error _) false)))
+      (_ false)))
+
+  (fn restriction-on-inverse ((arena Arena) (g IndexedGraph) (b Term))
+    (@intent "Is this restriction's owl:onProperty an ObjectInverseOf?")
+    (@spec ((Arena IndexedGraph Term) -> Bool))
+    (@alloc arena)
+    (match (obj-of arena g b OWL_ON_PROPERTY)
+      ((ok pt)   (inverse-expression-term arena g pt))
+      ((error _) false)))
+
+  (fn list-has-inverse ((arena Arena) (g IndexedGraph) (head Term))
+    (@intent "Does this RDF collection contain an ObjectInverseOf?")
+    (@spec ((Arena IndexedGraph Term) -> Bool))
+    (@alloc arena)
+    ;; A MALFORMED list answers false, deliberately: the caller's own
+    ;; checked walk then reports it as the input-error it is, rather than
+    ;; this helper laundering it into an omission.
+    (match (rdf-list-checked arena g head)
+      ((error _) false)
+      ((ok terms)
+        (let ((mut found false))
+          (do
+            (for-each (tm terms)
+              (when (inverse-expression-term arena g tm) (set! found true)))
+            found)))))
+
+  (fn property-axiom-on-inverse ((arena Arena) (g IndexedGraph) (pv String) (t Triple))
+    (@intent "Is this a property axiom with an ObjectInverseOf operand?")
+    (@spec ((Arena IndexedGraph String Triple) -> Bool))
+    (@alloc arena)
+    ;; `_:b owl:inverseOf :p` — the expression's OWN defining triple — is
+    ;; not an axiom and never reaches here: `structural-triple` skips it,
+    ;; and it is read through its user instead.
+    (cond
+      ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0)
+        (or (inverse-expression-term arena g (. t subject))
+            (list-has-inverse arena g (. t object))))
+      ((or (== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)
+         (or (== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
+             (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)))
+        (or (inverse-expression-term arena g (. t subject))
+            (inverse-expression-term arena g (. t object))))
+      ((== (string-cmp pv OWL_INVERSE_OF) 0)
+        (inverse-expression-term arena g (. t object)))
+      ((or (== (string-cmp pv RDFS_DOMAIN) 0) (== (string-cmp pv RDFS_RANGE) 0))
+        (inverse-expression-term arena g (. t subject)))
+      (else false)))
 
   (fn literal-count ((t Term))
     (@intent "A non-negative integer cardinality, from a literal term")
@@ -595,6 +664,13 @@
     (@spec ((Arena IndexedGraph Term Int) -> (Result RawConcept String)))
     (@alloc arena)
     (cond
+      ;; FIRST, because every restriction kind reads owl:onProperty: an
+      ;; inverse there is out-of-profile, and the enclosing axiom is
+      ;; omitted by the gate's operand check instead of faulting the run.
+      ((restriction-on-inverse arena g b)
+        (ok (union-new RawConcept rc-anon
+              (union-new InputRef rdf-fragment "restriction on an ObjectInverseOf property"))))
+
       ((has-pred arena g b OWL_INTERSECTION_OF)
         (match (obj-of arena g b OWL_INTERSECTION_OF)
           ((error _) (error "owl:intersectionOf is absent or ambiguous"))
@@ -643,7 +719,12 @@
                 (match (term-iri-value vt)
                   ((some i) (ok (union-new RawConcept rc-has-value r
                                   (union-new Node individual-node i))))
-                  ((none)   (error "owl:hasValue is not a named individual"))))))))
+                  ;; An anonymous individual: well-formed, and excluded by
+                  ;; OWL 2 EL (Individual := NamedIndividual). Represented,
+                  ;; so the enclosing axiom is omitted rather than faulted.
+                  ((none)   (ok (union-new RawConcept rc-anon
+                                  (union-new InputRef rdf-fragment
+                                    "owl:hasValue on an anonymous individual"))))))))))
 
       ((has-pred arena g b OWL_HAS_SELF)
         (match (decode-role arena g b)
@@ -895,7 +976,16 @@
       ;; `[ a owl:Restriction ; ... ]` — the type triple of an
       ;; anonymous class expression, not a declaration.
       (if (not (is-pred t RDF_TYPE))
-        false
+        ;; `_:b owl:inverseOf :p` — an ObjectInverseOf's defining triple,
+        ;; read through the axiom that uses the expression. Decoded at top
+        ;; level it would fault as an inverseOf "on a non-IRI subject".
+        ;; `:p owl:inverseOf :q` has an IRI subject and stays an axiom.
+        (and (is-pred t OWL_INVERSE_OF)
+             (match (. t subject)
+               ((term-blank _) true)
+               ((term-iri _) false)
+               ((term-literal _) false)
+               ((term-triple _) false)))
         (match (term-iri-value (. t object))
           ((some o)
             (and (match (. t subject)
@@ -1017,7 +1107,10 @@
         ((== (string-cmp ov OWL_TRANSITIVE_PROPERTY) 0)
           (match (role-of-term (. t subject))
             ((some r) (ok (union-new RawAxiom ra-transitive-property r)))
-            ((none)   (error "owl:TransitiveProperty on a non-IRI subject"))))
+            ((none)
+              (if (inverse-expression-term arena g (. t subject))
+                (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
+                (error "owl:TransitiveProperty on a non-IRI subject")))))
 
         ((match (characteristic-of ov) ((some _) true) ((none) false))
           (match (role-of-term (. t subject))
@@ -1025,7 +1118,10 @@
               (match (characteristic-of ov)
                 ((some c) (ok (union-new RawAxiom ra-property-characteristic c r)))
                 ((none)   (error "unreachable: characteristic vanished"))))
-            ((none) (error "property characteristic on a non-IRI subject"))))
+            ((none)
+              (if (inverse-expression-term arena g (. t subject))
+                (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
+                (error "property characteristic on a non-IRI subject")))))
 
         ;; THE MEMBERS MUST BE READ, NOT STUBBED. `ra-disjoint-classes`
         ;; is IN PROFILE, so an n-ary AllDisjointClasses decoded with an
@@ -1053,9 +1149,11 @@
           (match (members-head arena g (. t subject))
             ((none) (error "owl:AllDisjointProperties without owl:members"))
             ((some head)
-              (match (decode-role-list arena g head)
-                ((error m) (error m))
-                ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs)))))))
+              (if (list-has-inverse arena g head)
+                (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
+                (match (decode-role-list arena g head)
+                  ((error m) (error m))
+                  ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs))))))))
         ((== (string-cmp ov OWL_NEGATIVE_PROPERTY_ASSERTION) 0)
           (ok (union-new RawAxiom ra-negative-assertion (frag arena t))))
         ((== (string-cmp ov SWRL_IMP) 0)
@@ -1135,6 +1233,12 @@
               (match (term-iri-value (. t object))
                 ((some o) (decode-typed arena g t o))
                 ((none)   (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
+
+            ;; Ahead of every property-axiom arm below, each of which
+            ;; faults on a non-IRI operand — correctly, for a blank node
+            ;; naming no property; wrongly, for an ObjectInverseOf.
+            ((property-axiom-on-inverse arena g pv t)
+              (ok (union-new RawAxiom ra-inverse-expression (frag arena t))))
 
             ((== (string-cmp pv RDFS_SUBCLASS_OF) 0)
               (match (decode-concept arena g (. t subject) CONCEPT_FUEL)

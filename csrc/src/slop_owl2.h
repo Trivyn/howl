@@ -238,6 +238,7 @@ typedef enum {
     owl2_RawAxiom_ra_negative_assertion,
     owl2_RawAxiom_ra_disjoint_union,
     owl2_RawAxiom_ra_has_key,
+    owl2_RawAxiom_ra_inverse_expression,
     owl2_RawAxiom_ra_data_axiom,
     owl2_RawAxiom_ra_builtin_role,
     owl2_RawAxiom_ra_anonymous_individual,
@@ -289,6 +290,7 @@ struct owl2_RawAxiom {
         types_InputRef ra_negative_assertion;
         types_InputRef ra_disjoint_union;
         types_InputRef ra_has_key;
+        types_InputRef ra_inverse_expression;
         types_InputRef ra_data_axiom;
         types_InputRef ra_builtin_role;
         types_InputRef ra_anonymous_individual;
@@ -349,6 +351,8 @@ slop_string owl2_wrap(slop_arena* arena, slop_string head, slop_string body);
 slop_string owl2_join2(slop_arena* arena, slop_string a, slop_string b);
 slop_string owl2_render_concept(slop_arena* arena, owl2_RawConcept c);
 slop_string owl2_render_input_ref(types_InputRef r);
+slop_string owl2_render_entity_kind(types_EntityKind k);
+slop_string owl2_render_omission(slop_arena* arena, types_Omission o);
 slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax);
 slop_string owl2_render_characteristic(owl2_PropCharacteristic c);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);

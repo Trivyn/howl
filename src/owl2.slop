@@ -44,7 +44,7 @@
 
   (import rdf (IRI))
   (import canon (string-cmp node-cmp role-cmp sort-range))
-  (import types (Node RoleId EntityKind InputRef AxiomRef))
+  (import types (Node RoleId EntityKind InputRef AxiomRef Omission MissingDeclaration))
 
   (export
     OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY OWL_ANNOTATED_TARGET
@@ -58,7 +58,7 @@
     Signature
     disposition concept-in-profile axiom-in-profile role-in-profile
     concept-tag-rank concept-cmp concept-at sort-concepts
-    render-concept render-axiom render-role
+    render-concept render-axiom render-role render-omission
     make-signature signature-has-class signature-has-object-property
     signature-has-annotation-property signature-has-data-property
     signature-size)
@@ -211,6 +211,7 @@
     (ra-negative-assertion    InputRef)
     (ra-disjoint-union        InputRef)
     (ra-has-key               InputRef)
+    (ra-inverse-expression    InputRef)   ; ObjectInverseOf as an operand — v1
 
     ;; --- out-of-profile: built on vocabulary v0 has no types for ---
     (ra-data-axiom            InputRef)   ; the whole data side (§5.2)
@@ -269,6 +270,7 @@
       ((ra-negative-assertion _)        'd-out-of-profile)
       ((ra-disjoint-union _)            'd-out-of-profile)
       ((ra-has-key _)                   'd-out-of-profile)
+      ((ra-inverse-expression _)        'd-out-of-profile)
       ((ra-data-axiom _)                'd-out-of-profile)
       ((ra-builtin-role _)              'd-out-of-profile)
       ((ra-anonymous-individual _)      'd-out-of-profile)
@@ -465,6 +467,7 @@
         ((ra-negative-assertion _)       false)
         ((ra-disjoint-union _)           false)
         ((ra-has-key _)                  false)
+        ((ra-inverse-expression _)       false)
         ((ra-data-axiom _)               false)
         ((ra-builtin-role _)             false)
         ((ra-anonymous-individual _)     false)
@@ -725,6 +728,34 @@
       ((rdf-fragment s) s)
       ((synthetic s)    s)))
 
+  (fn render-entity-kind ((k EntityKind))
+    (@intent "The functional-syntax keyword for an entity kind")
+    (@spec ((EntityKind) -> String))
+    (@pure)
+    (match k
+      ('entity-class               "Class")
+      ('entity-object-property     "ObjectProperty")
+      ('entity-data-property       "DataProperty")
+      ('entity-annotation-property "AnnotationProperty")
+      ('entity-individual          "NamedIndividual")
+      ('entity-datatype            "Datatype")))
+
+  (fn render-omission ((arena Arena) (o Omission))
+    (@intent "One omission as a single line a person can act on")
+    (@spec ((Arena Omission) -> String))
+    (@alloc arena)
+    ;; A COUNT IS NOT A REPORT. "510 omitted" cannot tell a dangling
+    ;; import from a union from a SWRL rule, so nobody can fix any of
+    ;; them. The out-of-profile arm reuses the AxiomRef / fragment text
+    ;; the gate already canonicalized, so this line is exactly what an
+    ;; omission is identified by.
+    (match o
+      ((out-of-profile ref)  (render-input-ref ref))
+      ((unresolved-import i) (wrap arena "UnresolvedImport" (. i value)))
+      ((missing-declaration md)
+        (wrap arena "MissingDeclaration"
+          (wrap arena (render-entity-kind (. md kind)) (. (. md entity) value))))))
+
   (fn render-axiom ((arena Arena) (ax RawAxiom))
     (@intent "An axiom in OWL functional syntax, annotations stripped")
     (@spec ((Arena RawAxiom) -> String))
@@ -781,6 +812,7 @@
       ((ra-negative-assertion ref)   (wrap arena "NegativeAssertion" (render-input-ref ref)))
       ((ra-disjoint-union ref)       (wrap arena "DisjointUnion" (render-input-ref ref)))
       ((ra-has-key ref)              (wrap arena "HasKey" (render-input-ref ref)))
+      ((ra-inverse-expression ref)   (wrap arena "ObjectInverseOf" (render-input-ref ref)))
       ((ra-data-axiom ref)           (wrap arena "DataAxiom" (render-input-ref ref)))
       ((ra-builtin-role ref)         (wrap arena "BuiltinRole" (render-input-ref ref)))
       ((ra-anonymous-individual ref) (wrap arena "AnonymousIndividual" (render-input-ref ref)))

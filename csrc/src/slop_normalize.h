@@ -213,7 +213,7 @@ slop_list_normalize_RangeFact normalize_collect_range_facts(slop_arena* arena, n
 slop_list_types_Node normalize_ran_t(slop_arena* arena, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, int64_t r);
 uint8_t normalize_mat_get_b(slop_list_u8 m, int64_t i);
 slop_string normalize_range_elim_key(slop_arena* arena, types_RoleId r, types_Node d);
-slop_string normalize_render_node_name(types_Node n);
+slop_string normalize_render_node_name(slop_arena* arena, types_Node n);
 uint8_t normalize_eliminate_ranges(slop_arena* arena, normalize_NormState* p, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles);
 slop_list_types_Addressed normalize_edge_range_seeds(slop_arena* arena, slop_list_types_LogicalEdge edges, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles);
 uint8_t normalize_normalize_axiom(slop_arena* arena, normalize_NormState* p, owl2_RawAxiom ax);

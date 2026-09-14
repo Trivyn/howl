@@ -537,18 +537,26 @@
     (@alloc arena)
     (string-concat arena "range-elim:"
       (string-concat arena (render-role-name r)
-        (string-concat arena ":" (render-node-name d)))))
+        (string-concat arena ":" (render-node-name arena d)))))
 
-  (fn render-node-name ((n Node))
-    (@intent "A stable textual key for a node")
-    (@spec ((Node) -> String))
-    (@pure)
+  (fn render-node-name ((arena Arena) (n Node))
+    (@intent "A textual key for a node, injective over nodes")
+    (@spec ((Arena Node) -> String))
+    (@alloc arena)
+    ;; A KEY MUST NAME ITS WHOLE PAYLOAD. This arm once rendered every
+    ;; fresh node as the constant "_:fresh", so X_{r,D} got one key for
+    ;; ALL complex fillers of r: they shared a single X that inherited
+    ;; every filler's subsumers, and two disjoint ones made it ⊥. OBI
+    ;; reported itself inconsistent (hazards/range-complex-fillers.ttl).
+    ;;
+    ;; The three shapes cannot collide: a fresh id is not an IRI (a
+    ;; scheme starts with a letter), and `{` `}` are illegal in IRIs.
+    ;; A fresh id is canonical already — assigned by first occurrence
+    ;; under the canonical axiom ordering.
     (match n
       ((class-node i)      (. i value))
-      ((individual-node i) (. i value))
-      ;; A fresh node's id is already canonical: it was assigned by
-      ;; first occurrence under the canonical axiom ordering.
-      ((fresh-node k)      "_:fresh")))
+      ((individual-node i) (string-concat arena "{" (string-concat arena (. i value) "}")))
+      ((fresh-node k)      (string-concat arena "_:fresh" (int-to-string arena k)))))
 
   (fn eliminate-ranges ((arena Arena) (p (Ptr NormState)) (facts (List RangeFact))
                         (told (List Bool)) (n Int) (roles (List RoleId)))

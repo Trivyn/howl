@@ -1,0 +1,29 @@
+# RANGE ELIMINATION MUST KEY X_{r,D} BY THE WHOLE FILLER, fresh ids included.
+# Both existential fillers are complex, so each is named by a FRESH node. A key
+# that renders every fresh node alike gives both the same X_{r,_:fresh}; X then
+# inherits P and U, which are disjoint, so X is unsatisfiable and so are C1 and C2.
+# That is over-derivation — unsoundness — and it made OBI report itself inconsistent.
+# Expect: COHERENT, unsatisfiable EMPTY. Removing the range must not change the verdict.
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:r a owl:ObjectProperty ; rdfs:range :R .
+
+:C1 a owl:Class .
+:C2 a owl:Class .
+:P  a owl:Class .
+:Q  a owl:Class .
+:U  a owl:Class .
+:V  a owl:Class .
+:R  a owl:Class .
+
+:P owl:disjointWith :U .
+
+:C1 rdfs:subClassOf [ a owl:Restriction ;
+    owl:onProperty :r ;
+    owl:someValuesFrom [ a owl:Class ; owl:intersectionOf ( :P :Q ) ] ] .
+
+:C2 rdfs:subClassOf [ a owl:Restriction ;
+    owl:onProperty :r ;
+    owl:someValuesFrom [ a owl:Class ; owl:intersectionOf ( :U :V ) ] ] .

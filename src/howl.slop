@@ -169,14 +169,22 @@
     ;; Coverage travels from the gate UNCHANGED. It is what makes a
     ;; run with omissions report `inconclusive` rather than `coherent`,
     ;; so nothing downstream may quietly empty it.
+    ;;
+    ;; --strict REFUSES AFTER THE GATE, BEFORE SATURATION. The omissions
+    ;; are exactly what the caller asked not to run past, so `refused`
+    ;; carries them and nothing else: no Outcome, so no verdict and no
+    ;; findings a partial run might have produced (§9, §10 item 12).
     (match (normalize-input arena triples imports-resolved config)
       ((error f) (error f))
       ((ok nr)
-        (match (saturate arena (. nr saturation) (. nr axioms) config)
-          ((error f) (error f))
-          ((ok rr)
-            (ok (record-new Outcome
-                  (coverage    (. nr coverage))
-                  (termination (. rr termination))
-                  (findings    (extract-findings arena (. rr saturation)))
-                  (saturation  (. rr saturation))))))))))
+        (if (and (. config strict-profile)
+                 (> (list-len (. (. nr coverage) omitted)) 0))
+          (error (union-new Fault refused (. (. nr coverage) omitted)))
+          (match (saturate arena (. nr saturation) (. nr axioms) config)
+            ((error f) (error f))
+            ((ok rr)
+              (ok (record-new Outcome
+                    (coverage    (. nr coverage))
+                    (termination (. rr termination))
+                    (findings    (extract-findings arena (. rr saturation)))
+                    (saturation  (. rr saturation)))))))))))

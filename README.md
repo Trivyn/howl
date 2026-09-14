@@ -24,18 +24,39 @@ howl: 10 subsumptions, 0 unsatisfiable, 0 omitted
 howl: coherent                                                    # exit 0
 
 $ howl validate corpus/fixtures/hazards/unattested-import.ttl
+howl: 6 subsumptions, 0 unsatisfiable, 1 omitted
+  omitted: UnresolvedImport(http://example.org/does-not-exist)
 howl: INCONCLUSIVE — coverage gaps, this is NOT a pass            # exit 2
+
+$ howl validate corpus/fixtures/out-of-profile/union.ttl --strict
+howl: refused (--strict), no report — 1 omitted
+  omitted: SubClassOf(http://example.org/t#C ObjectUnionOf(http://example.org/t#A http://example.org/t#B))
+                                                                  # exit 2
 ```
 
 `classify` no longer refuses. It still returns a `Fault` rather than a report when the front end
 cannot decode the input, and that is the safety-relevant choice: a `Fault` has no verdict to
 misread, an `Outcome` does. Coverage travels from the gate unchanged, so a run with omissions
-reports **inconclusive** — never **coherent**. Treat exit 0 alone as the pass condition; a CI job
-that accepts 2 reintroduces the silent false pass the gate exists to prevent.
+reports **inconclusive** — never **coherent** — and lists every omission so it can be acted on.
+Treat exit 0 alone as the pass condition; a CI job that accepts 2 reintroduces the silent false pass
+the gate exists to prevent. Every CLI argument is either honoured or refused with exit 3: `-I FILE`
+attests an import (a document with no ontology IRI is refused), `--strict` refuses to run past an
+omission, and `--emit`/`--reduce` are refused until M3.
+
+**Real ontologies, not just fixtures.** The fixtures all passed while the first two real ontologies
+failed, and both failures are fixed and pinned by `make corpus-acceptance`:
+
+| Ontology | Before | Now |
+|---|---|---|
+| RO 2025-12-17 (11.6k triples) | exit 3 — an inverse property in a property chain faulted the whole document | exit 2, 0 unsatisfiable, 847 omitted |
+| OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 168 s |
+
+GO (1.4M triples) is not yet run: saturation matches every fact against every axiom, and indexing
+that is M1's benchmark work.
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | types, front end, normalization | **done** — Turtle in, classified out; `howl validate` exits 0/1/2 (`make acceptance`) |
+| M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
 | M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
@@ -125,7 +146,7 @@ that `match`.
 **Why "recognized and enumerated" rather than "unsupported".** A rejected axiom lands in
 `coverage.omitted` with a canonical `AxiomRef`, which forces the verdict to **inconclusive**. That is
 the whole safety property: HOWL will not report *coherent* over an ontology it only partly read. The
-corpus pins both directions — all 17 `v0/` fixtures gate clean, and all 14 `out-of-profile/` fixtures
+corpus pins both directions — all 17 `v0/` fixtures gate clean, and all 15 `out-of-profile/` fixtures
 yield at least one omission (`make test`), cross-checked by an independently written census
 (`make census`).
 
@@ -146,6 +167,8 @@ make lib      # static library
 make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
 make example      # executable @example blocks on the completion rules
 make crate-test   # Rust crate, including the FFI layout guards
+make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
+make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
 ```
 
 Working on the SLOP sources needs the toolchain:
