@@ -42,42 +42,85 @@ that accepts 2 reintroduces the silent false pass the gate exists to prevent.
 | M3 | Turtle emission + GROWL round-trip | not started |
 | M4 | alignment + minimal repair | not started |
 
-## What v0 accepts, and what it only reports
+## On the way to EL++
 
-**v0 is not EL++, and saying so would overclaim.** Named, it is **ELH<sub>⊥</sub><sup>R+</sup> with
-domain and range axioms** — EL with role hierarchies, ⊥, role composition, and property
-domains/ranges — which is a *strict subset* of EL++ and, subject to the two RBox conditions, of the
-OWL 2 EL profile. The gap is **not** just nominals and concrete domains; the complete list is below.
-[§5.2](./SPEC.md#52-the-exact-v0-language) is the authority and this table summarises it.
+v0 is **ELH<sub>⊥</sub><sup>R+</sup> with domain and range** — EL with role hierarchies, ⊥, role
+composition, and property domains/ranges. This table tracks the distance from there to EL++,
+construct by construct, against both forms of the target: **EL++** the description logic (Baader,
+Brandt & Lutz, 2005, extended with ranges and reflexive roles in 2008), and the **OWL 2 EL** profile,
+its W3C syntax. The two are not the same list — OWL 2 EL adds `ObjectHasSelf`, keys and the built-in
+properties, which the EL++ papers do not define. [§5.2](./SPEC.md#52-the-exact-v0-language) is the
+authority for what HOWL does with each.
+
+**done** — reasoned over, and tested. **not yet** — recognized and enumerated out-of-profile, so a
+document using it reports *inconclusive*, never *coherent*. **non-goal** — excluded by
+[§14](./SPEC.md#14-non-goals).
+
+| Construct | EL++ | OWL 2 EL | HOWL | What it takes / how it is done |
+|---|:-:|:-:|---|---|
+| ***Class constructors*** | | | | |
+| `owl:Thing`, `owl:Nothing` (⊤, ⊥) | ✓ | ✓ | **done** | |
+| `ObjectIntersectionOf` (C ⊓ D) | ✓ | ✓ | **done** | |
+| `ObjectSomeValuesFrom` (∃r.C) | ✓ | ✓ | **done** | |
+| `ObjectOneOf`, one individual ({a}) | ✓ | ✓ | not yet | nominal propagation (CEL's CR6), which reaches across contexts and so gives up [§6.6](./SPEC.md#66-parallelism-context-based)'s context independence; [§15 Q3](./SPEC.md#15-open-questions) closed it for the first consumer |
+| `ObjectHasValue` (∃r.{a}) | ✓ | ✓ | not yet | lands with nominals |
+| `ObjectHasSelf` (∃r.Self) | | ✓ | not yet | completion rules for self-loops, and a completeness citation beyond the EL++ papers |
+| ***TBox axioms*** | | | | |
+| `SubClassOf` (C ⊑ D) | ✓ | ✓ | **done** | |
+| `EquivalentClasses` | ✓ | ✓ | **done** | desugared to GCIs around the canonically least operand |
+| `DisjointClasses`, n-ary | ✓ | ✓ | **done** | desugared to pairwise C ⊓ D ⊑ ⊥ |
+| ***RBox axioms*** | | | | |
+| `SubObjectPropertyOf` (r ⊑ s) | ✓ | ✓ | **done** | |
+| `ObjectPropertyChain` (r₁ ∘ … ∘ rₙ ⊑ s) | ✓ | ✓ | **done** | OWL 2 §11.2 regularity is gated; EL++ alone would not require it |
+| `EquivalentObjectProperties` | ✓ | ✓ | **done** | desugared to simple inclusions |
+| `TransitiveObjectProperty` | ✓ | ✓ | **done** | desugared to r ∘ r ⊑ r |
+| `ObjectPropertyDomain` | ✓ | ✓ | **done** | ∃r.⊤ ⊑ C |
+| `ObjectPropertyRange` | ✓ | ✓ | **done** | eliminated through fresh X<sub>r,D</sub> (2008); the range/chain condition is gated |
+| `ReflexiveObjectProperty` (ε ⊑ r) | ✓ | ✓ | not yet | an r-self-edge in every context, and its interaction with chains |
+| `owl:topObjectProperty`, `owl:bottomObjectProperty` | | ✓ | not yet | built-in role semantics; the universal role reaches across contexts, as nominals do |
+| ***Assertions*** | | | | |
+| `ClassAssertion` (C(a)) | ✓ | ✓ | **done**† | individual(a) ⊑ C |
+| `ObjectPropertyAssertion` (r(a,b)) | ✓ | ✓ | **done**† | direct edges, plus range seeds on the target |
+| `SameIndividual`, `DifferentIndividuals` | via {a} | ✓ | not yet | equality: {a} ⊑ {b}, {a} ⊓ {b} ⊑ ⊥ — lands with nominals |
+| `NegativeObjectPropertyAssertion` | via {a} | ✓ | not yet | {a} ⊓ ∃r.{b} ⊑ ⊥ — lands with nominals |
+| `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality — lands after nominals |
+| ***Concrete domains*** | | | | |
+| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
+
+† Implemented and tested, but the reviewed argument that the direct-edge encoding is sound and
+complete ([§12](./SPEC.md#12-milestones--acceptance-criteria) M1 (f)) is still owed, so assertions
+ship outside the sound-and-complete claim until it lands.
+
+**14 of 23 rows done.** Every open EL++ row traces to one of three things: **nominals** (four rows),
+**reflexive roles** (one), and **concrete domains** (the non-goal). OWL 2 EL adds three more:
+`ObjectHasSelf`, the built-in properties, and `HasKey`. None of the open rows has a milestone yet —
+[§12](./SPEC.md#12-milestones--acceptance-criteria) goes from v0 to Horn-SHIQ, which is incomparable
+with EL++ rather than a step toward it.
+
+**Off the path entirely.** These are outside OWL 2 EL, so no progress toward EL++ reaches them; they
+are recognized and enumerated like every open row above.
+
+| Construct | Where it lives |
+|---|---|
+| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — v2 (SROIQ) |
+| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — v1 (Horn-SHIQ) |
+| `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL |
+| Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |
+| SWRL rules | **never**, at any rung — unrestricted SWRL is undecidable, and it is in neither OWL 2 DL nor OWL 2 EL |
+
+### What happens to a construct that isn't done
 
 Every recognized construct has exactly one of four dispositions, and the matrix is a catch-all-free
 `match` over `RawAxiom` compiled with `-Werror=switch` — so adding a construct without dispositioning
-it is a **build error**, not a proofreading exercise.
+it is a **build error**, not a proofreading exercise. Moving a row to **done** therefore starts at
+that `match`.
 
 | Disposition | Meaning | Constructs |
 |---|---|---|
-| **in v0** | reasoned over | `SubClassOf`, `EquivalentClasses`, `DisjointClasses` (n-ary), `ObjectIntersectionOf`, `ObjectSomeValuesFrom`, `owl:Thing`, `owl:Nothing`, `SubObjectPropertyOf`, `ObjectPropertyChain` (n-ary), `EquivalentObjectProperties`, `TransitiveObjectProperty`, `ObjectPropertyDomain`, `ObjectPropertyRange`, `ClassAssertion`, `ObjectPropertyAssertion` |
+| **in v0** | reasoned over | every **done** row above |
 | **consumed** | read, yields no axiom | declarations — *not* "ignored": dropping them loses declared-but-unused classes |
 | **inert** | semantically empty in OWL 2 | `AnnotationAssertion`, `SubAnnotationPropertyOf`, `AnnotationProperty{Domain,Range}`, the ontology header, axiom-annotation reification |
-| **out-of-profile** | recognized, **enumerated**, never silently dropped | everything below |
-
-**Rejected, with the reason each is rejected:**
-
-| Construct | Why it is out |
-|---|---|
-| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities | outside EL entirely — v2 (SROIQ) |
-| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — v1 (Horn-SHIQ) |
-| `ObjectOneOf` (nominals), `ObjectHasValue` | **in OWL 2 EL**, deferred |
-| `ObjectHasSelf` | **in OWL 2 EL**, but not in the cited EL++ constructor syntax |
-| `ReflexiveObjectProperty` | **in OWL 2 EL**, and in the updated EL++ paper — deferred |
-| `owl:topObjectProperty`, `owl:bottomObjectProperty` | **in OWL 2 EL**; CR1–CR7 do not implement built-in role semantics, and treating `⊥ᵣ` as an ordinary role is a *missed unsatisfiability* |
-| Concrete domains, datatype properties, data ranges | the consumer partitions these and keeps a told-coherence side-check |
-| Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |
-| `SameIndividual`, `DifferentIndividuals`, negative assertions, `HasKey`, `DisjointUnion`, `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL |
-| SWRL rules | **never**, at any rung — unrestricted SWRL is undecidable, and it is in neither OWL 2 DL nor OWL 2 EL |
-
-The five rows marked **in OWL 2 EL** are the honest distance between v0 and that profile. Everything
-else v0 rejects, OWL 2 EL rejects too.
+| **out-of-profile** | recognized, **enumerated**, never silently dropped | every other row above |
 
 **Why "recognized and enumerated" rather than "unsupported".** A rejected axiom lands in
 `coverage.omitted` with a canonical `AxiomRef`, which forces the verdict to **inconclusive**. That is
