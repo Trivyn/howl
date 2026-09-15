@@ -110,6 +110,7 @@
     frontier-is-empty
     context-of
     queue-of
+    deliver-seed
     store-has-sub
     store-has-succ)
 
@@ -574,4 +575,45 @@
                   (termination (union-new Termination fixpoint))))
             (ok (record-new RoundResult
                   (saturation  state)
-                  (termination (union-new Termination resource-limit (. state iteration)))))))))))
+                  (termination (union-new Termination resource-limit (. state iteration))))))))))
+  (fn deliver-seed ((arena Arena) (sat Saturation) (to Node) (d Derived))
+    (@intent "Place one derived fact into Δ₀ for an existing context")
+    (@spec ((Arena Saturation Node Derived) -> Bool))
+    (@alloc arena)
+    ;; §6.3 step 4: initialization IS the barrier, so asserted edges and
+    ;; the range facts they carry go into Δ₀ rather than into the store.
+    ;; Writing them into `subsumers` instead would make them invisible
+    ;; to round 0's rules — the same failure `seed-node` documents from
+    ;; the other side, where omitting the STORE write leaves CR2 and CR4
+    ;; unable to see the seeds.
+    ;;
+    ;; Returns false when the target has no context, which means the
+    ;; caller left a node out of the signature. It is not silently
+    ;; created here: a context minted behind the caller's back would
+    ;; make the registry a function of axiom occurrence again, which is
+    ;; exactly what keying on the signature exists to avoid.
+    (match (map-get (. sat queues) to)
+      ((none) false)
+      ((some q)
+        (let ((mut qq q)
+              (store (ensure-context arena sat to)))
+          (do
+            ;; BOTH THE STORE AND THE QUEUE, exactly as `round-commit`
+            ;; writes them. Writing only the queue is silent and total:
+            ;; the fact is delivered as a message for round 0, but
+            ;; S(target) never contains it, so CR2 can never find the
+            ;; OTHER conjunct of a `sub-and` against a seed. The
+            ;; mandatory identity fixture fails precisely there — both
+            ;; ranges arrive at `individual(b)` as messages, neither is
+            ;; in S(b), the disjointness never fires, and the run
+            ;; reports COHERENT. `seed-node` documents the same hazard
+            ;; from the other side.
+            (match d
+              ((derived-sub b)    (set-put (. store subsumers) b))
+              ((derived-succ r y) (add-succ arena store r y))
+              ((derived-pred r x) (add-pred arena store r x)))
+            (list-push (. qq items) d)
+            (map-put (. sat queues) to qq)
+            (set-put (. sat active) to)
+            true)))))
+)

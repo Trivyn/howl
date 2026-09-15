@@ -12,7 +12,16 @@
 CC      ?= cc
 # Version is sourced from slop.toml [project]; override with `make HOWL_VERSION=x.y.z`
 HOWL_VERSION ?= $(shell sed -n 's/^version = "\(.*\)"/\1/p' slop.toml | head -1)
-CFLAGS  ?= -O2 -Wall -Wno-unused-function -Wno-unused-variable \
+# -Werror=switch IS A CORRECTNESS GATE, NOT A STYLE FLAG. SPEC.md §5.2
+# requires the disposition matrix to be "a total function over RawAxiom
+# ... generated from it rather than maintained by hand", so that adding
+# a construct cannot silently leave it undispositioned. SLOP's own
+# checker only WARNS on a non-exhaustive match, but the transpiler
+# emits SLOP_UNREACHABLE() after the switch rather than as a default
+# arm, specifically so -Wswitch still fires (csrc/runtime:86-88). This
+# promotes that to a hard build error naming the missing variant.
+# Without it the failure surfaces as an abort() on a real ontology.
+CFLAGS  ?= -O2 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
            -Wno-return-type -Wno-pointer-sign \
            -DSLOP_ARENA_NO_CAP \
            -DSLOP_INTERN_THREADSAFE \
@@ -33,7 +42,7 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        crate-vendor crate-build crate-test crate-publish
+        acceptance corpus-acceptance crate-vendor crate-build crate-test crate-publish
 
 PLATFORM ?= unknown
 
@@ -68,7 +77,7 @@ test: $(BIN)
 clean:
 	rm -rf $(BIN) dist
 
-release: CFLAGS = -O3 -Wall -Wno-unused-function -Wno-unused-variable \
+release: CFLAGS = -O3 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
                   -Wno-return-type -Wno-pointer-sign -DNDEBUG \
                   -DSLOP_ARENA_NO_CAP \
                   -DSLOP_INTERN_THREADSAFE \
@@ -102,6 +111,56 @@ verify:
 # skipped AND counted as a pass, so a green line meant nothing.
 example:
 	slop test src/rules/el.slop
+	slop test src/canon.slop
+
+# SPEC.md §12's acceptance criteria, as exit codes. These are the contract a
+# consumer actually observes, and they are checked here rather than only
+# in-process because the CLI is where the verdict becomes a number: a test
+# asserting `verdict-inconclusive` still passes if the exit-code table drifts.
+# 2 is deliberately NOT a pass.
+acceptance: cli
+	@rc=0; fail=0; \
+	check() { ./$(BIN)/howl validate $$1 >/dev/null 2>&1; rc=$$?; \
+	          if [ "$$rc" -eq "$$2" ]; then echo "  ok   $$1 -> $$rc"; \
+	          else echo "  FAIL $$1 -> $$rc (expected $$2)"; fail=1; fi; }; \
+	check corpus/fixtures/v0/litmus.ttl 0; \
+	check corpus/fixtures/hazards/unattested-import.ttl 2; \
+	check corpus/fixtures/hazards/abox-disjoint-range.ttl 1; \
+	check corpus/fixtures/hazards/annotation-heavy.ttl 0; \
+	check corpus/fixtures/hazards/declared-unused-class.ttl 0; \
+	check corpus/fixtures/hazards/rbox-regularity-reject.ttl 2; \
+	check corpus/fixtures/hazards/punning.ttl 0; \
+	check corpus/fixtures/hazards/seed-only-entailment.ttl 0; \
+	check corpus/fixtures/hazards/owl-nothing-present.ttl 0; \
+	check corpus/fixtures/hazards/inconsistent-via-individual.ttl 1; \
+	check corpus/fixtures/hazards/unsatisfiable-consistent.ttl 1; \
+	check corpus/fixtures/hazards/cyclic-hierarchy.ttl 0; \
+	check corpus/fixtures/hazards/range-complex-fillers.ttl 0; \
+	check corpus/fixtures/out-of-profile/inverse-expressions.ttl 2; \
+	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
+	else echo "  ACCEPTANCE FAILED"; exit 1; fi
+
+# M0 acceptance (a) asks for a REAL ontology, and every fixture above passed
+# while the first two real ones failed: RO faulted on inverse property
+# expressions, and OBI reported itself inconsistent through a collapsed range
+# key. Both are released OBO ontologies that their own pipelines classify, so
+# neither has an unsatisfiable class; both carry out-of-profile axioms, so the
+# honest verdict is 2. A missing .ttl FAILS rather than skipping — a gate that
+# passes because its input was absent is the false pass this project exists
+# to prevent. GO is excluded until saturation is indexed (M1).
+corpus-acceptance: cli
+	@fail=0; \
+	check() { f=corpus/vendor/$$1.ttl; \
+	          if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh $$2)"; fail=1; return; fi; \
+	          out=$$(./$(BIN)/howl validate $$f 2>&1); rc=$$?; \
+	          unsat=$$(printf '%s\n' "$$out" | sed -n 's/.* \([0-9][0-9]*\) unsatisfiable.*/\1/p' | head -1); \
+	          if [ "$$rc" -eq "$$3" ] && [ "$$unsat" = "0" ]; then echo "  ok   $$1 -> $$rc, 0 unsatisfiable"; \
+	          else echo "  FAIL $$1 -> $$rc, $${unsat:-?} unsatisfiable (expected $$3, 0)"; fail=1; fi; }; \
+	check ro-2025-12-17 ro 2; \
+	check obi-2026-07-27 obi 2; \
+	echo "  skip go-2026-07-26 (saturation is unindexed until M1)"; \
+	if [ "$$fail" -eq 0 ]; then echo "  real-corpus acceptance met"; \
+	else echo "  CORPUS ACCEPTANCE FAILED"; exit 1; fi
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.

@@ -71,6 +71,7 @@
   (import vocab (OWL_NOTHING))
   (import types (Node SubPair Findings Saturation Context
                  node-top node-bottom node-eq))
+  (import canon (sort-iris sort-sub-pairs))
 
   (export
     extract-findings
@@ -185,7 +186,12 @@
             ;; that appear in no input and must appear in no output.
             ((individual-node _) (do))
             ((fresh-node _)      (do))))
-        unsat)))
+        ;; SORTED ON THE WAY OUT (§6.8). `for-each` over a Set walks
+        ;; bucket order, which is a function of hash and insertion
+        ;; history rather than of content — so an unsorted list here
+        ;; would make the report vary with worker count and defeat the
+        ;; consumer's verdict hashing.
+        (sort-iris arena unsat))))
 
   (fn collect-taxonomy ((arena Arena) (sat Saturation))
     (@intent "The subsumption hierarchy, bottom-compressed and projected to class contexts")
@@ -217,16 +223,17 @@
                       ((fresh-node _)      (do)))))))
             ((individual-node _) (do))
             ((fresh-node _)      (do))))
-        ;; OWED — CANONICAL ORDERING (§6.8, M1 acceptance (e)). This list
-        ;; and `unsatisfiable` must both be sorted for a report to be
-        ;; byte-identical across worker counts; set iteration is bucket
-        ;; order, which is not content-canonical. There is no sort and no
-        ;; string comparison but `string-eq` anywhere in the toolchain —
-        ;; the route is an FFI `memcmp` (cli/main.slop already declares
-        ;; `strlen` that way) plus an insertion sort. Deferred rather
-        ;; than skipped: `howl.classify` still refuses, so no consumer
-        ;; can observe these lists yet. It must land before the front end.
-        subs)))
+        ;; SORTED ON THE WAY OUT (§6.8, M1 acceptance (e)) — this was
+        ;; OWED through M1 and is discharged here, because the front end
+        ;; is about to give these lists a consumer. Two `for-each`es over
+        ;; Sets feed this list, and both walk bucket order; canonical
+        ;; ordering is what makes the report byte-identical across worker
+        ;; counts and therefore hashable into a durable verdict.
+        ;;
+        ;; The comparator is `canon.string-cmp` (FFI memcmp), NOT
+        ;; `strlib.compare` — see the header of src/canon.slop for why
+        ;; strcmp is unsafe on the IRI slices this walks.
+        (sort-sub-pairs arena subs))))
 
   (fn extract-findings ((arena Arena) (sat Saturation))
     (@intent "Extract the taxonomy and coherence findings from a saturated state")

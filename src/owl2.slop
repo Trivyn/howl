@@ -1,0 +1,843 @@
+;; ============================================================
+;; The OWL 2 decode layer  —  SPEC.md §6.3 step 1, §5.2
+;;
+;; `RawAxiom` is deliberately WIDER than §6.2's `Concept`/`NormAxiom`.
+;; Those hold only v0 constructs, so a union, a cardinality restriction
+;; or a nominal has NO REPRESENTABLE VALUE in them — and a gate cannot
+;; enumerate as out-of-profile something it cannot hold. Without this
+;; layer an unsupported-but-well-formed axiom has nowhere to go but a
+;; parse error or the floor, and §5.1's "never silently drop an axiom"
+;; is unimplementable.
+;;
+;; DECODING IS NOT ACCEPTING. Every variant below decodes; the GATE
+;; then decides its disposition. That separation is what lets the
+;; front end run in the only order that works (§6.3): the RBox gates
+;; need chains as written AND need to compare class expressions, and
+;; only decoding first satisfies both.
+;;
+;; HOW MUCH STRUCTURE EACH VARIANT CARRIES, and why it differs. Where
+;; v0's own vocabulary can hold an operand — a `RoleId`, a `Node`, a
+;; `RawConcept` — the variant carries it, because the signature, the
+;; RBox gates and the normalizer all read those operands. Where the
+;; construct is built from vocabulary v0 has no types for at all (the
+;; data side, SWRL), the variant carries an `InputRef` instead. That
+;; is not a loss of the losslessness §6.3 asks for: the requirement is
+;; that every axiom be REPRESENTABLE AND NAMEABLE in a report, and an
+;; `InputRef` names it exactly — as canonical functional syntax where
+;; one exists, as canonical N-Triples where it does not. Inventing a
+;; `RawDataRange` tree that nothing would ever read would be shape for
+;; its own sake.
+;;
+;; THE DISPOSITION MATRIX IS A TOTAL FUNCTION, AND THE COMPILER
+;; ENFORCES IT. §5.2 requires exhaustiveness to be a compile-time
+;; property rather than a proofreading exercise. `disposition` is a
+;; `match` with NO catch-all arm — but note that SLOP itself only
+;; WARNS on a non-exhaustive match. The hard gate is `-Werror=switch`
+;; in the Makefile: the transpiler emits `SLOP_UNREACHABLE()` after
+;; the switch rather than as a `default:` arm precisely so `-Wswitch`
+;; still fires, so a new `RawAxiom` variant fails the BUILD, naming
+;; itself, until it is given a disposition.
+;; ============================================================
+
+(module owl2
+  (@doc "The lossless OWL 2 axiom AST, its disposition matrix, and the input signature (§5.2, §6.3)")
+
+  (import rdf (IRI))
+  (import canon (string-cmp node-cmp role-cmp sort-range))
+  (import types (Node RoleId EntityKind InputRef AxiomRef Omission MissingDeclaration))
+
+  (export
+    OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY OWL_ANNOTATED_TARGET
+    OWL_ANNOTATION OWL_DISJOINT_UNION_OF
+    OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
+    OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
+    SWRL_NS SWRL_IMP SWRL_BODY SWRL_HEAD
+    CardKind PropCharacteristic
+    RawConcept RawChain RawEdge RawClassAssertion RawAnnotation RawDeclaration
+    RawAxiom Disposition
+    Signature
+    disposition concept-in-profile axiom-in-profile role-in-profile
+    concept-tag-rank concept-cmp concept-at sort-concepts
+    render-concept render-axiom render-role render-omission
+    make-signature signature-has-class signature-has-object-property
+    signature-has-annotation-property signature-has-data-property
+    signature-size)
+
+  ;; ============================================================
+  ;; Vocabulary slop-rdf's `vocab` module does not carry
+  ;;
+  ;; Confirmed absent from ../slop-rdf/src/vocab.slop, which is
+  ;; otherwise thorough for OWL 2. Defined here rather than upstream so
+  ;; M0 does not block on a sibling release; an upstream PR is owed.
+  ;; ============================================================
+
+  ;; Axiom-annotation reification (§6.3 step 0). WITHOUT THESE THE
+  ;; HEADER PRE-PASS CANNOT RUN, and every annotated `rdfs:subClassOf`
+  ;; in a real ontology would reach the gate as four unrecognized
+  ;; triples — marking every versioned, annotation-heavy ontology
+  ;; out-of-profile, which is M0 acceptance (a) failing outright.
+  (const OWL_AXIOM              String "http://www.w3.org/2002/07/owl#Axiom")
+  (const OWL_ANNOTATED_SOURCE   String "http://www.w3.org/2002/07/owl#annotatedSource")
+  (const OWL_ANNOTATED_PROPERTY String "http://www.w3.org/2002/07/owl#annotatedProperty")
+  (const OWL_ANNOTATED_TARGET   String "http://www.w3.org/2002/07/owl#annotatedTarget")
+  (const OWL_ANNOTATION         String "http://www.w3.org/2002/07/owl#Annotation")
+
+  (const OWL_DISJOINT_UNION_OF  String "http://www.w3.org/2002/07/owl#disjointUnionOf")
+
+  ;; THE BUILT-IN OBJECT PROPERTIES. §5.2 requires these to be
+  ;; RECOGNIZED and gated OUT — never treated as ordinary role names —
+  ;; and the reason `bottomObjectProperty` matters is a false pass, not
+  ;; a missing feature: it connects no pair, so `A ⊑ ∃⊥ᵣ.⊤` entails
+  ;; `A ⊑ ⊥`. Treated as an ordinary role, CR3 happily builds an edge
+  ;; and `A` is reported SATISFIABLE — a missed unsatisfiability.
+  ;; `topObjectProperty` interacts with every existential in the
+  ;; ontology and nothing in CR1–CR7 accounts for it.
+  (const OWL_TOP_OBJECT_PROPERTY    String "http://www.w3.org/2002/07/owl#topObjectProperty")
+  (const OWL_BOTTOM_OBJECT_PROPERTY String "http://www.w3.org/2002/07/owl#bottomObjectProperty")
+  (const OWL_TOP_DATA_PROPERTY      String "http://www.w3.org/2002/07/owl#topDataProperty")
+  (const OWL_BOTTOM_DATA_PROPERTY   String "http://www.w3.org/2002/07/owl#bottomDataProperty")
+
+  ;; SWRL. Out-of-profile at every rung and never to be implemented
+  ;; (unrestricted SWRL is undecidable), but it must be RECOGNIZED —
+  ;; RO, a mainstream OBO ontology, carries 25 rules, and treating them
+  ;; as inert would drop logical content two of them use to derive
+  ;; disjointness.
+  (const SWRL_NS   String "http://www.w3.org/2003/11/swrl#")
+  (const SWRL_IMP  String "http://www.w3.org/2003/11/swrl#Imp")
+  (const SWRL_BODY String "http://www.w3.org/2003/11/swrl#body")
+  (const SWRL_HEAD String "http://www.w3.org/2003/11/swrl#head")
+
+  ;; ============================================================
+  ;; Class expressions
+  ;; ============================================================
+
+  (type CardKind (enum card-min card-max card-exact))
+
+  (type PropCharacteristic (enum
+    prop-functional
+    prop-inverse-functional
+    prop-symmetric
+    prop-asymmetric
+    prop-reflexive
+    prop-irreflexive))
+
+  ;; The v0 arms (`rc-name`/`rc-thing`/`rc-nothing`/`rc-and`/`rc-some`)
+  ;; lower to §6.2's `Concept` after gating. The rest exist ONLY so the
+  ;; gate can name what it rejected.
+  (type RawConcept (union
+    (rc-name    Node)
+    (rc-thing)
+    (rc-nothing)
+    (rc-and     (List RawConcept))
+    (rc-some    RoleId (Ptr RawConcept))
+    ;; --- out-of-profile, but representable ---
+    (rc-or      (List RawConcept))
+    (rc-not     (Ptr RawConcept))
+    (rc-all     RoleId (Ptr RawConcept))
+    (rc-oneof   (List Node))
+    (rc-has-value RoleId Node)
+    (rc-has-self  RoleId)
+    (rc-card    CardKind RoleId (Int 0 ..))
+    (rc-qcard   CardKind RoleId (Int 0 ..) (Ptr RawConcept))
+    (rc-data    InputRef)      ; a data range in a class position
+    (rc-anon    InputRef)))    ; a blank node HOWL cannot decode
+
+  ;; ============================================================
+  ;; Axiom payloads that need a record
+  ;;
+  ;; A multi-field union variant containing a `(List T)` does not get
+  ;; that list type registered by the transpiler — the same reason
+  ;; `MissingDeclaration` is a record in types.slop. So any variant
+  ;; that would pair a list with another field becomes a record here.
+  ;; ============================================================
+
+  (type RawChain (record
+    (steps (List RoleId))     ; AS WRITTEN, any n >= 2 — the RBox gates
+    (super RoleId)))          ; read this before decomposition (§6.3)
+
+  (type RawEdge (record
+    (role RoleId)
+    (from Node)
+    (to   Node)))
+
+  (type RawClassAssertion (record
+    (concept (Ptr RawConcept))
+    (subject Node)))
+
+  (type RawAnnotation (record
+    (property IRI)
+    (subject  InputRef)
+    (target   String)))
+
+  (type RawDeclaration (record
+    (kind   EntityKind)
+    (entity IRI)))
+
+  ;; ============================================================
+  ;; The axiom AST
+  ;; ============================================================
+
+  (type RawAxiom (union
+    ;; --- in v0 (§5.2's grammar) ---
+    (ra-sub-class-of          (Ptr RawConcept) (Ptr RawConcept))
+    (ra-equivalent-classes    (List RawConcept))
+    (ra-disjoint-classes      (List RawConcept))
+    (ra-sub-object-property   RoleId RoleId)
+    (ra-property-chain        RawChain)
+    (ra-equivalent-properties (List RoleId))
+    (ra-transitive-property   RoleId)
+    (ra-object-property-domain RoleId (Ptr RawConcept))
+    (ra-object-property-range  RoleId (Ptr RawConcept))
+    (ra-class-assertion       RawClassAssertion)
+    (ra-object-property-assertion RawEdge)
+
+    ;; --- consumed: no axiom, but READ (§5.2). Discarding these loses
+    ;;     declared-but-unused classes, which M0 acceptance (c) requires. ---
+    (ra-declaration           RawDeclaration)
+
+    ;; --- inert: semantically empty in OWL 2. Treating these as
+    ;;     unsupported returns false-inconclusive on every documented
+    ;;     ontology, which is the failure mode that makes a reasoner
+    ;;     useless rather than merely incomplete. ---
+    (ra-annotation-assertion  RawAnnotation)
+    (ra-annotation-axiom      InputRef)
+
+    ;; --- out-of-profile: object side, structure retained ---
+    (ra-inverse-properties    RoleId RoleId)
+    (ra-property-characteristic PropCharacteristic RoleId)
+    (ra-disjoint-properties   (List RoleId))
+    (ra-same-individual       (List Node))
+    (ra-different-individuals (List Node))
+    (ra-negative-assertion    InputRef)
+    (ra-disjoint-union        InputRef)
+    (ra-has-key               InputRef)
+    (ra-inverse-expression    InputRef)   ; ObjectInverseOf as an operand — v1
+
+    ;; --- out-of-profile: built on vocabulary v0 has no types for ---
+    (ra-data-axiom            InputRef)   ; the whole data side (§5.2)
+    (ra-builtin-role          InputRef)   ; owl:top/bottomObjectProperty
+    (ra-anonymous-individual  InputRef)
+    (ra-reserved-vocabulary   InputRef)   ; e.g. owl:Nothing as an individual
+    (ra-swrl-rule             InputRef)
+
+    ;; --- well-formed, unrecognized. NOT a catch-all for laziness: it
+    ;;     is what lets a FUTURE profile's axiom decode and gate rather
+    ;;     than failing to parse (§6.3 step 1). ---
+    (ra-unrecognized          InputRef)))
+
+  (type Disposition (enum
+    d-in-profile        ; classified
+    d-inert             ; contributes nothing, costs nothing
+    d-consumed          ; produces no NormAxiom, but is READ
+    d-out-of-profile))  ; enumerated in the report; verdict inconclusive
+
+  ;; §5.2's four-disposition table, as a total function. See the module
+  ;; header for why this has no catch-all arm and what enforces it.
+  ;;
+  ;; The two failure modes are OPPOSITE and both silent: a permissive
+  ;; mapping drops an unsupported LOGICAL axiom and returns a false
+  ;; coherent; a conservative one marks ANNOTATION axioms out-of-profile
+  ;; and returns false inconclusive on every real ontology. Neither
+  ;; announces itself, which is why the table is the authority and a
+  ;; construct absent from it is a spec bug rather than a judgement call.
+  (fn disposition ((ax RawAxiom))
+    (@intent "The §5.2 disposition of a decoded axiom — total by construction")
+    (@spec ((RawAxiom) -> Disposition))
+    (@pure)
+    (match ax
+      ((ra-sub-class-of _ _)            'd-in-profile)
+      ((ra-equivalent-classes _)        'd-in-profile)
+      ((ra-disjoint-classes _)          'd-in-profile)
+      ((ra-sub-object-property _ _)     'd-in-profile)
+      ((ra-property-chain _)            'd-in-profile)
+      ((ra-equivalent-properties _)     'd-in-profile)
+      ((ra-transitive-property _)       'd-in-profile)
+      ((ra-object-property-domain _ _)  'd-in-profile)
+      ((ra-object-property-range _ _)   'd-in-profile)
+      ((ra-class-assertion _)           'd-in-profile)
+      ((ra-object-property-assertion _) 'd-in-profile)
+
+      ((ra-declaration _)               'd-consumed)
+
+      ((ra-annotation-assertion _)      'd-inert)
+      ((ra-annotation-axiom _)          'd-inert)
+
+      ((ra-inverse-properties _ _)      'd-out-of-profile)
+      ((ra-property-characteristic _ _) 'd-out-of-profile)
+      ((ra-disjoint-properties _)       'd-out-of-profile)
+      ((ra-same-individual _)           'd-out-of-profile)
+      ((ra-different-individuals _)     'd-out-of-profile)
+      ((ra-negative-assertion _)        'd-out-of-profile)
+      ((ra-disjoint-union _)            'd-out-of-profile)
+      ((ra-has-key _)                   'd-out-of-profile)
+      ((ra-inverse-expression _)        'd-out-of-profile)
+      ((ra-data-axiom _)                'd-out-of-profile)
+      ((ra-builtin-role _)              'd-out-of-profile)
+      ((ra-anonymous-individual _)      'd-out-of-profile)
+      ((ra-reserved-vocabulary _)       'd-out-of-profile)
+      ((ra-swrl-rule _)                 'd-out-of-profile)
+      ((ra-unrecognized _)              'd-out-of-profile)))
+
+  ;; ============================================================
+  ;; The input signature (§6.3 step 1)
+  ;;
+  ;; "Occurs in the input" means THE SIGNATURE, everywhere else in the
+  ;; spec — not the set of axioms. §6.2's `unsatisfiable` and §6.7's
+  ;; output projection are both defined against it, and §6.3 step 4
+  ;; keys the context registry on it rather than on axiom occurrence,
+  ;; which is the ONLY thing that gives a declared-but-unused class a
+  ;; context at all (M0 acceptance (c)).
+  ;;
+  ;; A record of Sets rather than a bare Map: M1 established that
+  ;; `Map`/`Set` cannot be function PARAMETER types in SLOP, so the
+  ;; signature has to travel wrapped.
+  ;; ============================================================
+
+  (type Signature (record
+    (classes     (Set IRI))
+    (obj-props   (Set IRI))
+    (data-props  (Set IRI))
+    (annot-props (Set IRI))
+    (individuals (Set IRI))
+    (datatypes   (Set IRI))))
+
+  (fn make-signature ((arena Arena))
+    (@intent "An empty signature; the built-ins are added by the decoder")
+    (@spec ((Arena) -> Signature))
+    (@alloc arena)
+    (record-new Signature
+      (classes     (set-new arena IRI))
+      (obj-props   (set-new arena IRI))
+      (data-props  (set-new arena IRI))
+      (annot-props (set-new arena IRI))
+      (individuals (set-new arena IRI))
+      (datatypes   (set-new arena IRI))))
+
+  (fn signature-has-class ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig classes) i))
+
+  (fn signature-has-object-property ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig obj-props) i))
+
+  (fn signature-has-annotation-property ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig annot-props) i))
+
+  (fn signature-has-data-property ((sig Signature) (i IRI))
+    (@spec ((Signature IRI) -> Bool))
+    (set-has (. sig data-props) i))
+
+  (fn signature-size ((arena Arena) (sig Signature))
+    (@intent "Total declared entities — every context comes from one of these")
+    (@spec ((Arena Signature) -> Int))
+    ;; Takes an Arena because `set-elements` allocates the element
+    ;; array and emits the bare identifier `arena` — the same mechanism
+    ;; that makes a store write inside `round-join` a compile error.
+    (@alloc arena)
+    (+ (cast Int (list-len (set-elements (. sig classes))))
+      (+ (cast Int (list-len (set-elements (. sig obj-props))))
+        (+ (cast Int (list-len (set-elements (. sig data-props))))
+          (+ (cast Int (list-len (set-elements (. sig annot-props))))
+            (+ (cast Int (list-len (set-elements (. sig individuals))))
+               (cast Int (list-len (set-elements (. sig datatypes))))))))))
+  ;; ============================================================
+  ;; The fragment restriction on OPERANDS
+  ;;
+  ;; §5.2's table classifies axiom FORMS. That is necessary and not
+  ;; sufficient: `SubClassOf(A, ObjectUnionOf(B, C))` is a
+  ;; SubClassOf — an in-profile form — carrying a concept ELH⊥R+ has
+  ;; no constructor for. Judging it by `disposition` alone accepts it,
+  ;; and the union is then either silently ignored or, worse, read as
+  ;; something it is not.
+  ;;
+  ;; The two conditions are kept separate rather than folded together
+  ;; because they answer different questions and are established at
+  ;; different points: the form is known as soon as the axiom decodes,
+  ;; while the operands are only known once the class expressions are
+  ;; built. The gate combines them.
+  ;; ============================================================
+
+  (fn role-in-profile ((r RoleId))
+    (@intent "Is this role an ordinary one, rather than an OWL built-in?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    ;; THE FALSE PASS THIS CLOSES IS A MISSED UNSATISFIABILITY, which
+    ;; is the one direction that makes a reasoner dangerous rather than
+    ;; merely incomplete. `owl:bottomObjectProperty` connects no pair,
+    ;; so `A ⊑ ∃⊥ᵣ.⊤` entails `A ⊑ ⊥`. Decoded as an ordinary named
+    ;; role it is an in-profile existential, CR3 happily builds an
+    ;; edge, and `A` is reported SATISFIABLE. `owl:topObjectProperty`
+    ;; interacts with every existential in the ontology and nothing in
+    ;; CR1–CR7 accounts for it.
+    ;;
+    ;; Checked at the ROLE, not at the axiom shape, so a built-in is
+    ;; caught wherever it occurs — in a restriction, a subproperty
+    ;; axiom, a chain, a domain, or an edge assertion.
+    (match r
+      ((fresh-role _) true)
+      ((named-role i)
+        (and (!= (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0)
+          (and (!= (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0)
+            (and (!= (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)
+                 (!= (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)))))))
+
+  (fn roles-in-profile ((rs (List RoleId)))
+    (@intent "Is every role in this list an ordinary one?")
+    (@spec (((List RoleId)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (r rs)
+          (when (not (role-in-profile r)) (set! ok false)))
+        ok)))
+
+  (fn concepts-in-profile ((cs (List RawConcept)))
+    (@intent "Is every concept in this list within the fragment?")
+    (@spec (((List RawConcept)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (c cs)
+          (when (not (concept-in-profile c)) (set! ok false)))
+        ok)))
+
+  (fn concept-in-profile ((c RawConcept))
+    (@intent "Is this class expression inside ELH⊥R+?")
+    (@spec ((RawConcept) -> Bool))
+    (@pure)
+    ;; No catch-all: a new RawConcept variant must be given an answer
+    ;; here, and -Werror=switch makes forgetting a build error. The
+    ;; unsafe default would be `true`, which admits a constructor the
+    ;; calculus cannot reason about.
+    (match c
+      ((rc-name _)        true)
+      ((rc-thing)         true)
+      ((rc-nothing)       true)
+      ((rc-and cs)        (concepts-in-profile cs))
+      ((rc-some r f)      (and (role-in-profile r) (concept-in-profile (deref f))))
+      ((rc-or _)          false)
+      ((rc-not _)         false)
+      ((rc-all _ _)       false)
+      ((rc-oneof _)       false)
+      ((rc-has-value _ _) false)
+      ((rc-has-self _)    false)
+      ((rc-card _ _ _)    false)
+      ((rc-qcard _ _ _ _) false)
+      ((rc-data _)        false)
+      ((rc-anon _)        false)))
+
+  (fn axiom-in-profile ((ax RawAxiom))
+    (@intent "In-profile FORM whose operands are also in the fragment")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (if (!= (disposition ax) 'd-in-profile)
+      false
+      ;; Every variant named, no catch-all. A catch-all would mean a
+      ;; future concept-carrying axiom form silently skips the operand
+      ;; check — the exact gap this function exists to close.
+      (match ax
+        ((ra-sub-class-of l r)
+          (and (concept-in-profile (deref l)) (concept-in-profile (deref r))))
+        ((ra-equivalent-classes cs)      (concepts-in-profile cs))
+        ((ra-disjoint-classes cs)        (concepts-in-profile cs))
+        ((ra-object-property-domain r c)
+          (and (role-in-profile r) (concept-in-profile (deref c))))
+        ((ra-object-property-range r c)
+          (and (role-in-profile r) (concept-in-profile (deref c))))
+        ((ra-class-assertion ca)         (concept-in-profile (deref (. ca concept))))
+        ((ra-sub-object-property a b)    (and (role-in-profile a) (role-in-profile b)))
+        ((ra-property-chain ch)
+          (and (roles-in-profile (. ch steps)) (role-in-profile (. ch super))))
+        ((ra-equivalent-properties rs)   (roles-in-profile rs))
+        ((ra-transitive-property r)      (role-in-profile r))
+        ((ra-object-property-assertion e) (role-in-profile (. e role)))
+        ;; The remainder are not d-in-profile, so the guard above has
+        ;; already returned. They are named anyway so that the switch
+        ;; stays total and a disposition change cannot slip past.
+        ((ra-declaration _)              false)
+        ((ra-annotation-assertion _)     false)
+        ((ra-annotation-axiom _)         false)
+        ((ra-inverse-properties _ _)     false)
+        ((ra-property-characteristic _ _) false)
+        ((ra-disjoint-properties _)      false)
+        ((ra-same-individual _)          false)
+        ((ra-different-individuals _)    false)
+        ((ra-negative-assertion _)       false)
+        ((ra-disjoint-union _)           false)
+        ((ra-has-key _)                  false)
+        ((ra-inverse-expression _)       false)
+        ((ra-data-axiom _)               false)
+        ((ra-builtin-role _)             false)
+        ((ra-anonymous-individual _)     false)
+        ((ra-reserved-vocabulary _)      false)
+        ((ra-swrl-rule _)                false)
+        ((ra-unrecognized _)             false))))
+
+  ;; ============================================================
+  ;; Canonical order on class expressions
+  ;;
+  ;; §6.3 needs this in three places: canonicalizing `and` operands,
+  ;; building the equivalence star "around the canonically LEAST
+  ;; operand", and keying fresh nodes by canonical expression. It lives
+  ;; here rather than in canon.slop because canon cannot import owl2 —
+  ;; owl2 already imports canon, and the cycle would not resolve.
+  ;; ============================================================
+
+  (fn concept-tag-rank ((c RawConcept))
+    (@intent "Variant rank, so unlike shapes order deterministically")
+    (@spec ((RawConcept) -> Int))
+    (@pure)
+    ;; TAG FIRST, for the same reason node-cmp ranks tags first: two
+    ;; shapes that are not the same construct must never compare equal
+    ;; because their payloads happen to line up.
+    (match c
+      ((rc-thing)          0)
+      ((rc-nothing)        1)
+      ((rc-name _)         2)
+      ((rc-and _)          3)
+      ((rc-some _ _)       4)
+      ((rc-or _)           5)
+      ((rc-not _)          6)
+      ((rc-all _ _)        7)
+      ((rc-oneof _)        8)
+      ((rc-has-value _ _)  9)
+      ((rc-has-self _)    10)
+      ((rc-card _ _ _)    11)
+      ((rc-qcard _ _ _ _) 12)
+      ((rc-data _)        13)
+      ((rc-anon _)        14)))
+
+  (fn concept-list-cmp ((a (List RawConcept)) (b (List RawConcept)))
+    (@intent "Lexicographic order on operand lists, length as tiebreak")
+    (@spec (((List RawConcept) (List RawConcept)) -> Int))
+    (@pure)
+    (let ((alen (cast Int (list-len a)))
+          (blen (cast Int (list-len b)))
+          (n    (min alen blen))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do
+            (set! r (concept-cmp (concept-at a i) (concept-at b i)))
+            (set! i (+ i 1))))
+        (cond ((!= r 0) r)
+              ((< alen blen) -1)
+              ((> alen blen) 1)
+              (else 0)))))
+
+  (fn concept-at ((xs (List RawConcept)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List RawConcept) Int) -> RawConcept))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new RawConcept rc-thing))))
+
+  (fn concept-cmp ((a RawConcept) (b RawConcept))
+    (@intent "Total structural order on class expressions")
+    (@spec ((RawConcept RawConcept) -> Int))
+    (@pure)
+    (let ((ra (concept-tag-rank a))
+          (rb (concept-tag-rank b)))
+      (if (!= ra rb)
+        (if (< ra rb) -1 1)
+        ;; Same variant: compare payloads. Only the arms that can
+        ;; actually pair with themselves need a body; the outer rank
+        ;; check has already separated everything else.
+        (match a
+          ((rc-name na)
+            (match b ((rc-name nb) (node-cmp na nb)) (_ 0)))
+          ((rc-and as)
+            (match b ((rc-and bs) (concept-list-cmp as bs)) (_ 0)))
+          ((rc-some ra2 fa)
+            (match b
+              ((rc-some rb2 fb)
+                (let ((rr (role-cmp ra2 rb2)))
+                  (if (!= rr 0) rr (concept-cmp (deref fa) (deref fb)))))
+              (_ 0)))
+          ((rc-or as)
+            (match b ((rc-or bs) (concept-list-cmp as bs)) (_ 0)))
+          ((rc-not fa)
+            (match b ((rc-not fb) (concept-cmp (deref fa) (deref fb))) (_ 0)))
+          ((rc-all ra2 fa)
+            (match b
+              ((rc-all rb2 fb)
+                (let ((rr (role-cmp ra2 rb2)))
+                  (if (!= rr 0) rr (concept-cmp (deref fa) (deref fb)))))
+              (_ 0)))
+          ((rc-has-value ra2 na)
+            (match b
+              ((rc-has-value rb2 nb)
+                (let ((rr (role-cmp ra2 rb2)))
+                  (if (!= rr 0) rr (node-cmp na nb))))
+              (_ 0)))
+          ((rc-has-self ra2)
+            (match b ((rc-has-self rb2) (role-cmp ra2 rb2)) (_ 0)))
+          ;; The remaining variants are either payload-free (rc-thing,
+          ;; rc-nothing) or carry payloads no canonical order is defined
+          ;; on yet (rc-oneof's node list, the cardinality counts, the
+          ;; InputRef strings). They are all OUT OF PROFILE, so they
+          ;; never reach a position where their relative order changes a
+          ;; classification — only an omission list, which sorts by
+          ;; omission-cmp rather than by this. Returning 0 makes them
+          ;; tie, and the sort is STABLE, so input order decides and the
+          ;; result stays input-determined.
+          (_ 0)))))
+
+  ;; ============================================================
+  ;; Canonical rendering — OWL functional syntax
+  ;;
+  ;; This is what `AxiomRef.text` and every out-of-profile `InputRef`
+  ;; carry, and it is load-bearing rather than cosmetic: omissions are
+  ;; hashed into the consumer's verdict identity (§6.8), and two
+  ;; distinct rejected axioms that render identically would MERGE in
+  ;; the omission list. That is an axiom silently dropped from the
+  ;; report — the failure §5.2 exists to prevent — so every payload
+  ;; that distinguishes two axioms has to appear here. It is why
+  ;; `rc-qcard` carries its count: `max 1 r.C` and `max 2 r.C` are
+  ;; different axioms and must not collapse to one omission.
+  ;; ============================================================
+
+  (fn render-role ((r RoleId))
+    (@intent "A role in functional syntax")
+    (@spec ((RoleId) -> String))
+    (@pure)
+    (match r
+      ((named-role i) (. i value))
+      ;; A fresh role cannot appear here: only ACCEPTED chains are
+      ;; decomposed, so decomposition runs strictly after the gate and
+      ;; no fresh-role ever reaches a rendered axiom.
+      ((fresh-role _) "_:fresh-role")))
+
+  (fn render-node ((n Node))
+    (@intent "A node in functional syntax")
+    (@spec ((Node) -> String))
+    (@pure)
+    (match n
+      ((class-node i)      (. i value))
+      ((individual-node i) (. i value))
+      ((fresh-node _)      "_:fresh-node")))
+
+  (fn render-card-kind ((k CardKind))
+    (@intent "The functional-syntax name of a cardinality kind")
+    (@spec ((CardKind) -> String))
+    (@pure)
+    (match k
+      ('card-min   "ObjectMinCardinality")
+      ('card-max   "ObjectMaxCardinality")
+      ('card-exact "ObjectExactCardinality")))
+
+  (fn render-concept-list ((arena Arena) (cs (List RawConcept)))
+    (@intent "Space-separated operands")
+    (@spec ((Arena (List RawConcept)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (c cs)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (render-concept arena c)))
+            (set! first false)))
+        out)))
+
+  (fn render-node-list ((arena Arena) (ns (List Node)))
+    (@intent "Space-separated individuals")
+    (@spec ((Arena (List Node)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (n ns)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (render-node n)))
+            (set! first false)))
+        out)))
+
+  (fn render-role-list ((arena Arena) (rs (List RoleId)))
+    (@intent "Space-separated roles")
+    (@spec ((Arena (List RoleId)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (r rs)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (render-role r)))
+            (set! first false)))
+        out)))
+
+  (fn wrap ((arena Arena) (head String) (body String))
+    (@intent "head(body)")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena head (string-concat arena "(" (string-concat arena body ")"))))
+
+  (fn join2 ((arena Arena) (a String) (b String))
+    (@intent "a b")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena a (string-concat arena " " b)))
+
+  (fn render-concept ((arena Arena) (c RawConcept))
+    (@intent "A class expression in OWL functional syntax")
+    (@spec ((Arena RawConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((rc-thing)   "owl:Thing")
+      ((rc-nothing) "owl:Nothing")
+      ((rc-name n)  (render-node n))
+      ((rc-and cs)  (wrap arena "ObjectIntersectionOf" (render-concept-list arena cs)))
+      ((rc-or cs)   (wrap arena "ObjectUnionOf" (render-concept-list arena cs)))
+      ((rc-not f)   (wrap arena "ObjectComplementOf" (render-concept arena (deref f))))
+      ((rc-some r f)
+        (wrap arena "ObjectSomeValuesFrom"
+          (join2 arena (render-role r) (render-concept arena (deref f)))))
+      ((rc-all r f)
+        (wrap arena "ObjectAllValuesFrom"
+          (join2 arena (render-role r) (render-concept arena (deref f)))))
+      ((rc-oneof ns) (wrap arena "ObjectOneOf" (render-node-list arena ns)))
+      ((rc-has-value r n)
+        (wrap arena "ObjectHasValue" (join2 arena (render-role r) (render-node n))))
+      ((rc-has-self r) (wrap arena "ObjectHasSelf" (render-role r)))
+      ((rc-card k r n)
+        (wrap arena (render-card-kind k)
+          (join2 arena (int-to-string arena n) (render-role r))))
+      ((rc-qcard k r n f)
+        (wrap arena (render-card-kind k)
+          (join2 arena (int-to-string arena n)
+            (join2 arena (render-role r) (render-concept arena (deref f))))))
+      ;; An undecodable operand keeps the fragment it was decoded from,
+      ;; so two different anonymous classes stay distinguishable.
+      ((rc-data ref) (wrap arena "DataRange" (render-input-ref ref)))
+      ((rc-anon ref) (wrap arena "AnonymousClass" (render-input-ref ref)))))
+
+  (fn render-input-ref ((r InputRef))
+    (@intent "The text an InputRef carries")
+    (@spec ((InputRef) -> String))
+    (@pure)
+    (match r
+      ((owl-axiom a)    (. a text))
+      ((rdf-fragment s) s)
+      ((synthetic s)    s)))
+
+  (fn render-entity-kind ((k EntityKind))
+    (@intent "The functional-syntax keyword for an entity kind")
+    (@spec ((EntityKind) -> String))
+    (@pure)
+    (match k
+      ('entity-class               "Class")
+      ('entity-object-property     "ObjectProperty")
+      ('entity-data-property       "DataProperty")
+      ('entity-annotation-property "AnnotationProperty")
+      ('entity-individual          "NamedIndividual")
+      ('entity-datatype            "Datatype")))
+
+  (fn render-omission ((arena Arena) (o Omission))
+    (@intent "One omission as a single line a person can act on")
+    (@spec ((Arena Omission) -> String))
+    (@alloc arena)
+    ;; A COUNT IS NOT A REPORT. "510 omitted" cannot tell a dangling
+    ;; import from a union from a SWRL rule, so nobody can fix any of
+    ;; them. The out-of-profile arm reuses the AxiomRef / fragment text
+    ;; the gate already canonicalized, so this line is exactly what an
+    ;; omission is identified by.
+    (match o
+      ((out-of-profile ref)  (render-input-ref ref))
+      ((unresolved-import i) (wrap arena "UnresolvedImport" (. i value)))
+      ((missing-declaration md)
+        (wrap arena "MissingDeclaration"
+          (wrap arena (render-entity-kind (. md kind)) (. (. md entity) value))))))
+
+  (fn render-axiom ((arena Arena) (ax RawAxiom))
+    (@intent "An axiom in OWL functional syntax, annotations stripped")
+    (@spec ((Arena RawAxiom) -> String))
+    (@alloc arena)
+    ;; No catch-all: a new RawAxiom variant must be given a rendering,
+    ;; or two of them collapse into one omission.
+    (match ax
+      ((ra-sub-class-of l r)
+        (wrap arena "SubClassOf"
+          (join2 arena (render-concept arena (deref l)) (render-concept arena (deref r)))))
+      ((ra-equivalent-classes cs)
+        (wrap arena "EquivalentClasses" (render-concept-list arena cs)))
+      ((ra-disjoint-classes cs)
+        (wrap arena "DisjointClasses" (render-concept-list arena cs)))
+      ((ra-sub-object-property a b)
+        (wrap arena "SubObjectPropertyOf" (join2 arena (render-role a) (render-role b))))
+      ((ra-property-chain ch)
+        (wrap arena "SubObjectPropertyOf"
+          (join2 arena
+            (wrap arena "ObjectPropertyChain" (render-role-list arena (. ch steps)))
+            (render-role (. ch super)))))
+      ((ra-equivalent-properties rs)
+        (wrap arena "EquivalentObjectProperties" (render-role-list arena rs)))
+      ((ra-transitive-property r)
+        (wrap arena "TransitiveObjectProperty" (render-role r)))
+      ((ra-object-property-domain r c)
+        (wrap arena "ObjectPropertyDomain"
+          (join2 arena (render-role r) (render-concept arena (deref c)))))
+      ((ra-object-property-range r c)
+        (wrap arena "ObjectPropertyRange"
+          (join2 arena (render-role r) (render-concept arena (deref c)))))
+      ((ra-class-assertion ca)
+        (wrap arena "ClassAssertion"
+          (join2 arena (render-concept arena (deref (. ca concept)))
+                       (render-node (. ca subject)))))
+      ((ra-object-property-assertion e)
+        (wrap arena "ObjectPropertyAssertion"
+          (join2 arena (render-role (. e role))
+            (join2 arena (render-node (. e from)) (render-node (. e to))))))
+      ((ra-declaration d)
+        (wrap arena "Declaration" (. (. d entity) value)))
+      ((ra-annotation-assertion a)
+        (wrap arena "AnnotationAssertion"
+          (join2 arena (. (. a property) value) (. a target))))
+      ((ra-annotation-axiom ref)      (wrap arena "AnnotationAxiom" (render-input-ref ref)))
+      ((ra-inverse-properties a b)
+        (wrap arena "InverseObjectProperties" (join2 arena (render-role a) (render-role b))))
+      ((ra-property-characteristic c r)
+        (wrap arena (render-characteristic c) (render-role r)))
+      ((ra-disjoint-properties rs)
+        (wrap arena "DisjointObjectProperties" (render-role-list arena rs)))
+      ((ra-same-individual ns)       (wrap arena "SameIndividual" (render-node-list arena ns)))
+      ((ra-different-individuals ns) (wrap arena "DifferentIndividuals" (render-node-list arena ns)))
+      ((ra-negative-assertion ref)   (wrap arena "NegativeAssertion" (render-input-ref ref)))
+      ((ra-disjoint-union ref)       (wrap arena "DisjointUnion" (render-input-ref ref)))
+      ((ra-has-key ref)              (wrap arena "HasKey" (render-input-ref ref)))
+      ((ra-inverse-expression ref)   (wrap arena "ObjectInverseOf" (render-input-ref ref)))
+      ((ra-data-axiom ref)           (wrap arena "DataAxiom" (render-input-ref ref)))
+      ((ra-builtin-role ref)         (wrap arena "BuiltinRole" (render-input-ref ref)))
+      ((ra-anonymous-individual ref) (wrap arena "AnonymousIndividual" (render-input-ref ref)))
+      ((ra-reserved-vocabulary ref)  (wrap arena "ReservedVocabulary" (render-input-ref ref)))
+      ((ra-swrl-rule ref)            (wrap arena "SWRLRule" (render-input-ref ref)))
+      ((ra-unrecognized ref)         (wrap arena "Unrecognized" (render-input-ref ref)))))
+
+  (fn render-characteristic ((c PropCharacteristic))
+    (@intent "The functional-syntax axiom name for a property characteristic")
+    (@spec ((PropCharacteristic) -> String))
+    (@pure)
+    (match c
+      ('prop-functional         "FunctionalObjectProperty")
+      ('prop-inverse-functional "InverseFunctionalObjectProperty")
+      ('prop-symmetric          "SymmetricObjectProperty")
+      ('prop-asymmetric         "AsymmetricObjectProperty")
+      ('prop-reflexive          "ReflexiveObjectProperty")
+      ('prop-irreflexive        "IrreflexiveObjectProperty")))
+
+  (fn sort-concepts ((arena Arena) (xs (List RawConcept)))
+    (@intent "Canonically sorted copy — the order n-ary operands are read in")
+    (@spec ((Arena (List RawConcept)) -> (List RawConcept)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (concept-cmp (concept-at xs i) (concept-at xs j)))))
+          (mut out (list-new arena RawConcept)))
+      (do (for-each (k idx) (list-push out (concept-at xs k))) out)))
+)

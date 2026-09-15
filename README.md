@@ -11,31 +11,149 @@ RDF: HOWL classifies → emits inferred `subClassOf` → GROWL materializes/enri
   targets (CB-EL, Horn-SHIQ) are Horn fragments.
 - **Design:** [`SPEC.md`](./SPEC.md) — approved 2026-08-17.
 
-## Status: the calculus runs; the front end does not
+## Status: Turtle in, classified out
 
-**HOWL derives `Mother ⊑ Parent`** — the [§3.1](./SPEC.md#31-the-litmus-test-also-the-v0-acceptance-criterion)
-litmus, and the line between a DL reasoner and a materialization engine. CR1–CR7, the
-barrier-synchronized driver, and hierarchy extraction all work, driven from hand-normalized
-`NormAxiom` fixtures.
+**HOWL derives `Mother ⊑ Parent` from a Turtle document** — the
+[§3.1](./SPEC.md#31-the-litmus-test-also-the-v0-acceptance-criterion) litmus, and the line between a
+DL reasoner and a materialization engine. It is reachable only through the existential on the
+*defining* side, which is what materialization cannot see.
 
-**There is still no front end**, so `classify` returns a `Fault` rather than a report: nothing yet
-parses Turtle, gates against [§5.2](./SPEC.md#52-the-exact-v0-language), or normalizes.
+```
+$ howl validate corpus/fixtures/v0/litmus.ttl
+howl: 10 subsumptions, 0 unsatisfiable, 0 omitted
+howl: coherent                                                    # exit 0
 
-That refusal is deliberate and it is the safety-relevant choice, and it outlives the rules landing.
-Without the gate there is nothing to populate `coverage.omitted`, so a report handed back now would
-present as full coverage, a reached fixpoint, and whatever the rules found — which the verdict rule
-reads as a clean **coherent**. Sound, catastrophically incomplete, and indistinguishable from success
-at every interface. The engine stays unable to express a verdict until it can also say what it
-could not see.
+$ howl validate corpus/fixtures/hazards/unattested-import.ttl
+howl: 6 subsumptions, 0 unsatisfiable, 1 omitted
+  omitted: UnresolvedImport(http://example.org/does-not-exist)
+howl: INCONCLUSIVE — coverage gaps, this is NOT a pass            # exit 2
+
+$ howl validate corpus/fixtures/out-of-profile/union.ttl --strict
+howl: refused (--strict), no report — 1 omitted
+  omitted: SubClassOf(http://example.org/t#C ObjectUnionOf(http://example.org/t#A http://example.org/t#B))
+                                                                  # exit 2
+```
+
+`classify` no longer refuses. It still returns a `Fault` rather than a report when the front end
+cannot decode the input, and that is the safety-relevant choice: a `Fault` has no verdict to
+misread, an `Outcome` does. Coverage travels from the gate unchanged, so a run with omissions
+reports **inconclusive** — never **coherent** — and lists every omission so it can be acted on.
+Treat exit 0 alone as the pass condition; a CI job that accepts 2 reintroduces the silent false pass
+the gate exists to prevent. Every CLI argument is either honoured or refused with exit 3: `-I FILE`
+attests an import (a document with no ontology IRI is refused), `--strict` refuses to run past an
+omission, and `--emit`/`--reduce` are refused until M3.
+
+**Real ontologies, not just fixtures.** The fixtures all passed while the first two real ontologies
+failed, and both failures are fixed and pinned by `make corpus-acceptance`:
+
+| Ontology | Before | Now |
+|---|---|---|
+| RO 2025-12-17 (11.6k triples) | exit 3 — an inverse property in a property chain faulted the whole document | exit 2, 0 unsatisfiable, 847 omitted |
+| OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 168 s |
+
+GO (1.4M triples) is not yet run: saturation matches every fact against every axiom, and indexing
+that is M1's benchmark work.
 
 | Milestone | Scope | State |
 |---|---|---|
-| M0 | types, front end, normalization | types done; front end stubbed |
+| M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
 | M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
 | M4 | alignment + minimal repair | not started |
+
+## On the way to EL++
+
+v0 is **ELH<sub>⊥</sub><sup>R+</sup> with domain and range** — EL with role hierarchies, ⊥, role
+composition, and property domains/ranges. This table tracks the distance from there to EL++,
+construct by construct, against both forms of the target: **EL++** the description logic (Baader,
+Brandt & Lutz, 2005, extended with ranges and reflexive roles in 2008), and the **OWL 2 EL** profile,
+its W3C syntax. The two are not the same list — OWL 2 EL adds `ObjectHasSelf`, keys and the built-in
+properties, which the EL++ papers do not define. [§5.2](./SPEC.md#52-the-exact-v0-language) is the
+authority for what HOWL does with each.
+
+**done** — reasoned over, and tested. **not yet** — recognized and enumerated out-of-profile, so a
+document using it reports *inconclusive*, never *coherent*. **non-goal** — excluded by
+[§14](./SPEC.md#14-non-goals).
+
+| Construct | EL++ | OWL 2 EL | HOWL | What it takes / how it is done |
+|---|:-:|:-:|---|---|
+| ***Class constructors*** | | | | |
+| `owl:Thing`, `owl:Nothing` (⊤, ⊥) | ✓ | ✓ | **done** | |
+| `ObjectIntersectionOf` (C ⊓ D) | ✓ | ✓ | **done** | |
+| `ObjectSomeValuesFrom` (∃r.C) | ✓ | ✓ | **done** | |
+| `ObjectOneOf`, one individual ({a}) | ✓ | ✓ | not yet | nominal propagation (CEL's CR6), which reaches across contexts and so gives up [§6.6](./SPEC.md#66-parallelism-context-based)'s context independence; [§15 Q3](./SPEC.md#15-open-questions) closed it for the first consumer |
+| `ObjectHasValue` (∃r.{a}) | ✓ | ✓ | not yet | lands with nominals |
+| `ObjectHasSelf` (∃r.Self) | | ✓ | not yet | completion rules for self-loops, and a completeness citation beyond the EL++ papers |
+| ***TBox axioms*** | | | | |
+| `SubClassOf` (C ⊑ D) | ✓ | ✓ | **done** | |
+| `EquivalentClasses` | ✓ | ✓ | **done** | desugared to GCIs around the canonically least operand |
+| `DisjointClasses`, n-ary | ✓ | ✓ | **done** | desugared to pairwise C ⊓ D ⊑ ⊥ |
+| ***RBox axioms*** | | | | |
+| `SubObjectPropertyOf` (r ⊑ s) | ✓ | ✓ | **done** | |
+| `ObjectPropertyChain` (r₁ ∘ … ∘ rₙ ⊑ s) | ✓ | ✓ | **done** | OWL 2 §11.2 regularity is gated; EL++ alone would not require it |
+| `EquivalentObjectProperties` | ✓ | ✓ | **done** | desugared to simple inclusions |
+| `TransitiveObjectProperty` | ✓ | ✓ | **done** | desugared to r ∘ r ⊑ r |
+| `ObjectPropertyDomain` | ✓ | ✓ | **done** | ∃r.⊤ ⊑ C |
+| `ObjectPropertyRange` | ✓ | ✓ | **done** | eliminated through fresh X<sub>r,D</sub> (2008); the range/chain condition is gated |
+| `ReflexiveObjectProperty` (ε ⊑ r) | ✓ | ✓ | not yet | an r-self-edge in every context, and its interaction with chains |
+| `owl:topObjectProperty`, `owl:bottomObjectProperty` | | ✓ | not yet | built-in role semantics; the universal role reaches across contexts, as nominals do |
+| ***Assertions*** | | | | |
+| `ClassAssertion` (C(a)) | ✓ | ✓ | **done**† | individual(a) ⊑ C |
+| `ObjectPropertyAssertion` (r(a,b)) | ✓ | ✓ | **done**† | direct edges, plus range seeds on the target |
+| `SameIndividual`, `DifferentIndividuals` | via {a} | ✓ | not yet | equality: {a} ⊑ {b}, {a} ⊓ {b} ⊑ ⊥ — lands with nominals |
+| `NegativeObjectPropertyAssertion` | via {a} | ✓ | not yet | {a} ⊓ ∃r.{b} ⊑ ⊥ — lands with nominals |
+| `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality — lands after nominals |
+| ***Concrete domains*** | | | | |
+| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
+
+† Implemented and tested, but the reviewed argument that the direct-edge encoding is sound and
+complete ([§12](./SPEC.md#12-milestones--acceptance-criteria) M1 (f)) is still owed, so assertions
+ship outside the sound-and-complete claim until it lands.
+
+**14 of 23 rows done.** Every open EL++ row traces to one of three things: **nominals** (four rows),
+**reflexive roles** (one), and **concrete domains** (the non-goal). OWL 2 EL adds three more:
+`ObjectHasSelf`, the built-in properties, and `HasKey`. None of the open rows has a milestone yet —
+[§12](./SPEC.md#12-milestones--acceptance-criteria) goes from v0 to Horn-SHIQ, which is incomparable
+with EL++ rather than a step toward it.
+
+**Off the path entirely.** These are outside OWL 2 EL, so no progress toward EL++ reaches them; they
+are recognized and enumerated like every open row above.
+
+| Construct | Where it lives |
+|---|---|
+| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — v2 (SROIQ) |
+| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — v1 (Horn-SHIQ) |
+| `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL |
+| Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |
+| SWRL rules | **never**, at any rung — unrestricted SWRL is undecidable, and it is in neither OWL 2 DL nor OWL 2 EL |
+
+### What happens to a construct that isn't done
+
+Every recognized construct has exactly one of four dispositions, and the matrix is a catch-all-free
+`match` over `RawAxiom` compiled with `-Werror=switch` — so adding a construct without dispositioning
+it is a **build error**, not a proofreading exercise. Moving a row to **done** therefore starts at
+that `match`.
+
+| Disposition | Meaning | Constructs |
+|---|---|---|
+| **in v0** | reasoned over | every **done** row above |
+| **consumed** | read, yields no axiom | declarations — *not* "ignored": dropping them loses declared-but-unused classes |
+| **inert** | semantically empty in OWL 2 | `AnnotationAssertion`, `SubAnnotationPropertyOf`, `AnnotationProperty{Domain,Range}`, the ontology header, axiom-annotation reification |
+| **out-of-profile** | recognized, **enumerated**, never silently dropped | every other row above |
+
+**Why "recognized and enumerated" rather than "unsupported".** A rejected axiom lands in
+`coverage.omitted` with a canonical `AxiomRef`, which forces the verdict to **inconclusive**. That is
+the whole safety property: HOWL will not report *coherent* over an ontology it only partly read. The
+corpus pins both directions — all 17 `v0/` fixtures gate clean, and all 15 `out-of-profile/` fixtures
+yield at least one omission (`make test`), cross-checked by an independently written census
+(`make census`).
+
+**Two conditions, not one.** §5.2's table classifies axiom *forms*; ELH<sub>⊥</sub><sup>R+</sup> also
+restricts the *operands* those forms carry. `SubClassOf(A, ObjectUnionOf(B,C))` is an in-profile form
+carrying a concept the fragment has no constructor for, so the gate checks both — and a built-in role
+is caught wherever it occurs, not only in the shape a fixture happens to use.
 
 ## Build
 
@@ -49,6 +167,8 @@ make lib      # static library
 make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
 make example      # executable @example blocks on the completion rules
 make crate-test   # Rust crate, including the FFI layout guards
+make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
+make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
 ```
 
 Working on the SLOP sources needs the toolchain:
@@ -158,7 +278,9 @@ only testable.
 
 **Obligations that cannot be discharged are marked `OWED` in-source, with the reason**, and covered
 by test meanwhile. Two are outstanding: the per-rule faithfulness pairs (`src/rules/el.slop`) and the
-undefined-not-empty rules (`src/classify.slop`). No vacuous contracts stand in:
+undefined-not-empty rules (`src/classify.slop`). A third — canonical ordering of
+`Findings.unsatisfiable` and `subsumptions` — has been **discharged**: `src/canon.slop` supplies a
+total order over identities and both lists now sort on the way out. No vacuous contracts stand in:
 `(list-len $result) >= 0` is true of every possible implementation and would only make the summary
 look fuller than it is. Stating a postcondition the prover cannot discharge is worse than stating
 none, because it reads as coverage — and because a red `make verify` destroys the signal from every

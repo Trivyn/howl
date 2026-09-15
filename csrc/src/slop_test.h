@@ -5,10 +5,22 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_vocab.h"
+#include "slop_decode.h"
+#include "slop_gate.h"
+#include "slop_normalize.h"
+#include "slop_owl2.h"
+#include "slop_ttl.h"
 #include "slop_types.h"
+#include "slop_canon.h"
 #include "slop_saturate.h"
 #include "slop_classify.h"
 #include "slop_howl.h"
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
 
 #ifndef SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_DEFINED
@@ -22,6 +34,23 @@ SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
+#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
+#endif
+
+#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
+#define SLOP_OPTION_TYPES_OUTCOME_DEFINED
+SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
@@ -30,6 +59,36 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
+#define SLOP_OPTION_DECODE_STAGE1_DEFINED
+SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+#define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
+#endif
+
+#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
+#define SLOP_OPTION_GATE_GATERESULT_DEFINED
+SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+#define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #endif
 
 
@@ -113,7 +172,11 @@ uint8_t test_test_consistent_but_incoherent(slop_arena* arena);
 uint8_t test_test_context_starts_with_empty_store(slop_arena* arena);
 slop_string test_node_iri(types_Node n);
 uint8_t test_test_emit_edge_addresses_both_halves(slop_arena* arena);
-uint8_t test_test_stub_refuses_rather_than_passing(slop_arena* arena);
+slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string path);
+uint8_t test_test_litmus_end_to_end(slop_arena* arena);
+uint8_t test_test_unattested_import_is_inconclusive(slop_arena* arena);
+uint8_t test_test_declared_unused_class_gets_a_context(slop_arena* arena);
+uint8_t test_test_abox_disjoint_range_is_incoherent(slop_arena* arena);
 types_Node test_cls(slop_string name);
 types_RoleId test_rol(slop_string name);
 slop_result_saturate_RoundResult_types_Fault test_run_fixture(slop_arena* arena, slop_list_types_Node signature, slop_list_types_NormAxiom axioms);
@@ -131,8 +194,105 @@ uint8_t test_test_bottom_compression(slop_arena* arena);
 uint8_t test_test_inconsistency_suppresses_both_lists(slop_arena* arena);
 uint8_t test_test_derived_eq_compares_both_payloads(slop_arena* arena);
 uint8_t test_test_order_independence(slop_arena* arena);
+rdf_IRI test_mk_iri(slop_string v);
+uint8_t test_test_string_cmp_is_length_safe(slop_arena* arena);
+uint8_t test_test_node_cmp_separates_punned_iris(slop_arena* arena);
+uint8_t test_test_sort_orders_and_is_input_determined(slop_arena* arena);
+rdf_Term test_ex_iri(slop_arena* arena, slop_string local);
+int64_t test_count_subclass_triples(slop_list_rdf_Triple ts, rdf_Term pred);
+uint8_t test_test_unattested_import_yields_an_omission(slop_arena* arena);
+uint8_t test_test_attested_import_yields_none(slop_arena* arena);
+uint8_t test_test_header_and_reification_are_consumed(slop_arena* arena);
+int64_t test_count_out_of_profile(slop_list_owl2_RawAxiom axs);
+int64_t test_count_disposition(slop_list_owl2_RawAxiom axs, owl2_Disposition want);
+slop_option_decode_Stage1 test_decode_fixture(slop_arena* arena, slop_string path);
+int64_t test_nary_disjoint_member_count(slop_list_owl2_RawAxiom axs);
+uint8_t test_test_nary_disjointness_keeps_its_members(slop_arena* arena);
+int64_t test_out_of_profile_count_of(slop_arena* arena, slop_string path);
+uint8_t test_test_v0_corpus_decodes_clean(slop_arena* arena);
+uint8_t test_test_out_of_profile_corpus_is_caught(slop_arena* arena);
+uint8_t test_test_annotation_heavy_decodes_clean(slop_arena* arena);
+uint8_t test_test_litmus_decodes_clean(slop_arena* arena);
+uint8_t test_test_missing_class_declaration_is_reported(slop_arena* arena);
+uint8_t test_test_undeclared_individual_is_not_reported(slop_arena* arena);
+int64_t test_accepted_count_of_ttl(slop_arena* arena, slop_string ttl);
+uint8_t test_test_reserved_iri_as_individual_is_out_of_profile(slop_arena* arena);
+uint8_t test_test_annotation_property_axioms_are_inert(slop_arena* arena);
+uint8_t test_decodes_ok(slop_arena* arena, slop_string ttl);
+uint8_t test_test_undeclared_property_is_an_input_error(slop_arena* arena);
+uint8_t test_test_unknown_owl_vocabulary_still_decodes(slop_arena* arena);
+uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena);
+int64_t test_gate_omissions_of_ttl(slop_arena* arena, slop_string ttl);
+slop_string test_rc_prefix(void);
+uint8_t test_test_range_composition_table(slop_arena* arena);
+uint8_t test_norm_eq(types_NormAxiom a, types_NormAxiom b);
+uint8_t test_norm_contains(slop_list_types_NormAxiom xs, types_NormAxiom a);
+slop_option_normalize_NormOutput test_normalize_fixture(slop_arena* arena, slop_string path);
+uint8_t test_test_litmus_reproduces_the_m1_normal_form(slop_arena* arena);
+uint8_t test_test_normalization_polarity_is_negative_on_the_left(slop_arena* arena);
+uint8_t test_test_range_elimination_introduces_a_shared_filler(slop_arena* arena);
+uint8_t test_test_asserted_edges_seed_their_range(slop_arena* arena);
+uint8_t test_test_range_complex_fillers_stay_apart(slop_arena* arena);
+uint8_t test_complex_range_fillers_distinct(slop_arena* arena, slop_string path);
+uint8_t test_test_inverse_expressions_are_omissions(slop_arena* arena);
+slop_list_string test_m0_fixture_paths(slop_arena* arena);
+uint8_t test_accounting_exempt(owl2_RawAxiom ax);
+uint8_t test_axiom_accounted(slop_arena* arena, owl2_RawAxiom ax);
+uint8_t test_test_accounting_holds(slop_arena* arena);
+uint8_t test_same_rendering(slop_arena* arena, slop_list_owl2_RawAxiom xs, slop_list_owl2_RawAxiom ys);
+uint8_t test_test_canonicalization_is_idempotent(slop_arena* arena);
+slop_list_types_Node test_norm_nodes(slop_arena* arena, types_NormAxiom ax);
+uint8_t test_fresh_ids_dense(slop_arena* arena, normalize_NormOutput no);
+uint8_t test_test_fresh_nodes_are_fresh(slop_arena* arena);
+slop_list_rdf_Triple test_reversed_triples(slop_arena* arena, slop_list_rdf_Triple ts);
+slop_option_normalize_NormOutput test_normalize_triples(slop_arena* arena, slop_list_rdf_Triple ts);
+uint8_t test_same_normal_form(normalize_NormOutput a, normalize_NormOutput b);
+uint8_t test_same_report(types_Outcome a, types_Outcome b);
+uint8_t test_order_independent(slop_arena* arena, slop_string path);
+uint8_t test_test_triple_order_independence(slop_arena* arena);
+int64_t test_strict_outcome(slop_arena* arena, slop_string path);
+uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
+uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
+slop_option_u8 test_regularity_of(slop_arena* arena, slop_string path);
+uint8_t test_test_regularity_rejects_mutual_recursion(slop_arena* arena);
+uint8_t test_test_regularity_accepts_equivalence_and_transitivity(slop_arena* arena);
+uint8_t test_test_regularity_accepts_plain_subproperty(slop_arena* arena);
+uint8_t test_test_regularity_accepts_nary_chain(slop_arena* arena);
+uint8_t test_test_irregular_rbox_is_omitted_whole(slop_arena* arena);
+slop_option_gate_GateResult test_gate_fixture(slop_arena* arena, slop_string path);
+int64_t test_count_variant_chain(slop_list_owl2_RawAxiom axs);
+int64_t test_count_variant_disjoint(slop_list_owl2_RawAxiom axs);
+int64_t test_count_variant_subclass(slop_list_owl2_RawAxiom axs);
+uint8_t test_test_gate_annotation_heavy_is_clean(slop_arena* arena);
+uint8_t test_test_gate_carries_import_omissions(slop_arena* arena);
+uint8_t test_test_sugar_transitivity_becomes_a_chain(slop_arena* arena);
+uint8_t test_test_sugar_nary_disjointness_becomes_pairs(slop_arena* arena);
+uint8_t test_test_sugar_equivalence_is_a_star_not_all_pairs(slop_arena* arena);
+int64_t test_gate_omission_count(slop_arena* arena, slop_string path);
+uint8_t test_test_gate_accepts_every_v0_fixture(slop_arena* arena);
+uint8_t test_test_gate_rejects_every_out_of_profile_fixture(slop_arena* arena);
+slop_option_owl2_Signature test_signature_of_fixture(slop_arena* arena, slop_string path);
+uint8_t test_test_declared_unused_class_reaches_the_signature(slop_arena* arena);
+uint8_t test_test_builtins_are_declared(slop_arena* arena);
+uint8_t test_test_custom_annotation_property_is_recognized(slop_arena* arena);
+uint8_t test_is_named_class(owl2_RawConcept c, slop_string iri);
+uint8_t test_is_some_person(owl2_RawConcept c, slop_string role_iri, slop_string filler_iri);
+uint8_t test_test_decode_litmus_class_expression(slop_arena* arena);
+uint8_t test_test_decode_represents_out_of_profile_rather_than_failing(slop_arena* arena);
+uint8_t test_test_decode_blank_node_cycle_is_bounded(slop_arena* arena);
+uint8_t test_test_rdf_list_well_formed(slop_arena* arena);
+uint8_t test_test_rdf_list_truncation_is_a_fault(slop_arena* arena);
+uint8_t test_test_rdf_list_cycle_terminates(slop_arena* arena);
+uint8_t test_test_rdf_list_branching_is_a_fault(slop_arena* arena);
+uint8_t test_test_sort_is_stable(slop_arena* arena);
+uint8_t test_test_sort_is_a_permutation(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
 int main(int argc, char** _c_argv);
+
+#ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
+#define SLOP_OPTION_TYPES_OUTCOME_DEFINED
+SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
+#endif
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
@@ -142,6 +302,41 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
+#define SLOP_OPTION_DECODE_STAGE1_DEFINED
+SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+#define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
+SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
+#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
+#define SLOP_OPTION_GATE_GATERESULT_DEFINED
+SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+#define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
+SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #endif
 
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
@@ -157,11 +352,6 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
-#endif
-
-#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
-#define SLOP_OPTION_RDF_TRIPLE_DEFINED
-SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
@@ -182,10 +372,10 @@ SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
-#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
-#define SLOP_LIST_RDF_TRIPLE_DEFINED
-#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
-SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
+#ifndef SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #endif
 
 

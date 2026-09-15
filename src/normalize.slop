@@ -67,10 +67,20 @@
 
   (import rdf (Triple IRI))
   (import types (Node RoleId Concept NormAxiom Omission Coverage
-                 Saturation ReasonerConfig Fault))
+                 Saturation ReasonerConfig Fault LogicalEdge
+                 Derived Addressed EdgePair emit-edge
+                 node-top node-bottom node-eq role-eq))
+  (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
+                Signature))
+  (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
+  (import decode (Stage0 Stage1 stage0-header decode-axioms))
+  (import saturate (make-initial-saturation deliver-seed))
+  (import canon (string-cmp))
 
   (export
-    NormResult
+    NormResult NormOutput
+    NormState new-state
+    normalize-accepted
     normalize-input)
 
   ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
@@ -88,6 +98,668 @@
     (saturation Saturation)      ; contexts initialized, seeds in Δ₀
     (coverage   Coverage)))      ; what the gate omitted
 
+  (type NormOutput (record
+    (axioms      (List NormAxiom))
+    (edges       (List LogicalEdge))
+    (seeds       (List Addressed))   ; range facts for asserted edge targets
+    (fresh-count Int)))
+
+  ;; ============================================================
+  ;; Normalizer state
+  ;;
+  ;; Threaded through the recursion as a POINTER, because the fresh
+  ;; registry and the emitted-axiom list are shared across every
+  ;; branch. Each helper reads the record, mutates, and writes back.
+  ;;
+  ;; Every mutator takes an Arena explicitly. That is not decoration:
+  ;; with no `arena` binding in scope, `list-push` into a record field
+  ;; lowers to `slop_arena_alloc(<base>.arena, …)` — it invents an
+  ;; `arena` member on the list's base type — and the failure surfaces
+  ;; in cc rather than as a checker error. With an arena in scope it
+  ;; lowers correctly. Upstream issue owed for the missing diagnostic.
+  ;; ============================================================
+
+  (type NormState (record
+    (axioms      (List NormAxiom))
+    (fresh       (List String))   ; index = fresh-node id, value = canonical text
+    (fresh-roles (List String))   ; index = fresh-role id, value = provenance text
+    (neg-done    (List String))   ; expressions whose NEGATIVE definition is emitted
+    (pos-done    (List String))   ; expressions whose POSITIVE definition is emitted
+    (edges       (List LogicalEdge))))
+
+  (fn new-state ((arena Arena))
+    (@intent "An empty normalizer state")
+    (@spec ((Arena) -> (Ptr NormState)))
+    (@alloc arena)
+    (let ((p (cast (Ptr NormState) (arena-alloc arena (sizeof NormState)))))
+      (do
+        (set! (deref p) (record-new NormState
+                          (axioms      (list-new arena NormAxiom))
+                          (fresh       (list-new arena String))
+                          (fresh-roles (list-new arena String))
+                          (neg-done    (list-new arena String))
+                          (pos-done    (list-new arena String))
+                          (edges       (list-new arena LogicalEdge))))
+        p)))
+
+  (fn st-emit ((arena Arena) (p (Ptr NormState)) (ax NormAxiom))
+    (@intent "Append a normal-form axiom")
+    (@spec ((Arena (Ptr NormState) NormAxiom) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s axioms) ax) (set! (deref p) s) true)))
+
+  (fn st-emit-edge ((arena Arena) (p (Ptr NormState)) (e LogicalEdge))
+    (@intent "Append an asserted role edge")
+    (@spec ((Arena (Ptr NormState) LogicalEdge) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s edges) e) (set! (deref p) s) true)))
+
+  (fn str-index ((xs (List String)) (t String))
+    (@intent "Index of a string, or -1")
+    (@spec (((List String) String) -> Int))
+    (@pure)
+    (let ((mut found -1)
+          (mut i 0))
+      (do
+        (for-each (x xs)
+          (do
+            (when (and (< found 0) (== (string-cmp x t) 0)) (set! found i))
+            (set! i (+ i 1))))
+        found)))
+
+  (fn st-fresh-id ((arena Arena) (p (Ptr NormState)) (text String))
+    (@intent "The fresh-node id for a canonical expression, minting on first use")
+    (@spec ((Arena (Ptr NormState) String) -> Int))
+    (@alloc arena)
+    ;; FRESH SYMBOLS ARE KEYED BY CANONICAL EXPRESSION ALONE — one node
+    ;; per distinct subexpression, carrying a negative-definition bit
+    ;; and a positive-definition bit. Keying by (expression, polarity)
+    ;; would mint two nodes for an expression occurring at both, which
+    ;; changes fresh ids, saturation size, derivation depth, and
+    ;; therefore every capped-run report.
+    (let ((existing (str-index (. (deref p) fresh) text)))
+      (if (>= existing 0)
+        existing
+        (let ((mut s (deref p))
+              (id (cast Int (list-len (. (deref p) fresh)))))
+          (do (list-push (. s fresh) text) (set! (deref p) s) id)))))
+
+  (fn st-fresh-role-id ((arena Arena) (p (Ptr NormState)) (text String))
+    (@intent "A fresh role id for a chain decomposition step")
+    (@spec ((Arena (Ptr NormState) String) -> Int))
+    (@alloc arena)
+    (let ((existing (str-index (. (deref p) fresh-roles) text)))
+      (if (>= existing 0)
+        existing
+        (let ((mut s (deref p))
+              (id (cast Int (list-len (. (deref p) fresh-roles)))))
+          (do (list-push (. s fresh-roles) text) (set! (deref p) s) id)))))
+
+  (fn st-mark-neg ((arena Arena) (p (Ptr NormState)) (text String))
+    (@intent "Record that the negative definition for this expression is emitted")
+    (@spec ((Arena (Ptr NormState) String) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s neg-done) text) (set! (deref p) s) true)))
+
+  (fn st-mark-pos ((arena Arena) (p (Ptr NormState)) (text String))
+    (@intent "Record that the positive definition for this expression is emitted")
+    (@spec ((Arena (Ptr NormState) String) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s pos-done) text) (set! (deref p) s) true)))
+
+  ;; ============================================================
+  ;; Polarity-correct normalization
+  ;;
+  ;; POLARITY DECIDES THE DIRECTION OF EVERY FRESH DEFINITION, and
+  ;; getting it wrong loses the test that defines the project:
+  ;;
+  ;;   negative (left of ⊑)   emit  E ⊑ X    X must be IMPLIED BY E
+  ;;   positive (right of ⊑)  emit  X ⊑ E    X must IMPLY E
+  ;;
+  ;; `Person ⊓ ∃hasChild.Person ⊑ Parent` has the existential in
+  ;; NEGATIVE position, so it needs `∃hasChild.Person ⊑ X` before
+  ;; `Person ⊓ X ⊑ Parent` is in normal form. Emit only
+  ;; `X ⊑ ∃hasChild.Person` and `Mother ⊑ Parent` is never derived —
+  ;; the implementation fails the one test that defines the project
+  ;; while looking like it followed the spec's example.
+  ;; ============================================================
+
+  (fn rc-of-node ((n Node))
+    (@intent "Wrap a node back into a concept")
+    (@spec ((Node) -> RawConcept))
+    (@pure)
+    (union-new RawConcept rc-name n))
+
+  (fn flatten-and ((arena Arena) (c RawConcept) (acc (List RawConcept)))
+    (@intent "Conjuncts of a (possibly nested) intersection, in order")
+    (@spec ((Arena RawConcept (List RawConcept)) -> (List RawConcept)))
+    (@alloc arena)
+    (let ((mut out acc))
+      (do
+        (match c
+          ((rc-and cs) (for-each (x cs) (set! out (flatten-and arena x out))))
+          ((rc-thing)  (do))          ; ⊤ is the unit of ⊓ — drop it
+          (_           (list-push out c)))
+        out)))
+
+  (fn prefix-text ((arena Arena) (conj (List RawConcept)) (upto Int))
+    (@intent "Canonical text of the first `upto` conjuncts, as one intersection")
+    (@spec ((Arena (List RawConcept) Int) -> String))
+    (@alloc arena)
+    ;; The KEY for an intermediate fresh name. Keying on the prefix
+    ;; rather than on a counter is what makes two occurrences of the
+    ;; same conjunction share a node instead of minting two.
+    (let ((mut pre (list-new arena RawConcept))
+          (mut i 0))
+      (do
+        (while (< i upto)
+          (do (list-push pre (concept-at conj i)) (set! i (+ i 1))))
+        (render-concept arena (union-new RawConcept rc-and pre)))))
+
+  (fn neg-atom ((arena Arena) (p (Ptr NormState)) (c RawConcept))
+    (@intent "A concept NAME standing for `c` in negative position")
+    (@spec ((Arena (Ptr NormState) RawConcept) -> Node))
+    (@alloc arena)
+    (match c
+      ((rc-name n)  n)
+      ((rc-thing)   (node-top))
+      ((rc-nothing) (node-bottom))
+      ((rc-some r f)
+        (let ((text (render-concept arena c))
+              (x (union-new Node fresh-node (st-fresh-id arena p (render-concept arena c)))))
+          (do
+            (when (< (str-index (. (deref p) neg-done) text) 0)
+              (do
+                (st-mark-neg arena p text)
+                ;; ∃r.F ⊑ X — the load-bearing direction.
+                (st-emit arena p (union-new NormAxiom sub-some-lhs
+                                   r (neg-atom arena p (deref f)) x))))
+            x)))
+      ((rc-and cs)
+        (let ((flat (flatten-and arena c (list-new arena RawConcept)))
+              (n (cast Int (list-len (flatten-and arena c (list-new arena RawConcept))))))
+          (cond
+            ((== n 0) (node-top))
+            ((== n 1) (neg-atom arena p (concept-at flat 0)))
+            (else (fold-conjuncts arena p flat n)))))
+      ;; UNREACHABLE BY THE GATE: only in-profile concepts reach
+      ;; normalization. The fallback is ⊥ rather than ⊤ because in
+      ;; NEGATIVE position `⊥ ⊑ D` is vacuous — it loses the axiom
+      ;; without inventing an entailment. ⊤ here would assert the axiom
+      ;; of everything.
+      (_ (node-bottom))))
+
+  (fn fold-conjuncts ((arena Arena) (p (Ptr NormState)) (conj (List RawConcept)) (n Int))
+    (@intent "One name for a whole conjunction, left-associated")
+    (@spec ((Arena (Ptr NormState) (List RawConcept) Int) -> Node))
+    (@alloc arena)
+    (let ((mut acc (neg-atom arena p (concept-at conj 0)))
+          (mut i 1))
+      (do
+        (while (< i n)
+          (let ((x (union-new Node fresh-node
+                     (st-fresh-id arena p (prefix-text arena conj (+ i 1))))))
+            (do
+              (st-emit arena p (union-new NormAxiom sub-and
+                                 acc (neg-atom arena p (concept-at conj i)) x))
+              (set! acc x)
+              (set! i (+ i 1)))))
+        acc)))
+
+  (fn pos-atom ((arena Arena) (p (Ptr NormState)) (c RawConcept))
+    (@intent "A concept NAME standing for `c` in positive position")
+    (@spec ((Arena (Ptr NormState) RawConcept) -> Node))
+    (@alloc arena)
+    (match c
+      ((rc-name n)  n)
+      ((rc-thing)   (node-top))
+      ((rc-nothing) (node-bottom))
+      ;; UNREACHABLE BY THE GATE; the fallback is ⊤ here, the mirror of
+      ;; neg-atom's ⊥ — in POSITIVE position `C ⊑ ⊤` is vacuous, while
+      ;; ⊥ would make C unsatisfiable and manufacture an incoherence.
+      (_
+        (let ((text (render-concept arena c))
+              (x (union-new Node fresh-node (st-fresh-id arena p (render-concept arena c)))))
+          (do
+            (when (< (str-index (. (deref p) pos-done) text) 0)
+              (do
+                (st-mark-pos arena p text)
+                ;; X ⊑ E — the positive direction.
+                (normalize-gci arena p (rc-of-node x) c)))
+            x)))))
+
+  (fn emit-inclusion ((arena Arena) (p (Ptr NormState))
+                      (conj (List RawConcept)) (n Int) (target Node))
+    (@intent "conj₁ ⊓ … ⊓ conjₙ ⊑ target, in normal form")
+    (@spec ((Arena (Ptr NormState) (List RawConcept) Int Node) -> Bool))
+    (@alloc arena)
+    (cond
+      ((== n 0) (st-emit arena p (union-new NormAxiom sub-name (node-top) target)))
+      ((== n 1) (st-emit arena p (union-new NormAxiom sub-name
+                                   (neg-atom arena p (concept-at conj 0)) target)))
+      ;; TWO CONJUNCTS GO STRAIGHT INTO `sub-and`, with the axiom's own
+      ;; right-hand side as the target. Folding them into a fresh name
+      ;; first and then emitting `Y ⊑ target` is also correct, but it
+      ;; mints a node and an axiom the canonical form does not have —
+      ;; and the M1 litmus fixture pins `Person ⊓ X ⊑ Parent` exactly.
+      ((== n 2) (st-emit arena p (union-new NormAxiom sub-and
+                                   (neg-atom arena p (concept-at conj 0))
+                                   (neg-atom arena p (concept-at conj 1))
+                                   target)))
+      (else
+        (let ((acc (fold-conjuncts arena p conj (- n 1))))
+          (st-emit arena p (union-new NormAxiom sub-and
+                             acc (neg-atom arena p (concept-at conj (- n 1))) target))))))
+
+  (fn normalize-gci ((arena Arena) (p (Ptr NormState)) (lhs RawConcept) (rhs RawConcept))
+    (@intent "One GCI into normal form, splitting positive conjunctions")
+    (@spec ((Arena (Ptr NormState) RawConcept RawConcept) -> Bool))
+    (@alloc arena)
+    (match rhs
+      ;; C ⊑ D₁ ⊓ D₂  ⇒  C ⊑ D₁ and C ⊑ D₂. Splitting rather than
+      ;; naming keeps the normal form minimal and is why the litmus
+      ;; produces `Parent ⊑ Person` and `Parent ⊑ ∃hasChild.Person`
+      ;; rather than a definition of the conjunction.
+      ((rc-and ds)
+        (let ((mut ok true))
+          (do (for-each (d ds) (set! ok (normalize-gci arena p lhs d))) ok)))
+      ;; C ⊑ ⊤ is vacuous.
+      ((rc-thing) true)
+      (_
+        (let ((conj (flatten-and arena lhs (list-new arena RawConcept)))
+              (n (cast Int (list-len (flatten-and arena lhs (list-new arena RawConcept))))))
+          (match rhs
+            ((rc-name b)  (emit-inclusion arena p conj n b))
+            ((rc-nothing) (emit-inclusion arena p conj n (node-bottom)))
+            ((rc-some r f)
+              (let ((bnode (pos-atom arena p (deref f)))
+                    (lnode (if (== n 1)
+                             (neg-atom arena p (concept-at conj 0))
+                             (fold-conjuncts arena p conj n))))
+                (st-emit arena p (union-new NormAxiom sub-some-rhs lnode r bnode))))
+            (_ true))))))
+
+  ;; ============================================================
+  ;; Chain decomposition — AFTER the gates
+  ;; ============================================================
+
+  (fn decompose-chain ((arena Arena) (p (Ptr NormState)) (ch RawChain))
+    (@intent "An n-ary chain into binary role-chain axioms, left-associated")
+    (@spec ((Arena (Ptr NormState) RawChain) -> Bool))
+    (@alloc arena)
+    ;; Runs only on ACCEPTED chains, so a fresh-role never appears in a
+    ;; gate question. Decomposing first would hide a non-regular
+    ;; dependency across two innocuous binary steps, because a fresh
+    ;; intermediate role is unconstrained by any ≺ the original chain
+    ;; had to respect.
+    (let ((steps (. ch steps))
+          (len (cast Int (list-len (. ch steps)))))
+      (cond
+        ((< len 2) true)
+        ((== len 2)
+          (st-emit arena p (union-new NormAxiom role-chain
+                             (role-at-n steps 0) (role-at-n steps 1) (. ch super))))
+        (else
+          (let ((mut acc (role-at-n steps 0))
+                (mut i 1))
+            (do
+              (while (< i (- len 1))
+                (let ((f (union-new RoleId fresh-role
+                           (st-fresh-role-id arena p
+                             (prefix-role-text arena steps (+ i 1) (. ch super))))))
+                  (do
+                    (st-emit arena p (union-new NormAxiom role-chain
+                                       acc (role-at-n steps i) f))
+                    (set! acc f)
+                    (set! i (+ i 1)))))
+              (st-emit arena p (union-new NormAxiom role-chain
+                                 acc (role-at-n steps (- len 1)) (. ch super)))))))))
+
+  (fn role-at-n ((xs (List RoleId)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List RoleId) Int) -> RoleId))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new RoleId fresh-role 0))))
+
+  (fn prefix-role-text ((arena Arena) (steps (List RoleId)) (upto Int) (super RoleId))
+    (@intent "Deterministic provenance key for a fresh intermediate role")
+    (@spec ((Arena (List RoleId) Int RoleId) -> String))
+    (@alloc arena)
+    ;; Keyed by (chain prefix, super) so two chains sharing a prefix but
+    ;; a different super do not collide onto one intermediate role.
+    (let ((mut out "chain:")
+          (mut i 0))
+      (do
+        (while (< i upto)
+          (do
+            (set! out (string-concat arena out
+                        (string-concat arena (render-role-name (role-at-n steps i)) ".")))
+            (set! i (+ i 1))))
+        (string-concat arena out
+          (string-concat arena "=>" (render-role-name super))))))
+
+  (fn render-role-name ((r RoleId))
+    (@intent "A stable textual key for a role")
+    (@spec ((RoleId) -> String))
+    (@pure)
+    (match r
+      ((named-role i) (. i value))
+      ((fresh-role _) "_:fresh")))
+
+
+  ;; ============================================================
+  ;; Range elimination — the published construction
+  ;;
+  ;; RANGES ARE ELIMINATED, NOT GIVEN A COMPLETION RULE. A draft of the
+  ;; spec added "CR8": (X,Y) ∈ R(r), range(r) ⊑ A ⟹ A ∈ S(Y), derived
+  ;; from first principles. It is plausible and may even be correct,
+  ;; but the published extension of EL++ with ranges establishes
+  ;; tractability and completeness BY ELIMINATING RANGES THROUGH FRESH
+  ;; CONCEPTS. Shipping CR8 would claim completeness from a proof that
+  ;; does not cover the calculus actually implemented. The rule set
+  ;; stays at CR1–CR7.
+  ;;
+  ;; Runs AFTER ordinary normalization and AFTER chain decomposition,
+  ;; over normal-form GCIs. For each `C ⊑ ∃r.D`:
+  ;;
+  ;;     C        ⊑ ∃r.X_{r,D}
+  ;;     X_{r,D}  ⊑ D
+  ;;     X_{r,D}  ⊑ A          for every A ∈ ran_T(r)
+  ;;
+  ;; X_{r,D} is SHARED per (r,D) pair. Minting one per occurrence
+  ;; changes nothing semantically but blows up the signature and makes
+  ;; the output non-canonical.
+  ;; ============================================================
+
+  (type RangeFact (record
+    (role   Int)     ; canonical role index
+    (filler Node)))
+
+  (fn collect-range-facts ((arena Arena) (p (Ptr NormState))
+                           (axs (List RawAxiom)) (roles (List RoleId)))
+    (@intent "Told ranges, with complex fillers already named")
+    (@spec ((Arena (Ptr NormState) (List RawAxiom) (List RoleId)) -> (List RangeFact)))
+    (@alloc arena)
+    ;; COMPLEX RANGE FILLERS ARE NORMALIZED FIRST. The recipe assumes an
+    ;; atomic A, but the v0 grammar admits `range(r) ⊑ C` for any EL
+    ;; concept, so `range(r) ⊑ A ⊓ ∃s.B` has no route to normal form.
+    ;; `pos-atom` is exactly the intermediate form the spec calls for:
+    ;; a deterministic fresh X with the POSITIVELY directed definition
+    ;; X ⊑ C. NormAxiom still needs no range constructor.
+    (let ((mut out (list-new arena RangeFact)))
+      (do
+        (for-each (ax axs)
+          (match ax
+            ((ra-object-property-range r c)
+              (let ((ir (role-idx roles r)))
+                (when (>= ir 0)
+                  (list-push out (record-new RangeFact
+                                   (role ir)
+                                   (filler (pos-atom arena p (deref c))))))))
+            (_ (do))))
+        out)))
+
+  (fn ran-t ((arena Arena) (facts (List RangeFact)) (told (List Bool)) (n Int) (r Int))
+    (@intent "ran_T(r) — every range r inherits through the TOLD role hierarchy")
+    (@spec ((Arena (List RangeFact) (List Bool) Int Int) -> (List Node)))
+    (@alloc arena)
+    ;; Computed over the TOLD hierarchy so r inherits every super-role's
+    ;; range. Multiple inherited ranges ACCUMULATE; they do not
+    ;; override.
+    (let ((mut out (list-new arena Node)))
+      (do
+        (when (>= r 0)
+          (for-each (f facts)
+            (when (mat-get-b told (+ (* r n) (. f role)))
+              (let ((mut dup false))
+                (do
+                  (for-each (x out) (when (node-eq x (. f filler)) (set! dup true)))
+                  (when (not dup) (list-push out (. f filler))))))))
+        out)))
+
+  (fn mat-get-b ((m (List Bool)) (i Int))
+    (@intent "Cell i of a bit matrix")
+    (@spec (((List Bool) Int) -> Bool))
+    (@pure)
+    (match (list-get m i) ((some v) v) ((none) false)))
+
+  (fn range-elim-key ((arena Arena) (r RoleId) (d Node))
+    (@intent "The canonical key for X_{r,D} — shared per (r,D) pair")
+    (@spec ((Arena RoleId Node) -> String))
+    (@alloc arena)
+    (string-concat arena "range-elim:"
+      (string-concat arena (render-role-name r)
+        (string-concat arena ":" (render-node-name arena d)))))
+
+  (fn render-node-name ((arena Arena) (n Node))
+    (@intent "A textual key for a node, injective over nodes")
+    (@spec ((Arena Node) -> String))
+    (@alloc arena)
+    ;; A KEY MUST NAME ITS WHOLE PAYLOAD. This arm once rendered every
+    ;; fresh node as the constant "_:fresh", so X_{r,D} got one key for
+    ;; ALL complex fillers of r: they shared a single X that inherited
+    ;; every filler's subsumers, and two disjoint ones made it ⊥. OBI
+    ;; reported itself inconsistent (hazards/range-complex-fillers.ttl).
+    ;;
+    ;; The three shapes cannot collide: a fresh id is not an IRI (a
+    ;; scheme starts with a letter), and `{` `}` are illegal in IRIs.
+    ;; A fresh id is canonical already — assigned by first occurrence
+    ;; under the canonical axiom ordering.
+    (match n
+      ((class-node i)      (. i value))
+      ((individual-node i) (string-concat arena "{" (string-concat arena (. i value) "}")))
+      ((fresh-node k)      (string-concat arena "_:fresh" (int-to-string arena k)))))
+
+  (fn eliminate-ranges ((arena Arena) (p (Ptr NormState)) (facts (List RangeFact))
+                        (told (List Bool)) (n Int) (roles (List RoleId)))
+    (@intent "Rewrite every C ⊑ ∃r.D whose role carries an inherited range")
+    (@spec ((Arena (Ptr NormState) (List RangeFact) (List Bool) Int (List RoleId)) -> Bool))
+    (@alloc arena)
+    (let ((mut rebuilt (list-new arena NormAxiom))
+          (existing (. (deref p) axioms)))
+      (do
+        (for-each (ax existing)
+          (match ax
+            ((sub-some-rhs c r d)
+              (let ((fillers (ran-t arena facts told n (role-idx roles r))))
+                (if (== (cast Int (list-len fillers)) 0)
+                  ;; r imposes nothing, so the axiom stands unchanged.
+                  (list-push rebuilt ax)
+                  (let ((x (union-new Node fresh-node
+                             (st-fresh-id arena p (range-elim-key arena r d)))))
+                    (do
+                      (list-push rebuilt (union-new NormAxiom sub-some-rhs c r x))
+                      (list-push rebuilt (union-new NormAxiom sub-name x d))
+                      (for-each (a fillers)
+                        (list-push rebuilt (union-new NormAxiom sub-name x a))))))))
+            (_ (list-push rebuilt ax))))
+        (let ((mut s (deref p)))
+          (do (set! s axioms rebuilt) (set! (deref p) s) true)))))
+
+  (fn edge-range-seeds ((arena Arena) (edges (List LogicalEdge)) (facts (List RangeFact))
+                        (told (List Bool)) (n Int) (roles (List RoleId)))
+    (@intent "derived-sub(A) into S(target) for every A ∈ ran_T(r) of an asserted edge")
+    (@spec ((Arena (List LogicalEdge) (List RangeFact) (List Bool) Int (List RoleId))
+            -> (List Addressed)))
+    (@alloc arena)
+    ;; THE EXTENSION THE PUBLISHED REWRITE DOES NOT GIVE YOU. The
+    ;; transformation above touches only existential GCIs. Asserted
+    ;; edges are installed directly, so nothing propagates a range onto
+    ;; their target — and the mandatory identity fixture
+    ;; (range(r)=C, range(s)=D, r(a,b), s(c,b), Disjoint(C,D)) would
+    ;; report COHERENT with the ranges dropped and no propagation rule
+    ;; left. Seeding them here is HOWL's extension, and carries the same
+    ;; proof obligation as the rest of the ABox reduction.
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (for-each (e edges)
+          (for-each (a (ran-t arena facts told n (role-idx roles (. e role))))
+            (list-push out (record-new Addressed
+                             (to   (. e to))
+                             (what (union-new Derived derived-sub a))))))
+        out)))
+
+  ;; ============================================================
+  ;; Axiom dispatch
+  ;; ============================================================
+
+  (fn normalize-axiom ((arena Arena) (p (Ptr NormState)) (ax RawAxiom))
+    (@intent "One accepted RawAxiom into normal form")
+    (@spec ((Arena (Ptr NormState) RawAxiom) -> Bool))
+    (@alloc arena)
+    (match ax
+      ((ra-sub-class-of l r) (normalize-gci arena p (deref l) (deref r)))
+
+      ;; Binary disjointness is `C ⊓ D ⊑ ⊥`. The n-ary form was already
+      ;; expanded to pairs by the gate's sugar pass.
+      ((ra-disjoint-classes cs)
+        (normalize-gci arena p (union-new RawConcept rc-and cs)
+                               (union-new RawConcept rc-nothing)))
+
+      ;; domain(r) ⊑ C is `∃r.⊤ ⊑ C` — an ordinary GCI with the
+      ;; existential in NEGATIVE position, so it needs no new machinery.
+      ((ra-object-property-domain r c)
+        (let ((top-c (union-new RawConcept rc-thing)))
+          (normalize-gci arena p
+            (union-new RawConcept rc-some r (box-rc arena top-c))
+            (deref c))))
+
+      ((ra-sub-object-property a b)
+        (st-emit arena p (union-new NormAxiom sub-role a b)))
+
+      ((ra-property-chain ch) (decompose-chain arena p ch))
+
+      ;; C(a) becomes the PRE-NORMALIZATION GCI individual(a) ⊑ C, so
+      ;; the individual gets a context and the class expression is
+      ;; normalized like any other right-hand side.
+      ((ra-class-assertion ca)
+        (normalize-gci arena p (rc-of-node (. ca subject)) (deref (. ca concept))))
+
+      ;; r(a,b) is an EDGE, not a GCI. Going through `∃` would lose the
+      ;; identity of the repeated individual name: individual(b) is an
+      ;; ordinary concept name, not a singleton, so two assertions
+      ;; naming the same b could be witnessed by DIFFERENT members.
+      ((ra-object-property-assertion e)
+        (st-emit-edge arena p (record-new LogicalEdge
+                                (from (. e from)) (role (. e role)) (to (. e to)))))
+
+      ;; Ranges are consumed by elimination, not by a rule; equivalences
+      ;; and transitivity were expanded by the gate. Everything else
+      ;; either never reaches here (the gate omitted it) or contributes
+      ;; no axiom.
+      (_ true)))
+
+  (fn box-rc ((arena Arena) (c RawConcept))
+    (@intent "Heap-box a concept")
+    (@spec ((Arena RawConcept) -> (Ptr RawConcept)))
+    (@alloc arena)
+    (let ((q (cast (Ptr RawConcept) (arena-alloc arena (sizeof RawConcept)))))
+      (do (set! (deref q) c) q)))
+
+  (fn normalize-accepted ((arena Arena) (axs (List RawAxiom)))
+    (@intent "Accepted axioms into normal form, with asserted edges")
+    (@spec ((Arena (List RawAxiom)) -> NormOutput))
+    (@alloc arena)
+    ;; Fresh ids are assigned in order of FIRST OCCURRENCE under the
+    ;; canonical axiom ordering, so they are a function of content
+    ;; rather than of the order triples happened to be written.
+    (let ((p (new-state arena))
+          (roles (collect-rbox-roles arena axs))
+          (nr (cast Int (list-len (collect-rbox-roles arena axs)))))
+      (do
+        (for-each (ax axs) (normalize-axiom arena p ax))
+        ;; Range elimination runs LAST, over normal-form GCIs and after
+        ;; chain decomposition, exactly as the construction specifies.
+        (let ((told  (told-closure arena axs roles nr))
+              (facts (collect-range-facts arena p axs roles)))
+          (do
+            (eliminate-ranges arena p facts told nr roles)
+            (record-new NormOutput
+              (axioms      (. (deref p) axioms))
+              (edges       (. (deref p) edges))
+              (seeds       (edge-range-seeds arena (. (deref p) edges)
+                             facts told nr roles))
+              (fresh-count (cast Int (list-len (. (deref p) fresh)))))))))) 
+
+  ;; ============================================================
+  ;; Initialization — §6.3 step 4
+  ;; ============================================================
+
+  (fn node-in-list ((xs (List Node)) (n Node))
+    (@intent "Membership by structural node equality")
+    (@spec (((List Node) Node) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (x xs) (when (node-eq x n) (set! found true))) found)))
+
+  (fn signature-nodes ((arena Arena) (sig Signature) (no NormOutput))
+    (@intent "One context per signature entry, plus fresh nodes and edge endpoints")
+    (@spec ((Arena Signature NormOutput) -> (List Node)))
+    (@alloc arena)
+    ;; KEYED ON THE SIGNATURE, not on axiom occurrence. That is the
+    ;; whole reason `:Unused a owl:Class .` gets a context: it
+    ;; contributes no axiom, so an occurrence-driven registry would
+    ;; never create it, and HOWL could not answer `Unused ⊑ ⊤`, list it
+    ;; in a hierarchy, or serve a probe naming it.
+    ;;
+    ;; Edge endpoints are added even when undeclared, because
+    ;; NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL — an ABox may assert
+    ;; `:a :r :b` with neither individual declared, and without a
+    ;; context for `:b` the range seed has nowhere to land.
+    (let ((mut out (list-new arena Node))
+          (mut i 0))
+      (do
+        (for-each (c (set-elements (. sig classes)))
+          (let ((n (union-new Node class-node c)))
+            (when (not (node-in-list out n)) (list-push out n))))
+        (for-each (a (set-elements (. sig individuals)))
+          (let ((n (union-new Node individual-node a)))
+            (when (not (node-in-list out n)) (list-push out n))))
+        (for-each (e (. no edges))
+          (do
+            (when (not (node-in-list out (. e from))) (list-push out (. e from)))
+            (when (not (node-in-list out (. e to)))   (list-push out (. e to)))))
+        (for-each (sd (. no seeds))
+          (when (not (node-in-list out (. sd to))) (list-push out (. sd to))))
+        (while (< i (. no fresh-count))
+          (let ((n (union-new Node fresh-node i)))
+            (do
+              (when (not (node-in-list out n)) (list-push out n))
+              (set! i (+ i 1)))))
+        out)))
+
+  (fn install-seeds ((arena Arena) (sat Saturation) (no NormOutput))
+    (@intent "Asserted edges and their range facts into Δ₀")
+    (@spec ((Arena Saturation NormOutput) -> Bool))
+    (@alloc arena)
+    ;; INITIALIZATION IS THE BARRIER in this driver, so these go into
+    ;; Δ₀ and not into the store. An edge is installed as BOTH halves —
+    ;; a count of two is satisfied by emitting the successor half
+    ;; twice, which is why emit-edge names the destinations.
+    (let ((mut ok true))
+      (do
+        (for-each (e (. no edges))
+          (let ((pair (emit-edge arena e)))
+            (do
+              (when (not (deliver-seed arena sat
+                           (. (. pair succ-half) to) (. (. pair succ-half) what)))
+                (set! ok false))
+              (when (not (deliver-seed arena sat
+                           (. (. pair pred-half) to) (. (. pair pred-half) what)))
+                (set! ok false)))))
+        (for-each (sd (. no seeds))
+          (when (not (deliver-seed arena sat (. sd to) (. sd what)))
+            (set! ok false)))
+        ok)))
+
   (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Run the front end: header, decode, gate, normalize, initialize")
     (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
@@ -100,6 +772,21 @@
     ;; standalone `range(r) ⊑ C` legitimately vanishes when no
     ;; existential GCI or asserted edge uses `r`, and a role assertion
     ;; becomes edge messages rather than a NormAxiom at all.
-    ;;
-    ;; M0: not implemented.
-    (error (union-new Fault input-error "front end not implemented (M0)"))))
+    (match (stage0-header arena triples imports-resolved)
+      ((error f) (error f))
+      ((ok s0)
+        (match (decode-axioms arena (. s0 triples))
+          ((error f) (error f))
+          ((ok s1)
+            (let ((gr (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions)))
+                  (no (normalize-accepted arena
+                        (. (gate-axioms arena (. s1 axioms) (. s1 signature)
+                             (. s0 omissions)) accepted))))
+              (let ((sat (make-initial-saturation arena
+                           (signature-nodes arena (. gr signature) no))))
+                (do
+                  (install-seeds arena sat no)
+                  (ok (record-new NormResult
+                        (axioms     (. no axioms))
+                        (saturation sat)
+                        (coverage   (record-new Coverage (omitted (. gr omissions)))))))))))))))

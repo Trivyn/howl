@@ -151,6 +151,7 @@ types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_t
 uint8_t saturate_frontier_is_empty(types_Saturation sat);
 uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config);
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
+uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);
 
 #ifndef SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 #define SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED

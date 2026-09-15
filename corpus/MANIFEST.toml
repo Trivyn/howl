@@ -15,6 +15,14 @@
 # benchmark or differential run over an entry with non-empty coverage.omitted
 # compares different theories, and a TIMING run makes HOWL look fast precisely
 # to the extent that it skipped work.
+#
+# TURTLE IS DERIVED, AND ONLY THE SOURCE IS PINNED. HOWL reads Turtle only
+# (SPEC.md §6.1), so corpus/fetch.sh converts each verified .owl to a sibling
+# .ttl with rdflib. The .ttl is NOT hashed: rdflib's Turtle output is not
+# deterministic (two conversions of RO hash differently), and canonical
+# blank-node relabelling, which is, took 9.3 hours on OBI. Pinning the converter
+# keeps the derivation reproducible in content; fetch.sh warns when it differs.
+converter_rdflib = "7.6.0"
 
 [[ontology]]
 name           = "ro"

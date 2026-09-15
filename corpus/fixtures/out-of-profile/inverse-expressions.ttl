@@ -1,0 +1,26 @@
+# INVERSE PROPERTY EXPRESSIONS ARE OUT-OF-PROFILE, NOT MALFORMED INPUT.
+# `[ owl:inverseOf :p ]` is well-formed OWL 2 (ObjectInverseOf) and excluded by OWL 2 EL
+# (ObjectPropertyExpression := ObjectProperty) — v1 territory. RO writes 10 of its property
+# chains this way; treating the blank node as a decode error turned the whole document into
+# exit 3 instead of an enumerated omission.
+# Expect: one omission per axiom below, none for the declarations; verdict INCONCLUSIVE (exit 2).
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+:p a owl:ObjectProperty .
+:q a owl:ObjectProperty .
+:s a owl:ObjectProperty .
+:A a owl:Class .
+:B a owl:Class .
+
+# A chain step (RO's shape).
+:s owl:propertyChainAxiom ( [ owl:inverseOf :p ] :q ) .
+
+# The object of a property inclusion (RO's other shape).
+:q rdfs:subPropertyOf [ owl:inverseOf :p ] .
+
+# The property of a restriction.
+:A rdfs:subClassOf [ a owl:Restriction ;
+    owl:onProperty [ owl:inverseOf :p ] ;
+    owl:someValuesFrom :B ] .
