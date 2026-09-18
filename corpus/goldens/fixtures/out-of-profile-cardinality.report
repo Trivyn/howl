@@ -1,0 +1,16 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 2
+omission SubClassOf(http://example.org/t#A ObjectMaxCardinality(2 http://example.org/t#r http://example.org/t#B))
+omission SubClassOf(http://example.org/t#A ObjectMinCardinality(1 http://example.org/t#r))
+unsatisfiable 0
+subsumptions 5
+sub http://example.org/t#A http://example.org/t#A
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#B http://example.org/t#B
+sub http://example.org/t#B http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

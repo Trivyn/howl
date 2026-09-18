@@ -2312,6 +2312,7 @@ Mirrors GROWL's CLI conventions (separate `cli/` SLOP executable project).
 
 ```
 howl validate    <ontology.ttl> [--profile P] [--strict] [-I FILE]...  # FLAGSHIP — coherence; see exit codes
+                 [--report] [--max-iterations N] [--timings]
 howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]  # inferred subsumption hierarchy
 howl unsat       <ontology.ttl>                                    # list unsatisfiable classes
 howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       # merged coherence + minimal repair
@@ -2340,6 +2341,18 @@ itself a caller — no means to discharge it. `--no-imports` asserts deliberate 
 records them as omitted, so the run is inconclusive rather than silently narrowed. Neither flag can turn an
 incomplete run into a **coherent** verdict. (Neither prevents an incomplete run from returning a
 definitive **incoherent** verdict — that asymmetry is the point, see [§6.2](#62-data-model).)
+
+**The report, the budget, and timings.** `--report` prints the **canonical report** in place of
+the summary: a line each for verdict, termination, round count and inconsistency, then every
+omission, unsatisfiable class and subsumption, each list in the canonical order
+[§6.7](#67-output--classification) fixes. It is the text a run is *compared by* — goldens, the
+worker-count determinism check of [§12](#12-milestones--acceptance-criteria) M1 (e) — so it carries
+nothing that is not a function of input and budget. `--max-iterations N` sets the round budget
+([§6.8](#68-determinism-binding)); a value outside `0..10000` is refused with exit `3`, never
+clamped, since a clamped budget is a run the caller did not ask for. `--timings` prints phase
+durations (parse, front end, reasoning, total) on **stderr**. **Timings are a CLI measurement, never
+part of a report**: the engine never reads a clock, and a duration on stdout would make two correct
+runs' reports differ. `reason_ms` is the classification-only figure M1 (c) compares against ELK.
 
 **Exit codes** are [§6.2](#62-data-model)'s verdict table, verbatim — a CI gate must distinguish
 "checked, fine" from "couldn't check", and must not downgrade a real finding just because coverage

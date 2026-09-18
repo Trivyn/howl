@@ -352,16 +352,6 @@
       (make-iri arena RDF_TYPE)
       (make-iri arena type-iri)))
 
-  (fn term-in-set-of ((xs (List Term)) (target Term))
-    (@intent "Membership over a small term list")
-    (@spec (((List Term) Term) -> Bool))
-    (@pure)
-    (let ((mut found false))
-      (do
-        (for-each (x xs)
-          (when (term-eq x target) (set! found true)))
-        found)))
-
   (fn stage0-header ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
     (@intent "Consume the ontology header and axiom reification; reconcile imports")
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Stage0 Fault)))
@@ -391,11 +381,25 @@
           (mut fault (Option String) (none)))
       (do
         ;; Keep everything that is not header or reification scaffolding.
-        (for-each (t triples)
-          (let ((s (. t subject)))
-            (when (and (not (term-in-set-of ont-subjs s))
-                       (not (term-in-set-of ax-subjs s)))
-              (list-push out t))))
+        ;;
+        ;; MEMBERSHIP IS A SET. This filter visits every triple, and it
+        ;; used to test each subject by scanning the ontology-node and
+        ;; axiom-node LISTS — fine for a hand-written fixture, and
+        ;; triples × reified axioms on a real one: GO reifies 131,783
+        ;; axioms over 1.4M triples and never left this loop. Header
+        ;; subjects are IRIs or blank nodes, which hash and compare by
+        ;; content, so the set answers exactly what the scan did. (An
+        ;; RDF-star triple term compares by pointer in a set; it is not
+        ;; OWL, and if one were typed as a header node its triples would
+        ;; reach the gate and be omitted — never silently accepted.)
+        (let ((header-subjs (set-new arena Term)))
+          (do
+            (for-each (o ont-subjs) (set-put header-subjs o))
+            (for-each (a ax-subjs)  (set-put header-subjs a))
+            (for-each (t triples)
+              (let ((s (. t subject)))
+                (when (not (set-has header-subjs s))
+                  (list-push out t))))))
 
         ;; Rebuild each reified axiom, unless the document also asserts it.
         (for-each (a ax-subjs)

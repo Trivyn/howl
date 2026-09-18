@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "slop_rdf.h"
 #include "slop_types.h"
+#include "slop_premise.h"
 
 #ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
 #define SLOP_LIST_TYPES_ADDRESSED_DEFINED
@@ -47,7 +48,8 @@ slop_list_types_Addressed el_cr_role_incl_on_pred(slop_arena* arena, types_Conte
 slop_list_types_Addressed el_cr_role_incl_on_succ(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node y, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context ctx, types_RoleId s, types_Node z, types_NormAxiom ax);
-slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx, types_Derived incoming, slop_list_types_NormAxiom axioms);
+slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx, types_Derived incoming, premise_RuleIndex idx);
+slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_Context ctx, types_Derived incoming, slop_list_types_NormAxiom axioms);
 
 #ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 #define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
@@ -57,6 +59,11 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_PREMISE_AXLIST_DEFINED
+#define SLOP_OPTION_PREMISE_AXLIST_DEFINED
+SLOP_OPTION_DEFINE(premise_AxList, slop_option_premise_AxList)
 #endif
 
 

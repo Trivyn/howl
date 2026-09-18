@@ -42,7 +42,7 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        acceptance corpus-acceptance crate-vendor crate-build crate-test crate-publish
+        acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish
 
 PLATFORM ?= unknown
 
@@ -68,11 +68,28 @@ cli: $(BIN)
 	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl
 	@echo "  -> $(BIN)/howl"
 
+# NO CLOCK UNDER src/. HOWL never consults a clock inside a reasoning call
+# (SPEC.md §6.8): a report must be a function of input and budget alone, and
+# wall-clock timeouts belong to the host. Timings are the CLI's measurement.
 test: $(BIN)
+	@if grep -rnE 'now-ms|slop_now_ms|clock_gettime' src/; then \
+	  echo "FAIL: a clock read under src/ -- the engine never consults a clock (SPEC.md §6.8)"; exit 1; fi
 	@echo "Building tests..."
 	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test
 	@echo "Running tests..."
 	$(BIN)/howl-test
+
+# The test harness under AddressSanitizer. Saturation frees a scratch arena at
+# every barrier, so anything a round allocates there and the store keeps is a
+# use-after-free -- silent in an optimized build, a hard failure here.
+test-asan: $(BIN)
+	@echo "Building tests with AddressSanitizer..."
+	$(CC) -O1 -g -fsanitize=address -fno-omit-frame-pointer -Wall -Werror=switch \
+	  -Wno-unused-function -Wno-unused-variable -Wno-return-type -Wno-pointer-sign \
+	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
+	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
+	  $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test-asan
+	ASAN_OPTIONS=detect_leaks=0 $(BIN)/howl-test-asan
 
 clean:
 	rm -rf $(BIN) dist
@@ -147,7 +164,8 @@ acceptance: cli
 # neither has an unsatisfiable class; both carry out-of-profile axioms, so the
 # honest verdict is 2. A missing .ttl FAILS rather than skipping — a gate that
 # passes because its input was absent is the false pass this project exists
-# to prevent. GO is excluded until saturation is indexed (M1).
+# to prevent. GO joined when saturation got its premise index (M1 slice 1): its
+# single omission is one owl:inverseOf, exactly what the census predicts.
 corpus-acceptance: cli
 	@fail=0; \
 	check() { f=corpus/vendor/$$1.ttl; \
@@ -158,9 +176,69 @@ corpus-acceptance: cli
 	          else echo "  FAIL $$1 -> $$rc, $${unsat:-?} unsatisfiable (expected $$3, 0)"; fail=1; fi; }; \
 	check ro-2025-12-17 ro 2; \
 	check obi-2026-07-27 obi 2; \
-	echo "  skip go-2026-07-26 (saturation is unindexed until M1)"; \
+	check go-2026-07-26 go 2; \
 	if [ "$$fail" -eq 0 ]; then echo "  real-corpus acceptance met"; \
 	else echo "  CORPUS ACCEPTANCE FAILED"; exit 1; fi
+
+# GOLDEN REPORTS gate every performance change. They were captured on the
+# engine BEFORE any M1 performance work, so a faster engine that derives one
+# subsumption fewer -- or needs one round more, which changes what a capped run
+# can see -- fails here rather than in a differential run much later. Fixture
+# reports are committed text, so a deliberate change is reviewed as a diff; RO
+# and OBI are too large to commit and are pinned by hash. Each golden ends with
+# the exit code. A missing input FAILS: a gate that passes because its input
+# was absent is the false pass this project exists to prevent.
+# `golden-update` is for deliberate changes only.
+GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl)
+# GO's golden was captured AFTER the premise index -- the unindexed engine never
+# finished it -- so it pins stability, not correctness, until the S4 differential
+# against ELK checks it.
+GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26
+# Override to capture from a different build, e.g. the pre-change binary.
+HOWL ?= ./$(BIN)/howl
+
+# A golden must BE a report. The first capture passed `--report` before the
+# input file, the CLI refused it, and every golden recorded that usage error --
+# a gate both the old and new engine would pass forever. So a capture or a
+# comparison whose output does not start with the report header fails outright.
+golden: cli
+	@fail=0; \
+	for f in $(GOLDEN_FIXTURES); do \
+	  g=corpus/goldens/fixtures/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
+	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 1"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
+	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL $$f differs from $$g"; fail=1; fi; \
+	done; \
+	for c in $(GOLDEN_CORPUS); do \
+	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/$$c.sha256; \
+	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 1"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
+	  h=$$(printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1); \
+	  if [ "$$h" = "$$(cat $$g)" ]; then echo "  ok   $$c"; else echo "  FAIL $$c report hash $$h"; fail=1; fi; \
+	done; \
+	if [ "$$fail" -eq 0 ]; then echo "  goldens unchanged"; else echo "  GOLDEN MISMATCH"; exit 1; fi
+
+golden-update: cli
+	@mkdir -p corpus/goldens/fixtures
+	@fail=0; \
+	for f in $(GOLDEN_FIXTURES); do \
+	  g=corpus/goldens/fixtures/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
+	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > $$g;; \
+	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
+	done; \
+	for c in $(GOLDEN_CORPUS); do \
+	  f=corpus/vendor/$$c.ttl; \
+	  if [ ! -f "$$f" ]; then echo "  skip $$c (no $$f)"; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 1"*) \
+	    printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1 > corpus/goldens/$$c.sha256; \
+	    echo "  -> corpus/goldens/$$c.sha256";; \
+	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
+	done; \
+	[ "$$fail" -eq 0 ]
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.

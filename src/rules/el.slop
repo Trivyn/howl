@@ -135,9 +135,11 @@
   (import rdf (IRI))
   (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge EdgePair Context
                  node-bottom node-eq role-eq emit-edge make-context addressed-eq))
+  (import premise (AxList RuleIndex))
 
   (export
     apply-el-rules
+    apply-el-rules-reference
     cr-sub-name-on-sub
     cr-and-on-sub
     cr-some-rhs-on-sub
@@ -603,8 +605,81 @@
   ;; arena it would have compiled and silently dropped every message
   ;; past the shared buffer's initial length.
 
-  (fn apply-el-rules ((arena Arena) (ctx Context) (incoming Derived) (axioms (List NormAxiom)))
+  (fn apply-el-rules ((arena Arena) (ctx Context) (incoming Derived) (idx RuleIndex))
     (@intent "Apply every v0 completion rule triggered by one incoming Derived fact")
+    (@spec ((Arena Context Derived RuleIndex) -> (List Addressed)))
+    (@alloc arena)
+    ;; THE TRIGGER TABLE, THROUGH THE PREMISE INDEX (premise.slop). Every
+    ;; row of the table in this module's header is served here, and each
+    ;; rule is offered exactly the axioms whose premise matches the
+    ;; incoming fact's key — the ones it could fire on. The rules are the
+    ;; same functions `apply-el-rules-reference` calls with every axiom;
+    ;; `test-indexed-dispatch-matches-reference` holds the two to the
+    ;; same conclusions on every fixture.
+    ;;
+    ;; A key with no bucket costs one lookup and allocates nothing.
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match incoming
+          ;; ---- a new subsumer arrived: CR1, CR2, CR3, CR4, CR5 ----
+          ((derived-sub b)
+            (do
+              (match (map-get (. idx sub-by-lhs) b)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-sub-name-on-sub arena ctx b ax)) (list-push out m))))
+                ((none) (do)))
+              (match (map-get (. idx and-by-conjunct) b)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-and-on-sub arena ctx b ax)) (list-push out m))))
+                ((none) (do)))
+              (match (map-get (. idx rhs-by-lhs) b)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-some-rhs-on-sub arena ctx b ax)) (list-push out m))))
+                ((none) (do)))
+              (match (map-get (. idx lhs-by-filler) b)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m))))
+                ((none) (do)))
+              (for-each (m (cr-bottom-on-sub arena ctx b)) (list-push out m))))
+          ;; ---- a new predecessor edge arrived: CR4, CR5, CR6, CR7 ----
+          ((derived-pred r x)
+            (do
+              ;; CR4's companion trigger: "scan stored S(Y)". Each stored
+              ;; subsumer b is a filler key, so the axioms offered are
+              ;; exactly the ∃r'.b ⊑ A with b ∈ S(Y); the rule itself
+              ;; still checks r' = r. Walking S(Y) rather than a by-role
+              ;; bucket is the cheaper side: a context holds tens of
+              ;; subsumers, while one role (part_of, say) can head
+              ;; thousands of ∃r.B ⊑ A axioms.
+              (for-each (b (. ctx subsumers))
+                (match (map-get (. idx lhs-by-filler) b)
+                  ((some l) (for-each (ax (. l items))
+                              (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))))
+                  ((none) (do))))
+              (match (map-get (. idx incl-by-sub) r)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-role-incl-on-pred arena ctx r x ax)) (list-push out m))))
+                ((none) (do)))
+              (match (map-get (. idx chain-by-first) r)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-chain-on-pred arena ctx r x ax)) (list-push out m))))
+                ((none) (do)))
+              (for-each (m (cr-bottom-on-pred arena ctx x)) (list-push out m))))
+          ;; ---- a new successor edge arrived: CR6, CR7 ----
+          ((derived-succ r y)
+            (do
+              (match (map-get (. idx incl-by-sub) r)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-role-incl-on-succ arena ctx r y ax)) (list-push out m))))
+                ((none) (do)))
+              (match (map-get (. idx chain-by-second) r)
+                ((some l) (for-each (ax (. l items))
+                            (for-each (m (cr-chain-on-succ arena ctx r y ax)) (list-push out m))))
+                ((none) (do))))))
+        out)))
+
+  (fn apply-el-rules-reference ((arena Arena) (ctx Context) (incoming Derived) (axioms (List NormAxiom)))
+    (@intent "The unindexed dispatcher: every rule against every axiom — for differential tests only")
     (@spec ((Arena Context Derived (List NormAxiom)) -> (List Addressed)))
     (@alloc arena)
     ;; DISPATCH COVERAGE is the driver-level obligation §7 names: this

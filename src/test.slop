@@ -44,7 +44,10 @@
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult saturate make-initial-saturation))
   (import classify (extract-findings entails-sub))
-  (import howl (Verdict verdict classify))
+  (import howl (Verdict verdict classify Prepared prepare reason))
+  (import el (apply-el-rules apply-el-rules-reference))
+  (import premise (RuleIndex build-rule-index))
+  (import report (report-lines))
 
   ;; ============================================================
   ;; Fixture builders
@@ -307,7 +310,8 @@
     (@intent "Initialize from a signature and saturate to fixpoint")
     (@spec ((Arena (List Node) (List NormAxiom)) -> (Result RoundResult Fault)))
     (@alloc arena)
-    (saturate arena (make-initial-saturation arena signature) axioms (default-config)))
+    (saturate arena (make-initial-saturation arena signature)
+      (build-rule-index arena axioms) (default-config)))
 
   ;; ------------------------------------------------------------
   ;; §3.1 THE LITMUS. This is the test that decides whether HOWL is a
@@ -641,10 +645,9 @@
   ;; map insertion order without changing content; the round count and
   ;; the findings sizes must be identical.
   ;;
-  ;; This checks SIZES rather than element order, because canonical
-  ;; ordering of the findings lists is still OWED (see classify.slop) —
-  ;; asserting element order here would be asserting something the
-  ;; implementation does not yet claim.
+  ;; This checks SIZES only. Element order is pinned end to end by
+  ;; `test-triple-order-independence`, which compares whole canonical
+  ;; reports line for line.
   ;; ------------------------------------------------------------
 
   (fn test-order-independence ((arena Arena))
@@ -1773,6 +1776,29 @@
             (set! i (+ i 1))))
         ok)))
 
+  (fn same-lines ((a (List String)) (b (List String)))
+    (@intent "Two canonical reports, line for line and byte for byte")
+    (@spec (((List String) (List String)) -> Bool))
+    (@pure)
+    ;; Shaped exactly like `same-report` — `ok` starts true and a length
+    ;; mismatch clears it. Initialising `ok` from the length comparison
+    ;; directly runs `slop verify`'s native parser out of arena (0.2.3).
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (when (!= (list-len a) (list-len b))
+          (set! ok false))
+        (while (and ok (< i (cast Int (list-len a))))
+          (do
+            (match (list-get a i)
+              ((some x)
+                (match (list-get b i)
+                  ((some y) (when (not (string-eq x y)) (set! ok false)))
+                  ((none)   (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
   (fn order-independent ((arena Arena) (path String))
     (@intent "The same document with its triples reversed: identical normal form and report")
     (@spec ((Arena String) -> Bool))
@@ -1796,7 +1822,11 @@
                         (match (classify arena rev (list-new arena IRI) (default-config))
                           ((error _) false)
                           ((ok o2)
-                            (if (same-report o1 o2)
+                            ;; The structural comparison names WHICH list
+                            ;; differs; the rendered one is the bytes the
+                            ;; consumer hashes, rounds included.
+                            (if (and (same-report o1 o2)
+                                     (same-lines (report-lines arena o1) (report-lines arena o2)))
                               true
                               (do (print "  [order] report differs: ") (println path) false)))))))))))))))
 
@@ -1818,6 +1848,107 @@
         (list-push ps "corpus/fixtures/hazards/annotation-heavy.ttl")
         (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
         (for-each (p ps) (when (not (order-independent arena p)) (set! ok false)))
+        ok)))
+
+  ;; ------------------------------------------------------------
+  ;; The premise index against the full scan (M1 slice 1). The indexed
+  ;; dispatcher offers each rule only the axioms whose premise matches
+  ;; the incoming fact's key; the reference offers every axiom. They must
+  ;; conclude the same things for EVERY fact in EVERY context — so each
+  ;; fixture is saturated, and every stored fact of the final store (the
+  ;; richest snapshot, where every rule has the most premises to join) is
+  ;; replayed through both. A missing bucket, a key filed under the wrong
+  ;; position, or CR2 filed under only one conjunct each show up as a
+  ;; conclusion one side has and the other lacks.
+  ;; ------------------------------------------------------------
+
+  (fn addressed-subset ((xs (List Addressed)) (ys (List Addressed)))
+    (@intent "Every message in xs also appears in ys")
+    (@spec (((List Addressed) (List Addressed)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (x xs)
+          (let ((mut found false))
+            (do
+              (for-each (y ys) (when (addressed-eq x y) (set! found true)))
+              (when (not found) (set! ok false)))))
+        ok)))
+
+  (fn same-conclusions ((arena Arena) (ctx Context) (d Derived) (idx RuleIndex) (axioms (List NormAxiom)))
+    (@intent "The indexed and reference dispatchers conclude the same set for one fact")
+    (@spec ((Arena Context Derived RuleIndex (List NormAxiom)) -> Bool))
+    (@alloc arena)
+    (let ((xs (apply-el-rules arena ctx d idx))
+          (ys (apply-el-rules-reference arena ctx d axioms)))
+      (if (addressed-subset xs ys) (addressed-subset ys xs) false)))
+
+  (fn dispatch-agrees ((arena Arena) (path String))
+    (@intent "On one fixture, both dispatchers agree on every stored fact")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) false)
+      ((ok g)
+        (match (prepare arena (. g triples) (list-new arena IRI) (default-config))
+          ((error _) false)
+          ((ok p)
+            (let ((idx (. p index))
+                  (axioms (. p axioms)))
+              (match (reason arena p (default-config))
+                ((error _) false)
+                ((ok o)
+                  (let ((mut ok true)
+                        (mut facts 0))
+                    (do
+                      (for-each ((n ctx) (. (. o saturation) contexts))
+                        (do
+                          (for-each (b (. ctx subsumers))
+                            (do
+                              (set! facts (+ facts 1))
+                              (when (not (same-conclusions arena ctx
+                                           (union-new Derived derived-sub b) idx axioms))
+                                (set! ok false))))
+                          (for-each ((r ys) (. ctx succs))
+                            (for-each (y ys)
+                              (when (not (same-conclusions arena ctx
+                                           (union-new Derived derived-succ r y) idx axioms))
+                                (set! ok false))))
+                          (for-each ((r xs) (. ctx preds))
+                            (for-each (x xs)
+                              (when (not (same-conclusions arena ctx
+                                           (union-new Derived derived-pred r x) idx axioms))
+                                (set! ok false))))))
+                      (when (not ok) (do (print "  [dispatch] indexed != reference: ") (println path)))
+                      ;; A fixture that replayed nothing proves nothing.
+                      (if (> facts 0) ok false)))))))))))
+
+  (fn test-indexed-dispatch-matches-reference ((arena Arena))
+    (@intent "The premise index offers each rule exactly the axioms it could fire on")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/intersection.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-lhs.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-rhs.ttl")
+        (list-push ps "corpus/fixtures/v0/domain.ttl")
+        (list-push ps "corpus/fixtures/v0/range.ttl")
+        (list-push ps "corpus/fixtures/v0/subproperty.ttl")
+        (list-push ps "corpus/fixtures/v0/equivalent-properties.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/abox-assertions.ttl")
+        (list-push ps "corpus/fixtures/v0/top-bottom.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
+        (list-push ps "corpus/fixtures/hazards/rbox-regularity-accept.ttl")
+        (list-push ps "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
+        (list-push ps "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
+        (for-each (p ps) (when (not (dispatch-agrees arena p)) (set! ok false)))
         ok)))
 
   (fn strict-outcome ((arena Arena) (path String))
@@ -2821,6 +2952,10 @@
 
           (let ((r (test-triple-order-independence arena)))
             (print-test-result "§6.8: reversed triples give the same normal form and report" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-indexed-dispatch-matches-reference arena)))
+            (print-test-result "M1: the premise index concludes exactly what the full scan does" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-strict-refuses-past-omissions arena)))

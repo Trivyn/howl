@@ -119,13 +119,23 @@
   ;; lowers correctly. Upstream issue owed for the missing diagnostic.
   ;; ============================================================
 
+  ;; LOOKUPS ARE MAPS AND SETS; IDS ARE STILL LIST POSITIONS. Each fresh
+  ;; name used to be found by a linear scan of `fresh`, so minting was
+  ;; quadratic in the number of fresh names. The index answers "seen
+  ;; before?" in constant time, while `fresh` keeps doing what it always
+  ;; did — the id IS the position a text was first appended at — so ids
+  ;; stay first-occurrence and nothing downstream moves. Map and Set
+  ;; fields are pointers, so the copy-mutate-write-back below shares them
+  ;; without any extra write-back.
   (type NormState (record
-    (axioms      (List NormAxiom))
-    (fresh       (List String))   ; index = fresh-node id, value = canonical text
-    (fresh-roles (List String))   ; index = fresh-role id, value = provenance text
-    (neg-done    (List String))   ; expressions whose NEGATIVE definition is emitted
-    (pos-done    (List String))   ; expressions whose POSITIVE definition is emitted
-    (edges       (List LogicalEdge))))
+    (axioms           (List NormAxiom))
+    (fresh            (List String))      ; index = fresh-node id, value = canonical text
+    (fresh-index      (Map String Int))   ; canonical text -> fresh-node id
+    (fresh-roles      (List String))      ; index = fresh-role id, value = provenance text
+    (fresh-role-index (Map String Int))   ; provenance text -> fresh-role id
+    (neg-done         (Set String))       ; expressions whose NEGATIVE definition is emitted
+    (pos-done         (Set String))       ; expressions whose POSITIVE definition is emitted
+    (edges            (List LogicalEdge))))
 
   (fn new-state ((arena Arena))
     (@intent "An empty normalizer state")
@@ -134,12 +144,14 @@
     (let ((p (cast (Ptr NormState) (arena-alloc arena (sizeof NormState)))))
       (do
         (set! (deref p) (record-new NormState
-                          (axioms      (list-new arena NormAxiom))
-                          (fresh       (list-new arena String))
-                          (fresh-roles (list-new arena String))
-                          (neg-done    (list-new arena String))
-                          (pos-done    (list-new arena String))
-                          (edges       (list-new arena LogicalEdge))))
+                          (axioms           (list-new arena NormAxiom))
+                          (fresh            (list-new arena String))
+                          (fresh-index      (map-new arena String Int))
+                          (fresh-roles      (list-new arena String))
+                          (fresh-role-index (map-new arena String Int))
+                          (neg-done         (set-new arena String))
+                          (pos-done         (set-new arena String))
+                          (edges            (list-new arena LogicalEdge))))
         p)))
 
   (fn st-emit ((arena Arena) (p (Ptr NormState)) (ax NormAxiom))
@@ -156,19 +168,6 @@
     (let ((mut s (deref p)))
       (do (list-push (. s edges) e) (set! (deref p) s) true)))
 
-  (fn str-index ((xs (List String)) (t String))
-    (@intent "Index of a string, or -1")
-    (@spec (((List String) String) -> Int))
-    (@pure)
-    (let ((mut found -1)
-          (mut i 0))
-      (do
-        (for-each (x xs)
-          (do
-            (when (and (< found 0) (== (string-cmp x t) 0)) (set! found i))
-            (set! i (+ i 1))))
-        found)))
-
   (fn st-fresh-id ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "The fresh-node id for a canonical expression, minting on first use")
     (@spec ((Arena (Ptr NormState) String) -> Int))
@@ -179,37 +178,43 @@
     ;; would mint two nodes for an expression occurring at both, which
     ;; changes fresh ids, saturation size, derivation depth, and
     ;; therefore every capped-run report.
-    (let ((existing (str-index (. (deref p) fresh) text)))
-      (if (>= existing 0)
-        existing
+    (match (map-get (. (deref p) fresh-index) text)
+      ((some id) id)
+      ((none)
         (let ((mut s (deref p))
               (id (cast Int (list-len (. (deref p) fresh)))))
-          (do (list-push (. s fresh) text) (set! (deref p) s) id)))))
+          (do
+            (list-push (. s fresh) text)
+            (map-put (. s fresh-index) text id)
+            (set! (deref p) s)
+            id)))))
 
   (fn st-fresh-role-id ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "A fresh role id for a chain decomposition step")
     (@spec ((Arena (Ptr NormState) String) -> Int))
     (@alloc arena)
-    (let ((existing (str-index (. (deref p) fresh-roles) text)))
-      (if (>= existing 0)
-        existing
+    (match (map-get (. (deref p) fresh-role-index) text)
+      ((some id) id)
+      ((none)
         (let ((mut s (deref p))
               (id (cast Int (list-len (. (deref p) fresh-roles)))))
-          (do (list-push (. s fresh-roles) text) (set! (deref p) s) id)))))
+          (do
+            (list-push (. s fresh-roles) text)
+            (map-put (. s fresh-role-index) text id)
+            (set! (deref p) s)
+            id)))))
 
   (fn st-mark-neg ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "Record that the negative definition for this expression is emitted")
     (@spec ((Arena (Ptr NormState) String) -> Bool))
     (@alloc arena)
-    (let ((mut s (deref p)))
-      (do (list-push (. s neg-done) text) (set! (deref p) s) true)))
+    (do (set-put (. (deref p) neg-done) text) true))
 
   (fn st-mark-pos ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "Record that the positive definition for this expression is emitted")
     (@spec ((Arena (Ptr NormState) String) -> Bool))
     (@alloc arena)
-    (let ((mut s (deref p)))
-      (do (list-push (. s pos-done) text) (set! (deref p) s) true)))
+    (do (set-put (. (deref p) pos-done) text) true))
 
   ;; ============================================================
   ;; Polarity-correct normalization
@@ -270,9 +275,9 @@
       ((rc-nothing) (node-bottom))
       ((rc-some r f)
         (let ((text (render-concept arena c))
-              (x (union-new Node fresh-node (st-fresh-id arena p (render-concept arena c)))))
+              (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
-            (when (< (str-index (. (deref p) neg-done) text) 0)
+            (when (not (set-has (. (deref p) neg-done) text))
               (do
                 (st-mark-neg arena p text)
                 ;; ∃r.F ⊑ X — the load-bearing direction.
@@ -281,7 +286,7 @@
             x)))
       ((rc-and cs)
         (let ((flat (flatten-and arena c (list-new arena RawConcept)))
-              (n (cast Int (list-len (flatten-and arena c (list-new arena RawConcept))))))
+              (n (cast Int (list-len flat))))
           (cond
             ((== n 0) (node-top))
             ((== n 1) (neg-atom arena p (concept-at flat 0)))
@@ -323,9 +328,9 @@
       ;; ⊥ would make C unsatisfiable and manufacture an incoherence.
       (_
         (let ((text (render-concept arena c))
-              (x (union-new Node fresh-node (st-fresh-id arena p (render-concept arena c)))))
+              (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
-            (when (< (str-index (. (deref p) pos-done) text) 0)
+            (when (not (set-has (. (deref p) pos-done) text))
               (do
                 (st-mark-pos arena p text)
                 ;; X ⊑ E — the positive direction.
@@ -371,7 +376,7 @@
       ((rc-thing) true)
       (_
         (let ((conj (flatten-and arena lhs (list-new arena RawConcept)))
-              (n (cast Int (list-len (flatten-and arena lhs (list-new arena RawConcept))))))
+              (n (cast Int (list-len conj))))
           (match rhs
             ((rc-name b)  (emit-inclusion arena p conj n b))
             ((rc-nothing) (emit-inclusion arena p conj n (node-bottom)))
@@ -673,7 +678,7 @@
     ;; rather than of the order triples happened to be written.
     (let ((p (new-state arena))
           (roles (collect-rbox-roles arena axs))
-          (nr (cast Int (list-len (collect-rbox-roles arena axs)))))
+          (nr (cast Int (list-len roles))))
       (do
         (for-each (ax axs) (normalize-axiom arena p ax))
         ;; Range elimination runs LAST, over normal-form GCIs and after
@@ -693,13 +698,6 @@
   ;; Initialization — §6.3 step 4
   ;; ============================================================
 
-  (fn node-in-list ((xs (List Node)) (n Node))
-    (@intent "Membership by structural node equality")
-    (@spec (((List Node) Node) -> Bool))
-    (@pure)
-    (let ((mut found false))
-      (do (for-each (x xs) (when (node-eq x n) (set! found true))) found)))
-
   (fn signature-nodes ((arena Arena) (sig Signature) (no NormOutput))
     (@intent "One context per signature entry, plus fresh nodes and edge endpoints")
     (@spec ((Arena Signature NormOutput) -> (List Node)))
@@ -714,25 +712,36 @@
     ;; NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL — an ABox may assert
     ;; `:a :r :b` with neither individual declared, and without a
     ;; context for `:b` the range seed has nowhere to land.
+    ;;
+    ;; MEMBERSHIP IS A SET, ORDER IS THE LIST. The dedup used to scan the
+    ;; output list per insert — quadratic in the signature, which on GO is
+    ;; every class and every fresh node. `seen` answers membership; `out`
+    ;; still records first occurrence, so the node order handed to
+    ;; initialization is unchanged. The membership test is written out at
+    ;; each site because a Set cannot be passed to a helper.
     (let ((mut out (list-new arena Node))
+          (seen (set-new arena Node))
           (mut i 0))
       (do
         (for-each (c (set-elements (. sig classes)))
           (let ((n (union-new Node class-node c)))
-            (when (not (node-in-list out n)) (list-push out n))))
+            (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))))
         (for-each (a (set-elements (. sig individuals)))
           (let ((n (union-new Node individual-node a)))
-            (when (not (node-in-list out n)) (list-push out n))))
+            (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))))
         (for-each (e (. no edges))
-          (do
-            (when (not (node-in-list out (. e from))) (list-push out (. e from)))
-            (when (not (node-in-list out (. e to)))   (list-push out (. e to)))))
+          (let ((from (. e from))
+                (to   (. e to)))
+            (do
+              (when (not (set-has seen from)) (do (set-put seen from) (list-push out from)))
+              (when (not (set-has seen to))   (do (set-put seen to)   (list-push out to))))))
         (for-each (sd (. no seeds))
-          (when (not (node-in-list out (. sd to))) (list-push out (. sd to))))
+          (let ((to (. sd to)))
+            (when (not (set-has seen to)) (do (set-put seen to) (list-push out to)))))
         (while (< i (. no fresh-count))
           (let ((n (union-new Node fresh-node i)))
             (do
-              (when (not (node-in-list out n)) (list-push out n))
+              (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))
               (set! i (+ i 1)))))
         out)))
 
@@ -778,10 +787,11 @@
         (match (decode-axioms arena (. s0 triples))
           ((error f) (error f))
           ((ok s1)
+            ;; The gate runs ONCE. It used to run a second time to feed
+            ;; the normalizer — the same answer at the cost of a second
+            ;; gate over every axiom, which on GO is the whole corpus.
             (let ((gr (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions)))
-                  (no (normalize-accepted arena
-                        (. (gate-axioms arena (. s1 axioms) (. s1 signature)
-                             (. s0 omissions)) accepted))))
+                  (no (normalize-accepted arena (. gr accepted))))
               (let ((sat (make-initial-saturation arena
                            (signature-nodes arena (. gr signature) no))))
                 (do

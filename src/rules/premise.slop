@@ -1,0 +1,132 @@
+;; ============================================================
+;; The premise index  —  SPEC.md §6.4 (delta triggers), §12 M1 (c)
+;;
+;; The module is `premise`, not `index`: slop-rdf already has an `index`
+;; module (the triple store's IndexedGraph), and two modules of one name
+;; transpile to the same slop_index.c.
+;;
+;; WHY IT EXISTS. The dispatcher used to hand every incoming fact the
+;; WHOLE axiom list, and every rule matched every axiom only to discover
+;; it was about some other name. Nearly every call returned an empty
+;; list — allocated anyway — so a fact cost Θ(|axioms|) rule calls: OBI's
+;; 26k axioms took 172 s to classify, and GO's 118k were never run.
+;;
+;; WHAT IT IS. For each trigger in the §6.4 table, the axioms whose
+;; premise matches that trigger's key, looked up once per fact:
+;;
+;;   field             key                        rule, trigger
+;;   ----------------- -------------------------- ----------------------
+;;   sub-by-lhs        B     of  B ⊑ A            CR1  on derived-sub
+;;   and-by-conjunct   B₁,B₂ of  B₁ ⊓ B₂ ⊑ A      CR2  on derived-sub
+;;   rhs-by-lhs        B     of  B ⊑ ∃r.A         CR3  on derived-sub
+;;   lhs-by-filler     B     of  ∃r.B ⊑ A         CR4  on sub AND on pred
+;;   incl-by-sub       r     of  r ⊑ s            CR6  on pred AND on succ
+;;   chain-by-first    r     of  r ∘ s ⊑ t        CR7  on pred
+;;   chain-by-second   s     of  r ∘ s ⊑ t        CR7  on succ
+;;
+;; WHY FILTERING LOSES NOTHING. Every rule's FIRST guard is an equality
+;; on exactly the key above (`node-eq b b2`, `role-eq r r2`), so an axiom
+;; filed under a different key is one the rule would have rejected
+;; anyway. The rules are unchanged; only the set of axioms they are
+;; offered shrinks to the ones they can fire on.
+;;
+;; CR2 IS FILED UNDER BOTH CONJUNCTS, because it is a self-join that must
+;; fire from either one (§6.4) — and ONCE when B₁ = B₂, since filing it
+;; twice would offer the rule the same axiom twice for one fact.
+;;
+;; BUILT ONCE, READ-ONLY AFTER. It is constructed in `prepare`, before
+;; the first round, and nothing writes it during saturation, so it adds
+;; no shared mutable state to the round (§6.6): workers may read it
+;; concurrently. It is a separate record from `Saturation` because it is
+;; a function of the axioms alone, not of what has been derived.
+;; ============================================================
+
+(module premise
+  (@doc "Premise index over normal-form axioms, one lookup per trigger (§6.4)")
+
+  (import types (Node RoleId NormAxiom node-eq))
+
+  (export
+    AxList
+    RuleIndex
+    build-rule-index)
+
+  ;; A record around the list, for the reason `Queue` is one: a
+  ;; `(List T)` is a value struct, and a Map of records makes "read it,
+  ;; push, write it back" explicit at the one site that does it.
+  (type AxList (record
+    (items (List NormAxiom))))
+
+  (type RuleIndex (record
+    (sub-by-lhs      (Map Node AxList))
+    (and-by-conjunct (Map Node AxList))
+    (rhs-by-lhs      (Map Node AxList))
+    (lhs-by-filler   (Map Node AxList))
+    (incl-by-sub     (Map RoleId AxList))
+    (chain-by-first  (Map RoleId AxList))
+    (chain-by-second (Map RoleId AxList))))
+
+  (fn pushed ((arena Arena) (found (Option AxList)) (ax NormAxiom))
+    (@intent "The bucket a lookup found, with one more axiom — or a new bucket")
+    (@spec ((Arena (Option AxList) NormAxiom) -> AxList))
+    (@alloc arena)
+    ;; The caller writes the result back with `map-put`, replacing the
+    ;; old record. Pushing onto the copied list may write into the old
+    ;; bucket's buffer past its length, which is harmless precisely
+    ;; because that record is about to be overwritten.
+    (let ((mut items (match found
+                       ((some l) (. l items))
+                       ((none)   (list-new arena NormAxiom)))))
+      (do
+        (list-push items ax)
+        (record-new AxList (items items)))))
+
+  (fn build-rule-index ((arena Arena) (axioms (List NormAxiom)))
+    (@intent "File every normal-form axiom under the key each of its triggers looks up")
+    (@spec ((Arena (List NormAxiom)) -> RuleIndex))
+    (@alloc arena)
+    ;; Axioms are filed in list order, so a bucket's order is the
+    ;; normalizer's canonical order. Nothing depends on it — a round is a
+    ;; union over its conclusions — but it keeps the index itself a
+    ;; function of the input.
+    ;;
+    ;; Every value written is let-bound first: `map-put` takes the
+    ;; address of its value, and a call result is not a C lvalue.
+    (let ((idx (record-new RuleIndex
+                 (sub-by-lhs      (map-new arena Node AxList))
+                 (and-by-conjunct (map-new arena Node AxList))
+                 (rhs-by-lhs      (map-new arena Node AxList))
+                 (lhs-by-filler   (map-new arena Node AxList))
+                 (incl-by-sub     (map-new arena RoleId AxList))
+                 (chain-by-first  (map-new arena RoleId AxList))
+                 (chain-by-second (map-new arena RoleId AxList)))))
+      (do
+        (for-each (ax axioms)
+          (match ax
+            ((sub-name b _)
+              (let ((l (pushed arena (map-get (. idx sub-by-lhs) b) ax)))
+                (map-put (. idx sub-by-lhs) b l)))
+            ((sub-and b1 b2 _)
+              (do
+                (let ((l1 (pushed arena (map-get (. idx and-by-conjunct) b1) ax)))
+                  (map-put (. idx and-by-conjunct) b1 l1))
+                (when (not (node-eq b1 b2))
+                  (let ((l2 (pushed arena (map-get (. idx and-by-conjunct) b2) ax)))
+                    (map-put (. idx and-by-conjunct) b2 l2)))))
+            ((sub-some-rhs b _ _)
+              (let ((l (pushed arena (map-get (. idx rhs-by-lhs) b) ax)))
+                (map-put (. idx rhs-by-lhs) b l)))
+            ((sub-some-lhs _ b _)
+              (let ((l (pushed arena (map-get (. idx lhs-by-filler) b) ax)))
+                (map-put (. idx lhs-by-filler) b l)))
+            ((sub-role r _)
+              (let ((l (pushed arena (map-get (. idx incl-by-sub) r) ax)))
+                (map-put (. idx incl-by-sub) r l)))
+            ((role-chain r s _)
+              (do
+                (let ((l1 (pushed arena (map-get (. idx chain-by-first) r) ax)))
+                  (map-put (. idx chain-by-first) r l1))
+                (let ((l2 (pushed arena (map-get (. idx chain-by-second) s) ax)))
+                  (map-put (. idx chain-by-second) s l2))))))
+        idx)))
+)

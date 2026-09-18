@@ -41,7 +41,9 @@ reports **inconclusive** — never **coherent** — and lists every omission so 
 Treat exit 0 alone as the pass condition; a CI job that accepts 2 reintroduces the silent false pass
 the gate exists to prevent. Every CLI argument is either honoured or refused with exit 3: `-I FILE`
 attests an import (a document with no ontology IRI is refused), `--strict` refuses to run past an
-omission, and `--emit`/`--reduce` are refused until M3.
+omission, and `--emit`/`--reduce` are refused until M3. `--report` prints the canonical report the
+goldens compare, `--max-iterations N` sets the round budget, and `--timings` prints phase durations on
+stderr — never in the report.
 
 **Real ontologies, not just fixtures.** The fixtures all passed while the first two real ontologies
 failed, and both failures are fixed and pinned by `make corpus-acceptance`:
@@ -49,15 +51,18 @@ failed, and both failures are fixed and pinned by `make corpus-acceptance`:
 | Ontology | Before | Now |
 |---|---|---|
 | RO 2025-12-17 (11.6k triples) | exit 3 — an inverse property in a property chain faulted the whole document | exit 2, 0 unsatisfiable, 847 omitted |
-| OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 168 s |
+| OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 1.0 s (reasoning 0.4 s) |
+| GO 2026-07-26 (1.4M triples) | never finished — the header pass scanned lists per triple, and every fact was matched against every axiom | exit 2, 0 unsatisfiable, 1 omitted (one `owl:inverseOf`), 459,329 subsumptions, 13.4 s (reasoning 5.5 s) |
 
-GO (1.4M triples) is not yet run: saturation matches every fact against every axiom, and indexing
-that is M1's benchmark work.
+Rule dispatch goes through a premise index, so each rule sees only the axioms it could fire on; OBI's
+reasoning went from 172 s to 0.4 s with its report unchanged byte for byte. These are single-threaded
+numbers from `--timings`, not yet the §12 benchmark (median of 5, 4 workers, against ELK run on the
+same machine). Memory is now the dominant cost: GO peaks at 25.7 GB, OBI at 3.8 GB.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |

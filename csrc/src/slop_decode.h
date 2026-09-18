@@ -317,7 +317,6 @@ uint8_t decode_iri_in_list(slop_list_rdf_IRI xs, rdf_IRI target);
 slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, slop_list_rdf_Triple triples);
 slop_list_types_Omission decode_unresolved_imports(slop_arena* arena, slop_list_rdf_IRI declared, slop_list_rdf_IRI resolved);
 slop_list_rdf_Term decode_subjects_of_type(slop_arena* arena, index_IndexedGraph g, slop_string type_iri);
-uint8_t decode_term_in_set_of(slop_list_rdf_Term xs, rdf_Term target);
 slop_result_decode_Stage0_types_Fault decode_stage0_header(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 owl2_RawConcept* decode_box_concept(slop_arena* arena, owl2_RawConcept c);
 slop_string decode_list_fault_message(decode_ListFault f);

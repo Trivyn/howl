@@ -1,0 +1,16 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 2
+inconsistent false
+omitted 4
+omission DataAxiom(<http://example.org/t#a> <http://example.org/t#d> "42" .)
+omission DataAxiom(<http://example.org/t#d> <http://www.w3.org/2000/01/rdf-schema#domain> <http://example.org/t#A> .)
+omission DataAxiom(<http://example.org/t#d> <http://www.w3.org/2000/01/rdf-schema#range> <http://www.w3.org/2001/XMLSchema#integer> .)
+omission MissingDeclaration(Class(http://www.w3.org/2001/XMLSchema#integer))
+unsatisfiable 0
+subsumptions 3
+sub http://example.org/t#A http://example.org/t#A
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

@@ -1,0 +1,23 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 13
+omission AnonymousIndividual(_:b1 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#IndividualPropertyAtom> .)
+omission AnonymousIndividual(_:b2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .)
+omission AnonymousIndividual(_:b3 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .)
+omission AnonymousIndividual(_:b5 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#ClassAtom> .)
+omission AnonymousIndividual(_:b6 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .)
+omission ReservedVocabulary(_:b0 <http://www.w3.org/2003/11/swrl#body> _:b4 .)
+omission ReservedVocabulary(_:b0 <http://www.w3.org/2003/11/swrl#head> _:b7 .)
+omission ReservedVocabulary(_:b1 <http://www.w3.org/2003/11/swrl#argument1> _:b2 .)
+omission ReservedVocabulary(_:b1 <http://www.w3.org/2003/11/swrl#argument2> _:b3 .)
+omission ReservedVocabulary(_:b1 <http://www.w3.org/2003/11/swrl#propertyPredicate> <http://example.org/t#downstreamOf> .)
+omission ReservedVocabulary(_:b5 <http://www.w3.org/2003/11/swrl#argument1> _:b6 .)
+omission ReservedVocabulary(_:b5 <http://www.w3.org/2003/11/swrl#classPredicate> <http://www.w3.org/2002/07/owl#Nothing> .)
+omission SWRLRule(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Imp> .)
+unsatisfiable 0
+subsumptions 1
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

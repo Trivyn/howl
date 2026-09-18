@@ -155,9 +155,11 @@ SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 struct normalize_NormState {
     slop_list_types_NormAxiom axioms;
     slop_list_string fresh;
+    slop_map* fresh_index;
     slop_list_string fresh_roles;
-    slop_list_string neg_done;
-    slop_list_string pos_done;
+    slop_map* fresh_role_index;
+    slop_map* neg_done;
+    slop_map* pos_done;
     slop_list_types_LogicalEdge edges;
 };
 typedef struct normalize_NormState normalize_NormState;
@@ -184,6 +186,70 @@ SLOP_OPTION_DEFINE(normalize_RangeFact, slop_option_normalize_RangeFact)
 SLOP_LIST_DEFINE(normalize_RangeFact, slop_list_normalize_RangeFact)
 #endif
 
+
+/* Hash/eq functions and list types for struct map/set keys */
+#ifndef TYPES_NODE_HASH_EQ_DEFINED
+#define TYPES_NODE_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && slop_eq_string(&_a->value, &_b->value)
+    ;
+}
+#endif
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && slop_eq_string(&_a->value, &_b->value)
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_Node(const void* key) {
+    const types_Node* _k = (const types_Node*)key;
+    switch (_k->tag) {
+        case types_Node_class_node:
+            return slop_hash_rdf_IRI(&_k->data.class_node);
+        case types_Node_individual_node:
+            return slop_hash_rdf_IRI(&_k->data.individual_node);
+        case types_Node_fresh_node:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_node });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_Node(const void* a, const void* b) {
+    const types_Node* _a = (const types_Node*)a;
+    const types_Node* _b = (const types_Node*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_Node_class_node:
+            return slop_eq_rdf_IRI(&_a->data.class_node, &_b->data.class_node);
+        case types_Node_individual_node:
+            return slop_eq_rdf_IRI(&_a->data.individual_node, &_b->data.individual_node);
+        case types_Node_fresh_node:
+            return _a->data.fresh_node == _b->data.fresh_node;
+    }
+    return false;
+}
+#endif
+
 #ifndef SLOP_RESULT_NORMALIZE_NORMRESULT_TYPES_FAULT_DEFINED
 #define SLOP_RESULT_NORMALIZE_NORMRESULT_TYPES_FAULT_DEFINED
 typedef struct { bool is_ok; union { normalize_NormResult ok; types_Fault err; } data; } slop_result_normalize_NormResult_types_Fault;
@@ -192,7 +258,6 @@ typedef struct { bool is_ok; union { normalize_NormResult ok; types_Fault err; }
 normalize_NormState* normalize_new_state(slop_arena* arena);
 uint8_t normalize_st_emit(slop_arena* arena, normalize_NormState* p, types_NormAxiom ax);
 uint8_t normalize_st_emit_edge(slop_arena* arena, normalize_NormState* p, types_LogicalEdge e);
-int64_t normalize_str_index(slop_list_string xs, slop_string t);
 int64_t normalize_st_fresh_id(slop_arena* arena, normalize_NormState* p, slop_string text);
 int64_t normalize_st_fresh_role_id(slop_arena* arena, normalize_NormState* p, slop_string text);
 uint8_t normalize_st_mark_neg(slop_arena* arena, normalize_NormState* p, slop_string text);
@@ -219,7 +284,6 @@ slop_list_types_Addressed normalize_edge_range_seeds(slop_arena* arena, slop_lis
 uint8_t normalize_normalize_axiom(slop_arena* arena, normalize_NormState* p, owl2_RawAxiom ax);
 owl2_RawConcept* normalize_box_rc(slop_arena* arena, owl2_RawConcept c);
 normalize_NormOutput normalize_normalize_accepted(slop_arena* arena, slop_list_owl2_RawAxiom axs);
-uint8_t normalize_node_in_list(slop_list_types_Node xs, types_Node n);
 slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature sig, normalize_NormOutput no);
 uint8_t normalize_install_seeds(slop_arena* arena, types_Saturation sat, normalize_NormOutput no);
 slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);

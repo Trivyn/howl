@@ -1,0 +1,18 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 2
+omission DisjointUnion(<http://example.org/t#C> <http://www.w3.org/2002/07/owl#disjointUnionOf> _:b1 .)
+omission HasKey(<http://example.org/t#A> <http://www.w3.org/2002/07/owl#hasKey> _:b0 .)
+unsatisfiable 0
+subsumptions 7
+sub http://example.org/t#A http://example.org/t#A
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#B http://example.org/t#B
+sub http://example.org/t#B http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

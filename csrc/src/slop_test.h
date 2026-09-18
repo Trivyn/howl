@@ -16,6 +16,9 @@
 #include "slop_saturate.h"
 #include "slop_classify.h"
 #include "slop_howl.h"
+#include "slop_el.h"
+#include "slop_premise.h"
+#include "slop_report.h"
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -44,6 +47,12 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
+#define SLOP_LIST_TYPES_ADDRESSED_DEFINED
+#define SLOP_LIST_TYPES_ADDRESSED_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
@@ -79,6 +88,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 #define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+#define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #endif
 
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
@@ -248,8 +262,13 @@ slop_list_rdf_Triple test_reversed_triples(slop_arena* arena, slop_list_rdf_Trip
 slop_option_normalize_NormOutput test_normalize_triples(slop_arena* arena, slop_list_rdf_Triple ts);
 uint8_t test_same_normal_form(normalize_NormOutput a, normalize_NormOutput b);
 uint8_t test_same_report(types_Outcome a, types_Outcome b);
+uint8_t test_same_lines(slop_list_string a, slop_list_string b);
 uint8_t test_order_independent(slop_arena* arena, slop_string path);
 uint8_t test_test_triple_order_independence(slop_arena* arena);
+uint8_t test_addressed_subset(slop_list_types_Addressed xs, slop_list_types_Addressed ys);
+uint8_t test_same_conclusions(slop_arena* arena, types_Context ctx, types_Derived d, premise_RuleIndex idx, slop_list_types_NormAxiom axioms);
+uint8_t test_dispatch_agrees(slop_arena* arena, slop_string path);
+uint8_t test_test_indexed_dispatch_matches_reference(slop_arena* arena);
 int64_t test_strict_outcome(slop_arena* arena, slop_string path);
 uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
 uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
@@ -322,6 +341,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 #define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+#define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED

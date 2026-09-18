@@ -99,6 +99,7 @@
                  Termination Fault ReasonerConfig
                  node-top node-bottom make-context make-queue))
   (import el (apply-el-rules))
+  (import premise (RuleIndex))
 
   (export
     RoundDelta
@@ -289,9 +290,9 @@
   ;; THE ROUND
   ;; ============================================================
 
-  (fn round-join ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (delta RoundDelta))
+  (fn round-join ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta))
     (@intent "Join every δ ∈ Δₙ against the frozen Sₙ, accumulating novel conclusions")
-    (@spec ((Arena Saturation (List NormAxiom) RoundDelta) -> Unit))
+    (@spec ((Arena Saturation RuleIndex RoundDelta) -> Unit))
     (@alloc arena)
     ;; READ-ONLY OVER `sat`. Every write below targets `delta`. If this
     ;; function ever grows a `set-put`/`map-put`/`list-push` against
@@ -305,12 +306,13 @@
               ;; `ctx` is the ROUND SNAPSHOT Sₙ = Sₙ₋₁ ∪ Δₙ: the store
               ;; already absorbed Δₙ at the previous barrier, so the
               ;; Δₙ × Δₙ joins CR2 and CR7 depend on are reachable here.
-              ;; The whole axiom list goes in, not one axiom at a
+              ;; The whole premise index goes in, not one axiom at a
               ;; time: CR5 has no axiom premise, so a per-axiom
               ;; dispatcher would emit |axioms| copies of every
-              ;; ⊥-propagation. The dispatcher owns that distinction.
+              ;; ⊥-propagation. The dispatcher owns that distinction,
+              ;; and the index is read-only for the whole run.
               (for-each (d (. q items))
-                (for-each (m (apply-el-rules arena ctx d axioms))
+                (for-each (m (apply-el-rules arena ctx d idx))
                   (admit arena sat delta m))))
             ((none) (do))))
         ((none) (do)))))
@@ -379,19 +381,33 @@
           (active-count count)
           (iteration    (+ (. sat iteration) 1))))))
 
-  (fn advance-round ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (config ReasonerConfig))
+  (fn advance-round ((arena Arena) (sat Saturation) (idx RuleIndex) (config ReasonerConfig))
     (@intent "Execute one barrier-synchronized round: join read-only, then commit")
-    (@spec ((Arena Saturation (List NormAxiom) ReasonerConfig) -> Saturation))
+    (@spec ((Arena Saturation RuleIndex ReasonerConfig) -> Saturation))
     (@alloc arena)
     ;; The round-count contract lives on `round-commit`, where the body
     ;; is a `record-new` and the checker can discharge it. Restating it
     ;; here would be unprovable — there is no interprocedural reasoning,
     ;; so a callee is an uninterpreted function — and a @post the
     ;; checker cannot establish reads as coverage without being any (§7).
-    (let ((delta (record-new RoundDelta (pending (map-new arena Node Context)))))
-      (do
-        (round-join arena sat axioms delta)
-        (round-commit arena sat delta))))
+    ;;
+    ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. Every
+    ;; rule call builds a result list and the round's delta is a map of
+    ;; contexts; none of it is needed once the round commits, yet in the
+    ;; run arena it all lived until exit — OBI peaked at 3.8 GB. So the
+    ;; join and its RoundDelta allocate in `scratch`, and only
+    ;; `round-commit`, which writes the store, allocates in the run arena.
+    ;;
+    ;; Why nothing escapes: commit copies every fact into sets and queues
+    ;; it allocates itself, and a copied Node or RoleId holds only an id or
+    ;; an IRI whose bytes live in the parse arena — no rule creates a
+    ;; string. `make test-asan` is what enforces this: a store that kept a
+    ;; pointer into `scratch` is a use-after-free there.
+    (with-arena :as scratch 16777216
+      (let ((delta (record-new RoundDelta (pending (map-new scratch Node Context)))))
+        (do
+          (round-join scratch sat idx delta)
+          (round-commit arena sat delta)))))
 
   ;; ============================================================
   ;; INITIALIZATION (§6.3 step 4)
@@ -523,9 +539,9 @@
     (@post (implies {(. config max-iterations) == 0} {$result == true}))
     (>= (. sat iteration) (. config max-iterations)))
 
-  (fn saturate ((arena Arena) (sat Saturation) (axioms (List NormAxiom)) (config ReasonerConfig))
+  (fn saturate ((arena Arena) (sat Saturation) (idx RuleIndex) (config ReasonerConfig))
     (@intent "Run barrier-synchronized semi-naive saturation to fixpoint or the round cap")
-    (@spec ((Arena Saturation (List NormAxiom) ReasonerConfig) -> (Result RoundResult Fault)))
+    (@spec ((Arena Saturation RuleIndex ReasonerConfig) -> (Result RoundResult Fault)))
     (@alloc arena)
     ;; THE BUDGET BOUNDARY IS PINNED, because leaving it to "the test
     ;; decides" lets two conforming implementations return different
@@ -566,7 +582,7 @@
               (break)
               (if (budget-exhausted state config)
                 (break)
-                (set! state (advance-round arena state axioms config))))))
+                (set! state (advance-round arena state idx config))))))
         (if cancelled
           (error (union-new Fault cancelled))
           (if (frontier-is-empty state)

@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "slop_types.h"
 #include "slop_el.h"
+#include "slop_premise.h"
 
 typedef struct saturate_RoundResult saturate_RoundResult;
 typedef struct saturate_RoundDelta saturate_RoundDelta;
@@ -14,12 +15,6 @@ typedef struct saturate_RoundDelta saturate_RoundDelta;
 #define SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
-#endif
-
-#ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
-#define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
-#define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
@@ -35,11 +30,6 @@ SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
 #ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
 #define SLOP_OPTION_TYPES_QUEUE_DEFINED
 SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-#define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
 struct saturate_RoundResult {
@@ -142,15 +132,15 @@ void saturate_add_pred(slop_arena* arena, types_Context ctx, types_RoleId r, typ
 void saturate_admit_sub(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Node x, types_Node b);
 void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_LogicalEdge e);
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
-void saturate_round_join(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, saturate_RoundDelta delta);
+void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta);
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_round_commit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta);
-types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
+types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
 uint8_t saturate_frontier_is_empty(types_Saturation sat);
 uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config);
-slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
+slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);
 
 #ifndef SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
@@ -176,11 +166,6 @@ SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 #ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
 #define SLOP_OPTION_TYPES_QUEUE_DEFINED
 SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-#define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
 
