@@ -269,6 +269,7 @@ uint8_t test_addressed_subset(slop_list_types_Addressed xs, slop_list_types_Addr
 uint8_t test_same_conclusions(slop_arena* arena, types_Context ctx, types_Derived d, premise_RuleIndex idx, slop_list_types_NormAxiom axioms);
 uint8_t test_dispatch_agrees(slop_arena* arena, slop_string path);
 uint8_t test_test_indexed_dispatch_matches_reference(slop_arena* arena);
+uint8_t test_test_quoted_triple_header_subjects(slop_arena* arena);
 int64_t test_strict_outcome(slop_arena* arena, slop_string path);
 uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
 uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);

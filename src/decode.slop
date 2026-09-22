@@ -386,20 +386,37 @@
         ;; used to test each subject by scanning the ontology-node and
         ;; axiom-node LISTS — fine for a hand-written fixture, and
         ;; triples × reified axioms on a real one: GO reifies 131,783
-        ;; axioms over 1.4M triples and never left this loop. Header
-        ;; subjects are IRIs or blank nodes, which hash and compare by
-        ;; content, so the set answers exactly what the scan did. (An
-        ;; RDF-star triple term compares by pointer in a set; it is not
-        ;; OWL, and if one were typed as a header node its triples would
-        ;; reach the gate and be omitted — never silently accepted.)
-        (let ((header-subjs (set-new arena Term)))
+        ;; axioms over 1.4M triples and never left this loop.
+        ;;
+        ;; IRIs and blank nodes hash and compare by content, so for them
+        ;; the set answers exactly what the scan did. A QUOTED TRIPLE does
+        ;; not: a set compares `term-triple` by pointer, `term-eq` compares
+        ;; it structurally, and two parses of `<< :s :p :o >>` are two
+        ;; pointers. Turtle cannot deliver one here (slop-rdf rejects
+        ;; `<< >>`), but the library's triple buffer can, and a header node
+        ;; filed under one pointer would let its other triples through to
+        ;; decode as if they were ordinary axioms. So quoted-triple subjects
+        ;; keep the structural scan — over a list that is empty for OWL.
+        (let ((header-subjs (set-new arena Term))
+              (mut quoted (list-new arena Term)))
           (do
-            (for-each (o ont-subjs) (set-put header-subjs o))
-            (for-each (a ax-subjs)  (set-put header-subjs a))
+            (for-each (o ont-subjs)
+              (match o
+                ((term-triple _) (list-push quoted o))
+                (_ (set-put header-subjs o))))
+            (for-each (a ax-subjs)
+              (match a
+                ((term-triple _) (list-push quoted a))
+                (_ (set-put header-subjs a))))
             (for-each (t triples)
-              (let ((s (. t subject)))
-                (when (not (set-has header-subjs s))
-                  (list-push out t))))))
+              (let ((s (. t subject))
+                    (mut header false))
+                (do
+                  (match s
+                    ((term-triple _)
+                      (for-each (q quoted) (when (term-eq q s) (set! header true))))
+                    (_ (when (set-has header-subjs s) (set! header true))))
+                  (when (not header) (list-push out t)))))))
 
         ;; Rebuild each reified axiom, unless the document also asserts it.
         (for-each (a ax-subjs)

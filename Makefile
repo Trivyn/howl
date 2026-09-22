@@ -72,7 +72,7 @@ cli: $(BIN)
 # (SPEC.md §6.8): a report must be a function of input and budget alone, and
 # wall-clock timeouts belong to the host. Timings are the CLI's measurement.
 test: $(BIN)
-	@if grep -rnE 'now-ms|slop_now_ms|clock_gettime' src/; then \
+	@if grep -rnE 'now-ms|slop_now_ms|clock_gettime|gettimeofday|timespec_get|mach_absolute_time|\btime\(|\bclock\(' src/; then \
 	  echo "FAIL: a clock read under src/ -- the engine never consults a clock (SPEC.md §6.8)"; exit 1; fi
 	@echo "Building tests..."
 	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test
@@ -187,7 +187,10 @@ corpus-acceptance: cli
 # reports are committed text, so a deliberate change is reviewed as a diff; RO
 # and OBI are too large to commit and are pinned by hash. Each golden ends with
 # the exit code. A missing input FAILS: a gate that passes because its input
-# was absent is the false pass this project exists to prevent.
+# was absent is the false pass this project exists to prevent. That includes a
+# FIXTURE that disappeared: the fixture list is a wildcard over what exists, so
+# a deleted or renamed .ttl would simply drop out of it, and `golden` therefore
+# also walks the committed reports and fails on any whose source is gone.
 # `golden-update` is for deliberate changes only.
 GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl)
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
@@ -203,6 +206,13 @@ HOWL ?= ./$(BIN)/howl
 # comparison whose output does not start with the report header fails outright.
 golden: cli
 	@fail=0; \
+	for g in corpus/goldens/fixtures/*.report; do \
+	  n=$$(basename $$g .report); src=""; \
+	  for d in out-of-profile hazards v0; do \
+	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
+	  done; \
+	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
+	done; \
 	for f in $(GOLDEN_FIXTURES); do \
 	  g=corpus/goldens/fixtures/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
 	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \

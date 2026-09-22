@@ -20,9 +20,9 @@
 (module test
   (@doc "Verdict-discipline and structural-invariant tests")
 
-  (import rdf (IRI Triple Term make-iri make-blank make-triple term-eq))
+  (import rdf (IRI Triple Term make-iri make-blank make-triple make-triple-term term-eq))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
-                 OWL_THING RDFS_LABEL))
+                 OWL_THING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
   (import decode (graph-to-indexed rdf-list-checked term-at stage0-header Stage0
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms Stage1))
@@ -1951,6 +1951,37 @@
         (for-each (p ps) (when (not (dispatch-agrees arena p)) (set! ok false)))
         ok)))
 
+  ;; ------------------------------------------------------------
+  ;; Stage 0 filters header subjects through a SET (GO reifies 131,783
+  ;; axioms, and a list scan per triple never finished). A set compares a
+  ;; quoted triple by POINTER while `term-eq` compares it structurally, so
+  ;; quoted-triple subjects keep the structural scan. Turtle cannot carry
+  ;; one (slop-rdf rejects `<< >>`); the library's triple buffer can, so
+  ;; the case is built directly: two separately allocated, structurally
+  ;; equal quoted triples, one typed owl:Ontology. Both triples are header
+  ;; material, and stage 0 must consume both.
+  ;; ------------------------------------------------------------
+
+  (fn test-quoted-triple-header-subjects ((arena Arena))
+    (@intent "Stage 0 consumes every triple of a quoted-triple header node, compared structurally")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((s    (make-iri arena "http://example.org/t#s"))
+          (p    (make-iri arena "http://example.org/t#p"))
+          (o    (make-iri arena "http://example.org/t#o"))
+          (q1   (make-triple-term arena (make-triple arena s p o)))
+          (q2   (make-triple-term arena (make-triple arena s p o)))
+          (tp   (make-iri arena RDF_TYPE))
+          (ont  (make-iri arena OWL_ONTOLOGY))
+          (prop (make-iri arena "http://example.org/t#undeclared"))
+          (mut ts (list-new arena Triple)))
+      (do
+        (list-push ts (make-triple arena q1 tp ont))
+        (list-push ts (make-triple arena q2 prop o))
+        (match (stage0-header arena ts (list-new arena IRI))
+          ((error _) false)
+          ((ok s0) (== (cast Int (list-len (. s0 triples))) 0))))))
+
   (fn strict-outcome ((arena Arena) (path String))
     (@intent "Under strict-profile: 1 refused with omissions, 0 ran to an Outcome, -1 otherwise")
     (@spec ((Arena String) -> Int))
@@ -2956,6 +2987,10 @@
 
           (let ((r (test-indexed-dispatch-matches-reference arena)))
             (print-test-result "M1: the premise index concludes exactly what the full scan does" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-quoted-triple-header-subjects arena)))
+            (print-test-result "stage 0: a quoted-triple header subject is matched structurally" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-strict-refuses-past-omissions arena)))
