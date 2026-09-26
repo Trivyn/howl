@@ -632,6 +632,24 @@
     ;; thing this function expands (§6.4).
     (@post {(. (. $result succ-half) to) == (. e from)})
     (@post {(. (. $result pred-half) to) == (. e to)})
+    ;; And WHAT each half says: the successor half is (role, to) at the
+    ;; source, the predecessor half (role, from) at the target. With only
+    ;; the destinations pinned, a rule emitting the right halves about the
+    ;; wrong edge would satisfy every contract its callers can state.
+    ;;
+    ;; @property, not @post: a @post is also compiled into a runtime check
+    ;; under SLOP_DEBUG, and the transpiler lowers a multi-payload match in
+    ;; expression position incorrectly (slop-lang/slop#171) - the debug build
+    ;; would not compile. A @property is verify-only, holds for every call,
+    ;; and a caller's verifier reads it like a postcondition.
+    (@property succ-says-edge
+      (match (. (. $result succ-half) what)
+        ((derived-succ r y) (and (== r (. e role)) (== y (. e to))))
+        (_ false)))
+    (@property pred-says-edge
+      (match (. (. $result pred-half) what)
+        ((derived-pred r x) (and (== r (. e role)) (== x (. e from))))
+        (_ false)))
     ;; One helper for all three edge-concluding rules (CR3, CR6, CR7),
     ;; so the invariant has a single site rather than three.
     (record-new EdgePair

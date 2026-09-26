@@ -76,57 +76,39 @@
 ;;    sides), so the symptom is under-derivation with no error.
 ;;
 ;; ============================================================
-;; OWED — THE TWO FAITHFULNESS DIRECTIONS, PER RULE (§7).
+;; THE TWO FAITHFULNESS DIRECTIONS, PER RULE (§7).
 ;;
-;; Each rule below carries STRUCTURAL contracts: how many messages it
-;; may emit, where they are addressed, and which `Derived` shape they
-;; carry. Those are real constraints — they fail if a rule emits to the
-;; wrong context, emits an edge half without its partner, or emits a
-;; subsumer where an edge belongs.
+;; Every loop-free rule states both directions as `@property`s and
+;; `slop verify` proves them:
 ;;
-;; What is NOT yet stated is the full pair §7 requires:
+;;   sound     nothing unlicensed is emitted - every message is addressed
+;;             where the rule says, and carries the conclusion its
+;;             premises license
+;;   complete  nothing licensed is omitted - when the premises hold, the
+;;             conclusion is among the messages
 ;;
-;;   (a) nothing unlicensed is emitted
-;;   (b) nothing licensed is omitted
+;; Completeness is the one that matters most: soundness alone is satisfied
+;; by emitting nothing, which a disabled engine does. Proved here, for
+;; CR1, CR2, CR3, CR4 and CR5 on an arriving edge, and CR6 in both
+;; directions. Each was seen to stop verifying under a mutation of the body.
 ;;
-;; and (b) is the one that matters most, because SOUNDNESS ALONE IS
-;; SATISFIED BY EMITTING NOTHING — a disabled engine passes it while
-;; deriving nothing at all. Both are transcription rather than design:
-;; CR1–CR7 are fully specified in the published CEL formulation, so
-;; every premise and conclusion is given. The blocker is expressibility,
-;; and it is concrete: stating them needs (i) per-variant ACCESSORS on
-;; `NormAxiom` usable inside a contract, since a contract cannot
-;; `match`, and (ii) a `preds-of`-style function returning a Set for the
-;; premise `(X,Y) ∈ R(r)`, where `map-get` returns an `Option` that a
-;; contract equally cannot destructure. GROWL states its equivalents
-;; only because RDF gives it total accessors — `triple-subject` is
-;; defined for every triple, whereas `sub-some-lhs-role` is not defined
-;; for a `role-chain`.
+;; What makes them statable (slop-lang/slop PRs #168 and #172): a contract can
+;; `match` on the axiom and on a message's `Derived`, binding every
+;; payload; and a result built by guarded pushes with no loop is modelled
+;; exactly, so `forall`/`exists` over `$result` decide. Guards are stated
+;; with the same `node-eq`/`role-eq`/`set-has` terms the body uses - to the
+;; verifier these are opaque predicates, which is why CR2's second side
+;; carries the body's own case split (see there).
 ;;
-;; Their shape, taking CR4 as the worked example, follows GROWL's
-;; VERIFIED idiom (`rules/eq.slop:280-293`) rather than SPEC §6.4's
-;; sketch — the sketch uses `list-has`, which is not a contract builtin,
-;; and `implies`, which does not translate inside `@property`. The
-;; working forms are `list-contains` and a negated-premise disjunction:
-;;
-;;   (@property soundness
-;;     (forall (m $result)
-;;       (exists (x (preds-of ctx r))
-;;         (and (= ax (sub-some-lhs r b a))
-;;              (= m (addressed x (derived-sub a)))))))
-;;
-;;   (@property completeness
-;;     (forall (x (preds-of ctx r))
-;;       (or (not (= ax (sub-some-lhs r b a)))
-;;           (list-contains $result (addressed x (derived-sub a))))))
-;;
-;; Until the accessors exist, direction (b) is discharged EMPIRICALLY by
-;; the fixtures in test.slop — the §3.1 litmus for CR1–CR4, the polarity
-;; guard, the same-round co-arrival case for CR4's two-sided trigger,
-;; and the ⊥-propagation case for CR5. No vacuous `@post` stands in
-;; meanwhile: `(list-len $result) >= 0` is true of every possible
-;; implementation and would only make the verification summary look
-;; fuller than it is.
+;; OWED: the four rules with a loop - CR4 and CR5 on an arriving subsumer
+;; (they walk the stored predecessors) and CR7 in both directions (the
+;; stored legs). The exact model does not follow loops, so over these a
+;; quantified property comes back unknown. Their completeness is
+;; discharged empirically - the §3.1 litmus, the same-round co-arrival and
+;; late-subsumer fixtures, ⊥ propagation, the premise-index differential -
+;; and by the ELK/HermiT differential (§10). No vacuous `@post` stands in:
+;; `(list-len $result) >= 0` is true of any implementation and would only
+;; make the verification summary look fuller than it is.
 ;; ============================================================
 
 (module el
@@ -155,10 +137,9 @@
   ;; ============================================================
   ;; Fixtures for the @example blocks below
   ;;
-  ;; §7 wants a faithfulness contract PAIR on every rule, and the `@property`
-  ;; form those need is currently unusable: quantified over a push-built
-  ;; `$result` it fails outright AND makes any sibling `@post` fail
-  ;; (slop-lang/slop#69). `@example` is the obvious substitute.
+  ;; The examples are concrete runs of the rules, complementing the proved
+  ;; faithfulness properties rather than standing in for them - and, for the
+  ;; four loop rules whose properties are still owed, the direct evidence.
   ;;
   ;; These EXECUTE as of slop 0.2.1 (`make example`). Under 0.1.2 they did not:
   ;; an example was run only when every argument was a scalar literal, so any
@@ -226,6 +207,22 @@
     ;;
     ;; At most one conclusion: one axiom in, one subsumer out.
     (@post {(list-len $result) <= 1})
+    (@property sound
+      (forall (m $result)
+        (and (== (. m to) (. ctx root))
+             (match ax
+               ((sub-name b2 a)
+                 (and (node-eq b b2)
+                      (match (. m what) ((derived-sub y) (== y a)) (_ false))))
+               (_ false)))))
+    (@property complete
+      (match ax
+        ((sub-name b2 a)
+          (or (not (node-eq b b2))
+              (exists (m $result)
+                (and (== (. m to) (. ctx root))
+                     (match (. m what) ((derived-sub y) (== y a)) (_ false))))))
+        (_ true)))
     (@example
       ;; B ∈ S(X) and the axiom B ⊑ A, so A joins S(X).
       :eq addressed-eq
@@ -273,6 +270,45 @@
     (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
     (@alloc arena)
     (@post {(list-len $result) <= 1})
+    ;; Premise: b is one conjunct and the OTHER is already in S(X) - read
+    ;; from either side, which is the self-join §6.4 requires.
+    (@property sound
+      (forall (m $result)
+        (and (== (. m to) (. ctx root))
+             (match ax
+               ((sub-and a1 a2 a)
+                 (and (or (and (node-eq b a1) (set-has (. ctx subsumers) a2))
+                          (and (node-eq b a2) (set-has (. ctx subsumers) a1)))
+                      (match (. m what) ((derived-sub y) (== y a)) (_ false))))
+               (_ false)))))
+    ;; Completeness, one property per side of the self-join: b arrives as
+    ;; the first conjunct with the second stored, or as the second with the
+    ;; first stored. The second side is the body's ELSE branch, so its
+    ;; premise includes "b is not also the first conjunct". To the verifier
+    ;; `node-eq` is an opaque predicate, not equality, so it cannot conclude
+    ;; a1 = a2 from node-eq(b,a1) and node-eq(b,a2); without that clause the
+    ;; property is unprovable in its model though true in the program. The
+    ;; two together cover every premise tuple given that node-eq is
+    ;; equality, which is node-eq's job (types.slop) and is tested there.
+    (@property complete-first
+      (match ax
+        ((sub-and a1 a2 a)
+          (or (not (node-eq b a1))
+              (not (set-has (. ctx subsumers) a2))
+              (exists (m $result)
+                (and (== (. m to) (. ctx root))
+                     (match (. m what) ((derived-sub y) (== y a)) (_ false))))))
+        (_ true)))
+    (@property complete-second
+      (match ax
+        ((sub-and a1 a2 a)
+          (or (node-eq b a1)
+              (not (node-eq b a2))
+              (not (set-has (. ctx subsumers) a1))
+              (exists (m $result)
+                (and (== (. m to) (. ctx root))
+                     (match (. m what) ((derived-sub y) (== y a)) (_ false))))))
+        (_ true)))
     (@example
       ;; B arrives; C is ALREADY stored; the axiom is B ⊓ C ⊑ A. Fires.
       :eq addressed-eq
@@ -333,6 +369,36 @@
     ;; successor at X and a predecessor at A. The bound is `<= 2` and
     ;; the both-halves guarantee comes from `emit-edge`'s EdgePair.
     (@post {(list-len $result) <= 2})
+    ;; Premise B ∈ S(X) with B ⊑ ∃r.A: the edge (X, r, A), as both halves.
+    (@property sound
+      (forall (m $result)
+        (match ax
+          ((sub-some-rhs b2 r a)
+            (and (node-eq b b2)
+                 (or (and (== (. m to) (. ctx root))
+                          (match (. m what)
+                            ((derived-succ r3 y3) (and (== r3 r) (== y3 a)))
+                            (_ false)))
+                     (and (== (. m to) a)
+                          (match (. m what)
+                            ((derived-pred r3 x3) (and (== r3 r) (== x3 (. ctx root))))
+                            (_ false))))))
+          (_ false))))
+    (@property complete
+      (match ax
+        ((sub-some-rhs b2 r a)
+          (or (not (node-eq b b2))
+              (and (exists (m $result)
+                    (and (== (. m to) (. ctx root))
+                         (match (. m what)
+                           ((derived-succ r3 y3) (and (== r3 r) (== y3 a)))
+                           (_ false))))
+                  (exists (m $result)
+                    (and (== (. m to) a)
+                         (match (. m what)
+                           ((derived-pred r3 x3) (and (== r3 r) (== x3 (. ctx root))))
+                           (_ false)))))))
+        (_ true)))
     (let ((mut result (list-new arena Addressed)))
       (do
         (match ax
@@ -396,6 +462,26 @@
     ;; delta any more. This is the case `test-same-round-co-arrival`
     ;; exists to pin.
     (@post {(list-len $result) <= 1})
+    ;; Premises: the arriving edge is (x, r, Y), and ∃r.B ⊑ A with B ∈ S(Y).
+    ;; The conclusion goes to the PREDECESSOR x, not to this context.
+    (@property sound
+      (forall (m $result)
+        (and (== (. m to) x)
+             (match ax
+               ((sub-some-lhs r2 b a)
+                 (and (role-eq r r2)
+                      (set-has (. ctx subsumers) b)
+                      (match (. m what) ((derived-sub y) (== y a)) (_ false))))
+               (_ false)))))
+    (@property complete
+      (match ax
+        ((sub-some-lhs r2 b a)
+          (or (not (role-eq r r2))
+              (not (set-has (. ctx subsumers) b))
+              (exists (m $result)
+                (and (== (. m to) x)
+                     (match (. m what) ((derived-sub y) (== y a)) (_ false))))))
+        (_ true)))
     (let ((mut result (list-new arena Addressed)))
       (do
         (match ax
@@ -444,6 +530,17 @@
     (@spec ((Arena Context Node) -> (List Addressed)))
     (@alloc arena)
     (@post {(list-len $result) <= 1})
+    ;; Premise: ⊥ ∈ S(Y) for this context Y, and (x, r, Y) just arrived.
+    (@property sound
+      (forall (m $result)
+        (and (== (. m to) x)
+             (set-has (. ctx subsumers) (node-bottom))
+             (match (. m what) ((derived-sub y) (== y (node-bottom))) (_ false)))))
+    (@property complete
+      (or (not (set-has (. ctx subsumers) (node-bottom)))
+          (exists (m $result)
+            (and (== (. m to) x)
+                 (match (. m what) ((derived-sub y) (== y (node-bottom))) (_ false))))))
     (@example
       ;; ⊥ ∈ S(X) and a new predecessor B arrives, so B is unsatisfiable too.
       :eq addressed-eq
@@ -477,6 +574,36 @@
     (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
     (@alloc arena)
     (@post {(list-len $result) <= 2})
+    ;; Premise: the edge (x, r, Y) arrived and r ⊑ s: the edge (x, s, Y).
+    (@property sound
+      (forall (m $result)
+        (match ax
+          ((sub-role r2 s)
+            (and (role-eq r r2)
+                 (or (and (== (. m to) x)
+                          (match (. m what)
+                            ((derived-succ r3 y3) (and (== r3 s) (== y3 (. ctx root))))
+                            (_ false)))
+                     (and (== (. m to) (. ctx root))
+                          (match (. m what)
+                            ((derived-pred r3 x3) (and (== r3 s) (== x3 x)))
+                            (_ false))))))
+          (_ false))))
+    (@property complete
+      (match ax
+        ((sub-role r2 s)
+          (or (not (role-eq r r2))
+              (and (exists (m $result)
+                    (and (== (. m to) x)
+                         (match (. m what)
+                           ((derived-succ r3 y3) (and (== r3 s) (== y3 (. ctx root))))
+                           (_ false))))
+                  (exists (m $result)
+                    (and (== (. m to) (. ctx root))
+                         (match (. m what)
+                           ((derived-pred r3 x3) (and (== r3 s) (== x3 x)))
+                           (_ false)))))))
+        (_ true)))
     (let ((mut result (list-new arena Addressed)))
       (do
         (match ax
@@ -502,6 +629,36 @@
     (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
     (@alloc arena)
     (@post {(list-len $result) <= 2})
+    ;; Premise: the edge (X, r, y) arrived and r ⊑ s: the edge (X, s, y).
+    (@property sound
+      (forall (m $result)
+        (match ax
+          ((sub-role r2 s)
+            (and (role-eq r r2)
+                 (or (and (== (. m to) (. ctx root))
+                          (match (. m what)
+                            ((derived-succ r3 y3) (and (== r3 s) (== y3 y)))
+                            (_ false)))
+                     (and (== (. m to) y)
+                          (match (. m what)
+                            ((derived-pred r3 x3) (and (== r3 s) (== x3 (. ctx root))))
+                            (_ false))))))
+          (_ false))))
+    (@property complete
+      (match ax
+        ((sub-role r2 s)
+          (or (not (role-eq r r2))
+              (and (exists (m $result)
+                    (and (== (. m to) (. ctx root))
+                         (match (. m what)
+                           ((derived-succ r3 y3) (and (== r3 s) (== y3 y)))
+                           (_ false))))
+                  (exists (m $result)
+                    (and (== (. m to) y)
+                         (match (. m what)
+                           ((derived-pred r3 x3) (and (== r3 s) (== x3 (. ctx root))))
+                           (_ false)))))))
+        (_ true)))
     (let ((mut result (list-new arena Addressed)))
       (do
         (match ax

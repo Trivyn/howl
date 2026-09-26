@@ -845,7 +845,7 @@ asymmetry is essential, not incidental:
 | Assertion | Encoding |
 |---|---|
 | `C(a)` | the pre-normalization GCI `individual(a) ⊑ C` — `C` stays a full `Concept`, so `(B ⊓ ∃r.D)(a)` normalizes like any other right-hand side |
-| `r(a,b)` | an edge emitted into **Δ₀** via `emit-edge(individual(a), r, individual(b))`, plus `derived-sub(A)` to `individual(b)` for every `A ∈ ran_T(r)` — *not* the GCI `individual(a) ⊑ ∃r.individual(b)` |
+| `r(a,b)` | an edge emitted into **Δ₀** via `emit-edge` on the `LogicalEdge` (individual(a), r, individual(b)), plus `derived-sub(A)` to `individual(b)` for every `A ∈ ran_T(r)` — *not* the GCI `individual(a) ⊑ ∃r.individual(b)` |
 
 > **Why role assertions cannot go through `∃`.** `individual(b)` is an ordinary concept name, not a
 > singleton — nothing makes it a one-element set. So `individual(a) ⊑ ∃r.individual(b)` says only
@@ -1084,14 +1084,29 @@ GROWL's `Delta`.
 ;; therefore an OPERATIONAL invariant (bounded latency, simpler reasoning about a round's
 ;; output) rather than a completeness requirement — worth keeping, not worth mis-justifying.
 ;; Rules emit edges via a single `emit-edge` helper rather than by hand.
-(fn emit-edge ((arena Arena) (x Node) (r RoleId) (y Node))
-  (@intent "Derive the logical edge (x,y) ∈ R(r) as its two stored halves")
-  (@spec ((Arena Node RoleId Node) -> (List Addressed)))
-  (@post {(and (list-has $result (addressed x (derived-succ r y)))
-               (list-has $result (addressed y (derived-pred r x)))
-               (= (list-len $result) 2))})
-  (list (addressed x (derived-succ r y))
-        (addressed y (derived-pred r x))))
+;; It returns an EdgePair record, so "both halves exist" is a type guarantee, and its
+;; postconditions pin each half's destination and payload - proved by `slop verify`.
+(fn emit-edge ((arena Arena) (e LogicalEdge))
+  (@intent "Derive the logical edge (e.from, e.to) ∈ R(e.role) as its two stored halves")
+  (@spec ((Arena LogicalEdge) -> EdgePair))
+  (@alloc arena)
+  (@post {(. (. $result succ-half) to) == (. e from)})
+  (@post {(. (. $result pred-half) to) == (. e to)})
+  ;; @property rather than @post: a @post is also a runtime check under SLOP_DEBUG, and the
+  ;; transpiler mis-lowers a multi-payload match there (slop-lang/slop#171).
+  (@property succ-says-edge
+    (match (. (. $result succ-half) what)
+      ((derived-succ r y) (and (== r (. e role)) (== y (. e to))))
+      (_ false)))
+  (@property pred-says-edge
+    (match (. (. $result pred-half) what)
+      ((derived-pred r x) (and (== r (. e role)) (== x (. e from))))
+      (_ false)))
+  (record-new EdgePair
+    (succ-half (record-new Addressed (to (. e from))
+                 (what (union-new Derived derived-succ (. e role) (. e to)))))
+    (pred-half (record-new Addressed (to (. e to))
+                 (what (union-new Derived derived-pred (. e role) (. e from)))))))
 
 ;; How a run terminated. THREE INDEPENDENT AXES — an earlier draft made these exclusive
 ;; variants of one union, which is wrong: a run can perfectly well be BOTH out-of-profile
@@ -1645,50 +1660,64 @@ Two further notes. **CR2 and CR7 are self-joins**, so the Δₙ × Δₙ term ab
 for them but the main path. And a pair with both elements in Δₙ is visited twice, once from each
 side; that is harmless because the target is a set, but it is worth knowing when reading a profile.
 
-Representative rule — CR4's `derived-sub` handler, one of its two:
+Representative rule — CR4's `derived-pred` handler, one of its two, with the faithfulness pair
+[§7](#7-verification--contracts) requires, as `slop verify` proves it (`src/rules/el.slop`):
 
 ```lisp
 ;; CR4:  (X,Y) ∈ R(r),  B ∈ S(Y),  (∃r.B ⊑ A) ∈ O   ⟹   add A to S(X)
-;; Runs in context Y — the context owning the premise B ∈ S(Y) — and emits to each
-;; predecessor X. `b` is the subsumer just delivered to Y, i.e. the message being processed.
-;; THIS IS ONE OF CR4'S TWO HANDLERS. The companion, cr-exists-lhs-on-pred, fires when a
-;; new predecessor edge arrives and scans the STORED subsumers instead. Omitting it loses
-;; every conclusion whose edge happens to arrive after its subsumer — see the trigger table.
-(fn cr-exists-lhs-on-sub ((arena Arena) (ctx Context) (b Node) (ax NormAxiom))
-  (@intent "EL completion CR4, new-subsumer direction: ∃-restriction in subclass position")
-  (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
+;; Runs in context Y when the edge (x, r, Y) arrives, and scans the STORED subsumers of Y.
+;; THIS IS ONE OF CR4'S TWO HANDLERS. The companion, cr-exists-lhs-on-sub, fires when a new
+;; subsumer B arrives and scans the stored predecessors instead. Omitting either loses every
+;; conclusion whose premises arrive in the other order - see the trigger table.
+(fn cr-exists-lhs-on-pred ((arena Arena) (ctx Context) (r RoleId) (x Node) (ax NormAxiom))
+  (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
   (@alloc arena)
-  ;; Throughout, `ctx` is the ROUND SNAPSHOT Sₙ = Sₙ₋₁ ∪ Δₙ, never a live mutating view —
-  ;; so both `subsumers` and `preds` below already include this round's arrivals, which is
-  ;; what makes the Δₙ × Δₙ joins above reachable from here.
-  ;; CR4's first premise (B ∈ S(Y)) is the driver's obligation, not this function's: the
-  ;; rule fires because `b` was delivered to this context this round. It is therefore a @pre.
-  ;; Stating it as a @post instead would assert something the body never establishes —
-  ;; the same unprovable-claim error this contract exists to avoid (§7).
-  (@pre  {(set-has (. ctx subsumers) b)})
-  ;; FAITHFULNESS, BOTH DIRECTIONS. Soundness-direction alone is satisfied by returning the
-  ;; empty list — an implementation where every rule emits nothing passes it, which would make
-  ;; "the implementation cannot drift from the calculus without a contract failing" (§7) simply
-  ;; false. So the local-completeness direction is a contract too: every premise tuple that
-  ;; holds MUST produce its conclusion.
-  ;; (a) nothing unlicensed is emitted:
-  (@post {(forall (m) (implies (list-has $result m)
-            (exists (r a x)
-              (and (= ax (sub-some-lhs r b a))          ; the axiom is CR4-shaped, on this b
-                   (set-has (preds-of ctx r) x)         ; premise: (X,Y) ∈ R(r)
-                   (= m (addressed x (derived-sub a)))))))})  ; conclusion: A ∈ S(X)
-  ;; (b) nothing licensed is omitted:
-  (@post {(forall (r a x) (implies
-            (and (= ax (sub-some-lhs r b a))
-                 (set-has (preds-of ctx r) x))
-            (list-has $result (addressed x (derived-sub a)))))})
-  (match ax
-    ((sub-some-lhs r b* a)
-      (if (= b b*)
-        (map (x (preds-of ctx r)) (addressed x (derived-sub a)))
-        (list)))
-    (_ (list))))
+  ;; (a) nothing unlicensed is emitted
+  (@property sound
+    (forall (m $result)
+      (and (== (. m to) x)
+           (match ax
+             ((sub-some-lhs r2 b a)
+               (and (role-eq r r2)
+                    (set-has (. ctx subsumers) b)
+                    (match (. m what) ((derived-sub y) (== y a)) (_ false))))
+             (_ false)))))
+  ;; (b) nothing licensed is omitted - the direction a disabled engine fails
+  (@property complete
+    (match ax
+      ((sub-some-lhs r2 b a)
+        (or (not (role-eq r r2))
+            (not (set-has (. ctx subsumers) b))
+            (exists (m $result)
+              (and (== (. m to) x)
+                   (match (. m what) ((derived-sub y) (== y a)) (_ false))))))
+      (_ true)))
+  (let ((mut result (list-new arena Addressed)))
+    (do (match ax
+          ((sub-some-lhs r2 b a)
+            (when (role-eq r r2)
+              (when (set-has (. ctx subsumers) b)
+                (list-push result
+                  (record-new Addressed (to x) (what (union-new Derived derived-sub a)))))))
+          (_ (do)))
+        result)))
 ```
+
+Three things about how the pair is written, each forced by what a contract can express:
+- **The premises are the body's own terms.** `role-eq`, `node-eq` and `set-has` are opaque
+  predicates to the prover, so the contract states the premise with the same calls the body
+  tests, and the pair proves the body *faithful to that test*. That `role-eq` is role equality
+  is its own module's business.
+- **A premise the function does not establish is the driver's.** `ctx` is the round snapshot
+  Sₙ, and that the arriving edge is really in R(r) is how the driver delivers it. Neither is a
+  `@pre`: the rule is correct for whatever it is handed.
+- **Completeness is an `exists` over field equalities, not `list-contains` of a constructed
+  message.** A `record-new` in a contract is a fresh value that no emitted element can equal.
+
+The four rules with a **loop** - CR4 and CR5 on an arriving subsumer, which walk the stored
+predecessors, and CR7 in both directions - state neither direction yet: the prover's exact model of
+an emitted list does not follow loops, so a quantified property over them comes back *unknown*.
+[§7](#7-verification--contracts) carries them as owed.
 
 > **These local numbers are HOWL's, not the paper's.** In the cited 2005 calculus, role hierarchy
 > and role composition are **CR10** and **CR11**; its CR6 is nominal propagation and CR7–CR9 are
@@ -2034,9 +2063,9 @@ row below sits on one side of that line.
 
 | Property | How assured | Z3-reachable? |
 |----------|-------------|---------------|
-| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@post`s, one per direction ([§6.4](#64-completion-rules)) | **Yes** — structural |
-| **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural |
-| **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural |
+| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the seven loop-free rule functions (CR1, CR2, CR3, CR4 and CR5 on an arriving edge, CR6 both ways). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
+| **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural, but **not yet stated**: held by test (`test-indexed-dispatch-matches-reference` replays every stored fact through the premise index and the full scan) |
+| **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural, but **not yet stated**: held by test (`test-context-starts-with-empty-store`) |
 | **Per-rule soundness** — each conclusion is *entailed* by the ontology | Faithfulness (above) **+** the calculus's published soundness proof | **No** — model-theoretic |
 | **Normalization structural correctness** — fresh names are fresh; every gated-in axiom yields normal forms | Per-function contract on the rewrite | **Yes** |
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
@@ -2046,7 +2075,9 @@ row below sits on one side of that line.
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK, Kazakov for Horn-SHIQ) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
 So Z3 buys exactly one thing, and it is worth having: **the implementation cannot drift from the
-calculus without a contract failing.** That claim needs all three structural obligations — both
+calculus without a contract failing.** HOWL does **not** make that claim yet. Today it holds rule by
+rule for the seven loop-free rules only; the four loop rules, dispatch coverage and initialization
+are held by tests, which is evidence but not the claim. The claim needs all three structural obligations — both
 directions of each rule contract, dispatch coverage, **and initialization**. Drop any one and a
 disabled engine passes verification: with only the soundness direction, rules returning the empty
 list satisfy everything while deriving nothing; without the initialization obligation, seeds written
@@ -2471,9 +2502,10 @@ the weaker, more useful condition.
    version and the projected ontology's own hash. Projection is part of the fixture, never a step
    the benchmark performs on the fly — otherwise the numbers are not reproducible and neither is the
    diff.
-3. **Contract obligations.** Every completion rule carries an `@post` *faithfulness* contract
-   ([§7](#7-verification--contracts)); the driver carries the termination invariant (v0). CI runs
-   `slop verify` (Z3) as GROWL does.
+3. **Contract obligations.** Every loop-free completion rule carries a `sound`/`complete`
+   *faithfulness* pair of `@property`s ([§7](#7-verification--contracts)), each seen to stop
+   verifying under a mutation of the rule's body; the four loop rules are owed. The driver
+   carries the termination invariant (v0). CI runs `slop verify` (Z3) as GROWL does.
 4. **Verdict discipline (adversarial).** [§6.2](#62-data-model)'s verdict rule is a *safety*
    property, so test it by trying to break it — **all three rows**, since the failure modes are
    opposite:
@@ -2892,13 +2924,14 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
    this is a performance want, not a correctness blocker. The hard part when it does land is
    **deletion**: retracting an axiom can un-derive conclusions, which monotone saturation does not
    do for free.
-7. **Does SLOP's `@post` support quantifiers?** The faithfulness contracts in
-   [§6.4](#64-completion-rules) and [§7](#7-verification--contracts) are written with
-   `forall`/`exists` ranging over emitted conclusions. If SLOP's contract language is
-   quantifier-free, they cannot be stated as written and §7's "**Yes** — structural" rows overclaim
-   exactly as the old soundness row did. Fallbacks: have each rule return a **witness** alongside
-   every conclusion (naming the premises it fired on), which makes the check quantifier-free; or
-   bound-unroll over the emitted list. Resolve before M1 — it determines the rule signatures.
+7. ~~**Does SLOP's `@post` support quantifiers?**~~ **ANSWERED — yes, for loop-free rules.**
+   `forall`/`exists` over `$result` translate, and since slop-lang/slop #166 and #170 a result
+   built by guarded pushes with no loop is modelled exactly and a contract can `match` a union's
+   payloads, so both faithfulness directions are *proved* on the seven loop-free rule functions,
+   with the rule signatures unchanged. Neither fallback (witnesses, bound-unrolling) was needed.
+   What remains open is narrower: the **four loop rules**, whose emitted lists the exact model
+   does not follow. Their properties stay owed in [§7](#7-verification--contracts); proving them
+   needs a loop model in the prover or a `@loop-invariant` per rule.
 
 ---
 

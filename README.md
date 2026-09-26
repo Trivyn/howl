@@ -217,18 +217,25 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` discharges **23 contracts, 0 failing**, and `make example` runs **6 executable
-per-rule examples**. The boundary is not obvious, it is not documented upstream, and every row below
+`make verify` verifies **37 functions, 0 failing**. Among them, the seven loop-free completion
+rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
+(nothing licensed is omitted), 15 properties in all, each seen to stop verifying under a mutation of
+its rule's body. `make example` runs **6 executable per-rule examples**. The boundary is not obvious, it is not documented upstream, and every row below
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop 0.2.1.** Re-probed on the bump rather than assumed from release notes; two of the
-rows below were retired by it and two survived.
+**Toolchain: slop `main` after 0.2.3, not yet in a release.** The faithfulness pairs need
+[#168](https://github.com/slop-lang/slop/pull/168) (`match` binds every payload, at its declared
+sort) and [#172](https://github.com/slop-lang/slop/pull/172) (the exact model of a loop-free
+push-built result, [#170](https://github.com/slop-lang/slop/issues/170)), both merged. On a slop
+without them those properties come back unknown or failed; CI's verify step is non-blocking. The
+rows below were re-probed on each bump rather than assumed from release notes.
 
 | Works | Does not |
 |---|---|
 | Record fields — **including `Bool`** — and `list-len` | **`or` / `and` in a function BODY** — makes the return value opaque |
-| `(@post (implies {braced} {$result == X}))` | **`@property` quantifying over a push-built `$result`** — fails outright, *and* makes any `@post` on the same function fail ([#69](https://github.com/slop-lang/slop/issues/69), open) |
+| `(@post (implies {braced} {$result == X}))` | **A quantified `@property` over a result built in a LOOP** — *unknown*: the exact model follows only loop-free bodies |
+| **`forall` / `exists` / `list-contains` over a loop-free push-built `$result`** — proved or refuted ([#170](https://github.com/slop-lang/slop/issues/170)) | A premise the prover sees as an opaque predicate (`node-eq`, `set-has`) — equal inputs are not known to give equal answers |
 | `match` in a `@post`, enum-valued results | **A loop in the body** — `$result` becomes opaque |
 | `while` loops, with or without `@loop-invariant` | **`if` between two `record-new`s** — loses field projection on `$result` ([#70](https://github.com/slop-lang/slop/issues/70), open) |
 | A single unconditional `record-new` — fields stay visible | `const` values — opaque, so `{$result == EXIT_ERROR}` cannot be proved |
@@ -250,14 +257,19 @@ and emits at most one message. Written as two branches that each `list-push`, th
 with a two-element counterexample — the checker assumes both can fire. Written as a flag set in either
 branch and a single push, it proves. Same semantics, same message count.
 
-**Adding a `@property` can break a `@post` that was passing.** This one is genuinely surprising and
-cost real time. A `@property (forall (m $result) …)` over a list built with `list-push` does not
-merely go *unknown* — it **fails**, and its presence causes the sibling `@post` on the same function
-to fail too. The per-rule faithfulness properties were removed for this reason and the obligation
-moved to `OWED`; GROWL's equivalents survive because they come back *unknown*, which is not a
-failure. Still reproducible on 0.2.1 — re-probed, not assumed.
+**Faithfulness is proved against the body's own premise tests.** A rule's `complete` property says:
+when the premises hold, the conclusion is among the messages. The premises are stated with the same
+`node-eq` / `role-eq` / `set-has` calls the body makes, which the prover treats as opaque
+predicates. One consequence is visible in CR2: to the prover, `node-eq(b, a1)` and `node-eq(b, a2)`
+do not make `a1` and `a2` equal, so the second side of the self-join states the body's own case
+split ("b is not also the first conjunct"). The two sides together cover every premise tuple given
+that `node-eq` is equality, which is `node-eq`'s own business. Before 0.2.3 plus #168/#170 none of
+this was statable: a quantified property over a push-built result failed outright and broke a
+sibling `@post` ([#69](https://github.com/slop-lang/slop/issues/69)), later came back *unknown*, and
+`list-contains` could not be proved at all.
 
-**`@example` is now the substitute, and it was not before.** Through 0.1.2 an example ran only when
+**`@example` executes, and it did not before.** The examples complement the proved faithfulness
+pairs, and for the four loop rules they are the direct evidence. Through 0.1.2 an example ran only when
 every argument was a scalar literal; any fixture call was reported `SKIP (wildcard args)` and then
 **counted as a pass**. HOWL's six rule examples reported green while executing nothing, and GROWL's
 47 did the same. Fixed in 0.2.1 ([#71](https://github.com/slop-lang/slop/issues/71)): skips are
@@ -269,8 +281,10 @@ as literal elements, so it is `(list <elem> …)` with no type argument and `(li
 `(list Addressed)` — the valid empty-list literal in ordinary code — makes the harness treat the type
 name as an element.
 
-**There is no interprocedural reasoning.** A callee is an uninterpreted function, so a property that
-depends on what a helper returns is unprovable — the counterexample says so literally
+**Interprocedural reasoning is narrow.** Inside a loop-free push-built body (#172) a callee's
+`@post`s and `@property`s are assumed at the call, which is how the edge rules use `emit-edge`'s.
+Everywhere else a callee is an uninterpreted function, so a property that depends on what a helper
+returns is unprovable — the counterexample says so literally
 (`fn_outcome-is-complete_1=[else -> True]`). `verdict` keeps a *redundant* local coverage check for
 exactly this reason, and `advance-round` deliberately does **not** restate the round-count contract
 that `round-commit` proves. Where the fact must cross a loop rather than a call, `@loop-invariant`
@@ -282,8 +296,9 @@ is a provable field access. As a list it needed `list-get`, which is uninterpret
 only testable.
 
 **Obligations that cannot be discharged are marked `OWED` in-source, with the reason**, and covered
-by test meanwhile. Two are outstanding: the per-rule faithfulness pairs (`src/rules/el.slop`) and the
-undefined-not-empty rules (`src/classify.slop`). A third — canonical ordering of
+by test meanwhile. Two are outstanding: the faithfulness pairs of the **four loop rules** (CR4 and
+CR5 on an arriving subsumer, CR7 both ways; `src/rules/el.slop`), whose loops the exact model does not
+follow, and the undefined-not-empty rules (`src/classify.slop`). A third — canonical ordering of
 `Findings.unsatisfiable` and `subsumptions` — has been **discharged**: `src/canon.slop` supplies a
 total order over identities and both lists now sort on the way out. No vacuous contracts stand in:
 `(list-len $result) >= 0` is true of every possible implementation and would only make the summary
