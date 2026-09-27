@@ -278,6 +278,185 @@
       ((some o)
         (match (verdict o) ('verdict-incoherent true) (_ false)))))
 
+  ;; ------------------------------------------------------------
+  ;; EXTERNAL CONFORMANCE, PINNED HERE. corpus/conformance.py runs the W3C
+  ;; OWL 2 and ELK suites; each defect they found is a hazard fixture, and
+  ;; each fixture is asserted end to end below so the guarantee does not
+  ;; live only in a Python harness that needs the network and a JVM.
+  ;; ------------------------------------------------------------
+
+  (fn omitted-count ((o Outcome))
+    (@intent "How many axioms the run set aside")
+    (@spec ((Outcome) -> Int))
+    (@pure)
+    (cast Int (list-len (. (. o coverage) omitted))))
+
+  (fn test-undeclared-individual-is-reasoned-over ((arena Arena))
+    (@intent "W3C DisjointClasses-002: an undeclared individual's class assertions count")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; :stewie a :Boy , :Girl with Boy and Girl disjoint, :stewie declared
+    ;; as nothing. It got no context, so this read as a FALSE COHERENT.
+    (match (classify-fixture arena "corpus/fixtures/hazards/undeclared-individual.ttl")
+      ((none) false)
+      ((some o)
+        (and (== (omitted-count o) 0)
+             (and (. (. o findings) inconsistent)
+                  (match (verdict o) ('verdict-incoherent true) (_ false)))))))
+
+  (fn test-anonymous-class-assertion-is-read ((arena Arena))
+    (@intent "W3C WebOnt-Restriction-001: `:a a [∃op.⊥]` is a class assertion, not unrecognized")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Filed as unrecognized it was sound but INCONCLUSIVE; read, it is
+    ;; INCONSISTENT with nothing omitted.
+    (match (classify-fixture arena "corpus/fixtures/hazards/anonymous-class-assertion.ttl")
+      ((none) false)
+      ((some o)
+        (and (== (omitted-count o) 0)
+             (. (. o findings) inconsistent)))))
+
+  (fn test-annotation-on-annotation-is-consumed ((arena Arena))
+    (@intent "W3C AnnotationAnnotations-001: an owl:Annotation node is header, not an axiom")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Stage 0 must swallow the node — its annotatedSource/Property/Target
+    ;; included — and the document must classify COHERENT with nothing
+    ;; omitted. Read as a class assertion on an anonymous individual, it
+    ;; made the run INCONCLUSIVE.
+    (let ((path "corpus/fixtures/hazards/annotated-annotation.ttl")
+          (src-pred (make-iri arena "http://www.w3.org/2002/07/owl#annotatedSource")))
+      (and
+        (match (parse-ttl-file arena path)
+          ((error _) false)
+          ((ok g)
+            (match (stage0-header arena (. g triples) (list-new arena IRI))
+              ((error _) false)
+              ((ok s0)
+                (and (== (count-subclass-triples (. g triples) src-pred) 1)
+                     (and (== (count-subclass-triples (. s0 triples) src-pred) 0)
+                          (== (cast Int (list-len (. s0 omissions))) 0)))))))
+        (match (classify-fixture arena path)
+          ((none) false)
+          ((some o)
+            (and (== (omitted-count o) 0)
+                 (match (verdict o) ('verdict-coherent true) (_ false))))))))
+
+  (fn test-logical-triple-on-header-node-is-not-swallowed ((arena Arena))
+    (@intent "A subClassOf on an owl:Annotation node reaches the decoder, never vanishes")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Consumed with the node's scaffolding, the triple left no trace and the
+    ;; run read COHERENT. Passed on, it is an omission: INCONCLUSIVE.
+    (match (classify-fixture arena "corpus/fixtures/hazards/logical-triple-on-header-node.ttl")
+      ((none) false)
+      ((some o)
+        (and (> (omitted-count o) 0)
+             (match (verdict o) ('verdict-inconclusive true) (_ false))))))
+
+  (fn test-repeated-disjoint-member-is-positional ((arena Arena))
+    (@intent "ELK DisjointSelf: AllDisjointClasses (A B A) makes A disjoint from itself")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; OWL 2 reads the members pairwise BY POSITION, so A is unsatisfiable
+    ;; and B is not. The OWL API collapses the repeat, so no oracle can
+    ;; check this (corpus/differential.py's blind spots) — HOWL's answer is
+    ;; pinned here and by the fixture's golden instead.
+    (let ((a (record-new IRI (value "http://example.org/t#A"))))
+      (match (classify-fixture arena "corpus/fixtures/hazards/disjoint-repeated-member.ttl")
+        ((none) false)
+        ((some o)
+          (let ((unsat (. (. o findings) unsatisfiable)))
+            (and (== (omitted-count o) 0)
+                 (and (not (. (. o findings) inconsistent))
+                      (and (== (cast Int (list-len unsat)) 1)
+                           (match (list-get unsat 0)
+                             ((some u) (string-eq (. u value) (. a value)))
+                             ((none) false))))))))))
+
+  ;; ------------------------------------------------------------
+  ;; THE PROBE AGREES WITH THE REPORT. The differential (SPEC §10 item 1,
+  ;; corpus/differential.py) certifies the canonical REPORT against the
+  ;; oracles; the port serves `entails-sub`. The two read the same
+  ;; saturation by different code — extraction bottom-compresses and
+  ;; projects to class contexts, the probe tests ⊥ and B in S(A) — so
+  ;; this checks, over EVERY ordered pair of class contexts, that the
+  ;; probe answers exactly what the report says:
+  ;;
+  ;;   entails-sub(A,B)  =  inconsistent  or  (A,⊥) listed  or  (A,B) listed
+  ;;
+  ;; Without it the differential would certify one function and ship
+  ;; another. The fixtures are chosen to hit each disjunct and each
+  ;; representational corner (equivalence, punning, ⊤/⊥ as named
+  ;; classes, an individual-borne inconsistency, a context with no
+  ;; axioms), not to cover constructs: construct coverage is the
+  ;; differential's job, and this agreement is structural.
+  ;; ------------------------------------------------------------
+
+  (fn report-entails ((f Findings) (a Node) (b Node))
+    (@intent "entails-sub read off the report: inconsistent, or A unsatisfiable, or (A,B) listed")
+    (@spec ((Findings Node Node) -> Bool))
+    (@pure)
+    (if (. f inconsistent)
+      true
+      (let ((bottom (node-bottom))
+            (mut found false))
+        (do
+          (for-each (p (. f subsumptions))
+            (when (node-eq (. p sub) a)
+              (when (node-eq (. p super) bottom) (set! found true))
+              (when (node-eq (. p super) b) (set! found true))))
+          found))))
+
+  (fn probe-agrees-with-report ((arena Arena) (path String))
+    (@intent "entails-sub equals the report's answer on every ordered pair of class contexts")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (classify-fixture arena path)
+      ((none) false)
+      ((some o)
+        (let ((sat   (. o saturation))
+              (f     (. o findings))
+              (mut ok    true)
+              (mut pairs 0))
+          (do
+            (for-each ((a actx) (. sat contexts))
+              (match a
+                ((class-node ai)
+                  ;; owl:Nothing is excluded from the report by name
+                  ;; (classify.is-bottom-iri) and ⊥ ⊑ B holds vacuously.
+                  (when (not (string-eq (. ai value) "http://www.w3.org/2002/07/owl#Nothing"))
+                    (for-each ((b bctx) (. sat contexts))
+                      (match b
+                        ((class-node _)
+                          (do
+                            (set! pairs (+ pairs 1))
+                            (when (not (== (entails-sub sat (. f inconsistent) a b)
+                                           (report-entails f a b)))
+                              (set! ok false))))
+                        ((individual-node _) (do))
+                        ((fresh-node _)      (do))))))
+                ((individual-node _) (do))
+                ((fresh-node _)      (do))))
+            ;; A fixture that yielded no class pairs checked nothing.
+            (and ok (> pairs 0)))))))
+
+  (fn test-entails-sub-agrees-with-report ((arena Arena))
+    (@intent "The port's probe and the differential's report answer every pair alike")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (probe-agrees-with-report arena "corpus/fixtures/v0/litmus.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/v0/top-bottom.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/inconsistent-via-individual.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/punning.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/owl-nothing-present.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/declared-unused-class.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/probes/some-unsat-filler.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/probes/top-subsumes-everything.ttl"))))))))))))
+
   ;; ============================================================
   ;; M1 — the reasoning fixtures
   ;;
@@ -2727,6 +2906,30 @@
 
           (let ((r (test-abox-disjoint-range-is-incoherent arena)))
             (print-test-result "identity fixture: disjoint ranges on one target => INCOHERENT" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-entails-sub-agrees-with-report arena)))
+            (print-test-result "differential: entails-sub answers every pair as the report does" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-undeclared-individual-is-reasoned-over arena)))
+            (print-test-result "W3C DisjointClasses-002: undeclared individual is reasoned over" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-anonymous-class-assertion-is-read arena)))
+            (print-test-result "W3C WebOnt-Restriction-001: anonymous class assertion is read" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-annotation-on-annotation-is-consumed arena)))
+            (print-test-result "W3C AnnotationAnnotations-001: owl:Annotation is header" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-repeated-disjoint-member-is-positional arena)))
+            (print-test-result "ELK DisjointSelf: repeated disjoint member is positional" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-logical-triple-on-header-node-is-not-swallowed arena)))
+            (print-test-result "stage 0: a logical triple on a header node is not swallowed" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-litmus arena)))

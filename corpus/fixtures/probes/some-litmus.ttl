@@ -1,0 +1,15 @@
+# PROBE some-litmus. SPEC §3.1's litmus: Parent ≡ Person ⊓ ∃hasChild.Person and Mother ⊑ Person ⊓ ∃hasChild.Person entail Mother ⊑ Parent.
+# construct: ObjectSomeValuesFrom
+# expect: sub :Mother :Parent
+# expect-not: sub :Parent :Mother
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:Person a owl:Class . :Parent a owl:Class . :Mother a owl:Class .
+:hasChild a owl:ObjectProperty .
+:Parent owl:equivalentClass [ a owl:Class ; owl:intersectionOf ( :Person [ a owl:Restriction ; owl:onProperty :hasChild ; owl:someValuesFrom :Person ] ) ] .
+:Mother rdfs:subClassOf [ a owl:Class ; owl:intersectionOf ( :Person [ a owl:Restriction ; owl:onProperty :hasChild ; owl:someValuesFrom :Person ] ) ] .

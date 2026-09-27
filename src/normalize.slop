@@ -71,7 +71,7 @@
                  Derived Addressed EdgePair emit-edge
                  node-top node-bottom node-eq role-eq))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
-                Signature))
+                Signature make-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
   (import decode (Stage0 Stage1 stage0-header decode-axioms))
   (import saturate (make-initial-saturation deliver-seed))
@@ -101,6 +101,7 @@
   (type NormOutput (record
     (axioms      (List NormAxiom))
     (edges       (List LogicalEdge))
+    (asserted    (List Node))        ; subjects of class assertions, each needs a context
     (seeds       (List Addressed))   ; range facts for asserted edge targets
     (fresh-count Int)))
 
@@ -135,7 +136,8 @@
     (fresh-role-index (Map String Int))   ; provenance text -> fresh-role id
     (neg-done         (Set String))       ; expressions whose NEGATIVE definition is emitted
     (pos-done         (Set String))       ; expressions whose POSITIVE definition is emitted
-    (edges            (List LogicalEdge))))
+    (edges            (List LogicalEdge))
+    (asserted         (List Node))))      ; C(a) subjects, in first-occurrence order
 
   (fn new-state ((arena Arena))
     (@intent "An empty normalizer state")
@@ -151,7 +153,8 @@
                           (fresh-role-index (map-new arena String Int))
                           (neg-done         (set-new arena String))
                           (pos-done         (set-new arena String))
-                          (edges            (list-new arena LogicalEdge))))
+                          (edges            (list-new arena LogicalEdge))
+                          (asserted         (list-new arena Node))))
         p)))
 
   (fn st-emit ((arena Arena) (p (Ptr NormState)) (ax NormAxiom))
@@ -167,6 +170,13 @@
     (@alloc arena)
     (let ((mut s (deref p)))
       (do (list-push (. s edges) e) (set! (deref p) s) true)))
+
+  (fn st-note-asserted ((arena Arena) (p (Ptr NormState)) (n Node))
+    (@intent "Record the subject of a class assertion, which needs a context")
+    (@spec ((Arena (Ptr NormState) Node) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s asserted) n) (set! (deref p) s) true)))
 
   (fn st-fresh-id ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "The fresh-node id for a canonical expression, minting on first use")
@@ -642,11 +652,19 @@
 
       ((ra-property-chain ch) (decompose-chain arena p ch))
 
-      ;; C(a) becomes the PRE-NORMALIZATION GCI individual(a) ⊑ C, so
-      ;; the individual gets a context and the class expression is
-      ;; normalized like any other right-hand side.
+      ;; C(a) becomes the PRE-NORMALIZATION GCI individual(a) ⊑ C, and
+      ;; the class expression is normalized like any other right-hand
+      ;; side. The subject is RECORDED as well, because a GCI does not
+      ;; create a context — `signature-nodes` does, and named-individual
+      ;; declarations are optional. Without this, `:a a :B , :C` with
+      ;; B and C disjoint and `:a` undeclared left individual(a) with no
+      ;; context: the assertions derived nothing, coverage read complete,
+      ;; and the verdict was a FALSE COHERENT (W3C OWL 2 conformance test
+      ;; DisjointClasses-002, found by corpus/conformance.py).
       ((ra-class-assertion ca)
-        (normalize-gci arena p (rc-of-node (. ca subject)) (deref (. ca concept))))
+        (do
+          (st-note-asserted arena p (. ca subject))
+          (normalize-gci arena p (rc-of-node (. ca subject)) (deref (. ca concept)))))
 
       ;; r(a,b) is an EDGE, not a GCI. Going through `∃` would lose the
       ;; identity of the repeated individual name: individual(b) is an
@@ -690,6 +708,7 @@
             (record-new NormOutput
               (axioms      (. (deref p) axioms))
               (edges       (. (deref p) edges))
+              (asserted    (. (deref p) asserted))
               (seeds       (edge-range-seeds arena (. (deref p) edges)
                              facts told nr roles))
               (fresh-count (cast Int (list-len (. (deref p) fresh)))))))))) 
@@ -698,20 +717,67 @@
   ;; Initialization — §6.3 step 4
   ;; ============================================================
 
+  ;; Fixtures for signature-nodes' @examples (`make example`). The case is
+  ;; W3C OWL 2 conformance test DisjointClasses-002: `:stewie a :Boy , :Girl`
+  ;; with :stewie declared as nothing, so the Signature does not list it.
+  (fn ex-stewie () (@intent "An individual named only by class assertions")
+    (@spec (() -> Node)) (@pure)
+    (union-new Node individual-node (record-new IRI (value "http://example.org/stewie"))))
+
+  (fn ex-asserting-stewie ((arena Arena))
+    (@intent "Normal form whose only content is a class assertion about :stewie")
+    (@spec ((Arena) -> NormOutput))
+    (@alloc arena)
+    (let ((mut asserted (list-new arena Node)))
+      (do
+        (list-push asserted (ex-stewie))
+        (record-new NormOutput
+          (axioms      (list-new arena NormAxiom))
+          (edges       (list-new arena LogicalEdge))
+          (asserted    asserted)
+          (seeds       (list-new arena Addressed))
+          (fresh-count 0)))))
+
+  (fn ex-declaring-stewie ((arena Arena))
+    (@intent "A signature that DOES declare :stewie as a named individual")
+    (@spec ((Arena) -> Signature))
+    (@alloc arena)
+    (let ((sig (make-signature arena)))
+      (do
+        (set-put (. sig individuals) (record-new IRI (value "http://example.org/stewie")))
+        sig)))
+
   (fn signature-nodes ((arena Arena) (sig Signature) (no NormOutput))
     (@intent "One context per signature entry, plus fresh nodes and edge endpoints")
     (@spec ((Arena Signature NormOutput) -> (List Node)))
     (@alloc arena)
+    ;; A quantified `(forall (a (. no asserted)) (list-contains $result a))`
+    ;; is TRUE but OWED: the body is loops, which slop verify's exact model
+    ;; does not follow, so it would come back unknown (as the four loop
+    ;; rules in rules/el.slop do). The examples below and the
+    ;; undeclared-individual fixture carry the guarantee instead.
+    (@example
+      ;; Undeclared, asserted into by C(a): it still gets a context. Without
+      ;; one, its class assertions derive nothing — a FALSE COHERENT.
+      :eq node-eq
+      (arena (make-signature arena) (ex-asserting-stewie arena))
+      -> (list (ex-stewie)))
+    (@example
+      ;; Declared AND asserted into: one context, not two.
+      :eq node-eq
+      (arena (ex-declaring-stewie arena) (ex-asserting-stewie arena))
+      -> (list (ex-stewie)))
     ;; KEYED ON THE SIGNATURE, not on axiom occurrence. That is the
     ;; whole reason `:Unused a owl:Class .` gets a context: it
     ;; contributes no axiom, so an occurrence-driven registry would
     ;; never create it, and HOWL could not answer `Unused ⊑ ⊤`, list it
     ;; in a hierarchy, or serve a probe naming it.
     ;;
-    ;; Edge endpoints are added even when undeclared, because
-    ;; NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL — an ABox may assert
-    ;; `:a :r :b` with neither individual declared, and without a
-    ;; context for `:b` the range seed has nowhere to land.
+    ;; Edge endpoints and class-assertion subjects are added even when
+    ;; undeclared, because NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL —
+    ;; an ABox may assert `:a :r :b` or `:a a :C` with no individual
+    ;; declared. Without a context for `:b` the range seed has nowhere
+    ;; to land; without one for `:a`, C(a) derives nothing at all.
     ;;
     ;; MEMBERSHIP IS A SET, ORDER IS THE LIST. The dedup used to scan the
     ;; output list per insert — quadratic in the signature, which on GO is
@@ -735,6 +801,8 @@
             (do
               (when (not (set-has seen from)) (do (set-put seen from) (list-push out from)))
               (when (not (set-has seen to))   (do (set-put seen to)   (list-push out to))))))
+        (for-each (a (. no asserted))
+          (when (not (set-has seen a)) (do (set-put seen a) (list-push out a))))
         (for-each (sd (. no seeds))
           (let ((to (. sd to)))
             (when (not (set-has seen to)) (do (set-put seen to) (list-push out to)))))

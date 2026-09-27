@@ -111,7 +111,7 @@
                  OWL_ASYMMETRIC_PROPERTY OWL_REFLEXIVE_PROPERTY
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF))
-  (import owl2 (OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY
+  (import owl2 (OWL_AXIOM OWL_ANNOTATION OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY
                 OWL_ANNOTATED_TARGET
                 RawConcept CardKind Signature make-signature
                 OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
@@ -352,6 +352,85 @@
       (make-iri arena RDF_TYPE)
       (make-iri arena type-iri)))
 
+  (fn logical-predicate ((pv String))
+    (@intent "An OWL/RDFS predicate that states an axiom or builds a class expression")
+    (@spec ((String) -> Bool))
+    (@pure)
+    (cond
+      ((== (string-cmp pv RDFS_SUBCLASS_OF) 0)            true)
+      ((== (string-cmp pv OWL_EQUIVALENT_CLASS) 0)        true)
+      ((== (string-cmp pv OWL_DISJOINT_WITH) 0)           true)
+      ((== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)         true)
+      ((== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)     true)
+      ((== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)  true)
+      ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0)    true)
+      ((== (string-cmp pv OWL_INVERSE_OF) 0)              true)
+      ((== (string-cmp pv RDFS_DOMAIN) 0)                 true)
+      ((== (string-cmp pv RDFS_RANGE) 0)                  true)
+      ((== (string-cmp pv OWL_SAME_AS) 0)                 true)
+      ((== (string-cmp pv OWL_DIFFERENT_FROM) 0)          true)
+      ((== (string-cmp pv OWL_HAS_KEY) 0)                 true)
+      ((== (string-cmp pv OWL_INTERSECTION_OF) 0)         true)
+      ((== (string-cmp pv OWL_UNION_OF) 0)                true)
+      ((== (string-cmp pv OWL_COMPLEMENT_OF) 0)           true)
+      ((== (string-cmp pv OWL_ONE_OF) 0)                  true)
+      ((== (string-cmp pv OWL_SOME_VALUES_FROM) 0)        true)
+      ((== (string-cmp pv OWL_ALL_VALUES_FROM) 0)         true)
+      ((== (string-cmp pv OWL_HAS_VALUE) 0)               true)
+      ((== (string-cmp pv OWL_HAS_SELF) 0)                true)
+      ((== (string-cmp pv OWL_ON_PROPERTY) 0)             true)
+      ((== (string-cmp pv OWL_MEMBERS) 0)                 true)
+      ((== (string-cmp pv OWL_DISTINCT_MEMBERS) 0)        true)
+      (else false)))
+
+  ;; Fixtures for header-consumable's @examples (`make example`).
+  (fn ex-hdr ((p String) (o String))
+    (@intent "A triple on a blank header node, with predicate p and IRI object o")
+    (@spec ((String String) -> Triple))
+    (@pure)
+    (record-new Triple
+      (subject   (union-new Term term-blank (record-new BlankNode (id 7))))
+      (predicate (union-new Term term-iri (record-new IRI (value p))))
+      (object    (union-new Term term-iri (record-new IRI (value o))))))
+
+  (fn header-consumable ((t Triple))
+    (@intent "May stage 0 swallow this triple of an ontology, axiom or annotation node?")
+    (@spec ((Triple) -> Bool))
+    (@pure)
+    ;; CONSUMPTION BY SUBJECT IS NOT CONSUMPTION OF EVERYTHING. A header
+    ;; node's own scaffolding (its rdf:type as ontology / axiom / annotation,
+    ;; annotatedSource/Property/Target, owl:imports, versionIRI) and its
+    ;; annotations are header material. A LOGICAL triple on the same node —
+    ;; `_:ann a owl:Annotation ; rdfs:subClassOf :C`, or `_:ax a :C` — is
+    ;; not: swallowing it shrank the input with no omission and no fault.
+    ;; It goes on to the decoder instead, which reads it as whatever it is
+    ;; (usually an omission, since a header node is no class or individual
+    ;; HOWL can reason about), so the loss is never silent.
+    ;;
+    ;; What this cannot see: stage 0 runs before the signature exists, so a
+    ;; USER-DEFINED object property used on a header node is not told apart
+    ;; from an annotation property and is still consumed. OWL 2 DL gives a
+    ;; header node no such assertions; recorded, not handled.
+    (@example (ex-hdr "http://www.w3.org/2002/07/owl#annotatedSource" "http://example.org/o") -> true)
+    (@example (ex-hdr "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                      "http://www.w3.org/2002/07/owl#Annotation") -> true)
+    (@example (ex-hdr "http://www.w3.org/2000/01/rdf-schema#comment" "http://example.org/note") -> true)
+    (@example (ex-hdr "http://www.w3.org/2000/01/rdf-schema#subClassOf" "http://example.org/C") -> false)
+    (@example (ex-hdr "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" "http://example.org/C") -> false)
+    (match (term-iri-value (. t predicate))
+      ((none) false)
+      ((some p)
+        (if (== (string-cmp (. p value) RDF_TYPE) 0)
+          (match (term-iri-value (. t object))
+            ((none) false)
+            ((some o)
+              (cond
+                ((== (string-cmp (. o value) OWL_ONTOLOGY) 0)   true)
+                ((== (string-cmp (. o value) OWL_AXIOM) 0)      true)
+                ((== (string-cmp (. o value) OWL_ANNOTATION) 0) true)
+                (else false))))
+          (not (logical-predicate (. p value)))))))
+
   (fn stage0-header ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
     (@intent "Consume the ontology header and axiom reification; reconcile imports")
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Stage0 Fault)))
@@ -369,9 +448,19 @@
     ;; ontology node or an axiom node is header material. That covers
     ;; the annotations hanging off each without needing the signature,
     ;; which does not exist yet at stage 0.
+    ;;
+    ;; AN ANNOTATION ON AN ANNOTATION is a node typed `owl:Annotation`,
+    ;; with the same annotatedSource/Property/Target shape. It annotates an
+    ;; annotation assertion, never a logical axiom, so it is consumed by
+    ;; subject like an axiom node but NOTHING is rebuilt from it. Left to
+    ;; the decoder, `_:b a owl:Annotation` read as a class assertion on an
+    ;; anonymous individual, and a document carrying nothing but annotations
+    ;; came back INCONCLUSIVE (W3C OWL 2 conformance test
+    ;; New-Feature-AnnotationAnnotations-001).
     (let ((ig        (graph-to-indexed arena triples))
           (ont-subjs (subjects-of-type arena ig OWL_ONTOLOGY))
           (ax-subjs  (subjects-of-type arena ig OWL_AXIOM))
+          (ann-subjs (subjects-of-type arena ig OWL_ANNOTATION))
           (declared  (collect-imports arena triples))
           (src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
           (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
@@ -408,6 +497,10 @@
               (match a
                 ((term-triple _) (list-push quoted a))
                 (_ (set-put header-subjs a))))
+            (for-each (a ann-subjs)
+              (match a
+                ((term-triple _) (list-push quoted a))
+                (_ (set-put header-subjs a))))
             (for-each (t triples)
               (let ((s (. t subject))
                     (mut header false))
@@ -416,7 +509,9 @@
                     ((term-triple _)
                       (for-each (q quoted) (when (term-eq q s) (set! header true))))
                     (_ (when (set-has header-subjs s) (set! header true))))
-                  (when (not header) (list-push out t)))))))
+                  ;; A header node's LOGICAL triples are not header
+                  ;; material: they go on to the decoder (header-consumable).
+                  (when (or (not header) (not (header-consumable t))) (list-push out t)))))))
 
         ;; Rebuild each reified axiom, unless the document also asserts it.
         (for-each (a ax-subjs)
@@ -1184,20 +1279,40 @@
         ;; individual and the object is a class expression. §5.2's
         ;; tagging is PER OPERAND — the same IRI would be a class in
         ;; the object position and an individual in the subject one.
-        (else
-          (match (decode-concept arena g (. t object) CONCEPT_FUEL)
-            ((error m) (error m))
-            ((ok c)
-              (match (term-iri-value (. t subject))
-                ((some s)
-                  (if (is-reserved-iri (. s value))
-                    (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
-                    (ok (union-new RawAxiom ra-class-assertion
-                          (record-new RawClassAssertion
-                            (concept (box-concept arena c))
-                            (subject (union-new Node individual-node s)))))))
-                ((none)
-                  (ok (union-new RawAxiom ra-anonymous-individual (frag arena t)))))))))))
+        (else (decode-class-assertion arena g t)))))
+
+  (fn decode-class-assertion ((arena Arena) (g IndexedGraph) (t Triple))
+    (@intent "`a rdf:type C` as ClassAssertion(C, a), for a named or an anonymous C")
+    (@spec ((Arena IndexedGraph Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; NEVER UNRECOGNIZED. A typed triple that reaches here is a class
+    ;; assertion, a reserved-vocabulary individual, an anonymous individual,
+    ;; or a malformed class expression (an error) — never silently set
+    ;; aside as `unrecognized`, which is what the blank-node case used to be
+    ;; (W3C OWL 2 conformance test WebOnt-Restriction-001).
+    ;;
+    ;; OWED as a contract. It is true, and stated it would read
+    ;;   (@post (match $result ((ok r) (match r ((ra-unrecognized _) false) (_ true)))
+    ;;                         ((error _) true)))
+    ;; but slop verify reads an Option/Result payload as Int
+    ;; (slop-lang/slop#167, open), so a union inside `ok` loses its tag and
+    ;; the contract FAILS on a counterexample. Probed with minimal pairs:
+    ;; `(ok x)` for an Int and a bare `union-new` both verify; `(ok (union-new
+    ;; …))` and `(some (union-new …))` do not. The guarantee is held by
+    ;; test.slop's anonymous-class-assertion test and corpus/conformance.py.
+    (match (decode-concept arena g (. t object) CONCEPT_FUEL)
+      ((error m) (error m))
+      ((ok c)
+        (match (term-iri-value (. t subject))
+          ((some s)
+            (if (is-reserved-iri (. s value))
+              (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+              (ok (union-new RawAxiom ra-class-assertion
+                    (record-new RawClassAssertion
+                      (concept (box-concept arena c))
+                      (subject (union-new Node individual-node s)))))))
+          ((none)
+            (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))))
 
   (fn is-reserved-iri ((v String))
     (@intent "Is this IRI in a specification-reserved namespace?")
@@ -1250,10 +1365,18 @@
       ((some p)
         (let ((pv (. p value)))
           (cond
+            ;; A BLANK-NODE OBJECT IS A CLASS EXPRESSION — the only thing
+            ;; the OWL 2 RDF mapping types a resource with anonymously — so
+            ;; `:a a [ owl:someValuesFrom … ]` is ClassAssertion(∃r.C, a),
+            ;; in v0 when C is. It used to fall through to `unrecognized`:
+            ;; sound, since the omission blocks COHERENT, but it answered
+            ;; INCONCLUSIVE where the answer was INCONSISTENT (W3C OWL 2
+            ;; conformance test WebOnt-Restriction-001).
             ((== (string-cmp pv RDF_TYPE) 0)
-              (match (term-iri-value (. t object))
-                ((some o) (decode-typed arena g t o))
-                ((none)   (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
+              (match (. t object)
+                ((term-iri o)   (decode-typed arena g t o))
+                ((term-blank _) (decode-class-assertion arena g t))
+                (_              (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
 
             ;; Ahead of every property-axiom arm below, each of which
             ;; faults on a non-IRI operand — correctly, for a blank node

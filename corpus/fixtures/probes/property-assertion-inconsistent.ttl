@@ -1,0 +1,18 @@
+# PROBE property-assertion-inconsistent. r(a,b), B(b), ∃r.B ⊑ D, D disjoint E and E(a): inconsistent only through the edge.
+# construct: ObjectPropertyAssertion
+# expect: inconsistent
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:B a owl:Class . :D a owl:Class . :E a owl:Class .
+:r a owl:ObjectProperty .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:b a :B .
+:a a :E .
+:a :r :b .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :D .
+:D owl:disjointWith :E .

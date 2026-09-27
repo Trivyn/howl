@@ -1,0 +1,17 @@
+# PROBE chain-binary. r ∘ s ⊑ t, A ⊑ ∃r.B, B ⊑ ∃s.C and ∃t.C ⊑ D entail A ⊑ D.
+# construct: ObjectPropertyChain
+# expect: sub :A :D
+# expect-not: sub :B :D
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:t owl:propertyChainAxiom ( :r :s ) .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :C ] .
+[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :C ] rdfs:subClassOf :D .

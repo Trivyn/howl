@@ -1,0 +1,15 @@
+# PROBE disjoint-nary. AllDisjointClasses(B C D) with A ⊑ B and A ⊑ D makes A unsatisfiable; E ⊑ B alone does not.
+# construct: DisjointClasses
+# expect: unsat :A
+# expect-not: unsat :E
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :E a owl:Class .
+:A rdfs:subClassOf :B , :D .
+:E rdfs:subClassOf :B .
+[] a owl:AllDisjointClasses ; owl:members ( :B :C :D ) .

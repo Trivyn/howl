@@ -1,0 +1,15 @@
+# NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL. :stewie is asserted into two
+# disjoint classes and declared as nothing, so the ontology is INCONSISTENT.
+# A context registry keyed on declarations never creates individual(stewie):
+# its class assertions then derive nothing, coverage still reads complete, and
+# the verdict is a FALSE COHERENT. Found by the W3C OWL 2 conformance test
+# DisjointClasses-002 (corpus/conformance.py); this is its shape.
+# Expect: INCOHERENT (inconsistent), exit 1.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+<http://example.org/t> a owl:Ontology .
+:Boy a owl:Class ; owl:disjointWith :Girl .
+:Girl a owl:Class .
+:stewie a :Boy , :Girl .

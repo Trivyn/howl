@@ -1,0 +1,22 @@
+# AN ANNOTATION ON AN ANNOTATION. The ontology label is itself annotated, which
+# the OWL 2 RDF mapping writes as a blank node typed owl:Annotation carrying
+# owl:annotatedSource / annotatedProperty / annotatedTarget. It has no logical
+# content, so it must be consumed like axiom reification, not decoded: read as
+# a class assertion on an anonymous individual, it made this document
+# INCONCLUSIVE. Found by the W3C OWL 2 conformance test
+# New-Feature-AnnotationAnnotations-001 (corpus/conformance.py).
+# Expect: COHERENT, omitted 0, exit 0.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology ;
+    rdfs:label "An annotated ontology" .
+[ a owl:Annotation ;
+  owl:annotatedSource <http://example.org/t> ;
+  owl:annotatedProperty rdfs:label ;
+  owl:annotatedTarget "An annotated ontology" ;
+  rdfs:comment "An annotation on the label" ] .
+:A a owl:Class ; rdfs:subClassOf :B .
+:B a owl:Class .

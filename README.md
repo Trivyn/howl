@@ -62,7 +62,7 @@ same machine). Memory is now the dominant cost: GO peaks at 25.7 GB, OBI at 3.8 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`) — the corpus differential is next |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -170,10 +170,23 @@ make          # build the CLI from the committed C in csrc/ — no SLOP toolchai
 make test     # verdict-discipline and structural-invariant tests
 make lib      # static library
 make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
-make example      # executable @example blocks on the completion rules
+make example      # executable @example blocks: the completion rules, canon, context coverage
 make crate-test   # Rust crate, including the FFI layout guards
 make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
 make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
+```
+
+The differential ([SPEC §10](./SPEC.md#10-testing-strategy) item 1) needs a JDK to run Gradle and
+the network once. The wrapper provisions the pinned JDK 21 if the host has none, and `rdflib` 7.6.0
+routes fixtures by construct:
+
+```sh
+make oracle          # build oracle/, ELK 0.6.0 and HermiT 1.4.5.519 on OWL API 5.1.20
+make probes          # capability probes: HOWL and HermiT must pass all; ELK's results are recorded
+make diff-fixtures   # HOWL vs HermiT on every fixture, and vs ELK where the probes allow
+python3 -m unittest corpus/test_entdiff.py   # the comparator's self-tests
+make conformance-fetch   # the pinned W3C OWL 2 and ELK conformance tests (corpus/conformance.sha256)
+make conformance         # HOWL against their expected answers
 ```
 
 Working on the SLOP sources needs the toolchain:
@@ -199,6 +212,8 @@ src/
   rules/el.slop   CR1–CR7 and the delta-trigger table
   test.slop       test harness — verdict discipline, then the reasoning fixtures
 cli/              CLI harness (§9) — exit codes are the verdict table
+oracle/           the differential oracle: ELK and HermiT behind one pinned OWL API (Gradle)
+corpus/           pinned ontologies, fixtures, probes, goldens; census, entdiff and the harness
 rust/             FFI layer, with the ABI layout guards
 csrc/             transpiled C (committed)
 ```
@@ -220,7 +235,14 @@ never the presence of one.
 `make verify` verifies **37 functions, 0 failing**. Among them, the seven loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
 (nothing licensed is omitted), 15 properties in all, each seen to stop verifying under a mutation of
-its rule's body. `make example` runs **6 executable per-rule examples**. The boundary is not obvious, it is not documented upstream, and every row below
+its rule's body. `make example` runs **15 executable examples**: 6 per rule, 7 on the canonical sort, and
+2 on context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
+exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
+- context coverage in `signature-nodes`, which is loops;
+- "a class assertion is never set aside" in `decode-class-assertion`, which is blocked by
+  [#167](https://github.com/slop-lang/slop/issues/167) (a union inside `ok` loses its tag).
+
+Tests and examples hold both instead. The boundary is not obvious, it is not documented upstream, and every row below
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 

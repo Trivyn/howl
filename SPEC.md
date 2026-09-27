@@ -1414,6 +1414,20 @@ accepting it** — the gate can still enumerate an unsupported AST variant as ou
    `AxiomRef` if useful, and discard them semantically. Leaving this scaffolding to the gate would
    mark every versioned, annotation-heavy ontology out-of-profile — contradicting M0's acceptance
    criterion outright.
+
+   The same holds for an **annotation on an annotation**: a node typed `owl:Annotation`, with the
+   same three properties. It annotates an annotation assertion, never a logical axiom, so it is
+   consumed and nothing is rebuilt from it.
+
+   Consumption is by subject, since the signature doesn't exist yet at this stage, but it is
+   **not consumption of everything**. A *logical* triple on a header node passes through to the
+   decoder, where it becomes an omission instead of vanishing. Logical means an OWL/RDFS axiom or
+   class-expression predicate, or an `rdf:type` other than ontology, axiom or annotation; for
+   example, `rdfs:subClassOf` on an `owl:Annotation` node (`hazards/logical-triple-on-header-node.ttl`).
+
+   What stage 0 can't see: a *user-defined* object property used on a header node is
+   indistinguishable from an annotation property without the signature, so it is still consumed.
+   OWL 2 DL gives a header node no such assertion.
 1. **Decode RDF into a *raw* structural axiom AST** — `RawAxiom`, a **lossless** representation of
    every OWL 2 axiom and class/property expression form, *including the ones v0 does not support*.
    This layer is deliberately wider than [§6.2](#62-data-model)'s `Concept`/`NormAxiom`: those types
@@ -2066,6 +2080,8 @@ row below sits on one side of that line.
 | **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the seven loop-free rule functions (CR1, CR2, CR3, CR4 and CR5 on an arriving edge, CR6 both ways). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
 | **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural, but **not yet stated**: held by test (`test-indexed-dispatch-matches-reference` replays every stored fact through the premise index and the full scan) |
 | **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural, but **not yet stated**: held by test (`test-context-starts-with-empty-store`) |
+| **Context coverage** — every individual an axiom names gets a context, declared or not | `(forall (a (. no asserted)) (list-contains $result a))` on `signature-nodes` | **Owed** — true, but the body is loops, which the prover's exact model does not follow. Held by `@example`s on `signature-nodes` and `test-undeclared-individual-is-reasoned-over` (W3C DisjointClasses-002) |
+| **No class assertion is set aside** — a typed triple over a named or anonymous class decodes to a class assertion, never `unrecognized` | `@post` on `decode-class-assertion` | **Owed** — true and loop-free, but slop reads an Option/Result payload as Int (slop-lang/slop#167), so the tag of a union inside `ok` is lost and the contract fails on a counterexample. Held by `test-anonymous-class-assertion-is-read` (W3C WebOnt-Restriction-001) |
 | **Per-rule soundness** — each conclusion is *entailed* by the ontology | Faithfulness (above) **+** the calculus's published soundness proof | **No** — model-theoretic |
 | **Normalization structural correctness** — fresh names are fresh; every gated-in axiom yields normal forms | Per-function contract on the rewrite | **Yes** |
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
@@ -2482,10 +2498,92 @@ the weaker, more useful condition.
      not an oracle for that construct.
    - **Fail the harness on any oracle warning or ignored-axiom diagnostic** rather than diffing
      through it.
-   - **Route range-bearing cases to a confirmed-complete reasoner** (HermiT, or ELK only if the
-     pinned version passes the range probe). The "HOWL ⊆ ELK" claim in
-     [§5.2](#52-the-exact-v0-language) is about the *language*; it is not a promise that a given
-     build implements all of it.
+   - **Route range-bearing cases to a confirmed-complete reasoner**: HermiT. The "HOWL ⊆ ELK"
+     claim in [§5.2](#52-the-exact-v0-language) is about the *language*; it is not a promise that
+     a given build implements all of it. An earlier draft let ELK gate ranges if the pinned
+     version passed the range probe. It does not: ELK 0.6.0's release notes claim only *partial*
+     range support, and a handful of passing probes doesn't make a partial implementation
+     complete. So ELK's range-bearing diffs are printed for information and never gate.
+
+   **How the harness does it** (M1 slice 3; `make probes diff-fixtures`):
+   - **The oracle** is `oracle/`, a small Java program on one pinned OWL API rather than ROBOT.
+     ROBOT writes a reduced ontology, bundles its own reasoner versions, and gives no control over
+     log capture.
+     - ELK, HermiT, the OWL API and the JDK are pinned in `oracle/build.gradle.kts`, with Gradle
+       dependency locking and strict sha256 verification.
+     - At startup the program checks each jar's manifest release against those pins, so a
+       substituted artifact aborts the run.
+     - A file fails, and gets no report, when the OWL API leaves a triple unparsed or guesses a
+       declaration, or when anything logs a warning.
+     - ELK's warning capture is proven live by a tripwire: `out-of-profile/allvalues.ttl` must make
+       ELK warn both before the first file and after the last.
+   - **The comparison reads HOWL's canonical report** ([§6.7](#67-output--classification))
+     directly. There is no separate dump format. The oracle writes the same bottom-compressed
+     grammar, so `corpus/entdiff.py` compares sets and decides `entails-sub` for every ordered
+     pair in time linear in the report. It **refuses** a HOWL report that didn't reach a fixpoint
+     or omitted anything: such a report is a lower bound over a different theory.
+
+     Before believing anything, it checks the report against itself:
+     - every count must match its lines, `omitted` above all;
+     - the `verdict` (and a golden's `exit`) must follow from the report's facts under
+       [§6.2](#62-data-model)'s rule.
+
+     Only a *well-formed* incomplete report is skipped; a malformed one fails. A test in
+     `src/test.slop` holds `entails-sub` equal to the report's answer on every pair, so the
+     function the port serves is the one the differential certifies.
+   - **Capability probes** are `corpus/fixtures/probes/`: one ontology per v0 construct, with
+     `# construct:` (a `corpus/census.py` label) and `# expect:` / `# expect-not:` lines.
+     - Each probe's construct is load-bearing, **checked on every run**. The probe is rerun with
+       its construct's axioms deleted (probes are one axiom per line), and HOWL and HermiT must
+       both lose a positive expectation. The label must be one of the probe's census constructs.
+     - Which oracle passes which probe is recorded in `corpus/oracle-capabilities.txt`, and a
+       change fails the run until it is reviewed and regenerated.
+     - The run fails if HOWL or HermiT misses any probe.
+   - **Routing:** HermiT gates every fixture. ELK gates a fixture only when every census construct
+     in it passes all of ELK's probes and it has no range axiom.
+   - **External conformance** (`make conformance`) checks expected answers written by neither
+     HOWL nor this project. Both sources are pinned by commit and sha256 in
+     `corpus/conformance.sha256`.
+     - *The W3C OWL 2 conformance suite* (as HermiT carries it): every Approved EL-profile,
+       Direct-Semantics test.
+       - Consistency and inconsistency tests are checked against HOWL's `inconsistent` line.
+       - Positive and negative entailment tests are checked where the conclusion is a named-class
+         `SubClassOf`/`EquivalentClasses`. The rest are recorded `not-expressible`: individual
+         types, property axioms and complex expressions, which the report does not state.
+     - *ELK's tests* (`elk-reasoner/src/test/resources/test_input`):
+       - `classification/`: each input, converted to Turtle by the pinned OWL API, is checked
+         against the taxonomy ELK's authors expect. The taxonomy is transitively reduced, so it
+         is closed first, and `entdiff` compares it pair by pair.
+       - `query/entailment/`: the named-class subsumptions among the expected (non-)entailments.
+
+     **Outcomes and records.** Every outcome is recorded in `corpus/conformance-status.txt`, so a
+     test that starts being omitted fails the run instead of silently leaving the checked set.
+     - A test HOWL doesn't reason over completely is `outside-v0`, recorded with HOWL's omission
+       kinds and flagged `census-clean` when the independent census disagrees.
+     - A test whose input the OWL API cannot convert faithfully is `oracle-lossy` (see the
+       OWL API blind spots below).
+     - A mismatch is never recorded.
+
+     **Defects found.** The suites found three HOWL defects. Each is now a fixture, a
+     `src/test.slop` test and a golden:
+     - **A false coherent** (`hazards/undeclared-individual.ttl`; W3C DisjointClasses-002). An
+       individual that appears only in class assertions, with no `owl:NamedIndividual`
+       declaration, got no context, so its assertions derived nothing.
+     - **A needless inconclusive** (`hazards/anonymous-class-assertion.ttl`; W3C
+       WebOnt-Restriction-001). An `rdf:type` with a blank-node class expression was not read
+       as a class assertion.
+     - **A needless inconclusive** (`hazards/annotated-annotation.ttl`; W3C
+       AnnotationAnnotations-001). An annotation on an annotation (`owl:Annotation`) was read as
+       an anonymous individual instead of being consumed, as `owl:Axiom` reification is.
+   - **The OWL API's blind spots.** Both oracles, and `oracle convert`, sit behind the OWL API,
+     so input it cannot load as HOWL reads it is never diffed (`corpus/differential.py`). Each
+     blind spot has a fixture pinning HOWL's own answer instead.
+     - **Repeated operands** where OWL 2 reads operands pairwise by position (`AllDisjointClasses`,
+       `AllDifferent`, `disjointUnionOf`, and structurally equal anonymous operands too). The OWL
+       API stores these operands as a set and drops the repeat silently, so `(A B A)` loses "A
+       is empty" (ELK DisjointSelf; `hazards/disjoint-repeated-member.ttl`).
+     - **An annotation on an ontology annotation.** The OWL API's RDF parser leaves its triples
+       unparsed. The unparsed-triple refusal is not weakened to admit it.
 2. **Corpus — and every input must clear the v0 gate.** Start with small hand-built defined-class
    fixtures (including the §3.1 litmus test), then GO / a SNOMED fragment / OBO ontologies for EL;
    add BFO/CCO-with-definitions for v1.

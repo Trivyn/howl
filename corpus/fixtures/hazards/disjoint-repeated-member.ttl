@@ -1,0 +1,15 @@
+# A REPEATED OPERAND IN AN N-ARY DISJOINTNESS. OWL 2 makes AllDisjointClasses
+# members pairwise disjoint BY POSITION, so (A B A) makes A disjoint from
+# itself: A is UNSATISFIABLE. The OWL API stores the members as a set and drops
+# the repeat silently, so HermiT and ELK behind it answer "A satisfiable" —
+# the harness therefore does not diff this fixture against either oracle
+# (census.repeated_operands). HOWL must still get it right. Found through ELK's
+# conformance test DisjointSelf (corpus/conformance.py).
+# Expect: INCOHERENT, A unsatisfiable, B satisfiable, exit 1.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+[] a owl:AllDisjointClasses ; owl:members ( :A :B :A ) .

@@ -1,0 +1,17 @@
+# PROBE range-assertion-inconsistent. r(a,b), range(r) = C, B(b) and B disjoint C: the ABox is inconsistent through the range.
+# construct: ObjectPropertyRange
+# expect: inconsistent
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:B a owl:Class . :C a owl:Class .
+:r a owl:ObjectProperty .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:r rdfs:range :C .
+:B owl:disjointWith :C .
+:b a :B .
+:a :r :b .

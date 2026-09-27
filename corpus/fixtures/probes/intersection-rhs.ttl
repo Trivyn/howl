@@ -1,0 +1,13 @@
+# PROBE intersection-rhs. A ⊑ B ⊓ C entails A ⊑ B and A ⊑ C.
+# construct: ObjectIntersectionOf
+# expect: sub :A :B
+# expect: sub :A :C
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:A rdfs:subClassOf [ a owl:Class ; owl:intersectionOf ( :B :C ) ] .

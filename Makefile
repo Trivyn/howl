@@ -42,7 +42,8 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish
+        acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish \
+        oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update
 
 PLATFORM ?= unknown
 
@@ -129,6 +130,8 @@ verify:
 example:
 	slop test src/rules/el.slop
 	slop test src/canon.slop
+	slop test src/normalize.slop
+	slop test src/decode.slop
 
 # SPEC.md §12's acceptance criteria, as exit codes. These are the contract a
 # consumer actually observes, and they are checked here rather than only
@@ -150,6 +153,11 @@ acceptance: cli
 	check corpus/fixtures/hazards/seed-only-entailment.ttl 0; \
 	check corpus/fixtures/hazards/owl-nothing-present.ttl 0; \
 	check corpus/fixtures/hazards/inconsistent-via-individual.ttl 1; \
+	check corpus/fixtures/hazards/undeclared-individual.ttl 1; \
+	check corpus/fixtures/hazards/anonymous-class-assertion.ttl 1; \
+	check corpus/fixtures/hazards/annotated-annotation.ttl 0; \
+	check corpus/fixtures/hazards/disjoint-repeated-member.ttl 1; \
+	check corpus/fixtures/hazards/logical-triple-on-header-node.ttl 2; \
 	check corpus/fixtures/hazards/unsatisfiable-consistent.ttl 1; \
 	check corpus/fixtures/hazards/cyclic-hierarchy.ttl 0; \
 	check corpus/fixtures/hazards/range-complex-fillers.ttl 0; \
@@ -192,7 +200,8 @@ corpus-acceptance: cli
 # a deleted or renamed .ttl would simply drop out of it, and `golden` therefore
 # also walks the committed reports and fails on any whose source is gone.
 # `golden-update` is for deliberate changes only.
-GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl)
+GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl \
+                              corpus/fixtures/probes/*.ttl)
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
@@ -208,7 +217,7 @@ golden: cli
 	@fail=0; \
 	for g in corpus/goldens/fixtures/*.report; do \
 	  n=$$(basename $$g .report); src=""; \
-	  for d in out-of-profile hazards v0; do \
+	  for d in out-of-profile hazards v0 probes; do \
 	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
 	  done; \
 	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
@@ -249,6 +258,46 @@ golden-update: cli
 	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
 	done; \
 	[ "$$fail" -eq 0 ]
+
+# THE DIFFERENTIAL (SPEC.md §10 item 1, M1 acceptance (b)). `oracle` builds the
+# pinned ELK/HermiT program (oracle/, Gradle; the wrapper provisions a pinned
+# JDK). `probes` runs the capability battery and fails if HOWL or HermiT misses
+# a probe, or if an oracle's recorded capabilities (corpus/oracle-capabilities.txt)
+# changed; `probes-update` rewrites that file, for a deliberate oracle change
+# only. `diff-fixtures` compares HOWL with HermiT on every fixture it reasons
+# over completely, and with ELK where the probes prove ELK capable. None of
+# these joins `all` or `acceptance`: they need a JVM and the network once.
+oracle:
+	cd oracle && ./gradlew --quiet assemble
+
+probes: cli oracle
+	python3 corpus/differential.py probes
+
+probes-update: cli oracle
+	python3 corpus/differential.py probes --update
+
+# The comparator's self-tests run first: a clean diff is evidence only from a
+# comparator known to speak up when the two sides differ.
+diff-fixtures: cli oracle
+	python3 -m unittest -q corpus/test_entdiff.py
+	python3 corpus/differential.py fixtures
+
+# EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
+# W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's
+# classification tests with their expected taxonomies (corpus/conformance.py).
+# Sources are pinned by commit and sha256 in corpus/conformance.sha256 and
+# fetched, never committed. Each test's outcome is recorded in
+# corpus/conformance-status.txt; `conformance` fails on any mismatch or on a
+# changed record, and `conformance-update` refuses to record while one fails.
+conformance-fetch:
+	python3 corpus/conformance.py fetch
+
+conformance: cli oracle
+	python3 -m unittest -q corpus/test_conformance.py
+	python3 corpus/conformance.py run
+
+conformance-update: cli oracle
+	python3 corpus/conformance.py run --update
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.

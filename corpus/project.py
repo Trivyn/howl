@@ -130,8 +130,10 @@ def project(name, version, src_path, expect_sha):
     # share a triple are merged into CONNECTED COMPONENTS, which is independent
     # of the order the seeds were discovered in.
     seeds = []
+    n_in = 0
     for s_, p_, o_ in g:
         bucket, construct = classify_triple(sig, s_, p_, o_)
+        n_in += bucket == IN
         if bucket == OUT:
             seeds.append(((s_, p_, o_), construct))
 
@@ -215,7 +217,7 @@ def project(name, version, src_path, expect_sha):
         f"# Anchors are named subjects; blank nodes print as _:_ because parser\n"
         f"# -assigned labels differ run to run and would churn the file.\n"
         f"#\n")
-    return header + "\n" + body + "\n", len(groups), len(removed), collateral
+    return header + "\n" + body + "\n", len(groups), len(removed), collateral, n_in, len(seeds)
 
 
 def main():
@@ -228,16 +230,35 @@ def main():
     for e in entries:
         src = os.path.join(HERE, "vendor", f"{e['name']}-{e['version']}.owl")
         if not os.path.exists(src):
-            print(f"  skip     {e['name']} (not fetched — run ./corpus/fetch.sh)")
+            if verify:
+                # A projection that was never checked is not a verified one.
+                print(f"  !! MISSING {e['name']}: {os.path.relpath(src, os.getcwd())} is not fetched "
+                      f"(run ./corpus/fetch.sh), so its projection and figures are unchecked", file=sys.stderr)
+                rc = 1
+            else:
+                print(f"  skip     {e['name']} (not fetched — run ./corpus/fetch.sh)")
             continue
         out = os.path.join(PROJ, f"{e['name']}-{e['version']}.removals")
-        text, n_ax, n_tr, coll = project(e["name"], e["version"], src, e["sha256"])
+        text, n_ax, n_tr, coll, n_in, n_out = project(e["name"], e["version"], src, e["sha256"])
         if verify:
             old = open(out).read() if os.path.exists(out) else None
             if old != text:
                 print(f"  !! DRIFT {e['name']}-{e['version']}: "
                       f"regenerated projection differs from the pinned one", file=sys.stderr)
                 rc = 1
+            # THE MANIFEST'S FIGURES ARE CLAIMS TOO. Nothing checked them, and
+            # RO's in_v0/out_of_profile sat two off the census for a slice.
+            claimed = {"in_v0": e["in_v0"], "out_of_profile": e["out_of_profile"],
+                       "removed axioms": e["projection_removes"]["axioms"],
+                       "removed triples": e["projection_removes"]["triples"],
+                       "in_v0_swept_in": e["projection_removes"]["in_v0_swept_in"]}
+            actual = {"in_v0": n_in, "out_of_profile": n_out, "removed axioms": n_ax,
+                      "removed triples": n_tr, "in_v0_swept_in": coll}
+            for k in claimed:
+                if claimed[k] != actual[k]:
+                    print(f"  !! MANIFEST {e['name']}: {k} = {claimed[k]}, census says {actual[k]}",
+                          file=sys.stderr)
+                    rc = 1
             else:
                 print(f"  ok       {e['name']}-{e['version']} ({n_ax:,} axioms removed)")
         else:

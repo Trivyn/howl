@@ -1,0 +1,20 @@
+# PROBE range-no-overderivation. Two complex fillers under one range must not be merged (the range-complex-fillers hazard): nothing is unsatisfiable, yet the range still reaches both successors (∃r.R ⊑ D gives C1 ⊑ D and C2 ⊑ D) — the positive half is what shows the range was processed at all.
+# construct: ObjectPropertyRange
+# expect: sub :C1 :D
+# expect: sub :C2 :D
+# expect-not: unsat :C1
+# expect-not: unsat :C2
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:C1 a owl:Class . :D a owl:Class . :C2 a owl:Class . :P a owl:Class . :Q a owl:Class . :U a owl:Class . :V a owl:Class . :R a owl:Class .
+:r a owl:ObjectProperty .
+:r rdfs:range :R .
+:P owl:disjointWith :U .
+:C1 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Class ; owl:intersectionOf ( :P :Q ) ] ] .
+:C2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Class ; owl:intersectionOf ( :U :V ) ] ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :R ] rdfs:subClassOf :D .

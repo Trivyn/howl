@@ -5,12 +5,12 @@
 # source                  obi-2026-07-27.owl
 # source_sha256           8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b946
 # source_triples          117,997
-# axioms_removed          379
-# triples_removed         5,828
-# in_v0_swept_in          1,244   <- collateral from blank-node closures
-# projected_triples       112,169
+# axioms_removed          384
+# triples_removed         5,848
+# in_v0_swept_in          1,249   <- collateral from blank-node closures
+# projected_triples       112,149
 # projected_ground_sha256 6d03513610059eefff1923d2d8a7b9014bc8936aa3261c6f84f8f492f53c87be
-# projected_bnode_triples 62,240
+# projected_bnode_triples 62,220
 #
 # The ground hash covers every triple with no blank node on either
 # end -- the overwhelming majority, and the part that is canonical
@@ -201,6 +201,7 @@
 <http://purl.obolibrary.org/obo/OBI_0001869> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasValue [c410ed2c]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001870> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [351ff1d2]  (+39 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001871> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasValue [4081de7a]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/OBI_0001873> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # DataSomeValuesFrom [61961990]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001876> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectUnionOf [fb2bd60c]  (+9 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001892> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectUnionOf [2e88834e]  (+18 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001898> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectUnionOf [6923cc30]  (+23 in blank-node closure)
@@ -347,6 +348,10 @@
 <http://purl.obolibrary.org/obo/OBI_0200111> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [a44b1ad5]  (+9 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0200111> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [80974beb]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0200111> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectUnionOf [2aaafc27]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/OBI_0200141> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # DataSomeValuesFrom [5a3d4447]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/OBI_0200151> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # DataSomeValuesFrom [6798c56c]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/OBI_0200152> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # DataSomeValuesFrom [dad679a9]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/OBI_0200153> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # DataSomeValuesFrom [f33ab9f1]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0200169> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectUnionOf [9b159d0d]  (+12 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0200170> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectUnionOf [4db95507]  (+12 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0200175> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectUnionOf [35a1b26e]  (+12 in blank-node closure)

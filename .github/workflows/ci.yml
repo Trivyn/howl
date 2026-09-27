@@ -83,3 +83,35 @@ jobs:
             echo "SLOP toolchain not available in CI; skipping contract verification."
             echo "Run 'make verify' locally. See SPEC.md §7."
           fi
+
+  differential:
+    # M1 acceptance (b), on the committed fixtures (SPEC §10 item 1): the
+    # capability probes against HOWL, HermiT and ELK, then HOWL diffed as
+    # entailments against HermiT on every fixture it reasons over
+    # completely, and against ELK where the probes prove ELK capable.
+    # Blocking: the fixtures are small, and a differential that only runs
+    # on a laptop stops being run. The corpus differential (S4) stays local.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The oracle's pinned JDK (oracle/build.gradle.kts). Present here, the
+      # Gradle toolchain uses it instead of provisioning one.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # census.py routes fixtures by construct; pinned as in corpus/MANIFEST.toml.
+      - name: Install rdflib
+        run: pip install rdflib==7.6.0
+      - name: Probes and fixture differential
+        run: make probes diff-fixtures
+      # Pinned by commit and sha256 (corpus/conformance.sha256); a fetched
+      # file that no longer matches its pin fails here, before anything runs.
+      - name: External conformance (W3C OWL 2 EL, ELK classification)
+        run: make conformance-fetch conformance

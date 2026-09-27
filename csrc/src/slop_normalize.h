@@ -40,6 +40,12 @@ SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 SLOP_LIST_DEFINE(types_LogicalEdge, slop_list_types_LogicalEdge)
 #endif
 
+#ifndef SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_DEFINED
+#define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
+#endif
+
 #ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
 #define SLOP_LIST_TYPES_ADDRESSED_DEFINED
 #define SLOP_LIST_TYPES_ADDRESSED_IMPL_DEFINED
@@ -64,12 +70,6 @@ SLOP_LIST_DEFINE(types_RoleId, slop_list_types_RoleId)
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #endif
 
-#ifndef SLOP_LIST_TYPES_NODE_DEFINED
-#define SLOP_LIST_TYPES_NODE_DEFINED
-#define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
-#endif
-
 #ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
@@ -92,6 +92,11 @@ SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 SLOP_OPTION_DEFINE(types_LogicalEdge, slop_option_types_LogicalEdge)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
+#define SLOP_OPTION_TYPES_NODE_DEFINED
+SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 #define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
@@ -110,11 +115,6 @@ SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
-#define SLOP_OPTION_TYPES_NODE_DEFINED
-SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #endif
 
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
@@ -142,6 +142,7 @@ SLOP_OPTION_DEFINE(normalize_NormResult, slop_option_normalize_NormResult)
 struct normalize_NormOutput {
     slop_list_types_NormAxiom axioms;
     slop_list_types_LogicalEdge edges;
+    slop_list_types_Node asserted;
     slop_list_types_Addressed seeds;
     int64_t fresh_count;
 };
@@ -161,6 +162,7 @@ struct normalize_NormState {
     slop_map* neg_done;
     slop_map* pos_done;
     slop_list_types_LogicalEdge edges;
+    slop_list_types_Node asserted;
 };
 typedef struct normalize_NormState normalize_NormState;
 
@@ -258,6 +260,7 @@ typedef struct { bool is_ok; union { normalize_NormResult ok; types_Fault err; }
 normalize_NormState* normalize_new_state(slop_arena* arena);
 uint8_t normalize_st_emit(slop_arena* arena, normalize_NormState* p, types_NormAxiom ax);
 uint8_t normalize_st_emit_edge(slop_arena* arena, normalize_NormState* p, types_LogicalEdge e);
+uint8_t normalize_st_note_asserted(slop_arena* arena, normalize_NormState* p, types_Node n);
 int64_t normalize_st_fresh_id(slop_arena* arena, normalize_NormState* p, slop_string text);
 int64_t normalize_st_fresh_role_id(slop_arena* arena, normalize_NormState* p, slop_string text);
 uint8_t normalize_st_mark_neg(slop_arena* arena, normalize_NormState* p, slop_string text);
@@ -284,6 +287,9 @@ slop_list_types_Addressed normalize_edge_range_seeds(slop_arena* arena, slop_lis
 uint8_t normalize_normalize_axiom(slop_arena* arena, normalize_NormState* p, owl2_RawAxiom ax);
 owl2_RawConcept* normalize_box_rc(slop_arena* arena, owl2_RawConcept c);
 normalize_NormOutput normalize_normalize_accepted(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+types_Node normalize_ex_stewie(void);
+normalize_NormOutput normalize_ex_asserting_stewie(slop_arena* arena);
+owl2_Signature normalize_ex_declaring_stewie(slop_arena* arena);
 slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature sig, normalize_NormOutput no);
 uint8_t normalize_install_seeds(slop_arena* arena, types_Saturation sat, normalize_NormOutput no);
 slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
@@ -301,6 +307,11 @@ SLOP_OPTION_DEFINE(normalize_NormResult, slop_option_normalize_NormResult)
 #ifndef SLOP_OPTION_TYPES_LOGICALEDGE_DEFINED
 #define SLOP_OPTION_TYPES_LOGICALEDGE_DEFINED
 SLOP_OPTION_DEFINE(types_LogicalEdge, slop_option_types_LogicalEdge)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
+#define SLOP_OPTION_TYPES_NODE_DEFINED
+SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
@@ -341,11 +352,6 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_NODE_DEFINED
-#define SLOP_OPTION_TYPES_NODE_DEFINED
-SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #endif
 
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED

@@ -71,11 +71,15 @@ OUT_TYPE = {
 # these drops axioms an accepted ontology depends on (SPEC.md §5.2).
 IN_V0_TYPE = {
     OWL.TransitiveProperty: "TransitiveObjectProperty (-> r o r subseteq r)",
+    # The n-ary spelling of DisjointClasses. Once filed as a declaration, which
+    # hid it from construct routing: a corpus entry whose only disjointness is
+    # n-ary looked disjointness-free (caught by the probe label check).
+    OWL.AllDisjointClasses: "DisjointClasses",
 }
 DECL_TYPES = {
     OWL.Class, OWL.ObjectProperty, OWL.NamedIndividual, OWL.AnnotationProperty,
     OWL.DatatypeProperty, RDFS.Datatype, OWL.Ontology, OWL.Restriction,
-    OWL.AllDisjointClasses, OWL.Axiom, RDF.List,
+    OWL.Axiom, OWL.Annotation, RDF.List,
 }
 HEADER_PRED = {
     OWL.imports, OWL.versionIRI, OWL.priorVersion, OWL.versionInfo,
@@ -93,11 +97,19 @@ OUT, IN, INERT, CONSUMED = "out", "in_v0", "inert", "consumed"
 
 def signature(g):
     """Declared entity sets, needed to disposition a triple in context."""
+    # The built-in data properties are data properties without a declaration,
+    # as HOWL's add-builtins (decode.slop) registers them.
+    data = set(g.subjects(RDF.type, OWL.DatatypeProperty)) | {OWL.topDataProperty, OWL.bottomDataProperty}
     return {
         "ann":     set(g.subjects(RDF.type, OWL.AnnotationProperty)),
-        "data":    set(g.subjects(RDF.type, OWL.DatatypeProperty)),
+        "data":    data,
         "obj":     set(g.subjects(RDF.type, OWL.ObjectProperty)),
         "classes": set(g.subjects(RDF.type, OWL.Class)),
+        # Restrictions ON A DATA PROPERTY. owl:someValuesFrom is spelled the
+        # same for DataSomeValuesFrom as for ObjectSomeValuesFrom; only the
+        # restriction's owl:onProperty tells them apart, and a predicate-only
+        # table would count the data one as in v0.
+        "data_restrictions": {s for s, o in g.subject_objects(OWL.onProperty) if o in data},
     }
 
 
@@ -117,6 +129,8 @@ def classify_triple(sig, s, p, o):
     # position" -- reporting a well-formed annotated ontology as one third
     # out-of-profile. That is exactly M0 acceptance (a), and this tool got it
     # wrong on its first run.
+    if p == OWL.someValuesFrom and s in sig["data_restrictions"]:
+        return OUT, "DataSomeValuesFrom"
     if p in HEADER_PRED:
         return CONSUMED, "declaration / header"
     if p == OWL.deprecated:
@@ -135,7 +149,10 @@ def classify_triple(sig, s, p, o):
             return OUT, OUT_TYPE[o]
         if o in IN_V0_TYPE:
             return IN, IN_V0_TYPE[o]
-        if o in sig["classes"] or isinstance(o, URIRef):
+        # A blank-node object is an anonymous class expression -- the only
+        # thing the OWL 2 RDF mapping types a resource with anonymously -- so
+        # `:a a [ owl:someValuesFrom ... ]` is a ClassAssertion, not inert.
+        if o in sig["classes"] or isinstance(o, (URIRef, BNode)):
             if isinstance(s, BNode):
                 return OUT, "anonymous individual"
             return IN, "ClassAssertion"
