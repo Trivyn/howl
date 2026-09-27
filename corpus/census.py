@@ -95,6 +95,68 @@ BUILTIN_ROLES = {OWL.topObjectProperty, OWL.bottomObjectProperty}
 OUT, IN, INERT, CONSUMED = "out", "in_v0", "inert", "consumed"
 
 
+def _expression_key(g, t, seen=()):
+    """A class expression as a structural key: an IRI by value, a blank node by
+    what it says. "The same class expression" of SPEC §5.2's range/composition
+    condition is syntactic, so two blank nodes spelling the same ∃r.C match."""
+    if not isinstance(t, BNode) or t in seen:
+        return str(t)
+    return tuple(sorted((str(p), _expression_key(g, o, seen + (t,))) for p, o in g.predicate_objects(t)))
+
+
+def inadmissible_chains(g):
+    """{(t, list head): reason} for every property chain that is not a v0
+    chain: malformed (fewer than two named roles), or violating SPEC §5.2's
+    range/composition condition, implemented from the SPEC, not from HOWL:
+
+        for every  r1 o ... o rn  subPropertyOf t :
+            every range imposed on t   is also imposed on rn   (the same C)
+
+    where "imposed on" goes up the reflexive-transitive closure of TOLD
+    rdfs:subPropertyOf (owl:equivalentProperty read both ways). It is the OWL
+    2 EL global restriction on chains and ranges: CR7's composed edge reuses
+    the s-edge's target, which was built to satisfy range(rn) only, so a
+    range on t that rn does not share would be silently unmet. A chain with a
+    non-IRI step (an inverse) is out of profile already and not judged here.
+    """
+    from rdflib.collection import Collection
+    up = {}
+    for a, b in g.subject_objects(RDFS.subPropertyOf):
+        up.setdefault(a, set()).add(b)
+    for a, b in g.subject_objects(OWL.equivalentProperty):
+        up.setdefault(a, set()).add(b)
+        up.setdefault(b, set()).add(a)
+    ranges = {}
+    for r, c in g.subject_objects(RDFS.range):
+        ranges.setdefault(r, set()).add(_expression_key(g, c))
+
+    def imposed(r):
+        seen, todo, out = {r}, [r], set()
+        while todo:
+            x = todo.pop()
+            out |= ranges.get(x, set())
+            for y in up.get(x, ()):
+                if y not in seen:
+                    seen.add(y)
+                    todo.append(y)
+        return out
+
+    bad = {}
+    for t, head in g.subject_objects(OWL.propertyChainAxiom):
+        steps = list(Collection(g, head))
+        # An inverse step or super-role is out of profile already (its
+        # owl:inverseOf triple is a seed, and the chain goes with it). Any
+        # OTHER non-IRI operand, or fewer than two steps, is not a v0 chain.
+        inverse = lambda x: isinstance(x, BNode) and (x, OWL.inverseOf, None) in g
+        if any(inverse(x) for x in steps + [t]):
+            continue
+        if len(steps) < 2 or not all(isinstance(x, URIRef) for x in steps) or not isinstance(t, URIRef):
+            bad[(t, head)] = "ObjectPropertyChain (malformed: fewer than two named roles)"
+        elif not imposed(t) <= imposed(steps[-1]):
+            bad[(t, head)] = "ObjectPropertyChain (range/composition condition)"
+    return bad
+
+
 def signature(g):
     """Declared entity sets, needed to disposition a triple in context."""
     # The built-in data properties are data properties without a declaration,
@@ -110,6 +172,7 @@ def signature(g):
         # restriction's owl:onProperty tells them apart, and a predicate-only
         # table would count the data one as in v0.
         "data_restrictions": {s for s, o in g.subject_objects(OWL.onProperty) if o in data},
+        "inadmissible_chains": inadmissible_chains(g),
     }
 
 
@@ -131,6 +194,14 @@ def classify_triple(sig, s, p, o):
     # wrong on its first run.
     if p == OWL.someValuesFrom and s in sig["data_restrictions"]:
         return OUT, "DataSomeValuesFrom"
+    # The property axioms share their spelling between object and data
+    # properties; only the operands' declared kind separates them. Read as
+    # object-property axioms, OBI's SubDataPropertyOf counted as in v0 while
+    # HOWL's gate (rightly) omitted it.
+    if p in (RDFS.subPropertyOf, OWL.equivalentProperty) and (s in sig["data"] or o in sig["data"]):
+        return OUT, "SubDataPropertyOf / EquivalentDataProperties"
+    if p == OWL.propertyChainAxiom and (s, o) in sig["inadmissible_chains"]:
+        return OUT, sig["inadmissible_chains"][(s, o)]
     if p in HEADER_PRED:
         return CONSUMED, "declaration / header"
     if p == OWL.deprecated:

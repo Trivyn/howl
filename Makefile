@@ -43,7 +43,8 @@ SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish \
-        oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update
+        oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
+        materialize diff-corpus diff-corpus-update
 
 PLATFORM ?= unknown
 
@@ -185,6 +186,17 @@ corpus-acceptance: cli
 	check ro-2025-12-17 ro 2; \
 	check obi-2026-07-27 obi 2; \
 	check go-2026-07-26 go 2; \
+	check el-galen-2011-04-12 el-galen 0; \
+	projected() { f=corpus/vendor/$$1.v0.ttl; \
+	          if [ ! -f "$$f" ]; then echo "  MISSING $$f (run make materialize)"; fail=1; return; fi; \
+	          rep=$$(./$(BIN)/howl validate $$f --report 2>/dev/null); rc=$$?; \
+	          om=$$(printf '%s\n' "$$rep" | sed -n 's/^omitted //p'); \
+	          if [ "$$rc" -eq "$$2" ] && [ "$$om" = "0" ]; then echo "  ok   $$1.v0 -> $$rc, omitted 0"; \
+	          else echo "  FAIL $$1.v0 -> $$rc, omitted $${om:-?} (expected $$2, 0)"; fail=1; fi; }; \
+	projected ro-2025-12-17 0; \
+	projected obi-2026-07-27 0; \
+	projected go-2026-07-26 0; \
+	projected el-galen-2011-04-12 0; \
 	if [ "$$fail" -eq 0 ]; then echo "  real-corpus acceptance met"; \
 	else echo "  CORPUS ACCEPTANCE FAILED"; exit 1; fi
 
@@ -205,7 +217,7 @@ GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
-GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26
+GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
 # Override to capture from a different build, e.g. the pre-change binary.
 HOWL ?= ./$(BIN)/howl
 
@@ -299,9 +311,19 @@ conformance: cli oracle
 conformance-update: cli oracle
 	python3 corpus/conformance.py run --update
 
+# THE CORPUS DIFFERENTIAL (M1 acceptance (b)): each materialized projection,
+# HOWL against its ROUTED oracle — ELK for GO and EL-GALEN, HermiT for the
+# range-bearing RO and OBI — recorded in corpus/corpus-differential.txt. Local
+# only, like project-verify: the corpus is 135 MB with mixed licences.
+diff-corpus: cli oracle
+	python3 corpus/differential.py corpus
+
+diff-corpus-update: cli oracle
+	python3 corpus/differential.py corpus --update
+
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.
-corpus:
+corpus: oracle
 	./corpus/fetch.sh
 
 # Construct census against SPEC.md §5.2. Run over the committed fixtures it is a
@@ -318,7 +340,16 @@ project: corpus
 	python3 corpus/project.py
 
 project-verify:
+	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --verify
+
+# THE PROJECTED ONTOLOGIES ITSELF, as Turtle under corpus/vendor/ (not
+# committed): the one input HOWL and the oracles share in the corpus
+# differential. Pinned by content — re-parsed, ground hash and blank-node count
+# against the .removals header, census 0 out-of-profile — not by bytes.
+materialize: corpus
+	python3 -m unittest -q corpus/test_project.py
+	python3 corpus/project.py --materialize
 
 dist:
 	rm -rf dist

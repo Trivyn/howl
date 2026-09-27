@@ -11,11 +11,13 @@
 # projected_triples       1,445,042
 # projected_ground_sha256 6d0899a6f25eb0ac1e08a0ee7d66846902a1db22eafce52ae1da8c52f722b632
 # projected_bnode_triples 862,029
+# projected_bnode_sha256  a32a9ecd0f8d324a376a081893e6e48f6da99439ef441f7933ac5759ebfb0c3d
 #
 # The ground hash covers every triple with no blank node on either
-# end -- the overwhelming majority, and the part that is canonical
-# without URDNA2015, which is impractical at this size. Blank-node
-# triples are pinned by count plus the source hash and this file.
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
 #
 # Anchors are named subjects; blank nodes print as _:_ because parser
 # -assigned labels differ run to run and would churn the file.

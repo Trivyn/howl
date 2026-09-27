@@ -2600,6 +2600,33 @@ the weaker, more useful condition.
    version and the projected ontology's own hash. Projection is part of the fixture, never a step
    the benchmark performs on the fly — otherwise the numbers are not reproducible and neither is the
    diff.
+
+   **How the corpus is projected and diffed** (M1 slice 4):
+   - **The projection is materialized** (`project.py --materialize`) as Turtle written by rdflib,
+     pinned by content rather than bytes. Read back, three things must match the pinned removal
+     list: its ground-triple hash, its blank-node triple count, and a digest of its blank-node
+     *structure*, in which each blank node is named by a hash of its own content instead of the
+     parser's label. Census must also find nothing out of profile. The corpus differential runs
+     the same check before it compares anything.
+     - N-Triples was rejected. HOWL's parser finds `_:` labels by linear scan, which is quadratic
+       on GO, and deterministic labels need canonical relabelling (9.3 h on OBI).
+     - A removed axiom takes its `owl:Axiom` reification with it: stage 0 would otherwise rebuild
+       the axiom from the reification. A reification is kept only while it matches a *surviving*
+       axiom.
+     - Chain admissibility (§5.2) is judged on the graph the other removals leave, so a chain is
+       not removed for a range the projection itself deletes.
+   - **Census and the gate must agree** on the materialized file: HOWL must report `omitted 0`.
+     A disagreement is triaged:
+     - census too permissive: fix census and re-project;
+     - gate too strict: fix HOWL, with a fixture;
+     - removals are never derived from HOWL's gate, or the projection would certify itself.
+   - **The corpus differential routes by the same rule as the fixtures.** ELK gates an entry only
+     when it is probe-capable for every construct and has no ranges (GO, EL-GALEN). HermiT gates
+     the rest (RO, OBI).
+     - HermiT does not gate GO or EL-GALEN, as it does every fixture: it is not the confirmed
+       oracle there, and it is far slower.
+     - An oracle that does not finish inside the timeout is "no oracle", a failure.
+     - The outcome is recorded in `corpus/corpus-differential.txt`.
 3. **Contract obligations.** Every loop-free completion rule carries a `sound`/`complete`
    *faithfulness* pair of `@property`s ([§7](#7-verification--contracts)), each seen to stop
    verifying under a mutation of the rule's body; the four loop rules are owed. The driver

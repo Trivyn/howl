@@ -3,6 +3,7 @@
 
     python3 corpus/differential.py probes [--update]
     python3 corpus/differential.py fixtures
+    python3 corpus/differential.py corpus [--update] [--also] [--timeout SECONDS]
 
 `probes` runs corpus/fixtures/probes/ — one small ontology per v0 construct,
 each carrying `# construct:` and `# expect:` / `# expect-not:` lines — through
@@ -23,6 +24,15 @@ only the fixtures it is PROVEN capable of (Constraint b293cf6e):
 A fixture HOWL does not reason over completely (a capped run, or any
 omission) is not comparable and is listed as skipped: it is a lower bound over
 a different theory.
+
+`corpus` diffs each MATERIALIZED corpus entry (corpus/vendor/NAME.v0.ttl, from
+`make materialize`) against its ROUTED oracle, by the same rule: ELK where it is
+probe-capable for every construct and there is no range (GO, EL-GALEN), HermiT
+otherwise (RO, OBI). `--also` runs the other oracle too, for information. Each
+file must still be its projection (ground sha256 against the pinned .removals),
+HOWL must reason over it completely, and the oracle must finish inside the
+timeout — a timeout is "no oracle", a failure, never a pass. The outcome is
+recorded in corpus/corpus-differential.txt: the evidence M1 (b) rests on.
 
 Reports land in build/differential/ for inspection. Exit 0 when everything
 gating is clean, 1 on any failure, 3 when the harness itself cannot run.
@@ -147,7 +157,7 @@ def lossy_for_oracles(files):
     return out
 
 
-def run_oracle(reasoner, files):
+def run_oracle(reasoner, files, timeout=None):
     """({name: report path}, {name: failure text}). One JVM for the whole batch."""
     out = os.path.join(OUT, reasoner)
     os.makedirs(out, exist_ok=True)
@@ -158,7 +168,11 @@ def run_oracle(reasoner, files):
     cmd = [ORACLE, "report", "--reasoner", reasoner, "--out", out]
     if reasoner == "elk":
         cmd += ["--tripwire", TRIPWIRE]
-    p = subprocess.run(cmd + files, capture_output=True, text=True)
+    try:
+        p = subprocess.run(cmd + files, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # No oracle within the budget: every file in the batch fails.
+        return {}, {name_of(f): f"{reasoner} did not finish within {timeout}s" for f in files}
     # Nothing the oracle program prints goes to stderr, so anything there came
     # from the JVM or a library bypassing the logger — a warning the harness
     # would otherwise diff through.
@@ -398,6 +412,139 @@ def elk_capable():
     return passes - fails
 
 
+def elk_gates(constructs, capable):
+    """(does ELK gate?, why not) for an input with these census constructs."""
+    uncovered = sorted(set(constructs) - capable)
+    if RANGE in constructs:
+        return False, RANGE
+    if uncovered:
+        return False, ", ".join(uncovered)
+    return True, ""
+
+
+CORPUS_RECORD = os.path.join(HERE, "corpus-differential.txt")
+
+
+def oracle_entailments_sha(path):
+    """sha256 of an oracle report's ENTAILMENT lines only: the header names the
+    JVM build, which varies by machine, and must not make the record local."""
+    import hashlib
+    with open(path, encoding="utf-8") as fh:
+        body = [l for l in fh.read().splitlines() if not l.startswith(("oracle-report", "reasoner "))]
+    return hashlib.sha256("\n".join(body).encode()).hexdigest()
+
+
+def cmd_corpus(update, also, timeout):
+    import hashlib
+    import census
+    import project
+    from rdflib import Graph
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        import tomli as tomllib
+    with open(os.path.join(HERE, "MANIFEST.toml"), "rb") as fh:
+        entries = tomllib.load(fh)["ontology"]
+    capable = elk_capable()
+    plan, failed = [], False
+    for e in entries:
+        stem = f"{e['name']}-{e['version']}"
+        path = project.materialized_path(e)
+        if not os.path.exists(path):
+            raise HarnessError(f"{rel(path)} is missing: run `make materialize`")
+        # ONE PARSE per entry, shared by the projection check, census's
+        # construct routing and the OWL API blind-spot scan.
+        g = Graph()
+        g.parse(path, format="turtle")
+        # The SAME check as `project-verify`: ground triples, blank-node
+        # structure and count against the pinned removal list, census 0 out.
+        with open(os.path.join(HERE, "projections", stem + ".removals"), encoding="utf-8") as fh:
+            pins = project.pinned_header(fh.read())
+        errors = project.check_graph(g, pins, path)
+        if errors:
+            print(f"  FAIL {stem:<24} the materialized file is not its projection: {'; '.join(errors)} "
+                  f"(run `make materialize`)")
+            failed = True
+            continue
+        ground = pins["ground_sha"]
+        bnode_sha = pins["bnode_sha"]
+        _, in_v0, _, _, _ = census.census(path, graph=g)
+        spots = owlapi_blind_spots(g)
+        gates_elk, why = elk_gates(set(in_v0), capable)
+        routed = "elk" if gates_elk else "hermit"
+        plan.append((e, stem, path, routed, why, spots, (ground, bnode_sha)))
+
+    howl = run_howl([p for _, _, p, *_ in plan])
+    runs = {}
+    for r in REASONERS:
+        batch = [p for _, _, p, routed, _, spots, _ in plan if not spots and (routed == r or also)]
+        runs[r] = run_oracle(r, batch, timeout) if batch else ({}, {})
+
+    lines = []
+    for e, stem, path, routed, why, spots, ground in plan:
+        n = name_of(path)
+        try:
+            h = entdiff.parse(howl[n])
+        except entdiff.Refused as err:
+            print(f"  FAIL {stem:<24} HOWL's report is not comparable: {err}")
+            failed = True
+            continue
+        if spots:
+            print(f"  FAIL {stem:<24} no oracle can load it faithfully ({'; '.join(spots)})")
+            failed = True
+            continue
+        cells, row_failed = [], False
+        for r in REASONERS:
+            if r != routed and not also:
+                continue
+            reports, failures = runs[r]
+            if n in failures:
+                status, bad = "FAILED: " + failures[n].strip().splitlines()[0], True
+            else:
+                diff = entdiff.compare(h, entdiff.parse(reports[n]))
+                status = "clean" if not diff else "MISMATCH " + ", ".join(f"{k} {len(v)}" for k, v in sorted(diff.items()))
+                bad = bool(diff)
+                if r == routed and not bad:
+                    with open(howl[n], "rb") as fh:
+                        howl_sha = hashlib.sha256(fh.read()).hexdigest()
+                    lines.append(f"{stem} source={e['sha256'][:16]} ground={ground[0][:16]} "
+                                 f"bnodes={ground[1][:16]} "
+                                 f"howl-report={howl_sha[:16]} oracle={r} "
+                                 f"oracle-entailments={oracle_entailments_sha(reports[n])[:16]} "
+                                 f"subsumptions={sum(len(v) for v in h.subs.values())} result=clean")
+            if r == routed:
+                row_failed |= bad
+                cells.append(f"{r} {status}")
+            else:
+                cells.append(f"{r} info ({why or 'not routed'}): {status}")
+        failed |= row_failed
+        print(f"  {'FAIL' if row_failed else 'ok  '} {stem:<24} " + "   ".join(cells))
+
+    header = ("# The corpus differential (corpus/differential.py corpus): each materialized\n"
+              "# v0 projection, HOWL against its ROUTED oracle, every ordered pair of named\n"
+              "# classes. Generated by `make diff-corpus-update`; never edited by hand. The\n"
+              "# oracle hash covers its entailment lines only, not the JVM-bearing header.\n")
+    text = header + "".join(l + "\n" for l in lines)
+    if update:
+        if failed:
+            print("  not updating the record while the differential fails")
+            return 1
+        with open(CORPUS_RECORD, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        print(f"  -> {rel(CORPUS_RECORD)}")
+    elif not failed:
+        try:
+            with open(CORPUS_RECORD, encoding="utf-8") as fh:
+                committed = fh.read()
+        except FileNotFoundError:
+            committed = None
+        if committed != text:
+            print(f"  FAIL {rel(CORPUS_RECORD)} differs from this run (review, then `make diff-corpus-update`)")
+            failed = True
+    print(f"  corpus: {len(plan)} entries: {'ALL CLEAN AGAINST THE ROUTED ORACLE' if not failed else 'DIFFERENTIAL FAILED'}")
+    return 1 if failed else 0
+
+
 def cmd_fixtures():
     import census
     files = fixtures(*FIXTURE_DIRS)
@@ -422,14 +569,13 @@ def cmd_fixtures():
         n = name_of(f)
         _, in_v0, _, _, _ = census.census(f)
         constructs = set(in_v0)
-        uncovered = sorted(constructs - capable)
-        elk_gates = not uncovered and RANGE not in constructs
+        gates_elk, why = elk_gates(constructs, capable)
         cells, row_failed = [], False
         if n in lossy:
             print(f"  ok   {n:<44} oracles n/a (OWL API blind spot: {lossy[n]})")
             continue
         for r in REASONERS:
-            gates = r == "hermit" or elk_gates
+            gates = r == "hermit" or gates_elk
             reports, failures = oracle[r]
             if n in failures:
                 status = "FAILED: " + failures[n].strip().splitlines()[0]
@@ -439,7 +585,6 @@ def cmd_fixtures():
                 status = "ok" if not diff else "MISMATCH " + ", ".join(f"{k} {len(v)}" for k, v in sorted(diff.items()))
                 bad = bool(diff)
             if not gates:
-                why = RANGE if RANGE in constructs else ", ".join(uncovered)
                 status = f"info ({why}): {status}"
             elif bad:
                 row_failed = True
@@ -459,6 +604,17 @@ def main(argv):
             return cmd_probes(update=len(argv) == 3)
         if argv[1:] == ["fixtures"]:
             return cmd_fixtures()
+        if argv[1:2] == ["corpus"]:
+            opts = argv[2:]
+            timeout = None
+            if "--timeout" in opts:
+                i = opts.index("--timeout")
+                timeout = int(opts[i + 1])
+                del opts[i:i + 2]
+            if set(opts) - {"--update", "--also"}:
+                raise HarnessError(f"unknown corpus options {sorted(set(opts) - {'--update', '--also'})}")
+            return cmd_corpus("--update" in opts, "--also" in opts,
+                              timeout if timeout is not None else 4 * 3600)
         print(__doc__.split("\n\n")[1], file=sys.stderr)
         return 3
     except HarnessError as e:

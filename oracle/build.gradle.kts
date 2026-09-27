@@ -75,7 +75,11 @@ val writeLauncher by tasks.registering {
     outputs.file(script)
     doLast {
         val f = script.get().asFile
-        f.writeText("#!/bin/sh\nexec \"${java.get()}\" -cp \"${lib.get()}/*\" howl.oracle.Main \"\$@\"\n")
+        // THE HEAP IS SET HERE, not through JAVA_TOOL_OPTIONS: that variable
+        // makes the JVM print "Picked up ..." on stderr, which the harness
+        // treats as a warning it must not diff through. Corpus entries need
+        // far more than the default quarter of RAM (GO is 1.4M triples).
+        f.writeText("#!/bin/sh\nexec \"${java.get()}\" -Xmx\${HOWL_ORACLE_XMX:-32g} -cp \"${lib.get()}/*\" howl.oracle.Main \"\$@\"\n")
         f.setExecutable(true)
     }
 }

@@ -109,6 +109,10 @@ jobs:
       # census.py routes fixtures by construct; pinned as in corpus/MANIFEST.toml.
       - name: Install rdflib
         run: pip install rdflib==7.6.0
+      # The projection's own self-tests need only rdflib; the corpus runs
+      # themselves stay local.
+      - name: Projection self-tests
+        run: python3 -m unittest corpus/test_project.py
       - name: Probes and fixture differential
         run: make probes diff-fixtures
       # Pinned by commit and sha256 (corpus/conformance.sha256); a fetched

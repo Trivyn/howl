@@ -62,7 +62,7 @@ same machine). Memory is now the dominant cost: GO peaks at 25.7 GB, OBI at 3.8 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`) — the corpus differential is next |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -187,6 +187,8 @@ make diff-fixtures   # HOWL vs HermiT on every fixture, and vs ELK where the pro
 python3 -m unittest corpus/test_entdiff.py   # the comparator's self-tests
 make conformance-fetch   # the pinned W3C OWL 2 and ELK conformance tests (corpus/conformance.sha256)
 make conformance         # HOWL against their expected answers
+make materialize         # the projected corpus ontologies (after ./corpus/fetch.sh; EL-GALEN needs make oracle)
+make diff-corpus         # each against its routed oracle; the record is corpus/corpus-differential.txt
 ```
 
 Working on the SLOP sources needs the toolchain:

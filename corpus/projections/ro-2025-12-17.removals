@@ -5,17 +5,19 @@
 # source                  ro-2025-12-17.owl
 # source_sha256           a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10aaf
 # source_triples          11,640
-# axioms_removed          342
-# triples_removed         1,361
+# axioms_removed          390
+# triples_removed         1,644
 # in_v0_swept_in          66   <- collateral from blank-node closures
-# projected_triples       10,279
+# projected_triples       9,996
 # projected_ground_sha256 79679dc93b7cb41e9c851b1fedddd616a1172bd8b4f5eaa54037e1caa4c3619c
-# projected_bnode_triples 2,817
+# projected_bnode_triples 2,534
+# projected_bnode_sha256  b88747fe31db36e03d159a1fa91ec20a27a1ded3dc570fcd93a01433d0198430
 #
 # The ground hash covers every triple with no blank node on either
-# end -- the overwhelming majority, and the part that is canonical
-# without URDNA2015, which is impractical at this size. Blank-node
-# triples are pinned by count plus the source hash and this file.
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
 #
 # Anchors are named subjects; blank nodes print as _:_ because parser
 # -assigned labels differ run to run and would churn the file.
@@ -36,6 +38,7 @@
 <http://purl.obolibrary.org/obo/BFO_0000054> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000055> .    # InverseObjectProperties [2635afde]
 <http://purl.obolibrary.org/obo/BFO_0000062> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000063> .    # InverseObjectProperties [4f79ed38]
 <http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000067> .    # InverseObjectProperties [556a17e2]
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [929e19d2]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/CL_0000540> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectHasSelf [7da20425]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/GO_0004842> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasSelf [cdaf615b]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/GO_0016301> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectHasSelf [2670356c]  (+3 in blank-node closure)
@@ -45,6 +48,7 @@
 <http://purl.obolibrary.org/obo/RO_0000052> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000053> .    # InverseObjectProperties [40bb7b83]
 <http://purl.obolibrary.org/obo/RO_0000053> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#InverseFunctionalProperty> .    # InverseFunctionalObjectProperty [0f9c5217]
 <http://purl.obolibrary.org/obo/RO_0000056> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000057> .    # InverseObjectProperties [2b3fb0a0]
+<http://purl.obolibrary.org/obo/RO_0000057> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [f281b026]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0000058> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [0f3d6a59]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0000058> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0000059> .    # InverseObjectProperties [e950e6f6]
 <http://purl.obolibrary.org/obo/RO_0000059> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [560ae020]  (+6 in blank-node closure)
@@ -58,8 +62,10 @@
 <http://purl.obolibrary.org/obo/RO_0001021> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001023> .    # InverseObjectProperties [dd238626]
 <http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf [c36cdf5b]  (+8 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf [d58354f8]  (+8 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [5bdc1521]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002002> .    # InverseObjectProperties [49e13b2a]
 <http://purl.obolibrary.org/obo/RO_0002005> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002134> .    # InverseObjectProperties [6a51d52a]
+<http://purl.obolibrary.org/obo/RO_0002005> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [e787ac55]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002006> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002130> .    # InverseObjectProperties [6fe103e6]
 <http://purl.obolibrary.org/obo/RO_0002022> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002578> .    # InverseObjectProperties [11ea7427]
 <http://purl.obolibrary.org/obo/RO_0002023> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002630> .    # InverseObjectProperties [74b80456]
@@ -71,6 +77,9 @@
 <http://purl.obolibrary.org/obo/RO_0002085> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002092> .    # InverseObjectProperties [96aea484]
 <http://purl.obolibrary.org/obo/RO_0002087> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002090> .    # InverseObjectProperties [82634d43]
 <http://purl.obolibrary.org/obo/RO_0002088> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002091> .    # InverseObjectProperties [e5a9964a]
+<http://purl.obolibrary.org/obo/RO_0002089> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [2f3e76cc]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002100> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [2c899168]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002100> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [359820d4]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002101> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002132> .    # InverseObjectProperties [039eb396]
 <http://purl.obolibrary.org/obo/RO_0002103> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [9aecdb18]  (+9 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002103> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002120> .    # InverseObjectProperties [a936c6ad]
@@ -87,6 +96,7 @@
 <http://purl.obolibrary.org/obo/RO_0002158> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [d1568f55]
 <http://purl.obolibrary.org/obo/RO_0002159> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [7d6ae965]
 <http://purl.obolibrary.org/obo/RO_0002170> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [58a5d7d7]  (+5 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002177> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [d5416449]  (+13 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002200> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [cb101b20]  (+8 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002200> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002201> .    # InverseObjectProperties [9cb0119f]
 <http://purl.obolibrary.org/obo/RO_0002201> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [a64689c5]
@@ -94,30 +104,44 @@
 <http://purl.obolibrary.org/obo/RO_0002204> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [dd5c3889]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002204> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [32730583]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002204> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002205> .    # InverseObjectProperties [94820a83]
+<http://purl.obolibrary.org/obo/RO_0002205> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [725e2b13]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002206> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [4b03ad00]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002206> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002292> .    # InverseObjectProperties [e86d5130]
+<http://purl.obolibrary.org/obo/RO_0002206> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [bd5f6154]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002207> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [03e15cd0]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002207> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [24b29f2e]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002207> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002210> .    # InverseObjectProperties [20f7bd45]
 <http://purl.obolibrary.org/obo/RO_0002208> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002209> .    # InverseObjectProperties [dfbbecd3]
 <http://purl.obolibrary.org/obo/RO_0002211> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002334> .    # InverseObjectProperties [7846bdbe]
+<http://purl.obolibrary.org/obo/RO_0002211> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [38afbee9]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002212> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002335> .    # InverseObjectProperties [51ec15dc]
 <http://purl.obolibrary.org/obo/RO_0002213> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002336> .    # InverseObjectProperties [d4745dae]
 <http://purl.obolibrary.org/obo/RO_0002214> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [99f11ae4]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002216> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [38f47f66]  (+13 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002219> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002221> .    # InverseObjectProperties [1246092e]
 <http://purl.obolibrary.org/obo/RO_0002223> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002224> .    # InverseObjectProperties [82cca5f9]
+<http://purl.obolibrary.org/obo/RO_0002225> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [d0facde1]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002226> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [8572e0ae]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002229> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002230> .    # InverseObjectProperties [b100ed7f]
 <http://purl.obolibrary.org/obo/RO_0002233> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002352> .    # InverseObjectProperties [67670003]
 <http://purl.obolibrary.org/obo/RO_0002234> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002353> .    # InverseObjectProperties [bae5eeb4]
 <http://purl.obolibrary.org/obo/RO_0002248> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002249> .    # InverseObjectProperties [d106fccc]
 <http://purl.obolibrary.org/obo/RO_0002252> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002253> .    # InverseObjectProperties [5f5abd9b]
 <http://purl.obolibrary.org/obo/RO_0002254> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002255> .    # InverseObjectProperties [181f7df9]
+<http://purl.obolibrary.org/obo/RO_0002255> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [b0e1cb11]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002256> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002257> .    # InverseObjectProperties [5b05272a]
 <http://purl.obolibrary.org/obo/RO_0002258> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002286> .    # InverseObjectProperties [8fd291f6]
+<http://purl.obolibrary.org/obo/RO_0002263> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [144ec866]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002264> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [19878fba]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002291> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002293> .    # InverseObjectProperties [a03e5177]
 <http://purl.obolibrary.org/obo/RO_0002297> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002354> .    # InverseObjectProperties [7a0b4778]
 <http://purl.obolibrary.org/obo/RO_0002302> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002606> .    # InverseObjectProperties [83eaad1e]
 <http://purl.obolibrary.org/obo/RO_0002327> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002333> .    # InverseObjectProperties [b1a218d4]
+<http://purl.obolibrary.org/obo/RO_0002327> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [e6342ac3]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002331> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [8d1ad953]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002331> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [c58c59d8]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002338> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [4db7510c]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002339> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [093fee78]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002350> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002351> .    # InverseObjectProperties [cc4b78eb]
 <http://purl.obolibrary.org/obo/RO_0002351> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [6718d79d]
 <http://purl.obolibrary.org/obo/RO_0002371> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [60ab26ae]
@@ -126,9 +150,12 @@
 <http://purl.obolibrary.org/obo/RO_0002378> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://purl.obolibrary.org/obo/RO_0002383> .    # DisjointObjectProperties [aa82309a]
 <http://purl.obolibrary.org/obo/RO_0002379> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [22f469be]  (+5 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002380> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002569> .    # InverseObjectProperties [d5793b08]
+<http://purl.obolibrary.org/obo/RO_0002380> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [a631fd48]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002404> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002411> .    # InverseObjectProperties [c68e882b]
 <http://purl.obolibrary.org/obo/RO_0002405> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002412> .    # InverseObjectProperties [877e1fce]
+<http://purl.obolibrary.org/obo/RO_0002413> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [da5ab7bf]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002418> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002427> .    # InverseObjectProperties [a2145354]
+<http://purl.obolibrary.org/obo/RO_0002418> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [d07cbbf5]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002425> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [39cfe308]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002434> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [04877f2e]
 <http://purl.obolibrary.org/obo/RO_0002435> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [98ec52ab]
@@ -142,16 +169,28 @@
 <http://purl.obolibrary.org/obo/RO_0002443> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [e9994c0c]  (+7 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002444> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002445> .    # InverseObjectProperties [e960359f]
 <http://purl.obolibrary.org/obo/RO_0002444> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [3228b140]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002447> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [dd7a9cb0]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002448> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [c81bccd1]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002449> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [39862506]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002450> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [c25514a3]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002452> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0017007> .    # InverseObjectProperties [2a4a84d8]
 <http://purl.obolibrary.org/obo/RO_0002455> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002456> .    # InverseObjectProperties [47e91062]
 <http://purl.obolibrary.org/obo/RO_0002457> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002469> .    # InverseObjectProperties [27626e07]
 <http://purl.obolibrary.org/obo/RO_0002459> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002460> .    # InverseObjectProperties [96eaec7c]
 <http://purl.obolibrary.org/obo/RO_0002472> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002558> .    # InverseObjectProperties [b6fb622e]
+<http://purl.obolibrary.org/obo/RO_0002480> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [53608728]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002485> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002486> .    # InverseObjectProperties [f6232cbf]
+<http://purl.obolibrary.org/obo/RO_0002488> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [041d19b1]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002488> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [0fb9cb11]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002492> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [956d7916]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002492> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [e36222c8]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002496> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [f3f22822]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002496> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [7dbdb0f5]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002497> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # InverseObjectProperties [b14a5227]  (+7 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0002497> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [ea69d3fe]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002500> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002608> .    # InverseObjectProperties [33c784c6]
 <http://purl.obolibrary.org/obo/RO_0002507> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002508> .    # InverseObjectProperties [e02597c1]
+<http://purl.obolibrary.org/obo/RO_0002509> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [8649753f]  (+13 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002510> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [ce0f1ed8]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002510> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [243c9734]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002510> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002511> .    # InverseObjectProperties [39af645b]
@@ -204,9 +243,16 @@
 <http://purl.obolibrary.org/obo/RO_0004006> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004016> .    # InverseObjectProperties [d3415b79]
 <http://purl.obolibrary.org/obo/RO_0004017> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0004018> .    # InverseObjectProperties [1a590ea3]
 <http://purl.obolibrary.org/obo/RO_0004022> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [02d7d596]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004024> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [a29ae612]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004025> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [2ece6fc5]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0004026> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [624d60b6]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0004027> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [318d72b0]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004028> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [8325690f]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0004029> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [0448f252]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004032> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [e2d35cdc]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004033> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [e8828d9f]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004034> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [3befc932]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0004035> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [cfd937fe]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0008501> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0008502> .    # InverseObjectProperties [a222447e]
 <http://purl.obolibrary.org/obo/RO_0008503> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0008504> .    # InverseObjectProperties [29594191]
 <http://purl.obolibrary.org/obo/RO_0008506> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [a152c653]
@@ -216,7 +262,10 @@
 <http://purl.obolibrary.org/obo/RO_0009003> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [0dbf3ebd]
 <http://purl.obolibrary.org/obo/RO_0009005> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [6d5b9409]
 <http://purl.obolibrary.org/obo/RO_0009006> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0009007> .    # InverseObjectProperties [8de50b5b]
+<http://purl.obolibrary.org/obo/RO_0009501> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [edce7747]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0010001> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0010002> .    # InverseObjectProperties [22542cef]
+<http://purl.obolibrary.org/obo/RO_0010001> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [a7a8efe9]  (+4 in blank-node closure)
+<http://purl.obolibrary.org/obo/RO_0010002> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [9f2df87d]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0012000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0012004> .    # InverseObjectProperties [76e97615]
 <http://purl.obolibrary.org/obo/RO_0012001> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0012005> .    # InverseObjectProperties [d059e5b4]
 <http://purl.obolibrary.org/obo/RO_0012002> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0012006> .    # InverseObjectProperties [fe35e0d0]
@@ -230,6 +279,7 @@
 <http://purl.obolibrary.org/obo/RO_0017004> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [122a994c]
 <http://purl.obolibrary.org/obo/RO_0017008> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0017009> .    # InverseObjectProperties [70aeb785]
 <http://purl.obolibrary.org/obo/RO_0018002> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0018003> .    # InverseObjectProperties [88dc7ab2]
+<http://purl.obolibrary.org/obo/RO_0018002> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [e174388f]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0018031> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0018032> .    # InverseObjectProperties [18dfb090]
 <http://purl.obolibrary.org/obo/RO_0018033> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0018034> .    # InverseObjectProperties [02bbccae]
 <http://purl.obolibrary.org/obo/RO_0018035> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [7fb3d5bc]

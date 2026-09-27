@@ -40,13 +40,54 @@ def sha256(path):
             h.update(chunk)
     return h.hexdigest()
 
-def convert(owl):
-    """RDF/XML -> Turtle beside the verified source, skipped when up to date."""
+def convert_ofn(owl, e):
+    """Functional syntax -> Turtle through the pinned OWL API, and the result
+    checked against derived_sha256: that conversion is deterministic, so its
+    output is pinned, not just its converter."""
+    ttl = owl[:-len(".owl")] + ".ttl"
+    name = os.path.basename(ttl)
+    if os.path.exists(ttl) and sha256(ttl) == e["derived_sha256"]:
+        print(f"  ok       {name} (converted, derived sha256 matches)")
+        return 0
+    sys.path.insert(0, os.path.dirname(manifest))
+    import conformance
+    lossy = conformance.fss_repeated_operands(owl)
+    if lossy:
+        # The OWL API would collapse these on load, handing HOWL a smaller
+        # theory than the source states (differential.owlapi_blind_spots).
+        print(f"  !! {name}: repeated pairwise operands in {', '.join(lossy)}; "
+              f"the OWL API conversion would be lossy", file=sys.stderr)
+        return 1
+    oracle = os.path.join(os.path.dirname(os.path.dirname(manifest)), "oracle", "build", "oracle")
+    if not os.path.exists(oracle):
+        print(f"  !! {name}: needs the oracle to convert functional syntax (run make oracle)",
+              file=sys.stderr)
+        return 1
+    out = ttl + ".d"
+    p = subprocess.run([oracle, "convert", "--out", out, owl], capture_output=True, text=True)
+    produced = os.path.join(out, name)
+    if p.returncode != 0 or p.stderr.strip() or not os.path.exists(produced):
+        print(f"  !! {name}: oracle convert failed:\n{p.stdout}{p.stderr}", file=sys.stderr)
+        return 1
+    got = sha256(produced)
+    if got != e["derived_sha256"]:
+        print(f"  !! DERIVED HASH MISMATCH {name}\n     expected {e['derived_sha256']}\n"
+              f"     got      {got}\n     kept at  {produced}", file=sys.stderr)
+        return 1
+    os.replace(produced, ttl)
+    os.rmdir(out)
+    print(f"  wrote    {name}  (OWL API, derived sha256 verified)")
+    return 0
+
+def convert(owl, e):
+    """The verified source -> Turtle beside it, skipped when up to date."""
+    if e.get("format") == "ofn":
+        return convert_ofn(owl, e)
     ttl = owl[:-len(".owl")] + ".ttl"
     name = os.path.basename(ttl)
     if os.path.exists(ttl) and os.path.getmtime(ttl) >= os.path.getmtime(owl):
         print(f"  ok       {name} (converted)")
-        return
+        return 0
     import rdflib
     pinned = spec.get("converter_rdflib")
     if pinned and rdflib.__version__ != pinned:
@@ -60,13 +101,14 @@ def convert(owl):
     g.serialize(part, format="turtle")
     os.replace(part, ttl)
     print(f"  wrote    {name}  ({len(g):,} triples, rdflib {rdflib.__version__})")
+    return 0
 
 rc = 0
 for e in entries:
     dest = os.path.join(vendor, f"{e['name']}-{e['version']}.owl")
     if os.path.exists(dest) and sha256(dest) == e["sha256"]:
         print(f"  ok       {e['name']}-{e['version']} (cached)")
-        convert(dest)
+        rc |= convert(dest, e)
         continue
     print(f"  fetching {e['name']}-{e['version']}  ({e['bytes']/1e6:.0f} MB)")
     subprocess.run(["curl", "-sSL", "--fail", "--max-time", "1800",
@@ -83,6 +125,6 @@ for e in entries:
         rc = 1
         continue
     print(f"  verified {e['name']}-{e['version']}")
-    convert(dest)
+    rc |= convert(dest, e)
 sys.exit(rc)
 PY

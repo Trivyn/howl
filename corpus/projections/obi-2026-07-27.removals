@@ -5,17 +5,19 @@
 # source                  obi-2026-07-27.owl
 # source_sha256           8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b946
 # source_triples          117,997
-# axioms_removed          384
-# triples_removed         5,848
+# axioms_removed          385
+# triples_removed         5,849
 # in_v0_swept_in          1,249   <- collateral from blank-node closures
-# projected_triples       112,149
-# projected_ground_sha256 6d03513610059eefff1923d2d8a7b9014bc8936aa3261c6f84f8f492f53c87be
+# projected_triples       112,148
+# projected_ground_sha256 db04e098e8ee908825869c31c9661a27b4dff3ef77ee30bd1a3fc26135ca7ed0
 # projected_bnode_triples 62,220
+# projected_bnode_sha256  1f731f935cfb6d0daf17df10fe0f5cdfa63a5bdbe68ab8c262a5dd50f9b23b41
 #
 # The ground hash covers every triple with no blank node on either
-# end -- the overwhelming majority, and the part that is canonical
-# without URDNA2015, which is impractical at this size. Blank-node
-# triples are pinned by count plus the source hash and this file.
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
 #
 # Anchors are named subjects; blank nodes print as _:_ because parser
 # -assigned labels differ run to run and would churn the file.
@@ -212,6 +214,7 @@
 <http://purl.obolibrary.org/obo/OBI_0001934> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [dfb00e4d]  (+15 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001937> <http://www.w3.org/2000/01/rdf-schema#domain> <http://purl.obolibrary.org/obo/OBI_0001933> .    # DataPropertyDomain/Range [e08f494a]
 <http://purl.obolibrary.org/obo/OBI_0001937> <http://www.w3.org/2000/01/rdf-schema#range> <http://www.w3.org/2002/07/owl#real> .    # DataPropertyDomain/Range [5c3fc2d4]
+<http://purl.obolibrary.org/obo/OBI_0001937> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> <http://purl.obolibrary.org/obo/OBI_0002135> .    # SubDataPropertyOf / EquivalentDataProperties [228fc8f1]
 <http://purl.obolibrary.org/obo/OBI_0001947> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectUnionOf [c683f21d]  (+15 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001948> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectAllValuesFrom [8627106c]  (+9 in blank-node closure)
 <http://purl.obolibrary.org/obo/OBI_0001950> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [25b209f8]  (+17 in blank-node closure)
