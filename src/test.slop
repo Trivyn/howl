@@ -1085,6 +1085,36 @@
                 (and (== (cast Int (list-len (. s0 imports-declared))) 1)
                      (== (cast Int (list-len (. s0 omissions))) 0)))))))))
 
+  (fn stage0-fault-of ((arena Arena) (ts (List Triple)))
+    (@intent "Stage 0's input-error message for these triples, or empty when it succeeds")
+    (@spec ((Arena (List Triple)) -> String))
+    (@alloc arena)
+    (match (stage0-header arena ts (list-new arena IRI))
+      ((ok _) "")
+      ((error f)
+        (match f
+          ((input-error m) m)
+          ((refused _)     "refused")
+          ((cancelled)     "cancelled")))))
+
+  (fn test-stage0-fault-follows-the-document ((arena Arena))
+    (@intent "Which malformed reification's fault is reported follows the document, never hash order")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Two owl:Axiom nodes, one missing its annotatedSource, the other its
+    ;; annotatedTarget. The last one in the document is the fault reported,
+    ;; so reversing the triples must flip the message. When the nodes came
+    ;; from the index's hash set, both orders gave the same message - the
+    ;; one whose blank node hashed last - and this failed.
+    (let ((ttl "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class . :B a owl:Class .\n_:x a owl:Axiom ; owl:annotatedProperty rdfs:subClassOf ; owl:annotatedTarget :B .\n_:y a owl:Axiom ; owl:annotatedSource :A ; owl:annotatedProperty rdfs:subClassOf .\n"))
+      (match (parse-ttl-string arena ttl)
+        ((error _) false)
+        ((ok g)
+          (and (== (string-cmp (stage0-fault-of arena (. g triples))
+                     "owl:Axiom node without a usable owl:annotatedTarget") 0)
+               (== (string-cmp (stage0-fault-of arena (reversed-triples arena (. g triples)))
+                     "owl:Axiom node without a usable owl:annotatedSource") 0))))))
+
   (fn test-header-and-reification-are-consumed ((arena Arena))
     (@intent "Ontology header and owl:Axiom scaffolding leave stage 0 as logical content")
     (@spec ((Arena) -> Bool))
@@ -3098,6 +3128,10 @@
 
           (let ((r (test-header-and-reification-are-consumed arena)))
             (print-test-result "stage 0: header and owl:Axiom scaffolding consumed" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-stage0-fault-follows-the-document arena)))
+            (print-test-result "stage 0: the reported fault follows the document, not hash order" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-decode-litmus-class-expression arena)))

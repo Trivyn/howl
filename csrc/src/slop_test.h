@@ -229,6 +229,8 @@ rdf_Term test_ex_iri(slop_arena* arena, slop_string local);
 int64_t test_count_subclass_triples(slop_list_rdf_Triple ts, rdf_Term pred);
 uint8_t test_test_unattested_import_yields_an_omission(slop_arena* arena);
 uint8_t test_test_attested_import_yields_none(slop_arena* arena);
+slop_string test_stage0_fault_of(slop_arena* arena, slop_list_rdf_Triple ts);
+uint8_t test_test_stage0_fault_follows_the_document(slop_arena* arena);
 uint8_t test_test_header_and_reification_are_consumed(slop_arena* arena);
 int64_t test_count_out_of_profile(slop_list_owl2_RawAxiom axs);
 int64_t test_count_disposition(slop_list_owl2_RawAxiom axs, owl2_Disposition want);

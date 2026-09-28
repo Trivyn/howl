@@ -317,6 +317,8 @@ uint8_t decode_iri_in_list(slop_list_rdf_IRI xs, rdf_IRI target);
 slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, slop_list_rdf_Triple triples);
 slop_list_types_Omission decode_unresolved_imports(slop_arena* arena, slop_list_rdf_IRI declared, slop_list_rdf_IRI resolved);
 slop_list_rdf_Term decode_subjects_of_type(slop_arena* arena, index_IndexedGraph g, slop_string type_iri);
+uint8_t decode_typed_as(rdf_Triple t, slop_string type_iri);
+slop_list_rdf_Term decode_typed_subjects_in_order(slop_arena* arena, slop_list_rdf_Triple triples, slop_string type_iri);
 uint8_t decode_logical_predicate(slop_string pv);
 rdf_Triple decode_ex_hdr(slop_string p, slop_string o);
 uint8_t decode_header_consumable(rdf_Triple t);

@@ -352,6 +352,51 @@
       (make-iri arena RDF_TYPE)
       (make-iri arena type-iri)))
 
+  (fn typed-as ((t Triple) (type-iri String))
+    (@intent "Is this triple `?s rdf:type <type-iri>`?")
+    (@spec ((Triple String) -> Bool))
+    (@pure)
+    (match (term-iri-value (. t predicate))
+      ((none) false)
+      ((some p)
+        (and (== (string-cmp (. p value) RDF_TYPE) 0)
+             (match (term-iri-value (. t object))
+               ((none)   false)
+               ((some o) (== (string-cmp (. o value) type-iri) 0)))))))
+
+  (fn typed-subjects-in-order ((arena Arena) (triples (List Triple)) (type-iri String))
+    (@intent "Every subject typed <type-iri>, once each, in first-occurrence document order")
+    (@spec ((Arena (List Triple) String) -> (List Term)))
+    (@alloc arena)
+    ;; DOCUMENT ORDER, NOT THE INDEX'S. `subjects-of-type` answers from a
+    ;; hash set, so its order is bucket order: a function of the hash
+    ;; function and the table's growth, not of the input. Stage 0 used it
+    ;; for the owl:Axiom nodes, and that order reached the output twice -
+    ;; the order rebuilt triples join the list, and which of several
+    ;; malformed reifications' faults is the one reported. A new string
+    ;; hash would have changed the reported fault (§6.8). Walking the list
+    ;; ties both to the document, as `decode-axioms` already is.
+    ;;
+    ;; Deduplicated as the header filter below is: a set for IRIs and blank
+    ;; nodes, a `term-eq` scan for quoted triples, which a set would compare
+    ;; by pointer.
+    (let ((seen (set-new arena Term))
+          (mut out (list-new arena Term)))
+      (do
+        (for-each (t triples)
+          (when (typed-as t type-iri)
+            (let ((s (. t subject)))
+              (match s
+                ((term-triple _)
+                  (let ((mut dup false))
+                    (do
+                      (for-each (q out) (when (term-eq q s) (set! dup true)))
+                      (when (not dup) (list-push out s)))))
+                (_
+                  (when (not (set-has seen s))
+                    (do (set-put seen s) (list-push out s))))))))
+        out)))
+
   (fn logical-predicate ((pv String))
     (@intent "An OWL/RDFS predicate that states an axiom or builds a class expression")
     (@spec ((String) -> Bool))
@@ -458,8 +503,11 @@
     ;; came back INCONCLUSIVE (W3C OWL 2 conformance test
     ;; New-Feature-AnnotationAnnotations-001).
     (let ((ig        (graph-to-indexed arena triples))
-          (ont-subjs (subjects-of-type arena ig OWL_ONTOLOGY))
-          (ax-subjs  (subjects-of-type arena ig OWL_AXIOM))
+          ;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
+          ;; and the named ontology follows ont-subjs - so both come from
+          ;; the document. ann-subjs is only ever a membership test.
+          (ont-subjs (typed-subjects-in-order arena triples OWL_ONTOLOGY))
+          (ax-subjs  (typed-subjects-in-order arena triples OWL_AXIOM))
           (ann-subjs (subjects-of-type arena ig OWL_ANNOTATION))
           (declared  (collect-imports arena triples))
           (src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
