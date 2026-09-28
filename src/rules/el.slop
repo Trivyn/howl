@@ -49,8 +49,15 @@
 ;;   CR3  | scan axioms B ⊑ ∃r.A    | —                       | —
 ;;   CR4  | scan stored preds(r)    | scan stored S(Y)        | —
 ;;   CR5  | if b = ⊥, scan preds    | if ⊥ ∈ S(Y), emit to x  | —
-;;   CR6  | —                       | scan axioms r ⊑ s       | scan axioms r ⊑ s
+;;   CR6  | —                       | —                       | scan axioms r ⊑ s
 ;;   CR7  | —                       | scan succs (second leg) | scan preds (first leg)
+;;
+;; CR6 FIRES ON THE SUCCESSOR HALF ONLY. Its premise is one edge and an
+;; axiom, not a join, so any single delivery of the edge suffices - and
+;; the driver delivers BOTH halves of every edge, in the same round
+;; (`admit-edge` writes both, `round-commit` queues both, `install-seeds`
+;; seeds both). Firing from the predecessor half too derived every
+;; super-role edge a second time: 3.2M redundant messages on EL-GALEN.
 ;;
 ;; CR2 and CR7 are SELF-JOINS, so same-round co-arrival is their main
 ;; path rather than a corner case — which is exactly why the driver's
@@ -89,8 +96,8 @@
 ;;
 ;; Completeness is the one that matters most: soundness alone is satisfied
 ;; by emitting nothing, which a disabled engine does. Proved here, for
-;; CR1, CR2, CR3, CR4 and CR5 on an arriving edge, and CR6 in both
-;; directions. Each was seen to stop verifying under a mutation of the body.
+;; CR1, CR2, CR3, CR4 and CR5 on an arriving edge, and CR6. Each was seen
+;; to stop verifying under a mutation of the body.
 ;;
 ;; What makes them statable (slop-lang/slop PRs #168 and #172): a contract can
 ;; `match` on the axiom and on a message's `Derived`, binding every
@@ -116,8 +123,8 @@
 
   (import rdf (IRI))
   (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge EdgePair Context
-                 node-bottom node-eq role-eq emit-edge make-context addressed-eq))
-  (import premise (AxList RuleIndex))
+                 node-bottom node-eq role-eq emit-edge make-context addressed-eq subsumer-count))
+  (import premise (AxList Partners RuleIndex))
 
   (export
     apply-el-rules
@@ -129,7 +136,6 @@
     cr-exists-lhs-on-pred
     cr-bottom-on-sub
     cr-bottom-on-pred
-    cr-role-incl-on-pred
     cr-role-incl-on-succ
     cr-chain-on-pred
     cr-chain-on-succ)
@@ -564,65 +570,12 @@
   ;; ============================================================
   ;; CR6 — (X,Y) ∈ R(r), r ⊑ s ⟹ (X,Y) ∈ R(s)
   ;;
-  ;; Fires from BOTH stored halves, because either half may be the one
-  ;; that just arrived. Each handler reconstructs the same logical edge
-  ;; from its own vantage point and re-emits it under the super-role.
+  ;; Fired from the SUCCESSOR half only (see the trigger table): the
+  ;; driver always delivers both halves of an edge in the same round, so
+  ;; the half at X is enough, and a second handler at Y re-derived every
+  ;; super-role edge. It re-emits the edge under the super-role, both
+  ;; halves, through `emit-edge`.
   ;; ============================================================
-
-  (fn cr-role-incl-on-pred ((arena Arena) (ctx Context) (r RoleId) (x Node) (ax NormAxiom))
-    (@intent "EL completion CR6, predecessor-half direction: role inclusion")
-    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
-    (@alloc arena)
-    (@post {(list-len $result) <= 2})
-    ;; Premise: the edge (x, r, Y) arrived and r ⊑ s: the edge (x, s, Y).
-    (@property sound
-      (forall (m $result)
-        (match ax
-          ((sub-role r2 s)
-            (and (role-eq r r2)
-                 (or (and (== (. m to) x)
-                          (match (. m what)
-                            ((derived-succ r3 y3) (and (== r3 s) (== y3 (. ctx root))))
-                            (_ false)))
-                     (and (== (. m to) (. ctx root))
-                          (match (. m what)
-                            ((derived-pred r3 x3) (and (== r3 s) (== x3 x)))
-                            (_ false))))))
-          (_ false))))
-    (@property complete
-      (match ax
-        ((sub-role r2 s)
-          (or (not (role-eq r r2))
-              (and (exists (m $result)
-                    (and (== (. m to) x)
-                         (match (. m what)
-                           ((derived-succ r3 y3) (and (== r3 s) (== y3 (. ctx root))))
-                           (_ false))))
-                  (exists (m $result)
-                    (and (== (. m to) (. ctx root))
-                         (match (. m what)
-                           ((derived-pred r3 x3) (and (== r3 s) (== x3 x)))
-                           (_ false)))))))
-        (_ true)))
-    (let ((mut result (list-new arena Addressed)))
-      (do
-        (match ax
-          ((sub-role r2 s)
-            (when (role-eq r r2)
-              ;; Incoming (derived-pred r x) at context Y IS the edge
-              ;; (x, r, Y) — so the super-role edge is (x, s, Y).
-              (let ((pair (emit-edge arena
-                            (record-new LogicalEdge
-                              (from x) (role s) (to (. ctx root))))))
-                (do
-                  (list-push result (. pair succ-half))
-                  (list-push result (. pair pred-half))))))
-          ((sub-name _ _)       (do))
-          ((sub-and _ _ _)      (do))
-          ((sub-some-rhs _ _ _) (do))
-          ((sub-some-lhs _ _ _) (do))
-          ((role-chain _ _ _)   (do)))
-        result)))
 
   (fn cr-role-incl-on-succ ((arena Arena) (ctx Context) (r RoleId) (y Node) (ax NormAxiom))
     (@intent "EL completion CR6, successor-half direction: role inclusion")
@@ -785,9 +738,21 @@
                 ((some l) (for-each (ax (. l items))
                             (for-each (m (cr-sub-name-on-sub arena ctx b ax)) (list-push out m))))
                 ((none) (do)))
-              (match (map-get (. idx and-by-conjunct) b)
-                ((some l) (for-each (ax (. l items))
-                            (for-each (m (cr-and-on-sub arena ctx b ax)) (list-push out m))))
+              ;; CR2: the axioms B ⊓ C ⊑ A whose other conjunct C ∈ S(X),
+              ;; found from whichever side is smaller (premise.slop). Every
+              ;; one still goes through `cr-and-on-sub`, the proved rule.
+              (match (map-get (. idx and-by-pair) b)
+                ((some p)
+                  (if (<= (subsumer-count ctx) (. p count))
+                    (for-each (c (. ctx subsumers))
+                      (match (map-get (. p by-other) c)
+                        ((some l) (for-each (ax (. l items))
+                                    (for-each (m (cr-and-on-sub arena ctx b ax)) (list-push out m))))
+                        ((none) (do))))
+                    (for-each ((c l) (. p by-other))
+                      (when (set-has (. ctx subsumers) c)
+                        (for-each (ax (. l items))
+                          (for-each (m (cr-and-on-sub arena ctx b ax)) (list-push out m)))))))
                 ((none) (do)))
               (match (map-get (. idx rhs-by-lhs) b)
                 ((some l) (for-each (ax (. l items))
@@ -798,24 +763,28 @@
                             (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m))))
                 ((none) (do)))
               (for-each (m (cr-bottom-on-sub arena ctx b)) (list-push out m))))
-          ;; ---- a new predecessor edge arrived: CR4, CR5, CR6, CR7 ----
+          ;; ---- a new predecessor edge arrived: CR4, CR5, CR7 ----
           ((derived-pred r x)
             (do
-              ;; CR4's companion trigger: "scan stored S(Y)". Each stored
-              ;; subsumer b is a filler key, so the axioms offered are
-              ;; exactly the ∃r'.b ⊑ A with b ∈ S(Y); the rule itself
-              ;; still checks r' = r. Walking S(Y) rather than a by-role
-              ;; bucket is the cheaper side: a context holds tens of
-              ;; subsumers, while one role (part_of, say) can head
-              ;; thousands of ∃r.B ⊑ A axioms.
-              (for-each (b (. ctx subsumers))
-                (match (map-get (. idx lhs-by-filler) b)
-                  ((some l) (for-each (ax (. l items))
-                              (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))))
-                  ((none) (do))))
-              (match (map-get (. idx incl-by-sub) r)
-                ((some l) (for-each (ax (. l items))
-                            (for-each (m (cr-role-incl-on-pred arena ctx r x ax)) (list-push out m))))
+              ;; CR4's companion trigger: the ∃r.B ⊑ A for THIS role r whose
+              ;; filler B ∈ S(Y). Neither side is always the cheap one - a
+              ;; context holds tens of subsumers, but one role (part_of,
+              ;; say) can head thousands of axioms, and walking S(Y) against
+              ;; a filler-only bucket offered every role's axioms: 27.8M
+              ;; rule calls for 579k conclusions on EL-GALEN. So walk the
+              ;; smaller of S(Y) and r's fillers, as CR2 does.
+              (match (map-get (. idx lhs-by-role) r)
+                ((some p)
+                  (if (<= (subsumer-count ctx) (. p count))
+                    (for-each (b (. ctx subsumers))
+                      (match (map-get (. p by-other) b)
+                        ((some l) (for-each (ax (. l items))
+                                    (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))))
+                        ((none) (do))))
+                    (for-each ((b l) (. p by-other))
+                      (when (set-has (. ctx subsumers) b)
+                        (for-each (ax (. l items))
+                          (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m)))))))
                 ((none) (do)))
               (match (map-get (. idx chain-by-first) r)
                 ((some l) (for-each (ax (. l items))
@@ -864,13 +833,12 @@
                   (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m))))
               ;; CR5 takes no axiom premise — fired once, not per axiom.
               (for-each (m (cr-bottom-on-sub arena ctx b)) (list-push out m))))
-          ;; ---- a new predecessor edge arrived: CR4, CR5, CR6, CR7 ----
+          ;; ---- a new predecessor edge arrived: CR4, CR5, CR7 ----
           ((derived-pred r x)
             (do
               (for-each (ax axioms)
                 (do
                   (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))
-                  (for-each (m (cr-role-incl-on-pred  arena ctx r x ax)) (list-push out m))
                   (for-each (m (cr-chain-on-pred      arena ctx r x ax)) (list-push out m))))
               (for-each (m (cr-bottom-on-pred arena ctx x)) (list-push out m))))
           ;; ---- a new successor edge arrived: CR6, CR7 ----

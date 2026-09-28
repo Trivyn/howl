@@ -66,18 +66,20 @@ classification. Every timed input and report must be the certified ones. Run-to-
 
 | Entry | Oracle | HOWL classify | Oracle classify | Ratio | |
 |---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 10.6 s (reasoning 3.3 s), 18 GB peak | 0.55 s | 19.2× | **fails** 5× |
-| EL-GALEN | ELK 0.6.0 | 9.6 s (reasoning 8.2 s), 14 GB peak | 0.32 s | 30.1× | **fails** 5× |
-| OBI 2026-07-27 | HermiT | 0.74 s | 0.57 s | 1.3× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 10.0 s (reasoning 2.1 s), 19 GB peak | 0.60 s | 16.6× | **fails** 5× |
+| EL-GALEN | ELK 0.6.0 | 9.0 s (reasoning 7.0 s), 9 GB peak | 0.40 s | 22.4× | **fails** 5× |
+| OBI 2026-07-27 | HermiT | 0.73 s | 0.57 s | 1.3× | reported |
 | RO 2025-12-17 | HermiT | 0.06 s | 0.17 s | 0.3× | reported |
 
-On EL-GALEN, ~59% of reasoning goes to hashing and comparing `Node`/`RoleId` IRIs. On GO, the
-single-threaded front end (6–7 s) dominates.
+M1 slice 6b removed the rules' redundant work: CR6 fires once per edge, each edge is admitted once, and
+CR2/CR4 walk the smaller side of their join. It took S6a's 19.2× (GO) and 30.1× (EL-GALEN) to the
+figures above. What remains is mostly hashing and comparing `Node`/`RoleId` IRIs in reasoning, and
+GO's single-threaded front end (~7 s).
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark runs, and is **not met**: GO 19.2× and EL-GALEN 30.1× ELK (`make bench`, `bench/results.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark runs, and is **not met**: GO 16.6× and EL-GALEN 22.4× ELK (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -253,9 +255,9 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **37 functions, 0 failing**. Among them, the seven loop-free completion
+`make verify` verifies **36 functions, 0 failing**. Among them, the six loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
-(nothing licensed is omitted), 15 properties in all, each seen to stop verifying under a mutation of
+(nothing licensed is omitted), 13 properties in all, each seen to stop verifying under a mutation of
 its rule's body. `make example` runs **15 executable examples**: 6 per rule, 7 on the canonical sort, and
 2 on context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
 exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):

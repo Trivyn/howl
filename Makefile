@@ -198,6 +198,7 @@ acceptance: cli
 	check corpus/fixtures/hazards/undeclared-individual.ttl 1; \
 	check corpus/fixtures/hazards/anonymous-class-assertion.ttl 1; \
 	check corpus/fixtures/hazards/annotated-annotation.ttl 0; \
+	check corpus/fixtures/hazards/smaller-side-join.ttl 0; \
 	check corpus/fixtures/hazards/disjoint-repeated-member.ttl 1; \
 	check corpus/fixtures/hazards/logical-triple-on-header-node.ttl 2; \
 	check corpus/fixtures/hazards/unsatisfiable-consistent.ttl 1; \

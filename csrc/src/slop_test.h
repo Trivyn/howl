@@ -192,6 +192,8 @@ uint8_t test_workers_agree(slop_arena* arena, slop_string path, int64_t cap);
 uint8_t test_test_worker_count_does_not_change_the_report(slop_arena* arena);
 uint8_t test_test_merge_delta_is_a_set_union(slop_arena* arena);
 uint8_t test_test_litmus_end_to_end(slop_arena* arena);
+uint8_t test_test_role_hierarchy_carries_edges(slop_arena* arena);
+uint8_t test_test_smaller_side_joins(slop_arena* arena);
 uint8_t test_test_unattested_import_is_inconclusive(slop_arena* arena);
 uint8_t test_test_declared_unused_class_gets_a_context(slop_arena* arena);
 uint8_t test_test_abox_disjoint_range_is_incoherent(slop_arena* arena);

@@ -272,21 +272,22 @@
     (@intent "Route one emitted conclusion through the novelty test")
     (@spec ((Arena Saturation RoundDelta Addressed) -> Unit))
     (@alloc arena)
-    ;; Both edge halves normalize back to the SAME logical edge — a
-    ;; `derived-pred (r,x)` addressed to y IS the edge (x,r,y), exactly
-    ;; as `derived-succ (r,y)` addressed to x is. So whichever half the
-    ;; driver happens to see reaches the same single test, which is what
-    ;; makes "tested on the logical edge" implementable at all: this is
-    ;; the only place that can see both endpoints.
+    ;; ONE LOGICAL EDGE, ADMITTED ONCE, through its successor half. A
+    ;; `derived-succ (r,y)` addressed to x IS the edge (x,r,y), and
+    ;; `admit-edge` tests and writes BOTH halves from it. The predecessor
+    ;; half says the same thing again, and every one that reaches here has
+    ;; its successor sibling in the same rule output: the only constructor
+    ;; of either half on this path is `emit-edge`, whose EdgePair carries
+    ;; both, and CR3, CR6 and CR7 push both (seeds never pass through
+    ;; `admit`). Admitting the predecessor half too tested and wrote every
+    ;; new edge twice - 1.8M redundant admits on EL-GALEN.
     (match (. m what)
       ((derived-sub b)
         (admit-sub arena sat delta (. m to) b))
       ((derived-succ r y)
         (admit-edge arena sat delta
           (record-new LogicalEdge (from (. m to)) (role r) (to y))))
-      ((derived-pred r x)
-        (admit-edge arena sat delta
-          (record-new LogicalEdge (from x) (role r) (to (. m to)))))))
+      ((derived-pred _ _) (do))))
 
   ;; ============================================================
   ;; THE ROUND

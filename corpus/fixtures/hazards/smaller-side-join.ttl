@@ -1,0 +1,51 @@
+# CR2 and CR4 dispatch walk the SMALLER side of each join (premise.slop,
+# M1 slice 6b step A). With few premises a bucket is always the smaller side,
+# so every other fixture walks only the partner bucket. Here the CONTEXT is
+# the smaller side, and each conclusion is reachable ONLY through that branch:
+#
+# CR2: B is a conjunct of 6 conjunctions and C3 of 7; S(X) = {X, T, B, C3}
+#      when either arrives (4 <= 6, 7), so both arrivals walk S(X).
+#      Expect X subClassOf E3.
+# CR4: role r heads 6 existentials; S(Y) = {Y, T, G2}. G2 arrives in round 1,
+#      the edge (X2, r, Y) only in round 2 (X2 -> M -> some r.Y), so for X2
+#      the subsumer-side trigger finds no edge and the edge-side one, walking
+#      S(Y) (3 <= 6), is the only derivation. Expect X2 subClassOf H2.
+#      (M's own edge (M, r, Y) co-arrives with G2 in round 1, so M subClassOf
+#      H2 has both triggers; the test asserts X2's, not M's.)
+# Expect: gate clean, coherent.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:r a owl:ObjectProperty .
+:B a owl:Class . :C3 a owl:Class . :X a owl:Class . :X2 a owl:Class . :Y a owl:Class . :M a owl:Class . :C1 a owl:Class . :C2 a owl:Class . :C4 a owl:Class . :C5 a owl:Class . :C6 a owl:Class . :E1 a owl:Class .
+:E2 a owl:Class . :E3 a owl:Class . :E4 a owl:Class . :E5 a owl:Class . :E6 a owl:Class . :D1 a owl:Class . :D2 a owl:Class . :D3 a owl:Class . :D4 a owl:Class . :D5 a owl:Class . :D6 a owl:Class . :F1 a owl:Class .
+:F2 a owl:Class . :F3 a owl:Class . :F4 a owl:Class . :F5 a owl:Class . :F6 a owl:Class . :G1 a owl:Class . :G2 a owl:Class . :G3 a owl:Class . :G4 a owl:Class . :G5 a owl:Class . :G6 a owl:Class . :H1 a owl:Class . :H2 a owl:Class . :H3 a owl:Class . :H4 a owl:Class . :H5 a owl:Class . :H6 a owl:Class .
+
+# CR2: B's six conjunctions, and six more on C3.
+[ a owl:Class ; owl:intersectionOf ( :B :C1 ) ] rdfs:subClassOf :E1 .
+[ a owl:Class ; owl:intersectionOf ( :B :C2 ) ] rdfs:subClassOf :E2 .
+[ a owl:Class ; owl:intersectionOf ( :B :C3 ) ] rdfs:subClassOf :E3 .
+[ a owl:Class ; owl:intersectionOf ( :B :C4 ) ] rdfs:subClassOf :E4 .
+[ a owl:Class ; owl:intersectionOf ( :B :C5 ) ] rdfs:subClassOf :E5 .
+[ a owl:Class ; owl:intersectionOf ( :B :C6 ) ] rdfs:subClassOf :E6 .
+[ a owl:Class ; owl:intersectionOf ( :C3 :D1 ) ] rdfs:subClassOf :F1 .
+[ a owl:Class ; owl:intersectionOf ( :C3 :D2 ) ] rdfs:subClassOf :F2 .
+[ a owl:Class ; owl:intersectionOf ( :C3 :D3 ) ] rdfs:subClassOf :F3 .
+[ a owl:Class ; owl:intersectionOf ( :C3 :D4 ) ] rdfs:subClassOf :F4 .
+[ a owl:Class ; owl:intersectionOf ( :C3 :D5 ) ] rdfs:subClassOf :F5 .
+[ a owl:Class ; owl:intersectionOf ( :C3 :D6 ) ] rdfs:subClassOf :F6 .
+:X rdfs:subClassOf :B, :C3 .
+
+# CR4: six existentials on r, and an r-edge into Y that arrives late.
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :G1 ] rdfs:subClassOf :H1 .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :G2 ] rdfs:subClassOf :H2 .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :G3 ] rdfs:subClassOf :H3 .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :G4 ] rdfs:subClassOf :H4 .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :G5 ] rdfs:subClassOf :H5 .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :G6 ] rdfs:subClassOf :H6 .
+:Y rdfs:subClassOf :G2 .
+:X2 rdfs:subClassOf :M .
+:M rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Y ] .

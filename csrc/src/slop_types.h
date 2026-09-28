@@ -616,6 +616,7 @@ types_Node types_node_top(void);
 types_Node types_node_bottom(void);
 uint8_t types_node_eq(types_Node a, types_Node b);
 uint8_t types_role_eq(types_RoleId a, types_RoleId b);
+int64_t types_subsumer_count(types_Context ctx);
 types_Context types_make_context(slop_arena* arena, types_Node root);
 types_Queue types_make_queue(slop_arena* arena);
 uint8_t types_queue_is_active(types_Queue q);

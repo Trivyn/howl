@@ -44,7 +44,6 @@ slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Conte
 slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_bottom_on_sub(slop_arena* arena, types_Context ctx, types_Node b);
 slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context ctx, types_Node x);
-slop_list_types_Addressed el_cr_role_incl_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_role_incl_on_succ(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node y, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax);
 slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context ctx, types_RoleId s, types_Node z, types_NormAxiom ax);
@@ -64,6 +63,11 @@ SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #ifndef SLOP_OPTION_PREMISE_AXLIST_DEFINED
 #define SLOP_OPTION_PREMISE_AXLIST_DEFINED
 SLOP_OPTION_DEFINE(premise_AxList, slop_option_premise_AxList)
+#endif
+
+#ifndef SLOP_OPTION_PREMISE_PARTNERS_DEFINED
+#define SLOP_OPTION_PREMISE_PARTNERS_DEFINED
+SLOP_OPTION_DEFINE(premise_Partners, slop_option_premise_Partners)
 #endif
 
 

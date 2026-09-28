@@ -7,6 +7,7 @@
 #include "slop_types.h"
 
 typedef struct premise_AxList premise_AxList;
+typedef struct premise_Partners premise_Partners;
 typedef struct premise_RuleIndex premise_RuleIndex;
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
@@ -52,11 +53,23 @@ typedef struct premise_AxList premise_AxList;
 SLOP_OPTION_DEFINE(premise_AxList, slop_option_premise_AxList)
 #endif
 
+struct premise_Partners {
+    slop_map* by_other;
+    int64_t count;
+};
+typedef struct premise_Partners premise_Partners;
+
+#ifndef SLOP_OPTION_PREMISE_PARTNERS_DEFINED
+#define SLOP_OPTION_PREMISE_PARTNERS_DEFINED
+SLOP_OPTION_DEFINE(premise_Partners, slop_option_premise_Partners)
+#endif
+
 struct premise_RuleIndex {
     slop_map* sub_by_lhs;
-    slop_map* and_by_conjunct;
+    slop_map* and_by_pair;
     slop_map* rhs_by_lhs;
     slop_map* lhs_by_filler;
+    slop_map* lhs_by_role;
     slop_map* incl_by_sub;
     slop_map* chain_by_first;
     slop_map* chain_by_second;
@@ -175,6 +188,7 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
 #endif
 
 premise_AxList premise_pushed(slop_arena* arena, slop_option_premise_AxList found, types_NormAxiom ax);
+premise_Partners premise_partnered(slop_arena* arena, slop_option_premise_Partners found, types_Node other, types_NormAxiom ax);
 premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_NormAxiom axioms);
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
@@ -190,6 +204,11 @@ SLOP_OPTION_DEFINE(premise_AxList, slop_option_premise_AxList)
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
+#ifndef SLOP_OPTION_PREMISE_PARTNERS_DEFINED
+#define SLOP_OPTION_PREMISE_PARTNERS_DEFINED
+SLOP_OPTION_DEFINE(premise_Partners, slop_option_premise_Partners)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED

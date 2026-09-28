@@ -55,6 +55,7 @@
     addressed-eq
     emit-edge
     make-context
+    subsumer-count
     make-queue
     queue-is-active
     outcome-is-complete
@@ -514,6 +515,21 @@
         (match b
           ((fresh-role bi) (== ai bi))
           ((named-role _)  false)))))
+
+  (fn subsumer-count ((ctx Context))
+    (@intent "|S(X)|, in O(1): how many subsumers this context stores")
+    (@spec ((Context) -> Int))
+    ;; THE ONE C-INLINE IN THE RULE PATH, and temporary. SLOP has no size
+    ;; builtin for a Set; the runtime keeps the count as `len`, and
+    ;; `(list-len (set-elements ...))` would allocate every element on
+    ;; every call. The dispatcher needs this to walk the smaller side of
+    ;; CR2's and CR4's joins (premise.slop). Replace it with `set-len`
+    ;; when slop has one. `ctx` and `n` are the C names the transpiler
+    ;; keeps, as the cancellation check in saturate.slop relies on.
+    (let ((mut n 0))
+      (do
+        (c-inline "n = (int64_t)ctx.subsumers->len;")
+        n)))
 
   (fn make-context ((arena Arena) (root Node))
     (@intent "Create an empty context for a node, with S(root) initially EMPTY")

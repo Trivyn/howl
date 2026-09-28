@@ -1617,12 +1617,27 @@ join against the *new* fact:
 | Rule | Premises joined | On `derived-sub b` | On `derived-pred (r,x)` | On `derived-succ (r,y)` |
 |---|---|---|---|---|
 | CR1 | `B ∈ S(X)` × axiom | scan axioms `B ⊑ A` | — | — |
-| CR2 | `B₁ ∈ S(X)` × `B₂ ∈ S(X)` | scan stored `S(X)` for the **other** conjunct of each `B₁ ⊓ B₂ ⊑ A` | — | — |
+| CR2 | `B₁ ∈ S(X)` × `B₂ ∈ S(X)` | intersect stored `S(X)` with the **other** conjuncts of `B₁`'s conjunctions | — | — |
 | CR3 | `B ∈ S(X)` × axiom | scan axioms `B ⊑ ∃r.A` | — | — |
-| CR4 | `B ∈ S(Y)` × `(X,Y) ∈ R(r)` | scan stored `preds(r)` | scan stored `S(Y)` for matching `∃r.B ⊑ A` | — |
+| CR4 | `B ∈ S(Y)` × `(X,Y) ∈ R(r)` | scan stored `preds(r)` | intersect stored `S(Y)` with the fillers `B` of `∃r.B ⊑ A` | — |
 | CR5 | `⊥ ∈ S(Y)` × `(X,Y) ∈ R(r)` | if `b = ⊥`, scan stored `preds` | if `⊥ ∈ S(Y)`, emit to the new `x` | — |
-| CR6 | `(X,Y) ∈ R(r)` × axiom | — | scan axioms `r ⊑ s` | scan axioms `r ⊑ s` |
+| CR6 | `(X,Y) ∈ R(r)` × axiom | — | — | scan axioms `r ⊑ s` |
 | CR7 | `(X,Y) ∈ R(r)` × `(Y,Z) ∈ R(s)` | — | scan stored `succs` for the second leg | scan stored `preds` for the first leg |
+
+Three rows are narrower than a literal reading of the calculus, each deliberately (M1 slice 6b):
+- **CR6 fires from the successor half only.** Its premise is one edge and an axiom, not a join,
+  so one delivery of the edge suffices. The driver delivers both halves of every edge in the same
+  round: `admit-edge` writes both, `round-commit` queues both, and the seeds install both. A
+  handler on the predecessor half re-derived every super-role edge; on EL-GALEN that was 3.2M
+  redundant messages.
+- **"Intersect" means the smaller side is walked and the other probed** (ELK's lazy set
+  intersection; `premise.slop`'s two-level buckets). Either side yields the same conclusions.
+  Walking one side always was the costly part: on GO, CR2 walked every conjunction a general class
+  takes part in, 77M rule calls for 131k conclusions. On EL-GALEN, CR4 walked S(Y) against every
+  role's fillers, 27.8M calls for 579k conclusions.
+- **A logical edge is admitted once, through its successor half** (`admit`). Every predecessor half
+  that reaches the driver arrives with its successor sibling in the same rule output, because
+  `emit-edge` builds both.
 
 ```mermaid
 flowchart TB
@@ -2102,7 +2117,7 @@ row below sits on one side of that line.
 
 | Property | How assured | Z3-reachable? |
 |----------|-------------|---------------|
-| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the seven loop-free rule functions (CR1, CR2, CR3, CR4 and CR5 on an arriving edge, CR6 both ways). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
+| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the six loop-free rule functions (CR1, CR2, CR3, CR4 and CR5 on an arriving edge, CR6). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
 | **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural, but **not yet stated**: held by test (`test-indexed-dispatch-matches-reference` replays every stored fact through the premise index and the full scan) |
 | **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural, but **not yet stated**: held by test (`test-context-starts-with-empty-store`) |
 | **Context coverage** — every individual an axiom names gets a context, declared or not | `(forall (a (. no asserted)) (list-contains $result a))` on `signature-nodes` | **Owed** — true, but the body is loops, which the prover's exact model does not follow. Held by `@example`s on `signature-nodes` and `test-undeclared-individual-is-reasoned-over` (W3C DisjointClasses-002) |
@@ -2117,7 +2132,7 @@ row below sits on one side of that line.
 
 So Z3 buys exactly one thing, and it is worth having: **the implementation cannot drift from the
 calculus without a contract failing.** HOWL does **not** make that claim yet. Today it holds rule by
-rule for the seven loop-free rules only; the four loop rules, dispatch coverage and initialization
+rule for the six loop-free rules only; the four loop rules, dispatch coverage and initialization
 are held by tests, which is evidence but not the claim. The claim needs all three structural obligations — both
 directions of each rule contract, dispatch coverage, **and initialization**. Drop any one and a
 disabled engine passes verification: with only the soundness direction, rules returning the empty
@@ -2905,7 +2920,8 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 19.2× and EL-GALEN at 30.1× (`bench/results.txt`).
+  > - **Status: not met.** GO is at 16.6× and EL-GALEN at 22.4× after slice 6b step A, down from
+  >   19.2× and 30.1× at S6a (`bench/results.txt`).
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document
@@ -3100,7 +3116,7 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
 7. ~~**Does SLOP's `@post` support quantifiers?**~~ **ANSWERED — yes, for loop-free rules.**
    `forall`/`exists` over `$result` translate, and since slop-lang/slop #166 and #170 a result
    built by guarded pushes with no loop is modelled exactly and a contract can `match` a union's
-   payloads, so both faithfulness directions are *proved* on the seven loop-free rule functions,
+   payloads, so both faithfulness directions are *proved* on the six loop-free rule functions,
    with the rule signatures unchanged. Neither fallback (witnesses, bound-unrolling) was needed.
    What remains open is narrower: the **four loop rules**, whose emitted lists the exact model
    does not follow. Their properties stay owed in [§7](#7-verification--contracts); proving them

@@ -304,6 +304,41 @@
             (and (entails-sub (. o saturation) (. (. o findings) inconsistent) mother parent)
                  (match (verdict o) ('verdict-coherent true) (_ false))))))))
 
+  (fn test-role-hierarchy-carries-edges ((arena Arena))
+    (@intent "CR6: an r-edge is an s-edge when r ⊑ s, and not the converse")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A ⊑ ∃r.B, r ⊑ s, ∃s.B ⊑ C: only CR6 (now fired from the successor
+    ;; half alone) turns the r-edge into the s-edge CR4 needs. The converse,
+    ;; E ⊑ ∃s.B with ∃r.B ⊑ F, must NOT give E ⊑ F.
+    (match (classify-fixture arena "corpus/fixtures/probes/subproperty-existential.ttl")
+      ((none) false)
+      ((some o)
+        (let ((inc (. (. o findings) inconsistent)))
+          (and (entails-sub (. o saturation) inc (cls "http://example.org/t#A")
+                            (cls "http://example.org/t#C"))
+               (not (entails-sub (. o saturation) inc (cls "http://example.org/t#E")
+                                 (cls "http://example.org/t#F"))))))))
+
+  (fn test-smaller-side-joins ((arena Arena))
+    (@intent "CR2 and CR4 derive through the context-side walk when the context is the smaller side")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; smaller-side-join.ttl makes S(X) and S(Y) smaller than the partner
+    ;; buckets, so the dispatcher walks the CONTEXT and probes the bucket -
+    ;; a branch no other fixture reaches, and one the goldens of the large
+    ;; corpora were the only thing to catch when it broke. Each entailment
+    ;; below has that branch as its only derivation (see the fixture).
+    (match (classify-fixture arena "corpus/fixtures/hazards/smaller-side-join.ttl")
+      ((none) false)
+      ((some o)
+        (let ((inc (. (. o findings) inconsistent)))
+          (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
+               (and (entails-sub (. o saturation) inc (cls "http://example.org/t#X")
+                                 (cls "http://example.org/t#E3"))
+                    (entails-sub (. o saturation) inc (cls "http://example.org/t#X2")
+                                 (cls "http://example.org/t#H2"))))))))
+
   (fn test-unattested-import-is-inconclusive ((arena Arena))
     (@intent "M0 ACCEPTANCE (b) end to end: a dangling import is never COHERENT")
     (@spec ((Arena) -> Bool))
@@ -2229,6 +2264,11 @@
         (list-push ps "corpus/fixtures/hazards/rbox-regularity-accept.ttl")
         (list-push ps "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
         (list-push ps "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
+        (list-push ps "corpus/fixtures/hazards/smaller-side-join.ttl")
+        ;; The only fixture here where CR6 carries an edge: subproperty.ttl
+        ;; and equivalent-properties.ttl declare the hierarchy with nothing
+        ;; for it to act on.
+        (list-push ps "corpus/fixtures/probes/subproperty-existential.ttl")
         (for-each (p ps) (when (not (dispatch-agrees arena p)) (set! ok false)))
         ok)))
 
@@ -3128,6 +3168,14 @@
 
           (let ((r (test-header-and-reification-are-consumed arena)))
             (print-test-result "stage 0: header and owl:Axiom scaffolding consumed" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-role-hierarchy-carries-edges arena)))
+            (print-test-result "CR6: an r-edge is an s-edge when r ⊑ s, not the converse" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-smaller-side-joins arena)))
+            (print-test-result "CR2 and CR4 walk the smaller side, context side included" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-stage0-fault-follows-the-document arena)))
