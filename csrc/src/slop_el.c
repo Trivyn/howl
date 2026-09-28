@@ -536,7 +536,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                 __auto_type _mv_108 = ({ void* _ptr = slop_map_get(idx.and_by_pair, &(b)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; });
                 if (_mv_108.has_value) {
                     __auto_type p = _mv_108.value;
-                    if (types_subsumer_count(ctx) <= p.count) {
+                    if (((int64_t)(ctx.subsumers)->len) <= p.count) {
                         {
                             slop_map* _coll = (slop_map*)ctx.subsumers;
                             for (size_t _i = 0; _i < _coll->cap; _i++) {
@@ -643,7 +643,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                 __auto_type _mv_117 = ({ void* _ptr = slop_map_get(idx.lhs_by_role, &(r)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; });
                 if (_mv_117.has_value) {
                     __auto_type p = _mv_117.value;
-                    if (types_subsumer_count(ctx) <= p.count) {
+                    if (((int64_t)(ctx.subsumers)->len) <= p.count) {
                         {
                             slop_map* _coll = (slop_map*)ctx.subsumers;
                             for (size_t _i = 0; _i < _coll->cap; _i++) {

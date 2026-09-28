@@ -121,7 +121,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif
@@ -137,7 +137,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif

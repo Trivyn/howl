@@ -123,7 +123,7 @@
 
   (import rdf (IRI))
   (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge EdgePair Context
-                 node-bottom node-eq role-eq emit-edge make-context addressed-eq subsumer-count))
+                 node-bottom node-eq role-eq emit-edge make-context addressed-eq))
   (import premise (AxList Partners RuleIndex))
 
   (export
@@ -743,7 +743,7 @@
               ;; one still goes through `cr-and-on-sub`, the proved rule.
               (match (map-get (. idx and-by-pair) b)
                 ((some p)
-                  (if (<= (subsumer-count ctx) (. p count))
+                  (if (<= (set-len (. ctx subsumers)) (. p count))
                     (for-each (c (. ctx subsumers))
                       (match (map-get (. p by-other) c)
                         ((some l) (for-each (ax (. l items))
@@ -775,7 +775,7 @@
               ;; smaller of S(Y) and r's fillers, as CR2 does.
               (match (map-get (. idx lhs-by-role) r)
                 ((some p)
-                  (if (<= (subsumer-count ctx) (. p count))
+                  (if (<= (set-len (. ctx subsumers)) (. p count))
                     (for-each (b (. ctx subsumers))
                       (match (map-get (. p by-other) b)
                         ((some l) (for-each (ax (. l items))

@@ -2920,8 +2920,8 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 16.6× and EL-GALEN at 22.4× after slice 6b step A, down from
-  >   19.2× and 30.1× at S6a (`bench/results.txt`).
+  > - **Status: not met.** GO is at 9.5× and EL-GALEN at 12.3× after slice 6b step A and slop's
+  >   map work (slop-lang/slop#205), down from 19.2× and 30.1× at S6a (`bench/results.txt`).
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document
