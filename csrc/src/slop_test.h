@@ -187,6 +187,10 @@ uint8_t test_test_context_starts_with_empty_store(slop_arena* arena);
 slop_string test_node_iri(types_Node n);
 uint8_t test_test_emit_edge_addresses_both_halves(slop_arena* arena);
 slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string path);
+slop_option_types_Outcome test_classify_fixture_with(slop_arena* arena, slop_string path, int64_t workers, int64_t cap);
+uint8_t test_workers_agree(slop_arena* arena, slop_string path, int64_t cap);
+uint8_t test_test_worker_count_does_not_change_the_report(slop_arena* arena);
+uint8_t test_test_merge_delta_is_a_set_union(slop_arena* arena);
 uint8_t test_test_litmus_end_to_end(slop_arena* arena);
 uint8_t test_test_unattested_import_is_inconclusive(slop_arena* arena);
 uint8_t test_test_declared_unused_class_gets_a_context(slop_arena* arena);
@@ -386,6 +390,11 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CONTEXT_DEFINED
+#define SLOP_OPTION_TYPES_CONTEXT_DEFINED
+SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED

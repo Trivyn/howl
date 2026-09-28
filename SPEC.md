@@ -2033,6 +2033,31 @@ start of round *n*, and messages produced during round *n* are delivered for rou
 count is then a function of the input alone, so `max-iterations` cuts at the same point on every
 host, at any worker count. Within a round, work distribution stays free.
 
+**How the round is parallelized** (M1 slice 5, `src/saturate.slop` `parallel-join`):
+1. **Split.** At `worker-count` W > 1 the frontier `active` is split into up to W contiguous
+   shares.
+2. **Join.** Each worker thread joins its share against the frozen store, writing only its own
+   arena and `RoundDelta`. `round-join` is read-only over the store, and a store write in the join
+   is a compile error, so workers share nothing mutable.
+3. **Merge.** At the barrier the coordinator merges the workers' deltas by **set union**, in fixed
+   worker order. A fact two workers both derived collapses to one.
+4. **Commit.** The unchanged `round-commit` commits the merged delta.
+
+**Why any split gives the same result:** each delta holds only facts novel against the same frozen
+Sₙ, and their union is exactly the Δₙ₊₁ one worker would have built. So the frontier, the round
+count and every report are the same at every W, capped runs included.
+
+**Checks:**
+- `make test-tsan` checks the join with ThreadSanitizer.
+- `make determinism` compares every report at W ∈ {1,2,4,8} for every cap in
+  {0, 1, R/2, R−1, R, ∞}. It refuses to pass unless some cap actually cut a run short.
+
+**One precondition the language does not yet check: every worker thread starts.** slop's `spawn`
+ignores a `pthread_create` failure ([slop#192](https://github.com/slop-lang/slop/issues/192)). A
+share whose thread never started would contribute no delta, and nothing would say so. Until #192 is
+fixed, the guarantee above holds for runs where every spawn succeeds. Worker arenas are kept small
+(1 MB, growing on demand) so that `--workers 64` does not itself cause such a failure.
+
 Consequences, stated honestly:
 
 - **This costs throughput against pure ELK-style racing.** A barrier idles workers that finish a
@@ -2359,7 +2384,7 @@ Mirrors GROWL's CLI conventions (separate `cli/` SLOP executable project).
 
 ```
 howl validate    <ontology.ttl> [--profile P] [--strict] [-I FILE]...  # FLAGSHIP — coherence; see exit codes
-                 [--report] [--max-iterations N] [--timings]
+                 [--report] [--max-iterations N] [--workers N] [--timings]
 howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]  # inferred subsumption hierarchy
 howl unsat       <ontology.ttl>                                    # list unsatisfiable classes
 howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       # merged coherence + minimal repair
@@ -2396,7 +2421,10 @@ omission, unsatisfiable class and subsumption, each list in the canonical order
 worker-count determinism check of [§12](#12-milestones--acceptance-criteria) M1 (e) — so it carries
 nothing that is not a function of input and budget. `--max-iterations N` sets the round budget
 ([§6.8](#68-determinism-binding)); a value outside `0..10000` is refused with exit `3`, never
-clamped, since a clamped budget is a run the caller did not ask for. `--timings` prints phase
+clamped, since a clamped budget is a run the caller did not ask for. `--workers N` sets how many
+threads join each round (`1..64`, default 4, refused rather than clamped outside that range). It
+can change only speed, never the report, and it appears nowhere in the report or the engine
+fingerprint. `--timings` prints phase
 durations (parse, front end, reasoning, total) on **stderr**. **Timings are a CLI measurement, never
 part of a report**: the engine never reads a clock, and a duration on stdout would make two correct
 runs' reports differ. `reason_ms` is the classification-only figure M1 (c) compares against ELK.

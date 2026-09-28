@@ -100,12 +100,14 @@
                  node-top node-bottom make-context make-queue))
   (import el (apply-el-rules))
   (import premise (RuleIndex))
+  (import thread (spawn join))
 
   (export
     RoundDelta
     RoundResult
     saturate
     advance-round
+    merge-delta
     make-initial-saturation
     budget-exhausted
     frontier-is-empty
@@ -299,7 +301,30 @@
     ;; anything reachable from `sat`, the freeze is broken and the
     ;; determinism guarantee goes with it.
     (for-each (n (. sat active))
-      (match (context-of sat n)
+      (join-context arena sat idx delta n)))
+
+  (fn round-join-part ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta)
+                       (part (List Node)))
+    (@intent "The join over one worker's share of the frontier")
+    (@spec ((Arena Saturation RuleIndex RoundDelta (List Node)) -> Int))
+    (@alloc arena)
+    ;; A WORKER'S WHOLE JOB, and exactly `round-join` over a subset: the
+    ;; same per-context body, the same read-only discipline. `arena` is the
+    ;; worker's OWN arena and `delta` its own RoundDelta, so the only writes
+    ;; a worker makes land in memory no other thread touches; everything
+    ;; else it reads — the store, the queues, the premise index — is frozen
+    ;; for the whole round. Returns an Int because a spawned function is
+    ;; called through `int64_t(*)(void*)`.
+    (do
+      (for-each (n part)
+        (join-context arena sat idx delta n))
+      0))
+
+  (fn join-context ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (n Node))
+    (@intent "Join one context's Δₙ against the frozen Sₙ")
+    (@spec ((Arena Saturation RuleIndex RoundDelta Node) -> Unit))
+    (@alloc arena)
+    (match (context-of sat n)
         ((some ctx)
           (match (queue-of sat n)
             ((some q)
@@ -315,7 +340,29 @@
                 (for-each (m (apply-el-rules arena ctx d idx))
                   (admit arena sat delta m))))
             ((none) (do))))
-        ((none) (do)))))
+        ((none) (do))))
+
+  (fn merge-delta ((arena Arena) (into RoundDelta) (from RoundDelta))
+    (@intent "Fold one worker's Δₙ₊₁ into the round's, by set union")
+    (@spec ((Arena RoundDelta RoundDelta) -> Unit))
+    (@alloc arena)
+    ;; SET UNION IS WHY ANY PARTITION GIVES THE SAME ROUND. Each worker's
+    ;; delta holds only facts novel against the frozen Sₙ (`admit`), and
+    ;; two workers can both derive the same fact; `set-put` makes the
+    ;; second a no-op, so the merged delta is exactly the one a single
+    ;; worker would have built — the same Δₙ₊₁, the same frontier, the same
+    ;; round count. Merged in fixed worker order on the coordinator; the
+    ;; order does not reach the report either way, since extraction sorts.
+    ;; Everything is copied into `arena` (the coordinator's scratch), so a
+    ;; worker's arena can be freed once its delta is merged and committed.
+    (for-each ((x dc) (. from pending))
+      (let ((m (delta-context arena into x)))
+        (do
+          (for-each (b (. dc subsumers)) (set-put (. m subsumers) b))
+          (for-each ((r ys) (. dc succs))
+            (for-each (y ys) (add-succ arena m r y)))
+          (for-each ((r ps) (. dc preds))
+            (for-each (p ps) (add-pred arena m r p)))))))
 
   (fn ensure-context ((arena Arena) (sat Saturation) (n Node))
     (@intent "The stored context for a node, created if the registry lacks one")
@@ -406,8 +453,72 @@
     (with-arena :as scratch 16777216
       (let ((delta (record-new RoundDelta (pending (map-new scratch Node Context)))))
         (do
-          (round-join scratch sat idx delta)
+          (if (<= (. config worker-count) 1)
+            (round-join scratch sat idx delta)
+            (parallel-join scratch sat idx delta (. config worker-count)))
           (round-commit arena sat delta)))))
+
+  (fn parallel-join ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (w Int))
+    (@intent "The join on up to w workers, each over a share of the frontier, merged into delta")
+    (@spec ((Arena Saturation RuleIndex RoundDelta Int) -> Unit))
+    (@alloc arena)
+    ;; WITHIN A ROUND, WORK DISTRIBUTION IS FREE (SPEC §6.8): the store is
+    ;; frozen, each worker writes only its own arena and RoundDelta, and
+    ;; the deltas meet by set union at the barrier (`merge-delta`). So the
+    ;; round — Δₙ₊₁, the frontier, the count — is the same at every worker
+    ;; count, and so is every report, capped runs included (M1 (e)).
+    ;;
+    ;; The frontier is split into CONTIGUOUS CHUNKS, each list complete
+    ;; before it is stored: a `(List T)` is a value struct, so round-robin
+    ;; pushes into lists held in a list would silently lose writes. Thread
+    ;; structs and closure environments live in `arena` (the coordinator's
+    ;; scratch), which outlives every `join`; worker arenas are freed only
+    ;; after their deltas are merged, and the merge copies every fact.
+    (let ((nodes   (set-elements (. sat active)))
+          (n       (cast Int (list-len nodes)))
+          (mut arenas  (list-new arena Arena))
+          (mut deltas  (list-new arena RoundDelta))
+          (mut threads (list-new arena (Ptr (Thread Int))))
+          (mut k 0))
+      (do
+        (while (< k w)
+          (let ((lo (/ (* k n) w))
+                (hi (/ (* (+ k 1) n) w)))
+            (do
+              (when (< lo hi)
+                ;; 1 MB to start, not the coordinator's 16: an arena chains
+                ;; a larger block when it fills, so a busy worker grows and
+                ;; an idle one costs little — 64 workers on a small frontier
+                ;; asked for a gigabyte every round at 16 MB each.
+                (let ((wa (arena-new 1048576))
+                      (mut part (list-new arena Node))
+                      (mut i lo))
+                  (do
+                    (while (< i hi)
+                      (do
+                        (match (list-get nodes i)
+                          ((some x) (list-push part x))
+                          ((none)   (do)))
+                        (set! i (+ i 1))))
+                    ;; `share` is an IMMUTABLE copy of the finished partition,
+                    ;; and that is load-bearing: a closure captures a `mut`
+                    ;; local BY REFERENCE (`&part` in the C), and `part` is a
+                    ;; stack slot of this loop body. Spawned on `part` itself,
+                    ;; every worker read a slot the next iteration reused —
+                    ;; wrong partitions, lost conclusions, the litmus failing
+                    ;; deterministically. An immutable binding is captured by
+                    ;; value, so each thread owns its list header (slop#193).
+                    (let ((d     (record-new RoundDelta (pending (map-new wa Node Context))))
+                          (share part))
+                      (do
+                        (list-push arenas wa)
+                        (list-push deltas d)
+                        (list-push threads
+                          (spawn arena (fn () (round-join-part wa sat idx d share)))))))))
+              (set! k (+ k 1)))))
+        (for-each (t threads) (join t))
+        (for-each (d deltas) (merge-delta arena delta d))
+        (for-each (a arenas) (arena-free a)))))
 
   ;; ============================================================
   ;; INITIALIZATION (§6.3 step 4)

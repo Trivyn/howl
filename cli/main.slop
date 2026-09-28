@@ -11,7 +11,7 @@
 ;; implementation with its own semantics.
 ;;
 ;;   howl validate    <ontology.ttl> [--profile el|auto] [--strict] [--no-imports] [-I FILE]...
-;;                    [--report] [--timings] [--max-iterations N]
+;;                    [--report] [--timings] [--max-iterations N] [--workers N]
 ;;   howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]   (flags: M3)
 ;;   howl unsat       <ontology.ttl>                                    (not yet)
 ;;   howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       (M4)
@@ -245,6 +245,7 @@
       (println "  --report   print the canonical report instead of the summary")
       (println "  --timings  print phase durations on stderr (never part of a report)")
       (println "  --max-iterations N   the round budget, 0..10000 (default 1000)")
+      (println "  --workers N          threads joining each round, 1..64 (default 4); never changes the report")
       (println "")
       (println "EXIT CODES:")
       (println "  0  coherent       checked, no incoherence found")
@@ -453,6 +454,29 @@
                                       (do (println "howl: --max-iterations must be 0..10000") (set! failed true))))
                                   ((error _)
                                     (do (println "howl: --max-iterations needs a whole number 0..10000") (set! failed true)))))))))
+
+                      ;; Worker count (§6.8): how many threads join each round.
+                      ;; It can change only speed, never the report — the
+                      ;; round is the same at every W, capped runs included
+                      ;; (M1 (e); `make determinism` checks it). Refused
+                      ;; outside 1..64, never clamped, like the round budget.
+                      (when (string-eq arg "--workers")
+                        (do
+                          (set! known true)
+                          (set! step 2)
+                          (when (>= (+ i 1) argc)
+                            (do (println "howl: --workers needs N (1..64)") (set! failed true)))
+                          (when (< (+ i 1) argc)
+                            (let ((v (argv-to-string argv (+ i 1))))
+                              (if (not (all-digits v))
+                                (do (println "howl: --workers needs a whole number 1..64") (set! failed true))
+                                (match (parse-int v)
+                                  ((ok n)
+                                    (if (and (>= n 1) (<= n 64))
+                                      (set! cfg worker-count (cast Int n))
+                                      (do (println "howl: --workers must be 1..64") (set! failed true))))
+                                  ((error _)
+                                    (do (println "howl: --workers needs a whole number 1..64") (set! failed true)))))))))
 
                       (when (or (string-eq arg "--emit") (string-eq arg "--reduce"))
                         (do

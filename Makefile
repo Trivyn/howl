@@ -44,7 +44,7 @@ SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
-        materialize diff-corpus diff-corpus-update
+        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus
 
 PLATFORM ?= unknown
 
@@ -92,6 +92,30 @@ test-asan: $(BIN)
 	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
 	  $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test-asan
 	ASAN_OPTIONS=detect_leaks=0 $(BIN)/howl-test-asan
+
+# THE ROUND-JOIN RUNS ON WORKER THREADS (M1 slice 5), and ThreadSanitizer is
+# what shows the join shares nothing mutable: workers read the frozen store
+# and write only their own arena and RoundDelta. Every test goes through the
+# parallel path (default-config's worker count is 4). TSan and ASan cannot
+# share a binary, hence a target of its own; halt_on_error makes a race fail.
+test-tsan: $(BIN)
+	@echo "Building tests with ThreadSanitizer..."
+	$(CC) -O1 -g -fsanitize=thread -Wall -Werror=switch \
+	  -Wno-unused-function -Wno-unused-variable -Wno-return-type -Wno-pointer-sign \
+	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
+	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
+	  $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test-tsan
+	TSAN_OPTIONS=halt_on_error=1 $(BIN)/howl-test-tsan
+
+# M1 (e): the canonical report is byte-identical at W in {1,2,4,8} for every
+# cap in {0, 1, R/2, R-1, R, unbounded}, and some cap must actually cut a run
+# short. Fixtures here and in CI; the corpus locally (GO and EL-GALEN take
+# ~20 s a run).
+determinism: cli
+	python3 corpus/determinism.py
+
+determinism-corpus: cli
+	python3 corpus/determinism.py --corpus
 
 clean:
 	rm -rf $(BIN) dist

@@ -42,7 +42,8 @@ Treat exit 0 alone as the pass condition; a CI job that accepts 2 reintroduces t
 the gate exists to prevent. Every CLI argument is either honoured or refused with exit 3: `-I FILE`
 attests an import (a document with no ontology IRI is refused), `--strict` refuses to run past an
 omission, and `--emit`/`--reduce` are refused until M3. `--report` prints the canonical report the
-goldens compare, `--max-iterations N` sets the round budget, and `--timings` prints phase durations on
+goldens compare, `--max-iterations N` sets the round budget, `--workers N` sets how many threads join
+each round (default 4; it never changes the report), and `--timings` prints phase durations on
 stderr — never in the report.
 
 **Real ontologies, not just fixtures.** The fixtures all passed while the first two real ontologies
@@ -62,7 +63,7 @@ same machine). Memory is now the dominant cost: GO peaks at 25.7 GB, OBI at 3.8 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -173,6 +174,8 @@ make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
 make example      # executable @example blocks: the completion rules, canon, context coverage
 make crate-test   # Rust crate, including the FFI layout guards
 make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
+make test-tsan    # the tests under ThreadSanitizer (every test runs the parallel round)
+make determinism  # reports byte-identical at W in {1,2,4,8} for every round cap (fixtures; -corpus for RO/OBI/GO/GALEN)
 make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
 ```
 
@@ -248,11 +251,15 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop `main` after 0.2.3, not yet in a release.** The faithfulness pairs need
+**Toolchain: slop 0.3.0 or later.** The faithfulness pairs need
 [#168](https://github.com/slop-lang/slop/pull/168) (`match` binds every payload, at its declared
 sort) and [#172](https://github.com/slop-lang/slop/pull/172) (the exact model of a loop-free
-push-built result, [#170](https://github.com/slop-lang/slop/issues/170)), both merged. On a slop
-without them those properties come back unknown or failed; CI's verify step is non-blocking. The
+push-built result, [#170](https://github.com/slop-lang/slop/issues/170)). On a slop without them
+those properties come back unknown or failed; CI's verify step is non-blocking. The parallel round
+needs [#173](https://github.com/slop-lang/slop/issues/173) (a call resolves within its module, so
+`join` is the thread's and not `strlib`'s). 0.3.0 makes an unmarked parameter read-only
+([#180](https://github.com/slop-lang/slop/issues/180)), so slop-rdf must be at or after its
+`param-mode-fixes` merge. The
 rows below were re-probed on each bump rather than assumed from release notes.
 
 | Works | Does not |

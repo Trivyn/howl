@@ -7,6 +7,7 @@
 #include "slop_types.h"
 #include "slop_el.h"
 #include "slop_premise.h"
+#include "slop_thread.h"
 
 typedef struct saturate_RoundResult saturate_RoundResult;
 typedef struct saturate_RoundDelta saturate_RoundDelta;
@@ -133,9 +134,13 @@ void saturate_admit_sub(slop_arena* arena, types_Saturation sat, saturate_RoundD
 void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_LogicalEdge e);
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
 void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta);
+int64_t saturate_round_join_part(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, slop_list_types_Node part);
+void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
+void saturate_merge_delta(slop_arena* arena, saturate_RoundDelta into, saturate_RoundDelta from);
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_round_commit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta);
 types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
+void saturate_parallel_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, int64_t w);
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
 uint8_t saturate_frontier_is_empty(types_Saturation sat);
@@ -166,6 +171,34 @@ SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 #ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
 #define SLOP_OPTION_TYPES_QUEUE_DEFINED
 SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
+#ifndef SLOP_OPTION_THREAD_INT_PTR_DEFINED
+#define SLOP_OPTION_THREAD_INT_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_thread_int*, slop_option_thread_int_ptr)
+#endif
+
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
+#endif
+
+#ifndef SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_LIST_THREAD_INT_PTR_DEFINED
+#define SLOP_LIST_THREAD_INT_PTR_DEFINED
+#define SLOP_LIST_THREAD_INT_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_thread_int*, slop_list_thread_int_ptr)
 #endif
 
 

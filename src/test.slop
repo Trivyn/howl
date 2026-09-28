@@ -42,7 +42,7 @@
                  outcome-is-complete findings-are-incoherent))
   (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range
                  sub-pair-cmp omission-cmp))
-  (import saturate (RoundResult saturate make-initial-saturation))
+  (import saturate (RoundResult RoundDelta saturate make-initial-saturation merge-delta))
   (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify Prepared prepare reason))
   (import el (apply-el-rules apply-el-rules-reference))
@@ -213,6 +213,78 @@
         (match (classify arena (. g triples) (list-new arena IRI) (default-config))
           ((error _) (none))
           ((ok o)    (some o))))))
+
+  (fn classify-fixture-with ((arena Arena) (path String) (workers Int) (cap Int))
+    (@intent "The whole pipeline at a chosen worker count and round budget")
+    (@spec ((Arena String Int Int) -> (Option Outcome)))
+    (@alloc arena)
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg worker-count (cast (Int 1 .. 64) workers))
+        (set! cfg max-iterations (cast (Int 0 .. 10000) cap))
+        (match (parse-ttl-file arena path)
+          ((error _) (none))
+          ((ok g)
+            (match (classify arena (. g triples) (list-new arena IRI) cfg)
+              ((error _) (none))
+              ((ok o)    (some o))))))))
+
+  (fn workers-agree ((arena Arena) (path String) (cap Int))
+    (@intent "The report at W = 1 and at W = 4 is the same text, line for line")
+    (@spec ((Arena String Int) -> Bool))
+    (@alloc arena)
+    (match (classify-fixture-with arena path 1 cap)
+      ((none) false)
+      ((some one)
+        (match (classify-fixture-with arena path 4 cap)
+          ((none) false)
+          ((some four) (same-lines (report-lines arena one) (report-lines arena four)))))))
+
+  (fn test-worker-count-does-not-change-the-report ((arena Arena))
+    (@intent "M1 (e): the same report at W = 1 and W = 4, complete and capped")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; CAPPED RUNS ARE THE POINT: saturation is confluent, so complete runs
+    ;; agree under any scheduling; a run cut short reports whatever state the
+    ;; rounds reached, and that is where a racing engine would differ. Cap 1
+    ;; cuts every fixture below short. corpus/determinism.py does the full
+    ;; W x cap matrix over every fixture; this keeps the property in `make test`.
+    (and (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1000)
+    (and (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1)
+    (and (workers-agree arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl" 1)
+    (and (workers-agree arena "corpus/fixtures/hazards/abox-disjoint-range.ttl" 1)
+    (and (workers-agree arena "corpus/fixtures/probes/some-unsat-filler.ttl" 2)
+         (workers-agree arena "corpus/fixtures/probes/chain-nary.ttl" 1000)))))))
+
+  (fn test-merge-delta-is-a-set-union ((arena Arena))
+    (@intent "Two workers deriving the same fact merge to one; distinct facts union")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The REPORT cannot see a merge that duplicates: a fact queued twice
+    ;; re-derives the same conclusions. So the union is checked directly —
+    ;; worker a derives P ∈ S(X), worker b derives P and Q ∈ S(X), and the
+    ;; merged delta holds exactly {P, Q} for X.
+    (let ((x (cls "http://example.org/X"))
+          (p (cls "http://example.org/P"))
+          (q (cls "http://example.org/Q"))
+          (a    (record-new RoundDelta (pending (map-new arena Node Context))))
+          (b    (record-new RoundDelta (pending (map-new arena Node Context))))
+          (into (record-new RoundDelta (pending (map-new arena Node Context))))
+          (ca (make-context arena x))
+          (cb (make-context arena x)))
+      (do
+        (set-put (. ca subsumers) p)
+        (map-put (. a pending) x ca)
+        (set-put (. cb subsumers) p)
+        (set-put (. cb subsumers) q)
+        (map-put (. b pending) x cb)
+        (merge-delta arena into a)
+        (merge-delta arena into b)
+        (match (map-get (. into pending) x)
+          ((some c)
+            (and (== (cast Int (list-len (set-elements (. c subsumers)))) 2)
+                 (and (set-has (. c subsumers) p) (set-has (. c subsumers) q))))
+          ((none) false)))))
 
   (fn test-litmus-end-to-end ((arena Arena))
     (@intent "§12: Turtle in, Mother ⊑ Parent out, verdict COHERENT")
@@ -2906,6 +2978,14 @@
 
           (let ((r (test-abox-disjoint-range-is-incoherent arena)))
             (print-test-result "identity fixture: disjoint ranges on one target => INCOHERENT" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-worker-count-does-not-change-the-report arena)))
+            (print-test-result "M1 (e): the same report at W = 1 and W = 4, complete and capped" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-merge-delta-is-a-set-union arena)))
+            (print-test-result "round-join: worker deltas merge by set union" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-entails-sub-agrees-with-report arena)))
