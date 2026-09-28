@@ -5,15 +5,15 @@ types_Profile select_select_profile(slop_arena* arena, types_ProfileSelection se
 
 types_Profile select_select_profile(slop_arena* arena, types_ProfileSelection selection) {
     types_Profile _retval = {0};
-    __auto_type _mv_481 = selection;
-    switch (_mv_481.tag) {
+    __auto_type _mv_433 = selection;
+    switch (_mv_433.tag) {
         case types_ProfileSelection_slop_auto:
         {
             return types_Profile_profile_el;
         }
         case types_ProfileSelection_explicit:
         {
-            __auto_type p = _mv_481.data.explicit;
+            __auto_type p = _mv_433.data.explicit;
             return p;
         }
     }

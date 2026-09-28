@@ -1,0 +1,276 @@
+;; ============================================================
+;; HOWL's triple store  —  M1 slice 6b step B
+;;
+;; The module is `termstore`, not `index`: slop-rdf has an `index` module,
+;; and the Makefile keeps `slop_index.*` out of the Rust crate by name.
+;;
+;; WHY HOWL OWNS IT. Decode asks three questions of the triples: the
+;; objects of (s, p, ?), the subjects of (?, p, o), and whether (s, p, o)
+;; is present. slop-rdf's IndexedGraph answers them from four nested
+;; indexes (SPO, PSO, OSP, POS) keyed by whole Terms, re-hashing every
+;; IRI and literal at each level, and it checks each triple for presence
+;; before inserting it. On GO that build was 35-40% of the whole run and
+;; ~80% of the front end, and HOWL reads only two of the four indexes.
+;;
+;; WHAT IT IS - the questions decode asks, and nothing more:
+;;   - A TERM TABLE: every term gets an Int id the first time it is seen,
+;;     by CONTENT - IRIs by string, blank nodes by id, literals by value,
+;;     datatype and language (compared by content since slop #205), and
+;;     quoted triples by the ids of their three parts, which is what
+;;     `term-eq` means by equal; a Map would compare them by pointer.
+;;     That last is a deliberate change from slop-rdf's IndexedGraph,
+;;     which keyed quoted triples by POINTER, so two equal ones built
+;;     apart were two terms. Stage 0 already treats them structurally
+;;     (decode.slop's header filter), and no file can reach the case:
+;;     slop-rdf's Turtle parser rejects `<< >>`, so only a library caller
+;;     building triples directly ever supplies one.
+;;   - SPO over those ids, (s, p) -> {o}, for every triple: objects,
+;;     presence, and "has any". A term is hashed once per occurrence, when
+;;     it is interned; the index hashes integer pairs.
+;;   - TYPED, type -> {s}, for rdf:type triples only. Decode's one subjects
+;;     query is `(?, rdf:type, T)`, so a general POS over every triple was
+;;     a set allocated per (p, o) pair to answer a question never asked.
+;;     The API has that shape (`store-typed`), so nothing can ask another.
+;;   - DUPLICATES are found by the SPO insert itself: a triple is new
+;;     exactly when its object is not yet in its (s, p) set.
+;;
+;; ORDER. Query results come back in set order, which is hash order. That
+;; is safe only because no caller lets the order of a result reach an
+;; output (decode.slop's header: `one-object` demands exactly one,
+;; list-walking counts, and stage 0 takes its order-bearing subjects from
+;; the triple list). Keep it that way.
+;;
+;; BUILT ONCE, READ-ONLY AFTER, like the premise index: nothing writes a
+;; store once `build-store` returns.
+;; ============================================================
+
+(module termstore
+  (@doc "Term ids by content, and the SPO/POS indexes decode reads")
+
+  (import rdf (Term Triple make-iri))
+  (import vocab (RDF_TYPE))
+
+  (export
+    TermStore
+    build-store
+    store-objects
+    store-typed
+    store-contains
+    store-has-any)
+
+  (type IdPair (record
+    (a Int)
+    (b Int)))
+
+  (type IdTriple (record
+    (s Int)
+    (p Int)
+    (o Int)))
+
+  (type IdSet (Set Int))
+
+  ;; Every Map field is shared by copies of the record, so the build
+  ;; mutates in place. The next id is the table's size. `rdf-type` is
+  ;; interned first, so it is id 0 in every store.
+  (type TermStore (record
+    (ids     (Map Term Int))       ; IRI, blank node and literal terms
+    (quoted  (Map IdTriple Int))   ; quoted triples, by their parts' ids
+    (terms   (Map Int Term))       ; id -> term, for query results
+    (spo     (Map IdPair IdSet))   ; (s, p) -> objects
+    (typed   (Map Int IdSet))      ; type -> subjects, rdf:type triples only
+    (rdf-type Int)))
+
+  ;; ============================================================
+  ;; The term table
+  ;; ============================================================
+
+  (fn intern-term ((arena Arena) (st TermStore) (t Term))
+    (@intent "t's id, minted the first time t is seen - by content, quoted triples by their parts")
+    (@spec ((Arena TermStore Term) -> Int))
+    (@alloc arena)
+    (match t
+      ((term-triple tt)
+        (let ((tr  (deref tt))
+              (key (record-new IdTriple
+                     (s (intern-term arena st (. tr subject)))
+                     (p (intern-term arena st (. tr predicate)))
+                     (o (intern-term arena st (. tr object))))))
+          (match (map-get (. st quoted) key)
+            ((some id) id)
+            ((none)
+              (let ((id (cast Int (map-len (. st terms)))))
+                (do
+                  (map-put (. st quoted) key id)
+                  (map-put (. st terms) id t)
+                  id))))))
+      (_
+        (match (map-get (. st ids) t)
+          ((some id) id)
+          ((none)
+            (let ((id (cast Int (map-len (. st terms)))))
+              (do
+                (map-put (. st ids) t id)
+                (map-put (. st terms) id t)
+                id)))))))
+
+  (fn lookup-term ((st TermStore) (t Term))
+    (@intent "t's id if the store has seen t; a query never mints one")
+    (@spec ((TermStore Term) -> (Option Int)))
+    (match t
+      ((term-triple tt)
+        (let ((tr (deref tt)))
+          (match (lookup-term st (. tr subject))
+            ((none) (none))
+            ((some s)
+              (match (lookup-term st (. tr predicate))
+                ((none) (none))
+                ((some p)
+                  (match (lookup-term st (. tr object))
+                    ((none) (none))
+                    ((some o)
+                      (let ((key (record-new IdTriple (s s) (p p) (o o))))
+                        (map-get (. st quoted) key))))))))))
+      (_ (map-get (. st ids) t))))
+
+  ;; ============================================================
+  ;; Building
+  ;; ============================================================
+
+  (fn typed-put ((arena Arena) (st TermStore) (type Int) (s Int))
+    (@intent "Record s as a subject of rdf:type <type>")
+    (@spec ((Arena TermStore Int Int) -> Unit))
+    (@alloc arena)
+    (match (map-get (. st typed) type)
+      ((some subs) (set-put subs s))
+      ((none)
+        (let ((subs (set-new arena Int)))
+          (do
+            (set-put subs s)
+            (map-put (. st typed) type subs))))))
+
+  (fn store-insert ((arena Arena) (st TermStore) (t Triple))
+    (@intent "Index one triple; true when it is new, false for a duplicate, which changes nothing")
+    (@spec ((Arena TermStore Triple) -> Bool))
+    (@alloc arena)
+    (let ((s  (intern-term arena st (. t subject)))
+          (p  (intern-term arena st (. t predicate)))
+          (o  (intern-term arena st (. t object)))
+          (sp (record-new IdPair (a s) (b p))))
+      (match (map-get (. st spo) sp)
+        ((some objs)
+          (if (set-has objs o)
+            false
+            (do
+              (set-put objs o)
+              (when (== p (. st rdf-type)) (typed-put arena st o s))
+              true)))
+        ((none)
+          (let ((objs (set-new arena Int)))
+            (do
+              (set-put objs o)
+              (map-put (. st spo) sp objs)
+              (when (== p (. st rdf-type)) (typed-put arena st o s))
+              true))))))
+
+  (fn build-store ((arena Arena) (triples (List Triple)))
+    (@intent "Intern and index every triple, in list order")
+    (@spec ((Arena (List Triple)) -> TermStore))
+    (@alloc arena)
+    (let ((st0 (record-new TermStore
+                 (ids      (map-new arena Term Int))
+                 (quoted   (map-new arena IdTriple Int))
+                 (terms    (map-new arena Int Term))
+                 (spo      (map-new arena IdPair IdSet))
+                 (typed    (map-new arena Int IdSet))
+                 (rdf-type 0)))
+          (ty  (intern-term arena st0 (make-iri arena RDF_TYPE)))
+          (st  (record-new TermStore
+                 (ids      (. st0 ids))
+                 (quoted   (. st0 quoted))
+                 (terms    (. st0 terms))
+                 (spo      (. st0 spo))
+                 (typed    (. st0 typed))
+                 (rdf-type ty))))
+      (do
+        (for-each (t triples)
+          (store-insert arena st t))
+        st)))
+
+  ;; ============================================================
+  ;; Queries - Terms in, Terms out; an unseen term matches nothing
+  ;; ============================================================
+
+  (fn store-objects ((arena Arena) (st TermStore) (s Term) (p Term))
+    (@intent "Every o with (s, p, o) in the store, in set order")
+    (@spec ((Arena TermStore Term Term) -> (List Term)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Term)))
+      (do
+        (match (lookup-term st s)
+          ((some si)
+            (match (lookup-term st p)
+              ((some pi)
+                (let ((key (record-new IdPair (a si) (b pi))))
+                  (match (map-get (. st spo) key)
+                    ((some objs)
+                      (for-each (o objs)
+                        (match (map-get (. st terms) o)
+                          ((some term) (list-push out term))
+                          ((none)      (do)))))
+                    ((none) (do)))))
+              ((none) (do))))
+          ((none) (do)))
+        out)))
+
+  (fn store-typed ((arena Arena) (st TermStore) (type Term))
+    (@intent "Every s with (s, rdf:type, type) in the store, in set order")
+    (@spec ((Arena TermStore Term) -> (List Term)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Term)))
+      (do
+        (match (lookup-term st type)
+          ((some ti)
+            (match (map-get (. st typed) ti)
+              ((some subs)
+                (for-each (s subs)
+                  (match (map-get (. st terms) s)
+                    ((some term) (list-push out term))
+                    ((none)      (do)))))
+              ((none) (do))))
+          ((none) (do)))
+        out)))
+
+  (fn store-contains ((st TermStore) (t Triple))
+    (@intent "Is (s, p, o) in the store?")
+    (@spec ((TermStore Triple) -> Bool))
+    (match (lookup-term st (. t subject))
+      ((none) false)
+      ((some si)
+        (match (lookup-term st (. t predicate))
+          ((none) false)
+          ((some pi)
+            (match (lookup-term st (. t object))
+              ((none) false)
+              ((some oi)
+                (let ((key (record-new IdPair (a si) (b pi))))
+                  (match (map-get (. st spo) key)
+                    ((some objs) (set-has objs oi))
+                    ((none)      false))))))))))
+
+  (fn store-has-any ((st TermStore) (s Term) (p Term))
+    (@intent "Is there any o with (s, p, o) in the store? Allocates nothing")
+    (@spec ((TermStore Term Term) -> Bool))
+    ;; An (s, p) entry exists exactly when it has an object: sets are
+    ;; created by the insert that puts their first element in, and nothing
+    ;; removes. So the lookup alone answers, with no need to count.
+    (match (lookup-term st s)
+      ((none) false)
+      ((some si)
+        (match (lookup-term st p)
+          ((none) false)
+          ((some pi)
+            (let ((key (record-new IdPair (a si) (b pi))))
+              (match (map-get (. st spo) key)
+                ((some _) true)
+                ((none)   false))))))))
+)

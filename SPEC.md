@@ -2164,7 +2164,7 @@ Two consequences worth keeping in view:
 |---|---|
 | Turtle parse/serialize (`slop-rdf`) | Concept/Role expression ADTs |
 | `Term` / `IRI` / blank-node interning | RDF/OWL → axiom structural mapping |
-| `IndexedGraph` and arena utilities | Normalization to normal form |
+| Arena utilities | Normalization to normal form; the triple store decode reads (`termstore.slop`: term ids by content, an SPO index and an `rdf:type` index — HOWL's own since M1 slice 6b, replacing slop-rdf's four-index `IndexedGraph`) |
 | The fixpoint **control skeleton** (`engine-run` → `saturate`) | `S(C)` / `R(r)` saturation state |
 | Worker pool / channels / `ReasonerConfig` fields | The completion rules (calculus) |
 | Vocab constants; CLI/config plumbing | Classification output, reduction, justifications |
@@ -2920,8 +2920,9 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 9.5× and EL-GALEN at 12.3× after slice 6b step A and slop's
-  >   map work (slop-lang/slop#205), down from 19.2× and 30.1× at S6a (`bench/results.txt`).
+  > - **Status: not met.** GO is at 7.2× and EL-GALEN at 12–14× (load-dependent) after slice 6b
+  >   steps A and B and slop's map work (slop-lang/slop#205), down from 19.2× and 30.1× at S6a
+  >   (`bench/results.txt`).
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document

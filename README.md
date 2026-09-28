@@ -66,21 +66,22 @@ classification. Every timed input and report must be the certified ones. Run-to-
 
 | Entry | Oracle | HOWL classify | Oracle classify | Ratio | |
 |---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 4.2 s (reasoning 1.0 s), 19 GB peak | 0.45 s | 9.5× | **fails** 5× |
-| EL-GALEN | ELK 0.6.0 | 3.3 s (reasoning 2.6 s), 10 GB peak | 0.27 s | 12.3× | **fails** 5× |
-| OBI 2026-07-27 | HermiT | 0.35 s | 0.51 s | 0.7× | reported |
-| RO 2025-12-17 | HermiT | 0.03 s | 0.16 s | 0.2× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 4.0 s (reasoning 1.2 s), 14 GB peak | 0.56 s | 7.2× | **fails** 5× |
+| EL-GALEN | ELK 0.6.0 | 4.2 s (reasoning 3.5 s), 8 GB peak | 0.31 s | 13.7× | **fails** 5× |
+| OBI 2026-07-27 | HermiT | 0.28 s | 0.55 s | 0.5× | reported |
+| RO 2025-12-17 | HermiT | 0.03 s | 0.19 s | 0.2× | reported |
 
 M1 slice 6b removed the rules' redundant work: CR6 fires once per edge, each edge is admitted once, and
-CR2/CR4 walk the smaller side of their join. With slop's faster maps (stored hashes, a
-word-at-a-time string hash, slop-lang/slop#205) that took S6a's 19.2× (GO) and 30.1× (EL-GALEN) to
-the figures above. What remains is mostly IRI hashing and comparison in reasoning, and GO's
-single-threaded front end (~3 s, most of it slop-rdf's four-index triple store).
+CR2/CR4 walk the smaller side of their join. slop's faster maps (stored hashes, a
+word-at-a-time string hash, slop-lang/slop#205) and HOWL's own triple store (term ids by content, an
+SPO index and an rdf:type index, instead of slop-rdf's four-index store) took S6a's 19.2× (GO) and
+30.1× (EL-GALEN) to the figures above. EL-GALEN's run varies with machine load (12.3× on a quieter
+run); what remains there is IRI hashing and comparison in reasoning.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark runs, and is **not met**: GO 9.5× and EL-GALEN 12.3× ELK (`make bench`, `bench/results.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark runs, and is **not met**: GO 7.2× and EL-GALEN 12–14× ELK (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |

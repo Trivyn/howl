@@ -1,17 +1,17 @@
-#ifndef SLOP_index_H
-#define SLOP_index_H
+#ifndef SLOP_termstore_H
+#define SLOP_termstore_H
 
 #include "../runtime/slop_runtime.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_vocab.h"
 
-typedef struct index_TripleIndex index_TripleIndex;
-typedef struct index_IndexedGraph index_IndexedGraph;
+typedef struct termstore_IdPair termstore_IdPair;
+typedef struct termstore_IdTriple termstore_IdTriple;
+typedef struct termstore_TermStore termstore_TermStore;
 
-typedef slop_map* index_TermSet;
-
-typedef slop_map* index_TermSetMap;
+typedef slop_map* termstore_IdSet;
 
 #ifndef SLOP_LIST_RDF_TERM_DEFINED
 #define SLOP_LIST_RDF_TERM_DEFINED
@@ -35,29 +35,54 @@ SLOP_OPTION_DEFINE(rdf_Term, slop_option_rdf_Term)
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #endif
 
-struct index_TripleIndex {
-    slop_map* spo;
-    slop_map* pso;
-    slop_map* osp;
-    slop_map* pos;
+struct termstore_IdPair {
+    int64_t a;
+    int64_t b;
 };
-typedef struct index_TripleIndex index_TripleIndex;
+typedef struct termstore_IdPair termstore_IdPair;
 
-#ifndef SLOP_OPTION_INDEX_TRIPLEINDEX_DEFINED
-#define SLOP_OPTION_INDEX_TRIPLEINDEX_DEFINED
-SLOP_OPTION_DEFINE(index_TripleIndex, slop_option_index_TripleIndex)
+#ifndef SLOP_OPTION_TERMSTORE_IDPAIR_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDPAIR_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdPair, slop_option_termstore_IdPair)
 #endif
 
-struct index_IndexedGraph {
-    slop_list_rdf_Triple triples;
-    index_TripleIndex index;
-    int64_t size;
-};
-typedef struct index_IndexedGraph index_IndexedGraph;
+#ifndef SLOP_LIST_TERMSTORE_IDPAIR_DEFINED
+#define SLOP_LIST_TERMSTORE_IDPAIR_DEFINED
+#define SLOP_LIST_TERMSTORE_IDPAIR_IMPL_DEFINED
+SLOP_LIST_DEFINE(termstore_IdPair, slop_list_termstore_IdPair)
+#endif
 
-#ifndef SLOP_OPTION_INDEX_INDEXEDGRAPH_DEFINED
-#define SLOP_OPTION_INDEX_INDEXEDGRAPH_DEFINED
-SLOP_OPTION_DEFINE(index_IndexedGraph, slop_option_index_IndexedGraph)
+struct termstore_IdTriple {
+    int64_t s;
+    int64_t p;
+    int64_t o;
+};
+typedef struct termstore_IdTriple termstore_IdTriple;
+
+#ifndef SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdTriple, slop_option_termstore_IdTriple)
+#endif
+
+#ifndef SLOP_LIST_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_LIST_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_LIST_TERMSTORE_IDTRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(termstore_IdTriple, slop_list_termstore_IdTriple)
+#endif
+
+struct termstore_TermStore {
+    slop_map* ids;
+    slop_map* quoted;
+    slop_map* terms;
+    slop_map* spo;
+    slop_map* typed;
+    int64_t rdf_type;
+};
+typedef struct termstore_TermStore termstore_TermStore;
+
+#ifndef SLOP_OPTION_TERMSTORE_TERMSTORE_DEFINED
+#define SLOP_OPTION_TERMSTORE_TERMSTORE_DEFINED
+SLOP_OPTION_DEFINE(termstore_TermStore, slop_option_termstore_TermStore)
 #endif
 
 
@@ -148,53 +173,84 @@ static inline bool slop_eq_rdf_Term(const void* a, const void* b) {
 }
 #endif
 
-index_IndexedGraph rdf_indexed_graph_create(slop_arena* arena);
-index_IndexedGraph rdf_indexed_graph_add(slop_arena* arena, index_IndexedGraph g, rdf_Triple t);
-uint8_t rdf_indexed_graph_contains(index_IndexedGraph g, rdf_Triple t);
-slop_list_rdf_Triple rdf_indexed_graph_match(slop_arena* arena, index_IndexedGraph g, slop_option_rdf_Term subj, slop_option_rdf_Term pred, slop_option_rdf_Term obj);
-void rdf_indexed_graph_for_each(index_IndexedGraph g, slop_option_rdf_Term subj, slop_option_rdf_Term pred, slop_option_rdf_Term obj, slop_closure_t callback);
-int64_t rdf_indexed_graph_size(index_IndexedGraph g);
-slop_list_rdf_Term rdf_indexed_graph_subjects(slop_arena* arena, index_IndexedGraph g, rdf_Term pred, rdf_Term obj);
-slop_list_rdf_Term rdf_indexed_graph_objects(slop_arena* arena, index_IndexedGraph g, rdf_Term subj, rdf_Term pred);
+#ifndef TERMSTORE_IDTRIPLE_HASH_EQ_DEFINED
+#define TERMSTORE_IDTRIPLE_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_termstore_IdTriple(const void* key) {
+    const termstore_IdTriple* _k = (const termstore_IdTriple*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_int(&_k->s); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->p); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->o); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_termstore_IdTriple(const void* a, const void* b) {
+    const termstore_IdTriple* _a = (const termstore_IdTriple*)a;
+    const termstore_IdTriple* _b = (const termstore_IdTriple*)b;
+    return true
+        && (_a->s == _b->s)
+        && (_a->p == _b->p)
+        && (_a->o == _b->o)
+    ;
+}
+#endif
 
-/* Function name aliases for C interop */
-#define index_indexed_graph_create rdf_indexed_graph_create
-#define index_indexed_graph_add rdf_indexed_graph_add
-#define index_indexed_graph_contains rdf_indexed_graph_contains
-#define index_indexed_graph_match rdf_indexed_graph_match
-#define index_indexed_graph_for_each rdf_indexed_graph_for_each
-#define index_indexed_graph_size rdf_indexed_graph_size
-#define index_indexed_graph_subjects rdf_indexed_graph_subjects
-#define index_indexed_graph_objects rdf_indexed_graph_objects
+#ifndef TERMSTORE_IDPAIR_HASH_EQ_DEFINED
+#define TERMSTORE_IDPAIR_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_termstore_IdPair(const void* key) {
+    const termstore_IdPair* _k = (const termstore_IdPair*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_int(&_k->a); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->b); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_termstore_IdPair(const void* a, const void* b) {
+    const termstore_IdPair* _a = (const termstore_IdPair*)a;
+    const termstore_IdPair* _b = (const termstore_IdPair*)b;
+    return true
+        && (_a->a == _b->a)
+        && (_a->b == _b->b)
+    ;
+}
+#endif
+
+int64_t termstore_intern_term(slop_arena* arena, termstore_TermStore st, rdf_Term t);
+slop_option_int termstore_lookup_term(termstore_TermStore st, rdf_Term t);
+void termstore_typed_put(slop_arena* arena, termstore_TermStore st, int64_t type, int64_t s);
+uint8_t termstore_store_insert(slop_arena* arena, termstore_TermStore st, rdf_Triple t);
+termstore_TermStore termstore_build_store(slop_arena* arena, slop_list_rdf_Triple triples);
+slop_list_rdf_Term termstore_store_objects(slop_arena* arena, termstore_TermStore st, rdf_Term s, rdf_Term p);
+slop_list_rdf_Term termstore_store_typed(slop_arena* arena, termstore_TermStore st, rdf_Term type);
+uint8_t termstore_store_contains(termstore_TermStore st, rdf_Triple t);
+uint8_t termstore_store_has_any(termstore_TermStore st, rdf_Term s, rdf_Term p);
+
+#ifndef SLOP_OPTION_TERMSTORE_IDPAIR_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDPAIR_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdPair, slop_option_termstore_IdPair)
+#endif
+
+#ifndef SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdTriple, slop_option_termstore_IdTriple)
+#endif
 
 #ifndef SLOP_OPTION_RDF_TERM_DEFINED
 #define SLOP_OPTION_RDF_TERM_DEFINED
 SLOP_OPTION_DEFINE(rdf_Term, slop_option_rdf_Term)
 #endif
 
-#ifndef SLOP_OPTION_INDEX_TERMSET_DEFINED
-#define SLOP_OPTION_INDEX_TERMSET_DEFINED
-SLOP_OPTION_DEFINE(index_TermSet, slop_option_index_TermSet)
+#ifndef SLOP_OPTION_TERMSTORE_IDSET_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDSET_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdSet, slop_option_termstore_IdSet)
 #endif
 
-#ifndef SLOP_OPTION_INDEX_TERMSETMAP_DEFINED
-#define SLOP_OPTION_INDEX_TERMSETMAP_DEFINED
-SLOP_OPTION_DEFINE(index_TermSetMap, slop_option_index_TermSetMap)
-#endif
-
-#ifndef SLOP_OPTION_INDEX_TRIPLEINDEX_DEFINED
-#define SLOP_OPTION_INDEX_TRIPLEINDEX_DEFINED
-SLOP_OPTION_DEFINE(index_TripleIndex, slop_option_index_TripleIndex)
+#ifndef SLOP_OPTION_TERMSTORE_TERMSTORE_DEFINED
+#define SLOP_OPTION_TERMSTORE_TERMSTORE_DEFINED
+SLOP_OPTION_DEFINE(termstore_TermStore, slop_option_termstore_TermStore)
 #endif
 
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
 #define SLOP_OPTION_RDF_TRIPLE_DEFINED
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
-#endif
-
-#ifndef SLOP_OPTION_INDEX_INDEXEDGRAPH_DEFINED
-#define SLOP_OPTION_INDEX_INDEXEDGRAPH_DEFINED
-SLOP_OPTION_DEFINE(index_IndexedGraph, slop_option_index_IndexedGraph)
 #endif
 
 
