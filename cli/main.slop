@@ -276,8 +276,9 @@
     (@alloc arena)
     ;; THE CLOCK IS READ IN THE CLI AND NOWHERE ELSE. HOWL never consults
     ;; a clock inside a reasoning call (§6.8); `make test` fails if one
-    ;; appears under src/. `reason_ms` is the classification-only number
-    ;; §12 M1 (c) compares against ELK; `total_ms` is end to end.
+    ;; appears under src/. `prepare_ms + reason_ms` is the classification
+    ;; figure §12 M1 (c) compares against ELK (bench/bench.py); `total_ms`
+    ;; is end to end, up to the report being printed.
     (eprint
       (string-concat arena "timing parse_ms="
         (string-concat arena (int-to-string arena (- t1 t0))

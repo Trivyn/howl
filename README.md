@@ -56,14 +56,28 @@ failed, and both failures are fixed and pinned by `make corpus-acceptance`:
 | GO 2026-07-26 (1.4M triples) | never finished — the header pass scanned lists per triple, and every fact was matched against every axiom | exit 2, 0 unsatisfiable, 1 omitted (one `owl:inverseOf`), 459,329 subsumptions, 13.4 s (reasoning 5.5 s) |
 
 Rule dispatch goes through a premise index, so each rule sees only the axioms it could fire on; OBI's
-reasoning went from 172 s to 0.4 s with its report unchanged byte for byte. These are single-threaded
-numbers from `--timings`, not yet the §12 benchmark (median of 5, 4 workers, against ELK run on the
-same machine). Memory is now the dominant cost: GO peaks at 25.7 GB, OBI at 3.8 GB.
+reasoning went from 172 s to 0.4 s with its report unchanged byte for byte.
+
+**The §12 benchmark: not yet met.** `make bench` times each corpus entry against its routed oracle on
+the same machine. Each side gets a median of 5 runs after 1 warm-up, with W = 4. Classification is
+HOWL's front end plus reasoning, against the oracle's reasoner creation, consistency check and
+classification. Every timed input and report must be the certified ones. Run-to-run spread is about
+±10%, and the verdict holds across it (`bench/results.txt`, Apple M3 Ultra):
+
+| Entry | Oracle | HOWL classify | Oracle classify | Ratio | |
+|---|---|---|---|---|---|
+| GO 2026-07-26 | ELK 0.6.0 | 10.6 s (reasoning 3.3 s), 18 GB peak | 0.55 s | 19.2× | **fails** 5× |
+| EL-GALEN | ELK 0.6.0 | 9.6 s (reasoning 8.2 s), 14 GB peak | 0.32 s | 30.1× | **fails** 5× |
+| OBI 2026-07-27 | HermiT | 0.74 s | 0.57 s | 1.3× | reported |
+| RO 2025-12-17 | HermiT | 0.06 s | 0.17 s | 0.3× | reported |
+
+On EL-GALEN, ~59% of reasoning goes to hashing and comparing `Node`/`RoleId` IRIs. On GO, the
+single-threaded front end (6–7 s) dominates.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark runs, and is **not met**: GO 19.2× and EL-GALEN 30.1× ELK (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -176,6 +190,8 @@ make crate-test   # Rust crate, including the FFI layout guards
 make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
 make test-tsan    # the tests under ThreadSanitizer (every test runs the parallel round)
 make determinism  # reports byte-identical at W in {1,2,4,8} for every round cap (fixtures; -corpus for RO/OBI/GO/GALEN)
+make bench        # §12 benchmark against the routed oracle; writes bench/results.txt (local, minutes)
+make bench-check  # results.txt still names the certified reports, and its verdicts follow
 make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
 ```
 

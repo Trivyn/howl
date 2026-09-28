@@ -179,10 +179,11 @@
   ;; twice over one Prepared would start the second run from the first
   ;; run's fixpoint and report a round count that belongs to neither.
   ;;
-  ;; The premise index is built HERE, so `prepare_ms` pays for it and
-  ;; `reason_ms` — the figure compared against ELK — does not. ELK indexes
-  ;; its axioms while loading, before classification begins; charging the
-  ;; index to reasoning would compare unlike boundaries.
+  ;; The premise index is built HERE, so `prepare_ms` pays for it. The
+  ;; figure compared against ELK is `prepare_ms + reason_ms`, not
+  ;; `reason_ms` alone: ELK loads and indexes its axioms lazily, at the
+  ;; first query, INSIDE its classification window (bench/bench.py times
+  ;; it there), so excluding HOWL's index would compare unlike boundaries.
   (type Prepared (record
     (axioms     (List NormAxiom))
     (index      RuleIndex)

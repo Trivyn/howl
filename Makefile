@@ -44,7 +44,7 @@ SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
-        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus
+        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-check
 
 PLATFORM ?= unknown
 
@@ -120,14 +120,31 @@ determinism-corpus: cli
 clean:
 	rm -rf $(BIN) dist
 
-release: CFLAGS = -O3 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
-                  -Wno-return-type -Wno-pointer-sign -DNDEBUG \
-                  -DSLOP_ARENA_NO_CAP \
-                  -DSLOP_INTERN_THREADSAFE \
-                  -DSLOP_INTERN_BUCKET_COUNT=65536 \
-                  -DHOWL_VERSION=\"$(HOWL_VERSION)\"
+RELEASE_CFLAGS = -O3 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
+                 -Wno-return-type -Wno-pointer-sign -DNDEBUG \
+                 -DSLOP_ARENA_NO_CAP \
+                 -DSLOP_INTERN_THREADSAFE \
+                 -DSLOP_INTERN_BUCKET_COUNT=65536 \
+                 -DHOWL_VERSION=\"$(HOWL_VERSION)\"
+
+release: CFLAGS = $(RELEASE_CFLAGS)
 release: clean cli
 	@echo "Release binary built: $(BIN)/howl"
+
+# M1 (c), SPEC.md §12's benchmark protocol. Local only: a timing on CI
+# hardware proves nothing about the machine the results name. Builds its own
+# release binary under $(BIN)/bench so $(BIN)/howl is never replaced under a
+# concurrent gate, then times every corpus entry against its routed oracle and
+# writes bench/results.txt (commit it). Needs `make oracle` and `make materialize`.
+bench: oracle
+	@mkdir -p $(BIN)/bench
+	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/bench/howl
+	HOWL=$(BIN)/bench/howl BENCH_CFLAGS='$(RELEASE_CFLAGS)' python3 bench/bench.py run
+
+# Cheap: results.txt still names the certified reports, and its verdicts follow.
+bench-check:
+	python3 -m unittest bench/test_bench.py
+	python3 bench/bench.py check
 
 # --- SLOP toolchain targets (require slop on PATH) ---
 

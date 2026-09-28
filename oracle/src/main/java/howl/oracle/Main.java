@@ -1,7 +1,9 @@
 package howl.oracle;
 
 import org.semanticweb.HermiT.Configuration;
+import org.semanticweb.elk.owlapi.ElkReasonerConfiguration;
 import org.semanticweb.elk.owlapi.ElkReasonerFactory;
+import org.semanticweb.elk.reasoner.config.ReasonerConfiguration;
 import org.semanticweb.owlapi.apibinding.OWLManager;
 import org.semanticweb.owlapi.formats.TurtleDocumentFormat;
 import org.semanticweb.owlapi.io.FileDocumentSource;
@@ -22,6 +24,8 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -38,12 +42,22 @@ import java.util.TreeSet;
  * oracle report --reasoner elk    --tripwire FILE --out DIR FILE...
  * oracle report --reasoner hermit                 --out DIR FILE...
  * oracle convert                                  --out DIR FILE...
+ * oracle bench  --reasoner elk --workers N --tripwire FILE --warmup K --runs M FILE
+ * oracle bench  --reasoner hermit                          --warmup K --runs M FILE
  * </pre>
  *
  * <p>{@code convert} re-serializes each file as Turtle through the same pinned
  * OWL API, for inputs HOWL cannot read directly (ELK's conformance tests are in
  * functional syntax). It fails a file on the same conditions as {@code report},
  * so a lossy conversion never reaches HOWL.
+ *
+ * <p>{@code bench} times the reasoner on one file for bench/bench.py (SPEC.md
+ * §12's protocol): K warm-up runs, then M measured ones, all in this one JVM
+ * so the measured runs are JIT-warm — the direction that favours the oracle.
+ * Each run is exactly {@code report}'s path, split into timed phases, and
+ * prints one {@code bench} line with the sha256 of its entailment lines, so a
+ * timing is never separated from the answer it produced. ELK's worker count
+ * is set in code and read back; HermiT is single-threaded.
  *
  * <p>THE OUTPUT IS BOTTOM-COMPRESSED, EXACTLY AS HOWL'S IS. For every named
  * class A of the signature, plus owl:Thing and minus owl:Nothing: an
@@ -94,6 +108,7 @@ public final class Main {
             System.out.println("usage error: " + u.getMessage());
             System.out.println("usage: oracle report --reasoner elk|hermit [--tripwire FILE] --out DIR FILE...");
             System.out.println("       oracle convert --out DIR FILE...");
+            System.out.println("       oracle bench --reasoner elk|hermit [--workers N] [--tripwire FILE] --warmup K --runs M FILE");
             System.exit(3);
         } catch (Abort a) {
             System.out.println("ABORT " + a.getMessage());
@@ -102,28 +117,42 @@ public final class Main {
     }
 
     private static int run(String[] args) throws Usage, Abort {
-        if (args.length == 0 || !(args[0].equals("report") || args[0].equals("convert"))) {
-            throw new Usage("the commands are `report` and `convert`");
+        if (args.length == 0 || !(args[0].equals("report") || args[0].equals("convert") || args[0].equals("bench"))) {
+            throw new Usage("the commands are `report`, `convert` and `bench`");
         }
         boolean convert = args[0].equals("convert");
+        boolean bench = args[0].equals("bench");
         String reasoner = null;
         Path out = null;
         File tripwire = null;
+        int workers = 0, warmup = -1, runs = -1;
         List<File> files = new ArrayList<>();
         for (int i = 1; i < args.length; i++) {
             switch (args[i]) {
                 case "--reasoner" -> reasoner = value(args, ++i, "--reasoner");
                 case "--out" -> out = Path.of(value(args, ++i, "--out"));
                 case "--tripwire" -> tripwire = new File(value(args, ++i, "--tripwire"));
+                case "--workers" -> workers = count(args, ++i, "--workers", 1);
+                case "--warmup" -> warmup = count(args, ++i, "--warmup", 0);
+                case "--runs" -> runs = count(args, ++i, "--runs", 1);
                 default -> {
                     if (args[i].startsWith("--")) throw new Usage("unknown flag " + args[i]);
                     files.add(new File(args[i]));
                 }
             }
         }
-        if (out == null || files.isEmpty()) throw new Usage("--out and at least one FILE are required");
+        if (bench) {
+            if (out != null || files.size() != 1 || warmup < 0 || runs < 1) {
+                throw new Usage("bench takes --warmup K, --runs M and exactly one FILE, and no --out");
+            }
+            if ("elk".equals(reasoner) && workers < 1) throw new Usage("bench --reasoner elk requires --workers N");
+            if ("hermit".equals(reasoner) && workers != 0) throw new Usage("--workers applies to elk only");
+        } else {
+            if (out == null || files.isEmpty()) throw new Usage("--out and at least one FILE are required");
+            if (workers != 0 || warmup >= 0 || runs >= 0) throw new Usage("--workers, --warmup and --runs are bench flags");
+        }
         if (convert && (reasoner != null || tripwire != null)) throw new Usage("convert takes no --reasoner or --tripwire");
-        if (!convert && reasoner == null) throw new Usage("report requires --reasoner");
+        if (!convert && reasoner == null) throw new Usage(args[0] + " requires --reasoner");
         if (!convert && !reasoner.equals("elk") && !reasoner.equals("hermit")) throw new Usage("--reasoner is elk or hermit");
         // The tripwire is ELK's: it proves the warning capture is live by
         // feeding ELK a construct it is known to reject with a warning. HermiT
@@ -147,15 +176,18 @@ public final class Main {
             throw new Abort("running on JDK " + jdk + ", pinned " + pins.getProperty("jdk")
                     + " (run build/oracle, not the installDist script)");
         }
-        try {
-            Files.createDirectories(out);
-        } catch (IOException e) {
-            throw new Usage("cannot create " + out + ": " + e.getMessage());
+        if (!bench) {
+            try {
+                Files.createDirectories(out);
+            } catch (IOException e) {
+                throw new Usage("cannot create " + out + ": " + e.getMessage());
+            }
         }
         WarningRecorder.drain();
         if (convert) return convertAll(files, out);
         String header = "reasoner " + reasoner + " " + pins.getProperty(reasoner)
                 + " owlapi " + owlapi + " jvm " + System.getProperty("java.vm.version");
+        if (bench) return benchOne(reasoner, workers, tripwire, warmup, runs, files.get(0), header);
 
         // Checked BEFORE the first file and AFTER the last. ELK may log a given
         // unsupported feature once and then stay quiet; the second firing
@@ -164,7 +196,7 @@ public final class Main {
         int failed = 0;
         for (File f : files) {
             try {
-                List<String> lines = reason(reasoner, f);
+                List<String> lines = reason(reasoner, f, 0, new Phases());
                 List<String> warnings = WarningRecorder.drain();
                 if (!warnings.isEmpty()) {
                     failed++;
@@ -227,6 +259,67 @@ public final class Main {
         return args[i];
     }
 
+    private static int count(String[] args, int i, String flag, int min) throws Usage {
+        String v = value(args, i, flag);
+        if (!v.matches("[0-9]{1,4}") || Integer.parseInt(v) < min) {
+            throw new Usage(flag + " is an integer >= " + min + ", not " + v);
+        }
+        return Integer.parseInt(v);
+    }
+
+    /** One file, {@code warmup + runs} times; a {@code bench} line per run. */
+    private static int benchOne(String reasoner, int workers, File tripwire, int warmup, int runs, File f,
+                                String header) throws Abort {
+        System.out.println("bench-oracle " + header + " workers " + (workers == 0 ? 1 : workers)
+                + " heap_mb " + Runtime.getRuntime().maxMemory() / (1024 * 1024));
+        if (tripwire != null) fireTripwire(reasoner, tripwire, workers, "before");
+        for (int run = 0; run < warmup + runs; run++) {
+            Phases t = new Phases();
+            try {
+                List<String> lines = reason(reasoner, f, workers, t);
+                List<String> warnings = WarningRecorder.drain();
+                if (!warnings.isEmpty()) {
+                    System.out.println("FAIL " + f + ": " + warnings.size() + " warning(s)");
+                    for (String w : warnings) System.out.println("  " + w);
+                    return 1;
+                }
+                // Hashed exactly as corpus/differential.py's oracle_entailments_sha
+                // hashes a report's lines: joined by \n, no trailing newline.
+                byte[] sha = MessageDigest.getInstance("SHA-256")
+                        .digest(String.join("\n", lines).getBytes(StandardCharsets.UTF_8));
+                System.out.println("bench run=" + run + (run < warmup ? " warmup" : " measured")
+                        + " parse_ms=" + ms(t.parsed - t.start) + " create_ms=" + ms(t.created - t.parsed)
+                        + " consistent_ms=" + ms(t.consistent - t.created)
+                        + " classify_ms=" + ms(t.classified - t.consistent)
+                        + " extract_ms=" + ms(t.extracted - t.classified)
+                        + " lines=" + lines.size() + " entailments=" + HexFormat.of().formatHex(sha));
+            } catch (Abort a) {
+                throw a;
+            } catch (Exception e) {
+                WarningRecorder.drain();
+                System.out.println("FAIL " + f + ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                return 1;
+            }
+        }
+        if (tripwire != null) fireTripwire(reasoner, tripwire, workers, "after");
+        return 0;
+    }
+
+    private static String ms(long nanos) {
+        return String.format(java.util.Locale.ROOT, "%.3f", nanos / 1e6);
+    }
+
+    /**
+     * {@link System#nanoTime} marks between the phases of one {@code reason}
+     * call. ELK loads and indexes the ontology lazily, at the first query, so
+     * its indexing falls in {@code consistent}; HermiT preprocesses in its
+     * constructor, so its falls in {@code create}. The classification window
+     * bench/bench.py compares is therefore create + consistent + classify.
+     */
+    private static final class Phases {
+        long start, parsed, created, consistent, classified, extracted;
+    }
+
     /** The report name mirrors the golden naming: {@code <dir>-<name>.report}. */
     private static String reportName(File f) {
         String name = f.getName().replaceFirst("\\.ttl$", "");
@@ -246,8 +339,12 @@ public final class Main {
     }
 
     private static void fireTripwire(String reasoner, File tripwire, String when) throws Abort {
+        fireTripwire(reasoner, tripwire, 0, when);
+    }
+
+    private static void fireTripwire(String reasoner, File tripwire, int workers, String when) throws Abort {
         try {
-            reason(reasoner, tripwire);
+            reason(reasoner, tripwire, workers, new Phases());
         } catch (Abort a) {
             throw a;
         } catch (Exception e) {
@@ -261,28 +358,46 @@ public final class Main {
         }
     }
 
-    private static List<String> reason(String reasoner, File f) throws Exception {
+    /**
+     * {@code workers} 0 leaves ELK at its default; otherwise it is set in the
+     * configuration and read back, since a bench at the wrong worker count
+     * would compare against a different ELK than the one it names.
+     */
+    private static List<String> reason(String reasoner, File f, int workers, Phases t) throws Exception {
+        t.start = System.nanoTime();
         OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
         OWLOntology ont = manager.loadOntologyFromOntologyDocument(
                 new FileDocumentSource(f, new TurtleDocumentFormat()));
         refuseLossyParse(ont);
+        t.parsed = System.nanoTime();
 
         OWLReasoner r;
         if (reasoner.equals("hermit")) {
             Configuration c = new Configuration();
             c.warningMonitor = w -> WarningRecorder.record("WARN hermit: " + w);
             r = new org.semanticweb.HermiT.ReasonerFactory().createReasoner(ont, c);
-        } else {
+        } else if (workers == 0) {
             r = new ElkReasonerFactory().createReasoner(ont);
+        } else {
+            ElkReasonerConfiguration c = new ElkReasonerConfiguration();
+            c.getElkConfiguration().setParameter(ReasonerConfiguration.NUM_OF_WORKING_THREADS, Integer.toString(workers));
+            int set = c.getElkConfiguration().getParameterAsInt(ReasonerConfiguration.NUM_OF_WORKING_THREADS);
+            if (set != workers) throw new Abort("ELK's worker count reads back " + set + ", asked for " + workers);
+            r = new ElkReasonerFactory().createReasoner(ont, c);
         }
+        t.created = System.nanoTime();
         try {
             List<String> lines = new ArrayList<>();
-            if (!r.isConsistent()) {
+            boolean consistent = r.isConsistent();
+            t.consistent = System.nanoTime();
+            if (!consistent) {
                 lines.add("inconsistent true");
+                t.classified = t.extracted = t.consistent;
                 return lines;
             }
             lines.add("inconsistent false");
             r.precomputeInferences(InferenceType.CLASS_HIERARCHY);
+            t.classified = System.nanoTime();
             OWLDataFactory df = manager.getOWLDataFactory();
             Set<OWLClass> classes = new TreeSet<>();
             ont.classesInSignature().forEach(classes::add);
@@ -307,6 +422,7 @@ public final class Main {
             }
             body.sort(CODE_POINT_ORDER);
             lines.addAll(body);
+            t.extracted = System.nanoTime();
             return lines;
         } finally {
             r.dispose();

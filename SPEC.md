@@ -2427,7 +2427,8 @@ can change only speed, never the report, and it appears nowhere in the report or
 fingerprint. `--timings` prints phase
 durations (parse, front end, reasoning, total) on **stderr**. **Timings are a CLI measurement, never
 part of a report**: the engine never reads a clock, and a duration on stdout would make two correct
-runs' reports differ. `reason_ms` is the classification-only figure M1 (c) compares against ELK.
+runs' reports differ. `prepare_ms + reason_ms` is the classification figure M1 (c) compares against
+the oracle's (bench/bench.py; the boundary is pinned under §12's benchmark protocol).
 
 **Exit codes** are [§6.2](#62-data-model)'s verdict table, verbatim — a CI gate must distinguish
 "checked, fine" from "couldn't check", and must not downgrade a real finding just because coverage
@@ -2886,6 +2887,25 @@ flowchart TB
   > with ELK's own numbers regenerated rather than quoted from the literature. 5× is a starting
   > line, not a target: it is loose enough to be achievable for a first implementation and tight
   > enough that a wrong data structure fails it.
+  >
+  > **How the protocol is pinned** (M1 slice 6, `bench/bench.py`, results in `bench/results.txt`):
+  > - **Classification window.** For HOWL it is `prepare_ms + reason_ms`: header and decode through
+  >   saturation and extraction. For the oracle it is reasoner creation + the consistency check +
+  >   `precomputeInferences`. ELK loads and indexes its axioms lazily at the first query, and HermiT
+  >   in its constructor, so both do their indexing inside that window. HOWL's window also carries
+  >   decode (RDF triples → axioms), which the oracle does in its parse. So if anything, the
+  >   comparison charges HOWL for more, never less.
+  > - **Which oracle.** The routing `make diff-corpus` recorded. ELK times GO and EL-GALEN, and only
+  >   those are gated. HermiT times the range-bearing RO and OBI, with the result reported, not gated.
+  > - **Runs.** HOWL's runs are separate processes. The oracle's share one JVM, so its measured runs
+  >   are JIT-warm. The machine's load average is recorded at the start and end of each run.
+  > - **Every timed run reproduces the certified answer.** HOWL's report must hash to the
+  >   differential's `howl-report`, with `termination fixpoint` and `omitted 0`. The oracle's
+  >   entailment lines must hash to `oracle-entailments`. A timing is always of the exact input and
+  >   answer the differential certified clean.
+  > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
+  >   content check (ground, blank-node count and structure against the pinned projection).
+  > - **Status: not met.** GO is at 19.2× and EL-GALEN at 30.1× (`bench/results.txt`).
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document
