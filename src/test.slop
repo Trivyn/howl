@@ -43,7 +43,7 @@
                  outcome-is-complete findings-are-incoherent))
   (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range
                  sub-pair-cmp omission-cmp))
-  (import saturate (RoundResult RoundDelta saturate make-initial-saturation merge-delta))
+  (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify Prepared prepare reason))
   (import el (apply-el-rules apply-el-rules-reference))
@@ -250,42 +250,110 @@
     ;; rounds reached, and that is where a racing engine would differ. Cap 1
     ;; cuts every fixture below short. corpus/determinism.py does the full
     ;; W x cap matrix over every fixture; this keeps the property in `make test`.
+    ;; undeclared-filler.ttl creates a context at the barrier, the one
+    ;; write to the context registry a round makes (saturate.slop).
     (and (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1000)
-    (and (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1)
-    (and (workers-agree arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl" 1)
-    (and (workers-agree arena "corpus/fixtures/hazards/abox-disjoint-range.ttl" 1)
-    (and (workers-agree arena "corpus/fixtures/probes/some-unsat-filler.ttl" 2)
-         (workers-agree arena "corpus/fixtures/probes/chain-nary.ttl" 1000)))))))
+         (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1)
+         (workers-agree arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl" 1)
+         (workers-agree arena "corpus/fixtures/hazards/abox-disjoint-range.ttl" 1)
+         (workers-agree arena "corpus/fixtures/probes/some-unsat-filler.ttl" 2)
+         (workers-agree arena "corpus/fixtures/probes/chain-nary.ttl" 1000)
+         (workers-agree arena "corpus/fixtures/hazards/undeclared-filler.ttl" 1000)
+         (workers-agree arena "corpus/fixtures/hazards/undeclared-filler.ttl" 1)))
 
-  (fn test-merge-delta-is-a-set-union ((arena Arena))
-    (@intent "Two workers deriving the same fact merge to one; distinct facts union")
+  (fn edge-context ((arena Arena) (n Node) (r RoleId) (m Node) (succ Bool))
+    (@intent "A pending context for n holding the one r-edge half toward m")
+    (@spec ((Arena Node RoleId Node Bool) -> Context))
+    (@alloc arena)
+    (let ((c (make-context arena n))
+          (s (set-new arena Node)))
+      (do
+        (set-put s m)
+        (if succ (map-put (. c succs) r s) (map-put (. c preds) r s))
+        c)))
+
+  (fn queue-has ((sat Saturation) (n Node) (d Derived))
+    (@intent "Does n's next-round queue hold d?")
+    (@spec ((Saturation Node Derived) -> Bool))
+    (match (queue-of sat n)
+      ((some q)
+        (let ((mut found false))
+          (do
+            (for-each (it (. q items)) (when (derived-eq it d) (set! found true)))
+            found)))
+      ((none) false)))
+
+  (fn stored-edge ((sat Saturation) (x Node) (r RoleId) (y Node))
+    (@intent "Both halves of the edge (x, r, y) are in the store")
+    (@spec ((Saturation Node RoleId Node) -> Bool))
+    (and (match (context-of sat x)
+           ((some cx) (match (map-get (. cx succs) r) ((some s) (set-has s y)) ((none) false)))
+           ((none) false))
+         (match (context-of sat y)
+           ((some cy) (match (map-get (. cy preds) r) ((some s) (set-has s x)) ((none) false)))
+           ((none) false))))
+
+  (fn queue-len ((sat Saturation) (n Node))
+    (@intent "How many facts n's next-round queue holds; -1 when it has none")
+    (@spec ((Saturation Node) -> Int))
+    (match (queue-of sat n)
+      ((some q) (cast Int (list-len (. q items))))
+      ((none)   -1)))
+
+  (fn test-commit-dedups-across-deltas ((arena Arena))
+    (@intent "Two workers deriving the same facts commit them once, and queue each new fact once")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    ;; The REPORT cannot see a merge that duplicates: a fact queued twice
-    ;; re-derives the same conclusions. So the union is checked directly —
-    ;; worker a derives P ∈ S(X), worker b derives P and Q ∈ S(X), and the
-    ;; merged delta holds exactly {P, Q} for X.
+    ;; The REPORT cannot see a commit that queues a fact twice: processing
+    ;; it twice re-derives the same set. So the barrier is checked directly.
+    ;; Worker a derives P ∈ S(X) and the edge (X, r, Y); worker b derives
+    ;; P and Q ∈ S(X) and the same edge. Both workers' copies of X's facts
+    ;; land in X's ONE owner's bucket (the partition's job), so the store
+    ;; gets P, Q and both edge halves once, X's queue holds exactly P, Q and
+    ;; the successor half, and Y's exactly the predecessor half - checked
+    ;; by content, not only by count. X and Y have no contexts beforehand,
+    ;; so the partition must create them too.
     (let ((x (cls "http://example.org/X"))
+          (y (cls "http://example.org/Y"))
           (p (cls "http://example.org/P"))
           (q (cls "http://example.org/Q"))
-          (a    (record-new RoundDelta (pending (map-new arena Node Context))))
-          (b    (record-new RoundDelta (pending (map-new arena Node Context))))
-          (into (record-new RoundDelta (pending (map-new arena Node Context))))
-          (ca (make-context arena x))
-          (cb (make-context arena x)))
+          (r (rol "http://example.org/r"))
+          (sat (empty-saturation arena))
+          (a  (record-new RoundDelta (pending (map-new arena Node Context))))
+          (b  (record-new RoundDelta (pending (map-new arena Node Context))))
+          (ax (edge-context arena x r y true))
+          (ay (edge-context arena y r x false))
+          (bx (edge-context arena x r y true))
+          (by (edge-context arena y r x false))
+          (c1 (arena-new 1048576))
+          (c2 (arena-new 1048576))
+          (mut ds  (list-new arena RoundDelta))
+          (mut cas (list-new arena Arena)))
       (do
-        (set-put (. ca subsumers) p)
-        (map-put (. a pending) x ca)
-        (set-put (. cb subsumers) p)
-        (set-put (. cb subsumers) q)
-        (map-put (. b pending) x cb)
-        (merge-delta arena into a)
-        (merge-delta arena into b)
-        (match (map-get (. into pending) x)
-          ((some c)
-            (and (== (cast Int (list-len (set-elements (. c subsumers)))) 2)
-                 (and (set-has (. c subsumers) p) (set-has (. c subsumers) q))))
-          ((none) false)))))
+        (set-put (. ax subsumers) p)
+        (set-put (. bx subsumers) p)
+        (set-put (. bx subsumers) q)
+        (map-put (. a pending) x ax)
+        (map-put (. a pending) y ay)
+        (map-put (. b pending) x bx)
+        (map-put (. b pending) y by)
+        (list-push ds a)
+        (list-push ds b)
+        (list-push cas c1)
+        (list-push cas c2)
+        (let ((next (commit-round arena arena sat ds cas)))
+          (and (== (queue-len next x) 3)
+               (== (queue-len next y) 1)
+               (queue-has next x (union-new Derived derived-sub p))
+               (queue-has next x (union-new Derived derived-sub q))
+               (queue-has next x (union-new Derived derived-succ r y))
+               (queue-has next y (union-new Derived derived-pred r x))
+               (stored-edge next x r y)
+               (== (. next active-count) 2)
+               (== (. next iteration) 1)
+               (match (context-of next x)
+                 ((some cx) (and (set-has (. cx subsumers) p) (set-has (. cx subsumers) q)))
+                 ((none)    false)))))))
 
   (fn test-litmus-end-to-end ((arena Arena))
     (@intent "§12: Turtle in, Mother ⊑ Parent out, verdict COHERENT")
@@ -3120,8 +3188,8 @@
             (print-test-result "M1 (e): the same report at W = 1 and W = 4, complete and capped" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
-          (let ((r (test-merge-delta-is-a-set-union arena)))
-            (print-test-result "round-join: worker deltas merge by set union" r)
+          (let ((r (test-commit-dedups-across-deltas arena)))
+            (print-test-result "barrier: facts two workers share are committed once and queued once" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-entails-sub-agrees-with-report arena)))

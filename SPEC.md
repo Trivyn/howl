@@ -2048,22 +2048,39 @@ start of round *n*, and messages produced during round *n* are delivered for rou
 count is then a function of the input alone, so `max-iterations` cuts at the same point on every
 host, at any worker count. Within a round, work distribution stays free.
 
-**How the round is parallelized** (M1 slice 5, `src/saturate.slop` `parallel-join`):
+**How the round is parallelized** (M1 slice 5, `src/saturate.slop`; the barrier made parallel in
+slice 6b):
 1. **Split.** At `worker-count` W > 1 the frontier `active` is split into up to W contiguous
    shares.
 2. **Join.** Each worker thread joins its share against the frozen store, writing only its own
    arena and `RoundDelta`. `round-join` is read-only over the store, and a store write in the join
    is a compile error, so workers share nothing mutable.
-3. **Merge.** At the barrier the coordinator merges the workers' deltas by **set union**, in fixed
-   worker order. A fact two workers both derived collapses to one.
-4. **Commit.** The unchanged `round-commit` commits the merged delta.
+3. **Partition.** At the barrier the coordinator walks every delta's *keys*, gives each touched
+   context one owner (round-robin, first seen), and creates any context a delta names. That
+   creation is the one write to the context registry a round makes (an undeclared class used as
+   an existential filler), so it happens here, serially.
+4. **Commit.** One committer per owner, in parallel. Each processes its own bucket: the entries,
+   drawn from every delta, for the contexts it owns. It grows those contexts' sets in its own
+   arena. A fact joins the next queue only if
+   it was new to the store, which is how two workers' copies of one fact become one. Nothing is
+   merged first: on EL-GALEN at W = 4 the old merge-then-commit was two serial passes over every
+   conclusion, 68% of the round.
+5. **Collect.** The owners' queues become the next round's queues and frontier.
 
 **Why any split gives the same result:** each delta holds only facts novel against the same frozen
-Sₙ, and their union is exactly the Δₙ₊₁ one worker would have built. So the frontier, the round
-count and every report are the same at every W, capped runs included.
+Sₙ, every fact belongs to exactly one context, and every context has exactly one committer. So the
+store after the barrier is the union of the deltas, each queue holds each novel fact once, and the
+frontier is the touched set: exactly what one worker would have produced. Only queue *order* can
+differ, and Δ is a set. So the frontier, the round count and every report are the same at every W,
+capped runs included.
 
 **Checks:**
-- `make test-tsan` checks the join with ThreadSanitizer.
+- `make test-tsan` runs the join and the commit under ThreadSanitizer. That is evidence, not proof,
+  since a race is reported only when it happens. Two deliberate breakages were each seen as races:
+  giving one context two committers, and creating contexts in the committers rather than in the
+  partition.
+- `test-commit-dedups-across-deltas` checks that two workers' copies of a fact are committed and
+  queued once, which the report alone cannot show.
 - `make determinism` compares every report at W ∈ {1,2,4,8} for every cap in
   {0, 1, R/2, R−1, R, ∞}. It refuses to pass unless some cap actually cut a run short.
 
@@ -2920,9 +2937,9 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 7.2× and EL-GALEN at 12–14× (load-dependent) after slice 6b
-  >   steps A and B and slop's map work (slop-lang/slop#205), down from 19.2× and 30.1× at S6a
-  >   (`bench/results.txt`).
+  > - **Status: not met.** GO is at 5.9× and EL-GALEN at 7.7× after slice 6b (the rules each join
+  >   once from the cheaper side, HOWL's own triple store, a parallel round barrier) and slop's map
+  >   work (slop-lang/slop#205), down from 19.2× and 30.1× at S6a (`bench/results.txt`).
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document

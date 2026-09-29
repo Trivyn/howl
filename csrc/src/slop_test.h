@@ -191,7 +191,11 @@ slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string p
 slop_option_types_Outcome test_classify_fixture_with(slop_arena* arena, slop_string path, int64_t workers, int64_t cap);
 uint8_t test_workers_agree(slop_arena* arena, slop_string path, int64_t cap);
 uint8_t test_test_worker_count_does_not_change_the_report(slop_arena* arena);
-uint8_t test_test_merge_delta_is_a_set_union(slop_arena* arena);
+types_Context test_edge_context(slop_arena* arena, types_Node n, types_RoleId r, types_Node m, uint8_t succ);
+uint8_t test_queue_has(types_Saturation sat, types_Node n, types_Derived d);
+uint8_t test_stored_edge(types_Saturation sat, types_Node x, types_RoleId r, types_Node y);
+int64_t test_queue_len(types_Saturation sat, types_Node n);
+uint8_t test_test_commit_dedups_across_deltas(slop_arena* arena);
 uint8_t test_test_litmus_end_to_end(slop_arena* arena);
 uint8_t test_test_role_hierarchy_carries_edges(slop_arena* arena);
 uint8_t test_test_smaller_side_joins(slop_arena* arena);
@@ -399,9 +403,14 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_CONTEXT_DEFINED
-#define SLOP_OPTION_TYPES_CONTEXT_DEFINED
-SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
+#ifndef SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
@@ -420,6 +429,18 @@ SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 #define SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
+#ifndef SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
 #endif
 
 #ifndef SLOP_LIST_U8_DEFINED
