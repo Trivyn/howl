@@ -79,9 +79,10 @@
   (import canon (string-cmp))
 
   (export
-    NormResult NormOutput
+    Decoded NormResult NormOutput
     NormState new-state
     normalize-accepted
+    decode-document normalize-decoded
     normalize-input)
 
   ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
@@ -94,6 +95,15 @@
   ;; names, unsatisfiability of input concept names, and
   ;; unsatisfiability of the individual-proxy concepts. Anything
   ;; outside it must not assume preservation.
+  ;; The document as axioms: what the header pre-pass and decode make of
+  ;; the triples, before the gate. This is the §12 benchmark's boundary -
+  ;; the counterpart of an OWL API ontology in hand - so the front end
+  ;; splits here and the CLI times the two halves apart.
+  (type Decoded (record
+    (axioms    (List RawAxiom))
+    (signature Signature)
+    (omissions (List Omission))))    ; stage 0's: unresolved imports
+
   (type NormResult (record
     (axioms     (List NormAxiom))
     (saturation Saturation)      ; contexts initialized, seeds in Δ₀
@@ -918,9 +928,24 @@
           (seeds       seeds)
           (fresh-count (. no fresh-count))))))
 
-    (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
-    (@intent "Run the front end: header, decode, gate, normalize, initialize")
-    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
+  (fn decode-document ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
+    (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
+    (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    (match (stage0-header arena triples imports-resolved)
+      ((error f) (error f))
+      ((ok s0)
+        (match (decode-axioms arena (. s0 triples))
+          ((error f) (error f))
+          ((ok s1)
+            (ok (record-new Decoded
+                  (axioms    (. s1 axioms))
+                  (signature (. s1 signature))
+                  (omissions (. s0 omissions)))))))))
+
+  (fn normalize-decoded ((arena Arena) (d Decoded))
+    (@intent "The front end's second half: gate, normalize, rename, initialize")
+    (@spec ((Arena Decoded) -> NormResult))
     (@alloc arena)
     ;; ACCOUNTING, NOT "one normal form per axiom". Every accepted
     ;; logical axiom must be discharged by ONE of: the NormAxioms it
@@ -930,30 +955,34 @@
     ;; standalone `range(r) ⊑ C` legitimately vanishes when no
     ;; existential GCI or asserted edge uses `r`, and a role assertion
     ;; becomes edge messages rather than a NormAxiom at all.
-    (match (stage0-header arena triples imports-resolved)
+    ;;
+    ;; The gate runs ONCE. It used to run a second time to feed the
+    ;; normalizer — the same answer at the cost of a second gate over
+    ;; every axiom, which on GO is the whole corpus.
+    ;;
+    ;; THE SATURATION BOUNDARY. `signature-nodes` runs on the ORIGINAL
+    ;; output - it mints `fresh-node i` for i < fresh-count, which would
+    ;; collide with renamed ids - and then everything saturation will see
+    ;; is renamed through one table.
+    (let ((gr    (gate-axioms arena (. d axioms) (. d signature) (. d omissions)))
+          (no    (normalize-accepted arena (. gr accepted)))
+          (names (empty-names arena))
+          (sig   (rename-nodes arena names (signature-nodes arena (. gr signature) no)))
+          (rno   (rename-output arena names no)))
+      (let ((sat (make-initial-saturation arena sig)))
+        (do
+          (install-seeds arena sat rno)
+          (record-new NormResult
+            (axioms     (. rno axioms))
+            (saturation sat)
+            (coverage   (record-new Coverage (omitted (. gr omissions))))
+            (names      names))))))
+
+  (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "Run the front end: header, decode, gate, normalize, initialize")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
+    (@alloc arena)
+    (match (decode-document arena triples imports-resolved)
       ((error f) (error f))
-      ((ok s0)
-        (match (decode-axioms arena (. s0 triples))
-          ((error f) (error f))
-          ((ok s1)
-            ;; The gate runs ONCE. It used to run a second time to feed
-            ;; the normalizer — the same answer at the cost of a second
-            ;; gate over every axiom, which on GO is the whole corpus.
-            ;;
-            ;; THE SATURATION BOUNDARY. `signature-nodes` runs on the
-            ;; ORIGINAL output - it mints `fresh-node i` for i < fresh-count,
-            ;; which would collide with renamed ids - and then everything
-            ;; saturation will see is renamed through one table.
-            (let ((gr    (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions)))
-                  (no    (normalize-accepted arena (. gr accepted)))
-                  (names (empty-names arena))
-                  (sig   (rename-nodes arena names (signature-nodes arena (. gr signature) no)))
-                  (rno   (rename-output arena names no)))
-              (let ((sat (make-initial-saturation arena sig)))
-                (do
-                  (install-seeds arena sat rno)
-                  (ok (record-new NormResult
-                        (axioms     (. rno axioms))
-                        (saturation sat)
-                        (coverage   (record-new Coverage (omitted (. gr omissions))))
-                        (names      names))))))))))))
+      ((ok d)    (ok (normalize-decoded arena d)))))
+)

@@ -2469,10 +2469,13 @@ clamped, since a clamped budget is a run the caller did not ask for. `--workers 
 threads join each round (`1..64`, default 4, refused rather than clamped outside that range). It
 can change only speed, never the report, and it appears nowhere in the report or the engine
 fingerprint. `--timings` prints phase
-durations (parse, front end, reasoning, total) on **stderr**. **Timings are a CLI measurement, never
+durations on **stderr**: `parse_ms` (the Turtle), `decode_ms` (header pre-pass and decode, triples
+to axioms), `prepare_ms` (gate, normalize, rename, initialize, premise index), `reason_ms` and
+`total_ms`. **Timings are a CLI measurement, never
 part of a report**: the engine never reads a clock, and a duration on stdout would make two correct
-runs' reports differ. `prepare_ms + reason_ms` is the classification figure M1 (c) compares against
-the oracle's (bench/bench.py; the boundary is pinned under §12's benchmark protocol).
+runs' reports differ. `prepare_ms + reason_ms`, axioms in hand to taxonomy, is the classification
+figure M1 (c) compares against the oracle's (bench/bench.py; the boundary is pinned under §12's
+benchmark protocol).
 
 **Exit codes** are [§6.2](#62-data-model)'s verdict table, verbatim — a CI gate must distinguish
 "checked, fine" from "couldn't check", and must not downgrade a real finding just because coverage
@@ -2933,12 +2936,16 @@ flowchart TB
   > enough that a wrong data structure fails it.
   >
   > **How the protocol is pinned** (M1 slice 6, `bench/bench.py`, results in `bench/results.txt`):
-  > - **Classification window.** For HOWL it is `prepare_ms + reason_ms`: header and decode through
-  >   saturation and extraction. For the oracle it is reasoner creation + the consistency check +
-  >   `precomputeInferences`. ELK loads and indexes its axioms lazily at the first query, and HermiT
-  >   in its constructor, so both do their indexing inside that window. HOWL's window also carries
-  >   decode (RDF triples → axioms), which the oracle does in its parse. So if anything, the
-  >   comparison charges HOWL for more, never less.
+  > - **Classification window: axioms in hand to taxonomy, on both sides.** For the oracle it is
+  >   reasoner creation + the consistency check + `precomputeInferences`, over an `OWLOntology` its
+  >   untimed parse built. The OWL API's parse does the text *and* the RDF-to-OWL mapping
+  >   (reification, lists, class expressions); ELK then loads, normalizes and indexes the axioms
+  >   lazily at the first query, and HermiT in its constructor, inside the window. For HOWL it is
+  >   `prepare_ms + reason_ms`: gate, normalize, rename, initialize, premise index, saturation and
+  >   extraction, over the axioms its untimed parse and decode built. HOWL's decode (triples →
+  >   axioms) is the counterpart of the OWL API's mapping, so it is outside the window as that is.
+  >   It is recorded beside the window (`howl_decode_ms`), never hidden. Until M1 slice 6b the
+  >   window included decode, which charged HOWL for work the oracle was not charged for.
   > - **Which oracle.** The routing `make diff-corpus` recorded. ELK times GO and EL-GALEN, and only
   >   those are gated. HermiT times the range-bearing RO and OBI, with the result reported, not gated.
   > - **Runs.** HOWL's runs are separate processes. The oracle's share one JVM, so its measured runs
@@ -2949,9 +2956,9 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 5.05× and EL-GALEN at 6.1× after slice 6b and slop's map and
-  >   lazy-collection work (slop-lang/slop#205, #217), down from 19.2× and 30.1× at S6a
-  >   (`bench/results.txt`). Slice 6b's
+  > - **Status: not met.** EL-GALEN is at 5.3× and GO at 1.4× (`bench/results.txt`). With decode
+  >   still inside the window they were 6.1× and 5.05× after slice 6b and slop's map and
+  >   lazy-collection work (slop-lang/slop#205, #217), down from 30.1× and 19.2× at S6a. Slice 6b's
   >   changes: each rule join done once from its cheaper side, HOWL's own triple store, a parallel
   >   round barrier, and saturation over renamed nodes.
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer

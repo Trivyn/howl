@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import io
 import os
+import re
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -40,7 +41,8 @@ def oracle_out(entailments=ENT, measured=bench.RUNS, warmup=bench.WARMUP):
 
 
 def runs(classify, n=bench.RUNS):
-    return [{"classify": classify, "reason": classify / 2, "e2e": classify * 2, "peak": 2**30}] * n
+    return [{"classify": classify, "decode": classify / 4, "reason": classify / 2, "e2e": classify * 2,
+             "peak": 2**30}] * n
 
 
 RECORD = {"el-galen-2011-04-12": {"oracle": "elk", "howl-report": PIN, "oracle-entailments": ENT[:16]},
@@ -75,10 +77,13 @@ class HowlSide(unittest.TestCase):
         self.assertTrue(any("omitted" in e for e in errors))
 
     def test_timings_line(self):
-        t = bench.parse_timing("noise\ntiming parse_ms=10 prepare_ms=20 reason_ms=30 total_ms=60\n")
-        self.assertEqual(t, {"parse": 10, "prepare": 20, "reason": 30, "total": 60})
+        t = bench.parse_timing("noise\ntiming parse_ms=10 decode_ms=5 prepare_ms=20 reason_ms=30 total_ms=65\n")
+        self.assertEqual(t, {"parse": 10, "decode": 5, "prepare": 20, "reason": 30, "total": 65})
         with self.assertRaises(bench.Refusal):
             bench.parse_timing("no timings here")
+        # A line without decode_ms is the old boundary (decode inside prepare_ms): refused, not misread.
+        with self.assertRaises(bench.Refusal):
+            bench.parse_timing("timing parse_ms=10 prepare_ms=20 reason_ms=30 total_ms=60\n")
 
 
 class OracleSide(unittest.TestCase):
@@ -134,6 +139,14 @@ class Verdicts(unittest.TestCase):
         stem, f = bench.parse_entry(lines[0])
         self.assertEqual((f["ratio"], f["verdict"]), ("4.50", "pass"))
 
+    def test_a_result_from_the_old_boundary_is_stale(self):
+        # Before M1 slice 6b, decode was inside the window and no howl_decode_ms was written.
+        lines = [bench.entry_line(s, r, runs(900.0), runs(200.0)) for s, r in RECORD.items()]
+        old = [re.sub(r" howl_decode_ms=\S+", "", l) for l in lines]
+        errors = bench.check_results(old, RECORD)
+        self.assertEqual(len(errors), len(RECORD))
+        self.assertTrue(all("howl_decode_ms" in e for e in errors))
+
     def test_just_over_the_threshold_fails_however_it_prints(self):
         # 1006 / 201 = 5.005: prints as 5.00 or 5.0, and is still over 5x.
         line = bench.entry_line("el-galen-2011-04-12", RECORD["el-galen-2011-04-12"], runs(1006.0), runs(201.0))
@@ -147,7 +160,7 @@ class Verdicts(unittest.TestCase):
         return bench.entry_line("ro-2025-12-17", RECORD["ro-2025-12-17"], runs(1.0), runs(1.0))
 
     def test_median_not_mean(self):
-        rs = runs(100.0, 4) + [{"classify": 10_000.0, "reason": 1, "e2e": 1, "peak": 1}]
+        rs = runs(100.0, 4) + [{"classify": 10_000.0, "decode": 1, "reason": 1, "e2e": 1, "peak": 1}]
         self.assertEqual(bench.summarize(rs, "classify")[0], 100.0)
 
     def test_a_ratio_that_does_not_follow_is_caught(self):

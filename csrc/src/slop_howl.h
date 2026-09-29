@@ -67,6 +67,11 @@ typedef struct howl_Prepared howl_Prepared;
 SLOP_OPTION_DEFINE(howl_Prepared, slop_option_howl_Prepared)
 #endif
 
+#ifndef SLOP_RESULT_NORMALIZE_DECODED_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_NORMALIZE_DECODED_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { normalize_Decoded ok; types_Fault err; } data; } slop_result_normalize_Decoded_types_Fault;
+#endif
+
 #ifndef SLOP_RESULT_HOWL_PREPARED_TYPES_FAULT_DEFINED
 #define SLOP_RESULT_HOWL_PREPARED_TYPES_FAULT_DEFINED
 typedef struct { bool is_ok; union { howl_Prepared ok; types_Fault err; } data; } slop_result_howl_Prepared_types_Fault;
@@ -78,6 +83,8 @@ typedef struct { bool is_ok; union { types_Outcome ok; types_Fault err; } data; 
 #endif
 
 howl_Verdict howl_verdict(types_Outcome o);
+slop_result_normalize_Decoded_types_Fault howl_decode(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
+slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config);
 slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);

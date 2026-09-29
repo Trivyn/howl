@@ -12,6 +12,7 @@
 #include "slop_saturate.h"
 #include "slop_canon.h"
 
+typedef struct normalize_Decoded normalize_Decoded;
 typedef struct normalize_NormResult normalize_NormResult;
 typedef struct normalize_NormOutput normalize_NormOutput;
 typedef struct normalize_NormState normalize_NormState;
@@ -26,6 +27,18 @@ SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
+#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
@@ -64,12 +77,6 @@ SLOP_LIST_DEFINE(owl2_RawConcept, slop_list_owl2_RawConcept)
 SLOP_LIST_DEFINE(types_RoleId, slop_list_types_RoleId)
 #endif
 
-#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
-#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
-#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
-SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
-#endif
-
 #ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
@@ -80,6 +87,16 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
@@ -112,11 +129,6 @@ SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
-#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
-#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
-SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
-#endif
-
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
 #define SLOP_OPTION_RDF_TRIPLE_DEFINED
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
@@ -125,6 +137,18 @@ SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+struct normalize_Decoded {
+    slop_list_owl2_RawAxiom axioms;
+    owl2_Signature signature;
+    slop_list_types_Omission omissions;
+};
+typedef struct normalize_Decoded normalize_Decoded;
+
+#ifndef SLOP_OPTION_NORMALIZE_DECODED_DEFINED
+#define SLOP_OPTION_NORMALIZE_DECODED_DEFINED
+SLOP_OPTION_DEFINE(normalize_Decoded, slop_option_normalize_Decoded)
 #endif
 
 struct normalize_NormResult {
@@ -253,6 +277,11 @@ static inline bool slop_eq_types_Node(const void* a, const void* b) {
 }
 #endif
 
+#ifndef SLOP_RESULT_NORMALIZE_DECODED_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_NORMALIZE_DECODED_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { normalize_Decoded ok; types_Fault err; } data; } slop_result_normalize_Decoded_types_Fault;
+#endif
+
 #ifndef SLOP_RESULT_NORMALIZE_NORMRESULT_TYPES_FAULT_DEFINED
 #define SLOP_RESULT_NORMALIZE_NORMRESULT_TYPES_FAULT_DEFINED
 typedef struct { bool is_ok; union { normalize_NormResult ok; types_Fault err; } data; } slop_result_normalize_NormResult_types_Fault;
@@ -297,7 +326,24 @@ types_NormAxiom normalize_rename_axiom(slop_arena* arena, types_Names names, typ
 types_Derived normalize_rename_derived(slop_arena* arena, types_Names names, types_Derived d);
 slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names, slop_list_types_Node ns);
 normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names names, normalize_NormOutput no);
+slop_result_normalize_Decoded_types_Fault normalize_decode_document(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
+normalize_NormResult normalize_normalize_decoded(slop_arena* arena, normalize_Decoded d);
 slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_NORMALIZE_DECODED_DEFINED
+#define SLOP_OPTION_NORMALIZE_DECODED_DEFINED
+SLOP_OPTION_DEFINE(normalize_Decoded, slop_option_normalize_Decoded)
+#endif
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
@@ -347,11 +393,6 @@ SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #ifndef SLOP_OPTION_NORMALIZE_RANGEFACT_DEFINED
 #define SLOP_OPTION_NORMALIZE_RANGEFACT_DEFINED
 SLOP_OPTION_DEFINE(normalize_RangeFact, slop_option_normalize_RangeFact)
-#endif
-
-#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
-#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
-SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED

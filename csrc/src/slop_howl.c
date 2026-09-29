@@ -2,6 +2,8 @@
 #include "slop_howl.h"
 
 howl_Verdict howl_verdict(types_Outcome o);
+slop_result_normalize_Decoded_types_Fault howl_decode(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
+slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config);
 slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
@@ -24,41 +26,52 @@ howl_Verdict howl_verdict(types_Outcome o) {
     return _retval;
 }
 
-slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
-    __auto_type _mv_520 = normalize_normalize_input(arena, triples, imports_resolved, config);
-    if (!_mv_520.is_ok) {
-        __auto_type f = _mv_520.data.err;
-        return ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_520.is_ok) {
-        __auto_type nr = _mv_520.data.ok;
+slop_result_normalize_Decoded_types_Fault howl_decode(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved) {
+    return normalize_decode_document(arena, triples, imports_resolved);
+}
+
+slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config) {
+    {
+        __auto_type nr = normalize_normalize_decoded(arena, d);
         if (config.strict_profile && (((int64_t)((nr.coverage.omitted).len)) > 0)) {
             return ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_refused, .data.refused = nr.coverage.omitted }) });
         } else {
             return ((slop_result_howl_Prepared_types_Fault){ .is_ok = true, .data.ok = ((howl_Prepared){.axioms = nr.axioms, .index = premise_build_rule_index(arena, nr.axioms), .saturation = nr.saturation, .coverage = nr.coverage, .names = nr.names}) });
         }
     }
+}
+
+slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
+    __auto_type _mv_521 = howl_decode(arena, triples, imports_resolved);
+    if (!_mv_521.is_ok) {
+        __auto_type f = _mv_521.data.err;
+        return ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = f });
+    } else if (_mv_521.is_ok) {
+        __auto_type d = _mv_521.data.ok;
+        return howl_prepare_decoded(arena, d, config);
+    }
     SLOP_UNREACHABLE();
 }
 
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config) {
-    __auto_type _mv_521 = saturate_saturate(arena, p.saturation, p.index, config);
-    if (!_mv_521.is_ok) {
-        __auto_type f = _mv_521.data.err;
+    __auto_type _mv_522 = saturate_saturate(arena, p.saturation, p.index, config);
+    if (!_mv_522.is_ok) {
+        __auto_type f = _mv_522.data.err;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_521.is_ok) {
-        __auto_type rr = _mv_521.data.ok;
+    } else if (_mv_522.is_ok) {
+        __auto_type rr = _mv_522.data.ok;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = true, .data.ok = ((types_Outcome){.coverage = p.coverage, .termination = rr.termination, .findings = classify_extract_findings(arena, rr.saturation, p.names), .saturation = rr.saturation, .names = p.names}) });
     }
     SLOP_UNREACHABLE();
 }
 
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
-    __auto_type _mv_522 = howl_prepare(arena, triples, imports_resolved, config);
-    if (!_mv_522.is_ok) {
-        __auto_type f = _mv_522.data.err;
+    __auto_type _mv_523 = howl_prepare(arena, triples, imports_resolved, config);
+    if (!_mv_523.is_ok) {
+        __auto_type f = _mv_523.data.err;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_522.is_ok) {
-        __auto_type p = _mv_522.data.ok;
+    } else if (_mv_523.is_ok) {
+        __auto_type p = _mv_523.data.ok;
         return howl_reason(arena, p, config);
     }
     SLOP_UNREACHABLE();

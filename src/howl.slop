@@ -21,7 +21,7 @@
                  Profile ProfileSelection ReasonerConfig
                  default-config emit-edge make-context
                  outcome-is-complete findings-are-incoherent))
-  (import normalize (NormResult normalize-input))
+  (import normalize (Decoded NormResult decode-document normalize-decoded))
   (import select (select-profile))
   (import saturate (RoundResult saturate))
   (import classify (extract-findings entails-sub))
@@ -56,7 +56,10 @@
     ;; The pipeline
     classify
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
+    Decoded
+    decode
     Prepared
+    prepare-decoded
     prepare
     reason
     ;; Verdict (§6.2) — the single statement of the rule
@@ -138,7 +141,8 @@
   ;; ============================================================
   ;; The pipeline
   ;;
-  ;;   triples → normalize (header, decode, gate, normalize, init)
+  ;;   triples → decode    (header, decode: triples to axioms)
+  ;;           → prepare   (gate, normalize, init, index)
   ;;           → saturate  (CR1–CR7 to fixpoint or the round cap)
   ;;           → extract   (taxonomy + findings)
   ;;           → Outcome
@@ -162,12 +166,14 @@
   ;; ============================================================
   ;; The pipeline, split where the front end ends
   ;;
-  ;; `classify` is `prepare` then `reason`, and nothing else. The split
-  ;; exists for §12 M1 (c): the benchmark times CLASSIFICATION, not
-  ;; parsing and normalization, and the only honest way to measure that
-  ;; from outside the library is a call boundary. The clock stays on the
-  ;; caller's side of it — HOWL never consults a clock inside a
-  ;; reasoning call (§6.8), so a timing can never reach a report.
+  ;; `classify` is `prepare` then `reason`, and nothing else; `prepare`
+  ;; is `decode` then `prepare-decoded`. The splits exist for §12 M1 (c):
+  ;; the benchmark times CLASSIFICATION FROM AXIOMS IN HAND - the point
+  ;; an OWL API caller reaches when its parse returns - and the only
+  ;; honest way to measure that from outside the library is a call
+  ;; boundary. The clock stays on the caller's side of it — HOWL never
+  ;; consults a clock inside a reasoning call (§6.8), so a timing can
+  ;; never reach a report.
   ;; ============================================================
 
   ;; What the front end hands the reasoner: the normalized axioms, the
@@ -184,6 +190,8 @@
   ;; `reason_ms` alone: ELK loads and indexes its axioms lazily, at the
   ;; first query, INSIDE its classification window (bench/bench.py times
   ;; it there), so excluding HOWL's index would compare unlike boundaries.
+  ;; `decode_ms` (triples to axioms) is outside it, as the OWL API's
+  ;; RDF-to-axiom mapping is outside ELK's, and is reported beside it.
   (type Prepared (record
     (axioms     (List NormAxiom))
     (index      RuleIndex)
@@ -191,9 +199,15 @@
     (coverage   Coverage)
     (names      Names)))      ; axioms, index and saturation are renamed (types.slop)
 
-  (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
-    (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
-    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
+  (fn decode ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
+    (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
+    (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    (decode-document arena triples imports-resolved))
+
+  (fn prepare-decoded ((arena Arena) (d Decoded) (config ReasonerConfig))
+    (@intent "The front end's second half: gate, normalize, initialize, index — and --strict's refusal")
+    (@spec ((Arena Decoded ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
     ;; WHY THE PIPELINE STILL REFUSES ON A FRONT-END FAULT.
     ;; An `input-error` has no verdict to misread; an Outcome would.
@@ -201,24 +215,31 @@
     ;; the document would present as full coverage over an empty
     ;; saturation, which §6.2's verdict rule reads as a clean
     ;; `coherent` — sound, catastrophically incomplete, and
-    ;; indistinguishable from success at every interface.
+    ;; indistinguishable from success at every interface. (A decode
+    ;; fault never gets here: `decode` returns it.)
     ;;
     ;; --strict REFUSES AFTER THE GATE, BEFORE SATURATION. The omissions
     ;; are exactly what the caller asked not to run past, so `refused`
     ;; carries them and nothing else: no Outcome, so no verdict and no
     ;; findings a partial run might have produced (§9, §10 item 12).
-    (match (normalize-input arena triples imports-resolved config)
+    (let ((nr (normalize-decoded arena d)))
+      (if (and (. config strict-profile)
+               (> (list-len (. (. nr coverage) omitted)) 0))
+        (error (union-new Fault refused (. (. nr coverage) omitted)))
+        (ok (record-new Prepared
+              (axioms     (. nr axioms))
+              (index      (build-rule-index arena (. nr axioms)))
+              (saturation (. nr saturation))
+              (coverage   (. nr coverage))
+              (names      (. nr names)))))))
+
+  (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
+    (@alloc arena)
+    (match (decode arena triples imports-resolved)
       ((error f) (error f))
-      ((ok nr)
-        (if (and (. config strict-profile)
-                 (> (list-len (. (. nr coverage) omitted)) 0))
-          (error (union-new Fault refused (. (. nr coverage) omitted)))
-          (ok (record-new Prepared
-                (axioms     (. nr axioms))
-                (index      (build-rule-index arena (. nr axioms)))
-                (saturation (. nr saturation))
-                (coverage   (. nr coverage))
-                (names      (. nr names))))))))
+      ((ok d)    (prepare-decoded arena d config))))
 
   (fn reason ((arena Arena) (p Prepared) (config ReasonerConfig))
     (@intent "Saturate a prepared theory and extract its findings")

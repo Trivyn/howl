@@ -75,7 +75,7 @@
                term-eq make-iri))
   (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config))
   (import owl2 (render-omission))
-  (import howl (Verdict verdict Prepared prepare reason))
+  (import howl (Verdict verdict Decoded decode Prepared prepare-decoded reason))
   (import report (report-lines))
   (import strlib (parse-int is-digit char-at))
   (import ttl (parse-ttl-file))
@@ -270,24 +270,28 @@
     ;; C parameter name, as `config` is in saturate.slop's cancel check.
     (c-inline "fwrite(s.data, 1, s.len, stderr);"))
 
-  (fn print-timings ((arena Arena) (t0 Int) (t1 Int) (t2 Int) (t3 Int))
-    (@intent "Phase durations on stderr: parse, front end, reasoning, total")
-    (@spec ((Arena Int Int Int Int) -> Unit))
+  (fn print-timings ((arena Arena) (t0 Int) (t1 Int) (t2 Int) (t3 Int) (t4 Int))
+    (@intent "Phase durations on stderr: parse, decode, rest of the front end, reasoning, total")
+    (@spec ((Arena Int Int Int Int Int) -> Unit))
     (@alloc arena)
     ;; THE CLOCK IS READ IN THE CLI AND NOWHERE ELSE. HOWL never consults
     ;; a clock inside a reasoning call (§6.8); `make test` fails if one
-    ;; appears under src/. `prepare_ms + reason_ms` is the classification
-    ;; figure §12 M1 (c) compares against ELK (bench/bench.py); `total_ms`
-    ;; is end to end, up to the report being printed.
+    ;; appears under src/. `prepare_ms + reason_ms` - axioms in hand to
+    ;; taxonomy - is the classification figure §12 M1 (c) compares against
+    ;; ELK (bench/bench.py); `decode_ms` (triples to axioms) is reported
+    ;; beside it. `total_ms` is parse through reasoning: the clock stops
+    ;; before the report is rendered and printed.
     (eprint
       (string-concat arena "timing parse_ms="
         (string-concat arena (int-to-string arena (- t1 t0))
-          (string-concat arena " prepare_ms="
+          (string-concat arena " decode_ms="
             (string-concat arena (int-to-string arena (- t2 t1))
-              (string-concat arena " reason_ms="
+              (string-concat arena " prepare_ms="
                 (string-concat arena (int-to-string arena (- t3 t2))
-                  (string-concat arena " total_ms="
-                    (string-concat arena (int-to-string arena (- t3 t0)) "\n"))))))))))
+                  (string-concat arena " reason_ms="
+                    (string-concat arena (int-to-string arena (- t4 t3))
+                      (string-concat arena " total_ms="
+                        (string-concat arena (int-to-string arena (- t4 t0)) "\n"))))))))))))
 
   (fn all-digits ((s String))
     (@intent "Non-empty, and every byte an ASCII digit — the only shape a budget may take")
@@ -308,13 +312,22 @@
             (set! i (+ i 1))))
         ok)))
 
+  (fn prepare-from ((arena Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
+    (@intent "Finish the front end over a successful decode; pass a decode fault straight through")
+    (@spec ((Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; This IS `howl.prepare`, split so decode can be timed apart.
+    (match d
+      ((error f) (error f))
+      ((ok dd)   (prepare-decoded arena dd config))))
+
   (fn reason-prepared ((arena Arena) (p (Result Prepared Fault)) (config ReasonerConfig))
     (@intent "Reason over a successful front end; pass a front-end fault straight through")
     (@spec ((Arena (Result Prepared Fault) ReasonerConfig) -> (Result Outcome Fault)))
     (@alloc arena)
-    ;; This IS `howl.classify`, split so the two halves can be timed. It
-    ;; adds nothing between them, so the timed path cannot drift from the
-    ;; port's path.
+    ;; This IS `howl.classify`, split so the halves can be timed. With
+    ;; `prepare-from` it adds nothing between them, so the timed path
+    ;; cannot drift from the port's path.
     (match p
       ((error f) (error f))
       ((ok pp)   (reason arena pp config))))
@@ -494,13 +507,15 @@
                 (if failed
                   EXIT_ERROR
                   (let ((t-parsed   (now-ms))
-                        (prepared   (prepare arena triples resolved cfg))
+                        (decoded    (decode arena triples resolved))
+                        (t-decoded  (now-ms))
+                        (prepared   (prepare-from arena decoded cfg))
                         (t-prepared (now-ms))
                         (result     (reason-prepared arena prepared cfg))
                         (t-reasoned (now-ms)))
                     (do
                       (when timings
-                        (print-timings arena t-start t-parsed t-prepared t-reasoned))
+                        (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
                       (match result
                         ((ok o)
                           (if report-mode

@@ -40,6 +40,8 @@ types_NormAxiom normalize_rename_axiom(slop_arena* arena, types_Names names, typ
 types_Derived normalize_rename_derived(slop_arena* arena, types_Names names, types_Derived d);
 slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names, slop_list_types_Node ns);
 normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names names, normalize_NormOutput no);
+slop_result_normalize_Decoded_types_Fault normalize_decode_document(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
+normalize_NormResult normalize_normalize_decoded(slop_arena* arena, normalize_Decoded d);
 slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 
 normalize_NormState* normalize_new_state(slop_arena* arena) {
@@ -909,33 +911,49 @@ normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names name
     }
 }
 
-slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
+slop_result_normalize_Decoded_types_Fault normalize_decode_document(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved) {
     __auto_type _mv_518 = decode_stage0_header(arena, triples, imports_resolved);
     if (!_mv_518.is_ok) {
         __auto_type f = _mv_518.data.err;
-        return ((slop_result_normalize_NormResult_types_Fault){ .is_ok = false, .data.err = f });
+        return ((slop_result_normalize_Decoded_types_Fault){ .is_ok = false, .data.err = f });
     } else if (_mv_518.is_ok) {
         __auto_type s0 = _mv_518.data.ok;
         __auto_type _mv_519 = decode_decode_axioms(arena, s0.triples);
         if (!_mv_519.is_ok) {
             __auto_type f = _mv_519.data.err;
-            return ((slop_result_normalize_NormResult_types_Fault){ .is_ok = false, .data.err = f });
+            return ((slop_result_normalize_Decoded_types_Fault){ .is_ok = false, .data.err = f });
         } else if (_mv_519.is_ok) {
             __auto_type s1 = _mv_519.data.ok;
-            {
-                __auto_type gr = gate_gate_axioms(arena, s1.axioms, s1.signature, s0.omissions);
-                __auto_type no = normalize_normalize_accepted(arena, gr.accepted);
-                __auto_type names = types_empty_names(arena);
-                __auto_type sig = normalize_rename_nodes(arena, names, normalize_signature_nodes(arena, gr.signature, no));
-                __auto_type rno = normalize_rename_output(arena, names, no);
-                {
-                    __auto_type sat = saturate_make_initial_saturation(arena, sig);
-                    normalize_install_seeds(arena, sat, rno);
-                    return ((slop_result_normalize_NormResult_types_Fault){ .is_ok = true, .data.ok = ((normalize_NormResult){.axioms = rno.axioms, .saturation = sat, .coverage = ((types_Coverage){.omitted = gr.omissions}), .names = names}) });
-                }
-            }
+            return ((slop_result_normalize_Decoded_types_Fault){ .is_ok = true, .data.ok = ((normalize_Decoded){.axioms = s1.axioms, .signature = s1.signature, .omissions = s0.omissions}) });
         }
         SLOP_UNREACHABLE();
+    }
+    SLOP_UNREACHABLE();
+}
+
+normalize_NormResult normalize_normalize_decoded(slop_arena* arena, normalize_Decoded d) {
+    {
+        __auto_type gr = gate_gate_axioms(arena, d.axioms, d.signature, d.omissions);
+        __auto_type no = normalize_normalize_accepted(arena, gr.accepted);
+        __auto_type names = types_empty_names(arena);
+        __auto_type sig = normalize_rename_nodes(arena, names, normalize_signature_nodes(arena, gr.signature, no));
+        __auto_type rno = normalize_rename_output(arena, names, no);
+        {
+            __auto_type sat = saturate_make_initial_saturation(arena, sig);
+            normalize_install_seeds(arena, sat, rno);
+            return ((normalize_NormResult){.axioms = rno.axioms, .saturation = sat, .coverage = ((types_Coverage){.omitted = gr.omissions}), .names = names});
+        }
+    }
+}
+
+slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
+    __auto_type _mv_520 = normalize_decode_document(arena, triples, imports_resolved);
+    if (!_mv_520.is_ok) {
+        __auto_type f = _mv_520.data.err;
+        return ((slop_result_normalize_NormResult_types_Fault){ .is_ok = false, .data.err = f });
+    } else if (_mv_520.is_ok) {
+        __auto_type d = _mv_520.data.ok;
+        return ((slop_result_normalize_NormResult_types_Fault){ .is_ok = true, .data.ok = normalize_normalize_decoded(arena, d) });
     }
     SLOP_UNREACHABLE();
 }
