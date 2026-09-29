@@ -30,6 +30,7 @@ typedef struct types_Outcome types_Outcome;
 typedef struct types_Fault types_Fault;
 typedef struct types_ProfileSelection types_ProfileSelection;
 typedef struct types_ReasonerConfig types_ReasonerConfig;
+typedef struct types_Names types_Names;
 
 typedef enum {
     types_EntityKind_entity_class,
@@ -402,19 +403,6 @@ typedef struct types_Findings types_Findings;
 SLOP_OPTION_DEFINE(types_Findings, slop_option_types_Findings)
 #endif
 
-struct types_Outcome {
-    types_Coverage coverage;
-    types_Termination termination;
-    types_Findings findings;
-    types_Saturation saturation;
-};
-typedef struct types_Outcome types_Outcome;
-
-#ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
-#define SLOP_OPTION_TYPES_OUTCOME_DEFINED
-SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
-#endif
-
 typedef enum {
     types_Fault_cancelled,
     types_Fault_input_error,
@@ -467,6 +455,33 @@ typedef struct types_ReasonerConfig types_ReasonerConfig;
 #ifndef SLOP_OPTION_TYPES_REASONERCONFIG_DEFINED
 #define SLOP_OPTION_TYPES_REASONERCONFIG_DEFINED
 SLOP_OPTION_DEFINE(types_ReasonerConfig, slop_option_types_ReasonerConfig)
+#endif
+
+struct types_Names {
+    slop_map* node_ids;
+    slop_map* nodes;
+    slop_map* role_ids;
+    slop_map* roles;
+};
+typedef struct types_Names types_Names;
+
+#ifndef SLOP_OPTION_TYPES_NAMES_DEFINED
+#define SLOP_OPTION_TYPES_NAMES_DEFINED
+SLOP_OPTION_DEFINE(types_Names, slop_option_types_Names)
+#endif
+
+struct types_Outcome {
+    types_Coverage coverage;
+    types_Termination termination;
+    types_Findings findings;
+    types_Saturation saturation;
+    types_Names names;
+};
+typedef struct types_Outcome types_Outcome;
+
+#ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
+#define SLOP_OPTION_TYPES_OUTCOME_DEFINED
+SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
 #endif
 
 #ifndef SLOP_LIST_TYPES_CONCEPT_DEFINED
@@ -616,6 +631,12 @@ types_Node types_node_top(void);
 types_Node types_node_bottom(void);
 uint8_t types_node_eq(types_Node a, types_Node b);
 uint8_t types_role_eq(types_RoleId a, types_RoleId b);
+types_Names types_empty_names(slop_arena* arena);
+types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n);
+types_RoleId types_intern_role(slop_arena* arena, types_Names names, types_RoleId r);
+slop_option_types_Node types_renamed_node(types_Names names, types_Node n);
+types_Node types_original_node(types_Names names, types_Node n);
+types_RoleId types_original_role(types_Names names, types_RoleId r);
 types_Context types_make_context(slop_arena* arena, types_Node root);
 types_Queue types_make_queue(slop_arena* arena);
 uint8_t types_queue_is_active(types_Queue q);
@@ -751,6 +772,11 @@ SLOP_OPTION_DEFINE(types_ProfileSelection, slop_option_types_ProfileSelection)
 #ifndef SLOP_OPTION_TYPES_REASONERCONFIG_DEFINED
 #define SLOP_OPTION_TYPES_REASONERCONFIG_DEFINED
 SLOP_OPTION_DEFINE(types_ReasonerConfig, slop_option_types_ReasonerConfig)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_NAMES_DEFINED
+#define SLOP_OPTION_TYPES_NAMES_DEFINED
+SLOP_OPTION_DEFINE(types_Names, slop_option_types_Names)
 #endif
 
 #ifndef SLOP_LIST_TYPES_CONCEPT_IMPL_DEFINED

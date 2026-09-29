@@ -39,6 +39,7 @@
                  Omission Coverage Termination SubPair Findings Outcome Fault
                  ReasonerConfig
                  default-config emit-edge make-context make-queue
+                 Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
   (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range
@@ -96,7 +97,8 @@
                          (union-new Termination fixpoint)
                          (union-new Termination resource-limit 1000)))
           (findings    (make-findings arena inconsistent unsat-count))
-          (saturation  (empty-saturation arena))))))
+          (saturation  (empty-saturation arena))
+          (names       (empty-names arena))))))
 
   (fn verdict-eq ((a Verdict) (b Verdict))
     (@intent "Compare two verdicts")
@@ -355,6 +357,51 @@
                  ((some cx) (and (set-has (. cx subsumers) p) (set-has (. cx subsumers) q)))
                  ((none)    false)))))))
 
+  (fn test-names-round-trip ((arena Arena))
+    (@intent "The saturation boundary's renaming inverts, keeps ⊤ and ⊥, keeps punning apart; empty is identity")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A class and an individual with the SAME IRI must rename to two
+    ;; different ids - the tags are what keep punned names apart, and a
+    ;; table keyed by IRI alone would merge them (types.slop, Node).
+    (let ((names  (empty-names arena))
+          (empty  (empty-names arena))
+          (c      (cls "http://example.org/C"))
+          (i      (union-new Node individual-node (record-new IRI (value "http://example.org/C"))))
+          (f      (union-new Node fresh-node 7))
+          (r      (rol "http://example.org/r"))
+          (top    (node-top))
+          (bottom (node-bottom))
+          (rc     (intern-node arena names c))
+          (ri     (intern-node arena names i))
+          (rf     (intern-node arena names f))
+          (rr     (intern-role arena names r)))
+      (and (node-eq (original-node names rc) c)
+           (node-eq (original-node names ri) i)
+           (node-eq (original-node names rf) f)
+           (role-eq (original-role names rr) r)
+           (not (node-eq rc ri))
+           (node-eq (intern-node arena names c) rc)
+           (same-renamed names c rc)
+           (node-eq (intern-node arena names top) top)
+           (node-eq (intern-node arena names bottom) bottom)
+           (node-eq (original-node empty f) f)
+           (same-renamed empty c c)
+           (same-renamed empty f f)
+           ;; An unknown ORIGINAL fresh node under a non-empty table: its
+           ;; id may belong to another node (C is id 0), so it is not
+           ;; mistaken for that node's renamed form.
+           (match (renamed-node names (union-new Node fresh-node 0))
+             ((none)   true)
+             ((some _) false)))))
+
+  (fn same-renamed ((names Names) (n Node) (expect Node))
+    (@intent "renamed-node n is exactly expect")
+    (@spec ((Names Node Node) -> Bool))
+    (match (renamed-node names n)
+      ((some r) (node-eq r expect))
+      ((none)   false)))
+
   (fn test-litmus-end-to-end ((arena Arena))
     (@intent "§12: Turtle in, Mother ⊑ Parent out, verdict COHERENT")
     (@spec ((Arena) -> Bool))
@@ -370,7 +417,7 @@
         ((none) false)
         ((some o)
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
-            (and (entails-sub (. o saturation) (. (. o findings) inconsistent) mother parent)
+            (and (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent) mother parent)
                  (match (verdict o) ('verdict-coherent true) (_ false))))))))
 
   (fn test-role-hierarchy-carries-edges ((arena Arena))
@@ -384,9 +431,9 @@
       ((none) false)
       ((some o)
         (let ((inc (. (. o findings) inconsistent)))
-          (and (entails-sub (. o saturation) inc (cls "http://example.org/t#A")
+          (and (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#A")
                             (cls "http://example.org/t#C"))
-               (not (entails-sub (. o saturation) inc (cls "http://example.org/t#E")
+               (not (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#E")
                                  (cls "http://example.org/t#F"))))))))
 
   (fn test-smaller-side-joins ((arena Arena))
@@ -403,9 +450,9 @@
       ((some o)
         (let ((inc (. (. o findings) inconsistent)))
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
-               (entails-sub (. o saturation) inc (cls "http://example.org/t#X")
+               (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#X")
                             (cls "http://example.org/t#E3"))
-               (entails-sub (. o saturation) inc (cls "http://example.org/t#X2")
+               (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#X2")
                             (cls "http://example.org/t#H2")))))))
 
   (fn test-unattested-import-is-inconclusive ((arena Arena))
@@ -434,7 +481,7 @@
       (match (classify-fixture arena "corpus/fixtures/hazards/declared-unused-class.ttl")
         ((none) false)
         ((some o)
-          (and (entails-sub (. o saturation) (. (. o findings) inconsistent)
+          (and (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent)
                  unused (node-top))
                (match (verdict o) ('verdict-coherent true) (_ false)))))))
 
@@ -592,28 +639,34 @@
       ((none) false)
       ((some o)
         (let ((sat   (. o saturation))
+              (names (. o names))
               (f     (. o findings))
               (mut ok    true)
               (mut pairs 0))
           (do
-            (for-each ((a actx) (. sat contexts))
-              (match a
-                ((class-node ai)
-                  ;; owl:Nothing is excluded from the report by name
-                  ;; (classify.is-bottom-iri) and ⊥ ⊑ B holds vacuously.
-                  (when (not (string-eq (. ai value) "http://www.w3.org/2002/07/owl#Nothing"))
-                    (for-each ((b bctx) (. sat contexts))
-                      (match b
-                        ((class-node _)
-                          (do
-                            (set! pairs (+ pairs 1))
-                            (when (not (== (entails-sub sat (. f inconsistent) a b)
-                                           (report-entails f a b)))
-                              (set! ok false))))
-                        ((individual-node _) (do))
-                        ((fresh-node _)      (do))))))
-                ((individual-node _) (do))
-                ((fresh-node _)      (do))))
+            ;; The store's keys are RENAMED (types.slop, Names): each is
+            ;; mapped back to the node it stands for, and the probe is asked
+            ;; about originals, as a caller would ask it.
+            (for-each ((ra actx) (. sat contexts))
+              (let ((a (original-node names ra)))
+                (match a
+                  ((class-node ai)
+                    ;; owl:Nothing is excluded from the report by name
+                    ;; (classify.is-bottom-iri) and ⊥ ⊑ B holds vacuously.
+                    (when (not (string-eq (. ai value) "http://www.w3.org/2002/07/owl#Nothing"))
+                      (for-each ((rb bctx) (. sat contexts))
+                        (let ((b (original-node names rb)))
+                          (match b
+                            ((class-node _)
+                              (do
+                                (set! pairs (+ pairs 1))
+                                (when (not (== (entails-sub sat names (. f inconsistent) a b)
+                                               (report-entails f a b)))
+                                  (set! ok false))))
+                            ((individual-node _) (do))
+                            ((fresh-node _)      (do)))))))
+                  ((individual-node _) (do))
+                  ((fresh-node _)      (do)))))
             ;; A fixture that yielded no class pairs checked nothing.
             (and ok (> pairs 0)))))))
 
@@ -726,8 +779,8 @@
     (@alloc arena)
     (match (run-fixture arena (litmus-signature arena) (litmus-axioms arena correct-polarity))
       ((ok r)
-        (let ((f (extract-findings arena (. r saturation))))
-          (entails-sub (. r saturation) (. f inconsistent)
+        (let ((f (extract-findings arena (. r saturation) (empty-names arena))))
+          (entails-sub (. r saturation) (empty-names arena) (. f inconsistent)
             (cls "http://example.org/Mother") (cls "http://example.org/Parent"))))
       ((error _) false)))
 
@@ -808,8 +861,8 @@
         (list-push ax (union-new NormAxiom sub-some-lhs r g h))    ; ∃r.G ⊑ H
         (match (run-fixture arena sig ax)
           ((ok res)
-            (let ((fi (extract-findings arena (. res saturation))))
-              (entails-sub (. res saturation) (. fi inconsistent) e h)))
+            (let ((fi (extract-findings arena (. res saturation) (empty-names arena))))
+              (entails-sub (. res saturation) (empty-names arena) (. fi inconsistent) e h)))
           ((error _) false)))))
 
   ;; The MIRROR, and it exists because mutation testing found a hole:
@@ -849,8 +902,8 @@
         (list-push ax (union-new NormAxiom sub-some-lhs r g h))    ; ∃r.G ⊑ H
         (match (run-fixture arena sig ax)
           ((ok res)
-            (let ((fi (extract-findings arena (. res saturation))))
-              (entails-sub (. res saturation) (. fi inconsistent) e h)))
+            (let ((fi (extract-findings arena (. res saturation) (empty-names arena))))
+              (entails-sub (. res saturation) (empty-names arena) (. fi inconsistent) e h)))
           ((error _) false)))))
 
   ;; ------------------------------------------------------------
@@ -885,7 +938,7 @@
     (@alloc arena)
     (match (unsat-fixture arena)
       ((ok r)
-        (let ((f (extract-findings arena (. r saturation))))
+        (let ((f (extract-findings arena (. r saturation) (empty-names arena))))
           ;; Exactly one unsatisfiable class: A. If owl:Nothing leaked in
           ;; — and it satisfies ⊥ ∈ S(⊥) by construction, since every
           ;; context is seeded with itself — this would be 2, and every
@@ -903,7 +956,7 @@
       ((ok r)
         (let ((a (cls "http://example.org/A"))
               (b (cls "http://example.org/B"))
-              (f (extract-findings arena (. r saturation)))
+              (f (extract-findings arena (. r saturation) (empty-names arena)))
               (mut pairs-about-a 0))
           (do
             (for-each (p (. f subsumptions))
@@ -915,7 +968,7 @@
             ;; the signature. Both readings are defensible in isolation;
             ;; implementing one where the other belongs gives either
             ;; false negatives on probes or a quadratic hierarchy.
-            (if (entails-sub (. r saturation) (. f inconsistent) a b)
+            (if (entails-sub (. r saturation) (empty-names arena) (. f inconsistent) a b)
               (== pairs-about-a 1)
               false))))
       ((error _) false)))
@@ -950,7 +1003,7 @@
         (list-push ax (union-new NormAxiom sub-name (node-top) (node-bottom)))
         (match (run-fixture arena sig ax)
           ((ok r)
-            (let ((f (extract-findings arena (. r saturation))))
+            (let ((f (extract-findings arena (. r saturation) (empty-names arena))))
               (if (. f inconsistent)
                 (if (== (list-len (. f unsatisfiable)) 0)
                   (== (list-len (. f subsumptions)) 0)
@@ -1024,8 +1077,8 @@
           ((ok r1)
             (match (run-fixture arena rev ax)
               ((ok r2)
-                (let ((f1 (extract-findings arena (. r1 saturation)))
-                      (f2 (extract-findings arena (. r2 saturation))))
+                (let ((f1 (extract-findings arena (. r1 saturation) (empty-names arena)))
+                      (f2 (extract-findings arena (. r2 saturation) (empty-names arena))))
                   (if (== (. (. r1 saturation) iteration) (. (. r2 saturation) iteration))
                     (if (== (list-len (. f1 subsumptions)) (list-len (. f2 subsumptions)))
                       (== (list-len (. f1 unsatisfiable)) (list-len (. f2 unsatisfiable)))
@@ -3186,6 +3239,10 @@
 
           (let ((r (test-worker-count-does-not-change-the-report arena)))
             (print-test-result "M1 (e): the same report at W = 1 and W = 4, complete and capped" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-names-round-trip arena)))
+            (print-test-result "saturation names: renaming inverts, keeps ⊤ and ⊥, keeps punning apart" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-commit-dedups-across-deltas arena)))

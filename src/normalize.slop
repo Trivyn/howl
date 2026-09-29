@@ -69,7 +69,8 @@
   (import types (Node RoleId Concept NormAxiom Omission Coverage
                  Saturation ReasonerConfig Fault LogicalEdge
                  Derived Addressed EdgePair emit-edge
-                 node-top node-bottom node-eq role-eq))
+                 node-top node-bottom node-eq role-eq
+                 Names empty-names intern-node intern-role))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
                 Signature make-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
@@ -96,7 +97,8 @@
   (type NormResult (record
     (axioms     (List NormAxiom))
     (saturation Saturation)      ; contexts initialized, seeds in Δ₀
-    (coverage   Coverage)))      ; what the gate omitted
+    (coverage   Coverage)        ; what the gate omitted
+    (names      Names)))         ; axioms and saturation are RENAMED (types.slop, Names)
 
   (type NormOutput (record
     (axioms      (List NormAxiom))
@@ -837,7 +839,86 @@
             (set! ok false)))
         ok)))
 
-  (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+;; ============================================================
+  ;; Renaming at the saturation boundary  —  M1 slice 6b C2
+  ;;
+  ;; Everything saturation will see - the signature's nodes, the normal
+  ;; form, the asserted edges and the seeds - is renamed to dense fresh ids
+  ;; here, through ONE table, so equality in saturation is an Int compare
+  ;; (types.slop, Names). Axiom-only nodes (an undeclared filler) are
+  ;; renamed too, since saturation may give them a context mid-run; they
+  ;; are not SEEDED, exactly as before. The order is the table's order:
+  ;; the signature first, then the axioms, edges and seeds - deterministic,
+  ;; and never visible, because extraction maps back before it sorts.
+  ;; ============================================================
+
+  (fn rename-axiom ((arena Arena) (names Names) (ax NormAxiom))
+    (@intent "A normal-form axiom over renamed nodes and roles")
+    (@spec ((Arena Names NormAxiom) -> NormAxiom))
+    (@alloc arena)
+    (match ax
+      ((sub-name a b)
+        (union-new NormAxiom sub-name (intern-node arena names a) (intern-node arena names b)))
+      ((sub-and a1 a2 b)
+        (union-new NormAxiom sub-and (intern-node arena names a1) (intern-node arena names a2)
+                                     (intern-node arena names b)))
+      ((sub-some-rhs a r b)
+        (union-new NormAxiom sub-some-rhs (intern-node arena names a) (intern-role arena names r)
+                                          (intern-node arena names b)))
+      ((sub-some-lhs r b a)
+        (union-new NormAxiom sub-some-lhs (intern-role arena names r) (intern-node arena names b)
+                                          (intern-node arena names a)))
+      ((sub-role r s)
+        (union-new NormAxiom sub-role (intern-role arena names r) (intern-role arena names s)))
+      ((role-chain r s t)
+        (union-new NormAxiom role-chain (intern-role arena names r) (intern-role arena names s)
+                                        (intern-role arena names t)))))
+
+  (fn rename-derived ((arena Arena) (names Names) (d Derived))
+    (@intent "A derived fact over renamed nodes and roles")
+    (@spec ((Arena Names Derived) -> Derived))
+    (@alloc arena)
+    (match d
+      ((derived-sub b)    (union-new Derived derived-sub (intern-node arena names b)))
+      ((derived-succ r y) (union-new Derived derived-succ (intern-role arena names r) (intern-node arena names y)))
+      ((derived-pred r x) (union-new Derived derived-pred (intern-role arena names r) (intern-node arena names x)))))
+
+  (fn rename-nodes ((arena Arena) (names Names) (ns (List Node)))
+    (@intent "A node list, renamed in order")
+    (@spec ((Arena Names (List Node)) -> (List Node)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Node)))
+      (do
+        (for-each (n ns) (list-push out (intern-node arena names n)))
+        out)))
+
+  (fn rename-output ((arena Arena) (names Names) (no NormOutput))
+    (@intent "The normalizer's output over renamed nodes and roles: axioms, edges, subjects, seeds")
+    (@spec ((Arena Names NormOutput) -> NormOutput))
+    (@alloc arena)
+    (let ((mut axioms (list-new arena NormAxiom))
+          (mut edges  (list-new arena LogicalEdge))
+          (mut seeds  (list-new arena Addressed)))
+      (do
+        (for-each (ax (. no axioms))
+          (list-push axioms (rename-axiom arena names ax)))
+        (for-each (e (. no edges))
+          (list-push edges (record-new LogicalEdge
+                             (from (intern-node arena names (. e from)))
+                             (role (intern-role arena names (. e role)))
+                             (to   (intern-node arena names (. e to))))))
+        (for-each (sd (. no seeds))
+          (list-push seeds (record-new Addressed
+                             (to   (intern-node arena names (. sd to)))
+                             (what (rename-derived arena names (. sd what))))))
+        (record-new NormOutput
+          (axioms      axioms)
+          (edges       edges)
+          (asserted    (rename-nodes arena names (. no asserted)))
+          (seeds       seeds)
+          (fresh-count (. no fresh-count))))))
+
+    (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Run the front end: header, decode, gate, normalize, initialize")
     (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
     (@alloc arena)
@@ -858,13 +939,21 @@
             ;; The gate runs ONCE. It used to run a second time to feed
             ;; the normalizer — the same answer at the cost of a second
             ;; gate over every axiom, which on GO is the whole corpus.
-            (let ((gr (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions)))
-                  (no (normalize-accepted arena (. gr accepted))))
-              (let ((sat (make-initial-saturation arena
-                           (signature-nodes arena (. gr signature) no))))
+            ;;
+            ;; THE SATURATION BOUNDARY. `signature-nodes` runs on the
+            ;; ORIGINAL output - it mints `fresh-node i` for i < fresh-count,
+            ;; which would collide with renamed ids - and then everything
+            ;; saturation will see is renamed through one table.
+            (let ((gr    (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions)))
+                  (no    (normalize-accepted arena (. gr accepted)))
+                  (names (empty-names arena))
+                  (sig   (rename-nodes arena names (signature-nodes arena (. gr signature) no)))
+                  (rno   (rename-output arena names no)))
+              (let ((sat (make-initial-saturation arena sig)))
                 (do
-                  (install-seeds arena sat no)
+                  (install-seeds arena sat rno)
                   (ok (record-new NormResult
-                        (axioms     (. no axioms))
+                        (axioms     (. rno axioms))
                         (saturation sat)
-                        (coverage   (record-new Coverage (omitted (. gr omissions)))))))))))))))
+                        (coverage   (record-new Coverage (omitted (. gr omissions))))
+                        (names      names))))))))))))

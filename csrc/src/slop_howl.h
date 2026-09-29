@@ -58,6 +58,7 @@ struct howl_Prepared {
     premise_RuleIndex index;
     types_Saturation saturation;
     types_Coverage coverage;
+    types_Names names;
 };
 typedef struct howl_Prepared howl_Prepared;
 

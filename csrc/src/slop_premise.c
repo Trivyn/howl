@@ -30,11 +30,11 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
             __auto_type _coll = axioms;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_31 = ax;
-                switch (_mv_31.tag) {
+                __auto_type _mv_48 = ax;
+                switch (_mv_48.tag) {
                     case types_NormAxiom_sub_name:
                     {
-                        __auto_type b = _mv_31.data.sub_name.f0;
+                        __auto_type b = _mv_48.data.sub_name.f0;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.sub_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ __auto_type _val = l; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, idx.sub_by_lhs, &(b), _vptr); });
@@ -43,8 +43,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_and:
                     {
-                        __auto_type b1 = _mv_31.data.sub_and.f0;
-                        __auto_type b2 = _mv_31.data.sub_and.f1;
+                        __auto_type b1 = _mv_48.data.sub_and.f0;
+                        __auto_type b2 = _mv_48.data.sub_and.f1;
                         {
                             __auto_type p1 = premise_partnered(arena, ({ void* _ptr = slop_map_get(idx.and_by_pair, &(b1)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; }), b2, ax);
                             ({ __auto_type _val = p1; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, idx.and_by_pair, &(b1), _vptr); });
@@ -59,7 +59,7 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_some_rhs:
                     {
-                        __auto_type b = _mv_31.data.sub_some_rhs.f0;
+                        __auto_type b = _mv_48.data.sub_some_rhs.f0;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.rhs_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ __auto_type _val = l; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, idx.rhs_by_lhs, &(b), _vptr); });
@@ -68,8 +68,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_some_lhs:
                     {
-                        __auto_type r = _mv_31.data.sub_some_lhs.f0;
-                        __auto_type b = _mv_31.data.sub_some_lhs.f1;
+                        __auto_type r = _mv_48.data.sub_some_lhs.f0;
+                        __auto_type b = _mv_48.data.sub_some_lhs.f1;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.lhs_by_filler, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ __auto_type _val = l; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, idx.lhs_by_filler, &(b), _vptr); });
@@ -82,7 +82,7 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_role:
                     {
-                        __auto_type r = _mv_31.data.sub_role.f0;
+                        __auto_type r = _mv_48.data.sub_role.f0;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.incl_by_sub, &(r)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ __auto_type _val = l; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, idx.incl_by_sub, &(r), _vptr); });
@@ -91,8 +91,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_role_chain:
                     {
-                        __auto_type r = _mv_31.data.role_chain.f0;
-                        __auto_type s = _mv_31.data.role_chain.f1;
+                        __auto_type r = _mv_48.data.role_chain.f0;
+                        __auto_type s = _mv_48.data.role_chain.f1;
                         {
                             __auto_type l1 = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.chain_by_first, &(r)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ __auto_type _val = l1; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, idx.chain_by_first, &(r), _vptr); });

@@ -17,7 +17,7 @@
                  Derived Addressed Context Saturation
                  EntityKind AxiomRef InputRef MissingDeclaration Omission Coverage Termination
                  EdgePair
-                 SubPair Findings Outcome Fault
+                 SubPair Findings Outcome Fault Names
                  Profile ProfileSelection ReasonerConfig
                  default-config emit-edge make-context
                  outcome-is-complete findings-are-incoherent))
@@ -188,7 +188,8 @@
     (axioms     (List NormAxiom))
     (index      RuleIndex)
     (saturation Saturation)
-    (coverage   Coverage)))
+    (coverage   Coverage)
+    (names      Names)))      ; axioms, index and saturation are renamed (types.slop)
 
   (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
@@ -216,7 +217,8 @@
                 (axioms     (. nr axioms))
                 (index      (build-rule-index arena (. nr axioms)))
                 (saturation (. nr saturation))
-                (coverage   (. nr coverage))))))))
+                (coverage   (. nr coverage))
+                (names      (. nr names))))))))
 
   (fn reason ((arena Arena) (p Prepared) (config ReasonerConfig))
     (@intent "Saturate a prepared theory and extract its findings")
@@ -231,8 +233,9 @@
         (ok (record-new Outcome
               (coverage    (. p coverage))
               (termination (. rr termination))
-              (findings    (extract-findings arena (. rr saturation)))
-              (saturation  (. rr saturation)))))))
+              (findings    (extract-findings arena (. rr saturation) (. p names)))
+              (saturation  (. rr saturation))
+              (names       (. p names)))))))
 
   (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")

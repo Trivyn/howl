@@ -1864,6 +1864,18 @@ result at all** (cancellation). This is not defensive
 bookkeeping: a capped run and a coherent ontology are indistinguishable at the `Saturation` level,
 and conflating them is how a validator returns a false pass.
 
+**Saturation runs over renamed nodes** (M1 slice 6b, `types.slop` `Names`). A class node, an
+individual node or a named role is compared and hashed as its whole IRI; a `fresh-node` or
+`fresh-role` as one integer. So at the boundary where normalized output enters saturation
+(`normalize-input`), every node and role is renamed to a dense fresh id through one table: the
+signature, the normal form, the asserted edges and the seeds. Extraction maps them back before
+it tests for classes or sorts.
+- **⊤ and ⊥ are never renamed.** The rules build them as constants.
+- **Nothing in the rules, the premise index or the driver looks at a node's tag or IRI,** only
+  at equality. So they run unchanged, with their proved contracts, and every report is the same
+  as before.
+- **Punned names stay two nodes.** The table is keyed by the whole node, tag included.
+
 **Aspiration:** lift this into a shared `saturate` skeleton parameterized over the fact type and
 rule set, instantiated twice (GROWL: triples; HOWL: derived axioms). **Open question**
 ([§15](#15-open-questions)): whether SLOP's generics/higher-order support make this a literally
@@ -2937,9 +2949,10 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 5.9× and EL-GALEN at 7.7× after slice 6b (the rules each join
-  >   once from the cheaper side, HOWL's own triple store, a parallel round barrier) and slop's map
-  >   work (slop-lang/slop#205), down from 19.2× and 30.1× at S6a (`bench/results.txt`).
+  > - **Status: not met.** GO is at 5.6× and EL-GALEN at 6.4× after slice 6b and slop's map work
+  >   (slop-lang/slop#205), down from 19.2× and 30.1× at S6a (`bench/results.txt`). Slice 6b's
+  >   changes: each rule join done once from its cheaper side, HOWL's own triple store, a parallel
+  >   round barrier, and saturation over renamed nodes.
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document

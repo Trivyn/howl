@@ -196,6 +196,8 @@ uint8_t test_queue_has(types_Saturation sat, types_Node n, types_Derived d);
 uint8_t test_stored_edge(types_Saturation sat, types_Node x, types_RoleId r, types_Node y);
 int64_t test_queue_len(types_Saturation sat, types_Node n);
 uint8_t test_test_commit_dedups_across_deltas(slop_arena* arena);
+uint8_t test_test_names_round_trip(slop_arena* arena);
+uint8_t test_same_renamed(types_Names names, types_Node n, types_Node expect);
 uint8_t test_test_litmus_end_to_end(slop_arena* arena);
 uint8_t test_test_role_hierarchy_carries_edges(slop_arena* arena);
 uint8_t test_test_smaller_side_joins(slop_arena* arena);

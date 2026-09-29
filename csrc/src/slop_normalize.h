@@ -131,6 +131,7 @@ struct normalize_NormResult {
     slop_list_types_NormAxiom axioms;
     types_Saturation saturation;
     types_Coverage coverage;
+    types_Names names;
 };
 typedef struct normalize_NormResult normalize_NormResult;
 
@@ -292,6 +293,10 @@ normalize_NormOutput normalize_ex_asserting_stewie(slop_arena* arena);
 owl2_Signature normalize_ex_declaring_stewie(slop_arena* arena);
 slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature sig, normalize_NormOutput no);
 uint8_t normalize_install_seeds(slop_arena* arena, types_Saturation sat, normalize_NormOutput no);
+types_NormAxiom normalize_rename_axiom(slop_arena* arena, types_Names names, types_NormAxiom ax);
+types_Derived normalize_rename_derived(slop_arena* arena, types_Names names, types_Derived d);
+slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names, slop_list_types_Node ns);
+normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names names, normalize_NormOutput no);
 slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED

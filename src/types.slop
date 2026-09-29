@@ -41,6 +41,7 @@
     Findings
     Outcome
     Fault
+    Names
     ;; configuration
     Profile
     ProfileSelection
@@ -56,6 +57,12 @@
     emit-edge
     make-context
     make-queue
+    empty-names
+    intern-node
+    intern-role
+    renamed-node
+    original-node
+    original-role
     queue-is-active
     outcome-is-complete
     findings-are-incoherent)
@@ -390,7 +397,8 @@
     (coverage    Coverage)
     (termination Termination)
     (findings    Findings)     ; what WAS derived — always present, always meaningful
-    (saturation  Saturation))) ; always present; PARTIAL unless the run was complete
+    (saturation  Saturation)   ; always present; PARTIAL unless the run was complete
+    (names       Names)))      ; the saturation's nodes are RENAMED: map back through this
 
   ;; The error path. Distinct from an Outcome: these produce no result
   ;; to report on.
@@ -515,7 +523,113 @@
           ((fresh-role bi) (== ai bi))
           ((named-role _)  false)))))
 
-  (fn make-context ((arena Arena) (root Node))
+;; ============================================================
+  ;; Saturation-local names  —  M1 slice 6b C2
+  ;;
+  ;; A class or individual node, and a named role, hash and compare as a
+  ;; whole IRI string; a `fresh-node`/`fresh-role` hashes and compares one
+  ;; Int. So every node and role ENTERING SATURATION is renamed to a dense
+  ;; fresh id (`normalize-input` does it, once, at the boundary), and
+  ;; extraction maps back through this table. Nothing in saturation looks
+  ;; at a node's tag or IRI - only at equality, and at ⊤ and ⊥ - so the
+  ;; rules, the premise index and the driver run unchanged on renamed
+  ;; nodes. ⊤ and ⊥ are NEVER renamed: the rules build them as constants
+  ;; (`node-top`, `node-bottom`), so a renamed one would never match.
+  ;;
+  ;; Both directions are Maps, which are pointers: a `Names` value can be
+  ;; filled in place by the helpers below and shared by every copy. An
+  ;; EMPTY table is the identity - a saturation over hand-built nodes
+  ;; (tests) reads back as it was built.
+  ;; ============================================================
+
+  (type Names (record
+    (node-ids (Map Node Int))      ; original -> id
+    (nodes    (Map Int Node))      ; id -> original
+    (role-ids (Map RoleId Int))
+    (roles    (Map Int RoleId))))
+
+  (fn empty-names ((arena Arena))
+    (@intent "A name table with nothing renamed - the identity")
+    (@spec ((Arena) -> Names))
+    (@alloc arena)
+    (record-new Names
+      (node-ids (map-new arena Node Int))
+      (nodes    (map-new arena Int Node))
+      (role-ids (map-new arena RoleId Int))
+      (roles    (map-new arena Int RoleId))))
+
+  (fn intern-node ((arena Arena) (names Names) (n Node))
+    (@intent "n's renamed form, minting the next id on first sight; ⊤ and ⊥ are kept")
+    (@spec ((Arena Names Node) -> Node))
+    (@alloc arena)
+    (let ((top (node-top))
+          (bottom (node-bottom)))
+      (if (node-eq n top)
+        n
+        (if (node-eq n bottom)
+          n
+          (match (map-get (. names node-ids) n)
+            ((some k) (union-new Node fresh-node k))
+            ((none)
+              (let ((k (cast Int (map-len (. names nodes)))))
+                (do
+                  (map-put (. names node-ids) n k)
+                  (map-put (. names nodes) k n)
+                  (union-new Node fresh-node k)))))))))
+
+  (fn intern-role ((arena Arena) (names Names) (r RoleId))
+    (@intent "r's renamed form, minting the next id on first sight")
+    (@spec ((Arena Names RoleId) -> RoleId))
+    (@alloc arena)
+    (match (map-get (. names role-ids) r)
+      ((some k) (union-new RoleId fresh-role k))
+      ((none)
+        (let ((k (cast Int (map-len (. names roles)))))
+          (do
+            (map-put (. names role-ids) r k)
+            (map-put (. names roles) k r)
+            (union-new RoleId fresh-role k))))))
+
+  (fn renamed-node ((names Names) (n Node))
+    (@intent "n as saturation knows it, without minting; none if n cannot be in the saturation")
+    (@spec ((Names Node) -> (Option Node)))
+    ;; Unknown nodes, ⊤ and ⊥ are themselves - EXCEPT an unknown
+    ;; `fresh-node k` under a non-empty table: `k` may be the id the table
+    ;; gave some other node, and answering `fresh-node k` would read that
+    ;; node's context (a false positive in `entails-sub`; Codex review of
+    ;; C2). Such a node is in no saturation built through the table, so the
+    ;; answer is none. Under an EMPTY table everything is itself.
+    (match (map-get (. names node-ids) n)
+      ((some k) (some (union-new Node fresh-node k)))
+      ((none)
+        (match n
+          ((fresh-node _)
+            (if (== (map-len (. names nodes)) 0) (some n) (none)))
+          ((class-node _)      (some n))
+          ((individual-node _) (some n))))))
+
+  (fn original-node ((names Names) (n Node))
+    (@intent "The node a renamed one stands for; anything not renamed is itself")
+    (@spec ((Names Node) -> Node))
+    (match n
+      ((fresh-node k)
+        (match (map-get (. names nodes) k)
+          ((some o) o)
+          ((none)   n)))
+      ((class-node _)      n)
+      ((individual-node _) n)))
+
+  (fn original-role ((names Names) (r RoleId))
+    (@intent "The role a renamed one stands for; anything not renamed is itself")
+    (@spec ((Names RoleId) -> RoleId))
+    (match r
+      ((fresh-role k)
+        (match (map-get (. names roles) k)
+          ((some o) o)
+          ((none)   r)))
+      ((named-role _) r)))
+
+    (fn make-context ((arena Arena) (root Node))
     (@intent "Create an empty context for a node, with S(root) initially EMPTY")
     (@spec ((Arena Node) -> Context))
     (@alloc arena)
