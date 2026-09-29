@@ -70,7 +70,7 @@
                  Saturation ReasonerConfig Fault LogicalEdge
                  Derived Addressed EdgePair emit-edge
                  node-top node-bottom node-eq role-eq
-                 Names empty-names intern-node intern-role))
+                 Names empty-names intern-node intern-role copy-omissions))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
                 Signature make-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
@@ -943,10 +943,17 @@
                   (signature (. s1 signature))
                   (omissions (. s0 omissions)))))))))
 
-  (fn normalize-decoded ((arena Arena) (d Decoded))
+  (fn normalize-decoded ((arena Arena) (scratch Arena) (d Decoded))
     (@intent "The front end's second half: gate, normalize, rename, initialize")
-    (@spec ((Arena Decoded) -> NormResult))
+    (@spec ((Arena Arena Decoded) -> NormResult))
     (@alloc arena)
+    ;; TWO ARENAS. The gate and the normalizer run in `scratch`, which the
+    ;; caller frees once this returns; everything in the result is built in
+    ;; `arena`: the name table (which copies the strings it keeps), the
+    ;; renamed axioms and signature, the saturation, and a copy of the
+    ;; omissions. A collection grows in the arena named `arena` at the site
+    ;; that pushes into it, so each survivor is built by a call that is
+    ;; handed `arena`, and each scratch structure by one handed `scratch`.
     ;; ACCOUNTING, NOT "one normal form per axiom". Every accepted
     ;; logical axiom must be discharged by ONE of: the NormAxioms it
     ;; produced, the initial Derived facts it produced, or a named
@@ -964,10 +971,10 @@
     ;; output - it mints `fresh-node i` for i < fresh-count, which would
     ;; collide with renamed ids - and then everything saturation will see
     ;; is renamed through one table.
-    (let ((gr    (gate-axioms arena (. d axioms) (. d signature) (. d omissions)))
-          (no    (normalize-accepted arena (. gr accepted)))
+    (let ((gr    (gate-axioms scratch (. d axioms) (. d signature) (. d omissions)))
+          (no    (normalize-accepted scratch (. gr accepted)))
           (names (empty-names arena))
-          (sig   (rename-nodes arena names (signature-nodes arena (. gr signature) no)))
+          (sig   (rename-nodes arena names (signature-nodes scratch (. gr signature) no)))
           (rno   (rename-output arena names no)))
       (let ((sat (make-initial-saturation arena sig)))
         (do
@@ -975,7 +982,7 @@
           (record-new NormResult
             (axioms     (. rno axioms))
             (saturation sat)
-            (coverage   (record-new Coverage (omitted (. gr omissions))))
+            (coverage   (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))))
             (names      names))))))
 
   (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
@@ -984,5 +991,5 @@
     (@alloc arena)
     (match (decode-document arena triples imports-resolved)
       ((error f) (error f))
-      ((ok d)    (ok (normalize-decoded arena d)))))
+      ((ok d)    (ok (normalize-decoded arena arena d)))))
 )

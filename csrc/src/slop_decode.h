@@ -14,6 +14,7 @@
 
 typedef struct decode_ListFault decode_ListFault;
 typedef struct decode_Stage0 decode_Stage0;
+typedef struct decode_HeaderSubjects decode_HeaderSubjects;
 typedef struct decode_Stage1 decode_Stage1;
 
 typedef enum {
@@ -151,6 +152,17 @@ typedef struct decode_Stage0 decode_Stage0;
 #ifndef SLOP_OPTION_DECODE_STAGE0_DEFINED
 #define SLOP_OPTION_DECODE_STAGE0_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
+#endif
+
+struct decode_HeaderSubjects {
+    slop_map* set;
+    slop_list_rdf_Term quoted;
+};
+typedef struct decode_HeaderSubjects decode_HeaderSubjects;
+
+#ifndef SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
+#define SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
+SLOP_OPTION_DEFINE(decode_HeaderSubjects, slop_option_decode_HeaderSubjects)
 #endif
 
 struct decode_Stage1 {
@@ -324,6 +336,8 @@ uint8_t decode_logical_predicate(slop_string pv);
 rdf_Triple decode_ex_hdr(slop_string p, slop_string o);
 uint8_t decode_header_consumable(rdf_Triple t);
 slop_result_decode_Stage0_types_Fault decode_stage0_header(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
+decode_HeaderSubjects decode_header_subjects(slop_arena* arena, slop_list_rdf_Term ont, slop_list_rdf_Term ax, slop_list_rdf_Term ann);
+slop_result_decode_Stage0_types_Fault decode_stage0_scan(slop_arena* arena, slop_arena* scratch, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 owl2_RawConcept* decode_box_concept(slop_arena* arena, owl2_RawConcept c);
 slop_string decode_list_fault_message(decode_ListFault f);
 uint8_t decode_has_pred(slop_arena* arena, termstore_TermStore g, rdf_Term s, slop_string pred_iri);
@@ -361,6 +375,7 @@ uint8_t decode_is_reserved_iri(slop_string v);
 int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj);
 slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstore_TermStore g, owl2_Signature sig, rdf_Triple t);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, slop_list_rdf_Triple triples);
+slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, slop_list_rdf_Triple triples);
 slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature sig, slop_list_rdf_Triple triples);
 
 #define decode_CONCEPT_FUEL (64)
@@ -393,6 +408,11 @@ SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #ifndef SLOP_OPTION_DECODE_STAGE0_DEFINED
 #define SLOP_OPTION_DECODE_STAGE0_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
+#define SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
+SLOP_OPTION_DEFINE(decode_HeaderSubjects, slop_option_decode_HeaderSubjects)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED

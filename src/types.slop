@@ -58,6 +58,9 @@
     make-context
     make-queue
     empty-names
+    copy-node
+    copy-omissions
+    copy-fault
     intern-node
     intern-role
     renamed-node
@@ -564,17 +567,25 @@
     (@alloc arena)
     (let ((top (node-top))
           (bottom (node-bottom)))
+      ;; ⊤ and ⊥ come back as the static constants, never as `n`: `n`
+      ;; may be the caller's, and a renamed node must not point into
+      ;; memory the front end is about to free.
       (if (node-eq n top)
-        n
+        top
         (if (node-eq n bottom)
-          n
+          bottom
           (match (map-get (. names node-ids) n)
             ((some k) (union-new Node fresh-node k))
             ((none)
-              (let ((k (cast Int (map-len (. names nodes)))))
+              ;; OWNED: the table keeps a copy in `arena`, as key and as
+              ;; value, so it outlives the front end's arenas. A lookup
+              ;; with the caller's node still finds it: keys compare by
+              ;; content.
+              (let ((k (cast Int (map-len (. names nodes))))
+                    (c (copy-node arena n)))
                 (do
-                  (map-put (. names node-ids) n k)
-                  (map-put (. names nodes) k n)
+                  (map-put (. names node-ids) c k)
+                  (map-put (. names nodes) k c)
                   (union-new Node fresh-node k)))))))))
 
   (fn intern-role ((arena Arena) (names Names) (r RoleId))
@@ -584,11 +595,107 @@
     (match (map-get (. names role-ids) r)
       ((some k) (union-new RoleId fresh-role k))
       ((none)
-        (let ((k (cast Int (map-len (. names roles)))))
+        ;; OWNED, as in `intern-node`.
+        (let ((k (cast Int (map-len (. names roles))))
+              (c (copy-role arena r)))
           (do
-            (map-put (. names role-ids) r k)
-            (map-put (. names roles) k r)
+            (map-put (. names role-ids) c k)
+            (map-put (. names roles) k c)
             (union-new RoleId fresh-role k))))))
+
+  ;; ============================================================
+  ;; Ownership copies
+  ;;
+  ;; The front end runs in arenas freed once `prepare` is done (the parse,
+  ;; decode, gate and normalizer). Only two of its products outlive it:
+  ;; the `Names` table's original nodes and roles, and the omissions. Their
+  ;; strings point into the parser's or the gate's memory, so they are
+  ;; copied into the long-lived arena here - `string-concat` always copies.
+  ;; Nothing else crosses: the index and the saturation hold renamed Ints.
+  ;; ============================================================
+
+  (fn copy-string ((arena Arena) (s String))
+    (@intent "s's bytes, copied into arena")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (string-concat arena s ""))
+
+  (fn copy-iri ((arena Arena) (i IRI))
+    (@intent "i, owning its string in arena")
+    (@spec ((Arena IRI) -> IRI))
+    (@alloc arena)
+    (record-new IRI (value (copy-string arena (. i value)))))
+
+  (fn copy-node ((arena Arena) (n Node))
+    (@intent "n, owning its strings in arena")
+    (@spec ((Arena Node) -> Node))
+    (@alloc arena)
+    (match n
+      ((class-node i)      (union-new Node class-node (copy-iri arena i)))
+      ((individual-node i) (union-new Node individual-node (copy-iri arena i)))
+      ((fresh-node k)      (union-new Node fresh-node k))))
+
+  (fn copy-role ((arena Arena) (r RoleId))
+    (@intent "r, owning its string in arena")
+    (@spec ((Arena RoleId) -> RoleId))
+    (@alloc arena)
+    (match r
+      ((named-role i) (union-new RoleId named-role (copy-iri arena i)))
+      ((fresh-role k) (union-new RoleId fresh-role k))))
+
+  (fn copy-axiom-ref ((arena Arena) (a AxiomRef))
+    (@intent "a, owning its strings in arena")
+    (@spec ((Arena AxiomRef) -> AxiomRef))
+    (@alloc arena)
+    (record-new AxiomRef
+      (source (match (. a source)
+                ((some i) (some (copy-iri arena i)))
+                ((none)   (none))))
+      (text   (copy-string arena (. a text)))))
+
+  (fn copy-input-ref ((arena Arena) (r InputRef))
+    (@intent "r, owning its strings in arena")
+    (@spec ((Arena InputRef) -> InputRef))
+    (@alloc arena)
+    (match r
+      ((owl-axiom a)    (union-new InputRef owl-axiom (copy-axiom-ref arena a)))
+      ((rdf-fragment s) (union-new InputRef rdf-fragment (copy-string arena s)))
+      ((synthetic s)    (union-new InputRef synthetic (copy-string arena s)))))
+
+  (fn copy-omission ((arena Arena) (o Omission))
+    (@intent "o, owning its strings in arena")
+    (@spec ((Arena Omission) -> Omission))
+    (@alloc arena)
+    (match o
+      ((out-of-profile r)    (union-new Omission out-of-profile (copy-input-ref arena r)))
+      ((unresolved-import i) (union-new Omission unresolved-import (copy-iri arena i)))
+      ((missing-declaration m)
+        (let ((mut refs (list-new arena AxiomRef)))
+          (do
+            (for-each (a (. m referring)) (list-push refs (copy-axiom-ref arena a)))
+            (union-new Omission missing-declaration
+              (record-new MissingDeclaration
+                (kind      (. m kind))
+                (entity    (copy-iri arena (. m entity)))
+                (referring refs))))))))
+
+  (fn copy-omissions ((arena Arena) (os (List Omission)))
+    (@intent "Every omission, in order, owning its strings in arena")
+    (@spec ((Arena (List Omission)) -> (List Omission)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Omission)))
+      (do
+        (for-each (o os) (list-push out (copy-omission arena o)))
+        out)))
+
+  (fn copy-fault ((arena Arena) (f Fault))
+    (@intent "f, owning its strings in arena")
+    (@spec ((Arena Fault) -> Fault))
+    (@alloc arena)
+    (match f
+      ((cancelled)       (union-new Fault cancelled))
+      ((input-error m)   (union-new Fault input-error (copy-string arena m)))
+      ((refused os)      (union-new Fault refused (copy-omissions arena os)))))
 
   (fn renamed-node ((names Names) (n Node))
     (@intent "n as saturation knows it, without minting; none if n cannot be in the saturation")

@@ -42,7 +42,7 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish \
+        acceptance corpus-acceptance golden golden-update test-asan golden-asan crate-vendor crate-build crate-test crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-check
 
@@ -92,6 +92,22 @@ test-asan: $(BIN)
 	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
 	  $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test-asan
 	ASAN_OPTIONS=detect_leaks=0 $(BIN)/howl-test-asan
+
+# THE CLI UNDER ASan, OVER THE GOLDENS. HOWL frees arenas as each phase of a
+# run ends, so a string or table left pointing into a freed arena is the
+# failure to fear - and only a real run over real input reaches every such
+# pointer; the unit tests do not. This builds the CLI under ASan and runs
+# `golden` with it: every fixture, plus RO and OBI (GO and EL-GALEN are left
+# out for time and memory; `golden` covers them without ASan). A memory error
+# exits 99, which no verdict uses, so it can never match a golden.
+golden-asan: $(BIN)
+	$(CC) -O1 -g -fsanitize=address -fno-omit-frame-pointer -Wall -Werror=switch \
+	  -Wno-unused-function -Wno-unused-variable -Wno-return-type -Wno-pointer-sign \
+	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
+	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
+	  $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl-asan
+	ASAN_OPTIONS=detect_leaks=0:exitcode=99 $(MAKE) --no-print-directory golden \
+	  HOWL=./$(BIN)/howl-asan GOLDEN_CORPUS="ro-2025-12-17 obi-2026-07-27"
 
 # THE ROUND-JOIN RUNS ON WORKER THREADS (M1 slice 5), and ThreadSanitizer is
 # what shows the join shares nothing mutable: workers read the frozen store

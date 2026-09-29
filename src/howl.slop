@@ -19,7 +19,7 @@
                  EdgePair
                  SubPair Findings Outcome Fault Names
                  Profile ProfileSelection ReasonerConfig
-                 default-config emit-edge make-context
+                 default-config emit-edge make-context copy-fault
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document normalize-decoded))
   (import select (select-profile))
@@ -222,24 +222,43 @@
     ;; are exactly what the caller asked not to run past, so `refused`
     ;; carries them and nothing else: no Outcome, so no verdict and no
     ;; findings a partial run might have produced (§9, §10 item 12).
-    (let ((nr (normalize-decoded arena d)))
-      (if (and (. config strict-profile)
-               (> (list-len (. (. nr coverage) omitted)) 0))
-        (error (union-new Fault refused (. (. nr coverage) omitted)))
-        (ok (record-new Prepared
-              (axioms     (. nr axioms))
-              (index      (build-rule-index arena (. nr axioms)))
-              (saturation (. nr saturation))
-              (coverage   (. nr coverage))
-              (names      (. nr names)))))))
+    ;;
+    ;; THE GATE AND THE NORMALIZER RUN IN A SCRATCH ARENA, freed before
+    ;; returning: everything in a Prepared - and in the refusal - is built
+    ;; in `arena` and owns its strings (normalize-decoded). `d` is the
+    ;; caller's and is not freed here.
+    (let ((scratch (arena-new 16777216))
+          (nr      (normalize-decoded arena scratch d))
+          (res     (if (and (. config strict-profile)
+                            (> (list-len (. (. nr coverage) omitted)) 0))
+                     (error (union-new Fault refused (. (. nr coverage) omitted)))
+                     (ok (record-new Prepared
+                           (axioms     (. nr axioms))
+                           (index      (build-rule-index arena (. nr axioms)))
+                           (saturation (. nr saturation))
+                           (coverage   (. nr coverage))
+                           (names      (. nr names)))))))
+      (do
+        (arena-free scratch)
+        res)))
 
   (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
     (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
-    (match (decode arena triples imports-resolved)
-      ((error f) (error f))
-      ((ok d)    (prepare-decoded arena d config))))
+    ;;
+    ;; DECODE RUNS IN AN ARENA OF ITS OWN, freed before returning, so a
+    ;; Prepared owns every string it holds: the caller's triples may go as
+    ;; soon as this returns. A decode fault's message is copied out first.
+    (let ((front (arena-new 16777216))
+          ;; The `ok` arm first: slop types a match's result from its first
+          ;; arm, and an `error` arm first leaves the ok type void in the C.
+          (res   (match (decode front triples imports-resolved)
+                   ((ok d)    (prepare-decoded arena d config))
+                   ((error f) (error (copy-fault arena f))))))
+      (do
+        (arena-free front)
+        res)))
 
   (fn reason ((arena Arena) (p Prepared) (config ReasonerConfig))
     (@intent "Saturate a prepared theory and extract its findings")

@@ -474,6 +474,50 @@
     (@intent "Consume the ontology header and axiom reification; reconcile imports")
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Stage0 Fault)))
     (@alloc arena)
+    ;; THE TRIPLE STORE AND THE SUBJECT LISTS ARE SCRATCH. They answer
+    ;; stage 0's questions and nothing after it reads them; on GO the store
+    ;; alone is ~1 GB. Everything in the result - the kept and rebuilt
+    ;; triples, the imports, the omissions - is built in `arena`, and its
+    ;; terms' strings are the parser's, never the store's (the store keeps
+    ;; terms by value). So the scratch is freed before stage 0 returns.
+    (let ((scratch (arena-new 16777216))
+          (res     (stage0-scan arena scratch triples imports-resolved)))
+      (do
+        (arena-free scratch)
+        res)))
+
+  ;; The header subjects as a membership set, built in the arena it is
+  ;; given (stage 0's scratch): a `set-put` grows in the arena its caller
+  ;; names `arena`, so building it inline would put it in the result's.
+  (type HeaderSubjects (record
+    (set    (Set Term))
+    (quoted (List Term))))    ; quoted-triple subjects: compared structurally
+
+  (fn header-subjects ((arena Arena) (ont (List Term)) (ax (List Term)) (ann (List Term)))
+    (@intent "Every ontology, axiom and annotation node, as a set plus the quoted-triple ones")
+    (@spec ((Arena (List Term) (List Term) (List Term)) -> HeaderSubjects))
+    (@alloc arena)
+    (let ((s (set-new arena Term))
+          (mut quoted (list-new arena Term)))
+      (do
+        (for-each (o ont)
+          (match o
+            ((term-triple _) (list-push quoted o))
+            (_ (set-put s o))))
+        (for-each (a ax)
+          (match a
+            ((term-triple _) (list-push quoted a))
+            (_ (set-put s a))))
+        (for-each (a ann)
+          (match a
+            ((term-triple _) (list-push quoted a))
+            (_ (set-put s a))))
+        (record-new HeaderSubjects (set s) (quoted quoted)))))
+
+  (fn stage0-scan ((arena Arena) (scratch Arena) (triples (List Triple)) (imports-resolved (List IRI)))
+    (@intent "Stage 0's work: results in arena, the store and working lists in scratch")
+    (@spec ((Arena Arena (List Triple) (List IRI)) -> (Result Stage0 Fault)))
+    (@alloc arena)
     ;; REIFICATION IS RECONSTRUCTED, NOT DROPPED. The OWL 2 RDF mapping
     ;; writes an annotated axiom as a blank node typed `owl:Axiom`
     ;; carrying annotatedSource / annotatedProperty / annotatedTarget
@@ -496,13 +540,13 @@
     ;; anonymous individual, and a document carrying nothing but annotations
     ;; came back INCONCLUSIVE (W3C OWL 2 conformance test
     ;; New-Feature-AnnotationAnnotations-001).
-    (let ((ig        (graph-to-indexed arena triples))
+    (let ((ig        (graph-to-indexed scratch triples))
           ;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
           ;; and the named ontology follows ont-subjs - so both come from
           ;; the document. ann-subjs is only ever a membership test.
-          (ont-subjs (typed-subjects-in-order arena triples OWL_ONTOLOGY))
-          (ax-subjs  (typed-subjects-in-order arena triples OWL_AXIOM))
-          (ann-subjs (subjects-of-type arena ig OWL_ANNOTATION))
+          (ont-subjs (typed-subjects-in-order scratch triples OWL_ONTOLOGY))
+          (ax-subjs  (typed-subjects-in-order scratch triples OWL_AXIOM))
+          (ann-subjs (subjects-of-type scratch ig OWL_ANNOTATION))
           (declared  (collect-imports arena triples))
           (src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
           (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
@@ -528,44 +572,31 @@
         ;; filed under one pointer would let its other triples through to
         ;; decode as if they were ordinary axioms. So quoted-triple subjects
         ;; keep the structural scan — over a list that is empty for OWL.
-        (let ((header-subjs (set-new arena Term))
-              (mut quoted (list-new arena Term)))
+        (let ((hs (header-subjects scratch ont-subjs ax-subjs ann-subjs)))
           (do
-            (for-each (o ont-subjs)
-              (match o
-                ((term-triple _) (list-push quoted o))
-                (_ (set-put header-subjs o))))
-            (for-each (a ax-subjs)
-              (match a
-                ((term-triple _) (list-push quoted a))
-                (_ (set-put header-subjs a))))
-            (for-each (a ann-subjs)
-              (match a
-                ((term-triple _) (list-push quoted a))
-                (_ (set-put header-subjs a))))
             (for-each (t triples)
               (let ((s (. t subject))
                     (mut header false))
                 (do
                   (match s
                     ((term-triple _)
-                      (for-each (q quoted) (when (term-eq q s) (set! header true))))
-                    (_ (when (set-has header-subjs s) (set! header true))))
+                      (for-each (q (. hs quoted)) (when (term-eq q s) (set! header true))))
+                    (_ (when (set-has (. hs set) s) (set! header true))))
                   ;; A header node's LOGICAL triples are not header
                   ;; material: they go on to the decoder (header-consumable).
                   (when (or (not header) (not (header-consumable t))) (list-push out t)))))))
 
         ;; Rebuild each reified axiom, unless the document also asserts it.
         (for-each (a ax-subjs)
-          (match (one-object arena ig a src-pred)
+          (match (one-object scratch ig a src-pred)
             ((error _)
               (set! fault (some "owl:Axiom node without a usable owl:annotatedSource")))
             ((ok subj)
-              (match (one-object arena ig a prop-pred)
+              (match (one-object scratch ig a prop-pred)
                 ((error _)
                   (set! fault (some "owl:Axiom node without a usable owl:annotatedProperty")))
                 ((ok pred)
-                  (match (one-object arena ig a tgt-pred)
+                  (match (one-object scratch ig a tgt-pred)
                     ((error _)
                       (set! fault (some "owl:Axiom node without a usable owl:annotatedTarget")))
                     ((ok obj)
@@ -1633,8 +1664,21 @@
     ;; axiom order is a function of the document rather than of hash
     ;; layout. Canonical reordering is the gate's job; this stage must
     ;; at least be deterministic.
-    (let ((ig  (graph-to-indexed arena triples))
-          (sig (build-signature arena triples))
+    ;;
+    ;; THE STORE IS SCRATCH, freed before returning, as in stage 0: the
+    ;; axioms and signature are built in `arena`, and a query copies terms
+    ;; out by value (their strings are the parser's, not the store's).
+    (let ((scratch (arena-new 16777216))
+          (res     (decode-axioms-with arena (graph-to-indexed scratch triples) triples)))
+      (do
+        (arena-free scratch)
+        res)))
+
+  (fn decode-axioms-with ((arena Arena) (ig TermStore) (triples (List Triple)))
+    (@intent "Stage 1 over a store built by the caller")
+    (@spec ((Arena TermStore (List Triple)) -> (Result Stage1 Fault)))
+    (@alloc arena)
+    (let ((sig (build-signature arena triples))
           (mut out (list-new arena RawAxiom))
           (mut inert 0)
           (mut fault (Option String) (none)))

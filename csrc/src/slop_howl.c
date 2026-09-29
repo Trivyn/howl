@@ -32,46 +32,42 @@ slop_result_normalize_Decoded_types_Fault howl_decode(slop_arena* arena, slop_li
 
 slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config) {
     {
-        __auto_type nr = normalize_normalize_decoded(arena, d);
-        if (config.strict_profile && (((int64_t)((nr.coverage.omitted).len)) > 0)) {
-            return ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_refused, .data.refused = nr.coverage.omitted }) });
-        } else {
-            return ((slop_result_howl_Prepared_types_Fault){ .is_ok = true, .data.ok = ((howl_Prepared){.axioms = nr.axioms, .index = premise_build_rule_index(arena, nr.axioms), .saturation = nr.saturation, .coverage = nr.coverage, .names = nr.names}) });
-        }
+        __auto_type scratch = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
+        __auto_type nr = normalize_normalize_decoded(arena, scratch, d);
+        __auto_type res = (((config.strict_profile && (((int64_t)((nr.coverage.omitted).len)) > 0))) ? ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_refused, .data.refused = nr.coverage.omitted }) }) : ((slop_result_howl_Prepared_types_Fault){ .is_ok = true, .data.ok = ((howl_Prepared){.axioms = nr.axioms, .index = premise_build_rule_index(arena, nr.axioms), .saturation = nr.saturation, .coverage = nr.coverage, .names = nr.names}) }));
+        ({ slop_arena_free(scratch); free(scratch); });
+        return res;
     }
 }
 
 slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
-    __auto_type _mv_557 = howl_decode(arena, triples, imports_resolved);
-    if (!_mv_557.is_ok) {
-        __auto_type f = _mv_557.data.err;
-        return ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_557.is_ok) {
-        __auto_type d = _mv_557.data.ok;
-        return howl_prepare_decoded(arena, d, config);
+    {
+        __auto_type front = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
+        __auto_type res = ({ __auto_type _mv = howl_decode(front, triples, imports_resolved); slop_result_howl_Prepared_types_Fault _mr; if (_mv.is_ok) { __auto_type d = _mv.data.ok; _mr = howl_prepare_decoded(arena, d, config); } else { __auto_type f = _mv.data.err; _mr = ((slop_result_howl_Prepared_types_Fault){ .is_ok = false, .data.err = types_copy_fault(arena, f) }); } _mr; });
+        ({ slop_arena_free(front); free(front); });
+        return res;
     }
-    SLOP_UNREACHABLE();
 }
 
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config) {
-    __auto_type _mv_558 = saturate_saturate(arena, p.saturation, p.index, config);
-    if (!_mv_558.is_ok) {
-        __auto_type f = _mv_558.data.err;
+    __auto_type _mv_562 = saturate_saturate(arena, p.saturation, p.index, config);
+    if (!_mv_562.is_ok) {
+        __auto_type f = _mv_562.data.err;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_558.is_ok) {
-        __auto_type rr = _mv_558.data.ok;
+    } else if (_mv_562.is_ok) {
+        __auto_type rr = _mv_562.data.ok;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = true, .data.ok = ((types_Outcome){.coverage = p.coverage, .termination = rr.termination, .findings = classify_extract_findings(arena, rr.saturation, p.names), .saturation = rr.saturation, .names = p.names}) });
     }
     SLOP_UNREACHABLE();
 }
 
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
-    __auto_type _mv_559 = howl_prepare(arena, triples, imports_resolved, config);
-    if (!_mv_559.is_ok) {
-        __auto_type f = _mv_559.data.err;
+    __auto_type _mv_563 = howl_prepare(arena, triples, imports_resolved, config);
+    if (!_mv_563.is_ok) {
+        __auto_type f = _mv_563.data.err;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_559.is_ok) {
-        __auto_type p = _mv_559.data.ok;
+    } else if (_mv_563.is_ok) {
+        __auto_type p = _mv_563.data.ok;
         return howl_reason(arena, p, config);
     }
     SLOP_UNREACHABLE();

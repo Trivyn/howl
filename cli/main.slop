@@ -73,7 +73,8 @@
 
   (import rdf (IRI Triple Term BlankNode make-blank make-triple make-triple-term
                term-eq make-iri))
-  (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config))
+  (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config
+                 copy-fault))
   (import owl2 (render-omission))
   (import howl (Verdict verdict Decoded decode Prepared prepare-decoded reason))
   (import report (report-lines))
@@ -348,14 +349,22 @@
             (set! i (+ i 1))))
         ok)))
 
-  (fn prepare-from ((arena Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
-    (@intent "Finish the front end over a successful decode; pass a decode fault straight through")
-    (@spec ((Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
+  (fn prepare-from ((arena Arena) (front Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
+    (@intent "Finish the front end over a decode, then free the front end's arena")
+    (@spec ((Arena Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
-    ;; This IS `howl.prepare`, split so decode can be timed apart.
-    (match d
-      ((error f) (error f))
-      ((ok dd)   (prepare-decoded arena dd config))))
+    ;; This IS `howl.prepare`, split so decode can be timed apart. `front`
+    ;; holds the parsed documents and the decode; nothing in the result
+    ;; points into it (a Prepared owns its strings, and a decode fault is
+    ;; copied out), so it is freed here, before reasoning starts.
+    ;; The `ok` arm comes first: slop types a match's result from its first
+    ;; arm, and an `error` arm first leaves the ok type void in the C.
+    (let ((res (match d
+                 ((ok dd)   (prepare-decoded arena dd config))
+                 ((error f) (error (copy-fault arena f))))))
+      (do
+        (arena-free front)
+        res)))
 
   (fn reason-prepared ((arena Arena) (p (Result Prepared Fault)) (config ReasonerConfig))
     (@intent "Reason over a successful front end; pass a front-end fault straight through")
@@ -392,7 +401,8 @@
           (if (not (or (string-eq command "validate") (string-eq command "classify")))
             (do (print "howl: unknown or unimplemented command: ") (println command)
                 EXIT_ERROR)
-            (let ((mut triples  (list-new arena Triple))
+            (let ((front        (arena-new 16777216))   ; parse and decode: freed after prepare
+                  (mut triples  (list-new arena Triple))
                   (mut resolved (list-new arena IRI))
                   (mut cfg      (default-config))
                   (mut failed   false)
@@ -403,7 +413,7 @@
                   (input (argv-to-string argv 2)))
               (do
                 ;; The root document.
-                (match (parse-ttl-file arena input)
+                (match (parse-ttl-file front input)
                   ((error _)
                     (do (print "howl: cannot parse ") (println input) (set! failed true)))
                   ;; The parsed list IS the buffer, not a copy of it: copying
@@ -430,7 +440,7 @@
                             (do (println "howl: -I needs a FILE") (set! failed true)))
                           (when (< (+ i 1) argc)
                             (let ((path (argv-to-string argv (+ i 1))))
-                              (match (parse-ttl-file arena path)
+                              (match (parse-ttl-file front path)
                                 ((error _)
                                   (do (print "howl: cannot parse import ") (println path)
                                       (set! failed true)))
@@ -548,10 +558,10 @@
                   EXIT_ERROR
                   (let ((t-parsed   (now-ms))
                         (m-parsed   (peak-mb))
-                        (decoded    (decode arena triples resolved))
+                        (decoded    (decode front triples resolved))
                         (t-decoded  (now-ms))
                         (m-decoded  (peak-mb))
-                        (prepared   (prepare-from arena decoded cfg))
+                        (prepared   (prepare-from arena front decoded cfg))
                         (t-prepared (now-ms))
                         (m-prepared (peak-mb))
                         (result     (reason-prepared arena prepared cfg))
