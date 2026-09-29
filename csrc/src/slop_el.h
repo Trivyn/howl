@@ -60,6 +60,11 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
+#ifndef SLOP_OPTION_MAP_PTR_DEFINED
+#define SLOP_OPTION_MAP_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
 #ifndef SLOP_OPTION_PREMISE_AXLIST_DEFINED
 #define SLOP_OPTION_PREMISE_AXLIST_DEFINED
 SLOP_OPTION_DEFINE(premise_AxList, slop_option_premise_AxList)

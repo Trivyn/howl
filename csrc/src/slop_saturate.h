@@ -293,6 +293,11 @@ SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 SLOP_OPTION_DEFINE(saturate_Joined, slop_option_saturate_Joined)
 #endif
 
+#ifndef SLOP_OPTION_MAP_PTR_DEFINED
+#define SLOP_OPTION_MAP_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
 #ifndef SLOP_OPTION_THREAD_INT_PTR_DEFINED
 #define SLOP_OPTION_THREAD_INT_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_thread_int*, slop_option_thread_int_ptr)

@@ -2949,8 +2949,9 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** GO is at 5.6× and EL-GALEN at 6.4× after slice 6b and slop's map work
-  >   (slop-lang/slop#205), down from 19.2× and 30.1× at S6a (`bench/results.txt`). Slice 6b's
+  > - **Status: not met.** GO is at 5.05× and EL-GALEN at 6.1× after slice 6b and slop's map and
+  >   lazy-collection work (slop-lang/slop#205, #217), down from 19.2× and 30.1× at S6a
+  >   (`bench/results.txt`). Slice 6b's
   >   changes: each rule join done once from its cheaper side, HOWL's own triple store, a parallel
   >   round barrier, and saturation over renamed nodes.
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer

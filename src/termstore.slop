@@ -262,7 +262,8 @@
     (@spec ((TermStore Term Term) -> Bool))
     ;; An (s, p) entry exists exactly when it has an object: sets are
     ;; created by the insert that puts their first element in, and nothing
-    ;; removes. So the lookup alone answers, with no need to count.
+    ;; removes. So the lookup alone answers, with no need to count (and
+    ;; `set-len` on a map-get result did not compile before slop #216).
     (match (lookup-term st s)
       ((none) false)
       ((some si)

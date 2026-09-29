@@ -95,13 +95,13 @@ slop_option_int termstore_lookup_term(termstore_TermStore st, rdf_Term t) {
 }
 
 void termstore_typed_put(slop_arena* arena, termstore_TermStore st, int64_t type, int64_t s) {
-    __auto_type _mv_195 = ({ void* _ptr = slop_map_get(st.typed, &(int64_t){type}); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+    __auto_type _mv_195 = ({ void* _ptr = slop_map_get(st.typed, &(int64_t){type}); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
     if (_mv_195.has_value) {
         __auto_type subs = _mv_195.value;
         ({ uint8_t _dummy = 1; slop_map_put(arena, subs, &(int64_t){s}, &_dummy); });
     } else if (!_mv_195.has_value) {
         {
-            __auto_type subs = slop_map_new_ptr(arena, 16, sizeof(int64_t), slop_hash_int, slop_eq_int);
+            __auto_type subs = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int);
             ({ uint8_t _dummy = 1; slop_map_put(arena, subs, &(int64_t){s}, &_dummy); });
             ({ __auto_type _val = subs; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, st.typed, &(int64_t){type}, _vptr); });
         }
@@ -114,7 +114,7 @@ uint8_t termstore_store_insert(slop_arena* arena, termstore_TermStore st, rdf_Tr
         __auto_type p = termstore_intern_term(arena, st, t.predicate);
         __auto_type o = termstore_intern_term(arena, st, t.object);
         __auto_type sp = ((termstore_IdPair){.a = s, .b = p});
-        __auto_type _mv_200 = ({ void* _ptr = slop_map_get(st.spo, &(sp)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+        __auto_type _mv_200 = ({ void* _ptr = slop_map_get(st.spo, &(sp)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
         if (_mv_200.has_value) {
             __auto_type objs = _mv_200.value;
             if (slop_map_get(objs, &(int64_t){o}) != NULL) {
@@ -128,7 +128,7 @@ uint8_t termstore_store_insert(slop_arena* arena, termstore_TermStore st, rdf_Tr
             }
         } else if (!_mv_200.has_value) {
             {
-                __auto_type objs = slop_map_new_ptr(arena, 16, sizeof(int64_t), slop_hash_int, slop_eq_int);
+                __auto_type objs = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int);
                 ({ uint8_t _dummy = 1; slop_map_put(arena, objs, &(int64_t){o}, &_dummy); });
                 ({ __auto_type _val = objs; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, st.spo, &(sp), _vptr); });
                 if (p == st.rdf_type) {
@@ -143,7 +143,7 @@ uint8_t termstore_store_insert(slop_arena* arena, termstore_TermStore st, rdf_Tr
 
 termstore_TermStore termstore_build_store(slop_arena* arena, slop_list_rdf_Triple triples) {
     {
-        __auto_type st0 = ((termstore_TermStore){.ids = slop_map_new_ptr(arena, 16, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term), .quoted = slop_map_new_ptr(arena, 16, sizeof(termstore_IdTriple), slop_hash_termstore_IdTriple, slop_eq_termstore_IdTriple), .terms = slop_map_new_ptr(arena, 16, sizeof(int64_t), slop_hash_int, slop_eq_int), .spo = slop_map_new_ptr(arena, 16, sizeof(termstore_IdPair), slop_hash_termstore_IdPair, slop_eq_termstore_IdPair), .typed = slop_map_new_ptr(arena, 16, sizeof(int64_t), slop_hash_int, slop_eq_int), .rdf_type = 0});
+        __auto_type st0 = ((termstore_TermStore){.ids = slop_map_new_ptr(arena, 0, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term), .quoted = slop_map_new_ptr(arena, 0, sizeof(termstore_IdTriple), slop_hash_termstore_IdTriple, slop_eq_termstore_IdTriple), .terms = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int), .spo = slop_map_new_ptr(arena, 0, sizeof(termstore_IdPair), slop_hash_termstore_IdPair, slop_eq_termstore_IdPair), .typed = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int), .rdf_type = 0});
         __auto_type ty = termstore_intern_term(arena, st0, rdf_make_iri(arena, vocab_RDF_TYPE));
         __auto_type st = ((termstore_TermStore){.ids = st0.ids, .quoted = st0.quoted, .terms = st0.terms, .spo = st0.spo, .typed = st0.typed, .rdf_type = ty});
         {
@@ -159,7 +159,7 @@ termstore_TermStore termstore_build_store(slop_arena* arena, slop_list_rdf_Tripl
 
 slop_list_rdf_Term termstore_store_objects(slop_arena* arena, termstore_TermStore st, rdf_Term s, rdf_Term p) {
     {
-        __auto_type out = ((slop_list_rdf_Term){ .data = (rdf_Term*)slop_arena_alloc(arena, 16 * sizeof(rdf_Term)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_rdf_Term){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_205 = termstore_lookup_term(st, s);
         if (_mv_205.has_value) {
             __auto_type si = _mv_205.value;
@@ -168,7 +168,7 @@ slop_list_rdf_Term termstore_store_objects(slop_arena* arena, termstore_TermStor
                 __auto_type pi = _mv_206.value;
                 {
                     __auto_type key = ((termstore_IdPair){.a = si, .b = pi});
-                    __auto_type _mv_208 = ({ void* _ptr = slop_map_get(st.spo, &(key)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+                    __auto_type _mv_208 = ({ void* _ptr = slop_map_get(st.spo, &(key)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
                     if (_mv_208.has_value) {
                         __auto_type objs = _mv_208.value;
                         {
@@ -198,11 +198,11 @@ slop_list_rdf_Term termstore_store_objects(slop_arena* arena, termstore_TermStor
 
 slop_list_rdf_Term termstore_store_typed(slop_arena* arena, termstore_TermStore st, rdf_Term type) {
     {
-        __auto_type out = ((slop_list_rdf_Term){ .data = (rdf_Term*)slop_arena_alloc(arena, 16 * sizeof(rdf_Term)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_rdf_Term){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_211 = termstore_lookup_term(st, type);
         if (_mv_211.has_value) {
             __auto_type ti = _mv_211.value;
-            __auto_type _mv_213 = ({ void* _ptr = slop_map_get(st.typed, &(int64_t){ti}); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+            __auto_type _mv_213 = ({ void* _ptr = slop_map_get(st.typed, &(int64_t){ti}); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
             if (_mv_213.has_value) {
                 __auto_type subs = _mv_213.value;
                 {
@@ -245,7 +245,7 @@ uint8_t termstore_store_contains(termstore_TermStore st, rdf_Triple t) {
                 __auto_type oi = _mv_218.value;
                 {
                     __auto_type key = ((termstore_IdPair){.a = si, .b = pi});
-                    __auto_type _mv_220 = ({ void* _ptr = slop_map_get(st.spo, &(key)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+                    __auto_type _mv_220 = ({ void* _ptr = slop_map_get(st.spo, &(key)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
                     if (_mv_220.has_value) {
                         __auto_type objs = _mv_220.value;
                         return (slop_map_get(objs, &(int64_t){oi}) != NULL);
@@ -275,7 +275,7 @@ uint8_t termstore_store_has_any(termstore_TermStore st, rdf_Term s, rdf_Term p) 
             __auto_type pi = _mv_223.value;
             {
                 __auto_type key = ((termstore_IdPair){.a = si, .b = pi});
-                __auto_type _mv_225 = ({ void* _ptr = slop_map_get(st.spo, &(key)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+                __auto_type _mv_225 = ({ void* _ptr = slop_map_get(st.spo, &(key)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
                 if (_mv_225.has_value) {
                     __auto_type _ = _mv_225.value;
                     return 1;

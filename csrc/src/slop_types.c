@@ -161,7 +161,7 @@ uint8_t types_role_eq(types_RoleId a, types_RoleId b) {
 }
 
 types_Names types_empty_names(slop_arena* arena) {
-    return ((types_Names){.node_ids = slop_map_new_ptr(arena, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .nodes = slop_map_new_ptr(arena, 16, sizeof(int64_t), slop_hash_int, slop_eq_int), .role_ids = slop_map_new_ptr(arena, 16, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .roles = slop_map_new_ptr(arena, 16, sizeof(int64_t), slop_hash_int, slop_eq_int)});
+    return ((types_Names){.node_ids = slop_map_new_ptr(arena, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .nodes = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int), .role_ids = slop_map_new_ptr(arena, 0, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .roles = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int)});
 }
 
 types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n) {
@@ -296,14 +296,14 @@ types_RoleId types_original_role(types_Names names, types_RoleId r) {
 
 types_Context types_make_context(slop_arena* arena, types_Node root) {
     types_Context _retval = {0};
-    _retval = ((types_Context){.root = root, .subsumers = slop_map_new_ptr(arena, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .succs = slop_map_new_ptr(arena, 16, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .preds = slop_map_new_ptr(arena, 16, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId)});
+    _retval = ((types_Context){.root = root, .subsumers = slop_map_new_ptr(arena, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .succs = slop_map_new_ptr(arena, 0, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .preds = slop_map_new_ptr(arena, 0, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId)});
     SLOP_POST((({ types_Node _eq_l_36 = (_retval.root); types_Node _eq_r_37 = (root); slop_eq_types_Node(&_eq_l_36, &_eq_r_37); })), "(== (. $result root) root)");
     return _retval;
 }
 
 types_Queue types_make_queue(slop_arena* arena) {
     types_Queue _retval = {0};
-    _retval = ((types_Queue){.items = ((slop_list_types_Derived){ .data = (types_Derived*)slop_arena_alloc(arena, 16 * sizeof(types_Derived)), .len = 0, .cap = 16 })});
+    _retval = ((types_Queue){.items = ((slop_list_types_Derived){ .data = NULL, .len = 0, .cap = 0 })});
     SLOP_POST(((((int64_t)((_retval.items).len)) == 0)), "(== (list-len (. $result items)) 0)");
     return _retval;
 }

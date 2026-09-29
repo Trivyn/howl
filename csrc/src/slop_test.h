@@ -405,6 +405,11 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
+#ifndef SLOP_OPTION_MAP_PTR_DEFINED
+#define SLOP_OPTION_MAP_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
 #ifndef SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
 #define SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
 SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)

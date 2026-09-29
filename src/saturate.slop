@@ -421,10 +421,9 @@
     (@intent "File one touched context under its owner, creating it if needed; return the next turn")
     (@spec ((Arena Arena Saturation Partition Node Context Int Int) -> Int))
     (@alloc arena)
-    ;; A function of its own because `x` and `dc` must be PARAMETERS here:
-    ;; bound by a map `for-each`'s destructuring, the transpiler cannot
-    ;; infer the C type of a `map-get` on them and reports the builtins as
-    ;; unknown functions.
+    ;; A function of its own because, when this was written, `x` and `dc`
+    ;; had to be PARAMETERS: bound by a map `for-each`'s destructuring, the
+    ;; transpiler could not type a `map-get` on them (fixed in slop #216).
     (do
       (ensure-context run sat x)
       (match (map-get (. part owner) x)
@@ -457,8 +456,8 @@
     (@spec ((Arena (Option Bucket)) -> (List Touched)))
     (@alloc arena)
     ;; A function of its own so the lookup's type is its parameter's: a
-    ;; `map-get` on a record field, matched inside a `let` binding, is
-    ;; typed `void*` by the transpiler.
+    ;; `map-get` on a record field, matched inside a `let` binding, was
+    ;; typed `void*` by the transpiler until slop #216.
     (match found
       ((some b) (. b items))
       ((none)   (list-new arena Touched))))
@@ -638,11 +637,11 @@
     ;; string. `make test-asan` is what enforces this: a store that kept a
     ;; pointer into `scratch` is a use-after-free there.
     ;;
-    ;; FREED EXPLICITLY, NOT BY `with-arena`. This body was a `with-arena`
-    ;; whose value was the commit, and slop lowers that to `return
-    ;; saturate_round_commit(...)` BEFORE the free: every round's scratch
-    ;; leaked, and the ASan check above never ran (M1 slice 6b C0). The
-    ;; result is let-bound, the scratch freed, and then the result returned.
+    ;; FREED EXPLICITLY. This body was a `with-arena` whose value was the
+    ;; commit, and slop then lowered that to `return ...` BEFORE the free:
+    ;; every round's scratch leaked, and the ASan check above never ran (M1
+    ;; slice 6b C0; fixed upstream in slop #213). The explicit form stays -
+    ;; it says what happens, in order.
     (let ((scratch (arena-new 16777216))
           (joined  (if (<= (. config worker-count) 1)
                      (let ((d (record-new RoundDelta (pending (map-new scratch Node Context))))

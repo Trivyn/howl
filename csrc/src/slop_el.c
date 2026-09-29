@@ -64,7 +64,7 @@ types_Context el_ex_ctx_bottom(slop_arena* arena) {
 slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_103 = ax;
         switch (_mv_103.tag) {
             case types_NormAxiom_sub_name:
@@ -106,7 +106,7 @@ slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context
 slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_104 = ax;
         switch (_mv_104.tag) {
             case types_NormAxiom_sub_and:
@@ -163,7 +163,7 @@ slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx,
 slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_107 = ax;
         switch (_mv_107.tag) {
             case types_NormAxiom_sub_some_rhs:
@@ -209,7 +209,7 @@ slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context
 
 slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_108 = ax;
         switch (_mv_108.tag) {
             case types_NormAxiom_sub_some_lhs:
@@ -218,7 +218,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Conte
                 __auto_type b2 = _mv_108.data.sub_some_lhs.f1;
                 __auto_type a = _mv_108.data.sub_some_lhs.f2;
                 if (types_node_eq(b, b2)) {
-                    __auto_type _mv_110 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+                    __auto_type _mv_110 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
                     if (_mv_110.has_value) {
                         __auto_type xs = _mv_110.value;
                         {
@@ -263,7 +263,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Conte
 slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_111 = ax;
         switch (_mv_111.tag) {
             case types_NormAxiom_sub_some_lhs:
@@ -307,7 +307,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Cont
 
 slop_list_types_Addressed el_cr_bottom_on_sub(slop_arena* arena, types_Context ctx, types_Node b) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type bottom = types_node_bottom();
         if (types_node_eq(b, bottom)) {
             {
@@ -336,7 +336,7 @@ slop_list_types_Addressed el_cr_bottom_on_sub(slop_arena* arena, types_Context c
 slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context ctx, types_Node x) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type bottom = types_node_bottom();
         if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
             ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = bottom })})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -350,7 +350,7 @@ slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context 
 slop_list_types_Addressed el_cr_role_incl_on_succ(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node y, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_114 = ax;
         switch (_mv_114.tag) {
             case types_NormAxiom_sub_role:
@@ -395,7 +395,7 @@ slop_list_types_Addressed el_cr_role_incl_on_succ(slop_arena* arena, types_Conte
 
 slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_115 = ax;
         switch (_mv_115.tag) {
             case types_NormAxiom_role_chain:
@@ -404,7 +404,7 @@ slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context c
                 __auto_type s = _mv_115.data.role_chain.f1;
                 __auto_type t = _mv_115.data.role_chain.f2;
                 if (types_role_eq(r, r2)) {
-                    __auto_type _mv_117 = ({ void* _ptr = slop_map_get(ctx.succs, &(s)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+                    __auto_type _mv_117 = ({ void* _ptr = slop_map_get(ctx.succs, &(s)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
                     if (_mv_117.has_value) {
                         __auto_type zs = _mv_117.value;
                         {
@@ -452,7 +452,7 @@ slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context c
 
 slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context ctx, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_118 = ax;
         switch (_mv_118.tag) {
             case types_NormAxiom_role_chain:
@@ -461,7 +461,7 @@ slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context c
                 __auto_type s2 = _mv_118.data.role_chain.f1;
                 __auto_type t = _mv_118.data.role_chain.f2;
                 if (types_role_eq(s, s2)) {
-                    __auto_type _mv_120 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_ptr){ .has_value = true, .value = *(void**)_ptr } : (slop_option_ptr){ .has_value = false }; });
+                    __auto_type _mv_120 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
                     if (_mv_120.has_value) {
                         __auto_type xs = _mv_120.value;
                         {
@@ -509,7 +509,7 @@ slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context c
 
 slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx, types_Derived incoming, premise_RuleIndex idx) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_121 = incoming;
         switch (_mv_121.tag) {
             case types_Derived_derived_sub:
@@ -774,7 +774,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
 
 slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_Context ctx, types_Derived incoming, slop_list_types_NormAxiom axioms) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type _mv_144 = incoming;
         switch (_mv_144.tag) {
             case types_Derived_derived_sub:

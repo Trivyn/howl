@@ -73,7 +73,7 @@ slop_option_types_RoleId gate_least_role(slop_list_types_RoleId rs) {
 
 slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawAxiom axs) {
     {
-        __auto_type out = ((slop_list_owl2_RawAxiom){ .data = (owl2_RawAxiom*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawAxiom)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -84,7 +84,7 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
                     {
                         __auto_type r = _mv_442.data.ra_transitive_property;
                         {
-                            __auto_type steps = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+                            __auto_type steps = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
                             ({ __auto_type _lst_p = &(steps); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             ({ __auto_type _lst_p = &(steps); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_property_chain, .data.ra_property_chain = ((owl2_RawChain){.steps = steps, .super = r}) })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -150,7 +150,7 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
                                             __auto_type j = (i + 1);
                                             while (j < n) {
                                                 {
-                                                    __auto_type pair = ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 });
+                                                    __auto_type pair = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
                                                     ({ __auto_type _lst_p = &(pair); __auto_type _item = (owl2_concept_at(sorted, i)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                     ({ __auto_type _lst_p = &(pair); __auto_type _item = (owl2_concept_at(sorted, j)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                     ({ __auto_type _lst_p = &(out); __auto_type _item = (((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_classes, .data.ra_disjoint_classes = pair })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -219,8 +219,8 @@ uint8_t gate_axiom_range_ok(slop_list_gate_RangeEntry entries, slop_list_u8 told
 gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, owl2_Signature sig, slop_list_types_Omission carried) {
     {
         __auto_type expanded = gate_expand_sugar(arena, axs);
-        __auto_type accepted = ((slop_list_owl2_RawAxiom){ .data = (owl2_RawAxiom*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawAxiom)), .len = 0, .cap = 16 });
-        __auto_type omitted = ((slop_list_types_Omission){ .data = (types_Omission*)slop_arena_alloc(arena, 16 * sizeof(types_Omission)), .len = 0, .cap = 16 });
+        __auto_type accepted = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type omitted = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = carried;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -268,7 +268,7 @@ slop_list_owl2_RawAxiom gate_sort_axioms(slop_arena* arena, slop_list_owl2_RawAx
         __auto_type texts = gate_axiom_texts(arena, xs);
         {
             __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ gate__lambda_447_env_t* gate__lambda_447_env = (gate__lambda_447_env_t*)slop_arena_alloc(arena, sizeof(gate__lambda_447_env_t)); *gate__lambda_447_env = (gate__lambda_447_env_t){ .texts = texts }; (slop_closure_t){ (void*)gate__lambda_447, (void*)gate__lambda_447_env }; }));
-            __auto_type out = ((slop_list_owl2_RawAxiom){ .data = (owl2_RawAxiom*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawAxiom)), .len = 0, .cap = 16 });
+            __auto_type out = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0 });
             {
                 __auto_type _coll = idx;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -283,7 +283,7 @@ slop_list_owl2_RawAxiom gate_sort_axioms(slop_arena* arena, slop_list_owl2_RawAx
 
 slop_list_string gate_axiom_texts(slop_arena* arena, slop_list_owl2_RawAxiom xs) {
     {
-        __auto_type out = ((slop_list_string){ .data = (slop_string*)slop_arena_alloc(arena, 16 * sizeof(slop_string)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = xs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -332,7 +332,7 @@ uint8_t gate_push_role_unique(slop_list_types_RoleId rs, types_RoleId r) {
 
 slop_list_types_RoleId gate_collect_rbox_roles(slop_arena* arena, slop_list_owl2_RawAxiom axs) {
     {
-        __auto_type rs = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+        __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -389,7 +389,7 @@ slop_list_types_RoleId gate_collect_rbox_roles(slop_arena* arena, slop_list_owl2
 slop_list_types_RoleId gate_sort_roles(slop_arena* arena, slop_list_types_RoleId xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ gate__lambda_450_env_t* gate__lambda_450_env = (gate__lambda_450_env_t*)slop_arena_alloc(arena, sizeof(gate__lambda_450_env_t)); *gate__lambda_450_env = (gate__lambda_450_env_t){ .xs = xs }; (slop_closure_t){ (void*)gate__lambda_450, (void*)gate__lambda_450_env }; }));
-        __auto_type out = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -416,7 +416,7 @@ types_RoleId gate_role_at(slop_list_types_RoleId xs, int64_t i) {
 
 slop_list_u8 gate_mat_new(slop_arena* arena, int64_t cells) {
     {
-        __auto_type m = ((slop_list_u8){ .data = (uint8_t*)slop_arena_alloc(arena, 16 * sizeof(uint8_t)), .len = 0, .cap = 16 });
+        __auto_type m = ((slop_list_u8){ .data = NULL, .len = 0, .cap = 0 });
         int64_t i = 0;
         while (i < cells) {
             ({ __auto_type _lst_p = &(m); __auto_type _item = (0); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -639,7 +639,7 @@ gate_RboxVerdict gate_check_regularity(slop_arena* arena, slop_list_owl2_RawAxio
 
 slop_list_gate_RangeEntry gate_collect_ranges(slop_arena* arena, slop_list_owl2_RawAxiom axs, slop_list_types_RoleId roles) {
     {
-        __auto_type out = ((slop_list_gate_RangeEntry){ .data = (gate_RangeEntry*)slop_arena_alloc(arena, 16 * sizeof(gate_RangeEntry)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_gate_RangeEntry){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -778,15 +778,15 @@ slop_list_rdf_IRI gate_collect_concept_classes(slop_arena* arena, owl2_RawConcep
 
 slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_owl2_RawAxiom axs) {
     {
-        __auto_type out = ((slop_list_gate_EntityRef){ .data = (gate_EntityRef*)slop_arena_alloc(arena, 16 * sizeof(gate_EntityRef)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_gate_EntityRef){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
                 {
                     __auto_type r = gate_axiom_ref_of(arena, ax);
-                    __auto_type classes = ((slop_list_rdf_IRI){ .data = (rdf_IRI*)slop_arena_alloc(arena, 16 * sizeof(rdf_IRI)), .len = 0, .cap = 16 });
-                    __auto_type roles = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+                    __auto_type classes = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
+                    __auto_type roles = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
                     __auto_type _mv_460 = ax;
                     switch (_mv_460.tag) {
                         case owl2_RawAxiom_ra_sub_class_of:
@@ -932,8 +932,8 @@ uint8_t gate_same_entity(gate_EntityRef a, gate_EntityRef b) {
 
 slop_list_types_Omission gate_missing_declarations(slop_arena* arena, owl2_Signature sig, slop_list_gate_EntityRef refs) {
     {
-        __auto_type out = ((slop_list_types_Omission){ .data = (types_Omission*)slop_arena_alloc(arena, 16 * sizeof(types_Omission)), .len = 0, .cap = 16 });
-        __auto_type seen = ((slop_list_gate_EntityRef){ .data = (gate_EntityRef*)slop_arena_alloc(arena, 16 * sizeof(gate_EntityRef)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type seen = ((slop_list_gate_EntityRef){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = refs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -952,7 +952,7 @@ slop_list_types_Omission gate_missing_declarations(slop_arena* arena, owl2_Signa
                         }
                         if (!(dup)) {
                             {
-                                __auto_type refs_for = ((slop_list_types_AxiomRef){ .data = (types_AxiomRef*)slop_arena_alloc(arena, 16 * sizeof(types_AxiomRef)), .len = 0, .cap = 16 });
+                                __auto_type refs_for = ((slop_list_types_AxiomRef){ .data = NULL, .len = 0, .cap = 0 });
                                 ({ __auto_type _lst_p = &(seen); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 {
                                     __auto_type _coll = refs;

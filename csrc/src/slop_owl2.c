@@ -199,7 +199,7 @@ owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
 }
 
 owl2_Signature owl2_make_signature(slop_arena* arena) {
-    return ((owl2_Signature){.classes = slop_map_new_ptr(arena, 16, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .obj_props = slop_map_new_ptr(arena, 16, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .data_props = slop_map_new_ptr(arena, 16, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .annot_props = slop_map_new_ptr(arena, 16, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .individuals = slop_map_new_ptr(arena, 16, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .datatypes = slop_map_new_ptr(arena, 16, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI)});
+    return ((owl2_Signature){.classes = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .obj_props = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .data_props = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .annot_props = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .individuals = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .datatypes = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI)});
 }
 
 uint8_t owl2_signature_has_class(owl2_Signature sig, rdf_IRI i) {
@@ -1230,7 +1230,7 @@ slop_string owl2_render_characteristic(owl2_PropCharacteristic c) {
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ owl2__lambda_178_env_t* owl2__lambda_178_env = (owl2__lambda_178_env_t*)slop_arena_alloc(arena, sizeof(owl2__lambda_178_env_t)); *owl2__lambda_178_env = (owl2__lambda_178_env_t){ .xs = xs }; (slop_closure_t){ (void*)owl2__lambda_178, (void*)owl2__lambda_178_env }; }));
-        __auto_type out = ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {

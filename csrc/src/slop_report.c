@@ -63,7 +63,7 @@ slop_string report_termination_line(types_Termination t) {
 
 slop_list_string report_report_lines(slop_arena* arena, types_Outcome o) {
     {
-        __auto_type out = ((slop_list_string){ .data = (slop_string*)slop_arena_alloc(arena, 16 * sizeof(slop_string)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type f = o.findings;
         __auto_type omitted = o.coverage.omitted;
         ({ __auto_type _lst_p = &(out); __auto_type _item = (SLOP_STR("howl-report 1")); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });

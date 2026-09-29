@@ -45,7 +45,7 @@ slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_aren
 normalize_NormState* normalize_new_state(slop_arena* arena) {
     {
         __auto_type p = ((normalize_NormState*)(({ __auto_type _alloc = (normalize_NormState*)slop_arena_alloc(arena, sizeof(normalize_NormState)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
-        (*p) = ((normalize_NormState){.axioms = ((slop_list_types_NormAxiom){ .data = (types_NormAxiom*)slop_arena_alloc(arena, 16 * sizeof(types_NormAxiom)), .len = 0, .cap = 16 }), .fresh = ((slop_list_string){ .data = (slop_string*)slop_arena_alloc(arena, 16 * sizeof(slop_string)), .len = 0, .cap = 16 }), .fresh_index = slop_map_new_ptr(arena, 16, sizeof(slop_string), slop_hash_string, slop_eq_string), .fresh_roles = ((slop_list_string){ .data = (slop_string*)slop_arena_alloc(arena, 16 * sizeof(slop_string)), .len = 0, .cap = 16 }), .fresh_role_index = slop_map_new_ptr(arena, 16, sizeof(slop_string), slop_hash_string, slop_eq_string), .neg_done = slop_map_new_ptr(arena, 16, sizeof(slop_string), slop_hash_string, slop_eq_string), .pos_done = slop_map_new_ptr(arena, 16, sizeof(slop_string), slop_hash_string, slop_eq_string), .edges = ((slop_list_types_LogicalEdge){ .data = (types_LogicalEdge*)slop_arena_alloc(arena, 16 * sizeof(types_LogicalEdge)), .len = 0, .cap = 16 }), .asserted = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 })});
+        (*p) = ((normalize_NormState){.axioms = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 }), .fresh = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_index = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .fresh_roles = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_role_index = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .neg_done = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .pos_done = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .edges = ((slop_list_types_LogicalEdge){ .data = NULL, .len = 0, .cap = 0 }), .asserted = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 })});
         return p;
     }
 }
@@ -159,7 +159,7 @@ slop_list_owl2_RawConcept normalize_flatten_and(slop_arena* arena, owl2_RawConce
 
 slop_string normalize_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept conj, int64_t upto) {
     {
-        __auto_type pre = ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 });
+        __auto_type pre = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
         int64_t i = 0;
         while (i < upto) {
             ({ __auto_type _lst_p = &(pre); __auto_type _item = (owl2_concept_at(conj, i)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -203,7 +203,7 @@ types_Node normalize_neg_atom(slop_arena* arena, normalize_NormState* p, owl2_Ra
         {
             __auto_type cs = _mv_488.data.rc_and;
             {
-                __auto_type flat = normalize_flatten_and(arena, c, ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 }));
+                __auto_type flat = normalize_flatten_and(arena, c, ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 }));
                 __auto_type n = ((int64_t)(((int64_t)((flat).len))));
                 if (n == 0) {
                     return types_node_top();
@@ -305,7 +305,7 @@ uint8_t normalize_normalize_gci(slop_arena* arena, normalize_NormState* p, owl2_
         }
         default: {
             {
-                __auto_type conj = normalize_flatten_and(arena, lhs, ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 }));
+                __auto_type conj = normalize_flatten_and(arena, lhs, ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 }));
                 __auto_type n = ((int64_t)(((int64_t)((conj).len))));
                 __auto_type _mv_493 = rhs;
                 switch (_mv_493.tag) {
@@ -407,7 +407,7 @@ slop_string normalize_render_role_name(types_RoleId r) {
 
 slop_list_normalize_RangeFact normalize_collect_range_facts(slop_arena* arena, normalize_NormState* p, slop_list_owl2_RawAxiom axs, slop_list_types_RoleId roles) {
     {
-        __auto_type out = ((slop_list_normalize_RangeFact){ .data = (normalize_RangeFact*)slop_arena_alloc(arena, 16 * sizeof(normalize_RangeFact)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_normalize_RangeFact){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -438,7 +438,7 @@ slop_list_normalize_RangeFact normalize_collect_range_facts(slop_arena* arena, n
 
 slop_list_types_Node normalize_ran_t(slop_arena* arena, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, int64_t r) {
     {
-        __auto_type out = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
         if (r >= 0) {
             {
                 __auto_type _coll = facts;
@@ -507,7 +507,7 @@ slop_string normalize_render_node_name(slop_arena* arena, types_Node n) {
 
 uint8_t normalize_eliminate_ranges(slop_arena* arena, normalize_NormState* p, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles) {
     {
-        __auto_type rebuilt = ((slop_list_types_NormAxiom){ .data = (types_NormAxiom*)slop_arena_alloc(arena, 16 * sizeof(types_NormAxiom)), .len = 0, .cap = 16 });
+        __auto_type rebuilt = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type existing = (*p).axioms;
         {
             __auto_type _coll = existing;
@@ -559,7 +559,7 @@ uint8_t normalize_eliminate_ranges(slop_arena* arena, normalize_NormState* p, sl
 
 slop_list_types_Addressed normalize_edge_range_seeds(slop_arena* arena, slop_list_types_LogicalEdge edges, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = edges;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -663,9 +663,9 @@ types_Node normalize_ex_stewie(void) {
 
 normalize_NormOutput normalize_ex_asserting_stewie(slop_arena* arena) {
     {
-        __auto_type asserted = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
+        __auto_type asserted = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
         ({ __auto_type _lst_p = &(asserted); __auto_type _item = (normalize_ex_stewie()); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        return ((normalize_NormOutput){.axioms = ((slop_list_types_NormAxiom){ .data = (types_NormAxiom*)slop_arena_alloc(arena, 16 * sizeof(types_NormAxiom)), .len = 0, .cap = 16 }), .edges = ((slop_list_types_LogicalEdge){ .data = (types_LogicalEdge*)slop_arena_alloc(arena, 16 * sizeof(types_LogicalEdge)), .len = 0, .cap = 16 }), .asserted = asserted, .seeds = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 }), .fresh_count = 0});
+        return ((normalize_NormOutput){.axioms = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 }), .edges = ((slop_list_types_LogicalEdge){ .data = NULL, .len = 0, .cap = 0 }), .asserted = asserted, .seeds = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 }), .fresh_count = 0});
     }
 }
 
@@ -679,8 +679,8 @@ owl2_Signature normalize_ex_declaring_stewie(slop_arena* arena) {
 
 slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature sig, normalize_NormOutput no) {
     {
-        __auto_type out = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
-        __auto_type seen = slop_map_new_ptr(arena, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node);
+        __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type seen = slop_map_new_ptr(arena, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node);
         int64_t i = 0;
         {
             __auto_type _coll = ({ slop_set_elements_result _r = slop_set_elements_raw(arena, sig.classes); (slop_list_rdf_IRI){.data = (rdf_IRI*)_r.data, .len = _r.len, .cap = _r.cap}; });
@@ -867,7 +867,7 @@ types_Derived normalize_rename_derived(slop_arena* arena, types_Names names, typ
 
 slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names, slop_list_types_Node ns) {
     {
-        __auto_type out = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = ns;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -881,9 +881,9 @@ slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names
 
 normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names names, normalize_NormOutput no) {
     {
-        __auto_type axioms = ((slop_list_types_NormAxiom){ .data = (types_NormAxiom*)slop_arena_alloc(arena, 16 * sizeof(types_NormAxiom)), .len = 0, .cap = 16 });
-        __auto_type edges = ((slop_list_types_LogicalEdge){ .data = (types_LogicalEdge*)slop_arena_alloc(arena, 16 * sizeof(types_LogicalEdge)), .len = 0, .cap = 16 });
-        __auto_type seeds = ((slop_list_types_Addressed){ .data = (types_Addressed*)slop_arena_alloc(arena, 16 * sizeof(types_Addressed)), .len = 0, .cap = 16 });
+        __auto_type axioms = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type edges = ((slop_list_types_LogicalEdge){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type seeds = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = no.axioms;
             for (size_t _i = 0; _i < _coll.len; _i++) {

@@ -278,18 +278,26 @@ int main(int argc, char** _c_argv) {
         slop_arena* arena = &_arena;
         if (argc < 3) {
             main_print_usage();
-            return main_EXIT_ERROR;
+            {
+                int _wa_ret = main_EXIT_ERROR;
+                slop_arena_free(arena);
+                return _wa_ret;
+            }
         } else {
             {
                 __auto_type command = main_argv_to_string(argv, 1);
                 if (!((string_eq(command, SLOP_STR("validate")) || string_eq(command, SLOP_STR("classify"))))) {
                     printf("%s", "howl: unknown or unimplemented command: ");
                     printf("%.*s\n", (int)(command).len, (command).data);
-                    return main_EXIT_ERROR;
+                    {
+                        int _wa_ret = main_EXIT_ERROR;
+                        slop_arena_free(arena);
+                        return _wa_ret;
+                    }
                 } else {
                     {
-                        __auto_type triples = ((slop_list_rdf_Triple){ .data = (rdf_Triple*)slop_arena_alloc(arena, 16 * sizeof(rdf_Triple)), .len = 0, .cap = 16 });
-                        __auto_type resolved = ((slop_list_rdf_IRI){ .data = (rdf_IRI*)slop_arena_alloc(arena, 16 * sizeof(rdf_IRI)), .len = 0, .cap = 16 });
+                        __auto_type triples = ((slop_list_rdf_Triple){ .data = NULL, .len = 0, .cap = 0 });
+                        __auto_type resolved = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
                         __auto_type cfg = howl_default_config();
                         uint8_t failed = 0;
                         int64_t i = 3;
@@ -478,7 +486,11 @@ int main(int argc, char** _c_argv) {
                             }
                         }
                         if (failed) {
-                            return main_EXIT_ERROR;
+                            {
+                                int _wa_ret = main_EXIT_ERROR;
+                                slop_arena_free(arena);
+                                return _wa_ret;
+                            }
                         } else {
                             {
                                 __auto_type t_parsed = slop_now_ms();
@@ -545,7 +557,11 @@ int main(int argc, char** _c_argv) {
                                         }
                                     }
                                 }
-                                return main_exit_code_for(result);
+                                {
+                                    int _wa_ret = main_exit_code_for(result);
+                                    slop_arena_free(arena);
+                                    return _wa_ret;
+                                }
                             }
                         }
                     }

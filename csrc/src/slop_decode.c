@@ -109,8 +109,8 @@ slop_result_list_rdf_Term_decode_ListFault decode_rdf_list_checked(slop_arena* a
         __auto_type first_pred = rdf_make_iri(arena, vocab_RDF_FIRST);
         __auto_type rest_pred = rdf_make_iri(arena, vocab_RDF_REST);
         __auto_type nil_term = rdf_make_iri(arena, vocab_RDF_NIL);
-        __auto_type out = ((slop_list_rdf_Term){ .data = (rdf_Term*)slop_arena_alloc(arena, 16 * sizeof(rdf_Term)), .len = 0, .cap = 16 });
-        __auto_type visited = slop_map_new_ptr(arena, 16, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term);
+        __auto_type out = ((slop_list_rdf_Term){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type visited = slop_map_new_ptr(arena, 0, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term);
         __auto_type current = head;
         slop_option_decode_ListFault fault = (slop_option_decode_ListFault){.has_value = false};
         uint8_t done = 0;
@@ -203,7 +203,7 @@ uint8_t decode_iri_in_list(slop_list_rdf_IRI xs, rdf_IRI target) {
 slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, slop_list_rdf_Triple triples) {
     {
         __auto_type imports_iri = rdf_make_iri(arena, vocab_OWL_IMPORTS);
-        __auto_type out = ((slop_list_rdf_IRI){ .data = (rdf_IRI*)slop_arena_alloc(arena, 16 * sizeof(rdf_IRI)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = triples;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -226,7 +226,7 @@ slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, slop_list_rdf_Triple
 
 slop_list_types_Omission decode_unresolved_imports(slop_arena* arena, slop_list_rdf_IRI declared, slop_list_rdf_IRI resolved) {
     {
-        __auto_type out = ((slop_list_types_Omission){ .data = (types_Omission*)slop_arena_alloc(arena, 16 * sizeof(types_Omission)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = declared;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -257,8 +257,8 @@ uint8_t decode_typed_as(rdf_Triple t, slop_string type_iri) {
 
 slop_list_rdf_Term decode_typed_subjects_in_order(slop_arena* arena, slop_list_rdf_Triple triples, slop_string type_iri) {
     {
-        __auto_type seen = slop_map_new_ptr(arena, 16, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term);
-        __auto_type out = ((slop_list_rdf_Term){ .data = (rdf_Term*)slop_arena_alloc(arena, 16 * sizeof(rdf_Term)), .len = 0, .cap = 16 });
+        __auto_type seen = slop_map_new_ptr(arena, 0, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term);
+        __auto_type out = ((slop_list_rdf_Term){ .data = NULL, .len = 0, .cap = 0 });
         {
             __auto_type _coll = triples;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -402,12 +402,12 @@ slop_result_decode_Stage0_types_Fault decode_stage0_header(slop_arena* arena, sl
         __auto_type src_pred = rdf_make_iri(arena, owl2_OWL_ANNOTATED_SOURCE);
         __auto_type prop_pred = rdf_make_iri(arena, owl2_OWL_ANNOTATED_PROPERTY);
         __auto_type tgt_pred = rdf_make_iri(arena, owl2_OWL_ANNOTATED_TARGET);
-        __auto_type out = ((slop_list_rdf_Triple){ .data = (rdf_Triple*)slop_arena_alloc(arena, 16 * sizeof(rdf_Triple)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_rdf_Triple){ .data = NULL, .len = 0, .cap = 0 });
         slop_option_rdf_IRI ont = (slop_option_rdf_IRI){.has_value = false};
         slop_option_string fault = (slop_option_string){.has_value = false};
         {
-            __auto_type header_subjs = slop_map_new_ptr(arena, 16, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term);
-            __auto_type quoted = ((slop_list_rdf_Term){ .data = (rdf_Term*)slop_arena_alloc(arena, 16 * sizeof(rdf_Term)), .len = 0, .cap = 16 });
+            __auto_type header_subjs = slop_map_new_ptr(arena, 0, sizeof(rdf_Term), slop_hash_rdf_Term, slop_eq_rdf_Term);
+            __auto_type quoted = ((slop_list_rdf_Term){ .data = NULL, .len = 0, .cap = 0 });
             {
                 __auto_type _coll = ont_subjs;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -741,7 +741,7 @@ slop_result_list_types_Node_string decode_decode_node_list(slop_arena* arena, te
     } else if (_mv_336.is_ok) {
         __auto_type terms = _mv_336.data.ok;
         {
-            __auto_type out = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
+            __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
             slop_option_string fault = (slop_option_string){.has_value = false};
             {
                 __auto_type _coll = terms;
@@ -777,7 +777,7 @@ slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* a
     } else if (_mv_339.is_ok) {
         __auto_type terms = _mv_339.data.ok;
         {
-            __auto_type out = ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 });
+            __auto_type out = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
             slop_option_string fault = (slop_option_string){.has_value = false};
             {
                 __auto_type _coll = terms;
@@ -1299,7 +1299,7 @@ slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, 
     } else if (_mv_390.is_ok) {
         __auto_type terms = _mv_390.data.ok;
         {
-            __auto_type out = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+            __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
             slop_option_string fault = (slop_option_string){.has_value = false};
             {
                 __auto_type _coll = terms;
@@ -1341,7 +1341,7 @@ slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena
         } else if (_mv_394.is_ok) {
             __auto_type rhs = _mv_394.data.ok;
             {
-                __auto_type out = ((slop_list_owl2_RawConcept){ .data = (owl2_RawConcept*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawConcept)), .len = 0, .cap = 16 });
+                __auto_type out = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (lhs); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (rhs); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 return ((slop_result_list_owl2_RawConcept_string){ .is_ok = true, .data.ok = out });
@@ -1653,7 +1653,7 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                     } else if (_mv_422.has_value) {
                         __auto_type b = _mv_422.value;
                         {
-                            __auto_type rs = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+                            __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_equivalent_properties, .data.ra_equivalent_properties = rs }) });
@@ -1674,7 +1674,7 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                     } else if (_mv_424.has_value) {
                         __auto_type b = _mv_424.value;
                         {
-                            __auto_type rs = ((slop_list_types_RoleId){ .data = (types_RoleId*)slop_arena_alloc(arena, 16 * sizeof(types_RoleId)), .len = 0, .cap = 16 });
+                            __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_properties, .data.ra_disjoint_properties = rs }) });
@@ -1747,7 +1747,7 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 }
             } else if (canon_string_cmp(pv, vocab_OWL_SAME_AS) == 0) {
                 {
-                    __auto_type ns = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
+                    __auto_type ns = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
                     __auto_type _mv_431 = decode_term_iri_value(t.subject);
                     if (_mv_431.has_value) {
                         __auto_type i = _mv_431.value;
@@ -1764,7 +1764,7 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 }
             } else if (canon_string_cmp(pv, vocab_OWL_DIFFERENT_FROM) == 0) {
                 {
-                    __auto_type ns = ((slop_list_types_Node){ .data = (types_Node*)slop_arena_alloc(arena, 16 * sizeof(types_Node)), .len = 0, .cap = 16 });
+                    __auto_type ns = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
                     __auto_type _mv_433 = decode_term_iri_value(t.subject);
                     if (_mv_433.has_value) {
                         __auto_type i = _mv_433.value;
@@ -1828,7 +1828,7 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, sl
     {
         __auto_type ig = decode_graph_to_indexed(arena, triples);
         __auto_type sig = decode_build_signature(arena, triples);
-        __auto_type out = ((slop_list_owl2_RawAxiom){ .data = (owl2_RawAxiom*)slop_arena_alloc(arena, 16 * sizeof(owl2_RawAxiom)), .len = 0, .cap = 16 });
+        __auto_type out = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0 });
         slop_option_string fault = (slop_option_string){.has_value = false};
         fault = decode_declaration_conflict(arena, sig, triples);
         {
