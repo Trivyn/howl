@@ -12,8 +12,19 @@
 ;;   CR3  B ∈ S(X), B ⊑ ∃r.A                  ⟹ (X,A) ∈ R(r)
 ;;   CR4  (X,Y) ∈ R(r), B ∈ S(Y), ∃r.B ⊑ A    ⟹ A ∈ S(X)
 ;;   CR5  (X,Y) ∈ R(r), ⊥ ∈ S(Y)              ⟹ ⊥ ∈ S(X)
-;;   CR6  (X,Y) ∈ R(r), r ⊑ s                 ⟹ (X,Y) ∈ R(s)
 ;;   CR7  (X,Y) ∈ R(r), (Y,Z) ∈ R(s), r∘s ⊑ t ⟹ (X,Z) ∈ R(t)
+;;
+;; THERE IS NO CR6 RULE: R(r) IS READ THROUGH THE TOLD ROLE HIERARCHY. The
+;; role-hierarchy rule (X,Y) ∈ R(r), r ⊑ s ⟹ (X,Y) ∈ R(s) used to copy
+;; every edge under each of its super-roles - about 1.6M of EL-GALEN's
+;; 1.8M new edges, each then queued, joined and committed. Now an edge is
+;; stored under the role it was derived with, and (X,Y) ∈ R(s) whenever
+;; it is stored under some e with s ∈ sup*(e) (premise.slop, RoleClosure).
+;; The consumers of R apply the closure - CR4 and CR7, in the dispatcher
+;; below; CR5 ignores roles - which is ELK's treatment of role
+;; hierarchies (M1 slice 6b D2). The fixpoint's subsumptions are the same:
+;; materializing added exactly the edges (X,Y):s for s ∈ sup*(e), and
+;; every reader of R(s) now sees those through the closure instead.
 ;;
 ;; THESE LOCAL NUMBERS ARE HOWL'S, NOT THE PAPER'S. In the cited 2005
 ;; calculus, role hierarchy and role composition are CR10 and CR11;
@@ -22,7 +33,7 @@
 ;; sends you to the wrong rule.
 ;;
 ;;   HOWL CR1–CR5  =  published CR1–CR5
-;;   HOWL CR6      =  published CR10   (role hierarchy)
+;;   HOWL CR6      =  published CR10   (role hierarchy: the closure, no rule)
 ;;   HOWL CR7      =  published CR11   (role composition)
 ;;
 ;; RANGES ADD NO RULE. They are eliminated during normalization by the
@@ -47,17 +58,22 @@
 ;;   CR2  | scan S(X) for the OTHER | —                       | —
 ;;        |   conjunct of B₁⊓B₂ ⊑ A |                         |
 ;;   CR3  | scan axioms B ⊑ ∃r.A    | —                       | —
-;;   CR4  | scan stored preds(r)    | scan stored S(Y)        | —
+;;   CR4  | scan stored preds(e),   | scan stored S(Y), for   | —
+;;        |   e ∈ sub*(r)           |   r ∈ sup*(e)           |
 ;;   CR5  | if b = ⊥, scan preds    | if ⊥ ∈ S(Y), emit to x  | —
-;;   CR6  | —                       | —                       | scan axioms r ⊑ s
-;;   CR7  | —                       | scan succs (second leg) | scan preds (first leg)
+;;   CR7  | —                       | scan succs(e₂) (second  | scan preds(e₁) (first
+;;        |                         |   leg), r ∈ sup*(e),    |   leg), s ∈ sup*(e),
+;;        |                         |   e₂ ∈ sub*(s)          |   e₁ ∈ sub*(r)
 ;;
-;; CR6 FIRES ON THE SUCCESSOR HALF ONLY. Its premise is one edge and an
-;; axiom, not a join, so any single delivery of the edge suffices - and
-;; the driver delivers BOTH halves of every edge, in the same round
-;; (`admit-edge` writes both, `round-commit` queues both, `install-seeds`
-;; seeds both). Firing from the predecessor half too derived every
-;; super-role edge a second time: 3.2M redundant messages on EL-GALEN.
+;; (e is the arriving edge's stored role; r and s are the axiom's.)
+;;
+;; THE DISPATCHER APPLIES THE CLOSURE, NOT THE RULES. An arriving edge
+;; stored under e is offered to the axioms of every r ∈ sup*(e), with r
+;; as its role; a rule that walks a stored side (CR4 on a subsumer, CR7's
+;; stored leg) is handed the axiom once per e ∈ sub*(r) of the walked
+;; role, rewritten to name e, so it walks E(e). Each rule still sees one
+;; concrete role, so its body and its proved contracts are unchanged; the
+;; rewritten axioms are arguments only, never stored.
 ;;
 ;; CR2 and CR7 are SELF-JOINS, so same-round co-arrival is their main
 ;; path rather than a corner case — which is exactly why the driver's
@@ -96,8 +112,8 @@
 ;;
 ;; Completeness is the one that matters most: soundness alone is satisfied
 ;; by emitting nothing, which a disabled engine does. Proved here, for
-;; CR1, CR2, CR3, CR4 and CR5 on an arriving edge, and CR6. Each was seen
-;; to stop verifying under a mutation of the body.
+;; CR1, CR2, CR3, and CR4 and CR5 on an arriving edge. Each was seen to
+;; stop verifying under a mutation of the body.
 ;;
 ;; What makes them statable (slop-lang/slop PRs #168 and #172): a contract can
 ;; `match` on the axiom and on a message's `Derived`, binding every
@@ -124,7 +140,7 @@
   (import rdf (IRI))
   (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge EdgePair Context
                  node-bottom node-eq role-eq emit-edge make-context addressed-eq))
-  (import premise (AxList Partners RuleIndex))
+  (import premise (AxList Partners RoleList RoleClosure RuleIndex axiom-roles))
 
   (export
     apply-el-rules
@@ -136,7 +152,6 @@
     cr-exists-lhs-on-pred
     cr-bottom-on-sub
     cr-bottom-on-pred
-    cr-role-incl-on-succ
     cr-chain-on-pred
     cr-chain-on-succ)
 
@@ -568,71 +583,6 @@
         result)))
 
   ;; ============================================================
-  ;; CR6 — (X,Y) ∈ R(r), r ⊑ s ⟹ (X,Y) ∈ R(s)
-  ;;
-  ;; Fired from the SUCCESSOR half only (see the trigger table): the
-  ;; driver always delivers both halves of an edge in the same round, so
-  ;; the half at X is enough, and a second handler at Y re-derived every
-  ;; super-role edge. It re-emits the edge under the super-role, both
-  ;; halves, through `emit-edge`.
-  ;; ============================================================
-
-  (fn cr-role-incl-on-succ ((arena Arena) (ctx Context) (r RoleId) (y Node) (ax NormAxiom))
-    (@intent "EL completion CR6, successor-half direction: role inclusion")
-    (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
-    (@alloc arena)
-    (@post {(list-len $result) <= 2})
-    ;; Premise: the edge (X, r, y) arrived and r ⊑ s: the edge (X, s, y).
-    (@property sound
-      (forall (m $result)
-        (match ax
-          ((sub-role r2 s)
-            (and (role-eq r r2)
-                 (or (and (== (. m to) (. ctx root))
-                          (match (. m what)
-                            ((derived-succ r3 y3) (and (== r3 s) (== y3 y)))
-                            (_ false)))
-                     (and (== (. m to) y)
-                          (match (. m what)
-                            ((derived-pred r3 x3) (and (== r3 s) (== x3 (. ctx root))))
-                            (_ false))))))
-          (_ false))))
-    (@property complete
-      (match ax
-        ((sub-role r2 s)
-          (or (not (role-eq r r2))
-              (and (exists (m $result)
-                    (and (== (. m to) (. ctx root))
-                         (match (. m what)
-                           ((derived-succ r3 y3) (and (== r3 s) (== y3 y)))
-                           (_ false))))
-                  (exists (m $result)
-                    (and (== (. m to) y)
-                         (match (. m what)
-                           ((derived-pred r3 x3) (and (== r3 s) (== x3 (. ctx root))))
-                           (_ false)))))))
-        (_ true)))
-    (let ((mut result (list-new arena Addressed)))
-      (do
-        (match ax
-          ((sub-role r2 s)
-            (when (role-eq r r2)
-              ;; Incoming (derived-succ r y) at context X IS the edge
-              ;; (X, r, y) — so the super-role edge is (X, s, y).
-              (let ((pair (emit-edge arena
-                            (record-new LogicalEdge
-                              (from (. ctx root)) (role s) (to y)))))
-                (do
-                  (list-push result (. pair succ-half))
-                  (list-push result (. pair pred-half))))))
-          ((sub-name _ _)       (do))
-          ((sub-and _ _ _)      (do))
-          ((sub-some-rhs _ _ _) (do))
-          ((sub-some-lhs _ _ _) (do))
-          ((role-chain _ _ _)   (do)))
-        result)))
-
-  ;; ============================================================
   ;; CR7 — (X,Y) ∈ R(r), (Y,Z) ∈ R(s), r∘s ⊑ t ⟹ (X,Z) ∈ R(t)
   ;;
   ;; The other SELF-JOIN, and the one whose two handlers are easiest to
@@ -699,6 +649,205 @@
         result)))
 
   ;; ============================================================
+  ;; The role closure, applied (see the header). `sups-of` is shared; the
+  ;; `-through` helpers are the indexed dispatcher's, and the reference
+  ;; has its own stored-side walks below.
+  ;; ============================================================
+
+  (fn sups-of ((arena Arena) (rc RoleClosure) (e RoleId))
+    (@intent "sup*(e): every role an edge stored under e is a member of")
+    (@spec ((Arena RoleClosure RoleId) -> (List RoleId)))
+    (@alloc arena)
+    ;; A role with no entry is one no axiom mentions, so sup*(e) = {e}.
+    (match (map-get (. rc sups) e)
+      ((some l) (. l items))
+      ((none)
+        (let ((mut one (list-new arena RoleId)))
+          (do (list-push one e) one)))))
+
+  (fn cr4-on-sub-through ((arena Arena) (ctx Context) (rc RoleClosure) (b Node) (ax NormAxiom))
+    (@intent "CR4 on a new subsumer, walking preds(e) for every e ∈ sub*(r) of ∃r.B ⊑ A")
+    (@spec ((Arena Context RoleClosure Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-some-lhs r b2 a)
+            (match (map-get (. rc subs) r)
+              ((some es)
+                (for-each (e (. es items))
+                  (let ((via (union-new NormAxiom sub-some-lhs e b2 a)))
+                    (for-each (m (cr-exists-lhs-on-sub arena ctx b via)) (list-push out m)))))
+              ((none) (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        out)))
+
+  (fn cr7-on-pred-through ((arena Arena) (ctx Context) (rc RoleClosure) (r RoleId) (x Node) (ax NormAxiom))
+    (@intent "CR7 on a new first leg in R(r), walking succs(e) for every e ∈ sub*(s) of r ∘ s ⊑ t")
+    (@spec ((Arena Context RoleClosure RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match ax
+          ((role-chain r2 s2 t)
+            (match (map-get (. rc subs) s2)
+              ((some es)
+                (for-each (e (. es items))
+                  (let ((via (union-new NormAxiom role-chain r2 e t)))
+                    (for-each (m (cr-chain-on-pred arena ctx r x via)) (list-push out m)))))
+              ((none) (for-each (m (cr-chain-on-pred arena ctx r x ax)) (list-push out m)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do)))
+        out)))
+
+  (fn cr7-on-succ-through ((arena Arena) (ctx Context) (rc RoleClosure) (s RoleId) (z Node) (ax NormAxiom))
+    (@intent "CR7 on a new second leg in R(s), walking preds(e) for every e ∈ sub*(r) of r ∘ s ⊑ t")
+    (@spec ((Arena Context RoleClosure RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match ax
+          ((role-chain r2 s2 t)
+            (match (map-get (. rc subs) r2)
+              ((some es)
+                (for-each (e (. es items))
+                  (let ((via (union-new NormAxiom role-chain e s2 t)))
+                    (for-each (m (cr-chain-on-succ arena ctx s z via)) (list-push out m)))))
+              ((none) (for-each (m (cr-chain-on-succ arena ctx s z ax)) (list-push out m)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do)))
+        out)))
+
+  (fn role-closure-naive ((arena Arena) (axioms (List NormAxiom)))
+    (@intent "sup* by fixpoint over the sub-role axioms - the reference's own closure")
+    (@spec ((Arena (List NormAxiom)) -> RoleClosure))
+    (@alloc arena)
+    ;; Deliberately NOT premise.slop's breadth-first walk: a fixpoint that
+    ;; rescans every axiom until nothing is added. `subs` is left empty -
+    ;; the reference never enumerates sub*, it tests sup* membership of
+    ;; the roles actually stored (`in-sups`).
+    (let ((rc (record-new RoleClosure
+                (sups (map-new arena RoleId RoleList))
+                (subs (map-new arena RoleId RoleList))))
+          (mut roles (list-new arena RoleId))
+          (seen (set-new arena RoleId)))
+      (do
+        (for-each (ax axioms)
+          (for-each (r (axiom-roles arena ax))
+            (when (not (set-has seen r))
+              (do (set-put seen r) (list-push roles r)))))
+        (for-each (r roles)
+          (let ((mut up (list-new arena RoleId))
+                (have (set-new arena RoleId))
+                (mut grew true))
+            (do
+              (set-put have r)
+              (list-push up r)
+              (while grew
+                (do
+                  (set! grew false)
+                  (for-each (ax axioms)
+                    (match ax
+                      ((sub-role a c)
+                        (when (and (set-has have a) (not (set-has have c)))
+                          (do (set-put have c) (list-push up c) (set! grew true))))
+                      ((sub-name _ _)       (do))
+                      ((sub-and _ _ _)      (do))
+                      ((sub-some-rhs _ _ _) (do))
+                      ((sub-some-lhs _ _ _) (do))
+                      ((role-chain _ _ _)   (do))))))
+              (let ((l (record-new RoleList (items up))))
+                (map-put (. rc sups) r l)))))
+        rc)))
+
+  (fn in-sups ((rc RoleClosure) (e RoleId) (r RoleId))
+    (@intent "Is r ∈ sup*(e), that is, is an edge stored under e also in R(r)?")
+    (@spec ((RoleClosure RoleId RoleId) -> Bool))
+    (@pure)
+    (match (map-get (. rc sups) e)
+      ((some l)
+        (let ((mut found false))
+          (do
+            (for-each (q (. l items))
+              (when (role-eq q r) (set! found true)))
+            found)))
+      ((none) (role-eq e r))))
+
+  ;; THE REFERENCE'S STORED-SIDE WALKS enumerate the other way round from
+  ;; the `-through` helpers: over the roles actually stored at the context,
+  ;; keeping those whose sup* holds the axiom's role, where the indexed
+  ;; dispatcher enumerates sub* of the axiom's role. The two share no code
+  ;; but the rule functions, so a wrong sub* walk shows up as a
+  ;; disagreement (Codex review of D2).
+
+  (fn ref-cr4-on-sub ((arena Arena) (ctx Context) (rc RoleClosure) (b Node) (ax NormAxiom))
+    (@intent "Reference CR4 on a new subsumer: preds(e) for every stored e with r ∈ sup*(e)")
+    (@spec ((Arena Context RoleClosure Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match ax
+          ((sub-some-lhs r b2 a)
+            (for-each ((e _) (. ctx preds))
+              (when (in-sups rc e r)
+                (for-each (m (cr-exists-lhs-on-sub arena ctx b (union-new NormAxiom sub-some-lhs e b2 a)))
+                  (list-push out m)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-role _ _)       (do))
+          ((role-chain _ _ _)   (do)))
+        out)))
+
+  (fn ref-cr7-on-pred ((arena Arena) (ctx Context) (rc RoleClosure) (r RoleId) (x Node) (ax NormAxiom))
+    (@intent "Reference CR7, new first leg: succs(e) for every stored e with s ∈ sup*(e)")
+    (@spec ((Arena Context RoleClosure RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match ax
+          ((role-chain r2 s2 t)
+            (for-each ((e _) (. ctx succs))
+              (when (in-sups rc e s2)
+                (for-each (m (cr-chain-on-pred arena ctx r x (union-new NormAxiom role-chain r2 e t)))
+                  (list-push out m)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do)))
+        out)))
+
+  (fn ref-cr7-on-succ ((arena Arena) (ctx Context) (rc RoleClosure) (s RoleId) (z Node) (ax NormAxiom))
+    (@intent "Reference CR7, new second leg: preds(e) for every stored e with r ∈ sup*(e)")
+    (@spec ((Arena Context RoleClosure RoleId Node NormAxiom) -> (List Addressed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Addressed)))
+      (do
+        (match ax
+          ((role-chain r2 s2 t)
+            (for-each ((e _) (. ctx preds))
+              (when (in-sups rc e r2)
+                (for-each (m (cr-chain-on-succ arena ctx s z (union-new NormAxiom role-chain e s2 t)))
+                  (list-push out m)))))
+          ((sub-name _ _)       (do))
+          ((sub-and _ _ _)      (do))
+          ((sub-some-rhs _ _ _) (do))
+          ((sub-some-lhs _ _ _) (do))
+          ((sub-role _ _)       (do)))
+        out)))
+
+  ;; ============================================================
   ;; Rule dispatch
   ;; ============================================================
 
@@ -760,47 +909,48 @@
                 ((none) (do)))
               (match (map-get (. idx lhs-by-filler) b)
                 ((some l) (for-each (ax (. l items))
-                            (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m))))
+                            (for-each (m (cr4-on-sub-through arena ctx (. idx roles) b ax)) (list-push out m))))
                 ((none) (do)))
               (for-each (m (cr-bottom-on-sub arena ctx b)) (list-push out m))))
           ;; ---- a new predecessor edge arrived: CR4, CR5, CR7 ----
-          ((derived-pred r x)
+          ;; The edge is (x, e, Y), and in R(r) for every r ∈ sup*(e).
+          ((derived-pred e x)
             (do
-              ;; CR4's companion trigger: the ∃r.B ⊑ A for THIS role r whose
-              ;; filler B ∈ S(Y). Neither side is always the cheap one - a
-              ;; context holds tens of subsumers, but one role (part_of,
-              ;; say) can head thousands of axioms, and walking S(Y) against
-              ;; a filler-only bucket offered every role's axioms: 27.8M
-              ;; rule calls for 579k conclusions on EL-GALEN. So walk the
-              ;; smaller of S(Y) and r's fillers, as CR2 does.
-              (match (map-get (. idx lhs-by-role) r)
-                ((some p)
-                  (if (<= (set-len (. ctx subsumers)) (. p count))
-                    (for-each (b (. ctx subsumers))
-                      (match (map-get (. p by-other) b)
-                        ((some l) (for-each (ax (. l items))
-                                    (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))))
-                        ((none) (do))))
-                    (for-each ((b l) (. p by-other))
-                      (when (set-has (. ctx subsumers) b)
-                        (for-each (ax (. l items))
-                          (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m)))))))
-                ((none) (do)))
-              (match (map-get (. idx chain-by-first) r)
-                ((some l) (for-each (ax (. l items))
-                            (for-each (m (cr-chain-on-pred arena ctx r x ax)) (list-push out m))))
-                ((none) (do)))
+              (for-each (r (sups-of arena (. idx roles) e))
+                (do
+                  ;; CR4's companion trigger: the ∃r.B ⊑ A for role r whose
+                  ;; filler B ∈ S(Y). Neither side is always the cheap one -
+                  ;; a context holds tens of subsumers, but one role (part_of,
+                  ;; say) can head thousands of axioms, and walking S(Y)
+                  ;; against a filler-only bucket offered every role's
+                  ;; axioms: 27.8M rule calls for 579k conclusions on
+                  ;; EL-GALEN. So walk the smaller of S(Y) and r's fillers,
+                  ;; as CR2 does.
+                  (match (map-get (. idx lhs-by-role) r)
+                    ((some p)
+                      (if (<= (set-len (. ctx subsumers)) (. p count))
+                        (for-each (b (. ctx subsumers))
+                          (match (map-get (. p by-other) b)
+                            ((some l) (for-each (ax (. l items))
+                                        (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))))
+                            ((none) (do))))
+                        (for-each ((b l) (. p by-other))
+                          (when (set-has (. ctx subsumers) b)
+                            (for-each (ax (. l items))
+                              (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m)))))))
+                    ((none) (do)))
+                  (match (map-get (. idx chain-by-first) r)
+                    ((some l) (for-each (ax (. l items))
+                                (for-each (m (cr7-on-pred-through arena ctx (. idx roles) r x ax)) (list-push out m))))
+                    ((none) (do)))))
               (for-each (m (cr-bottom-on-pred arena ctx x)) (list-push out m))))
-          ;; ---- a new successor edge arrived: CR6, CR7 ----
-          ((derived-succ r y)
-            (do
-              (match (map-get (. idx incl-by-sub) r)
+          ;; ---- a new successor edge arrived: CR7 ----
+          ;; The edge is (Y, e, z), and in R(s) for every s ∈ sup*(e).
+          ((derived-succ e z)
+            (for-each (s (sups-of arena (. idx roles) e))
+              (match (map-get (. idx chain-by-second) s)
                 ((some l) (for-each (ax (. l items))
-                            (for-each (m (cr-role-incl-on-succ arena ctx r y ax)) (list-push out m))))
-                ((none) (do)))
-              (match (map-get (. idx chain-by-second) r)
-                ((some l) (for-each (ax (. l items))
-                            (for-each (m (cr-chain-on-succ arena ctx r y ax)) (list-push out m))))
+                            (for-each (m (cr7-on-succ-through arena ctx (. idx roles) s z ax)) (list-push out m))))
                 ((none) (do))))))
         out)))
 
@@ -819,7 +969,12 @@
     ;; mutating view — the store absorbed Δₙ at the previous barrier —
     ;; so `subsumers` and `preds` already include this round's arrivals,
     ;; which is what makes the Δₙ × Δₙ joins reachable from here.
-    (let ((mut out (list-new arena Addressed)))
+    ;;
+    ;; THE ROLE CLOSURE is its own (`role-closure-naive`, a fixpoint), and
+    ;; its stored-side walks are its own (`ref-cr4-on-sub`, `ref-cr7-*`):
+    ;; they test sup* of each stored role rather than enumerate sub*.
+    (let ((mut out (list-new arena Addressed))
+          (rc (role-closure-naive arena axioms)))
       (do
         (match incoming
           ;; ---- a new subsumer arrived: CR1, CR2, CR3, CR4, CR5 ----
@@ -830,27 +985,27 @@
                   (for-each (m (cr-sub-name-on-sub   arena ctx b ax)) (list-push out m))
                   (for-each (m (cr-and-on-sub        arena ctx b ax)) (list-push out m))
                   (for-each (m (cr-some-rhs-on-sub   arena ctx b ax)) (list-push out m))
-                  (for-each (m (cr-exists-lhs-on-sub arena ctx b ax)) (list-push out m))))
+                  (for-each (m (ref-cr4-on-sub       arena ctx rc b ax)) (list-push out m))))
               ;; CR5 takes no axiom premise — fired once, not per axiom.
               (for-each (m (cr-bottom-on-sub arena ctx b)) (list-push out m))))
           ;; ---- a new predecessor edge arrived: CR4, CR5, CR7 ----
-          ((derived-pred r x)
+          ((derived-pred e x)
             (do
-              (for-each (ax axioms)
-                (do
-                  (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))
-                  (for-each (m (cr-chain-on-pred      arena ctx r x ax)) (list-push out m))))
+              (for-each (r (sups-of arena rc e))
+                (for-each (ax axioms)
+                  (do
+                    (for-each (m (cr-exists-lhs-on-pred arena ctx r x ax)) (list-push out m))
+                    (for-each (m (ref-cr7-on-pred       arena ctx rc r x ax)) (list-push out m)))))
               (for-each (m (cr-bottom-on-pred arena ctx x)) (list-push out m))))
-          ;; ---- a new successor edge arrived: CR6, CR7 ----
+          ;; ---- a new successor edge arrived: CR7 ----
           ;;
           ;; No CR4/CR5 handler here, and that is the trigger table, not
           ;; an omission: both conclude about a PREDECESSOR of the
           ;; context they run in, so a new successor at X gives X nothing
           ;; to say — the corresponding predecessor half arrives at the
           ;; other endpoint in the same round and fires there.
-          ((derived-succ r y)
-            (for-each (ax axioms)
-              (do
-                (for-each (m (cr-role-incl-on-succ arena ctx r y ax)) (list-push out m))
-                (for-each (m (cr-chain-on-succ     arena ctx r y ax)) (list-push out m))))))
+          ((derived-succ e z)
+            (for-each (s (sups-of arena rc e))
+              (for-each (ax axioms)
+                (for-each (m (ref-cr7-on-succ arena ctx rc s z ax)) (list-push out m))))))
         out))))

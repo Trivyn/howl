@@ -21,15 +21,30 @@
 ;;   rhs-by-lhs        B     of  B ⊑ ∃r.A         CR3  on derived-sub
 ;;   lhs-by-filler     B     of  ∃r.B ⊑ A         CR4  on derived-sub
 ;;   lhs-by-role       r → B of  ∃r.B ⊑ A         CR4  on derived-pred
-;;   incl-by-sub       r     of  r ⊑ s            CR6  on succ
 ;;   chain-by-first    r     of  r ∘ s ⊑ t        CR7  on pred
 ;;   chain-by-second   s     of  r ∘ s ⊑ t        CR7  on succ
+;;
+;; plus the told role hierarchy, closed (below): `roles`.
 ;;
 ;; WHY FILTERING LOSES NOTHING. Every rule's FIRST guard is an equality
 ;; on exactly the key above (`node-eq b b2`, `role-eq r r2`), so an axiom
 ;; filed under a different key is one the rule would have rejected
 ;; anyway. The rules are unchanged; only the set of axioms they are
-;; offered shrinks to the ones they can fire on.
+;; offered shrinks to the ones they can fire on. A role key is looked up
+;; once per role in the closure (el.slop's dispatcher), and the rule is
+;; handed that role, so its first guard still holds by construction.
+;;
+;; ROLE INCLUSIONS ARE MATCHED, NOT MATERIALIZED (M1 slice 6b D2). An
+;; edge is stored under the role it was derived with, and R(s) is read as
+;; the union of E(e) over the stored roles e with s ∈ sup*(e) - ELK's
+;; treatment of the role hierarchy. `roles` (a RoleClosure) maps a role to
+;; sup*(r), the reflexive-transitive closure of the `sub-role` axioms, and
+;; back to sub*(s). Both have an entry, itself included, for EVERY role some
+;; axiom mentions; a role no axiom mentions has no entry, and needs none,
+;; since no bucket is keyed on it or on anything above it. The closure is
+;; a breadth-first walk with a visited set, because equivalent properties
+;; make the hierarchy cyclic. Transitivity is not in it: that is the
+;; chain r ∘ r ⊑ r, which CR7 applies.
 ;;
 ;; CR2 IS FILED UNDER BOTH CONJUNCTS, because it is a self-join that must
 ;; fire from either one (§6.4) — and ONCE when B₁ = B₂, since filing it
@@ -60,7 +75,10 @@
   (export
     AxList
     Partners
+    RoleList
+    RoleClosure
     RuleIndex
+    axiom-roles
     build-rule-index)
 
   ;; A record around the list, for the reason `Queue` is one: a
@@ -77,15 +95,29 @@
     (by-other (Map Node AxList))
     (count    Int)))
 
+  ;; A record around a role list, for AxList's reason.
+  (type RoleList (record
+    (items (List RoleId))))
+
+  ;; The direct `sub-role` edges, r → its told super-roles. A record so a
+  ;; helper can take it: a Map is not passed bare.
+  (type RoleGraph (record
+    (up (Map RoleId RoleList))))
+
+  ;; sup* and sub* of the told role hierarchy (the header, and SPEC §6.4).
+  (type RoleClosure (record
+    (sups (Map RoleId RoleList))     ; r → sup*(r), itself included
+    (subs (Map RoleId RoleList))))   ; s → sub*(s), itself included
+
   (type RuleIndex (record
     (sub-by-lhs      (Map Node AxList))
     (and-by-pair     (Map Node Partners))
     (rhs-by-lhs      (Map Node AxList))
     (lhs-by-filler   (Map Node AxList))
     (lhs-by-role     (Map RoleId Partners))
-    (incl-by-sub     (Map RoleId AxList))
     (chain-by-first  (Map RoleId AxList))
-    (chain-by-second (Map RoleId AxList))))
+    (chain-by-second (Map RoleId AxList))
+    (roles           RoleClosure)))
 
   (fn pushed ((arena Arena) (found (Option AxList)) (ax NormAxiom))
     (@intent "The bucket a lookup found, with one more axiom — or a new bucket")
@@ -121,6 +153,60 @@
                    ((some _) (. p count))
                    ((none)   (+ (. p count) 1))))))))
 
+  (fn role-pushed ((arena Arena) (found (Option RoleList)) (r RoleId))
+    (@intent "The role list a lookup found, with one more role — or a new list")
+    (@spec ((Arena (Option RoleList) RoleId) -> RoleList))
+    (@alloc arena)
+    ;; `pushed`, for roles; the caller writes the result back.
+    (let ((mut items (match found
+                       ((some l) (. l items))
+                       ((none)   (list-new arena RoleId)))))
+      (do
+        (list-push items r)
+        (record-new RoleList (items items)))))
+
+  (fn axiom-roles ((arena Arena) (ax NormAxiom))
+    (@intent "Every role an axiom mentions")
+    (@spec ((Arena NormAxiom) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut rs (list-new arena RoleId)))
+      (do
+        (match ax
+          ((sub-name _ _)        (do))
+          ((sub-and _ _ _)       (do))
+          ((sub-some-rhs _ r _)  (list-push rs r))
+          ((sub-some-lhs r _ _)  (list-push rs r))
+          ((sub-role r s)        (do (list-push rs r) (list-push rs s)))
+          ((role-chain r s t)    (do (list-push rs r) (list-push rs s) (list-push rs t))))
+        rs)))
+
+  (fn role-closure ((arena Arena) (g RoleGraph) (r RoleId))
+    (@intent "sup*(r): r and every role above it in the told hierarchy, each once")
+    (@spec ((Arena RoleGraph RoleId) -> RoleList))
+    (@alloc arena)
+    ;; Breadth-first over `out` itself: `i` is the next role to expand,
+    ;; and a role is appended at most once, so the walk ends even on a
+    ;; cycle (EquivalentObjectProperties is r ⊑ s and s ⊑ r).
+    (let ((mut out (list-new arena RoleId))
+          (seen (set-new arena RoleId))
+          (mut i 0))
+      (do
+        (set-put seen r)
+        (list-push out r)
+        (while (< i (cast Int (list-len out)))
+          (do
+            (match (list-get out i)
+              ((some q)
+                (match (map-get (. g up) q)
+                  ((some l)
+                    (for-each (s (. l items))
+                      (when (not (set-has seen s))
+                        (do (set-put seen s) (list-push out s)))))
+                  ((none) (do))))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        (record-new RoleList (items out)))))
+
   (fn build-rule-index ((arena Arena) (axioms (List NormAxiom)))
     (@intent "File every normal-form axiom under the key each of its triggers looks up")
     (@spec ((Arena (List NormAxiom)) -> RuleIndex))
@@ -138,9 +224,14 @@
                  (rhs-by-lhs      (map-new arena Node AxList))
                  (lhs-by-filler   (map-new arena Node AxList))
                  (lhs-by-role     (map-new arena RoleId Partners))
-                 (incl-by-sub     (map-new arena RoleId AxList))
                  (chain-by-first  (map-new arena RoleId AxList))
-                 (chain-by-second (map-new arena RoleId AxList)))))
+                 (chain-by-second (map-new arena RoleId AxList))
+                 (roles           (record-new RoleClosure
+                                    (sups (map-new arena RoleId RoleList))
+                                    (subs (map-new arena RoleId RoleList))))))
+          (g   (record-new RoleGraph (up (map-new arena RoleId RoleList))))
+          (mut roles (list-new arena RoleId))
+          (seen (set-new arena RoleId)))
       (do
         (for-each (ax axioms)
           (match ax
@@ -163,14 +254,30 @@
                   (map-put (. idx lhs-by-filler) b l))
                 (let ((p (partnered arena (map-get (. idx lhs-by-role) r) b ax)))
                   (map-put (. idx lhs-by-role) r p))))
-            ((sub-role r _)
-              (let ((l (pushed arena (map-get (. idx incl-by-sub) r) ax)))
-                (map-put (. idx incl-by-sub) r l)))
+            ((sub-role r s)
+              (let ((l (role-pushed arena (map-get (. g up) r) s)))
+                (map-put (. g up) r l)))
             ((role-chain r s _)
               (do
                 (let ((l1 (pushed arena (map-get (. idx chain-by-first) r) ax)))
                   (map-put (. idx chain-by-first) r l1))
                 (let ((l2 (pushed arena (map-get (. idx chain-by-second) s) ax)))
                   (map-put (. idx chain-by-second) s l2))))))
+        ;; The mentioned roles, in first-mention order, so the closure
+        ;; lists - like the buckets - are a function of the axiom list.
+        (for-each (ax axioms)
+          (for-each (r (axiom-roles arena ax))
+            (when (not (set-has seen r))
+              (do (set-put seen r) (list-push roles r)))))
+        (for-each (r roles)
+          (let ((c (role-closure arena g r)))
+            (map-put (. (. idx roles) sups) r c)))
+        (for-each (r roles)
+          (match (map-get (. (. idx roles) sups) r)
+            ((some c)
+              (for-each (s (. c items))
+                (let ((l (role-pushed arena (map-get (. (. idx roles) subs) s) r)))
+                  (map-put (. (. idx roles) subs) s l))))
+            ((none) (do))))
         idx)))
 )

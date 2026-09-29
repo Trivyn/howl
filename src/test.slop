@@ -421,11 +421,11 @@
                  (match (verdict o) ('verdict-coherent true) (_ false))))))))
 
   (fn test-role-hierarchy-carries-edges ((arena Arena))
-    (@intent "CR6: an r-edge is an s-edge when r ⊑ s, and not the converse")
+    (@intent "Role hierarchy: an r-edge is an s-edge when r ⊑ s, and not the converse")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    ;; A ⊑ ∃r.B, r ⊑ s, ∃s.B ⊑ C: only CR6 (now fired from the successor
-    ;; half alone) turns the r-edge into the s-edge CR4 needs. The converse,
+    ;; A ⊑ ∃r.B, r ⊑ s, ∃s.B ⊑ C: only reading R(s) through the role
+    ;; closure lets CR4 match the stored r-edge against ∃s.B. The converse,
     ;; E ⊑ ∃s.B with ∃r.B ⊑ F, must NOT give E ⊑ F.
     (match (classify-fixture arena "corpus/fixtures/probes/subproperty-existential.ttl")
       ((none) false)
@@ -435,6 +435,32 @@
                             (cls "http://example.org/t#C"))
                (not (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#E")
                                  (cls "http://example.org/t#F"))))))))
+
+  (fn test-role-closure-deep ((arena Arena))
+    (@intent "CR4 and CR7 match edges through sup* and sub* of the told role hierarchy")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; role-hierarchy-deep.ttl: each entailment needs the closure at one
+    ;; site (see the fixture) - a three-level hierarchy, a late subsumer, an
+    ;; equivalent-property cycle, a chain over sub-role legs in both arrival
+    ;; orders, and a transitive role under a sub-role - and the converse
+    ;; direction must still not hold.
+    (match (classify-fixture arena "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
+      ((none) false)
+      ((some o)
+        (let ((inc (. (. o findings) inconsistent))
+              (sat (. o saturation))
+              (nm  (. o names)))
+          (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
+               (entails-sub sat nm inc (cls "http://example.org/t#A1") (cls "http://example.org/t#C1"))
+               (entails-sub sat nm inc (cls "http://example.org/t#A2") (cls "http://example.org/t#C2"))
+               (entails-sub sat nm inc (cls "http://example.org/t#A3") (cls "http://example.org/t#C3"))
+               (entails-sub sat nm inc (cls "http://example.org/t#D3") (cls "http://example.org/t#E3"))
+               (entails-sub sat nm inc (cls "http://example.org/t#X4") (cls "http://example.org/t#E"))
+               (entails-sub sat nm inc (cls "http://example.org/t#X5") (cls "http://example.org/t#E"))
+               (entails-sub sat nm inc (cls "http://example.org/t#X6") (cls "http://example.org/t#F6"))
+               (not (entails-sub sat nm inc (cls "http://example.org/t#A7")
+                                 (cls "http://example.org/t#N7"))))))))
 
   (fn test-smaller-side-joins ((arena Arena))
     (@intent "CR2 and CR4 derive through the context-side walk when the context is the smaller side")
@@ -2452,10 +2478,11 @@
         (list-push ps "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
         (list-push ps "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
         (list-push ps "corpus/fixtures/hazards/smaller-side-join.ttl")
-        ;; The only fixture here where CR6 carries an edge: subproperty.ttl
-        ;; and equivalent-properties.ttl declare the hierarchy with nothing
-        ;; for it to act on.
+        ;; The fixtures where the role closure carries an edge:
+        ;; subproperty.ttl and equivalent-properties.ttl declare the
+        ;; hierarchy with nothing for it to act on.
         (list-push ps "corpus/fixtures/probes/subproperty-existential.ttl")
+        (list-push ps "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
         (for-each (p ps) (when (not (dispatch-agrees arena p)) (set! ok false)))
         ok)))
 
@@ -3362,7 +3389,11 @@
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-role-hierarchy-carries-edges arena)))
-            (print-test-result "CR6: an r-edge is an s-edge when r ⊑ s, not the converse" r)
+            (print-test-result "Role hierarchy: an r-edge is an s-edge when r ⊑ s, not the converse" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-role-closure-deep arena)))
+            (print-test-result "CR4 and CR7 match through the role closure: depth, cycles, chains, transitivity" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-smaller-side-joins arena)))

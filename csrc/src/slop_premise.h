@@ -8,6 +8,9 @@
 
 typedef struct premise_AxList premise_AxList;
 typedef struct premise_Partners premise_Partners;
+typedef struct premise_RoleList premise_RoleList;
+typedef struct premise_RoleGraph premise_RoleGraph;
+typedef struct premise_RoleClosure premise_RoleClosure;
 typedef struct premise_RuleIndex premise_RuleIndex;
 
 #ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
@@ -64,15 +67,46 @@ typedef struct premise_Partners premise_Partners;
 SLOP_OPTION_DEFINE(premise_Partners, slop_option_premise_Partners)
 #endif
 
+struct premise_RoleList {
+    slop_list_types_RoleId items;
+};
+typedef struct premise_RoleList premise_RoleList;
+
+#ifndef SLOP_OPTION_PREMISE_ROLELIST_DEFINED
+#define SLOP_OPTION_PREMISE_ROLELIST_DEFINED
+SLOP_OPTION_DEFINE(premise_RoleList, slop_option_premise_RoleList)
+#endif
+
+struct premise_RoleGraph {
+    slop_map* up;
+};
+typedef struct premise_RoleGraph premise_RoleGraph;
+
+#ifndef SLOP_OPTION_PREMISE_ROLEGRAPH_DEFINED
+#define SLOP_OPTION_PREMISE_ROLEGRAPH_DEFINED
+SLOP_OPTION_DEFINE(premise_RoleGraph, slop_option_premise_RoleGraph)
+#endif
+
+struct premise_RoleClosure {
+    slop_map* sups;
+    slop_map* subs;
+};
+typedef struct premise_RoleClosure premise_RoleClosure;
+
+#ifndef SLOP_OPTION_PREMISE_ROLECLOSURE_DEFINED
+#define SLOP_OPTION_PREMISE_ROLECLOSURE_DEFINED
+SLOP_OPTION_DEFINE(premise_RoleClosure, slop_option_premise_RoleClosure)
+#endif
+
 struct premise_RuleIndex {
     slop_map* sub_by_lhs;
     slop_map* and_by_pair;
     slop_map* rhs_by_lhs;
     slop_map* lhs_by_filler;
     slop_map* lhs_by_role;
-    slop_map* incl_by_sub;
     slop_map* chain_by_first;
     slop_map* chain_by_second;
+    premise_RoleClosure roles;
 };
 typedef struct premise_RuleIndex premise_RuleIndex;
 
@@ -189,6 +223,9 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
 
 premise_AxList premise_pushed(slop_arena* arena, slop_option_premise_AxList found, types_NormAxiom ax);
 premise_Partners premise_partnered(slop_arena* arena, slop_option_premise_Partners found, types_Node other, types_NormAxiom ax);
+premise_RoleList premise_role_pushed(slop_arena* arena, slop_option_premise_RoleList found, types_RoleId r);
+slop_list_types_RoleId premise_axiom_roles(slop_arena* arena, types_NormAxiom ax);
+premise_RoleList premise_role_closure(slop_arena* arena, premise_RoleGraph g, types_RoleId r);
 premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_NormAxiom axioms);
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
@@ -214,6 +251,21 @@ SLOP_OPTION_DEFINE(premise_Partners, slop_option_premise_Partners)
 #ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
 #define SLOP_OPTION_TYPES_ROLEID_DEFINED
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
+#endif
+
+#ifndef SLOP_OPTION_PREMISE_ROLELIST_DEFINED
+#define SLOP_OPTION_PREMISE_ROLELIST_DEFINED
+SLOP_OPTION_DEFINE(premise_RoleList, slop_option_premise_RoleList)
+#endif
+
+#ifndef SLOP_OPTION_PREMISE_ROLEGRAPH_DEFINED
+#define SLOP_OPTION_PREMISE_ROLEGRAPH_DEFINED
+SLOP_OPTION_DEFINE(premise_RoleGraph, slop_option_premise_RoleGraph)
+#endif
+
+#ifndef SLOP_OPTION_PREMISE_ROLECLOSURE_DEFINED
+#define SLOP_OPTION_PREMISE_ROLECLOSURE_DEFINED
+SLOP_OPTION_DEFINE(premise_RoleClosure, slop_option_premise_RoleClosure)
 #endif
 
 #ifndef SLOP_OPTION_PREMISE_RULEINDEX_DEFINED

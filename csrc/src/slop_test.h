@@ -200,6 +200,7 @@ uint8_t test_test_names_round_trip(slop_arena* arena);
 uint8_t test_same_renamed(types_Names names, types_Node n, types_Node expect);
 uint8_t test_test_litmus_end_to_end(slop_arena* arena);
 uint8_t test_test_role_hierarchy_carries_edges(slop_arena* arena);
+uint8_t test_test_role_closure_deep(slop_arena* arena);
 uint8_t test_test_smaller_side_joins(slop_arena* arena);
 uint8_t test_test_unattested_import_is_inconclusive(slop_arena* arena);
 uint8_t test_test_declared_unused_class_gets_a_context(slop_arena* arena);

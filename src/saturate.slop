@@ -279,7 +279,7 @@
     ;; half says the same thing again, and every one that reaches here has
     ;; its successor sibling in the same rule output: the only constructor
     ;; of either half on this path is `emit-edge`, whose EdgePair carries
-    ;; both, and CR3, CR6 and CR7 push both (seeds never pass through
+    ;; both, and CR3 and CR7 push both (seeds never pass through
     ;; `admit`). Admitting the predecessor half too tested and wrote every
     ;; new edge twice - 1.8M redundant admits on EL-GALEN.
     (match (. m what)

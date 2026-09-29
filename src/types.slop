@@ -764,8 +764,8 @@
       (match (. (. $result pred-half) what)
         ((derived-pred r x) (and (== r (. e role)) (== x (. e from))))
         (_ false)))
-    ;; One helper for all three edge-concluding rules (CR3, CR6, CR7),
-    ;; so the invariant has a single site rather than three.
+    ;; One helper for both edge-concluding rules (CR3, CR7), so the
+    ;; invariant has a single site.
     (record-new EdgePair
       (succ-half (record-new Addressed
                    (to   (. e from))

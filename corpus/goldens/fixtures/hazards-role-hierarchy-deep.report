@@ -1,0 +1,101 @@
+howl-report 1
+verdict coherent
+termination fixpoint
+rounds 7
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 92
+sub http://example.org/t#A1 http://example.org/t#A1
+sub http://example.org/t#A1 http://example.org/t#C1
+sub http://example.org/t#A1 http://example.org/t#N7
+sub http://example.org/t#A1 http://example.org/t#P1
+sub http://example.org/t#A1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#A2 http://example.org/t#A2
+sub http://example.org/t#A2 http://example.org/t#C2
+sub http://example.org/t#A2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#A3 http://example.org/t#A3
+sub http://example.org/t#A3 http://example.org/t#C3
+sub http://example.org/t#A3 http://example.org/t#E3
+sub http://example.org/t#A3 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#A7 http://example.org/t#A7
+sub http://example.org/t#A7 http://example.org/t#C1
+sub http://example.org/t#A7 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#B1 http://example.org/t#B1
+sub http://example.org/t#B1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#B2 http://example.org/t#B2
+sub http://example.org/t#B2 http://example.org/t#G2
+sub http://example.org/t#B2 http://example.org/t#M2
+sub http://example.org/t#B2 http://example.org/t#N2
+sub http://example.org/t#B2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#B3 http://example.org/t#B3
+sub http://example.org/t#B3 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C1 http://example.org/t#C1
+sub http://example.org/t#C1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C2 http://example.org/t#C2
+sub http://example.org/t#C2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C3 http://example.org/t#C3
+sub http://example.org/t#C3 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#D http://example.org/t#D
+sub http://example.org/t#D http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#D3 http://example.org/t#C3
+sub http://example.org/t#D3 http://example.org/t#D3
+sub http://example.org/t#D3 http://example.org/t#E3
+sub http://example.org/t#D3 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#E http://example.org/t#E
+sub http://example.org/t#E http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#E3 http://example.org/t#E3
+sub http://example.org/t#E3 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#F6 http://example.org/t#F6
+sub http://example.org/t#F6 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#G2 http://example.org/t#G2
+sub http://example.org/t#G2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K4 http://example.org/t#E
+sub http://example.org/t#K4 http://example.org/t#K4
+sub http://example.org/t#K4 http://example.org/t#L4
+sub http://example.org/t#K4 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K5 http://example.org/t#K5
+sub http://example.org/t#K5 http://example.org/t#L5
+sub http://example.org/t#K5 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#L4 http://example.org/t#E
+sub http://example.org/t#L4 http://example.org/t#L4
+sub http://example.org/t#L4 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#L5 http://example.org/t#L5
+sub http://example.org/t#L5 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#M2 http://example.org/t#G2
+sub http://example.org/t#M2 http://example.org/t#M2
+sub http://example.org/t#M2 http://example.org/t#N2
+sub http://example.org/t#M2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#N2 http://example.org/t#G2
+sub http://example.org/t#N2 http://example.org/t#N2
+sub http://example.org/t#N2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#N7 http://example.org/t#N7
+sub http://example.org/t#N7 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#P1 http://example.org/t#C1
+sub http://example.org/t#P1 http://example.org/t#N7
+sub http://example.org/t#P1 http://example.org/t#P1
+sub http://example.org/t#P1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#X4 http://example.org/t#E
+sub http://example.org/t#X4 http://example.org/t#K4
+sub http://example.org/t#X4 http://example.org/t#L4
+sub http://example.org/t#X4 http://example.org/t#X4
+sub http://example.org/t#X4 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#X5 http://example.org/t#E
+sub http://example.org/t#X5 http://example.org/t#X5
+sub http://example.org/t#X5 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#X6 http://example.org/t#F6
+sub http://example.org/t#X6 http://example.org/t#X6
+sub http://example.org/t#X6 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Y4 http://example.org/t#Y4
+sub http://example.org/t#Y4 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Y5 http://example.org/t#K5
+sub http://example.org/t#Y5 http://example.org/t#L5
+sub http://example.org/t#Y5 http://example.org/t#Y5
+sub http://example.org/t#Y5 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Y6 http://example.org/t#F6
+sub http://example.org/t#Y6 http://example.org/t#Y6
+sub http://example.org/t#Y6 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Z6 http://example.org/t#Z6
+sub http://example.org/t#Z6 http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

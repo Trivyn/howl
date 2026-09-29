@@ -880,8 +880,9 @@ Two things follow from the row above and neither is optional:
 
 - **`emit-edge` into `Δ₀`, not a direct write to `succs`/`preds`.** An edge written straight into the
   store is invisible to the rules, exactly as a subsumer written straight into `S(·)` is
-  ([§5.2](#52-the-exact-v0-language)'s seeding): CR6 and CR7 fire on edge deltas, so role hierarchies
-  and chains would never apply to *asserted* edges while applying fine to derived ones. That
+  ([§5.2](#52-the-exact-v0-language)'s seeding): CR4 and CR7 fire on edge deltas, through the role
+  closure, so role hierarchies and chains would never apply to *asserted* edges while applying fine
+  to derived ones. That
   asymmetry is invisible in any fixture whose assertions happen not to interact with an RIA.
 - **Range seeds, because the elimination rewrite cannot reach an assertion.** The published
   construction rewrites existential GCIs only ([§6.3](#63-normalization)); an installed edge is not
@@ -1619,17 +1620,31 @@ join against the *new* fact:
 | CR1 | `B ∈ S(X)` × axiom | scan axioms `B ⊑ A` | — | — |
 | CR2 | `B₁ ∈ S(X)` × `B₂ ∈ S(X)` | intersect stored `S(X)` with the **other** conjuncts of `B₁`'s conjunctions | — | — |
 | CR3 | `B ∈ S(X)` × axiom | scan axioms `B ⊑ ∃r.A` | — | — |
-| CR4 | `B ∈ S(Y)` × `(X,Y) ∈ R(r)` | scan stored `preds(r)` | intersect stored `S(Y)` with the fillers `B` of `∃r.B ⊑ A` | — |
+| CR4 | `B ∈ S(Y)` × `(X,Y) ∈ R(r)` | scan stored `preds(e)`, `e ∈ sub*(r)` | for each `r ∈ sup*(e)`, intersect stored `S(Y)` with the fillers `B` of `∃r.B ⊑ A` | — |
 | CR5 | `⊥ ∈ S(Y)` × `(X,Y) ∈ R(r)` | if `b = ⊥`, scan stored `preds` | if `⊥ ∈ S(Y)`, emit to the new `x` | — |
-| CR6 | `(X,Y) ∈ R(r)` × axiom | — | — | scan axioms `r ⊑ s` |
-| CR7 | `(X,Y) ∈ R(r)` × `(Y,Z) ∈ R(s)` | — | scan stored `succs` for the second leg | scan stored `preds` for the first leg |
+| CR7 | `(X,Y) ∈ R(r)` × `(Y,Z) ∈ R(s)` | — | for each `r ∈ sup*(e)`, scan stored `succs(e₂)`, `e₂ ∈ sub*(s)`, for the second leg | for each `s ∈ sup*(e)`, scan stored `preds(e₁)`, `e₁ ∈ sub*(r)`, for the first leg |
 
-Three rows are narrower than a literal reading of the calculus, each deliberately (M1 slice 6b):
-- **CR6 fires from the successor half only.** Its premise is one edge and an axiom, not a join,
-  so one delivery of the edge suffices. The driver delivers both halves of every edge in the same
-  round: `admit-edge` writes both, `round-commit` queues both, and the seeds install both. A
-  handler on the predecessor half re-derived every super-role edge; on EL-GALEN that was 3.2M
-  redundant messages.
+Here `e` is the role the arriving edge is stored under, and `sup*`/`sub*` are the told role
+hierarchy's reflexive-transitive closure and its inverse (`premise.slop`'s `RoleClosure`).
+
+**There is no role-hierarchy rule (M1 slice 6b D2).** `R(r)` is read through the told hierarchy: an
+edge is stored under the role it was derived with, and `(X,Y) ∈ R(s)` whenever it is stored under
+some `e` with `s ∈ sup*(e)`. The consumers of `R` apply the closure, as ELK does (Kazakov, Krötzsch &
+Simančík, *The Incredible ELK*, 2014): CR4 and CR7 in the dispatcher, while CR5 ignores roles. The rule functions are unchanged. The dispatcher hands each
+one a concrete role, and a stored-side walk gets the axiom rewritten to name each `e ∈ sub*(r)` of
+the walked role, so every proved contract still applies. The fixpoint's subsumptions are those of the
+materializing rule it replaces, `(X,Y) ∈ R(r), r ⊑ s ⟹ (X,Y) ∈ R(s)`: that rule added exactly the
+edges `(X,Y):s` for `s ∈ sup*(e)`, and every reader of `R(s)` now sees them through the closure.
+- **Why.** Those copies were about 1.6M of EL-GALEN's 1.8M new edges, each queued, joined and
+  committed.
+- **Cycles.** `sup*` is a breadth-first walk with a visited set, because equivalent properties make
+  the hierarchy cyclic.
+- **Transitivity is not in the closure.** `Trans(r)` is the chain `r ∘ r ⊑ r`, which CR7 applies,
+  with both legs matched through `sup*`.
+- **Reports.** The rounds figure drops where a hierarchy was in play: a super-role consequence no
+  longer waits a round per level. Every other report line is unchanged, on every fixture and corpus.
+
+Two rows are narrower than a literal reading of the calculus, each deliberately (M1 slice 6b):
 - **"Intersect" means the smaller side is walked and the other probed** (ELK's lazy set
   intersection; `premise.slop`'s two-level buckets). Either side yields the same conclusions.
   Walking one side always was the costly part: on GO, CR2 walked every conjunction a general class
@@ -1758,7 +1773,7 @@ an emitted list does not follow loops, so a quantified property over them comes 
 > | HOWL | Published | |
 > |---|---|---|
 > | CR1–CR5 | CR1–CR5 | same rules |
-> | CR6 | CR10 | role hierarchy |
+> | — (was CR6) | CR10 | role hierarchy: realized by the role closure at CR4 and CR7, not by a rule |
 > | CR7 | CR11 | role composition |
 > | — | CR6 | nominals: not in v0 |
 > | — | CR7–CR9 | concrete domains: not in v0 |
@@ -1774,10 +1789,12 @@ the *delta* rather than the store is what makes CR1 fire at all:
 | CR3  | `B ∈ S(X)`, `B ⊑ ∃r.A` | `(X,A) ∈ R(r)` |
 | CR4  | `(X,Y) ∈ R(r)`, `B ∈ S(Y)`, `∃r.B ⊑ A` | `A ∈ S(X)` |
 | CR5  | `(X,Y) ∈ R(r)`, `⊥ ∈ S(Y)` | `⊥ ∈ S(X)` (bottom propagation) |
-| CR6  | `(X,Y) ∈ R(r)`, `r ⊑ s` | `(X,Y) ∈ R(s)` (role hierarchy) |
 | CR7  | `(X,Y) ∈ R(r)`, `(Y,Z) ∈ R(s)`, `r ∘ s ⊑ t` | `(X,Z) ∈ R(t)` (role composition) |
 
-**The three edge-concluding rules go through `emit-edge`.** CR3, CR6 and CR7 conclude
+`R(r)` in every premise above is read through the told role hierarchy, as described under the
+trigger table; the number CR6 is left unused, so CR7 keeps its name.
+
+**The two edge-concluding rules go through `emit-edge`.** CR3 and CR7 conclude
 `(X,Y) ∈ R(r)`, which is one logical fact stored as two halves — a successor at `X` and a
 predecessor at `Y` ([§6.2](#62-data-model)'s edge-pair invariant). Each must emit *both* messages;
 same-round delivery is the operational default rather than a completeness requirement. Writing only the successor half is the most tempting version of this
@@ -2146,7 +2163,7 @@ row below sits on one side of that line.
 
 | Property | How assured | Z3-reachable? |
 |----------|-------------|---------------|
-| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the six loop-free rule functions (CR1, CR2, CR3, CR4 and CR5 on an arriving edge, CR6). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
+| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the five loop-free rule functions (CR1, CR2, CR3, and CR4 and CR5 on an arriving edge). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
 | **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural, but **not yet stated**: held by test (`test-indexed-dispatch-matches-reference` replays every stored fact through the premise index and the full scan) |
 | **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural, but **not yet stated**: held by test (`test-context-starts-with-empty-store`) |
 | **Context coverage** — every individual an axiom names gets a context, declared or not | `(forall (a (. no asserted)) (list-contains $result a))` on `signature-nodes` | **Owed** — true, but the body is loops, which the prover's exact model does not follow. Held by `@example`s on `signature-nodes` and `test-undeclared-individual-is-reasoned-over` (W3C DisjointClasses-002) |
@@ -2161,7 +2178,7 @@ row below sits on one side of that line.
 
 So Z3 buys exactly one thing, and it is worth having: **the implementation cannot drift from the
 calculus without a contract failing.** HOWL does **not** make that claim yet. Today it holds rule by
-rule for the six loop-free rules only; the four loop rules, dispatch coverage and initialization
+rule for the five loop-free rules only; the four loop rules, dispatch coverage and initialization
 are held by tests, which is evidence but not the claim. The claim needs all three structural obligations — both
 directions of each rule contract, dispatch coverage, **and initialization**. Drop any one and a
 disabled engine passes verification: with only the soundness direction, rules returning the empty
@@ -2798,7 +2815,7 @@ the weaker, more useful condition.
 16. **Baseline diff safety.** With a deliberately incomplete baseline run, assert `subsumption_delta`
    is suppressed entirely rather than emitted partially, and that a subsumption entailed by both
    theories is never reported as new ([§6.7](#67-output--classification)).
-17. **Edge halves.** For every edge-concluding rule (CR3, CR6, CR7), assert both `derived-succ` and
+17. **Edge halves.** For every edge-concluding rule (CR3, CR7), assert both `derived-succ` and
    `derived-pred` land in the same next-round delta, and that a consuming rule reading `preds`
    (CR4/CR5) fires. Emitting one half under-derives silently, so assert the *consequence*, not just
    the message count.
@@ -2956,11 +2973,12 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: not met.** EL-GALEN is at 5.3× and GO at 1.4× (`bench/results.txt`). With decode
-  >   still inside the window they were 6.1× and 5.05× after slice 6b and slop's map and
-  >   lazy-collection work (slop-lang/slop#205, #217), down from 30.1× and 19.2× at S6a. Slice 6b's
-  >   changes: each rule join done once from its cheaper side, HOWL's own triple store, a parallel
-  >   round barrier, and saturation over renamed nodes.
+  > - **Status: met.** EL-GALEN is at 3.8× and GO at 1.6× (`bench/results.txt`). With decode still
+  >   inside the window they were 6.1× and 5.05× after slice 6b and slop's map and lazy-collection
+  >   work (slop-lang/slop#205, #217), down from 30.1× and 19.2× at S6a. Slice 6b's changes: each
+  >   rule join done once from its cheaper side, HOWL's own triple store, a parallel round barrier,
+  >   saturation over renamed nodes, the axioms-in-hand boundary, and role inclusions matched
+  >   through the told closure.
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document
@@ -3155,7 +3173,7 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
 7. ~~**Does SLOP's `@post` support quantifiers?**~~ **ANSWERED — yes, for loop-free rules.**
    `forall`/`exists` over `$result` translate, and since slop-lang/slop #166 and #170 a result
    built by guarded pushes with no loop is modelled exactly and a contract can `match` a union's
-   payloads, so both faithfulness directions are *proved* on the six loop-free rule functions,
+   payloads, so both faithfulness directions are *proved* on the five loop-free rule functions,
    with the rule signatures unchanged. Neither fallback (witnesses, bound-unrolling) was needed.
    What remains open is narrower: the **four loop rules**, whose emitted lists the exact model
    does not follow. Their properties stay owed in [§7](#7-verification--contracts); proving them

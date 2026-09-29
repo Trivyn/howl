@@ -1,7 +1,7 @@
 howl-report 1
 verdict coherent
 termination fixpoint
-rounds 5
+rounds 4
 inconsistent false
 omitted 0
 unsatisfiable 0

@@ -58,7 +58,7 @@ failed, and both failures are fixed and pinned by `make corpus-acceptance`:
 Rule dispatch goes through a premise index, so each rule sees only the axioms it could fire on; OBI's
 reasoning went from 172 s to 0.4 s with its report unchanged byte for byte.
 
-**The §12 benchmark: not yet met.** `make bench` times each corpus entry against its routed oracle on
+**The §12 benchmark: met.** `make bench` times each corpus entry against its routed oracle on
 the same machine. Each side gets a median of 5 runs after 1 warm-up, with W = 4. Classification runs
 from axioms in hand to taxonomy on both sides: HOWL's gate, normalization, indexing and reasoning,
 against the oracle's reasoner creation, consistency check and classification. Parsing and the
@@ -68,25 +68,27 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.71 s (reasoning 0.53 s), 8 GB peak | 1.5 s | 0.50 s | 1.4× | passes 5× |
-| EL-GALEN | ELK 0.6.0 | 1.6 s (reasoning 1.4 s), 5 GB peak | 0.30 s | 0.30 s | 5.3× | **fails** 5× |
-| OBI 2026-07-27 | HermiT | 0.09 s | 0.11 s | 0.55 s | 0.2× | reported |
-| RO 2025-12-17 | HermiT | 0.02 s | 0.01 s | 0.17 s | 0.1× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 0.69 s (reasoning 0.51 s), 8 GB peak | 1.4 s | 0.44 s | 1.6× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 1.06 s (reasoning 0.85 s), 4 GB peak | 0.25 s | 0.28 s | 3.8× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.08 s | 0.10 s | 0.49 s | 0.2× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.01 s | 0.15 s | 0.1× | reported |
 
-M1 slice 6b removed the rules' redundant work: CR6 fires once per edge, each edge is admitted once, and
-CR2/CR4 walk the smaller side of their join. slop's faster maps (stored hashes, a
+M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
+side of their join, and role inclusions are matched through the told role closure rather than
+copying every edge under each super-role. slop's faster maps (stored hashes, a
 word-at-a-time string hash, slop-lang/slop#205) and HOWL's own triple store (term ids by content, an
 SPO index and an rdf:type index, instead of slop-rdf's four-index store) a round barrier that commits in
 parallel instead of merging serially, and saturation over nodes renamed to integer ids at its
 boundary took S6a's 19.2× (GO) and 30.1× (EL-GALEN) to 5.05× and 6.1× with decode still inside the
-window. Moving the window to axioms in hand gives the figures above. What remains is EL-GALEN's
-reasoning. GO's single-threaded decode (~1.5 s) is outside the window but is still the bulk of its
-end-to-end time.
+window. Moving the window to axioms in hand took them to 5.3× (EL-GALEN) and 1.4× (GO), and
+matching role inclusions through the closure cut EL-GALEN's reasoning by 38%, to the figures above.
+GO's single-threaded decode (~1.4 s) is outside the window but is still the bulk of its end-to-end
+time.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark runs, and is **not met**: GO 1.4× and EL-GALEN 5.3× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 1.6× and EL-GALEN 3.8× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -262,9 +264,9 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **36 functions, 0 failing**. Among them, the six loop-free completion
+`make verify` verifies **35 functions, 0 failing**. Among them, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
-(nothing licensed is omitted), 13 properties in all, each seen to stop verifying under a mutation of
+(nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of
 its rule's body. `make example` runs **15 executable examples**: 6 per rule, 7 on the canonical sort, and
 2 on context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
 exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
