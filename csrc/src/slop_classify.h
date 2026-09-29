@@ -32,12 +32,13 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #endif
 
 uint8_t classify_context_has_bottom(types_Saturation sat, types_Node n);
-uint8_t classify_detect_inconsistent(types_Saturation sat);
-uint8_t classify_entails_sub(types_Saturation sat, uint8_t inconsistent, types_Node a, types_Node b);
+uint8_t classify_detect_inconsistent(types_Saturation sat, types_Names names);
+uint8_t classify_is_individual(types_Names names, types_Node n);
+uint8_t classify_entails_sub(types_Saturation sat, types_Names names, uint8_t inconsistent, types_Node a, types_Node b);
 uint8_t classify_is_bottom_iri(rdf_IRI iri);
-slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Saturation sat);
-slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Saturation sat);
-types_Findings classify_extract_findings(slop_arena* arena, types_Saturation sat);
+slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Saturation sat, types_Names names);
+slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Saturation sat, types_Names names);
+types_Findings classify_extract_findings(slop_arena* arena, types_Saturation sat, types_Names names);
 
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED

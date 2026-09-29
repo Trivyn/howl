@@ -6,20 +6,32 @@
 #include <stdbool.h>
 #include "slop_types.h"
 #include "slop_el.h"
+#include "slop_premise.h"
+#include "slop_thread.h"
 
 typedef struct saturate_RoundResult saturate_RoundResult;
 typedef struct saturate_RoundDelta saturate_RoundDelta;
+typedef struct saturate_Touched saturate_Touched;
+typedef struct saturate_Bucket saturate_Bucket;
+typedef struct saturate_Queues saturate_Queues;
+typedef struct saturate_Partition saturate_Partition;
+typedef struct saturate_Joined saturate_Joined;
+
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
 
 #ifndef SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_DEFINED
 #define SLOP_LIST_TYPES_NODE_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
-#endif
-
-#ifndef SLOP_LIST_TYPES_NORMAXIOM_DEFINED
-#define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
-#define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
@@ -35,11 +47,6 @@ SLOP_OPTION_DEFINE(types_Context, slop_option_types_Context)
 #ifndef SLOP_OPTION_TYPES_QUEUE_DEFINED
 #define SLOP_OPTION_TYPES_QUEUE_DEFINED
 SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-#define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
 struct saturate_RoundResult {
@@ -63,6 +70,71 @@ typedef struct saturate_RoundDelta saturate_RoundDelta;
 SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 #endif
 
+#ifndef SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
+#endif
+
+struct saturate_Touched {
+    types_Node node;
+    types_Context pending;
+};
+typedef struct saturate_Touched saturate_Touched;
+
+#ifndef SLOP_OPTION_SATURATE_TOUCHED_DEFINED
+#define SLOP_OPTION_SATURATE_TOUCHED_DEFINED
+SLOP_OPTION_DEFINE(saturate_Touched, slop_option_saturate_Touched)
+#endif
+
+#ifndef SLOP_LIST_SATURATE_TOUCHED_DEFINED
+#define SLOP_LIST_SATURATE_TOUCHED_DEFINED
+#define SLOP_LIST_SATURATE_TOUCHED_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_Touched, slop_list_saturate_Touched)
+#endif
+
+struct saturate_Bucket {
+    slop_list_saturate_Touched items;
+};
+typedef struct saturate_Bucket saturate_Bucket;
+
+#ifndef SLOP_OPTION_SATURATE_BUCKET_DEFINED
+#define SLOP_OPTION_SATURATE_BUCKET_DEFINED
+SLOP_OPTION_DEFINE(saturate_Bucket, slop_option_saturate_Bucket)
+#endif
+
+struct saturate_Queues {
+    slop_map* by_node;
+};
+typedef struct saturate_Queues saturate_Queues;
+
+#ifndef SLOP_OPTION_SATURATE_QUEUES_DEFINED
+#define SLOP_OPTION_SATURATE_QUEUES_DEFINED
+SLOP_OPTION_DEFINE(saturate_Queues, slop_option_saturate_Queues)
+#endif
+
+struct saturate_Partition {
+    slop_map* owner;
+    slop_map* by_owner;
+};
+typedef struct saturate_Partition saturate_Partition;
+
+#ifndef SLOP_OPTION_SATURATE_PARTITION_DEFINED
+#define SLOP_OPTION_SATURATE_PARTITION_DEFINED
+SLOP_OPTION_DEFINE(saturate_Partition, slop_option_saturate_Partition)
+#endif
+
+struct saturate_Joined {
+    slop_list_saturate_RoundDelta deltas;
+    slop_list_arena_ptr arenas;
+};
+typedef struct saturate_Joined saturate_Joined;
+
+#ifndef SLOP_OPTION_SATURATE_JOINED_DEFINED
+#define SLOP_OPTION_SATURATE_JOINED_DEFINED
+SLOP_OPTION_DEFINE(saturate_Joined, slop_option_saturate_Joined)
+#endif
+
 
 /* Hash/eq functions and list types for struct map/set keys */
 #ifndef TYPES_NODE_HASH_EQ_DEFINED
@@ -79,7 +151,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif
@@ -95,7 +167,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif
@@ -142,15 +214,28 @@ void saturate_add_pred(slop_arena* arena, types_Context ctx, types_RoleId r, typ
 void saturate_admit_sub(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Node x, types_Node b);
 void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_LogicalEdge e);
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
-void saturate_round_join(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, saturate_RoundDelta delta);
+void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta);
+int64_t saturate_round_join_part(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, slop_list_types_Node part);
+void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
-types_Saturation saturate_round_commit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta);
-types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
+saturate_Bucket saturate_bucketed(slop_arena* arena, slop_option_saturate_Bucket found, saturate_Touched e);
+int64_t saturate_partition_one(slop_arena* arena, slop_arena* run, types_Saturation sat, saturate_Partition part, types_Node x, types_Context dc, int64_t turn, int64_t w);
+int64_t saturate_partition_delta(slop_arena* arena, slop_arena* run, types_Saturation sat, saturate_RoundDelta d, saturate_Partition part, int64_t turn, int64_t w);
+slop_list_saturate_Touched saturate_bucket_items(slop_arena* arena, slop_option_saturate_Bucket found);
+saturate_Partition saturate_partition_round(slop_arena* arena, slop_arena* run, types_Saturation sat, slop_list_saturate_RoundDelta deltas, int64_t w);
+uint8_t saturate_commit_succ(slop_arena* arena, types_Context store, types_RoleId r, types_Node y);
+uint8_t saturate_commit_pred(slop_arena* arena, types_Context store, types_RoleId r, types_Node x);
+void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Touched e, saturate_Queues qs);
+int64_t saturate_commit_bucket(slop_arena* arena, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs);
+types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas);
+types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas);
+saturate_Joined saturate_parallel_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, int64_t w);
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
 uint8_t saturate_frontier_is_empty(types_Saturation sat);
 uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config);
-slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, slop_list_types_NormAxiom axioms, types_ReasonerConfig config);
+slop_list_arena_ptr saturate_commit_arenas(slop_arena* arena, int64_t w);
+slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);
 
 #ifndef SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
@@ -178,9 +263,56 @@ SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-#define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
-SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#ifndef SLOP_OPTION_SATURATE_TOUCHED_DEFINED
+#define SLOP_OPTION_SATURATE_TOUCHED_DEFINED
+SLOP_OPTION_DEFINE(saturate_Touched, slop_option_saturate_Touched)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_BUCKET_DEFINED
+#define SLOP_OPTION_SATURATE_BUCKET_DEFINED
+SLOP_OPTION_DEFINE(saturate_Bucket, slop_option_saturate_Bucket)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_QUEUES_DEFINED
+#define SLOP_OPTION_SATURATE_QUEUES_DEFINED
+SLOP_OPTION_DEFINE(saturate_Queues, slop_option_saturate_Queues)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_PARTITION_DEFINED
+#define SLOP_OPTION_SATURATE_PARTITION_DEFINED
+SLOP_OPTION_DEFINE(saturate_Partition, slop_option_saturate_Partition)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_JOINED_DEFINED
+#define SLOP_OPTION_SATURATE_JOINED_DEFINED
+SLOP_OPTION_DEFINE(saturate_Joined, slop_option_saturate_Joined)
+#endif
+
+#ifndef SLOP_OPTION_MAP_PTR_DEFINED
+#define SLOP_OPTION_MAP_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
+#ifndef SLOP_OPTION_THREAD_INT_PTR_DEFINED
+#define SLOP_OPTION_THREAD_INT_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_thread_int*, slop_option_thread_int_ptr)
+#endif
+
+#ifndef SLOP_LIST_SATURATE_QUEUES_DEFINED
+#define SLOP_LIST_SATURATE_QUEUES_DEFINED
+#define SLOP_LIST_SATURATE_QUEUES_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_Queues, slop_list_saturate_Queues)
+#endif
+
+#ifndef SLOP_LIST_THREAD_INT_PTR_DEFINED
+#define SLOP_LIST_THREAD_INT_PTR_DEFINED
+#define SLOP_LIST_THREAD_INT_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_thread_int*, slop_list_thread_int_ptr)
 #endif
 
 

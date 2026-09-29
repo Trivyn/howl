@@ -1,0 +1,16 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 6
+omission AsymmetricObjectProperty(http://example.org/t#i)
+omission FunctionalObjectProperty(http://example.org/t#f)
+omission InverseFunctionalObjectProperty(http://example.org/t#g)
+omission IrreflexiveObjectProperty(http://example.org/t#j)
+omission ReflexiveObjectProperty(http://example.org/t#k)
+omission SymmetricObjectProperty(http://example.org/t#h)
+unsatisfiable 0
+subsumptions 1
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

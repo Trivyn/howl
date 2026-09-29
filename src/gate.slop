@@ -201,8 +201,6 @@
     ;; recomputed, because coverage is one list and §6.2's verdict rule
     ;; reads its emptiness.
     (let ((expanded (expand-sugar arena axs))
-          (roles  (collect-rbox-roles arena axs))
-          (nroles (cast Int (list-len (collect-rbox-roles arena axs))))
           (mut accepted (list-new arena RawAxiom))
           (mut omitted  (list-new arena Omission)))
       (do
@@ -219,10 +217,12 @@
         (let ((rbox-bad (match (check-regularity arena expanded)
                           ((rbox-regular) false)
                           ((rbox-irregular _) true)))
-              (told   (told-closure arena expanded (collect-rbox-roles arena expanded)
-                        (cast Int (list-len (collect-rbox-roles arena expanded)))))
+              ;; The RBox role list is collected ONCE over the expanded
+              ;; axioms and shared by the closure, the range table and the
+              ;; per-axiom check — it had been recomputed for each.
               (rroles (collect-rbox-roles arena expanded))
-              (ranges (collect-ranges arena expanded (collect-rbox-roles arena expanded))))
+              (told   (told-closure arena expanded rroles (cast Int (list-len rroles))))
+              (ranges (collect-ranges arena expanded rroles)))
           (for-each (ax expanded)
           (match (disposition ax)
             ;; Consumed: read into the signature already, yields no

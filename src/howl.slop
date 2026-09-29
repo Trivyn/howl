@@ -17,14 +17,15 @@
                  Derived Addressed Context Saturation
                  EntityKind AxiomRef InputRef MissingDeclaration Omission Coverage Termination
                  EdgePair
-                 SubPair Findings Outcome Fault
+                 SubPair Findings Outcome Fault Names
                  Profile ProfileSelection ReasonerConfig
                  default-config emit-edge make-context
                  outcome-is-complete findings-are-incoherent))
-  (import normalize (NormResult normalize-input))
+  (import normalize (Decoded NormResult decode-document normalize-decoded))
   (import select (select-profile))
   (import saturate (RoundResult saturate))
   (import classify (extract-findings entails-sub))
+  (import premise (RuleIndex build-rule-index))
 
   (export
     ;; Types (re-exported from types)
@@ -54,6 +55,13 @@
     default-config
     ;; The pipeline
     classify
+    ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
+    Decoded
+    decode
+    Prepared
+    prepare-decoded
+    prepare
+    reason
     ;; Verdict (§6.2) — the single statement of the rule
     outcome-is-complete
     findings-are-incoherent
@@ -133,7 +141,8 @@
   ;; ============================================================
   ;; The pipeline
   ;;
-  ;;   triples → normalize (header, decode, gate, normalize, init)
+  ;;   triples → decode    (header, decode: triples to axioms)
+  ;;           → prepare   (gate, normalize, init, index)
   ;;           → saturate  (CR1–CR7 to fixpoint or the round cap)
   ;;           → extract   (taxonomy + findings)
   ;;           → Outcome
@@ -154,37 +163,108 @@
   ;; BOUNDARY, not a proof.
   ;; ============================================================
 
-  (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
-    (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")
-    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Outcome Fault)))
+  ;; ============================================================
+  ;; The pipeline, split where the front end ends
+  ;;
+  ;; `classify` is `prepare` then `reason`, and nothing else; `prepare`
+  ;; is `decode` then `prepare-decoded`. The splits exist for §12 M1 (c):
+  ;; the benchmark times CLASSIFICATION FROM AXIOMS IN HAND - the point
+  ;; an OWL API caller reaches when its parse returns - and the only
+  ;; honest way to measure that from outside the library is a call
+  ;; boundary. The clock stays on the caller's side of it — HOWL never
+  ;; consults a clock inside a reasoning call (§6.8), so a timing can
+  ;; never reach a report.
+  ;; ============================================================
+
+  ;; What the front end hands the reasoner: the normalized axioms, the
+  ;; initialized saturation (Δ₀ seeded AND committed, §6.3 step 4) and
+  ;; the coverage the gate computed.
+  ;;
+  ;; A Prepared is CONSUMED by `reason`. Saturation grows the context
+  ;; store in place — every Set and Map in it is a pointer — so reasoning
+  ;; twice over one Prepared would start the second run from the first
+  ;; run's fixpoint and report a round count that belongs to neither.
+  ;;
+  ;; The premise index is built HERE, so `prepare_ms` pays for it. The
+  ;; figure compared against ELK is `prepare_ms + reason_ms`, not
+  ;; `reason_ms` alone: ELK loads and indexes its axioms lazily, at the
+  ;; first query, INSIDE its classification window (bench/bench.py times
+  ;; it there), so excluding HOWL's index would compare unlike boundaries.
+  ;; `decode_ms` (triples to axioms) is outside it, as the OWL API's
+  ;; RDF-to-axiom mapping is outside ELK's, and is reported beside it.
+  (type Prepared (record
+    (axioms     (List NormAxiom))
+    (index      RuleIndex)
+    (saturation Saturation)
+    (coverage   Coverage)
+    (names      Names)))      ; axioms, index and saturation are renamed (types.slop)
+
+  (fn decode ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
+    (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
+    (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
     (@alloc arena)
-    ;; THE PIPELINE, AND WHY IT STILL REFUSES ON A FRONT-END FAULT.
+    (decode-document arena triples imports-resolved))
+
+  (fn prepare-decoded ((arena Arena) (d Decoded) (config ReasonerConfig))
+    (@intent "The front end's second half: gate, normalize, initialize, index — and --strict's refusal")
+    (@spec ((Arena Decoded ReasonerConfig) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; WHY THE PIPELINE STILL REFUSES ON A FRONT-END FAULT.
     ;; An `input-error` has no verdict to misread; an Outcome would.
     ;; Returning a partial Outcome when the front end could not decode
     ;; the document would present as full coverage over an empty
     ;; saturation, which §6.2's verdict rule reads as a clean
     ;; `coherent` — sound, catastrophically incomplete, and
-    ;; indistinguishable from success at every interface.
-    ;;
-    ;; Coverage travels from the gate UNCHANGED. It is what makes a
-    ;; run with omissions report `inconclusive` rather than `coherent`,
-    ;; so nothing downstream may quietly empty it.
+    ;; indistinguishable from success at every interface. (A decode
+    ;; fault never gets here: `decode` returns it.)
     ;;
     ;; --strict REFUSES AFTER THE GATE, BEFORE SATURATION. The omissions
     ;; are exactly what the caller asked not to run past, so `refused`
     ;; carries them and nothing else: no Outcome, so no verdict and no
     ;; findings a partial run might have produced (§9, §10 item 12).
-    (match (normalize-input arena triples imports-resolved config)
+    (let ((nr (normalize-decoded arena d)))
+      (if (and (. config strict-profile)
+               (> (list-len (. (. nr coverage) omitted)) 0))
+        (error (union-new Fault refused (. (. nr coverage) omitted)))
+        (ok (record-new Prepared
+              (axioms     (. nr axioms))
+              (index      (build-rule-index arena (. nr axioms)))
+              (saturation (. nr saturation))
+              (coverage   (. nr coverage))
+              (names      (. nr names)))))))
+
+  (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
+    (@alloc arena)
+    (match (decode arena triples imports-resolved)
       ((error f) (error f))
-      ((ok nr)
-        (if (and (. config strict-profile)
-                 (> (list-len (. (. nr coverage) omitted)) 0))
-          (error (union-new Fault refused (. (. nr coverage) omitted)))
-          (match (saturate arena (. nr saturation) (. nr axioms) config)
-            ((error f) (error f))
-            ((ok rr)
-              (ok (record-new Outcome
-                    (coverage    (. nr coverage))
-                    (termination (. rr termination))
-                    (findings    (extract-findings arena (. rr saturation)))
-                    (saturation  (. rr saturation)))))))))))
+      ((ok d)    (prepare-decoded arena d config))))
+
+  (fn reason ((arena Arena) (p Prepared) (config ReasonerConfig))
+    (@intent "Saturate a prepared theory and extract its findings")
+    (@spec ((Arena Prepared ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; Coverage travels from the gate UNCHANGED. It is what makes a run
+    ;; with omissions report `inconclusive` rather than `coherent`, so
+    ;; nothing downstream may quietly empty it.
+    (match (saturate arena (. p saturation) (. p index) config)
+      ((error f) (error f))
+      ((ok rr)
+        (ok (record-new Outcome
+              (coverage    (. p coverage))
+              (termination (. rr termination))
+              (findings    (extract-findings arena (. rr saturation) (. p names)))
+              (saturation  (. rr saturation))
+              (names       (. p names)))))))
+
+  (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; The port's entry point. It stays one call, so the library path
+    ;; cannot drift from the CLI's timed path: both are these two calls.
+    (match (prepare arena triples imports-resolved config)
+      ((error f) (error f))
+      ((ok p)    (reason arena p config))))
+)

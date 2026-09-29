@@ -71,11 +71,15 @@ OUT_TYPE = {
 # these drops axioms an accepted ontology depends on (SPEC.md §5.2).
 IN_V0_TYPE = {
     OWL.TransitiveProperty: "TransitiveObjectProperty (-> r o r subseteq r)",
+    # The n-ary spelling of DisjointClasses. Once filed as a declaration, which
+    # hid it from construct routing: a corpus entry whose only disjointness is
+    # n-ary looked disjointness-free (caught by the probe label check).
+    OWL.AllDisjointClasses: "DisjointClasses",
 }
 DECL_TYPES = {
     OWL.Class, OWL.ObjectProperty, OWL.NamedIndividual, OWL.AnnotationProperty,
     OWL.DatatypeProperty, RDFS.Datatype, OWL.Ontology, OWL.Restriction,
-    OWL.AllDisjointClasses, OWL.Axiom, RDF.List,
+    OWL.Axiom, OWL.Annotation, RDF.List,
 }
 HEADER_PRED = {
     OWL.imports, OWL.versionIRI, OWL.priorVersion, OWL.versionInfo,
@@ -91,13 +95,84 @@ BUILTIN_ROLES = {OWL.topObjectProperty, OWL.bottomObjectProperty}
 OUT, IN, INERT, CONSUMED = "out", "in_v0", "inert", "consumed"
 
 
+def _expression_key(g, t, seen=()):
+    """A class expression as a structural key: an IRI by value, a blank node by
+    what it says. "The same class expression" of SPEC §5.2's range/composition
+    condition is syntactic, so two blank nodes spelling the same ∃r.C match."""
+    if not isinstance(t, BNode) or t in seen:
+        return str(t)
+    return tuple(sorted((str(p), _expression_key(g, o, seen + (t,))) for p, o in g.predicate_objects(t)))
+
+
+def inadmissible_chains(g):
+    """{(t, list head): reason} for every property chain that is not a v0
+    chain: malformed (fewer than two named roles), or violating SPEC §5.2's
+    range/composition condition, implemented from the SPEC, not from HOWL:
+
+        for every  r1 o ... o rn  subPropertyOf t :
+            every range imposed on t   is also imposed on rn   (the same C)
+
+    where "imposed on" goes up the reflexive-transitive closure of TOLD
+    rdfs:subPropertyOf (owl:equivalentProperty read both ways). It is the OWL
+    2 EL global restriction on chains and ranges: CR7's composed edge reuses
+    the s-edge's target, which was built to satisfy range(rn) only, so a
+    range on t that rn does not share would be silently unmet. A chain with a
+    non-IRI step (an inverse) is out of profile already and not judged here.
+    """
+    from rdflib.collection import Collection
+    up = {}
+    for a, b in g.subject_objects(RDFS.subPropertyOf):
+        up.setdefault(a, set()).add(b)
+    for a, b in g.subject_objects(OWL.equivalentProperty):
+        up.setdefault(a, set()).add(b)
+        up.setdefault(b, set()).add(a)
+    ranges = {}
+    for r, c in g.subject_objects(RDFS.range):
+        ranges.setdefault(r, set()).add(_expression_key(g, c))
+
+    def imposed(r):
+        seen, todo, out = {r}, [r], set()
+        while todo:
+            x = todo.pop()
+            out |= ranges.get(x, set())
+            for y in up.get(x, ()):
+                if y not in seen:
+                    seen.add(y)
+                    todo.append(y)
+        return out
+
+    bad = {}
+    for t, head in g.subject_objects(OWL.propertyChainAxiom):
+        steps = list(Collection(g, head))
+        # An inverse step or super-role is out of profile already (its
+        # owl:inverseOf triple is a seed, and the chain goes with it). Any
+        # OTHER non-IRI operand, or fewer than two steps, is not a v0 chain.
+        inverse = lambda x: isinstance(x, BNode) and (x, OWL.inverseOf, None) in g
+        if any(inverse(x) for x in steps + [t]):
+            continue
+        if len(steps) < 2 or not all(isinstance(x, URIRef) for x in steps) or not isinstance(t, URIRef):
+            bad[(t, head)] = "ObjectPropertyChain (malformed: fewer than two named roles)"
+        elif not imposed(t) <= imposed(steps[-1]):
+            bad[(t, head)] = "ObjectPropertyChain (range/composition condition)"
+    return bad
+
+
 def signature(g):
     """Declared entity sets, needed to disposition a triple in context."""
+    # The built-in data properties are data properties without a declaration,
+    # as HOWL's add-builtins (decode.slop) registers them.
+    data = set(g.subjects(RDF.type, OWL.DatatypeProperty)) | {OWL.topDataProperty, OWL.bottomDataProperty}
     return {
         "ann":     set(g.subjects(RDF.type, OWL.AnnotationProperty)),
-        "data":    set(g.subjects(RDF.type, OWL.DatatypeProperty)),
+        "data":    data,
         "obj":     set(g.subjects(RDF.type, OWL.ObjectProperty)),
         "classes": set(g.subjects(RDF.type, OWL.Class)),
+        # Restrictions ON A DATA PROPERTY. owl:someValuesFrom is spelled the
+        # same for DataSomeValuesFrom as for ObjectSomeValuesFrom; only the
+        # restriction's owl:onProperty tells them apart, and a predicate-only
+        # table would count the data one as in v0.
+        "data_restrictions": {s for s, o in g.subject_objects(OWL.onProperty) if o in data},
+        "inadmissible_chains": inadmissible_chains(g),
     }
 
 
@@ -117,6 +192,16 @@ def classify_triple(sig, s, p, o):
     # position" -- reporting a well-formed annotated ontology as one third
     # out-of-profile. That is exactly M0 acceptance (a), and this tool got it
     # wrong on its first run.
+    if p == OWL.someValuesFrom and s in sig["data_restrictions"]:
+        return OUT, "DataSomeValuesFrom"
+    # The property axioms share their spelling between object and data
+    # properties; only the operands' declared kind separates them. Read as
+    # object-property axioms, OBI's SubDataPropertyOf counted as in v0 while
+    # HOWL's gate (rightly) omitted it.
+    if p in (RDFS.subPropertyOf, OWL.equivalentProperty) and (s in sig["data"] or o in sig["data"]):
+        return OUT, "SubDataPropertyOf / EquivalentDataProperties"
+    if p == OWL.propertyChainAxiom and (s, o) in sig["inadmissible_chains"]:
+        return OUT, sig["inadmissible_chains"][(s, o)]
     if p in HEADER_PRED:
         return CONSUMED, "declaration / header"
     if p == OWL.deprecated:
@@ -135,7 +220,10 @@ def classify_triple(sig, s, p, o):
             return OUT, OUT_TYPE[o]
         if o in IN_V0_TYPE:
             return IN, IN_V0_TYPE[o]
-        if o in sig["classes"] or isinstance(o, URIRef):
+        # A blank-node object is an anonymous class expression -- the only
+        # thing the OWL 2 RDF mapping types a resource with anonymously -- so
+        # `:a a [ owl:someValuesFrom ... ]` is a ClassAssertion, not inert.
+        if o in sig["classes"] or isinstance(o, (URIRef, BNode)):
             if isinstance(s, BNode):
                 return OUT, "anonymous individual"
             return IN, "ClassAssertion"

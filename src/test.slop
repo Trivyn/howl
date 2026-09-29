@@ -20,9 +20,10 @@
 (module test
   (@doc "Verdict-discipline and structural-invariant tests")
 
-  (import rdf (IRI Triple Term make-iri make-blank make-triple term-eq))
+  (import rdf (IRI Triple Term make-iri make-blank make-literal make-triple make-triple-term term-eq))
+  (import termstore (build-store store-objects store-typed store-contains store-has-any))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
-                 OWL_THING RDFS_LABEL))
+                 OWL_THING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
   (import decode (graph-to-indexed rdf-list-checked term-at stage0-header Stage0
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms Stage1))
@@ -38,13 +39,17 @@
                  Omission Coverage Termination SubPair Findings Outcome Fault
                  ReasonerConfig
                  default-config emit-edge make-context make-queue
+                 Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
   (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range
                  sub-pair-cmp omission-cmp))
-  (import saturate (RoundResult saturate make-initial-saturation))
+  (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
-  (import howl (Verdict verdict classify))
+  (import howl (Verdict verdict classify Prepared prepare reason))
+  (import el (apply-el-rules apply-el-rules-reference))
+  (import premise (RuleIndex build-rule-index))
+  (import report (report-lines))
 
   ;; ============================================================
   ;; Fixture builders
@@ -92,7 +97,8 @@
                          (union-new Termination fixpoint)
                          (union-new Termination resource-limit 1000)))
           (findings    (make-findings arena inconsistent unsat-count))
-          (saturation  (empty-saturation arena))))))
+          (saturation  (empty-saturation arena))
+          (names       (empty-names arena))))))
 
   (fn verdict-eq ((a Verdict) (b Verdict))
     (@intent "Compare two verdicts")
@@ -211,6 +217,191 @@
           ((error _) (none))
           ((ok o)    (some o))))))
 
+  (fn classify-fixture-with ((arena Arena) (path String) (workers Int) (cap Int))
+    (@intent "The whole pipeline at a chosen worker count and round budget")
+    (@spec ((Arena String Int Int) -> (Option Outcome)))
+    (@alloc arena)
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg worker-count (cast (Int 1 .. 64) workers))
+        (set! cfg max-iterations (cast (Int 0 .. 10000) cap))
+        (match (parse-ttl-file arena path)
+          ((error _) (none))
+          ((ok g)
+            (match (classify arena (. g triples) (list-new arena IRI) cfg)
+              ((error _) (none))
+              ((ok o)    (some o))))))))
+
+  (fn workers-agree ((arena Arena) (path String) (cap Int))
+    (@intent "The report at W = 1 and at W = 4 is the same text, line for line")
+    (@spec ((Arena String Int) -> Bool))
+    (@alloc arena)
+    (match (classify-fixture-with arena path 1 cap)
+      ((none) false)
+      ((some one)
+        (match (classify-fixture-with arena path 4 cap)
+          ((none) false)
+          ((some four) (same-lines (report-lines arena one) (report-lines arena four)))))))
+
+  (fn test-worker-count-does-not-change-the-report ((arena Arena))
+    (@intent "M1 (e): the same report at W = 1 and W = 4, complete and capped")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; CAPPED RUNS ARE THE POINT: saturation is confluent, so complete runs
+    ;; agree under any scheduling; a run cut short reports whatever state the
+    ;; rounds reached, and that is where a racing engine would differ. Cap 1
+    ;; cuts every fixture below short. corpus/determinism.py does the full
+    ;; W x cap matrix over every fixture; this keeps the property in `make test`.
+    ;; undeclared-filler.ttl creates a context at the barrier, the one
+    ;; write to the context registry a round makes (saturate.slop).
+    (and (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1000)
+         (workers-agree arena "corpus/fixtures/v0/litmus.ttl" 1)
+         (workers-agree arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl" 1)
+         (workers-agree arena "corpus/fixtures/hazards/abox-disjoint-range.ttl" 1)
+         (workers-agree arena "corpus/fixtures/probes/some-unsat-filler.ttl" 2)
+         (workers-agree arena "corpus/fixtures/probes/chain-nary.ttl" 1000)
+         (workers-agree arena "corpus/fixtures/hazards/undeclared-filler.ttl" 1000)
+         (workers-agree arena "corpus/fixtures/hazards/undeclared-filler.ttl" 1)))
+
+  (fn edge-context ((arena Arena) (n Node) (r RoleId) (m Node) (succ Bool))
+    (@intent "A pending context for n holding the one r-edge half toward m")
+    (@spec ((Arena Node RoleId Node Bool) -> Context))
+    (@alloc arena)
+    (let ((c (make-context arena n))
+          (s (set-new arena Node)))
+      (do
+        (set-put s m)
+        (if succ (map-put (. c succs) r s) (map-put (. c preds) r s))
+        c)))
+
+  (fn queue-has ((sat Saturation) (n Node) (d Derived))
+    (@intent "Does n's next-round queue hold d?")
+    (@spec ((Saturation Node Derived) -> Bool))
+    (match (queue-of sat n)
+      ((some q)
+        (let ((mut found false))
+          (do
+            (for-each (it (. q items)) (when (derived-eq it d) (set! found true)))
+            found)))
+      ((none) false)))
+
+  (fn stored-edge ((sat Saturation) (x Node) (r RoleId) (y Node))
+    (@intent "Both halves of the edge (x, r, y) are in the store")
+    (@spec ((Saturation Node RoleId Node) -> Bool))
+    (and (match (context-of sat x)
+           ((some cx) (match (map-get (. cx succs) r) ((some s) (set-has s y)) ((none) false)))
+           ((none) false))
+         (match (context-of sat y)
+           ((some cy) (match (map-get (. cy preds) r) ((some s) (set-has s x)) ((none) false)))
+           ((none) false))))
+
+  (fn queue-len ((sat Saturation) (n Node))
+    (@intent "How many facts n's next-round queue holds; -1 when it has none")
+    (@spec ((Saturation Node) -> Int))
+    (match (queue-of sat n)
+      ((some q) (cast Int (list-len (. q items))))
+      ((none)   -1)))
+
+  (fn test-commit-dedups-across-deltas ((arena Arena))
+    (@intent "Two workers deriving the same facts commit them once, and queue each new fact once")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The REPORT cannot see a commit that queues a fact twice: processing
+    ;; it twice re-derives the same set. So the barrier is checked directly.
+    ;; Worker a derives P ∈ S(X) and the edge (X, r, Y); worker b derives
+    ;; P and Q ∈ S(X) and the same edge. Both workers' copies of X's facts
+    ;; land in X's ONE owner's bucket (the partition's job), so the store
+    ;; gets P, Q and both edge halves once, X's queue holds exactly P, Q and
+    ;; the successor half, and Y's exactly the predecessor half - checked
+    ;; by content, not only by count. X and Y have no contexts beforehand,
+    ;; so the partition must create them too.
+    (let ((x (cls "http://example.org/X"))
+          (y (cls "http://example.org/Y"))
+          (p (cls "http://example.org/P"))
+          (q (cls "http://example.org/Q"))
+          (r (rol "http://example.org/r"))
+          (sat (empty-saturation arena))
+          (a  (record-new RoundDelta (pending (map-new arena Node Context))))
+          (b  (record-new RoundDelta (pending (map-new arena Node Context))))
+          (ax (edge-context arena x r y true))
+          (ay (edge-context arena y r x false))
+          (bx (edge-context arena x r y true))
+          (by (edge-context arena y r x false))
+          (c1 (arena-new 1048576))
+          (c2 (arena-new 1048576))
+          (mut ds  (list-new arena RoundDelta))
+          (mut cas (list-new arena Arena)))
+      (do
+        (set-put (. ax subsumers) p)
+        (set-put (. bx subsumers) p)
+        (set-put (. bx subsumers) q)
+        (map-put (. a pending) x ax)
+        (map-put (. a pending) y ay)
+        (map-put (. b pending) x bx)
+        (map-put (. b pending) y by)
+        (list-push ds a)
+        (list-push ds b)
+        (list-push cas c1)
+        (list-push cas c2)
+        (let ((next (commit-round arena arena sat ds cas)))
+          (and (== (queue-len next x) 3)
+               (== (queue-len next y) 1)
+               (queue-has next x (union-new Derived derived-sub p))
+               (queue-has next x (union-new Derived derived-sub q))
+               (queue-has next x (union-new Derived derived-succ r y))
+               (queue-has next y (union-new Derived derived-pred r x))
+               (stored-edge next x r y)
+               (== (. next active-count) 2)
+               (== (. next iteration) 1)
+               (match (context-of next x)
+                 ((some cx) (and (set-has (. cx subsumers) p) (set-has (. cx subsumers) q)))
+                 ((none)    false)))))))
+
+  (fn test-names-round-trip ((arena Arena))
+    (@intent "The saturation boundary's renaming inverts, keeps ⊤ and ⊥, keeps punning apart; empty is identity")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A class and an individual with the SAME IRI must rename to two
+    ;; different ids - the tags are what keep punned names apart, and a
+    ;; table keyed by IRI alone would merge them (types.slop, Node).
+    (let ((names  (empty-names arena))
+          (empty  (empty-names arena))
+          (c      (cls "http://example.org/C"))
+          (i      (union-new Node individual-node (record-new IRI (value "http://example.org/C"))))
+          (f      (union-new Node fresh-node 7))
+          (r      (rol "http://example.org/r"))
+          (top    (node-top))
+          (bottom (node-bottom))
+          (rc     (intern-node arena names c))
+          (ri     (intern-node arena names i))
+          (rf     (intern-node arena names f))
+          (rr     (intern-role arena names r)))
+      (and (node-eq (original-node names rc) c)
+           (node-eq (original-node names ri) i)
+           (node-eq (original-node names rf) f)
+           (role-eq (original-role names rr) r)
+           (not (node-eq rc ri))
+           (node-eq (intern-node arena names c) rc)
+           (same-renamed names c rc)
+           (node-eq (intern-node arena names top) top)
+           (node-eq (intern-node arena names bottom) bottom)
+           (node-eq (original-node empty f) f)
+           (same-renamed empty c c)
+           (same-renamed empty f f)
+           ;; An unknown ORIGINAL fresh node under a non-empty table: its
+           ;; id may belong to another node (C is id 0), so it is not
+           ;; mistaken for that node's renamed form.
+           (match (renamed-node names (union-new Node fresh-node 0))
+             ((none)   true)
+             ((some _) false)))))
+
+  (fn same-renamed ((names Names) (n Node) (expect Node))
+    (@intent "renamed-node n is exactly expect")
+    (@spec ((Names Node Node) -> Bool))
+    (match (renamed-node names n)
+      ((some r) (node-eq r expect))
+      ((none)   false)))
+
   (fn test-litmus-end-to-end ((arena Arena))
     (@intent "§12: Turtle in, Mother ⊑ Parent out, verdict COHERENT")
     (@spec ((Arena) -> Bool))
@@ -226,8 +417,69 @@
         ((none) false)
         ((some o)
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
-            (and (entails-sub (. o saturation) (. (. o findings) inconsistent) mother parent)
+            (and (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent) mother parent)
                  (match (verdict o) ('verdict-coherent true) (_ false))))))))
+
+  (fn test-role-hierarchy-carries-edges ((arena Arena))
+    (@intent "Role hierarchy: an r-edge is an s-edge when r ⊑ s, and not the converse")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A ⊑ ∃r.B, r ⊑ s, ∃s.B ⊑ C: only reading R(s) through the role
+    ;; closure lets CR4 match the stored r-edge against ∃s.B. The converse,
+    ;; E ⊑ ∃s.B with ∃r.B ⊑ F, must NOT give E ⊑ F.
+    (match (classify-fixture arena "corpus/fixtures/probes/subproperty-existential.ttl")
+      ((none) false)
+      ((some o)
+        (let ((inc (. (. o findings) inconsistent)))
+          (and (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#A")
+                            (cls "http://example.org/t#C"))
+               (not (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#E")
+                                 (cls "http://example.org/t#F"))))))))
+
+  (fn test-role-closure-deep ((arena Arena))
+    (@intent "CR4 and CR7 match edges through sup* and sub* of the told role hierarchy")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; role-hierarchy-deep.ttl: each entailment needs the closure at one
+    ;; site (see the fixture) - a three-level hierarchy, a late subsumer, an
+    ;; equivalent-property cycle, a chain over sub-role legs in both arrival
+    ;; orders, and a transitive role under a sub-role - and the converse
+    ;; direction must still not hold.
+    (match (classify-fixture arena "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
+      ((none) false)
+      ((some o)
+        (let ((inc (. (. o findings) inconsistent))
+              (sat (. o saturation))
+              (nm  (. o names)))
+          (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
+               (entails-sub sat nm inc (cls "http://example.org/t#A1") (cls "http://example.org/t#C1"))
+               (entails-sub sat nm inc (cls "http://example.org/t#A2") (cls "http://example.org/t#C2"))
+               (entails-sub sat nm inc (cls "http://example.org/t#A3") (cls "http://example.org/t#C3"))
+               (entails-sub sat nm inc (cls "http://example.org/t#D3") (cls "http://example.org/t#E3"))
+               (entails-sub sat nm inc (cls "http://example.org/t#X4") (cls "http://example.org/t#E"))
+               (entails-sub sat nm inc (cls "http://example.org/t#X5") (cls "http://example.org/t#E"))
+               (entails-sub sat nm inc (cls "http://example.org/t#X6") (cls "http://example.org/t#F6"))
+               (not (entails-sub sat nm inc (cls "http://example.org/t#A7")
+                                 (cls "http://example.org/t#N7"))))))))
+
+  (fn test-smaller-side-joins ((arena Arena))
+    (@intent "CR2 and CR4 derive through the context-side walk when the context is the smaller side")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; smaller-side-join.ttl makes S(X) and S(Y) smaller than the partner
+    ;; buckets, so the dispatcher walks the CONTEXT and probes the bucket -
+    ;; a branch no other fixture reaches, and one the goldens of the large
+    ;; corpora were the only thing to catch when it broke. Each entailment
+    ;; below has that branch as its only derivation (see the fixture).
+    (match (classify-fixture arena "corpus/fixtures/hazards/smaller-side-join.ttl")
+      ((none) false)
+      ((some o)
+        (let ((inc (. (. o findings) inconsistent)))
+          (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
+               (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#X")
+                            (cls "http://example.org/t#E3"))
+               (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#X2")
+                            (cls "http://example.org/t#H2")))))))
 
   (fn test-unattested-import-is-inconclusive ((arena Arena))
     (@intent "M0 ACCEPTANCE (b) end to end: a dangling import is never COHERENT")
@@ -255,7 +507,7 @@
       (match (classify-fixture arena "corpus/fixtures/hazards/declared-unused-class.ttl")
         ((none) false)
         ((some o)
-          (and (entails-sub (. o saturation) (. (. o findings) inconsistent)
+          (and (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent)
                  unused (node-top))
                (match (verdict o) ('verdict-coherent true) (_ false)))))))
 
@@ -274,6 +526,191 @@
       ((none) false)
       ((some o)
         (match (verdict o) ('verdict-incoherent true) (_ false)))))
+
+  ;; ------------------------------------------------------------
+  ;; EXTERNAL CONFORMANCE, PINNED HERE. corpus/conformance.py runs the W3C
+  ;; OWL 2 and ELK suites; each defect they found is a hazard fixture, and
+  ;; each fixture is asserted end to end below so the guarantee does not
+  ;; live only in a Python harness that needs the network and a JVM.
+  ;; ------------------------------------------------------------
+
+  (fn omitted-count ((o Outcome))
+    (@intent "How many axioms the run set aside")
+    (@spec ((Outcome) -> Int))
+    (@pure)
+    (cast Int (list-len (. (. o coverage) omitted))))
+
+  (fn test-undeclared-individual-is-reasoned-over ((arena Arena))
+    (@intent "W3C DisjointClasses-002: an undeclared individual's class assertions count")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; :stewie a :Boy , :Girl with Boy and Girl disjoint, :stewie declared
+    ;; as nothing. It got no context, so this read as a FALSE COHERENT.
+    (match (classify-fixture arena "corpus/fixtures/hazards/undeclared-individual.ttl")
+      ((none) false)
+      ((some o)
+        (and (== (omitted-count o) 0)
+             (and (. (. o findings) inconsistent)
+                  (match (verdict o) ('verdict-incoherent true) (_ false)))))))
+
+  (fn test-anonymous-class-assertion-is-read ((arena Arena))
+    (@intent "W3C WebOnt-Restriction-001: `:a a [∃op.⊥]` is a class assertion, not unrecognized")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Filed as unrecognized it was sound but INCONCLUSIVE; read, it is
+    ;; INCONSISTENT with nothing omitted.
+    (match (classify-fixture arena "corpus/fixtures/hazards/anonymous-class-assertion.ttl")
+      ((none) false)
+      ((some o)
+        (and (== (omitted-count o) 0)
+             (. (. o findings) inconsistent)))))
+
+  (fn test-annotation-on-annotation-is-consumed ((arena Arena))
+    (@intent "W3C AnnotationAnnotations-001: an owl:Annotation node is header, not an axiom")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Stage 0 must swallow the node — its annotatedSource/Property/Target
+    ;; included — and the document must classify COHERENT with nothing
+    ;; omitted. Read as a class assertion on an anonymous individual, it
+    ;; made the run INCONCLUSIVE.
+    (let ((path "corpus/fixtures/hazards/annotated-annotation.ttl")
+          (src-pred (make-iri arena "http://www.w3.org/2002/07/owl#annotatedSource")))
+      (and
+        (match (parse-ttl-file arena path)
+          ((error _) false)
+          ((ok g)
+            (match (stage0-header arena (. g triples) (list-new arena IRI))
+              ((error _) false)
+              ((ok s0)
+                (and (== (count-subclass-triples (. g triples) src-pred) 1)
+                     (and (== (count-subclass-triples (. s0 triples) src-pred) 0)
+                          (== (cast Int (list-len (. s0 omissions))) 0)))))))
+        (match (classify-fixture arena path)
+          ((none) false)
+          ((some o)
+            (and (== (omitted-count o) 0)
+                 (match (verdict o) ('verdict-coherent true) (_ false))))))))
+
+  (fn test-logical-triple-on-header-node-is-not-swallowed ((arena Arena))
+    (@intent "A subClassOf on an owl:Annotation node reaches the decoder, never vanishes")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Consumed with the node's scaffolding, the triple left no trace and the
+    ;; run read COHERENT. Passed on, it is an omission: INCONCLUSIVE.
+    (match (classify-fixture arena "corpus/fixtures/hazards/logical-triple-on-header-node.ttl")
+      ((none) false)
+      ((some o)
+        (and (> (omitted-count o) 0)
+             (match (verdict o) ('verdict-inconclusive true) (_ false))))))
+
+  (fn test-repeated-disjoint-member-is-positional ((arena Arena))
+    (@intent "ELK DisjointSelf: AllDisjointClasses (A B A) makes A disjoint from itself")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; OWL 2 reads the members pairwise BY POSITION, so A is unsatisfiable
+    ;; and B is not. The OWL API collapses the repeat, so no oracle can
+    ;; check this (corpus/differential.py's blind spots) — HOWL's answer is
+    ;; pinned here and by the fixture's golden instead.
+    (let ((a (record-new IRI (value "http://example.org/t#A"))))
+      (match (classify-fixture arena "corpus/fixtures/hazards/disjoint-repeated-member.ttl")
+        ((none) false)
+        ((some o)
+          (let ((unsat (. (. o findings) unsatisfiable)))
+            (and (== (omitted-count o) 0)
+                 (and (not (. (. o findings) inconsistent))
+                      (and (== (cast Int (list-len unsat)) 1)
+                           (match (list-get unsat 0)
+                             ((some u) (string-eq (. u value) (. a value)))
+                             ((none) false))))))))))
+
+  ;; ------------------------------------------------------------
+  ;; THE PROBE AGREES WITH THE REPORT. The differential (SPEC §10 item 1,
+  ;; corpus/differential.py) certifies the canonical REPORT against the
+  ;; oracles; the port serves `entails-sub`. The two read the same
+  ;; saturation by different code — extraction bottom-compresses and
+  ;; projects to class contexts, the probe tests ⊥ and B in S(A) — so
+  ;; this checks, over EVERY ordered pair of class contexts, that the
+  ;; probe answers exactly what the report says:
+  ;;
+  ;;   entails-sub(A,B)  =  inconsistent  or  (A,⊥) listed  or  (A,B) listed
+  ;;
+  ;; Without it the differential would certify one function and ship
+  ;; another. The fixtures are chosen to hit each disjunct and each
+  ;; representational corner (equivalence, punning, ⊤/⊥ as named
+  ;; classes, an individual-borne inconsistency, a context with no
+  ;; axioms), not to cover constructs: construct coverage is the
+  ;; differential's job, and this agreement is structural.
+  ;; ------------------------------------------------------------
+
+  (fn report-entails ((f Findings) (a Node) (b Node))
+    (@intent "entails-sub read off the report: inconsistent, or A unsatisfiable, or (A,B) listed")
+    (@spec ((Findings Node Node) -> Bool))
+    (@pure)
+    (if (. f inconsistent)
+      true
+      (let ((bottom (node-bottom))
+            (mut found false))
+        (do
+          (for-each (p (. f subsumptions))
+            (when (node-eq (. p sub) a)
+              (when (node-eq (. p super) bottom) (set! found true))
+              (when (node-eq (. p super) b) (set! found true))))
+          found))))
+
+  (fn probe-agrees-with-report ((arena Arena) (path String))
+    (@intent "entails-sub equals the report's answer on every ordered pair of class contexts")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (classify-fixture arena path)
+      ((none) false)
+      ((some o)
+        (let ((sat   (. o saturation))
+              (names (. o names))
+              (f     (. o findings))
+              (mut ok    true)
+              (mut pairs 0))
+          (do
+            ;; The store's keys are RENAMED (types.slop, Names): each is
+            ;; mapped back to the node it stands for, and the probe is asked
+            ;; about originals, as a caller would ask it.
+            (for-each ((ra actx) (. sat contexts))
+              (let ((a (original-node names ra)))
+                (match a
+                  ((class-node ai)
+                    ;; owl:Nothing is excluded from the report by name
+                    ;; (classify.is-bottom-iri) and ⊥ ⊑ B holds vacuously.
+                    (when (not (string-eq (. ai value) "http://www.w3.org/2002/07/owl#Nothing"))
+                      (for-each ((rb bctx) (. sat contexts))
+                        (let ((b (original-node names rb)))
+                          (match b
+                            ((class-node _)
+                              (do
+                                (set! pairs (+ pairs 1))
+                                (when (not (== (entails-sub sat names (. f inconsistent) a b)
+                                               (report-entails f a b)))
+                                  (set! ok false))))
+                            ((individual-node _) (do))
+                            ((fresh-node _)      (do)))))))
+                  ((individual-node _) (do))
+                  ((fresh-node _)      (do)))))
+            ;; A fixture that yielded no class pairs checked nothing.
+            (and ok (> pairs 0)))))))
+
+  (fn test-entails-sub-agrees-with-report ((arena Arena))
+    (@intent "The port's probe and the differential's report answer every pair alike")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (probe-agrees-with-report arena "corpus/fixtures/v0/litmus.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/v0/top-bottom.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/inconsistent-via-individual.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/punning.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/owl-nothing-present.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/declared-unused-class.ttl")
+    (and (probe-agrees-with-report arena "corpus/fixtures/probes/some-unsat-filler.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/probes/top-subsumes-everything.ttl"))))))))))))
 
   ;; ============================================================
   ;; M1 — the reasoning fixtures
@@ -307,7 +744,8 @@
     (@intent "Initialize from a signature and saturate to fixpoint")
     (@spec ((Arena (List Node) (List NormAxiom)) -> (Result RoundResult Fault)))
     (@alloc arena)
-    (saturate arena (make-initial-saturation arena signature) axioms (default-config)))
+    (saturate arena (make-initial-saturation arena signature)
+      (build-rule-index arena axioms) (default-config)))
 
   ;; ------------------------------------------------------------
   ;; §3.1 THE LITMUS. This is the test that decides whether HOWL is a
@@ -367,8 +805,8 @@
     (@alloc arena)
     (match (run-fixture arena (litmus-signature arena) (litmus-axioms arena correct-polarity))
       ((ok r)
-        (let ((f (extract-findings arena (. r saturation))))
-          (entails-sub (. r saturation) (. f inconsistent)
+        (let ((f (extract-findings arena (. r saturation) (empty-names arena))))
+          (entails-sub (. r saturation) (empty-names arena) (. f inconsistent)
             (cls "http://example.org/Mother") (cls "http://example.org/Parent"))))
       ((error _) false)))
 
@@ -449,8 +887,8 @@
         (list-push ax (union-new NormAxiom sub-some-lhs r g h))    ; ∃r.G ⊑ H
         (match (run-fixture arena sig ax)
           ((ok res)
-            (let ((fi (extract-findings arena (. res saturation))))
-              (entails-sub (. res saturation) (. fi inconsistent) e h)))
+            (let ((fi (extract-findings arena (. res saturation) (empty-names arena))))
+              (entails-sub (. res saturation) (empty-names arena) (. fi inconsistent) e h)))
           ((error _) false)))))
 
   ;; The MIRROR, and it exists because mutation testing found a hole:
@@ -490,8 +928,8 @@
         (list-push ax (union-new NormAxiom sub-some-lhs r g h))    ; ∃r.G ⊑ H
         (match (run-fixture arena sig ax)
           ((ok res)
-            (let ((fi (extract-findings arena (. res saturation))))
-              (entails-sub (. res saturation) (. fi inconsistent) e h)))
+            (let ((fi (extract-findings arena (. res saturation) (empty-names arena))))
+              (entails-sub (. res saturation) (empty-names arena) (. fi inconsistent) e h)))
           ((error _) false)))))
 
   ;; ------------------------------------------------------------
@@ -526,7 +964,7 @@
     (@alloc arena)
     (match (unsat-fixture arena)
       ((ok r)
-        (let ((f (extract-findings arena (. r saturation))))
+        (let ((f (extract-findings arena (. r saturation) (empty-names arena))))
           ;; Exactly one unsatisfiable class: A. If owl:Nothing leaked in
           ;; — and it satisfies ⊥ ∈ S(⊥) by construction, since every
           ;; context is seeded with itself — this would be 2, and every
@@ -544,7 +982,7 @@
       ((ok r)
         (let ((a (cls "http://example.org/A"))
               (b (cls "http://example.org/B"))
-              (f (extract-findings arena (. r saturation)))
+              (f (extract-findings arena (. r saturation) (empty-names arena)))
               (mut pairs-about-a 0))
           (do
             (for-each (p (. f subsumptions))
@@ -556,7 +994,7 @@
             ;; the signature. Both readings are defensible in isolation;
             ;; implementing one where the other belongs gives either
             ;; false negatives on probes or a quadratic hierarchy.
-            (if (entails-sub (. r saturation) (. f inconsistent) a b)
+            (if (entails-sub (. r saturation) (empty-names arena) (. f inconsistent) a b)
               (== pairs-about-a 1)
               false))))
       ((error _) false)))
@@ -591,7 +1029,7 @@
         (list-push ax (union-new NormAxiom sub-name (node-top) (node-bottom)))
         (match (run-fixture arena sig ax)
           ((ok r)
-            (let ((f (extract-findings arena (. r saturation))))
+            (let ((f (extract-findings arena (. r saturation) (empty-names arena))))
               (if (. f inconsistent)
                 (if (== (list-len (. f unsatisfiable)) 0)
                   (== (list-len (. f subsumptions)) 0)
@@ -641,10 +1079,9 @@
   ;; map insertion order without changing content; the round count and
   ;; the findings sizes must be identical.
   ;;
-  ;; This checks SIZES rather than element order, because canonical
-  ;; ordering of the findings lists is still OWED (see classify.slop) —
-  ;; asserting element order here would be asserting something the
-  ;; implementation does not yet claim.
+  ;; This checks SIZES only. Element order is pinned end to end by
+  ;; `test-triple-order-independence`, which compares whole canonical
+  ;; reports line for line.
   ;; ------------------------------------------------------------
 
   (fn test-order-independence ((arena Arena))
@@ -666,8 +1103,8 @@
           ((ok r1)
             (match (run-fixture arena rev ax)
               ((ok r2)
-                (let ((f1 (extract-findings arena (. r1 saturation)))
-                      (f2 (extract-findings arena (. r2 saturation))))
+                (let ((f1 (extract-findings arena (. r1 saturation) (empty-names arena)))
+                      (f2 (extract-findings arena (. r2 saturation) (empty-names arena))))
                   (if (== (. (. r1 saturation) iteration) (. (. r2 saturation) iteration))
                     (if (== (list-len (. f1 subsumptions)) (list-len (. f2 subsumptions)))
                       (== (list-len (. f1 unsatisfiable)) (list-len (. f2 unsatisfiable)))
@@ -830,6 +1267,101 @@
               ((ok s0)
                 (and (== (cast Int (list-len (. s0 imports-declared))) 1)
                      (== (cast Int (list-len (. s0 omissions))) 0)))))))))
+
+  (fn test-term-store-by-content ((arena Arena))
+    (@intent "The term store keys terms by content, collapses duplicates, and answers only what it holds")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The document states `:s :p "v"^^:dt` twice (the parser keeps both)
+    ;; and types :s and :u as :T. The probe literal is built here, its
+    ;; datatype string concatenated at run time, so it shares no pointer
+    ;; with the parsed one: only CONTENT can make them the same term. A
+    ;; store keying literals by their bytes (as slop's generated hash did
+    ;; before #205, pointers and padding included) says it is absent.
+    (let ((ttl "@prefix : <http://example.org/t#> .\n:s :p \"v\"^^:dt .\n:s :p \"v\"^^:dt .\n:s a :T .\n:u a :T .\n"))
+      (match (parse-ttl-string arena ttl)
+        ((error _) false)
+        ((ok g)
+          (let ((st (build-store arena (. g triples)))
+                (s  (make-iri arena "http://example.org/t#s"))
+                (p  (make-iri arena "http://example.org/t#p"))
+                (u  (make-iri arena "http://example.org/t#u"))
+                (dt (string-concat arena "http://example.org/t#" "dt"))
+                (v  (make-literal arena "v" (some dt) (none)))
+                (other (make-literal arena "v" (none) (none))))
+            (and (== (cast Int (list-len (store-objects arena st s p))) 1)
+                 (store-contains st (make-triple arena s p v))
+                 (not (store-contains st (make-triple arena s p other)))
+                 (== (cast Int (list-len (store-typed arena st (make-iri arena "http://example.org/t#T")))) 2)
+                 (store-has-any st s p)
+                 (not (store-has-any st u p))
+                 (== (cast Int (list-len (store-objects arena st u p))) 0)))))))
+
+  (fn test-term-store-quoted-and-tagged ((arena Arena))
+    (@intent "Quoted triples are one term by structure, nested too; literals differ by language tag")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Built directly: Turtle cannot carry a quoted triple. q1 and q2 are
+    ;; allocated apart but equal, as `term-eq` means it, so the store must
+    ;; find q1's triple through q2 - and the same one level down, for a
+    ;; quoted triple that contains them. A pointer-keyed store (slop-rdf's
+    ;; IndexedGraph) saw two terms. Literals: "v"@en is stored; "v"@en
+    ;; built apart is present, "v"@fr and plain "v" are not.
+    (let ((a  (make-iri arena "http://example.org/t#a"))
+          (b  (make-iri arena "http://example.org/t#b"))
+          (c  (make-iri arena "http://example.org/t#c"))
+          (p  (make-iri arena "http://example.org/t#p"))
+          (r  (make-iri arena "http://example.org/t#r"))
+          (o  (make-iri arena "http://example.org/t#o"))
+          (q1 (make-triple-term arena (make-triple arena a b c)))
+          (q2 (make-triple-term arena (make-triple arena a b c)))
+          (n1 (make-triple-term arena (make-triple arena q1 r o)))
+          (n2 (make-triple-term arena (make-triple arena q2 r o)))
+          (en (make-literal arena "v" (none) (some "en")))
+          (en2 (make-literal arena "v" (none) (some (string-concat arena "e" "n"))))
+          (fr (make-literal arena "v" (none) (some "fr")))
+          (plain (make-literal arena "v" (none) (none)))
+          (mut ts (list-new arena Triple)))
+      (do
+        (list-push ts (make-triple arena q1 p o))
+        (list-push ts (make-triple arena n1 p o))
+        (list-push ts (make-triple arena a p en))
+        (let ((st (build-store arena ts)))
+          (and (== (cast Int (list-len (store-objects arena st q2 p))) 1)
+               (store-has-any st n2 p)
+               (store-contains st (make-triple arena a p en2))
+               (not (store-contains st (make-triple arena a p fr)))
+               (not (store-contains st (make-triple arena a p plain))))))))
+
+  (fn stage0-fault-of ((arena Arena) (ts (List Triple)))
+    (@intent "Stage 0's input-error message for these triples, or empty when it succeeds")
+    (@spec ((Arena (List Triple)) -> String))
+    (@alloc arena)
+    (match (stage0-header arena ts (list-new arena IRI))
+      ((ok _) "")
+      ((error f)
+        (match f
+          ((input-error m) m)
+          ((refused _)     "refused")
+          ((cancelled)     "cancelled")))))
+
+  (fn test-stage0-fault-follows-the-document ((arena Arena))
+    (@intent "Which malformed reification's fault is reported follows the document, never hash order")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Two owl:Axiom nodes, one missing its annotatedSource, the other its
+    ;; annotatedTarget. The last one in the document is the fault reported,
+    ;; so reversing the triples must flip the message. When the nodes came
+    ;; from the index's hash set, both orders gave the same message - the
+    ;; one whose blank node hashed last - and this failed.
+    (let ((ttl "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class . :B a owl:Class .\n_:x a owl:Axiom ; owl:annotatedProperty rdfs:subClassOf ; owl:annotatedTarget :B .\n_:y a owl:Axiom ; owl:annotatedSource :A ; owl:annotatedProperty rdfs:subClassOf .\n"))
+      (match (parse-ttl-string arena ttl)
+        ((error _) false)
+        ((ok g)
+          (and (== (string-cmp (stage0-fault-of arena (. g triples))
+                     "owl:Axiom node without a usable owl:annotatedTarget") 0)
+               (== (string-cmp (stage0-fault-of arena (reversed-triples arena (. g triples)))
+                     "owl:Axiom node without a usable owl:annotatedSource") 0))))))
 
   (fn test-header-and-reification-are-consumed ((arena Arena))
     (@intent "Ontology header and owl:Axiom scaffolding leave stage 0 as logical content")
@@ -1773,6 +2305,29 @@
             (set! i (+ i 1))))
         ok)))
 
+  (fn same-lines ((a (List String)) (b (List String)))
+    (@intent "Two canonical reports, line for line and byte for byte")
+    (@spec (((List String) (List String)) -> Bool))
+    (@pure)
+    ;; Shaped exactly like `same-report` — `ok` starts true and a length
+    ;; mismatch clears it. Initialising `ok` from the length comparison
+    ;; directly runs `slop verify`'s native parser out of arena (0.2.3).
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (when (!= (list-len a) (list-len b))
+          (set! ok false))
+        (while (and ok (< i (cast Int (list-len a))))
+          (do
+            (match (list-get a i)
+              ((some x)
+                (match (list-get b i)
+                  ((some y) (when (not (string-eq x y)) (set! ok false)))
+                  ((none)   (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
   (fn order-independent ((arena Arena) (path String))
     (@intent "The same document with its triples reversed: identical normal form and report")
     (@spec ((Arena String) -> Bool))
@@ -1796,7 +2351,11 @@
                         (match (classify arena rev (list-new arena IRI) (default-config))
                           ((error _) false)
                           ((ok o2)
-                            (if (same-report o1 o2)
+                            ;; The structural comparison names WHICH list
+                            ;; differs; the rendered one is the bytes the
+                            ;; consumer hashes, rounds included.
+                            (if (and (same-report o1 o2)
+                                     (same-lines (report-lines arena o1) (report-lines arena o2)))
                               true
                               (do (print "  [order] report differs: ") (println path) false)))))))))))))))
 
@@ -1819,6 +2378,144 @@
         (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
         (for-each (p ps) (when (not (order-independent arena p)) (set! ok false)))
         ok)))
+
+  ;; ------------------------------------------------------------
+  ;; The premise index against the full scan (M1 slice 1). The indexed
+  ;; dispatcher offers each rule only the axioms whose premise matches
+  ;; the incoming fact's key; the reference offers every axiom. They must
+  ;; conclude the same things for EVERY fact in EVERY context — so each
+  ;; fixture is saturated, and every stored fact of the final store (the
+  ;; richest snapshot, where every rule has the most premises to join) is
+  ;; replayed through both. A missing bucket, a key filed under the wrong
+  ;; position, or CR2 filed under only one conjunct each show up as a
+  ;; conclusion one side has and the other lacks.
+  ;; ------------------------------------------------------------
+
+  (fn addressed-subset ((xs (List Addressed)) (ys (List Addressed)))
+    (@intent "Every message in xs also appears in ys")
+    (@spec (((List Addressed) (List Addressed)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (x xs)
+          (let ((mut found false))
+            (do
+              (for-each (y ys) (when (addressed-eq x y) (set! found true)))
+              (when (not found) (set! ok false)))))
+        ok)))
+
+  (fn same-conclusions ((arena Arena) (ctx Context) (d Derived) (idx RuleIndex) (axioms (List NormAxiom)))
+    (@intent "The indexed and reference dispatchers conclude the same set for one fact")
+    (@spec ((Arena Context Derived RuleIndex (List NormAxiom)) -> Bool))
+    (@alloc arena)
+    (let ((xs (apply-el-rules arena ctx d idx))
+          (ys (apply-el-rules-reference arena ctx d axioms)))
+      (if (addressed-subset xs ys) (addressed-subset ys xs) false)))
+
+  (fn dispatch-agrees ((arena Arena) (path String))
+    (@intent "On one fixture, both dispatchers agree on every stored fact")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) false)
+      ((ok g)
+        (match (prepare arena (. g triples) (list-new arena IRI) (default-config))
+          ((error _) false)
+          ((ok p)
+            (let ((idx (. p index))
+                  (axioms (. p axioms)))
+              (match (reason arena p (default-config))
+                ((error _) false)
+                ((ok o)
+                  (let ((mut ok true)
+                        (mut facts 0))
+                    (do
+                      (for-each ((n ctx) (. (. o saturation) contexts))
+                        (do
+                          (for-each (b (. ctx subsumers))
+                            (do
+                              (set! facts (+ facts 1))
+                              (when (not (same-conclusions arena ctx
+                                           (union-new Derived derived-sub b) idx axioms))
+                                (set! ok false))))
+                          (for-each ((r ys) (. ctx succs))
+                            (for-each (y ys)
+                              (when (not (same-conclusions arena ctx
+                                           (union-new Derived derived-succ r y) idx axioms))
+                                (set! ok false))))
+                          (for-each ((r xs) (. ctx preds))
+                            (for-each (x xs)
+                              (when (not (same-conclusions arena ctx
+                                           (union-new Derived derived-pred r x) idx axioms))
+                                (set! ok false))))))
+                      (when (not ok) (do (print "  [dispatch] indexed != reference: ") (println path)))
+                      ;; A fixture that replayed nothing proves nothing.
+                      (if (> facts 0) ok false)))))))))))
+
+  (fn test-indexed-dispatch-matches-reference ((arena Arena))
+    (@intent "The premise index offers each rule exactly the axioms it could fire on")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/intersection.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-lhs.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-rhs.ttl")
+        (list-push ps "corpus/fixtures/v0/domain.ttl")
+        (list-push ps "corpus/fixtures/v0/range.ttl")
+        (list-push ps "corpus/fixtures/v0/subproperty.ttl")
+        (list-push ps "corpus/fixtures/v0/equivalent-properties.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/abox-assertions.ttl")
+        (list-push ps "corpus/fixtures/v0/top-bottom.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
+        (list-push ps "corpus/fixtures/hazards/rbox-regularity-accept.ttl")
+        (list-push ps "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
+        (list-push ps "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
+        (list-push ps "corpus/fixtures/hazards/smaller-side-join.ttl")
+        ;; The fixtures where the role closure carries an edge:
+        ;; subproperty.ttl and equivalent-properties.ttl declare the
+        ;; hierarchy with nothing for it to act on.
+        (list-push ps "corpus/fixtures/probes/subproperty-existential.ttl")
+        (list-push ps "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
+        (for-each (p ps) (when (not (dispatch-agrees arena p)) (set! ok false)))
+        ok)))
+
+  ;; ------------------------------------------------------------
+  ;; Stage 0 filters header subjects through a SET (GO reifies 131,783
+  ;; axioms, and a list scan per triple never finished). A set compares a
+  ;; quoted triple by POINTER while `term-eq` compares it structurally, so
+  ;; quoted-triple subjects keep the structural scan. Turtle cannot carry
+  ;; one (slop-rdf rejects `<< >>`); the library's triple buffer can, so
+  ;; the case is built directly: two separately allocated, structurally
+  ;; equal quoted triples, one typed owl:Ontology. Both triples are header
+  ;; material, and stage 0 must consume both.
+  ;; ------------------------------------------------------------
+
+  (fn test-quoted-triple-header-subjects ((arena Arena))
+    (@intent "Stage 0 consumes every triple of a quoted-triple header node, compared structurally")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((s    (make-iri arena "http://example.org/t#s"))
+          (p    (make-iri arena "http://example.org/t#p"))
+          (o    (make-iri arena "http://example.org/t#o"))
+          (q1   (make-triple-term arena (make-triple arena s p o)))
+          (q2   (make-triple-term arena (make-triple arena s p o)))
+          (tp   (make-iri arena RDF_TYPE))
+          (ont  (make-iri arena OWL_ONTOLOGY))
+          (prop (make-iri arena "http://example.org/t#undeclared"))
+          (mut ts (list-new arena Triple)))
+      (do
+        (list-push ts (make-triple arena q1 tp ont))
+        (list-push ts (make-triple arena q2 prop o))
+        (match (stage0-header arena ts (list-new arena IRI))
+          ((error _) false)
+          ((ok s0) (== (cast Int (list-len (. s0 triples))) 0))))))
 
   (fn strict-outcome ((arena Arena) (path String))
     (@intent "Under strict-profile: 1 refused with omissions, 0 ran to an Outcome, -1 otherwise")
@@ -2567,6 +3264,42 @@
             (print-test-result "identity fixture: disjoint ranges on one target => INCOHERENT" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
+          (let ((r (test-worker-count-does-not-change-the-report arena)))
+            (print-test-result "M1 (e): the same report at W = 1 and W = 4, complete and capped" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-names-round-trip arena)))
+            (print-test-result "saturation names: renaming inverts, keeps ⊤ and ⊥, keeps punning apart" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-commit-dedups-across-deltas arena)))
+            (print-test-result "barrier: facts two workers share are committed once and queued once" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-entails-sub-agrees-with-report arena)))
+            (print-test-result "differential: entails-sub answers every pair as the report does" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-undeclared-individual-is-reasoned-over arena)))
+            (print-test-result "W3C DisjointClasses-002: undeclared individual is reasoned over" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-anonymous-class-assertion-is-read arena)))
+            (print-test-result "W3C WebOnt-Restriction-001: anonymous class assertion is read" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-annotation-on-annotation-is-consumed arena)))
+            (print-test-result "W3C AnnotationAnnotations-001: owl:Annotation is header" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-repeated-disjoint-member-is-positional arena)))
+            (print-test-result "ELK DisjointSelf: repeated disjoint member is positional" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-logical-triple-on-header-node-is-not-swallowed arena)))
+            (print-test-result "stage 0: a logical triple on a header node is not swallowed" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
           (let ((r (test-litmus arena)))
             (print-test-result "§3.1 LITMUS: derives Mother ⊑ Parent" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
@@ -2653,6 +3386,30 @@
 
           (let ((r (test-header-and-reification-are-consumed arena)))
             (print-test-result "stage 0: header and owl:Axiom scaffolding consumed" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-role-hierarchy-carries-edges arena)))
+            (print-test-result "Role hierarchy: an r-edge is an s-edge when r ⊑ s, not the converse" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-role-closure-deep arena)))
+            (print-test-result "CR4 and CR7 match through the role closure: depth, cycles, chains, transitivity" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-smaller-side-joins arena)))
+            (print-test-result "CR2 and CR4 walk the smaller side, context side included" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-term-store-by-content arena)))
+            (print-test-result "term store: terms by content, duplicates collapse, unseen terms match nothing" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-term-store-quoted-and-tagged arena)))
+            (print-test-result "term store: equal quoted triples are one term, nested too; tags distinguish literals" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-stage0-fault-follows-the-document arena)))
+            (print-test-result "stage 0: the reported fault follows the document, not hash order" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-decode-litmus-class-expression arena)))
@@ -2821,6 +3578,14 @@
 
           (let ((r (test-triple-order-independence arena)))
             (print-test-result "§6.8: reversed triples give the same normal form and report" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-indexed-dispatch-matches-reference arena)))
+            (print-test-result "M1: the premise index concludes exactly what the full scan does" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-quoted-triple-header-subjects arena)))
+            (print-test-result "stage 0: a quoted-triple header subject is matched structurally" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-strict-refuses-past-omissions arena)))

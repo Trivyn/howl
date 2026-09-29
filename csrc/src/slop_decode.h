@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
-#include "slop_index.h"
+#include "slop_termstore.h"
 #include "slop_vocab.h"
 #include "slop_owl2.h"
 #include "slop_types.h"
@@ -180,7 +180,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif
@@ -189,14 +189,14 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
 static inline uint64_t slop_hash_rdf_BlankNode(const void* key) {
     const rdf_BlankNode* _k = (const rdf_BlankNode*)key;
     uint64_t hash = 14695981039346656037ULL;
-    { int64_t _tmp = (int64_t)_k->id; hash ^= slop_hash_int(&_tmp); hash *= 1099511628211ULL; }
+    hash ^= slop_hash_int(&(int64_t){ (int64_t)_k->id }); hash *= 1099511628211ULL;
     return hash;
 }
 static inline bool slop_eq_rdf_BlankNode(const void* a, const void* b) {
     const rdf_BlankNode* _a = (const rdf_BlankNode*)a;
     const rdf_BlankNode* _b = (const rdf_BlankNode*)b;
     return true
-        && _a->id == _b->id
+        && (_a->id == _b->id)
     ;
 }
 #endif
@@ -206,17 +206,17 @@ static inline uint64_t slop_hash_rdf_Literal(const void* key) {
     const rdf_Literal* _k = (const rdf_Literal*)key;
     uint64_t hash = 14695981039346656037ULL;
     hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
-    { const uint8_t* _b = (const uint8_t*)&_k->datatype; for(size_t _i=0; _i<sizeof(_k->datatype); _i++) { hash ^= _b[_i]; hash *= 1099511628211ULL; } }
-    { const uint8_t* _b = (const uint8_t*)&_k->lang; for(size_t _i=0; _i<sizeof(_k->lang); _i++) { hash ^= _b[_i]; hash *= 1099511628211ULL; } }
+    hash ^= ((_k->datatype).has_value ? slop_hash_combine(1, slop_hash_string(&(_k->datatype).value)) : 0); hash *= 1099511628211ULL;
+    hash ^= ((_k->lang).has_value ? slop_hash_combine(1, slop_hash_string(&(_k->lang).value)) : 0); hash *= 1099511628211ULL;
     return hash;
 }
 static inline bool slop_eq_rdf_Literal(const void* a, const void* b) {
     const rdf_Literal* _a = (const rdf_Literal*)a;
     const rdf_Literal* _b = (const rdf_Literal*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
-        && memcmp(&_a->datatype, &_b->datatype, sizeof(_a->datatype)) == 0
-        && memcmp(&_a->lang, &_b->lang, sizeof(_a->lang)) == 0
+        && (slop_eq_string(&_a->value, &_b->value))
+        && ((_a->datatype).has_value == (_b->datatype).has_value && (!(_a->datatype).has_value || ((slop_eq_string(&(_a->datatype).value, &(_b->datatype).value)))))
+        && ((_a->lang).has_value == (_b->lang).has_value && (!(_a->lang).has_value || ((slop_eq_string(&(_a->lang).value, &(_b->lang).value)))))
     ;
 }
 #endif
@@ -309,32 +309,36 @@ typedef struct { bool is_ok; union { decode_Stage1 ok; types_Fault err; } data; 
 
 rdf_Term decode_term_at(slop_list_rdf_Term xs, int64_t i);
 rdf_Triple decode_triple_at(slop_list_rdf_Triple xs, int64_t i);
-index_IndexedGraph decode_graph_to_indexed(slop_arena* arena, slop_list_rdf_Triple triples);
-slop_result_rdf_Term_decode_LookupFault decode_one_object(slop_arena* arena, index_IndexedGraph g, rdf_Term subj, rdf_Term pred);
-slop_result_list_rdf_Term_decode_ListFault decode_rdf_list_checked(slop_arena* arena, index_IndexedGraph g, rdf_Term head);
+termstore_TermStore decode_graph_to_indexed(slop_arena* arena, slop_list_rdf_Triple triples);
+slop_result_rdf_Term_decode_LookupFault decode_one_object(slop_arena* arena, termstore_TermStore g, rdf_Term subj, rdf_Term pred);
+slop_result_list_rdf_Term_decode_ListFault decode_rdf_list_checked(slop_arena* arena, termstore_TermStore g, rdf_Term head);
 slop_option_rdf_IRI decode_term_iri_value(rdf_Term t);
 uint8_t decode_iri_in_list(slop_list_rdf_IRI xs, rdf_IRI target);
 slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, slop_list_rdf_Triple triples);
 slop_list_types_Omission decode_unresolved_imports(slop_arena* arena, slop_list_rdf_IRI declared, slop_list_rdf_IRI resolved);
-slop_list_rdf_Term decode_subjects_of_type(slop_arena* arena, index_IndexedGraph g, slop_string type_iri);
-uint8_t decode_term_in_set_of(slop_list_rdf_Term xs, rdf_Term target);
+slop_list_rdf_Term decode_subjects_of_type(slop_arena* arena, termstore_TermStore g, slop_string type_iri);
+uint8_t decode_typed_as(rdf_Triple t, slop_string type_iri);
+slop_list_rdf_Term decode_typed_subjects_in_order(slop_arena* arena, slop_list_rdf_Triple triples, slop_string type_iri);
+uint8_t decode_logical_predicate(slop_string pv);
+rdf_Triple decode_ex_hdr(slop_string p, slop_string o);
+uint8_t decode_header_consumable(rdf_Triple t);
 slop_result_decode_Stage0_types_Fault decode_stage0_header(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 owl2_RawConcept* decode_box_concept(slop_arena* arena, owl2_RawConcept c);
 slop_string decode_list_fault_message(decode_ListFault f);
-uint8_t decode_has_pred(slop_arena* arena, index_IndexedGraph g, rdf_Term s, slop_string pred_iri);
-slop_result_rdf_Term_decode_LookupFault decode_obj_of(slop_arena* arena, index_IndexedGraph g, rdf_Term s, slop_string pred_iri);
-slop_result_types_RoleId_string decode_decode_role(slop_arena* arena, index_IndexedGraph g, rdf_Term b);
-uint8_t decode_inverse_expression_term(slop_arena* arena, index_IndexedGraph g, rdf_Term t);
-uint8_t decode_restriction_on_inverse(slop_arena* arena, index_IndexedGraph g, rdf_Term b);
-uint8_t decode_list_has_inverse(slop_arena* arena, index_IndexedGraph g, rdf_Term head);
-uint8_t decode_property_axiom_on_inverse(slop_arena* arena, index_IndexedGraph g, slop_string pv, rdf_Triple t);
+uint8_t decode_has_pred(slop_arena* arena, termstore_TermStore g, rdf_Term s, slop_string pred_iri);
+slop_result_rdf_Term_decode_LookupFault decode_obj_of(slop_arena* arena, termstore_TermStore g, rdf_Term s, slop_string pred_iri);
+slop_result_types_RoleId_string decode_decode_role(slop_arena* arena, termstore_TermStore g, rdf_Term b);
+uint8_t decode_inverse_expression_term(slop_arena* arena, termstore_TermStore g, rdf_Term t);
+uint8_t decode_restriction_on_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term b);
+uint8_t decode_list_has_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term head);
+uint8_t decode_property_axiom_on_inverse(slop_arena* arena, termstore_TermStore g, slop_string pv, rdf_Triple t);
 slop_result_int_string decode_literal_count(rdf_Term t);
-slop_result_list_types_Node_string decode_decode_node_list(slop_arena* arena, index_IndexedGraph g, rdf_Term head);
-slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* arena, index_IndexedGraph g, rdf_Term head, int64_t fuel);
-slop_result_owl2_RawConcept_string decode_decode_quantified(slop_arena* arena, index_IndexedGraph g, rdf_Term b, slop_string filler_pred, uint8_t universal, int64_t fuel);
-slop_result_owl2_RawConcept_string decode_decode_cardinality(slop_arena* arena, index_IndexedGraph g, rdf_Term b, owl2_CardKind kind, slop_string count_pred, uint8_t qualified, int64_t fuel);
-slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, index_IndexedGraph g, rdf_Term b, int64_t fuel);
-slop_result_owl2_RawConcept_string decode_decode_concept(slop_arena* arena, index_IndexedGraph g, rdf_Term t, int64_t fuel);
+slop_result_list_types_Node_string decode_decode_node_list(slop_arena* arena, termstore_TermStore g, rdf_Term head);
+slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* arena, termstore_TermStore g, rdf_Term head, int64_t fuel);
+slop_result_owl2_RawConcept_string decode_decode_quantified(slop_arena* arena, termstore_TermStore g, rdf_Term b, slop_string filler_pred, uint8_t universal, int64_t fuel);
+slop_result_owl2_RawConcept_string decode_decode_cardinality(slop_arena* arena, termstore_TermStore g, rdf_Term b, owl2_CardKind kind, slop_string count_pred, uint8_t qualified, int64_t fuel);
+slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, termstore_TermStore g, rdf_Term b, int64_t fuel);
+slop_result_owl2_RawConcept_string decode_decode_concept(slop_arena* arena, termstore_TermStore g, rdf_Term t, int64_t fuel);
 uint8_t decode_declare_entity(slop_arena* arena, owl2_Signature sig, rdf_IRI entity, slop_string type_iri);
 uint8_t decode_add_builtins(slop_arena* arena, owl2_Signature sig);
 owl2_Signature decode_build_signature(slop_arena* arena, slop_list_rdf_Triple triples);
@@ -347,13 +351,14 @@ uint8_t decode_structural_triple(rdf_Triple t);
 slop_option_types_EntityKind decode_entity_kind_of(slop_string type_iri);
 slop_option_owl2_PropCharacteristic decode_characteristic_of(slop_string type_iri);
 slop_option_types_RoleId decode_role_of_term(rdf_Term t);
-slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, index_IndexedGraph g, rdf_Term head);
-slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena, index_IndexedGraph g, rdf_Triple t);
-slop_option_rdf_Term decode_members_head(slop_arena* arena, index_IndexedGraph g, rdf_Term s);
-slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, index_IndexedGraph g, rdf_Triple t, rdf_IRI obj);
+slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, termstore_TermStore g, rdf_Term head);
+slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
+slop_option_rdf_Term decode_members_head(slop_arena* arena, termstore_TermStore g, rdf_Term s);
+slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstore_TermStore g, rdf_Triple t, rdf_IRI obj);
+slop_result_owl2_RawAxiom_string decode_decode_class_assertion(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
 uint8_t decode_is_reserved_iri(slop_string v);
 int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj);
-slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, index_IndexedGraph g, owl2_Signature sig, rdf_Triple t);
+slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstore_TermStore g, owl2_Signature sig, rdf_Triple t);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, slop_list_rdf_Triple triples);
 slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature sig, slop_list_rdf_Triple triples);
 

@@ -41,7 +41,10 @@ reports **inconclusive** — never **coherent** — and lists every omission so 
 Treat exit 0 alone as the pass condition; a CI job that accepts 2 reintroduces the silent false pass
 the gate exists to prevent. Every CLI argument is either honoured or refused with exit 3: `-I FILE`
 attests an import (a document with no ontology IRI is refused), `--strict` refuses to run past an
-omission, and `--emit`/`--reduce` are refused until M3.
+omission, and `--emit`/`--reduce` are refused until M3. `--report` prints the canonical report the
+goldens compare, `--max-iterations N` sets the round budget, `--workers N` sets how many threads join
+each round (default 4; it never changes the report), and `--timings` prints phase durations on
+stderr — never in the report.
 
 **Real ontologies, not just fixtures.** The fixtures all passed while the first two real ontologies
 failed, and both failures are fixed and pinned by `make corpus-acceptance`:
@@ -49,15 +52,43 @@ failed, and both failures are fixed and pinned by `make corpus-acceptance`:
 | Ontology | Before | Now |
 |---|---|---|
 | RO 2025-12-17 (11.6k triples) | exit 3 — an inverse property in a property chain faulted the whole document | exit 2, 0 unsatisfiable, 847 omitted |
-| OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 168 s |
+| OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 1.0 s (reasoning 0.4 s) |
+| GO 2026-07-26 (1.4M triples) | never finished — the header pass scanned lists per triple, and every fact was matched against every axiom | exit 2, 0 unsatisfiable, 1 omitted (one `owl:inverseOf`), 459,329 subsumptions, 13.4 s (reasoning 5.5 s) |
 
-GO (1.4M triples) is not yet run: saturation matches every fact against every axiom, and indexing
-that is M1's benchmark work.
+Rule dispatch goes through a premise index, so each rule sees only the axioms it could fire on; OBI's
+reasoning went from 172 s to 0.4 s with its report unchanged byte for byte.
+
+**The §12 benchmark: met.** `make bench` times each corpus entry against its routed oracle on
+the same machine. Each side gets a median of 5 runs after 1 warm-up, with W = 4. Classification runs
+from axioms in hand to taxonomy on both sides: HOWL's gate, normalization, indexing and reasoning,
+against the oracle's reasoner creation, consistency check and classification. Parsing and the
+RDF-to-axiom mapping (HOWL's decode, the OWL API's parse) are untimed on both sides; HOWL's decode is
+reported beside the ratio. Every timed input and report must be the certified ones. Run-to-run spread
+is about ±10% (`bench/results.txt`, Apple M3 Ultra):
+
+| Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
+|---|---|---|---|---|---|---|
+| GO 2026-07-26 | ELK 0.6.0 | 0.69 s (reasoning 0.51 s), 8 GB peak | 1.4 s | 0.44 s | 1.6× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 1.06 s (reasoning 0.85 s), 4 GB peak | 0.25 s | 0.28 s | 3.8× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.08 s | 0.10 s | 0.49 s | 0.2× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.01 s | 0.15 s | 0.1× | reported |
+
+M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
+side of their join, and role inclusions are matched through the told role closure rather than
+copying every edge under each super-role. slop's faster maps (stored hashes, a
+word-at-a-time string hash, slop-lang/slop#205) and HOWL's own triple store (term ids by content, an
+SPO index and an rdf:type index, instead of slop-rdf's four-index store) a round barrier that commits in
+parallel instead of merging serially, and saturation over nodes renamed to integer ids at its
+boundary took S6a's 19.2× (GO) and 30.1× (EL-GALEN) to 5.05× and 6.1× with decode still inside the
+window. Moving the window to axioms in hand took them to 5.3× (EL-GALEN) and 1.4× (GO), and
+matching role inclusions through the closure cut EL-GALEN's reasoning by 38%, to the figures above.
+GO's single-threaded decode (~1.4 s) is outside the window but is still the bulk of its end-to-end
+time.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules + driver + extraction done; litmus green |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 1.6× and EL-GALEN 3.8× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -165,10 +196,29 @@ make          # build the CLI from the committed C in csrc/ — no SLOP toolchai
 make test     # verdict-discipline and structural-invariant tests
 make lib      # static library
 make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
-make example      # executable @example blocks on the completion rules
+make example      # executable @example blocks: the completion rules, canon, context coverage
 make crate-test   # Rust crate, including the FFI layout guards
 make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
+make test-tsan    # the tests under ThreadSanitizer (every test runs the parallel round)
+make determinism  # reports byte-identical at W in {1,2,4,8} for every round cap (fixtures; -corpus for RO/OBI/GO/GALEN)
+make bench        # §12 benchmark against the routed oracle; writes bench/results.txt (local, minutes)
+make bench-check  # results.txt still names the certified reports, and its verdicts follow
 make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
+```
+
+The differential ([SPEC §10](./SPEC.md#10-testing-strategy) item 1) needs a JDK to run Gradle and
+the network once. The wrapper provisions the pinned JDK 21 if the host has none, and `rdflib` 7.6.0
+routes fixtures by construct:
+
+```sh
+make oracle          # build oracle/, ELK 0.6.0 and HermiT 1.4.5.519 on OWL API 5.1.20
+make probes          # capability probes: HOWL and HermiT must pass all; ELK's results are recorded
+make diff-fixtures   # HOWL vs HermiT on every fixture, and vs ELK where the probes allow
+python3 -m unittest corpus/test_entdiff.py   # the comparator's self-tests
+make conformance-fetch   # the pinned W3C OWL 2 and ELK conformance tests (corpus/conformance.sha256)
+make conformance         # HOWL against their expected answers
+make materialize         # the projected corpus ontologies (after ./corpus/fetch.sh; EL-GALEN needs make oracle)
+make diff-corpus         # each against its routed oracle; the record is corpus/corpus-differential.txt
 ```
 
 Working on the SLOP sources needs the toolchain:
@@ -194,6 +244,8 @@ src/
   rules/el.slop   CR1–CR7 and the delta-trigger table
   test.slop       test harness — verdict discipline, then the reasoning fixtures
 cli/              CLI harness (§9) — exit codes are the verdict table
+oracle/           the differential oracle: ELK and HermiT behind one pinned OWL API (Gradle)
+corpus/           pinned ontologies, fixtures, probes, goldens; census, entdiff and the harness
 rust/             FFI layer, with the ABI layout guards
 csrc/             transpiled C (committed)
 ```
@@ -212,18 +264,39 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` discharges **23 contracts, 0 failing**, and `make example` runs **6 executable
-per-rule examples**. The boundary is not obvious, it is not documented upstream, and every row below
+`make verify` verifies **35 functions, 0 failing**. Among them, the five loop-free completion
+rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
+(nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of
+its rule's body. `make example` runs **15 executable examples**: 6 per rule, 7 on the canonical sort, and
+2 on context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
+exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
+- context coverage in `signature-nodes`, which is loops;
+- "a class assertion is never set aside" in `decode-class-assertion`, which is blocked by
+  [#167](https://github.com/slop-lang/slop/issues/167) (a union inside `ok` loses its tag).
+
+Tests and examples hold both instead. The boundary is not obvious, it is not documented upstream, and every row below
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop 0.2.1.** Re-probed on the bump rather than assumed from release notes; two of the
-rows below were retired by it and two survived.
+**Toolchain: slop `main` at or after [#217](https://github.com/slop-lang/slop/pull/217), not yet
+in a release.** #217 makes empty collections allocate nothing, which cut GO's peak from 13.5 to
+7.8 GB. CR2 and CR4's smaller-side dispatch uses #205's `set-len`, and its map rework (stored
+hashes, a word-at-a-time string hash) is most of the M1 slice 6b speedup. The faithfulness pairs need
+[#168](https://github.com/slop-lang/slop/pull/168) (`match` binds every payload, at its declared
+sort) and [#172](https://github.com/slop-lang/slop/pull/172) (the exact model of a loop-free
+push-built result, [#170](https://github.com/slop-lang/slop/issues/170)). On a slop without them
+those properties come back unknown or failed; CI's verify step is non-blocking. The parallel round
+needs [#173](https://github.com/slop-lang/slop/issues/173) (a call resolves within its module, so
+`join` is the thread's and not `strlib`'s). 0.3.0 makes an unmarked parameter read-only
+([#180](https://github.com/slop-lang/slop/issues/180)), so slop-rdf must be at or after its
+`param-mode-fixes` merge. The
+rows below were re-probed on each bump rather than assumed from release notes.
 
 | Works | Does not |
 |---|---|
 | Record fields — **including `Bool`** — and `list-len` | **`or` / `and` in a function BODY** — makes the return value opaque |
-| `(@post (implies {braced} {$result == X}))` | **`@property` quantifying over a push-built `$result`** — fails outright, *and* makes any `@post` on the same function fail ([#69](https://github.com/slop-lang/slop/issues/69), open) |
+| `(@post (implies {braced} {$result == X}))` | **A quantified `@property` over a result built in a LOOP** — *unknown*: the exact model follows only loop-free bodies |
+| **`forall` / `exists` / `list-contains` over a loop-free push-built `$result`** — proved or refuted ([#170](https://github.com/slop-lang/slop/issues/170)) | A premise the prover sees as an opaque predicate (`node-eq`, `set-has`) — equal inputs are not known to give equal answers |
 | `match` in a `@post`, enum-valued results | **A loop in the body** — `$result` becomes opaque |
 | `while` loops, with or without `@loop-invariant` | **`if` between two `record-new`s** — loses field projection on `$result` ([#70](https://github.com/slop-lang/slop/issues/70), open) |
 | A single unconditional `record-new` — fields stay visible | `const` values — opaque, so `{$result == EXIT_ERROR}` cannot be proved |
@@ -245,14 +318,19 @@ and emits at most one message. Written as two branches that each `list-push`, th
 with a two-element counterexample — the checker assumes both can fire. Written as a flag set in either
 branch and a single push, it proves. Same semantics, same message count.
 
-**Adding a `@property` can break a `@post` that was passing.** This one is genuinely surprising and
-cost real time. A `@property (forall (m $result) …)` over a list built with `list-push` does not
-merely go *unknown* — it **fails**, and its presence causes the sibling `@post` on the same function
-to fail too. The per-rule faithfulness properties were removed for this reason and the obligation
-moved to `OWED`; GROWL's equivalents survive because they come back *unknown*, which is not a
-failure. Still reproducible on 0.2.1 — re-probed, not assumed.
+**Faithfulness is proved against the body's own premise tests.** A rule's `complete` property says:
+when the premises hold, the conclusion is among the messages. The premises are stated with the same
+`node-eq` / `role-eq` / `set-has` calls the body makes, which the prover treats as opaque
+predicates. One consequence is visible in CR2: to the prover, `node-eq(b, a1)` and `node-eq(b, a2)`
+do not make `a1` and `a2` equal, so the second side of the self-join states the body's own case
+split ("b is not also the first conjunct"). The two sides together cover every premise tuple given
+that `node-eq` is equality, which is `node-eq`'s own business. Before 0.2.3 plus #168/#170 none of
+this was statable: a quantified property over a push-built result failed outright and broke a
+sibling `@post` ([#69](https://github.com/slop-lang/slop/issues/69)), later came back *unknown*, and
+`list-contains` could not be proved at all.
 
-**`@example` is now the substitute, and it was not before.** Through 0.1.2 an example ran only when
+**`@example` executes, and it did not before.** The examples complement the proved faithfulness
+pairs, and for the four loop rules they are the direct evidence. Through 0.1.2 an example ran only when
 every argument was a scalar literal; any fixture call was reported `SKIP (wildcard args)` and then
 **counted as a pass**. HOWL's six rule examples reported green while executing nothing, and GROWL's
 47 did the same. Fixed in 0.2.1 ([#71](https://github.com/slop-lang/slop/issues/71)): skips are
@@ -264,8 +342,10 @@ as literal elements, so it is `(list <elem> …)` with no type argument and `(li
 `(list Addressed)` — the valid empty-list literal in ordinary code — makes the harness treat the type
 name as an element.
 
-**There is no interprocedural reasoning.** A callee is an uninterpreted function, so a property that
-depends on what a helper returns is unprovable — the counterexample says so literally
+**Interprocedural reasoning is narrow.** Inside a loop-free push-built body (#172) a callee's
+`@post`s and `@property`s are assumed at the call, which is how the edge rules use `emit-edge`'s.
+Everywhere else a callee is an uninterpreted function, so a property that depends on what a helper
+returns is unprovable — the counterexample says so literally
 (`fn_outcome-is-complete_1=[else -> True]`). `verdict` keeps a *redundant* local coverage check for
 exactly this reason, and `advance-round` deliberately does **not** restate the round-count contract
 that `round-commit` proves. Where the fact must cross a loop rather than a call, `@loop-invariant`
@@ -277,8 +357,9 @@ is a provable field access. As a list it needed `list-get`, which is uninterpret
 only testable.
 
 **Obligations that cannot be discharged are marked `OWED` in-source, with the reason**, and covered
-by test meanwhile. Two are outstanding: the per-rule faithfulness pairs (`src/rules/el.slop`) and the
-undefined-not-empty rules (`src/classify.slop`). A third — canonical ordering of
+by test meanwhile. Two are outstanding: the faithfulness pairs of the **four loop rules** (CR4 and
+CR5 on an arriving subsumer, CR7 both ways; `src/rules/el.slop`), whose loops the exact model does not
+follow, and the undefined-not-empty rules (`src/classify.slop`). A third — canonical ordering of
 `Findings.unsatisfiable` and `subsumptions` — has been **discharged**: `src/canon.slop` supplies a
 total order over identities and both lists now sort on the way out. No vacuous contracts stand in:
 `(list-len $result) >= 0` is true of every possible implementation and would only make the summary

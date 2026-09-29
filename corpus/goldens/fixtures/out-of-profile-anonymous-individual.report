@@ -1,0 +1,14 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 2
+omission AnonymousIndividual(<http://example.org/t#a> <http://example.org/t#r> _:b0 .)
+omission AnonymousIndividual(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://example.org/t#C> .)
+unsatisfiable 0
+subsumptions 3
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

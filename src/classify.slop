@@ -69,8 +69,8 @@
 
   (import rdf (IRI))
   (import vocab (OWL_NOTHING))
-  (import types (Node SubPair Findings Saturation Context
-                 node-top node-bottom node-eq))
+  (import types (Node SubPair Findings Saturation Context Names
+                 node-top node-bottom node-eq renamed-node original-node))
   (import canon (sort-iris sort-sub-pairs))
 
   (export
@@ -92,10 +92,13 @@
         ((some ctx) (set-has (. ctx subsumers) bottom))
         ((none)     false))))
 
-  (fn detect-inconsistent ((sat Saturation))
+  (fn detect-inconsistent ((sat Saturation) (names Names))
     (@intent "⊥ ∈ S(⊤), or ⊥ ∈ S(individual(a)) for some individual a")
-    (@spec ((Saturation) -> Bool))
+    (@spec ((Saturation Names) -> Bool))
     (@pure)
+    ;; The saturation's nodes are RENAMED (types.slop, Names): the tag that
+    ;; says "individual" is read from the node each key stands for. ⊤ is
+    ;; never renamed, so its context is found as itself.
     ;; The INDIVIDUAL arm is the one that is easy to omit and expensive
     ;; to omit. §5.2's ABox encoding puts assertions into individual
     ;; contexts, so `C(a)` with `C ⊑ ⊥` gives ⊥ ∈ S(individual(a)) while
@@ -104,17 +107,24 @@
     (let ((mut found (context-has-bottom sat (node-top))))
       (do
         (for-each (n (. sat contexts))
-          (match n
-            ((individual-node _)
-              (when (context-has-bottom sat n) (set! found true)))
-            ((class-node _) (do))
-            ((fresh-node _) (do))))
+          (when (is-individual names n)
+            (when (context-has-bottom sat n) (set! found true))))
         found)))
 
-  (fn entails-sub ((sat Saturation) (inconsistent Bool) (a Node) (b Node))
+  (fn is-individual ((names Names) (n Node))
+    (@intent "Does this saturation node stand for an individual?")
+    (@spec ((Names Node) -> Bool))
+    (match (original-node names n)
+      ((individual-node _) true)
+      ((class-node _)      false)
+      ((fresh-node _)      false)))
+
+  (fn entails-sub ((sat Saturation) (names Names) (inconsistent Bool) (a Node) (b Node))
     (@intent "The subsumption PROBE — all three disjuncts, not just B ∈ S(A)")
-    (@spec ((Saturation Bool Node Node) -> Bool))
+    (@spec ((Saturation Names Bool Node Node) -> Bool))
     (@pure)
+    ;; `a` and `b` are the caller's ORIGINAL nodes; the saturation holds
+    ;; them renamed, so both are looked up through `names`.
     ;; An inconsistent ontology entails EVERY subsumption. This arm is
     ;; not redundant with the ⊥ ∈ S(A) arm below: inconsistency can
     ;; arrive through an INDIVIDUAL context, leaving every class context
@@ -128,12 +138,17 @@
     (let ((bottom (node-bottom)))
       (if inconsistent
         true
-        (match (map-get (. sat contexts) a)
-          ((some ctx)
-            (if (set-has (. ctx subsumers) bottom)
-              true
-              (set-has (. ctx subsumers) b)))
-          ((none) false)))))
+        (match (renamed-node names a)
+          ((none) false)
+          ((some ra)
+            (match (map-get (. sat contexts) ra)
+              ((some ctx)
+                (if (set-has (. ctx subsumers) bottom)
+                  true
+                  (match (renamed-node names b)
+                    ((some rb) (set-has (. ctx subsumers) rb))
+                    ((none)    false))))
+              ((none) false)))))))
 
   ;; ============================================================
   ;; Extraction, split so the "undefined, not empty" contracts hold
@@ -166,15 +181,15 @@
     ;; where dangerously quiet does not.
     (string-eq (. iri value) OWL_NOTHING))
 
-  (fn collect-unsatisfiable ((arena Arena) (sat Saturation))
+  (fn collect-unsatisfiable ((arena Arena) (sat Saturation) (names Names))
     (@intent "Named classes C ≠ owl:Nothing with ⊥ ∈ S(C), as a LOWER BOUND unless complete")
-    (@spec ((Arena Saturation) -> (List IRI)))
+    (@spec ((Arena Saturation Names) -> (List IRI)))
     (@alloc arena)
     (let ((mut unsat (list-new arena IRI))
           (bottom (node-bottom)))
       (do
         (for-each ((n ctx) (. sat contexts))
-          (match n
+          (match (original-node names n)
             ((class-node iri)
               (when (not (is-bottom-iri iri))
                 (when (set-has (. ctx subsumers) bottom)
@@ -193,15 +208,18 @@
         ;; consumer's verdict hashing.
         (sort-iris arena unsat))))
 
-  (fn collect-taxonomy ((arena Arena) (sat Saturation))
+  (fn collect-taxonomy ((arena Arena) (sat Saturation) (names Names))
     (@intent "The subsumption hierarchy, bottom-compressed and projected to class contexts")
-    (@spec ((Arena Saturation) -> (List SubPair)))
+    (@spec ((Arena Saturation Names) -> (List SubPair)))
     (@alloc arena)
+    ;; Keys and subsumers are RENAMED; each is mapped back to the node it
+    ;; stands for before the class test, and the pairs hold originals, so
+    ;; the sort below is over the same values it always was.
     (let ((mut subs (list-new arena SubPair))
           (bottom (node-bottom)))
       (do
-        (for-each ((n ctx) (. sat contexts))
-          (match n
+        (for-each ((rn ctx) (. sat contexts))
+          (match (original-node names rn)
             ((class-node iri)
               (when (not (is-bottom-iri iri))
                 (if (set-has (. ctx subsumers) bottom)
@@ -214,11 +232,14 @@
                   ;; and differ as data, and implementing one where the
                   ;; other belongs gives either false negatives on probes
                   ;; or a quadratic hierarchy.
-                  (list-push subs (record-new SubPair (sub n) (super bottom)))
-                  (for-each (b (. ctx subsumers))
-                    (match b
+                  (let ((n (original-node names rn)))
+                    (list-push subs (record-new SubPair (sub n) (super bottom))))
+                  (for-each (rb (. ctx subsumers))
+                    (match (original-node names rb)
                       ((class-node _)
-                        (list-push subs (record-new SubPair (sub n) (super b))))
+                        (let ((n (original-node names rn))
+                              (b (original-node names rb)))
+                          (list-push subs (record-new SubPair (sub n) (super b)))))
                       ((individual-node _) (do))
                       ((fresh-node _)      (do)))))))
             ((individual-node _) (do))
@@ -235,9 +256,9 @@
         ;; strcmp is unsafe on the IRI slices this walks.
         (sort-sub-pairs arena subs))))
 
-  (fn extract-findings ((arena Arena) (sat Saturation))
+  (fn extract-findings ((arena Arena) (sat Saturation) (names Names))
     (@intent "Extract the taxonomy and coherence findings from a saturated state")
-    (@spec ((Arena Saturation) -> Findings))
+    (@spec ((Arena Saturation Names) -> Findings))
     (@alloc arena)
     ;; The three conditions, defined separately (§6.2):
     ;;
@@ -294,14 +315,14 @@
     ;; `inconsistent` is bound once and used three times, so the field
     ;; and the two guards cannot disagree: whatever makes the flag true
     ;; is exactly what empties the lists.
-    (let ((inconsistent (detect-inconsistent sat)))
+    (let ((inconsistent (detect-inconsistent sat names)))
       (record-new Findings
         (inconsistent  inconsistent)
         (unsatisfiable (if inconsistent
                          (list-new arena IRI)
-                         (collect-unsatisfiable arena sat)))
+                         (collect-unsatisfiable arena sat names)))
         (subsumptions  (if inconsistent
                          (list-new arena SubPair)
-                         (collect-taxonomy arena sat)))
+                         (collect-taxonomy arena sat names)))
         (imports-seen  (list-new arena IRI)))))
 )

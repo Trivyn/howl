@@ -1,0 +1,19 @@
+howl-report 1
+verdict coherent
+termination fixpoint
+rounds 4
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 10
+sub http://example.org/t#Mother http://example.org/t#Mother
+sub http://example.org/t#Mother http://example.org/t#Parent
+sub http://example.org/t#Mother http://example.org/t#Person
+sub http://example.org/t#Mother http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Parent http://example.org/t#Parent
+sub http://example.org/t#Parent http://example.org/t#Person
+sub http://example.org/t#Parent http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Person http://example.org/t#Person
+sub http://example.org/t#Person http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

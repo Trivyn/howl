@@ -32,10 +32,10 @@ sha256         = "a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10a
 bytes          = 1_226_000
 licence        = "CC BY 4.0"
 logical_axioms = 1983
-in_v0          = 1465
-out_of_profile = 518
+in_v0          = 1415
+out_of_profile = 568
 projection     = "corpus/projections/ro-2025-12-17.removals"
-projection_removes = { axioms = 342, triples = 1361, in_v0_swept_in = 66 }
+projection_removes = { axioms = 390, triples = 1644, in_v0_swept_in = 66 }
 role           = "RBOX. 160 property chains, 45 transitive properties, 801 sub-property axioms — by far the best exercise available for CR6/CR7, which have no fixtures of their own. Also the SWRL case: 25 rules, 2 of which derive owl:Nothing."
 
 [[ontology]]
@@ -46,10 +46,10 @@ sha256         = "8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b9
 bytes          = 9_961_000
 licence        = "CC BY 4.0"
 logical_axioms = 26813
-in_v0          = 26403
-out_of_profile = 410
+in_v0          = 26397
+out_of_profile = 416
 projection     = "corpus/projections/obi-2026-07-27.removals"
-projection_removes = { axioms = 379, triples = 5828, in_v0_swept_in = 1244 }
+projection_removes = { axioms = 385, triples = 5849, in_v0_swept_in = 1249 }
 role           = "PRIMARY v0 ENTRY. Only 1.5% out-of-profile over 26k in-profile axioms — the closest fit to v0 of anything measured, and large enough to be a real differential and benchmark target."
 
 [[ontology]]
@@ -66,13 +66,35 @@ projection     = "corpus/projections/go-2026-07-26.removals"
 projection_removes = { axioms = 1, triples = 1, in_v0_swept_in = 0 }
 role           = "BENCHMARK, and the headline result of the census: 1.4M triples, 117,790 in-profile logical axioms, and exactly ONE out-of-profile axiom — a single owl:inverseOf. The canonical EL benchmark named in §12 is essentially inside v0 already, and its projection is a one-axiom diff that a human can audit by eye. The hash above is from the latest-PURL fetch; the versioned URL is pinned on the strength of ro.owl's verified byte-identical match, and fetch.sh catches it loudly if that assumption is wrong."
 
+# EL-GALEN, the variant CEL, Snorocket and ELK benchmark as "EL-GALEN" /
+# "GALEN-EL": §12 requires GALEN and warns that the name covers ontologies of
+# wildly differing difficulty, so the VARIANT is the pin. The source is OWL 2
+# FUNCTIONAL SYNTAX, which rdflib cannot read: fetch.sh converts it with the
+# pinned OWL API (`oracle convert`, oracle/), after checking it repeats no
+# operand the OWL API would collapse. That conversion is deterministic for a
+# pinned OWL API (two runs, byte-identical), so unlike the rdflib path its
+# output IS pinned, as derived_sha256.
+[[ontology]]
+name           = "el-galen"
+version        = "2011-04-12"
+format         = "ofn"
+url            = "https://raw.githubusercontent.com/ghxiao/drew/c8dbd015e6b39c69d9000e2e2a4b8c05769aca07/benchmark/galen/ontology/EL-GALEN.owl"
+sha256         = "4692482660fce56ede0d4587bd8c84af6a8428a62b668cecf976eb1ae4aff4cd"
+derived_sha256 = "52fd1c94972b5ca8204159eb78daf8cfb5e426f6a79d2c0b12a48814a9a199bf"
+bytes          = 10_401_844
+licence        = "none stated (CO-ODE OpenGALEN origin); the hosting repository is Apache-2.0"
+provenance     = "EL fragment of the CO-ODE OpenGALEN ontology (IRI http://www.co-ode.org/ontologies/galen), obtained by removing InverseObjectProperties, FunctionalObjectProperties and role-chain axioms (ELK TestOntologies wiki). Distributed by Kazakov/Simancik as EL-GALEN.owl on code.google.com/p/condor-reasoner, uploaded 2011-04-12 (sha1 08f62ef75d508b0099b57e190dd902a3d9327b71); byte-identical to galen.owl in ELK's test_ontologies_01.zip. Fetched from ghxiao/drew (DReW, TU Wien) commit c8dbd015e6b39c69d9000e2e2a4b8c05769aca07, path benchmark/galen/ontology/EL-GALEN.owl, git blob 88ae4dd69ade947ec9f27ee387a193dfd7ebc6b4. 23,136 classes, 950 object properties, 36,547 logical axioms."
+logical_axioms = 81513
+in_v0          = 81513
+out_of_profile = 0
+projection     = "corpus/projections/el-galen-2011-04-12.removals"
+projection_removes = { axioms = 0, triples = 0, in_v0_swept_in = 0 }
+role           = "BENCHMARK, with GO: plain EL (intersection, existentials, role hierarchy, transitivity; no ranges, chains or inverses), so ELK is its routed oracle. Entirely inside v0: an empty projection."
+
 # ---------------------------------------------------------------------------
 # NOT YET PINNED — open items, listed so they are scheduled rather than
 # rediscovered.
 #
-#   GALEN    §12 requires it, and warns that "GALEN" names several ontologies of
-#            wildly differing difficulty, so the VARIANT is part of the pin.
-#            Needs a canonical source decided before it can be hashed.
 #   SNOMED CT  requires an affiliate licence; never vendored, never fetched by
 #            CI. Opt-in local path only, per §12.
 #   BFO/CCO  measured (33.8% / 8.2% out-of-profile) and available in ../growl,

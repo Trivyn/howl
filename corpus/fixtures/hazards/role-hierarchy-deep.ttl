@@ -1,0 +1,88 @@
+# Role inclusions are MATCHED through the told closure, not materialized
+# (el.slop, premise.slop RoleClosure; M1 slice 6b D2). An edge is stored
+# under the role it was derived with, so every entailment below needs the
+# closure at the rule that consumes the edge. Each is reachable through one
+# path only:
+#
+# 1. Transitive closure, edge arriving last (CR4 on the edge, r ∈ sup*(e)):
+#    r1 ⊑ r2 ⊑ r3; A1 ⊑ P1 ⊑ ∃r1.B1; ∃r3.B1 ⊑ C1. Expect A1 subClassOf C1.
+#    A one-level closure (sup = {r1, r2}) misses it.
+# 2. Subsumer arriving last (CR4 on the subsumer, walking preds(e) for
+#    e ∈ sub*(r3)): A2 ⊑ ∃r1.B2; B2 ⊑ M2 ⊑ N2 ⊑ G2 (G2 reaches S(B2) two
+#    rounds after the edge); ∃r3.G2 ⊑ C2. Expect A2 subClassOf C2.
+# 3. An equivalent-property cycle, p ≡ q ⊑ u: A3 ⊑ ∃p.B3, ∃u.B3 ⊑ C3, and
+#    D3 ⊑ ∃q.B3, ∃p.B3 ⊑ E3. Expect A3 ⊑ C3 and D3 ⊑ E3; the closure walk
+#    must terminate on the cycle.
+# 4. A chain whose legs are stored under sub-roles: ra' ⊑ ra, sb' ⊑ sb,
+#    ra ∘ sb ⊑ t, ∃t.D ⊑ E.
+#    - First leg last (CR7 on the edge, walking succs(e) for e ∈ sub*(sb)):
+#      X4 ⊑ K4 ⊑ L4 ⊑ ∃ra'.Y4, Y4 ⊑ ∃sb'.D. Expect X4 subClassOf E.
+#    - Second leg last (CR7 on the edge, walking preds(e) for e ∈ sub*(ra)):
+#      X5 ⊑ ∃ra'.Y5, Y5 ⊑ K5 ⊑ L5 ⊑ ∃sb'.D. Expect X5 subClassOf E.
+# 5. A transitive role with a sub-role: tr transitive, tr' ⊑ tr;
+#    X6 ⊑ ∃tr'.Y6, Y6 ⊑ ∃tr'.Z6, ∃tr.Z6 ⊑ F6. Expect X6 subClassOf F6
+#    (tr ∘ tr ⊑ tr, both legs matched through sup*).
+# 6. The converse direction does NOT hold: A7 ⊑ ∃r3.B1 with ∃r1.B1 ⊑ N7.
+#    Expect NOT A7 subClassOf N7.
+# Expect: gate clean, coherent.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:r1 a owl:ObjectProperty . :r2 a owl:ObjectProperty . :r3 a owl:ObjectProperty .
+:p a owl:ObjectProperty . :q a owl:ObjectProperty . :u a owl:ObjectProperty .
+:ra a owl:ObjectProperty . :ra2 a owl:ObjectProperty . :sb a owl:ObjectProperty . :sb2 a owl:ObjectProperty .
+:t a owl:ObjectProperty .
+:tr a owl:ObjectProperty , owl:TransitiveProperty . :tr2 a owl:ObjectProperty .
+
+:A1 a owl:Class . :P1 a owl:Class . :B1 a owl:Class . :C1 a owl:Class .
+:A2 a owl:Class . :B2 a owl:Class . :M2 a owl:Class . :N2 a owl:Class . :G2 a owl:Class . :C2 a owl:Class .
+:A3 a owl:Class . :B3 a owl:Class . :C3 a owl:Class . :D3 a owl:Class . :E3 a owl:Class .
+:X4 a owl:Class . :K4 a owl:Class . :L4 a owl:Class . :Y4 a owl:Class . :D a owl:Class . :E a owl:Class .
+:X5 a owl:Class . :Y5 a owl:Class . :K5 a owl:Class . :L5 a owl:Class .
+:X6 a owl:Class . :Y6 a owl:Class . :Z6 a owl:Class . :F6 a owl:Class .
+:A7 a owl:Class . :N7 a owl:Class .
+
+# 1 and 2: a three-level hierarchy.
+:r1 rdfs:subPropertyOf :r2 .
+:r2 rdfs:subPropertyOf :r3 .
+:A1 rdfs:subClassOf :P1 .
+:P1 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B1 ] .
+[ a owl:Restriction ; owl:onProperty :r3 ; owl:someValuesFrom :B1 ] rdfs:subClassOf :C1 .
+:A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B2 ] .
+:B2 rdfs:subClassOf :M2 . :M2 rdfs:subClassOf :N2 . :N2 rdfs:subClassOf :G2 .
+[ a owl:Restriction ; owl:onProperty :r3 ; owl:someValuesFrom :G2 ] rdfs:subClassOf :C2 .
+
+# 3: p ≡ q ⊑ u.
+:p owl:equivalentProperty :q .
+:q rdfs:subPropertyOf :u .
+:A3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :B3 ] .
+[ a owl:Restriction ; owl:onProperty :u ; owl:someValuesFrom :B3 ] rdfs:subClassOf :C3 .
+:D3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom :B3 ] .
+[ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :B3 ] rdfs:subClassOf :E3 .
+
+# 4: a chain over super-roles of the stored legs.
+:ra2 rdfs:subPropertyOf :ra .
+:sb2 rdfs:subPropertyOf :sb .
+:t owl:propertyChainAxiom ( :ra :sb ) .
+[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .
+:X4 rdfs:subClassOf :K4 . :K4 rdfs:subClassOf :L4 .
+:L4 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :ra2 ; owl:someValuesFrom :Y4 ] .
+:Y4 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :sb2 ; owl:someValuesFrom :D ] .
+:X5 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :ra2 ; owl:someValuesFrom :Y5 ] .
+:Y5 rdfs:subClassOf :K5 . :K5 rdfs:subClassOf :L5 .
+:L5 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :sb2 ; owl:someValuesFrom :D ] .
+
+# 5: a transitive role reached through a sub-role.
+:tr2 rdfs:subPropertyOf :tr .
+:X6 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :tr2 ; owl:someValuesFrom :Y6 ] .
+:Y6 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :tr2 ; owl:someValuesFrom :Z6 ] .
+[ a owl:Restriction ; owl:onProperty :tr ; owl:someValuesFrom :Z6 ] rdfs:subClassOf :F6 .
+
+# 6: not the converse.
+:A7 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r3 ; owl:someValuesFrom :B1 ] .
+[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B1 ] rdfs:subClassOf :N7 .

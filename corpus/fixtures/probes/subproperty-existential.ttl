@@ -1,0 +1,18 @@
+# PROBE subproperty-existential. r ⊑ s, A ⊑ ∃r.B and ∃s.B ⊑ C entail A ⊑ C; the converse direction does not.
+# construct: SubObjectPropertyOf
+# expect: sub :A :C
+# expect-not: sub :E :F
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :E a owl:Class . :F a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty .
+:r rdfs:subPropertyOf :s .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] rdfs:subClassOf :C .
+:E rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :F .

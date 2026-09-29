@@ -176,11 +176,11 @@ slop_option_int strlib_last_index_of(slop_string haystack, slop_string needle) {
 }
 
 uint8_t strlib_contains(slop_string haystack, slop_string needle) {
-    __auto_type _mv_85 = strlib_index_of(haystack, needle);
-    if (_mv_85.has_value) {
-        __auto_type _ = _mv_85.value;
+    __auto_type _mv_180 = strlib_index_of(haystack, needle);
+    if (_mv_180.has_value) {
+        __auto_type _ = _mv_180.value;
         return 1;
-    } else if (!_mv_85.has_value) {
+    } else if (!_mv_180.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -521,9 +521,17 @@ slop_result_int_strlib_ParseError strlib_parse_int(slop_string s) {
                 {
                     __auto_type end_val = (*((char**)(endptr)));
                     if (end_val == ((char*)(s.data))) {
-                        return ((slop_result_int_strlib_ParseError){ .is_ok = false, .data.err = strlib_ParseError_invalid_format });
+                        {
+                            slop_result_int_strlib_ParseError _wa_ret = ((slop_result_int_strlib_ParseError){ .is_ok = false, .data.err = strlib_ParseError_invalid_format });
+                            slop_arena_free(arena);
+                            return _wa_ret;
+                        }
                     } else {
-                        return ((slop_result_int_strlib_ParseError){ .is_ok = true, .data.ok = result });
+                        {
+                            slop_result_int_strlib_ParseError _wa_ret = ((slop_result_int_strlib_ParseError){ .is_ok = true, .data.ok = result });
+                            slop_arena_free(arena);
+                            return _wa_ret;
+                        }
                     }
                 }
             }
@@ -551,9 +559,17 @@ slop_result_float_strlib_ParseError strlib_parse_float(slop_string s) {
                 {
                     __auto_type end_val = (*((char**)(endptr)));
                     if (end_val == ((char*)(s.data))) {
-                        return ((slop_result_float_strlib_ParseError){ .is_ok = false, .data.err = strlib_ParseError_invalid_format });
+                        {
+                            slop_result_float_strlib_ParseError _wa_ret = ((slop_result_float_strlib_ParseError){ .is_ok = false, .data.err = strlib_ParseError_invalid_format });
+                            slop_arena_free(arena);
+                            return _wa_ret;
+                        }
                     } else {
-                        return ((slop_result_float_strlib_ParseError){ .is_ok = true, .data.ok = result });
+                        {
+                            slop_result_float_strlib_ParseError _wa_ret = ((slop_result_float_strlib_ParseError){ .is_ok = true, .data.ok = result });
+                            slop_arena_free(arena);
+                            return _wa_ret;
+                        }
                     }
                 }
             }
@@ -596,11 +612,11 @@ slop_string strlib_join(slop_arena* arena, slop_list_string strings, slop_string
             return (slop_string){.len = ((uint64_t)(0)), .data = ((uint8_t*)(({ __auto_type _alloc = (uint8_t*)slop_arena_alloc(arena, 1); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })))};
         } else {
             if (count == 1) {
-                __auto_type _mv_86 = ({ __auto_type _lst = strings; size_t _idx = (size_t)0; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (_mv_86.has_value) {
-                    __auto_type first_str = _mv_86.value;
+                __auto_type _mv_181 = ({ __auto_type _lst = strings; size_t _idx = (size_t)0; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                if (_mv_181.has_value) {
+                    __auto_type first_str = _mv_181.value;
                     return first_str;
-                } else if (!_mv_86.has_value) {
+                } else if (!_mv_181.has_value) {
                     return (slop_string){.len = ((uint64_t)(0)), .data = ((uint8_t*)(({ __auto_type _alloc = (uint8_t*)slop_arena_alloc(arena, 1); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })))};
                 }
                 SLOP_UNREACHABLE();
@@ -610,11 +626,11 @@ slop_string strlib_join(slop_arena* arena, slop_list_string strings, slop_string
                     int64_t i = 0;
                     __auto_type sep_len = ((int64_t)(separator.len));
                     while (i < count) {
-                        __auto_type _mv_87 = ({ __auto_type _lst = strings; size_t _idx = (size_t)i; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                        if (_mv_87.has_value) {
-                            __auto_type str = _mv_87.value;
+                        __auto_type _mv_182 = ({ __auto_type _lst = strings; size_t _idx = (size_t)i; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                        if (_mv_182.has_value) {
+                            __auto_type str = _mv_182.value;
                             total_len = (total_len + ((int64_t)(str.len)));
-                        } else if (!_mv_87.has_value) {
+                        } else if (!_mv_182.has_value) {
                         }
                         i = (i + 1);
                     }
@@ -624,14 +640,14 @@ slop_string strlib_join(slop_arena* arena, slop_list_string strings, slop_string
                         int64_t pos = 0;
                         int64_t j = 0;
                         while (j < count) {
-                            __auto_type _mv_88 = ({ __auto_type _lst = strings; size_t _idx = (size_t)j; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                            if (_mv_88.has_value) {
-                                __auto_type str = _mv_88.value;
+                            __auto_type _mv_183 = ({ __auto_type _lst = strings; size_t _idx = (size_t)j; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                            if (_mv_183.has_value) {
+                                __auto_type str = _mv_183.value;
                                 if (str.len > 0) {
                                     memcpy(((void*)((buf + pos))), ((void*)(str.data)), str.len);
                                 }
                                 pos = (pos + ((int64_t)(str.len)));
-                            } else if (!_mv_88.has_value) {
+                            } else if (!_mv_183.has_value) {
                             }
                             if (j < (count - 1)) {
                                 if (sep_len > 0) {
@@ -654,11 +670,11 @@ slop_string strlib_string_build(slop_arena* arena, slop_list_string strings) {
 }
 
 slop_string strlib_replace(slop_arena* arena, slop_string s, slop_string old, slop_string new) {
-    __auto_type _mv_89 = strlib_index_of(s, old);
-    if (!_mv_89.has_value) {
+    __auto_type _mv_184 = strlib_index_of(s, old);
+    if (!_mv_184.has_value) {
         return s;
-    } else if (_mv_89.has_value) {
-        __auto_type idx = _mv_89.value;
+    } else if (_mv_184.has_value) {
+        __auto_type idx = _mv_184.value;
         {
             __auto_type slen = ((int64_t)(s.len));
             __auto_type old_len = ((int64_t)(old.len));

@@ -132,23 +132,36 @@ intersection. Each removal list reports `in_v0_swept_in` for exactly this:
 | Entry | axioms removed | triples | in-v0 swept in |
 |---|---:|---:|---:|
 | GO | 1 | 1 | **0** |
-| RO | 342 | 1,361 | 66 |
-| OBI | 379 | 5,828 | **1,244** |
+| RO | 390 | 1,644 | 66 |
+| OBI | 385 | 5,849 | **1,249** |
+| EL-GALEN | 0 | 0 | 0 |
+
+RO's and OBI's grew in M1 slice 4, when the census learned what HOWL's gate already
+refused: RO's 48 property chains that break §5.2's range/composition condition
+(with the `owl:Axiom` reifications of three of them — stage 0 would otherwise
+rebuild those chains), and OBI's one data-property sub-property axiom.
 
 **This changes corpus selection.** OBI looks like a 1.5% out-of-profile entry, but
 its projection costs ~4.7% of its in-profile content. GO's costs nothing at all —
 which makes it not merely the best benchmark entry but the only one whose
 projected theory is essentially the ontology as published.
 
-## Owed
+## The materialized projections and the corpus differential (M1 slice 4)
 
-- **Cross-check the projections against HOWL's gate**, once M0 lands. The removal
-  lists are produced independently on purpose; the gate agreeing with them is a
-  real check, and disagreement is a finding either way. Until then neither has
-  been validated against a second implementation.
-- **GALEN**, per §12 — and the *variant* is part of the pin, since "GALEN" names
-  several ontologies of very different difficulty.
-- **Oracle pins.** ELK and HermiT versions, with a capability probe per v0
-  construct at harness startup. `java` is available locally. An oracle that fails
-  a construct's probe is not an oracle for that construct — ELK and object
-  property ranges being the case that matters.
+- **`make materialize`** writes each projected ontology to `vendor/<name>.v0.ttl`
+  (not committed). It is pinned by content, not bytes: the file is read back, and
+  its ground-triple hash and blank-node count must match the `.removals` header,
+  and census must find nothing out of profile in it. `make project-verify`
+  re-checks an existing one.
+- **Census and HOWL's gate agree** on every entry: HOWL reads each materialized
+  file with `omitted 0` (`make corpus-acceptance`). That is the cross-check the
+  independent census was built for, and it found three things census had missed
+  (above).
+- **`make diff-corpus`** diffs each materialized entry against its routed oracle:
+  ELK for GO and EL-GALEN, HermiT for the range-bearing RO and OBI. Every ordered
+  pair of named classes is compared, and the outcome is recorded in
+  `corpus-differential.txt`: all four clean.
+- **EL-GALEN** is pinned from the DReW copy of the ELK authors' `EL-GALEN.owl`
+  (MANIFEST `provenance`). It is functional syntax, so `fetch.sh` converts it
+  with the pinned OWL API (`make oracle` first); that conversion is deterministic,
+  so its output is pinned too (`derived_sha256`).

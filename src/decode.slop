@@ -56,17 +56,18 @@
 ;; `owl:Thing` is never reported as a missing declaration.
 ;; ============================================================
 ;;
-;; THE INDEX IS FOR LOOKUP, NEVER FOR ITERATION ORDER. `(Set T)` and
-;; `(Map K V)` compile to `slop_map`, an open-addressed table, and
-;; `indexed-graph-match` / `-for-each` iterate its slot array — so
-;; their result order is HASH-BUCKET order, reproducible for a given
-;; key set but changed by a rehash, meaning one unrelated added triple
-;; can reorder an unrelated query. The single exception is the
-;; all-wildcard call, which walks the insertion-ordered triple list.
+;; THE INDEX IS FOR LOOKUP, NEVER FOR ITERATION ORDER. The triple store
+;; (termstore.slop) answers from `(Set T)`s, which compile to `slop_map`,
+;; an open-addressed table, so a query's result order is HASH-BUCKET
+;; order: reproducible for a given key set, but changed by a rehash or a
+;; new hash function, and one unrelated added triple can reorder an
+;; unrelated query.
 ;;
 ;; §6.8 requires the report to be a function of content alone, so this
-;; module never lets index order reach an output. Two rules do it:
-;; the top-level decode loop walks `(. ig triples)` directly, and
+;; module never lets index order reach an output. Three rules do it:
+;; the top-level decode loop walks the triple list directly, stage 0
+;; takes its order-bearing subjects from the list too
+;; (`typed-subjects-in-order`), and
 ;; every lookup goes through `one-object`, which demands EXACTLY ONE
 ;; match and faults on none or many. Ambiguity is where order would
 ;; have leaked, and it is precisely the malformed input that deserves
@@ -79,9 +80,8 @@
 
   (import rdf (Term Triple IRI BlankNode
                make-iri term-eq))
-  (import index (IndexedGraph indexed-graph-create indexed-graph-add
-                 indexed-graph-objects indexed-graph-subjects
-                 indexed-graph-contains))
+  (import termstore (TermStore build-store store-objects store-typed
+                     store-contains store-has-any))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDF_TYPE
                  OWL_ONTOLOGY OWL_IMPORTS
                  OWL_THING OWL_NOTHING
@@ -111,7 +111,7 @@
                  OWL_ASYMMETRIC_PROPERTY OWL_REFLEXIVE_PROPERTY
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF))
-  (import owl2 (OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY
+  (import owl2 (OWL_AXIOM OWL_ANNOTATION OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY
                 OWL_ANNOTATED_TARGET
                 RawConcept CardKind Signature make-signature
                 OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
@@ -175,17 +175,13 @@
 
   (fn graph-to-indexed ((arena Arena) (triples (List Triple)))
     (@intent "Index a triple list — UNFILTERED, see the module header")
-    (@spec ((Arena (List Triple)) -> IndexedGraph))
+    (@spec ((Arena (List Triple)) -> TermStore))
     (@alloc arena)
     ;; GROWL's version of this takes an annotation-property set and
     ;; drops matching triples (`growl/src/filter.slop:93`). HOWL must
     ;; not: the decoder has to see annotation triples to classify them
     ;; inert, and `:p a owl:AnnotationProperty` to know which ones.
-    (let ((mut ig (indexed-graph-create arena)))
-      (do
-        (for-each (t triples)
-          (set! ig (indexed-graph-add arena ig t)))
-        ig)))
+    (build-store arena triples))
 
   ;; ============================================================
   ;; Lookup — exactly one, or a fault
@@ -193,15 +189,15 @@
 
   (type LookupFault (enum lookup-missing lookup-ambiguous))
 
-  (fn one-object ((arena Arena) (g IndexedGraph) (subj Term) (pred Term))
+  (fn one-object ((arena Arena) (g TermStore) (subj Term) (pred Term))
     (@intent "The unique object of (subj, pred, ?) — a fault if absent or ambiguous")
-    (@spec ((Arena IndexedGraph Term Term) -> (Result Term LookupFault)))
+    (@spec ((Arena TermStore Term Term) -> (Result Term LookupFault)))
     (@alloc arena)
     ;; AMBIGUITY IS A FAULT, NOT A CHOICE. Two `owl:onProperty` values
     ;; on one restriction have no determinate reading, and picking
     ;; either would make the answer depend on hash order. slop-rdf's
     ;; list walker takes index 0 here; that is the bug this avoids.
-    (let ((objs (indexed-graph-objects arena g subj pred))
+    (let ((objs (store-objects arena g subj pred))
           (n    (cast Int (list-len objs))))
       (cond
         ((== n 1) (ok (term-at objs 0)))
@@ -217,9 +213,9 @@
     (list-branching String)   ; a cell with several rdf:first or rdf:rest
     (list-cyclic    String))) ; rdf:rest returns to a cell already seen
 
-  (fn rdf-list-checked ((arena Arena) (g IndexedGraph) (head Term))
+  (fn rdf-list-checked ((arena Arena) (g TermStore) (head Term))
     (@intent "Walk an RDF collection, distinguishing well-formed from malformed")
-    (@spec ((Arena IndexedGraph Term) -> (Result (List Term) ListFault)))
+    (@spec ((Arena TermStore Term) -> (Result (List Term) ListFault)))
     (@alloc arena)
     ;; WHY THIS EXISTS RATHER THAN `rdf-list-elements-indexed`. That
     ;; walker drops a cell with no `rdf:first` silently, takes index 0
@@ -250,8 +246,8 @@
               (set! done true))
             (do
               (set-put visited current)
-              (let ((firsts (indexed-graph-objects arena g current first-pred))
-                    (rests  (indexed-graph-objects arena g current rest-pred)))
+              (let ((firsts (store-objects arena g current first-pred))
+                    (rests  (store-objects arena g current rest-pred)))
                 (let ((nf (cast Int (list-len firsts)))
                       (nr (cast Int (list-len rests))))
                   (cond
@@ -344,23 +340,135 @@
             (list-push out (union-new Omission unresolved-import d))))
         (sort-omissions arena out))))
 
-  (fn subjects-of-type ((arena Arena) (g IndexedGraph) (type-iri String))
+  (fn subjects-of-type ((arena Arena) (g TermStore) (type-iri String))
     (@intent "Every subject asserted to have the given rdf:type")
-    (@spec ((Arena IndexedGraph String) -> (List Term)))
+    (@spec ((Arena TermStore String) -> (List Term)))
     (@alloc arena)
-    (indexed-graph-subjects arena g
-      (make-iri arena RDF_TYPE)
-      (make-iri arena type-iri)))
+    (store-typed arena g (make-iri arena type-iri)))
 
-  (fn term-in-set-of ((xs (List Term)) (target Term))
-    (@intent "Membership over a small term list")
-    (@spec (((List Term) Term) -> Bool))
+  (fn typed-as ((t Triple) (type-iri String))
+    (@intent "Is this triple `?s rdf:type <type-iri>`?")
+    (@spec ((Triple String) -> Bool))
     (@pure)
-    (let ((mut found false))
+    (match (term-iri-value (. t predicate))
+      ((none) false)
+      ((some p)
+        (and (== (string-cmp (. p value) RDF_TYPE) 0)
+             (match (term-iri-value (. t object))
+               ((none)   false)
+               ((some o) (== (string-cmp (. o value) type-iri) 0)))))))
+
+  (fn typed-subjects-in-order ((arena Arena) (triples (List Triple)) (type-iri String))
+    (@intent "Every subject typed <type-iri>, once each, in first-occurrence document order")
+    (@spec ((Arena (List Triple) String) -> (List Term)))
+    (@alloc arena)
+    ;; DOCUMENT ORDER, NOT THE INDEX'S. `subjects-of-type` answers from a
+    ;; hash set, so its order is bucket order: a function of the hash
+    ;; function and the table's growth, not of the input. Stage 0 used it
+    ;; for the owl:Axiom nodes, and that order reached the output twice -
+    ;; the order rebuilt triples join the list, and which of several
+    ;; malformed reifications' faults is the one reported. A new string
+    ;; hash would have changed the reported fault (§6.8). Walking the list
+    ;; ties both to the document, as `decode-axioms` already is.
+    ;;
+    ;; Deduplicated as the header filter below is: a set for IRIs and blank
+    ;; nodes, a `term-eq` scan for quoted triples, which a set would compare
+    ;; by pointer.
+    (let ((seen (set-new arena Term))
+          (mut out (list-new arena Term)))
       (do
-        (for-each (x xs)
-          (when (term-eq x target) (set! found true)))
-        found)))
+        (for-each (t triples)
+          (when (typed-as t type-iri)
+            (let ((s (. t subject)))
+              (match s
+                ((term-triple _)
+                  (let ((mut dup false))
+                    (do
+                      (for-each (q out) (when (term-eq q s) (set! dup true)))
+                      (when (not dup) (list-push out s)))))
+                (_
+                  (when (not (set-has seen s))
+                    (do (set-put seen s) (list-push out s))))))))
+        out)))
+
+  (fn logical-predicate ((pv String))
+    (@intent "An OWL/RDFS predicate that states an axiom or builds a class expression")
+    (@spec ((String) -> Bool))
+    (@pure)
+    (cond
+      ((== (string-cmp pv RDFS_SUBCLASS_OF) 0)            true)
+      ((== (string-cmp pv OWL_EQUIVALENT_CLASS) 0)        true)
+      ((== (string-cmp pv OWL_DISJOINT_WITH) 0)           true)
+      ((== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)         true)
+      ((== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)     true)
+      ((== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)  true)
+      ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0)    true)
+      ((== (string-cmp pv OWL_INVERSE_OF) 0)              true)
+      ((== (string-cmp pv RDFS_DOMAIN) 0)                 true)
+      ((== (string-cmp pv RDFS_RANGE) 0)                  true)
+      ((== (string-cmp pv OWL_SAME_AS) 0)                 true)
+      ((== (string-cmp pv OWL_DIFFERENT_FROM) 0)          true)
+      ((== (string-cmp pv OWL_HAS_KEY) 0)                 true)
+      ((== (string-cmp pv OWL_INTERSECTION_OF) 0)         true)
+      ((== (string-cmp pv OWL_UNION_OF) 0)                true)
+      ((== (string-cmp pv OWL_COMPLEMENT_OF) 0)           true)
+      ((== (string-cmp pv OWL_ONE_OF) 0)                  true)
+      ((== (string-cmp pv OWL_SOME_VALUES_FROM) 0)        true)
+      ((== (string-cmp pv OWL_ALL_VALUES_FROM) 0)         true)
+      ((== (string-cmp pv OWL_HAS_VALUE) 0)               true)
+      ((== (string-cmp pv OWL_HAS_SELF) 0)                true)
+      ((== (string-cmp pv OWL_ON_PROPERTY) 0)             true)
+      ((== (string-cmp pv OWL_MEMBERS) 0)                 true)
+      ((== (string-cmp pv OWL_DISTINCT_MEMBERS) 0)        true)
+      (else false)))
+
+  ;; Fixtures for header-consumable's @examples (`make example`).
+  (fn ex-hdr ((p String) (o String))
+    (@intent "A triple on a blank header node, with predicate p and IRI object o")
+    (@spec ((String String) -> Triple))
+    (@pure)
+    (record-new Triple
+      (subject   (union-new Term term-blank (record-new BlankNode (id 7))))
+      (predicate (union-new Term term-iri (record-new IRI (value p))))
+      (object    (union-new Term term-iri (record-new IRI (value o))))))
+
+  (fn header-consumable ((t Triple))
+    (@intent "May stage 0 swallow this triple of an ontology, axiom or annotation node?")
+    (@spec ((Triple) -> Bool))
+    (@pure)
+    ;; CONSUMPTION BY SUBJECT IS NOT CONSUMPTION OF EVERYTHING. A header
+    ;; node's own scaffolding (its rdf:type as ontology / axiom / annotation,
+    ;; annotatedSource/Property/Target, owl:imports, versionIRI) and its
+    ;; annotations are header material. A LOGICAL triple on the same node —
+    ;; `_:ann a owl:Annotation ; rdfs:subClassOf :C`, or `_:ax a :C` — is
+    ;; not: swallowing it shrank the input with no omission and no fault.
+    ;; It goes on to the decoder instead, which reads it as whatever it is
+    ;; (usually an omission, since a header node is no class or individual
+    ;; HOWL can reason about), so the loss is never silent.
+    ;;
+    ;; What this cannot see: stage 0 runs before the signature exists, so a
+    ;; USER-DEFINED object property used on a header node is not told apart
+    ;; from an annotation property and is still consumed. OWL 2 DL gives a
+    ;; header node no such assertions; recorded, not handled.
+    (@example (ex-hdr "http://www.w3.org/2002/07/owl#annotatedSource" "http://example.org/o") -> true)
+    (@example (ex-hdr "http://www.w3.org/1999/02/22-rdf-syntax-ns#type"
+                      "http://www.w3.org/2002/07/owl#Annotation") -> true)
+    (@example (ex-hdr "http://www.w3.org/2000/01/rdf-schema#comment" "http://example.org/note") -> true)
+    (@example (ex-hdr "http://www.w3.org/2000/01/rdf-schema#subClassOf" "http://example.org/C") -> false)
+    (@example (ex-hdr "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" "http://example.org/C") -> false)
+    (match (term-iri-value (. t predicate))
+      ((none) false)
+      ((some p)
+        (if (== (string-cmp (. p value) RDF_TYPE) 0)
+          (match (term-iri-value (. t object))
+            ((none) false)
+            ((some o)
+              (cond
+                ((== (string-cmp (. o value) OWL_ONTOLOGY) 0)   true)
+                ((== (string-cmp (. o value) OWL_AXIOM) 0)      true)
+                ((== (string-cmp (. o value) OWL_ANNOTATION) 0) true)
+                (else false))))
+          (not (logical-predicate (. p value)))))))
 
   (fn stage0-header ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
     (@intent "Consume the ontology header and axiom reification; reconcile imports")
@@ -379,9 +487,22 @@
     ;; ontology node or an axiom node is header material. That covers
     ;; the annotations hanging off each without needing the signature,
     ;; which does not exist yet at stage 0.
+    ;;
+    ;; AN ANNOTATION ON AN ANNOTATION is a node typed `owl:Annotation`,
+    ;; with the same annotatedSource/Property/Target shape. It annotates an
+    ;; annotation assertion, never a logical axiom, so it is consumed by
+    ;; subject like an axiom node but NOTHING is rebuilt from it. Left to
+    ;; the decoder, `_:b a owl:Annotation` read as a class assertion on an
+    ;; anonymous individual, and a document carrying nothing but annotations
+    ;; came back INCONCLUSIVE (W3C OWL 2 conformance test
+    ;; New-Feature-AnnotationAnnotations-001).
     (let ((ig        (graph-to-indexed arena triples))
-          (ont-subjs (subjects-of-type arena ig OWL_ONTOLOGY))
-          (ax-subjs  (subjects-of-type arena ig OWL_AXIOM))
+          ;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
+          ;; and the named ontology follows ont-subjs - so both come from
+          ;; the document. ann-subjs is only ever a membership test.
+          (ont-subjs (typed-subjects-in-order arena triples OWL_ONTOLOGY))
+          (ax-subjs  (typed-subjects-in-order arena triples OWL_AXIOM))
+          (ann-subjs (subjects-of-type arena ig OWL_ANNOTATION))
           (declared  (collect-imports arena triples))
           (src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
           (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
@@ -391,11 +512,48 @@
           (mut fault (Option String) (none)))
       (do
         ;; Keep everything that is not header or reification scaffolding.
-        (for-each (t triples)
-          (let ((s (. t subject)))
-            (when (and (not (term-in-set-of ont-subjs s))
-                       (not (term-in-set-of ax-subjs s)))
-              (list-push out t))))
+        ;;
+        ;; MEMBERSHIP IS A SET. This filter visits every triple, and it
+        ;; used to test each subject by scanning the ontology-node and
+        ;; axiom-node LISTS — fine for a hand-written fixture, and
+        ;; triples × reified axioms on a real one: GO reifies 131,783
+        ;; axioms over 1.4M triples and never left this loop.
+        ;;
+        ;; IRIs and blank nodes hash and compare by content, so for them
+        ;; the set answers exactly what the scan did. A QUOTED TRIPLE does
+        ;; not: a set compares `term-triple` by pointer, `term-eq` compares
+        ;; it structurally, and two parses of `<< :s :p :o >>` are two
+        ;; pointers. Turtle cannot deliver one here (slop-rdf rejects
+        ;; `<< >>`), but the library's triple buffer can, and a header node
+        ;; filed under one pointer would let its other triples through to
+        ;; decode as if they were ordinary axioms. So quoted-triple subjects
+        ;; keep the structural scan — over a list that is empty for OWL.
+        (let ((header-subjs (set-new arena Term))
+              (mut quoted (list-new arena Term)))
+          (do
+            (for-each (o ont-subjs)
+              (match o
+                ((term-triple _) (list-push quoted o))
+                (_ (set-put header-subjs o))))
+            (for-each (a ax-subjs)
+              (match a
+                ((term-triple _) (list-push quoted a))
+                (_ (set-put header-subjs a))))
+            (for-each (a ann-subjs)
+              (match a
+                ((term-triple _) (list-push quoted a))
+                (_ (set-put header-subjs a))))
+            (for-each (t triples)
+              (let ((s (. t subject))
+                    (mut header false))
+                (do
+                  (match s
+                    ((term-triple _)
+                      (for-each (q quoted) (when (term-eq q s) (set! header true))))
+                    (_ (when (set-has header-subjs s) (set! header true))))
+                  ;; A header node's LOGICAL triples are not header
+                  ;; material: they go on to the decoder (header-consumable).
+                  (when (or (not header) (not (header-consumable t))) (list-push out t)))))))
 
         ;; Rebuild each reified axiom, unless the document also asserts it.
         (for-each (a ax-subjs)
@@ -415,7 +573,7 @@
                                        (subject subj) (predicate pred) (object obj))))
                         ;; annotation-heavy.ttl asserts the axiom AND
                         ;; reifies it; without this the axiom decodes twice.
-                        (when (not (indexed-graph-contains ig rebuilt))
+                        (when (not (store-contains ig rebuilt))
                           (list-push out rebuilt))))))))))
 
         ;; The ontology IRI, when there is exactly one named one.
@@ -470,21 +628,21 @@
       ((list-branching m) m)
       ((list-cyclic    m) m)))
 
-  (fn has-pred ((arena Arena) (g IndexedGraph) (s Term) (pred-iri String))
+  (fn has-pred ((arena Arena) (g TermStore) (s Term) (pred-iri String))
     (@intent "Does this subject carry the given predicate at all?")
-    (@spec ((Arena IndexedGraph Term String) -> Bool))
+    (@spec ((Arena TermStore Term String) -> Bool))
     (@alloc arena)
-    (> (cast Int (list-len (indexed-graph-objects arena g s (make-iri arena pred-iri)))) 0))
+    (store-has-any g s (make-iri arena pred-iri)))
 
-  (fn obj-of ((arena Arena) (g IndexedGraph) (s Term) (pred-iri String))
+  (fn obj-of ((arena Arena) (g TermStore) (s Term) (pred-iri String))
     (@intent "The unique object for this subject and predicate IRI")
-    (@spec ((Arena IndexedGraph Term String) -> (Result Term LookupFault)))
+    (@spec ((Arena TermStore Term String) -> (Result Term LookupFault)))
     (@alloc arena)
     (one-object arena g s (make-iri arena pred-iri)))
 
-  (fn decode-role ((arena Arena) (g IndexedGraph) (b Term))
+  (fn decode-role ((arena Arena) (g TermStore) (b Term))
     (@intent "The role of a restriction, from its owl:onProperty")
-    (@spec ((Arena IndexedGraph Term) -> (Result RoleId String)))
+    (@spec ((Arena TermStore Term) -> (Result RoleId String)))
     (@alloc arena)
     (match (obj-of arena g b OWL_ON_PROPERTY)
       ((error _) (error "restriction without exactly one owl:onProperty"))
@@ -508,9 +666,9 @@
   ;; same chains out-of-profile.
   ;; ============================================================
 
-  (fn inverse-expression-term ((arena Arena) (g IndexedGraph) (t Term))
+  (fn inverse-expression-term ((arena Arena) (g TermStore) (t Term))
     (@intent "Is this term an ObjectInverseOf: a blank node inverting exactly one named property?")
-    (@spec ((Arena IndexedGraph Term) -> Bool))
+    (@spec ((Arena TermStore Term) -> Bool))
     (@alloc arena)
     (match t
       ((term-blank _)
@@ -519,17 +677,17 @@
           ((error _) false)))
       (_ false)))
 
-  (fn restriction-on-inverse ((arena Arena) (g IndexedGraph) (b Term))
+  (fn restriction-on-inverse ((arena Arena) (g TermStore) (b Term))
     (@intent "Is this restriction's owl:onProperty an ObjectInverseOf?")
-    (@spec ((Arena IndexedGraph Term) -> Bool))
+    (@spec ((Arena TermStore Term) -> Bool))
     (@alloc arena)
     (match (obj-of arena g b OWL_ON_PROPERTY)
       ((ok pt)   (inverse-expression-term arena g pt))
       ((error _) false)))
 
-  (fn list-has-inverse ((arena Arena) (g IndexedGraph) (head Term))
+  (fn list-has-inverse ((arena Arena) (g TermStore) (head Term))
     (@intent "Does this RDF collection contain an ObjectInverseOf?")
-    (@spec ((Arena IndexedGraph Term) -> Bool))
+    (@spec ((Arena TermStore Term) -> Bool))
     (@alloc arena)
     ;; A MALFORMED list answers false, deliberately: the caller's own
     ;; checked walk then reports it as the input-error it is, rather than
@@ -543,9 +701,9 @@
               (when (inverse-expression-term arena g tm) (set! found true)))
             found)))))
 
-  (fn property-axiom-on-inverse ((arena Arena) (g IndexedGraph) (pv String) (t Triple))
+  (fn property-axiom-on-inverse ((arena Arena) (g TermStore) (pv String) (t Triple))
     (@intent "Is this a property axiom with an ObjectInverseOf operand?")
-    (@spec ((Arena IndexedGraph String Triple) -> Bool))
+    (@spec ((Arena TermStore String Triple) -> Bool))
     (@alloc arena)
     ;; `_:b owl:inverseOf :p` — the expression's OWN defining triple — is
     ;; not an axiom and never reaches here: `structural-triple` skips it,
@@ -581,9 +739,9 @@
       ((term-blank _)  (error "cardinality is a blank node, not a literal"))
       ((term-triple _) (error "cardinality is a triple term, not a literal"))))
 
-  (fn decode-node-list ((arena Arena) (g IndexedGraph) (head Term))
+  (fn decode-node-list ((arena Arena) (g TermStore) (head Term))
     (@intent "An RDF collection of individuals, for owl:oneOf")
-    (@spec ((Arena IndexedGraph Term) -> (Result (List Node) String)))
+    (@spec ((Arena TermStore Term) -> (Result (List Node) String)))
     (@alloc arena)
     (match (rdf-list-checked arena g head)
       ((error lf) (error (list-fault-message lf)))
@@ -599,9 +757,9 @@
               ((some m) (error m))
               ((none)   (ok out))))))))
 
-  (fn decode-concept-list ((arena Arena) (g IndexedGraph) (head Term) (fuel Int))
+  (fn decode-concept-list ((arena Arena) (g TermStore) (head Term) (fuel Int))
     (@intent "An RDF collection of class expressions")
-    (@spec ((Arena IndexedGraph Term Int) -> (Result (List RawConcept) String)))
+    (@spec ((Arena TermStore Term Int) -> (Result (List RawConcept) String)))
     (@alloc arena)
     (match (rdf-list-checked arena g head)
       ((error lf) (error (list-fault-message lf)))
@@ -617,10 +775,10 @@
               ((some m) (error m))
               ((none)   (ok out))))))))
 
-  (fn decode-quantified ((arena Arena) (g IndexedGraph) (b Term)
+  (fn decode-quantified ((arena Arena) (g TermStore) (b Term)
                          (filler-pred String) (universal Bool) (fuel Int))
     (@intent "someValuesFrom / allValuesFrom — a role and a filler")
-    (@spec ((Arena IndexedGraph Term String Bool Int) -> (Result RawConcept String)))
+    (@spec ((Arena TermStore Term String Bool Int) -> (Result RawConcept String)))
     (@alloc arena)
     (match (decode-role arena g b)
       ((error m) (error m))
@@ -635,10 +793,10 @@
                   (ok (union-new RawConcept rc-all  r (box-concept arena c)))
                   (ok (union-new RawConcept rc-some r (box-concept arena c))))))))))) 
 
-  (fn decode-cardinality ((arena Arena) (g IndexedGraph) (b Term)
+  (fn decode-cardinality ((arena Arena) (g TermStore) (b Term)
                           (kind CardKind) (count-pred String) (qualified Bool) (fuel Int))
     (@intent "Cardinality restrictions, qualified or not — out of profile, still decoded")
-    (@spec ((Arena IndexedGraph Term CardKind String Bool Int) -> (Result RawConcept String)))
+    (@spec ((Arena TermStore Term CardKind String Bool Int) -> (Result RawConcept String)))
     (@alloc arena)
     (match (decode-role arena g b)
       ((error m) (error m))
@@ -659,9 +817,9 @@
                         ((ok qc)
                           (ok (union-new RawConcept rc-qcard kind r n (box-concept arena qc)))))))))))))))
 
-  (fn decode-anon ((arena Arena) (g IndexedGraph) (b Term) (fuel Int))
+  (fn decode-anon ((arena Arena) (g TermStore) (b Term) (fuel Int))
     (@intent "A blank node in a class position — dispatch on its vocabulary")
-    (@spec ((Arena IndexedGraph Term Int) -> (Result RawConcept String)))
+    (@spec ((Arena TermStore Term Int) -> (Result RawConcept String)))
     (@alloc arena)
     (cond
       ;; FIRST, because every restriction kind reads owl:onProperty: an
@@ -757,9 +915,9 @@
               (union-new InputRef rdf-fragment
                 "blank node with no recognized class-expression vocabulary"))))))
 
-  (fn decode-concept ((arena Arena) (g IndexedGraph) (t Term) (fuel Int))
+  (fn decode-concept ((arena Arena) (g TermStore) (t Term) (fuel Int))
     (@intent "RDF term in a class position → RawConcept")
-    (@spec ((Arena IndexedGraph Term Int) -> (Result RawConcept String)))
+    (@spec ((Arena TermStore Term Int) -> (Result RawConcept String)))
     (@alloc arena)
     (if (<= fuel 0)
       (error "class expression nests past the fuel bound — a blank-node cycle")
@@ -1031,9 +1189,9 @@
       ((some i) (some (union-new RoleId named-role i)))
       ((none)   (none))))
 
-  (fn decode-role-list ((arena Arena) (g IndexedGraph) (head Term))
+  (fn decode-role-list ((arena Arena) (g TermStore) (head Term))
     (@intent "An RDF collection of named roles, for owl:propertyChainAxiom")
-    (@spec ((Arena IndexedGraph Term) -> (Result (List RoleId) String)))
+    (@spec ((Arena TermStore Term) -> (Result (List RoleId) String)))
     (@alloc arena)
     (match (rdf-list-checked arena g head)
       ((error lf) (error (list-fault-message lf)))
@@ -1049,9 +1207,9 @@
               ((some m) (error m))
               ((none)   (ok out))))))))
 
-  (fn binary-concepts ((arena Arena) (g IndexedGraph) (t Triple))
+  (fn binary-concepts ((arena Arena) (g TermStore) (t Triple))
     (@intent "Both sides of a binary class axiom, decoded")
-    (@spec ((Arena IndexedGraph Triple) -> (Result (List RawConcept) String)))
+    (@spec ((Arena TermStore Triple) -> (Result (List RawConcept) String)))
     (@alloc arena)
     (match (decode-concept arena g (. t subject) CONCEPT_FUEL)
       ((error m) (error m))
@@ -1062,9 +1220,9 @@
             (let ((mut out (list-new arena RawConcept)))
               (do (list-push out lhs) (list-push out rhs) (ok out))))))))
 
-  (fn members-head ((arena Arena) (g IndexedGraph) (s Term))
+  (fn members-head ((arena Arena) (g TermStore) (s Term))
     (@intent "The collection head of an n-ary axiom's members")
-    (@spec ((Arena IndexedGraph Term) -> (Option Term)))
+    (@spec ((Arena TermStore Term) -> (Option Term)))
     (@alloc arena)
     ;; owl:members is the OWL 2 spelling; owl:distinctMembers is the
     ;; OWL 1 spelling that owl:AllDifferent still uses in the wild, and
@@ -1076,9 +1234,9 @@
           ((ok h)    (some h))
           ((error _) (none))))))
 
-  (fn decode-typed ((arena Arena) (g IndexedGraph) (t Triple) (obj IRI))
+  (fn decode-typed ((arena Arena) (g TermStore) (t Triple) (obj IRI))
     (@intent "An rdf:type triple — declaration, characteristic, or class assertion")
-    (@spec ((Arena IndexedGraph Triple IRI) -> (Result RawAxiom String)))
+    (@spec ((Arena TermStore Triple IRI) -> (Result RawAxiom String)))
     (@alloc arena)
     (let ((ov (. obj value)))
       (cond
@@ -1163,20 +1321,40 @@
         ;; individual and the object is a class expression. §5.2's
         ;; tagging is PER OPERAND — the same IRI would be a class in
         ;; the object position and an individual in the subject one.
-        (else
-          (match (decode-concept arena g (. t object) CONCEPT_FUEL)
-            ((error m) (error m))
-            ((ok c)
-              (match (term-iri-value (. t subject))
-                ((some s)
-                  (if (is-reserved-iri (. s value))
-                    (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
-                    (ok (union-new RawAxiom ra-class-assertion
-                          (record-new RawClassAssertion
-                            (concept (box-concept arena c))
-                            (subject (union-new Node individual-node s)))))))
-                ((none)
-                  (ok (union-new RawAxiom ra-anonymous-individual (frag arena t)))))))))))
+        (else (decode-class-assertion arena g t)))))
+
+  (fn decode-class-assertion ((arena Arena) (g TermStore) (t Triple))
+    (@intent "`a rdf:type C` as ClassAssertion(C, a), for a named or an anonymous C")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; NEVER UNRECOGNIZED. A typed triple that reaches here is a class
+    ;; assertion, a reserved-vocabulary individual, an anonymous individual,
+    ;; or a malformed class expression (an error) — never silently set
+    ;; aside as `unrecognized`, which is what the blank-node case used to be
+    ;; (W3C OWL 2 conformance test WebOnt-Restriction-001).
+    ;;
+    ;; OWED as a contract. It is true, and stated it would read
+    ;;   (@post (match $result ((ok r) (match r ((ra-unrecognized _) false) (_ true)))
+    ;;                         ((error _) true)))
+    ;; but slop verify reads an Option/Result payload as Int
+    ;; (slop-lang/slop#167, open), so a union inside `ok` loses its tag and
+    ;; the contract FAILS on a counterexample. Probed with minimal pairs:
+    ;; `(ok x)` for an Int and a bare `union-new` both verify; `(ok (union-new
+    ;; …))` and `(some (union-new …))` do not. The guarantee is held by
+    ;; test.slop's anonymous-class-assertion test and corpus/conformance.py.
+    (match (decode-concept arena g (. t object) CONCEPT_FUEL)
+      ((error m) (error m))
+      ((ok c)
+        (match (term-iri-value (. t subject))
+          ((some s)
+            (if (is-reserved-iri (. s value))
+              (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+              (ok (union-new RawAxiom ra-class-assertion
+                    (record-new RawClassAssertion
+                      (concept (box-concept arena c))
+                      (subject (union-new Node individual-node s)))))))
+          ((none)
+            (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))))
 
   (fn is-reserved-iri ((v String))
     (@intent "Is this IRI in a specification-reserved namespace?")
@@ -1220,19 +1398,27 @@
           ((signature-has-data-property sig i)       2)
           (else                                       0)))))
 
-  (fn decode-axiom ((arena Arena) (g IndexedGraph) (sig Signature) (t Triple))
+  (fn decode-axiom ((arena Arena) (g TermStore) (sig Signature) (t Triple))
     (@intent "One triple → one RawAxiom, per §5.2's disposition table")
-    (@spec ((Arena IndexedGraph Signature Triple) -> (Result RawAxiom String)))
+    (@spec ((Arena TermStore Signature Triple) -> (Result RawAxiom String)))
     (@alloc arena)
     (match (term-iri-value (. t predicate))
       ((none) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
       ((some p)
         (let ((pv (. p value)))
           (cond
+            ;; A BLANK-NODE OBJECT IS A CLASS EXPRESSION — the only thing
+            ;; the OWL 2 RDF mapping types a resource with anonymously — so
+            ;; `:a a [ owl:someValuesFrom … ]` is ClassAssertion(∃r.C, a),
+            ;; in v0 when C is. It used to fall through to `unrecognized`:
+            ;; sound, since the omission blocks COHERENT, but it answered
+            ;; INCONCLUSIVE where the answer was INCONSISTENT (W3C OWL 2
+            ;; conformance test WebOnt-Restriction-001).
             ((== (string-cmp pv RDF_TYPE) 0)
-              (match (term-iri-value (. t object))
-                ((some o) (decode-typed arena g t o))
-                ((none)   (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
+              (match (. t object)
+                ((term-iri o)   (decode-typed arena g t o))
+                ((term-blank _) (decode-class-assertion arena g t))
+                (_              (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
 
             ;; Ahead of every property-axiom arm below, each of which
             ;; faults on a non-IRI operand — correctly, for a blank node

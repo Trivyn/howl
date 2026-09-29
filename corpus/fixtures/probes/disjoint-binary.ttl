@@ -1,0 +1,15 @@
+# PROBE disjoint-binary. A ⊑ B, A ⊑ C and B disjoint C make A unsatisfiable; B and C stay satisfiable.
+# construct: DisjointClasses
+# expect: unsat :A
+# expect-not: unsat :B
+# expect-not: unsat :C
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:A rdfs:subClassOf :B , :C .
+:B owl:disjointWith :C .

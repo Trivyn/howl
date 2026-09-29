@@ -69,18 +69,20 @@
   (import types (Node RoleId Concept NormAxiom Omission Coverage
                  Saturation ReasonerConfig Fault LogicalEdge
                  Derived Addressed EdgePair emit-edge
-                 node-top node-bottom node-eq role-eq))
+                 node-top node-bottom node-eq role-eq
+                 Names empty-names intern-node intern-role))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
-                Signature))
+                Signature make-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
   (import decode (Stage0 Stage1 stage0-header decode-axioms))
   (import saturate (make-initial-saturation deliver-seed))
   (import canon (string-cmp))
 
   (export
-    NormResult NormOutput
+    Decoded NormResult NormOutput
     NormState new-state
     normalize-accepted
+    decode-document normalize-decoded
     normalize-input)
 
   ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
@@ -93,14 +95,25 @@
   ;; names, unsatisfiability of input concept names, and
   ;; unsatisfiability of the individual-proxy concepts. Anything
   ;; outside it must not assume preservation.
+  ;; The document as axioms: what the header pre-pass and decode make of
+  ;; the triples, before the gate. This is the §12 benchmark's boundary -
+  ;; the counterpart of an OWL API ontology in hand - so the front end
+  ;; splits here and the CLI times the two halves apart.
+  (type Decoded (record
+    (axioms    (List RawAxiom))
+    (signature Signature)
+    (omissions (List Omission))))    ; stage 0's: unresolved imports
+
   (type NormResult (record
     (axioms     (List NormAxiom))
     (saturation Saturation)      ; contexts initialized, seeds in Δ₀
-    (coverage   Coverage)))      ; what the gate omitted
+    (coverage   Coverage)        ; what the gate omitted
+    (names      Names)))         ; axioms and saturation are RENAMED (types.slop, Names)
 
   (type NormOutput (record
     (axioms      (List NormAxiom))
     (edges       (List LogicalEdge))
+    (asserted    (List Node))        ; subjects of class assertions, each needs a context
     (seeds       (List Addressed))   ; range facts for asserted edge targets
     (fresh-count Int)))
 
@@ -119,13 +132,24 @@
   ;; lowers correctly. Upstream issue owed for the missing diagnostic.
   ;; ============================================================
 
+  ;; LOOKUPS ARE MAPS AND SETS; IDS ARE STILL LIST POSITIONS. Each fresh
+  ;; name used to be found by a linear scan of `fresh`, so minting was
+  ;; quadratic in the number of fresh names. The index answers "seen
+  ;; before?" in constant time, while `fresh` keeps doing what it always
+  ;; did — the id IS the position a text was first appended at — so ids
+  ;; stay first-occurrence and nothing downstream moves. Map and Set
+  ;; fields are pointers, so the copy-mutate-write-back below shares them
+  ;; without any extra write-back.
   (type NormState (record
-    (axioms      (List NormAxiom))
-    (fresh       (List String))   ; index = fresh-node id, value = canonical text
-    (fresh-roles (List String))   ; index = fresh-role id, value = provenance text
-    (neg-done    (List String))   ; expressions whose NEGATIVE definition is emitted
-    (pos-done    (List String))   ; expressions whose POSITIVE definition is emitted
-    (edges       (List LogicalEdge))))
+    (axioms           (List NormAxiom))
+    (fresh            (List String))      ; index = fresh-node id, value = canonical text
+    (fresh-index      (Map String Int))   ; canonical text -> fresh-node id
+    (fresh-roles      (List String))      ; index = fresh-role id, value = provenance text
+    (fresh-role-index (Map String Int))   ; provenance text -> fresh-role id
+    (neg-done         (Set String))       ; expressions whose NEGATIVE definition is emitted
+    (pos-done         (Set String))       ; expressions whose POSITIVE definition is emitted
+    (edges            (List LogicalEdge))
+    (asserted         (List Node))))      ; C(a) subjects, in first-occurrence order
 
   (fn new-state ((arena Arena))
     (@intent "An empty normalizer state")
@@ -134,12 +158,15 @@
     (let ((p (cast (Ptr NormState) (arena-alloc arena (sizeof NormState)))))
       (do
         (set! (deref p) (record-new NormState
-                          (axioms      (list-new arena NormAxiom))
-                          (fresh       (list-new arena String))
-                          (fresh-roles (list-new arena String))
-                          (neg-done    (list-new arena String))
-                          (pos-done    (list-new arena String))
-                          (edges       (list-new arena LogicalEdge))))
+                          (axioms           (list-new arena NormAxiom))
+                          (fresh            (list-new arena String))
+                          (fresh-index      (map-new arena String Int))
+                          (fresh-roles      (list-new arena String))
+                          (fresh-role-index (map-new arena String Int))
+                          (neg-done         (set-new arena String))
+                          (pos-done         (set-new arena String))
+                          (edges            (list-new arena LogicalEdge))
+                          (asserted         (list-new arena Node))))
         p)))
 
   (fn st-emit ((arena Arena) (p (Ptr NormState)) (ax NormAxiom))
@@ -156,18 +183,12 @@
     (let ((mut s (deref p)))
       (do (list-push (. s edges) e) (set! (deref p) s) true)))
 
-  (fn str-index ((xs (List String)) (t String))
-    (@intent "Index of a string, or -1")
-    (@spec (((List String) String) -> Int))
-    (@pure)
-    (let ((mut found -1)
-          (mut i 0))
-      (do
-        (for-each (x xs)
-          (do
-            (when (and (< found 0) (== (string-cmp x t) 0)) (set! found i))
-            (set! i (+ i 1))))
-        found)))
+  (fn st-note-asserted ((arena Arena) (p (Ptr NormState)) (n Node))
+    (@intent "Record the subject of a class assertion, which needs a context")
+    (@spec ((Arena (Ptr NormState) Node) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s asserted) n) (set! (deref p) s) true)))
 
   (fn st-fresh-id ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "The fresh-node id for a canonical expression, minting on first use")
@@ -179,37 +200,43 @@
     ;; would mint two nodes for an expression occurring at both, which
     ;; changes fresh ids, saturation size, derivation depth, and
     ;; therefore every capped-run report.
-    (let ((existing (str-index (. (deref p) fresh) text)))
-      (if (>= existing 0)
-        existing
+    (match (map-get (. (deref p) fresh-index) text)
+      ((some id) id)
+      ((none)
         (let ((mut s (deref p))
               (id (cast Int (list-len (. (deref p) fresh)))))
-          (do (list-push (. s fresh) text) (set! (deref p) s) id)))))
+          (do
+            (list-push (. s fresh) text)
+            (map-put (. s fresh-index) text id)
+            (set! (deref p) s)
+            id)))))
 
   (fn st-fresh-role-id ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "A fresh role id for a chain decomposition step")
     (@spec ((Arena (Ptr NormState) String) -> Int))
     (@alloc arena)
-    (let ((existing (str-index (. (deref p) fresh-roles) text)))
-      (if (>= existing 0)
-        existing
+    (match (map-get (. (deref p) fresh-role-index) text)
+      ((some id) id)
+      ((none)
         (let ((mut s (deref p))
               (id (cast Int (list-len (. (deref p) fresh-roles)))))
-          (do (list-push (. s fresh-roles) text) (set! (deref p) s) id)))))
+          (do
+            (list-push (. s fresh-roles) text)
+            (map-put (. s fresh-role-index) text id)
+            (set! (deref p) s)
+            id)))))
 
   (fn st-mark-neg ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "Record that the negative definition for this expression is emitted")
     (@spec ((Arena (Ptr NormState) String) -> Bool))
     (@alloc arena)
-    (let ((mut s (deref p)))
-      (do (list-push (. s neg-done) text) (set! (deref p) s) true)))
+    (do (set-put (. (deref p) neg-done) text) true))
 
   (fn st-mark-pos ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "Record that the positive definition for this expression is emitted")
     (@spec ((Arena (Ptr NormState) String) -> Bool))
     (@alloc arena)
-    (let ((mut s (deref p)))
-      (do (list-push (. s pos-done) text) (set! (deref p) s) true)))
+    (do (set-put (. (deref p) pos-done) text) true))
 
   ;; ============================================================
   ;; Polarity-correct normalization
@@ -270,9 +297,9 @@
       ((rc-nothing) (node-bottom))
       ((rc-some r f)
         (let ((text (render-concept arena c))
-              (x (union-new Node fresh-node (st-fresh-id arena p (render-concept arena c)))))
+              (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
-            (when (< (str-index (. (deref p) neg-done) text) 0)
+            (when (not (set-has (. (deref p) neg-done) text))
               (do
                 (st-mark-neg arena p text)
                 ;; ∃r.F ⊑ X — the load-bearing direction.
@@ -281,7 +308,7 @@
             x)))
       ((rc-and cs)
         (let ((flat (flatten-and arena c (list-new arena RawConcept)))
-              (n (cast Int (list-len (flatten-and arena c (list-new arena RawConcept))))))
+              (n (cast Int (list-len flat))))
           (cond
             ((== n 0) (node-top))
             ((== n 1) (neg-atom arena p (concept-at flat 0)))
@@ -323,9 +350,9 @@
       ;; ⊥ would make C unsatisfiable and manufacture an incoherence.
       (_
         (let ((text (render-concept arena c))
-              (x (union-new Node fresh-node (st-fresh-id arena p (render-concept arena c)))))
+              (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
-            (when (< (str-index (. (deref p) pos-done) text) 0)
+            (when (not (set-has (. (deref p) pos-done) text))
               (do
                 (st-mark-pos arena p text)
                 ;; X ⊑ E — the positive direction.
@@ -371,7 +398,7 @@
       ((rc-thing) true)
       (_
         (let ((conj (flatten-and arena lhs (list-new arena RawConcept)))
-              (n (cast Int (list-len (flatten-and arena lhs (list-new arena RawConcept))))))
+              (n (cast Int (list-len conj))))
           (match rhs
             ((rc-name b)  (emit-inclusion arena p conj n b))
             ((rc-nothing) (emit-inclusion arena p conj n (node-bottom)))
@@ -637,11 +664,19 @@
 
       ((ra-property-chain ch) (decompose-chain arena p ch))
 
-      ;; C(a) becomes the PRE-NORMALIZATION GCI individual(a) ⊑ C, so
-      ;; the individual gets a context and the class expression is
-      ;; normalized like any other right-hand side.
+      ;; C(a) becomes the PRE-NORMALIZATION GCI individual(a) ⊑ C, and
+      ;; the class expression is normalized like any other right-hand
+      ;; side. The subject is RECORDED as well, because a GCI does not
+      ;; create a context — `signature-nodes` does, and named-individual
+      ;; declarations are optional. Without this, `:a a :B , :C` with
+      ;; B and C disjoint and `:a` undeclared left individual(a) with no
+      ;; context: the assertions derived nothing, coverage read complete,
+      ;; and the verdict was a FALSE COHERENT (W3C OWL 2 conformance test
+      ;; DisjointClasses-002, found by corpus/conformance.py).
       ((ra-class-assertion ca)
-        (normalize-gci arena p (rc-of-node (. ca subject)) (deref (. ca concept))))
+        (do
+          (st-note-asserted arena p (. ca subject))
+          (normalize-gci arena p (rc-of-node (. ca subject)) (deref (. ca concept)))))
 
       ;; r(a,b) is an EDGE, not a GCI. Going through `∃` would lose the
       ;; identity of the repeated individual name: individual(b) is an
@@ -673,7 +708,7 @@
     ;; rather than of the order triples happened to be written.
     (let ((p (new-state arena))
           (roles (collect-rbox-roles arena axs))
-          (nr (cast Int (list-len (collect-rbox-roles arena axs)))))
+          (nr (cast Int (list-len roles))))
       (do
         (for-each (ax axs) (normalize-axiom arena p ax))
         ;; Range elimination runs LAST, over normal-form GCIs and after
@@ -685,6 +720,7 @@
             (record-new NormOutput
               (axioms      (. (deref p) axioms))
               (edges       (. (deref p) edges))
+              (asserted    (. (deref p) asserted))
               (seeds       (edge-range-seeds arena (. (deref p) edges)
                              facts told nr roles))
               (fresh-count (cast Int (list-len (. (deref p) fresh)))))))))) 
@@ -693,46 +729,99 @@
   ;; Initialization — §6.3 step 4
   ;; ============================================================
 
-  (fn node-in-list ((xs (List Node)) (n Node))
-    (@intent "Membership by structural node equality")
-    (@spec (((List Node) Node) -> Bool))
-    (@pure)
-    (let ((mut found false))
-      (do (for-each (x xs) (when (node-eq x n) (set! found true))) found)))
+  ;; Fixtures for signature-nodes' @examples (`make example`). The case is
+  ;; W3C OWL 2 conformance test DisjointClasses-002: `:stewie a :Boy , :Girl`
+  ;; with :stewie declared as nothing, so the Signature does not list it.
+  (fn ex-stewie () (@intent "An individual named only by class assertions")
+    (@spec (() -> Node)) (@pure)
+    (union-new Node individual-node (record-new IRI (value "http://example.org/stewie"))))
+
+  (fn ex-asserting-stewie ((arena Arena))
+    (@intent "Normal form whose only content is a class assertion about :stewie")
+    (@spec ((Arena) -> NormOutput))
+    (@alloc arena)
+    (let ((mut asserted (list-new arena Node)))
+      (do
+        (list-push asserted (ex-stewie))
+        (record-new NormOutput
+          (axioms      (list-new arena NormAxiom))
+          (edges       (list-new arena LogicalEdge))
+          (asserted    asserted)
+          (seeds       (list-new arena Addressed))
+          (fresh-count 0)))))
+
+  (fn ex-declaring-stewie ((arena Arena))
+    (@intent "A signature that DOES declare :stewie as a named individual")
+    (@spec ((Arena) -> Signature))
+    (@alloc arena)
+    (let ((sig (make-signature arena)))
+      (do
+        (set-put (. sig individuals) (record-new IRI (value "http://example.org/stewie")))
+        sig)))
 
   (fn signature-nodes ((arena Arena) (sig Signature) (no NormOutput))
     (@intent "One context per signature entry, plus fresh nodes and edge endpoints")
     (@spec ((Arena Signature NormOutput) -> (List Node)))
     (@alloc arena)
+    ;; A quantified `(forall (a (. no asserted)) (list-contains $result a))`
+    ;; is TRUE but OWED: the body is loops, which slop verify's exact model
+    ;; does not follow, so it would come back unknown (as the four loop
+    ;; rules in rules/el.slop do). The examples below and the
+    ;; undeclared-individual fixture carry the guarantee instead.
+    (@example
+      ;; Undeclared, asserted into by C(a): it still gets a context. Without
+      ;; one, its class assertions derive nothing — a FALSE COHERENT.
+      :eq node-eq
+      (arena (make-signature arena) (ex-asserting-stewie arena))
+      -> (list (ex-stewie)))
+    (@example
+      ;; Declared AND asserted into: one context, not two.
+      :eq node-eq
+      (arena (ex-declaring-stewie arena) (ex-asserting-stewie arena))
+      -> (list (ex-stewie)))
     ;; KEYED ON THE SIGNATURE, not on axiom occurrence. That is the
     ;; whole reason `:Unused a owl:Class .` gets a context: it
     ;; contributes no axiom, so an occurrence-driven registry would
     ;; never create it, and HOWL could not answer `Unused ⊑ ⊤`, list it
     ;; in a hierarchy, or serve a probe naming it.
     ;;
-    ;; Edge endpoints are added even when undeclared, because
-    ;; NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL — an ABox may assert
-    ;; `:a :r :b` with neither individual declared, and without a
-    ;; context for `:b` the range seed has nowhere to land.
+    ;; Edge endpoints and class-assertion subjects are added even when
+    ;; undeclared, because NAMED-INDIVIDUAL DECLARATIONS ARE OPTIONAL —
+    ;; an ABox may assert `:a :r :b` or `:a a :C` with no individual
+    ;; declared. Without a context for `:b` the range seed has nowhere
+    ;; to land; without one for `:a`, C(a) derives nothing at all.
+    ;;
+    ;; MEMBERSHIP IS A SET, ORDER IS THE LIST. The dedup used to scan the
+    ;; output list per insert — quadratic in the signature, which on GO is
+    ;; every class and every fresh node. `seen` answers membership; `out`
+    ;; still records first occurrence, so the node order handed to
+    ;; initialization is unchanged. The membership test is written out at
+    ;; each site because a Set cannot be passed to a helper.
     (let ((mut out (list-new arena Node))
+          (seen (set-new arena Node))
           (mut i 0))
       (do
         (for-each (c (set-elements (. sig classes)))
           (let ((n (union-new Node class-node c)))
-            (when (not (node-in-list out n)) (list-push out n))))
+            (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))))
         (for-each (a (set-elements (. sig individuals)))
           (let ((n (union-new Node individual-node a)))
-            (when (not (node-in-list out n)) (list-push out n))))
+            (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))))
         (for-each (e (. no edges))
-          (do
-            (when (not (node-in-list out (. e from))) (list-push out (. e from)))
-            (when (not (node-in-list out (. e to)))   (list-push out (. e to)))))
+          (let ((from (. e from))
+                (to   (. e to)))
+            (do
+              (when (not (set-has seen from)) (do (set-put seen from) (list-push out from)))
+              (when (not (set-has seen to))   (do (set-put seen to)   (list-push out to))))))
+        (for-each (a (. no asserted))
+          (when (not (set-has seen a)) (do (set-put seen a) (list-push out a))))
         (for-each (sd (. no seeds))
-          (when (not (node-in-list out (. sd to))) (list-push out (. sd to))))
+          (let ((to (. sd to)))
+            (when (not (set-has seen to)) (do (set-put seen to) (list-push out to)))))
         (while (< i (. no fresh-count))
           (let ((n (union-new Node fresh-node i)))
             (do
-              (when (not (node-in-list out n)) (list-push out n))
+              (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))
               (set! i (+ i 1)))))
         out)))
 
@@ -760,9 +849,103 @@
             (set! ok false)))
         ok)))
 
-  (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
-    (@intent "Run the front end: header, decode, gate, normalize, initialize")
-    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
+;; ============================================================
+  ;; Renaming at the saturation boundary  —  M1 slice 6b C2
+  ;;
+  ;; Everything saturation will see - the signature's nodes, the normal
+  ;; form, the asserted edges and the seeds - is renamed to dense fresh ids
+  ;; here, through ONE table, so equality in saturation is an Int compare
+  ;; (types.slop, Names). Axiom-only nodes (an undeclared filler) are
+  ;; renamed too, since saturation may give them a context mid-run; they
+  ;; are not SEEDED, exactly as before. The order is the table's order:
+  ;; the signature first, then the axioms, edges and seeds - deterministic,
+  ;; and never visible, because extraction maps back before it sorts.
+  ;; ============================================================
+
+  (fn rename-axiom ((arena Arena) (names Names) (ax NormAxiom))
+    (@intent "A normal-form axiom over renamed nodes and roles")
+    (@spec ((Arena Names NormAxiom) -> NormAxiom))
+    (@alloc arena)
+    (match ax
+      ((sub-name a b)
+        (union-new NormAxiom sub-name (intern-node arena names a) (intern-node arena names b)))
+      ((sub-and a1 a2 b)
+        (union-new NormAxiom sub-and (intern-node arena names a1) (intern-node arena names a2)
+                                     (intern-node arena names b)))
+      ((sub-some-rhs a r b)
+        (union-new NormAxiom sub-some-rhs (intern-node arena names a) (intern-role arena names r)
+                                          (intern-node arena names b)))
+      ((sub-some-lhs r b a)
+        (union-new NormAxiom sub-some-lhs (intern-role arena names r) (intern-node arena names b)
+                                          (intern-node arena names a)))
+      ((sub-role r s)
+        (union-new NormAxiom sub-role (intern-role arena names r) (intern-role arena names s)))
+      ((role-chain r s t)
+        (union-new NormAxiom role-chain (intern-role arena names r) (intern-role arena names s)
+                                        (intern-role arena names t)))))
+
+  (fn rename-derived ((arena Arena) (names Names) (d Derived))
+    (@intent "A derived fact over renamed nodes and roles")
+    (@spec ((Arena Names Derived) -> Derived))
+    (@alloc arena)
+    (match d
+      ((derived-sub b)    (union-new Derived derived-sub (intern-node arena names b)))
+      ((derived-succ r y) (union-new Derived derived-succ (intern-role arena names r) (intern-node arena names y)))
+      ((derived-pred r x) (union-new Derived derived-pred (intern-role arena names r) (intern-node arena names x)))))
+
+  (fn rename-nodes ((arena Arena) (names Names) (ns (List Node)))
+    (@intent "A node list, renamed in order")
+    (@spec ((Arena Names (List Node)) -> (List Node)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Node)))
+      (do
+        (for-each (n ns) (list-push out (intern-node arena names n)))
+        out)))
+
+  (fn rename-output ((arena Arena) (names Names) (no NormOutput))
+    (@intent "The normalizer's output over renamed nodes and roles: axioms, edges, subjects, seeds")
+    (@spec ((Arena Names NormOutput) -> NormOutput))
+    (@alloc arena)
+    (let ((mut axioms (list-new arena NormAxiom))
+          (mut edges  (list-new arena LogicalEdge))
+          (mut seeds  (list-new arena Addressed)))
+      (do
+        (for-each (ax (. no axioms))
+          (list-push axioms (rename-axiom arena names ax)))
+        (for-each (e (. no edges))
+          (list-push edges (record-new LogicalEdge
+                             (from (intern-node arena names (. e from)))
+                             (role (intern-role arena names (. e role)))
+                             (to   (intern-node arena names (. e to))))))
+        (for-each (sd (. no seeds))
+          (list-push seeds (record-new Addressed
+                             (to   (intern-node arena names (. sd to)))
+                             (what (rename-derived arena names (. sd what))))))
+        (record-new NormOutput
+          (axioms      axioms)
+          (edges       edges)
+          (asserted    (rename-nodes arena names (. no asserted)))
+          (seeds       seeds)
+          (fresh-count (. no fresh-count))))))
+
+  (fn decode-document ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
+    (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
+    (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    (match (stage0-header arena triples imports-resolved)
+      ((error f) (error f))
+      ((ok s0)
+        (match (decode-axioms arena (. s0 triples))
+          ((error f) (error f))
+          ((ok s1)
+            (ok (record-new Decoded
+                  (axioms    (. s1 axioms))
+                  (signature (. s1 signature))
+                  (omissions (. s0 omissions)))))))))
+
+  (fn normalize-decoded ((arena Arena) (d Decoded))
+    (@intent "The front end's second half: gate, normalize, rename, initialize")
+    (@spec ((Arena Decoded) -> NormResult))
     (@alloc arena)
     ;; ACCOUNTING, NOT "one normal form per axiom". Every accepted
     ;; logical axiom must be discharged by ONE of: the NormAxioms it
@@ -772,21 +955,34 @@
     ;; standalone `range(r) ⊑ C` legitimately vanishes when no
     ;; existential GCI or asserted edge uses `r`, and a role assertion
     ;; becomes edge messages rather than a NormAxiom at all.
-    (match (stage0-header arena triples imports-resolved)
+    ;;
+    ;; The gate runs ONCE. It used to run a second time to feed the
+    ;; normalizer — the same answer at the cost of a second gate over
+    ;; every axiom, which on GO is the whole corpus.
+    ;;
+    ;; THE SATURATION BOUNDARY. `signature-nodes` runs on the ORIGINAL
+    ;; output - it mints `fresh-node i` for i < fresh-count, which would
+    ;; collide with renamed ids - and then everything saturation will see
+    ;; is renamed through one table.
+    (let ((gr    (gate-axioms arena (. d axioms) (. d signature) (. d omissions)))
+          (no    (normalize-accepted arena (. gr accepted)))
+          (names (empty-names arena))
+          (sig   (rename-nodes arena names (signature-nodes arena (. gr signature) no)))
+          (rno   (rename-output arena names no)))
+      (let ((sat (make-initial-saturation arena sig)))
+        (do
+          (install-seeds arena sat rno)
+          (record-new NormResult
+            (axioms     (. rno axioms))
+            (saturation sat)
+            (coverage   (record-new Coverage (omitted (. gr omissions))))
+            (names      names))))))
+
+  (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "Run the front end: header, decode, gate, normalize, initialize")
+    (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result NormResult Fault)))
+    (@alloc arena)
+    (match (decode-document arena triples imports-resolved)
       ((error f) (error f))
-      ((ok s0)
-        (match (decode-axioms arena (. s0 triples))
-          ((error f) (error f))
-          ((ok s1)
-            (let ((gr (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions)))
-                  (no (normalize-accepted arena
-                        (. (gate-axioms arena (. s1 axioms) (. s1 signature)
-                             (. s0 omissions)) accepted))))
-              (let ((sat (make-initial-saturation arena
-                           (signature-nodes arena (. gr signature) no))))
-                (do
-                  (install-seeds arena sat no)
-                  (ok (record-new NormResult
-                        (axioms     (. no axioms))
-                        (saturation sat)
-                        (coverage   (record-new Coverage (omitted (. gr omissions)))))))))))))))
+      ((ok d)    (ok (normalize-decoded arena d)))))
+)

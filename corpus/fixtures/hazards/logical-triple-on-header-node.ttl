@@ -1,0 +1,20 @@
+# A LOGICAL TRIPLE ON A HEADER NODE. Stage 0 consumes an owl:Annotation node's
+# triples by subject, as it does an owl:Axiom node's. This node also carries
+# rdfs:subClassOf, which is no annotation: swallowing it with the rest shrank
+# the input with no omission and no fault, so the verdict read COHERENT over a
+# document HOWL had not fully read. It must reach the decoder instead, where a
+# blank node that is neither a class expression nor an individual is an
+# omission. (Codex review of M1 slice 3.)
+# Expect: INCONCLUSIVE, omitted >= 1, exit 2 — never COHERENT.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology ; rdfs:label "Mixed header node" .
+:C a owl:Class .
+[ a owl:Annotation ;
+  owl:annotatedSource <http://example.org/t> ;
+  owl:annotatedProperty rdfs:label ;
+  owl:annotatedTarget "Mixed header node" ;
+  rdfs:subClassOf :C ] .

@@ -1,0 +1,14 @@
+# PROBE class-assertion-inconsistent. B(a) and C(a) with B disjoint C: the ABox is inconsistent.
+# construct: ClassAssertion
+# expect: inconsistent
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:B a owl:Class . :C a owl:Class .
+:a a owl:NamedIndividual .
+:B owl:disjointWith :C .
+:a a :B , :C .

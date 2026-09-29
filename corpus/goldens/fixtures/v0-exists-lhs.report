@@ -1,0 +1,14 @@
+howl-report 1
+verdict coherent
+termination fixpoint
+rounds 2
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 5
+sub http://example.org/t#A http://example.org/t#A
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#B http://example.org/t#B
+sub http://example.org/t#B http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

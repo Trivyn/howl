@@ -1,0 +1,15 @@
+# A CLASS ASSERTION OVER AN ANONYMOUS CLASS EXPRESSION. `:a a [ ∃op.⊥ ]` is
+# ClassAssertion(∃op.⊥, a): in v0, and INCONSISTENT, since ∃op.⊥ is empty.
+# A decoder that only reads `rdf:type` with an IRI object files it as
+# unrecognized: sound (the omission blocks COHERENT) but INCONCLUSIVE where
+# the answer is known. Found by the W3C OWL 2 conformance test
+# WebOnt-Restriction-001 (corpus/conformance.py); this is its shape.
+# Expect: INCOHERENT (inconsistent), omitted 0, exit 1.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+<http://example.org/t> a owl:Ontology .
+:op a owl:ObjectProperty .
+:a a owl:NamedIndividual ,
+     [ a owl:Restriction ; owl:onProperty :op ; owl:someValuesFrom owl:Nothing ] .

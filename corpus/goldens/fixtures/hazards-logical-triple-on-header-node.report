@@ -1,0 +1,13 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 1
+omission SubClassOf(AnonymousClass(blank node with no recognized class-expression vocabulary) http://example.org/t#C)
+unsatisfiable 0
+subsumptions 3
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

@@ -1,0 +1,101 @@
+;; ============================================================
+;; The canonical report  —  SPEC.md §6.7, §6.8
+;;
+;; ONE TEXT, AND THE ONE A RUN IS COMPARED BY. M1 (e) asks for
+;; byte-identical reports across worker counts at the same budget, and
+;; the goldens gate every performance change on exactly these bytes. So
+;; the report carries everything that is a function of (input, budget)
+;; and NOTHING that is not: no worker count, no timings, no file paths.
+;; A timing that leaked in here would make two correct runs differ.
+;;
+;; A LIST OF LINES, NOT ONE STRING. `string-concat` copies, so growing
+;; one string line by line is quadratic in the report's length — on GO's
+;; order of 10^6 subsumption pairs that would be the slowest thing the
+;; program does. The caller prints the lines.
+;;
+;; EVERY LIST ARRIVES ALREADY CANONICAL: the gate sorts omissions
+;; (gate.slop), extraction sorts the unsatisfiable set and the taxonomy
+;; (classify.slop). This module renders and does NOT re-sort, so the
+;; order it prints is the order the library commits to — a sort dropped
+;; upstream shows up here as a changed report instead of being papered
+;; over at the last moment.
+;; ============================================================
+
+(module report
+  (@doc "The canonical, input-determined report of an Outcome (§6.7, §6.8)")
+
+  (import rdf (IRI))
+  (import types (Node SubPair Omission Outcome Termination))
+  (import owl2 (render-omission))
+  (import howl (Verdict verdict))
+
+  (export report-lines)
+
+  (fn node-text ((arena Arena) (n Node))
+    (@intent "A node as report text — injective across the three node kinds")
+    (@spec ((Arena Node) -> String))
+    (@alloc arena)
+    ;; Only class nodes reach the taxonomy (classify.slop projects to
+    ;; them), but the rendering stays injective anyway: a renderer that
+    ;; collapses variants merges distinct objects the day a caller
+    ;; changes (Lesson 3638a9b5).
+    (match n
+      ((class-node i)      (. i value))
+      ((individual-node i) (string-concat arena "{" (string-concat arena (. i value) "}")))
+      ((fresh-node k)      (string-concat arena "_:fresh" (int-to-string arena k)))))
+
+  (fn keyed ((arena Arena) (key String) (text String))
+    (@intent "A report line: a fixed key, one space, then the text")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena key (string-concat arena " " text)))
+
+  (fn verdict-line ((o Outcome))
+    (@intent "The verdict line, from the ONE statement of §6.2's rule")
+    (@spec ((Outcome) -> String))
+    (@pure)
+    (match (verdict o)
+      ('verdict-coherent     "verdict coherent")
+      ('verdict-incoherent   "verdict incoherent")
+      ('verdict-inconclusive "verdict inconclusive")))
+
+  (fn termination-line ((t Termination))
+    (@intent "The termination line; the round count has its own line")
+    (@spec ((Termination) -> String))
+    (@pure)
+    (match t
+      ((fixpoint)         "termination fixpoint")
+      ((resource-limit _) "termination resource-limit")))
+
+  (fn report-lines ((arena Arena) (o Outcome))
+    (@intent "The canonical report of an Outcome, one line per fact")
+    (@spec ((Arena Outcome) -> (List String)))
+    (@alloc arena)
+    ;; `rounds` is printed at fixpoint too. §6.8 makes iteration
+    ;; accounting part of the report, and a performance change that
+    ;; altered the round count would change what a capped run can see —
+    ;; so the goldens must notice it even when the answer is the same.
+    (let ((mut out (list-new arena String))
+          (f       (. o findings))
+          (omitted (. (. o coverage) omitted)))
+      (do
+        (list-push out "howl-report 1")
+        (list-push out (verdict-line o))
+        (list-push out (termination-line (. o termination)))
+        (list-push out (keyed arena "rounds" (int-to-string arena (. (. o saturation) iteration))))
+        (list-push out (if (. f inconsistent) "inconsistent true" "inconsistent false"))
+        (list-push out (keyed arena "omitted" (int-to-string arena (cast Int (list-len omitted)))))
+        (for-each (om omitted)
+          (list-push out (keyed arena "omission" (render-omission arena om))))
+        (list-push out (keyed arena "unsatisfiable"
+                         (int-to-string arena (cast Int (list-len (. f unsatisfiable))))))
+        (for-each (c (. f unsatisfiable))
+          (list-push out (keyed arena "unsat" (. c value))))
+        (list-push out (keyed arena "subsumptions"
+                         (int-to-string arena (cast Int (list-len (. f subsumptions))))))
+        (for-each (p (. f subsumptions))
+          (list-push out (keyed arena "sub"
+                           (string-concat arena (node-text arena (. p sub))
+                             (string-concat arena " " (node-text arena (. p super)))))))
+        out)))
+)

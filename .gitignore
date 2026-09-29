@@ -19,3 +19,7 @@ rust/Cargo.lock
 # Fetched test ontologies — pinned in corpus/MANIFEST.toml, never committed
 corpus/vendor/
 corpus/__pycache__/
+
+# The differential oracle build (oracle/, Gradle)
+oracle/build/
+oracle/.gradle/

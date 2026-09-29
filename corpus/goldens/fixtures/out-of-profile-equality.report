@@ -1,0 +1,16 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 6
+omission DifferentIndividuals(http://example.org/t#a http://example.org/t#c)
+omission NegativeAssertion(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#NegativePropertyAssertion> .)
+omission ReservedVocabulary(_:b0 <http://www.w3.org/2002/07/owl#assertionProperty> <http://example.org/t#r> .)
+omission ReservedVocabulary(_:b0 <http://www.w3.org/2002/07/owl#sourceIndividual> <http://example.org/t#a> .)
+omission ReservedVocabulary(_:b0 <http://www.w3.org/2002/07/owl#targetIndividual> <http://example.org/t#c> .)
+omission SameIndividual(http://example.org/t#a http://example.org/t#b)
+unsatisfiable 0
+subsumptions 1
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

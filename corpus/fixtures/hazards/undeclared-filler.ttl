@@ -1,0 +1,23 @@
+# An undeclared class as an existential filler: A subClassOf some r.B, with B
+# never declared. The gate accepts the axiom and records B's missing
+# declaration (verdict INCONCLUSIVE, exit 2), and B gets its context only
+# when the edge (A, r, B) first reaches the barrier - the one context
+# created mid-run. The parallel commit (M1 slice 6b C1) must create it
+# serially, before the committers start; `test-worker-count-does-not-change-
+# the-report` runs this fixture at W = 4, and `make test-tsan` watches it.
+#
+# KNOWN GAP, pinned by the golden on purpose: domain(r) = C means A is
+# subsumed by C, but a context created mid-run gets no seeds (B and owl:Thing
+# are not in S(B)), so CR4 at B never fires on some r.Thing and A subClassOf
+# C is NOT derived. Sound (the run is inconclusive), incomplete; fixing it
+# changes this golden, which is the point of pinning it.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :C a owl:Class .
+:r a owl:ObjectProperty .
+:r rdfs:domain :C .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .

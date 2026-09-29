@@ -11,6 +11,7 @@
 ;; implementation with its own semantics.
 ;;
 ;;   howl validate    <ontology.ttl> [--profile el|auto] [--strict] [--no-imports] [-I FILE]...
+;;                    [--report] [--timings] [--max-iterations N] [--workers N]
 ;;   howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]   (flags: M3)
 ;;   howl unsat       <ontology.ttl>                                    (not yet)
 ;;   howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       (M4)
@@ -74,7 +75,9 @@
                term-eq make-iri))
   (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config))
   (import owl2 (render-omission))
-  (import howl (Verdict verdict classify))
+  (import howl (Verdict verdict Decoded decode Prepared prepare-decoded reason))
+  (import report (report-lines))
+  (import strlib (parse-int is-digit char-at))
   (import ttl (parse-ttl-file))
   (import vocab (RDF_TYPE OWL_ONTOLOGY))
   (import canon (string-cmp))
@@ -239,6 +242,10 @@
       (println "")
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
       (println "  --strict   refuse to run past any omission (exit 2, no report)")
+      (println "  --report   print the canonical report instead of the summary")
+      (println "  --timings  print phase durations on stderr (never part of a report)")
+      (println "  --max-iterations N   the round budget, 0..10000 (default 1000)")
+      (println "  --workers N          threads joining each round, 1..64 (default 4); never changes the report")
       (println "")
       (println "EXIT CODES:")
       (println "  0  coherent       checked, no incoherence found")
@@ -248,6 +255,82 @@
       (println "")
       (println "Treat 0 alone as the pass condition. A CI job that accepts 2")
       (println "reintroduces the silent-false-pass hazard the gate exists to prevent.")))
+
+  (fn eprint ((s String))
+    (@intent "Write a string to stderr")
+    (@spec ((String) -> Unit))
+    ;; SLOP's `print` only reaches stdout, and stdout is where the
+    ;; canonical report goes. Anything that is NOT a function of the
+    ;; input — a timing above all — must never share that stream, or a
+    ;; `--report | shasum` comparison across two correct runs differs.
+    ;;
+    ;; `c-inline` rather than an `ffi` binding of write(2): a function
+    ;; named `write` resolves to std file's `FileMode` variant of the same
+    ;; name and transpiles to an enum initializer, not a call. `s` is the
+    ;; C parameter name, as `config` is in saturate.slop's cancel check.
+    (c-inline "fwrite(s.data, 1, s.len, stderr);"))
+
+  (fn print-timings ((arena Arena) (t0 Int) (t1 Int) (t2 Int) (t3 Int) (t4 Int))
+    (@intent "Phase durations on stderr: parse, decode, rest of the front end, reasoning, total")
+    (@spec ((Arena Int Int Int Int Int) -> Unit))
+    (@alloc arena)
+    ;; THE CLOCK IS READ IN THE CLI AND NOWHERE ELSE. HOWL never consults
+    ;; a clock inside a reasoning call (§6.8); `make test` fails if one
+    ;; appears under src/. `prepare_ms + reason_ms` - axioms in hand to
+    ;; taxonomy - is the classification figure §12 M1 (c) compares against
+    ;; ELK (bench/bench.py); `decode_ms` (triples to axioms) is reported
+    ;; beside it. `total_ms` is parse through reasoning: the clock stops
+    ;; before the report is rendered and printed.
+    (eprint
+      (string-concat arena "timing parse_ms="
+        (string-concat arena (int-to-string arena (- t1 t0))
+          (string-concat arena " decode_ms="
+            (string-concat arena (int-to-string arena (- t2 t1))
+              (string-concat arena " prepare_ms="
+                (string-concat arena (int-to-string arena (- t3 t2))
+                  (string-concat arena " reason_ms="
+                    (string-concat arena (int-to-string arena (- t4 t3))
+                      (string-concat arena " total_ms="
+                        (string-concat arena (int-to-string arena (- t4 t0)) "\n"))))))))))))
+
+  (fn all-digits ((s String))
+    (@intent "Non-empty, and every byte an ASCII digit — the only shape a budget may take")
+    (@spec ((String) -> Bool))
+    (@pure)
+    ;; `parse-int` accepts a numeric PREFIX: "5garbage", "12abc" and "5 "
+    ;; all parse, as 5, 12 and 5. A malformed budget would then run a
+    ;; different capped classification than the caller wrote, and exit as
+    ;; though the flag had been understood. So the whole argument is
+    ;; checked here first, and a sign is refused as well: a budget is a
+    ;; count, and the range check below starts at 0.
+    (let ((mut ok (> (string-len s) 0))
+          (mut i 0))
+      (do
+        (while (and ok (< i (string-len s)))
+          (do
+            (when (not (is-digit (char-at s i))) (set! ok false))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn prepare-from ((arena Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
+    (@intent "Finish the front end over a successful decode; pass a decode fault straight through")
+    (@spec ((Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; This IS `howl.prepare`, split so decode can be timed apart.
+    (match d
+      ((error f) (error f))
+      ((ok dd)   (prepare-decoded arena dd config))))
+
+  (fn reason-prepared ((arena Arena) (p (Result Prepared Fault)) (config ReasonerConfig))
+    (@intent "Reason over a successful front end; pass a front-end fault straight through")
+    (@spec ((Arena (Result Prepared Fault) ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; This IS `howl.classify`, split so the halves can be timed. With
+    ;; `prepare-from` it adds nothing between them, so the timed path
+    ;; cannot drift from the port's path.
+    (match p
+      ((error f) (error f))
+      ((ok pp)   (reason arena pp config))))
 
   (fn print-omissions ((arena Arena) (os (List Omission)))
     (@intent "List every omission, one per line")
@@ -278,6 +361,9 @@
                   (mut cfg      (default-config))
                   (mut failed   false)
                   (mut i 3)
+                  (mut report-mode false)
+                  (mut timings false)
+                  (t-start (now-ms))
                   (input (argv-to-string argv 2)))
               (do
                 ;; The root document.
@@ -355,6 +441,57 @@
                                   (do (print "howl: profile not implemented in v0: ") (println p)
                                       (set! failed true))))))))
 
+                      (when (string-eq arg "--report")
+                        (do (set! known true) (set! report-mode true)))
+
+                      (when (string-eq arg "--timings")
+                        (do (set! known true) (set! timings true)))
+
+                      ;; The round budget (§6.8): `max-iterations = n` permits n
+                      ;; completed rounds, and 0 always yields resource-limit.
+                      ;; Out of range is refused rather than clamped — a clamped
+                      ;; budget is a run the caller did not ask for.
+                      (when (string-eq arg "--max-iterations")
+                        (do
+                          (set! known true)
+                          (set! step 2)
+                          (when (>= (+ i 1) argc)
+                            (do (println "howl: --max-iterations needs N (0..10000)") (set! failed true)))
+                          (when (< (+ i 1) argc)
+                            (let ((v (argv-to-string argv (+ i 1))))
+                              (if (not (all-digits v))
+                                (do (println "howl: --max-iterations needs a whole number 0..10000") (set! failed true))
+                                (match (parse-int v)
+                                  ((ok n)
+                                    (if (<= n 10000)
+                                      (set! cfg max-iterations (cast Int n))
+                                      (do (println "howl: --max-iterations must be 0..10000") (set! failed true))))
+                                  ((error _)
+                                    (do (println "howl: --max-iterations needs a whole number 0..10000") (set! failed true)))))))))
+
+                      ;; Worker count (§6.8): how many threads join each round.
+                      ;; It can change only speed, never the report — the
+                      ;; round is the same at every W, capped runs included
+                      ;; (M1 (e); `make determinism` checks it). Refused
+                      ;; outside 1..64, never clamped, like the round budget.
+                      (when (string-eq arg "--workers")
+                        (do
+                          (set! known true)
+                          (set! step 2)
+                          (when (>= (+ i 1) argc)
+                            (do (println "howl: --workers needs N (1..64)") (set! failed true)))
+                          (when (< (+ i 1) argc)
+                            (let ((v (argv-to-string argv (+ i 1))))
+                              (if (not (all-digits v))
+                                (do (println "howl: --workers needs a whole number 1..64") (set! failed true))
+                                (match (parse-int v)
+                                  ((ok n)
+                                    (if (and (>= n 1) (<= n 64))
+                                      (set! cfg worker-count (cast Int n))
+                                      (do (println "howl: --workers must be 1..64") (set! failed true))))
+                                  ((error _)
+                                    (do (println "howl: --workers needs a whole number 1..64") (set! failed true)))))))))
+
                       (when (or (string-eq arg "--emit") (string-eq arg "--reduce"))
                         (do
                           (set! known true)
@@ -369,10 +506,20 @@
 
                 (if failed
                   EXIT_ERROR
-                  (let ((result (classify arena triples resolved cfg)))
+                  (let ((t-parsed   (now-ms))
+                        (decoded    (decode arena triples resolved))
+                        (t-decoded  (now-ms))
+                        (prepared   (prepare-from arena decoded cfg))
+                        (t-prepared (now-ms))
+                        (result     (reason-prepared arena prepared cfg))
+                        (t-reasoned (now-ms)))
                     (do
+                      (when timings
+                        (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
                       (match result
                         ((ok o)
+                          (if report-mode
+                            (for-each (l (report-lines arena o)) (println l))
                           (do
                             (print "howl: ")
                             (print (int-to-string arena
@@ -391,7 +538,7 @@
                               ;; Spelled out, because 2 is the code a CI
                               ;; job is most tempted to accept as a pass.
                               ('verdict-inconclusive
-                                (println "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass")))))
+                                (println "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass"))))))
                         ((error f)
                           (match f
                             ((input-error msg) (do (print "howl: ") (println msg)))

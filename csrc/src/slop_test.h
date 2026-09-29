@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_termstore.h"
 #include "slop_vocab.h"
 #include "slop_decode.h"
 #include "slop_gate.h"
@@ -16,6 +17,9 @@
 #include "slop_saturate.h"
 #include "slop_classify.h"
 #include "slop_howl.h"
+#include "slop_el.h"
+#include "slop_premise.h"
+#include "slop_report.h"
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -44,6 +48,12 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
+#define SLOP_LIST_TYPES_ADDRESSED_DEFINED
+#define SLOP_LIST_TYPES_ADDRESSED_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
@@ -81,6 +91,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+#define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
+#endif
+
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
@@ -107,7 +122,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif
@@ -123,7 +138,7 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     const rdf_IRI* _a = (const rdf_IRI*)a;
     const rdf_IRI* _b = (const rdf_IRI*)b;
     return true
-        && slop_eq_string(&_a->value, &_b->value)
+        && (slop_eq_string(&_a->value, &_b->value))
     ;
 }
 #endif
@@ -173,10 +188,32 @@ uint8_t test_test_context_starts_with_empty_store(slop_arena* arena);
 slop_string test_node_iri(types_Node n);
 uint8_t test_test_emit_edge_addresses_both_halves(slop_arena* arena);
 slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string path);
+slop_option_types_Outcome test_classify_fixture_with(slop_arena* arena, slop_string path, int64_t workers, int64_t cap);
+uint8_t test_workers_agree(slop_arena* arena, slop_string path, int64_t cap);
+uint8_t test_test_worker_count_does_not_change_the_report(slop_arena* arena);
+types_Context test_edge_context(slop_arena* arena, types_Node n, types_RoleId r, types_Node m, uint8_t succ);
+uint8_t test_queue_has(types_Saturation sat, types_Node n, types_Derived d);
+uint8_t test_stored_edge(types_Saturation sat, types_Node x, types_RoleId r, types_Node y);
+int64_t test_queue_len(types_Saturation sat, types_Node n);
+uint8_t test_test_commit_dedups_across_deltas(slop_arena* arena);
+uint8_t test_test_names_round_trip(slop_arena* arena);
+uint8_t test_same_renamed(types_Names names, types_Node n, types_Node expect);
 uint8_t test_test_litmus_end_to_end(slop_arena* arena);
+uint8_t test_test_role_hierarchy_carries_edges(slop_arena* arena);
+uint8_t test_test_role_closure_deep(slop_arena* arena);
+uint8_t test_test_smaller_side_joins(slop_arena* arena);
 uint8_t test_test_unattested_import_is_inconclusive(slop_arena* arena);
 uint8_t test_test_declared_unused_class_gets_a_context(slop_arena* arena);
 uint8_t test_test_abox_disjoint_range_is_incoherent(slop_arena* arena);
+int64_t test_omitted_count(types_Outcome o);
+uint8_t test_test_undeclared_individual_is_reasoned_over(slop_arena* arena);
+uint8_t test_test_anonymous_class_assertion_is_read(slop_arena* arena);
+uint8_t test_test_annotation_on_annotation_is_consumed(slop_arena* arena);
+uint8_t test_test_logical_triple_on_header_node_is_not_swallowed(slop_arena* arena);
+uint8_t test_test_repeated_disjoint_member_is_positional(slop_arena* arena);
+uint8_t test_report_entails(types_Findings f, types_Node a, types_Node b);
+uint8_t test_probe_agrees_with_report(slop_arena* arena, slop_string path);
+uint8_t test_test_entails_sub_agrees_with_report(slop_arena* arena);
 types_Node test_cls(slop_string name);
 types_RoleId test_rol(slop_string name);
 slop_result_saturate_RoundResult_types_Fault test_run_fixture(slop_arena* arena, slop_list_types_Node signature, slop_list_types_NormAxiom axioms);
@@ -202,6 +239,10 @@ rdf_Term test_ex_iri(slop_arena* arena, slop_string local);
 int64_t test_count_subclass_triples(slop_list_rdf_Triple ts, rdf_Term pred);
 uint8_t test_test_unattested_import_yields_an_omission(slop_arena* arena);
 uint8_t test_test_attested_import_yields_none(slop_arena* arena);
+uint8_t test_test_term_store_by_content(slop_arena* arena);
+uint8_t test_test_term_store_quoted_and_tagged(slop_arena* arena);
+slop_string test_stage0_fault_of(slop_arena* arena, slop_list_rdf_Triple ts);
+uint8_t test_test_stage0_fault_follows_the_document(slop_arena* arena);
 uint8_t test_test_header_and_reification_are_consumed(slop_arena* arena);
 int64_t test_count_out_of_profile(slop_list_owl2_RawAxiom axs);
 int64_t test_count_disposition(slop_list_owl2_RawAxiom axs, owl2_Disposition want);
@@ -248,8 +289,14 @@ slop_list_rdf_Triple test_reversed_triples(slop_arena* arena, slop_list_rdf_Trip
 slop_option_normalize_NormOutput test_normalize_triples(slop_arena* arena, slop_list_rdf_Triple ts);
 uint8_t test_same_normal_form(normalize_NormOutput a, normalize_NormOutput b);
 uint8_t test_same_report(types_Outcome a, types_Outcome b);
+uint8_t test_same_lines(slop_list_string a, slop_list_string b);
 uint8_t test_order_independent(slop_arena* arena, slop_string path);
 uint8_t test_test_triple_order_independence(slop_arena* arena);
+uint8_t test_addressed_subset(slop_list_types_Addressed xs, slop_list_types_Addressed ys);
+uint8_t test_same_conclusions(slop_arena* arena, types_Context ctx, types_Derived d, premise_RuleIndex idx, slop_list_types_NormAxiom axioms);
+uint8_t test_dispatch_agrees(slop_arena* arena, slop_string path);
+uint8_t test_test_indexed_dispatch_matches_reference(slop_arena* arena);
+uint8_t test_test_quoted_triple_header_subjects(slop_arena* arena);
 int64_t test_strict_outcome(slop_arena* arena, slop_string path);
 uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
 uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
@@ -324,6 +371,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+#define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
+SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
+#endif
+
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
@@ -354,6 +406,21 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
+#ifndef SLOP_OPTION_MAP_PTR_DEFINED
+#define SLOP_OPTION_MAP_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
+SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
@@ -370,6 +437,18 @@ SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 #define SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
+#ifndef SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
 #endif
 
 #ifndef SLOP_LIST_U8_DEFINED

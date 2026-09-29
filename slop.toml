@@ -25,6 +25,12 @@ include = ["../slop-rdf", "src", "src/rules", "${SLOP_HOME}/lib/std"]
 sources = ["src", "cli"]
 include = ["src", "src/rules", "cli", "../slop-rdf"]
 pattern = "*.slop"
+# The test harness carries no contracts, and at ~2,900 lines its JSON AST
+# exhausts the native parser's fixed 256 MB arena (slop 0.2.3), which
+# `slop verify` reports as an error without falling back to the Python
+# parser. Excluding it loses no verification; it is compiled and run by
+# `make test`.
+exclude = ["src/test.slop"]
 timeout = 120000
 
 [providers.openrouter]

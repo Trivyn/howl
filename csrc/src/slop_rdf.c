@@ -244,7 +244,7 @@ uint8_t rdf_triple_eq(rdf_Triple a, rdf_Triple b) {
 
 rdf_Graph rdf_make_graph(slop_arena* arena) {
     rdf_Graph _retval = {0};
-    _retval = ((rdf_Graph){.triples = ((slop_list_rdf_Triple){ .data = (rdf_Triple*)slop_arena_alloc(arena, 16 * sizeof(rdf_Triple)), .len = 0, .cap = 16 }), .size = 0});
+    _retval = ((rdf_Graph){.triples = ((slop_list_rdf_Triple){ .data = NULL, .len = 0, .cap = 0 }), .size = 0});
     SLOP_POST(((rdf_graph_size(_retval) == 0)), "(== (graph-size $result) 0)");
     return _retval;
 }

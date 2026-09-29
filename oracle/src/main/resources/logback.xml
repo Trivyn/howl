@@ -1,0 +1,10 @@
+<configuration>
+  <!-- ONE appender, and it records rather than prints: any WARN or higher
+       from any logger fails the file being reasoned over (SPEC.md §10:
+       "fail the harness on any oracle warning or ignored-axiom diagnostic
+       rather than diffing through it"). The run prints what it recorded. -->
+  <appender name="RECORD" class="howl.oracle.WarningRecorder"/>
+  <root level="WARN">
+    <appender-ref ref="RECORD"/>
+  </root>
+</configuration>

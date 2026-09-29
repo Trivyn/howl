@@ -845,7 +845,7 @@ asymmetry is essential, not incidental:
 | Assertion | Encoding |
 |---|---|
 | `C(a)` | the pre-normalization GCI `individual(a) ⊑ C` — `C` stays a full `Concept`, so `(B ⊓ ∃r.D)(a)` normalizes like any other right-hand side |
-| `r(a,b)` | an edge emitted into **Δ₀** via `emit-edge(individual(a), r, individual(b))`, plus `derived-sub(A)` to `individual(b)` for every `A ∈ ran_T(r)` — *not* the GCI `individual(a) ⊑ ∃r.individual(b)` |
+| `r(a,b)` | an edge emitted into **Δ₀** via `emit-edge` on the `LogicalEdge` (individual(a), r, individual(b)), plus `derived-sub(A)` to `individual(b)` for every `A ∈ ran_T(r)` — *not* the GCI `individual(a) ⊑ ∃r.individual(b)` |
 
 > **Why role assertions cannot go through `∃`.** `individual(b)` is an ordinary concept name, not a
 > singleton — nothing makes it a one-element set. So `individual(a) ⊑ ∃r.individual(b)` says only
@@ -880,8 +880,9 @@ Two things follow from the row above and neither is optional:
 
 - **`emit-edge` into `Δ₀`, not a direct write to `succs`/`preds`.** An edge written straight into the
   store is invisible to the rules, exactly as a subsumer written straight into `S(·)` is
-  ([§5.2](#52-the-exact-v0-language)'s seeding): CR6 and CR7 fire on edge deltas, so role hierarchies
-  and chains would never apply to *asserted* edges while applying fine to derived ones. That
+  ([§5.2](#52-the-exact-v0-language)'s seeding): CR4 and CR7 fire on edge deltas, through the role
+  closure, so role hierarchies and chains would never apply to *asserted* edges while applying fine
+  to derived ones. That
   asymmetry is invisible in any fixture whose assertions happen not to interact with an RIA.
 - **Range seeds, because the elimination rewrite cannot reach an assertion.** The published
   construction rewrites existential GCIs only ([§6.3](#63-normalization)); an installed edge is not
@@ -1084,14 +1085,29 @@ GROWL's `Delta`.
 ;; therefore an OPERATIONAL invariant (bounded latency, simpler reasoning about a round's
 ;; output) rather than a completeness requirement — worth keeping, not worth mis-justifying.
 ;; Rules emit edges via a single `emit-edge` helper rather than by hand.
-(fn emit-edge ((arena Arena) (x Node) (r RoleId) (y Node))
-  (@intent "Derive the logical edge (x,y) ∈ R(r) as its two stored halves")
-  (@spec ((Arena Node RoleId Node) -> (List Addressed)))
-  (@post {(and (list-has $result (addressed x (derived-succ r y)))
-               (list-has $result (addressed y (derived-pred r x)))
-               (= (list-len $result) 2))})
-  (list (addressed x (derived-succ r y))
-        (addressed y (derived-pred r x))))
+;; It returns an EdgePair record, so "both halves exist" is a type guarantee, and its
+;; postconditions pin each half's destination and payload - proved by `slop verify`.
+(fn emit-edge ((arena Arena) (e LogicalEdge))
+  (@intent "Derive the logical edge (e.from, e.to) ∈ R(e.role) as its two stored halves")
+  (@spec ((Arena LogicalEdge) -> EdgePair))
+  (@alloc arena)
+  (@post {(. (. $result succ-half) to) == (. e from)})
+  (@post {(. (. $result pred-half) to) == (. e to)})
+  ;; @property rather than @post: a @post is also a runtime check under SLOP_DEBUG, and the
+  ;; transpiler mis-lowers a multi-payload match there (slop-lang/slop#171).
+  (@property succ-says-edge
+    (match (. (. $result succ-half) what)
+      ((derived-succ r y) (and (== r (. e role)) (== y (. e to))))
+      (_ false)))
+  (@property pred-says-edge
+    (match (. (. $result pred-half) what)
+      ((derived-pred r x) (and (== r (. e role)) (== x (. e from))))
+      (_ false)))
+  (record-new EdgePair
+    (succ-half (record-new Addressed (to (. e from))
+                 (what (union-new Derived derived-succ (. e role) (. e to)))))
+    (pred-half (record-new Addressed (to (. e to))
+                 (what (union-new Derived derived-pred (. e role) (. e from)))))))
 
 ;; How a run terminated. THREE INDEPENDENT AXES — an earlier draft made these exclusive
 ;; variants of one union, which is wrong: a run can perfectly well be BOTH out-of-profile
@@ -1399,6 +1415,20 @@ accepting it** — the gate can still enumerate an unsupported AST variant as ou
    `AxiomRef` if useful, and discard them semantically. Leaving this scaffolding to the gate would
    mark every versioned, annotation-heavy ontology out-of-profile — contradicting M0's acceptance
    criterion outright.
+
+   The same holds for an **annotation on an annotation**: a node typed `owl:Annotation`, with the
+   same three properties. It annotates an annotation assertion, never a logical axiom, so it is
+   consumed and nothing is rebuilt from it.
+
+   Consumption is by subject, since the signature doesn't exist yet at this stage, but it is
+   **not consumption of everything**. A *logical* triple on a header node passes through to the
+   decoder, where it becomes an omission instead of vanishing. Logical means an OWL/RDFS axiom or
+   class-expression predicate, or an `rdf:type` other than ontology, axiom or annotation; for
+   example, `rdfs:subClassOf` on an `owl:Annotation` node (`hazards/logical-triple-on-header-node.ttl`).
+
+   What stage 0 can't see: a *user-defined* object property used on a header node is
+   indistinguishable from an annotation property without the signature, so it is still consumed.
+   OWL 2 DL gives a header node no such assertion.
 1. **Decode RDF into a *raw* structural axiom AST** — `RawAxiom`, a **lossless** representation of
    every OWL 2 axiom and class/property expression form, *including the ones v0 does not support*.
    This layer is deliberately wider than [§6.2](#62-data-model)'s `Concept`/`NormAxiom`: those types
@@ -1588,12 +1618,41 @@ join against the *new* fact:
 | Rule | Premises joined | On `derived-sub b` | On `derived-pred (r,x)` | On `derived-succ (r,y)` |
 |---|---|---|---|---|
 | CR1 | `B ∈ S(X)` × axiom | scan axioms `B ⊑ A` | — | — |
-| CR2 | `B₁ ∈ S(X)` × `B₂ ∈ S(X)` | scan stored `S(X)` for the **other** conjunct of each `B₁ ⊓ B₂ ⊑ A` | — | — |
+| CR2 | `B₁ ∈ S(X)` × `B₂ ∈ S(X)` | intersect stored `S(X)` with the **other** conjuncts of `B₁`'s conjunctions | — | — |
 | CR3 | `B ∈ S(X)` × axiom | scan axioms `B ⊑ ∃r.A` | — | — |
-| CR4 | `B ∈ S(Y)` × `(X,Y) ∈ R(r)` | scan stored `preds(r)` | scan stored `S(Y)` for matching `∃r.B ⊑ A` | — |
+| CR4 | `B ∈ S(Y)` × `(X,Y) ∈ R(r)` | scan stored `preds(e)`, `e ∈ sub*(r)` | for each `r ∈ sup*(e)`, intersect stored `S(Y)` with the fillers `B` of `∃r.B ⊑ A` | — |
 | CR5 | `⊥ ∈ S(Y)` × `(X,Y) ∈ R(r)` | if `b = ⊥`, scan stored `preds` | if `⊥ ∈ S(Y)`, emit to the new `x` | — |
-| CR6 | `(X,Y) ∈ R(r)` × axiom | — | scan axioms `r ⊑ s` | scan axioms `r ⊑ s` |
-| CR7 | `(X,Y) ∈ R(r)` × `(Y,Z) ∈ R(s)` | — | scan stored `succs` for the second leg | scan stored `preds` for the first leg |
+| CR7 | `(X,Y) ∈ R(r)` × `(Y,Z) ∈ R(s)` | — | for each `r ∈ sup*(e)`, scan stored `succs(e₂)`, `e₂ ∈ sub*(s)`, for the second leg | for each `s ∈ sup*(e)`, scan stored `preds(e₁)`, `e₁ ∈ sub*(r)`, for the first leg |
+
+Here `e` is the role the arriving edge is stored under, and `sup*`/`sub*` are the told role
+hierarchy's reflexive-transitive closure and its inverse (`premise.slop`'s `RoleClosure`).
+
+**There is no role-hierarchy rule (M1 slice 6b D2).** `R(r)` is read through the told hierarchy: an
+edge is stored under the role it was derived with, and `(X,Y) ∈ R(s)` whenever it is stored under
+some `e` with `s ∈ sup*(e)`. The consumers of `R` apply the closure, as ELK does (Kazakov, Krötzsch &
+Simančík, *The Incredible ELK*, 2014): CR4 and CR7 in the dispatcher, while CR5 ignores roles. The rule functions are unchanged. The dispatcher hands each
+one a concrete role, and a stored-side walk gets the axiom rewritten to name each `e ∈ sub*(r)` of
+the walked role, so every proved contract still applies. The fixpoint's subsumptions are those of the
+materializing rule it replaces, `(X,Y) ∈ R(r), r ⊑ s ⟹ (X,Y) ∈ R(s)`: that rule added exactly the
+edges `(X,Y):s` for `s ∈ sup*(e)`, and every reader of `R(s)` now sees them through the closure.
+- **Why.** Those copies were about 1.6M of EL-GALEN's 1.8M new edges, each queued, joined and
+  committed.
+- **Cycles.** `sup*` is a breadth-first walk with a visited set, because equivalent properties make
+  the hierarchy cyclic.
+- **Transitivity is not in the closure.** `Trans(r)` is the chain `r ∘ r ⊑ r`, which CR7 applies,
+  with both legs matched through `sup*`.
+- **Reports.** The rounds figure drops where a hierarchy was in play: a super-role consequence no
+  longer waits a round per level. Every other report line is unchanged, on every fixture and corpus.
+
+Two rows are narrower than a literal reading of the calculus, each deliberately (M1 slice 6b):
+- **"Intersect" means the smaller side is walked and the other probed** (ELK's lazy set
+  intersection; `premise.slop`'s two-level buckets). Either side yields the same conclusions.
+  Walking one side always was the costly part: on GO, CR2 walked every conjunction a general class
+  takes part in, 77M rule calls for 131k conclusions. On EL-GALEN, CR4 walked S(Y) against every
+  role's fillers, 27.8M calls for 579k conclusions.
+- **A logical edge is admitted once, through its successor half** (`admit`). Every predecessor half
+  that reaches the driver arrives with its successor sibling in the same rule output, because
+  `emit-edge` builds both.
 
 ```mermaid
 flowchart TB
@@ -1645,50 +1704,64 @@ Two further notes. **CR2 and CR7 are self-joins**, so the Δₙ × Δₙ term ab
 for them but the main path. And a pair with both elements in Δₙ is visited twice, once from each
 side; that is harmless because the target is a set, but it is worth knowing when reading a profile.
 
-Representative rule — CR4's `derived-sub` handler, one of its two:
+Representative rule — CR4's `derived-pred` handler, one of its two, with the faithfulness pair
+[§7](#7-verification--contracts) requires, as `slop verify` proves it (`src/rules/el.slop`):
 
 ```lisp
 ;; CR4:  (X,Y) ∈ R(r),  B ∈ S(Y),  (∃r.B ⊑ A) ∈ O   ⟹   add A to S(X)
-;; Runs in context Y — the context owning the premise B ∈ S(Y) — and emits to each
-;; predecessor X. `b` is the subsumer just delivered to Y, i.e. the message being processed.
-;; THIS IS ONE OF CR4'S TWO HANDLERS. The companion, cr-exists-lhs-on-pred, fires when a
-;; new predecessor edge arrives and scans the STORED subsumers instead. Omitting it loses
-;; every conclusion whose edge happens to arrive after its subsumer — see the trigger table.
-(fn cr-exists-lhs-on-sub ((arena Arena) (ctx Context) (b Node) (ax NormAxiom))
-  (@intent "EL completion CR4, new-subsumer direction: ∃-restriction in subclass position")
-  (@spec ((Arena Context Node NormAxiom) -> (List Addressed)))
+;; Runs in context Y when the edge (x, r, Y) arrives, and scans the STORED subsumers of Y.
+;; THIS IS ONE OF CR4'S TWO HANDLERS. The companion, cr-exists-lhs-on-sub, fires when a new
+;; subsumer B arrives and scans the stored predecessors instead. Omitting either loses every
+;; conclusion whose premises arrive in the other order - see the trigger table.
+(fn cr-exists-lhs-on-pred ((arena Arena) (ctx Context) (r RoleId) (x Node) (ax NormAxiom))
+  (@spec ((Arena Context RoleId Node NormAxiom) -> (List Addressed)))
   (@alloc arena)
-  ;; Throughout, `ctx` is the ROUND SNAPSHOT Sₙ = Sₙ₋₁ ∪ Δₙ, never a live mutating view —
-  ;; so both `subsumers` and `preds` below already include this round's arrivals, which is
-  ;; what makes the Δₙ × Δₙ joins above reachable from here.
-  ;; CR4's first premise (B ∈ S(Y)) is the driver's obligation, not this function's: the
-  ;; rule fires because `b` was delivered to this context this round. It is therefore a @pre.
-  ;; Stating it as a @post instead would assert something the body never establishes —
-  ;; the same unprovable-claim error this contract exists to avoid (§7).
-  (@pre  {(set-has (. ctx subsumers) b)})
-  ;; FAITHFULNESS, BOTH DIRECTIONS. Soundness-direction alone is satisfied by returning the
-  ;; empty list — an implementation where every rule emits nothing passes it, which would make
-  ;; "the implementation cannot drift from the calculus without a contract failing" (§7) simply
-  ;; false. So the local-completeness direction is a contract too: every premise tuple that
-  ;; holds MUST produce its conclusion.
-  ;; (a) nothing unlicensed is emitted:
-  (@post {(forall (m) (implies (list-has $result m)
-            (exists (r a x)
-              (and (= ax (sub-some-lhs r b a))          ; the axiom is CR4-shaped, on this b
-                   (set-has (preds-of ctx r) x)         ; premise: (X,Y) ∈ R(r)
-                   (= m (addressed x (derived-sub a)))))))})  ; conclusion: A ∈ S(X)
-  ;; (b) nothing licensed is omitted:
-  (@post {(forall (r a x) (implies
-            (and (= ax (sub-some-lhs r b a))
-                 (set-has (preds-of ctx r) x))
-            (list-has $result (addressed x (derived-sub a)))))})
-  (match ax
-    ((sub-some-lhs r b* a)
-      (if (= b b*)
-        (map (x (preds-of ctx r)) (addressed x (derived-sub a)))
-        (list)))
-    (_ (list))))
+  ;; (a) nothing unlicensed is emitted
+  (@property sound
+    (forall (m $result)
+      (and (== (. m to) x)
+           (match ax
+             ((sub-some-lhs r2 b a)
+               (and (role-eq r r2)
+                    (set-has (. ctx subsumers) b)
+                    (match (. m what) ((derived-sub y) (== y a)) (_ false))))
+             (_ false)))))
+  ;; (b) nothing licensed is omitted - the direction a disabled engine fails
+  (@property complete
+    (match ax
+      ((sub-some-lhs r2 b a)
+        (or (not (role-eq r r2))
+            (not (set-has (. ctx subsumers) b))
+            (exists (m $result)
+              (and (== (. m to) x)
+                   (match (. m what) ((derived-sub y) (== y a)) (_ false))))))
+      (_ true)))
+  (let ((mut result (list-new arena Addressed)))
+    (do (match ax
+          ((sub-some-lhs r2 b a)
+            (when (role-eq r r2)
+              (when (set-has (. ctx subsumers) b)
+                (list-push result
+                  (record-new Addressed (to x) (what (union-new Derived derived-sub a)))))))
+          (_ (do)))
+        result)))
 ```
+
+Three things about how the pair is written, each forced by what a contract can express:
+- **The premises are the body's own terms.** `role-eq`, `node-eq` and `set-has` are opaque
+  predicates to the prover, so the contract states the premise with the same calls the body
+  tests, and the pair proves the body *faithful to that test*. That `role-eq` is role equality
+  is its own module's business.
+- **A premise the function does not establish is the driver's.** `ctx` is the round snapshot
+  Sₙ, and that the arriving edge is really in R(r) is how the driver delivers it. Neither is a
+  `@pre`: the rule is correct for whatever it is handed.
+- **Completeness is an `exists` over field equalities, not `list-contains` of a constructed
+  message.** A `record-new` in a contract is a fresh value that no emitted element can equal.
+
+The four rules with a **loop** - CR4 and CR5 on an arriving subsumer, which walk the stored
+predecessors, and CR7 in both directions - state neither direction yet: the prover's exact model of
+an emitted list does not follow loops, so a quantified property over them comes back *unknown*.
+[§7](#7-verification--contracts) carries them as owed.
 
 > **These local numbers are HOWL's, not the paper's.** In the cited 2005 calculus, role hierarchy
 > and role composition are **CR10** and **CR11**; its CR6 is nominal propagation and CR7–CR9 are
@@ -1700,7 +1773,7 @@ Representative rule — CR4's `derived-sub` handler, one of its two:
 > | HOWL | Published | |
 > |---|---|---|
 > | CR1–CR5 | CR1–CR5 | same rules |
-> | CR6 | CR10 | role hierarchy |
+> | — (was CR6) | CR10 | role hierarchy: realized by the role closure at CR4 and CR7, not by a rule |
 > | CR7 | CR11 | role composition |
 > | — | CR6 | nominals: not in v0 |
 > | — | CR7–CR9 | concrete domains: not in v0 |
@@ -1716,10 +1789,12 @@ the *delta* rather than the store is what makes CR1 fire at all:
 | CR3  | `B ∈ S(X)`, `B ⊑ ∃r.A` | `(X,A) ∈ R(r)` |
 | CR4  | `(X,Y) ∈ R(r)`, `B ∈ S(Y)`, `∃r.B ⊑ A` | `A ∈ S(X)` |
 | CR5  | `(X,Y) ∈ R(r)`, `⊥ ∈ S(Y)` | `⊥ ∈ S(X)` (bottom propagation) |
-| CR6  | `(X,Y) ∈ R(r)`, `r ⊑ s` | `(X,Y) ∈ R(s)` (role hierarchy) |
 | CR7  | `(X,Y) ∈ R(r)`, `(Y,Z) ∈ R(s)`, `r ∘ s ⊑ t` | `(X,Z) ∈ R(t)` (role composition) |
 
-**The three edge-concluding rules go through `emit-edge`.** CR3, CR6 and CR7 conclude
+`R(r)` in every premise above is read through the told role hierarchy, as described under the
+trigger table; the number CR6 is left unused, so CR7 keeps its name.
+
+**The two edge-concluding rules go through `emit-edge`.** CR3 and CR7 conclude
 `(X,Y) ∈ R(r)`, which is one logical fact stored as two halves — a successor at `X` and a
 predecessor at `Y` ([§6.2](#62-data-model)'s edge-pair invariant). Each must emit *both* messages;
 same-round delivery is the operational default rather than a completeness requirement. Writing only the successor half is the most tempting version of this
@@ -1805,6 +1880,18 @@ ordinary loop exit becomes either a **first-class, non-authoritative result** (t
 result at all** (cancellation). This is not defensive
 bookkeeping: a capped run and a coherent ontology are indistinguishable at the `Saturation` level,
 and conflating them is how a validator returns a false pass.
+
+**Saturation runs over renamed nodes** (M1 slice 6b, `types.slop` `Names`). A class node, an
+individual node or a named role is compared and hashed as its whole IRI; a `fresh-node` or
+`fresh-role` as one integer. So at the boundary where normalized output enters saturation
+(`normalize-input`), every node and role is renamed to a dense fresh id through one table: the
+signature, the normal form, the asserted edges and the seeds. Extraction maps them back before
+it tests for classes or sorts.
+- **⊤ and ⊥ are never renamed.** The rules build them as constants.
+- **Nothing in the rules, the premise index or the driver looks at a node's tag or IRI,** only
+  at equality. So they run unchanged, with their proved contracts, and every report is the same
+  as before.
+- **Punned names stay two nodes.** The table is keyed by the whole node, tag included.
 
 **Aspiration:** lift this into a shared `saturate` skeleton parameterized over the fact type and
 rule set, instantiated twice (GROWL: triples; HOWL: derived axioms). **Open question**
@@ -1990,6 +2077,48 @@ start of round *n*, and messages produced during round *n* are delivered for rou
 count is then a function of the input alone, so `max-iterations` cuts at the same point on every
 host, at any worker count. Within a round, work distribution stays free.
 
+**How the round is parallelized** (M1 slice 5, `src/saturate.slop`; the barrier made parallel in
+slice 6b):
+1. **Split.** At `worker-count` W > 1 the frontier `active` is split into up to W contiguous
+   shares.
+2. **Join.** Each worker thread joins its share against the frozen store, writing only its own
+   arena and `RoundDelta`. `round-join` is read-only over the store, and a store write in the join
+   is a compile error, so workers share nothing mutable.
+3. **Partition.** At the barrier the coordinator walks every delta's *keys*, gives each touched
+   context one owner (round-robin, first seen), and creates any context a delta names. That
+   creation is the one write to the context registry a round makes (an undeclared class used as
+   an existential filler), so it happens here, serially.
+4. **Commit.** One committer per owner, in parallel. Each processes its own bucket: the entries,
+   drawn from every delta, for the contexts it owns. It grows those contexts' sets in its own
+   arena. A fact joins the next queue only if
+   it was new to the store, which is how two workers' copies of one fact become one. Nothing is
+   merged first: on EL-GALEN at W = 4 the old merge-then-commit was two serial passes over every
+   conclusion, 68% of the round.
+5. **Collect.** The owners' queues become the next round's queues and frontier.
+
+**Why any split gives the same result:** each delta holds only facts novel against the same frozen
+Sₙ, every fact belongs to exactly one context, and every context has exactly one committer. So the
+store after the barrier is the union of the deltas, each queue holds each novel fact once, and the
+frontier is the touched set: exactly what one worker would have produced. Only queue *order* can
+differ, and Δ is a set. So the frontier, the round count and every report are the same at every W,
+capped runs included.
+
+**Checks:**
+- `make test-tsan` runs the join and the commit under ThreadSanitizer. That is evidence, not proof,
+  since a race is reported only when it happens. Two deliberate breakages were each seen as races:
+  giving one context two committers, and creating contexts in the committers rather than in the
+  partition.
+- `test-commit-dedups-across-deltas` checks that two workers' copies of a fact are committed and
+  queued once, which the report alone cannot show.
+- `make determinism` compares every report at W ∈ {1,2,4,8} for every cap in
+  {0, 1, R/2, R−1, R, ∞}. It refuses to pass unless some cap actually cut a run short.
+
+**One precondition the language does not yet check: every worker thread starts.** slop's `spawn`
+ignores a `pthread_create` failure ([slop#192](https://github.com/slop-lang/slop/issues/192)). A
+share whose thread never started would contribute no delta, and nothing would say so. Until #192 is
+fixed, the guarantee above holds for runs where every spawn succeeds. Worker arenas are kept small
+(1 MB, growing on demand) so that `--workers 64` does not itself cause such a failure.
+
 Consequences, stated honestly:
 
 - **This costs throughput against pure ELK-style racing.** A barrier idles workers that finish a
@@ -2034,9 +2163,11 @@ row below sits on one side of that line.
 
 | Property | How assured | Z3-reachable? |
 |----------|-------------|---------------|
-| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@post`s, one per direction ([§6.4](#64-completion-rules)) | **Yes** — structural |
-| **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural |
-| **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural |
+| **Per-rule faithfulness** — each step emits only conclusions licensed by its rule's premises, **and every licensed conclusion is emitted** | Two per-function `@property`s, `sound` and `complete` ([§6.4](#64-completion-rules)) | **Yes** — structural. **Proved** for the five loop-free rule functions (CR1, CR2, CR3, and CR4 and CR5 on an arriving edge). **Owed** for the four with a loop (CR4/CR5 on an arriving subsumer, CR7 both ways), which the prover's exact list model does not follow; empirical fixtures and the differential stand in |
+| **Dispatch coverage** — the driver actually invokes every rule against every axiom, in every trigger-table direction | Driver-level obligation over the trigger table ([§6.4](#64-completion-rules)) | **Yes** — structural, but **not yet stated**: held by test (`test-indexed-dispatch-matches-reference` replays every stored fact through the premise index and the full scan) |
+| **Initialization** — every context starts with an *empty* store, both seeds in its **queue**, and membership in `active` | Post-condition on the initializer ([§6.3](#63-normalization) step 4) | **Yes** — structural, but **not yet stated**: held by test (`test-context-starts-with-empty-store`) |
+| **Context coverage** — every individual an axiom names gets a context, declared or not | `(forall (a (. no asserted)) (list-contains $result a))` on `signature-nodes` | **Owed** — true, but the body is loops, which the prover's exact model does not follow. Held by `@example`s on `signature-nodes` and `test-undeclared-individual-is-reasoned-over` (W3C DisjointClasses-002) |
+| **No class assertion is set aside** — a typed triple over a named or anonymous class decodes to a class assertion, never `unrecognized` | `@post` on `decode-class-assertion` | **Owed** — true and loop-free, but slop reads an Option/Result payload as Int (slop-lang/slop#167), so the tag of a union inside `ok` is lost and the contract fails on a counterexample. Held by `test-anonymous-class-assertion-is-read` (W3C WebOnt-Restriction-001) |
 | **Per-rule soundness** — each conclusion is *entailed* by the ontology | Faithfulness (above) **+** the calculus's published soundness proof | **No** — model-theoretic |
 | **Normalization structural correctness** — fresh names are fresh; every gated-in axiom yields normal forms | Per-function contract on the rewrite | **Yes** |
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
@@ -2046,7 +2177,9 @@ row below sits on one side of that line.
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK, Kazakov for Horn-SHIQ) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
 So Z3 buys exactly one thing, and it is worth having: **the implementation cannot drift from the
-calculus without a contract failing.** That claim needs all three structural obligations — both
+calculus without a contract failing.** HOWL does **not** make that claim yet. Today it holds rule by
+rule for the five loop-free rules only; the four loop rules, dispatch coverage and initialization
+are held by tests, which is evidence but not the claim. The claim needs all three structural obligations — both
 directions of each rule contract, dispatch coverage, **and initialization**. Drop any one and a
 disabled engine passes verification: with only the soundness direction, rules returning the empty
 list satisfy everything while deriving nothing; without the initialization obligation, seeds written
@@ -2077,7 +2210,7 @@ Two consequences worth keeping in view:
 |---|---|
 | Turtle parse/serialize (`slop-rdf`) | Concept/Role expression ADTs |
 | `Term` / `IRI` / blank-node interning | RDF/OWL → axiom structural mapping |
-| `IndexedGraph` and arena utilities | Normalization to normal form |
+| Arena utilities | Normalization to normal form; the triple store decode reads (`termstore.slop`: term ids by content, an SPO index and an `rdf:type` index — HOWL's own since M1 slice 6b, replacing slop-rdf's four-index `IndexedGraph`) |
 | The fixpoint **control skeleton** (`engine-run` → `saturate`) | `S(C)` / `R(r)` saturation state |
 | Worker pool / channels / `ReasonerConfig` fields | The completion rules (calculus) |
 | Vocab constants; CLI/config plumbing | Classification output, reduction, justifications |
@@ -2312,6 +2445,7 @@ Mirrors GROWL's CLI conventions (separate `cli/` SLOP executable project).
 
 ```
 howl validate    <ontology.ttl> [--profile P] [--strict] [-I FILE]...  # FLAGSHIP — coherence; see exit codes
+                 [--report] [--max-iterations N] [--workers N] [--timings]
 howl classify    <ontology.ttl> [--reduce] [--emit inferred.ttl]  # inferred subsumption hierarchy
 howl unsat       <ontology.ttl>                                    # list unsatisfiable classes
 howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       # merged coherence + minimal repair
@@ -2340,6 +2474,25 @@ itself a caller — no means to discharge it. `--no-imports` asserts deliberate 
 records them as omitted, so the run is inconclusive rather than silently narrowed. Neither flag can turn an
 incomplete run into a **coherent** verdict. (Neither prevents an incomplete run from returning a
 definitive **incoherent** verdict — that asymmetry is the point, see [§6.2](#62-data-model).)
+
+**The report, the budget, and timings.** `--report` prints the **canonical report** in place of
+the summary: a line each for verdict, termination, round count and inconsistency, then every
+omission, unsatisfiable class and subsumption, each list in the canonical order
+[§6.7](#67-output--classification) fixes. It is the text a run is *compared by* — goldens, the
+worker-count determinism check of [§12](#12-milestones--acceptance-criteria) M1 (e) — so it carries
+nothing that is not a function of input and budget. `--max-iterations N` sets the round budget
+([§6.8](#68-determinism-binding)); a value outside `0..10000` is refused with exit `3`, never
+clamped, since a clamped budget is a run the caller did not ask for. `--workers N` sets how many
+threads join each round (`1..64`, default 4, refused rather than clamped outside that range). It
+can change only speed, never the report, and it appears nowhere in the report or the engine
+fingerprint. `--timings` prints phase
+durations on **stderr**: `parse_ms` (the Turtle), `decode_ms` (header pre-pass and decode, triples
+to axioms), `prepare_ms` (gate, normalize, rename, initialize, premise index), `reason_ms` and
+`total_ms`. **Timings are a CLI measurement, never
+part of a report**: the engine never reads a clock, and a duration on stdout would make two correct
+runs' reports differ. `prepare_ms + reason_ms`, axioms in hand to taxonomy, is the classification
+figure M1 (c) compares against the oracle's (bench/bench.py; the boundary is pinned under §12's
+benchmark protocol).
 
 **Exit codes** are [§6.2](#62-data-model)'s verdict table, verbatim — a CI gate must distinguish
 "checked, fine" from "couldn't check", and must not downgrade a real finding just because coverage
@@ -2438,10 +2591,92 @@ the weaker, more useful condition.
      not an oracle for that construct.
    - **Fail the harness on any oracle warning or ignored-axiom diagnostic** rather than diffing
      through it.
-   - **Route range-bearing cases to a confirmed-complete reasoner** (HermiT, or ELK only if the
-     pinned version passes the range probe). The "HOWL ⊆ ELK" claim in
-     [§5.2](#52-the-exact-v0-language) is about the *language*; it is not a promise that a given
-     build implements all of it.
+   - **Route range-bearing cases to a confirmed-complete reasoner**: HermiT. The "HOWL ⊆ ELK"
+     claim in [§5.2](#52-the-exact-v0-language) is about the *language*; it is not a promise that
+     a given build implements all of it. An earlier draft let ELK gate ranges if the pinned
+     version passed the range probe. It does not: ELK 0.6.0's release notes claim only *partial*
+     range support, and a handful of passing probes doesn't make a partial implementation
+     complete. So ELK's range-bearing diffs are printed for information and never gate.
+
+   **How the harness does it** (M1 slice 3; `make probes diff-fixtures`):
+   - **The oracle** is `oracle/`, a small Java program on one pinned OWL API rather than ROBOT.
+     ROBOT writes a reduced ontology, bundles its own reasoner versions, and gives no control over
+     log capture.
+     - ELK, HermiT, the OWL API and the JDK are pinned in `oracle/build.gradle.kts`, with Gradle
+       dependency locking and strict sha256 verification.
+     - At startup the program checks each jar's manifest release against those pins, so a
+       substituted artifact aborts the run.
+     - A file fails, and gets no report, when the OWL API leaves a triple unparsed or guesses a
+       declaration, or when anything logs a warning.
+     - ELK's warning capture is proven live by a tripwire: `out-of-profile/allvalues.ttl` must make
+       ELK warn both before the first file and after the last.
+   - **The comparison reads HOWL's canonical report** ([§6.7](#67-output--classification))
+     directly. There is no separate dump format. The oracle writes the same bottom-compressed
+     grammar, so `corpus/entdiff.py` compares sets and decides `entails-sub` for every ordered
+     pair in time linear in the report. It **refuses** a HOWL report that didn't reach a fixpoint
+     or omitted anything: such a report is a lower bound over a different theory.
+
+     Before believing anything, it checks the report against itself:
+     - every count must match its lines, `omitted` above all;
+     - the `verdict` (and a golden's `exit`) must follow from the report's facts under
+       [§6.2](#62-data-model)'s rule.
+
+     Only a *well-formed* incomplete report is skipped; a malformed one fails. A test in
+     `src/test.slop` holds `entails-sub` equal to the report's answer on every pair, so the
+     function the port serves is the one the differential certifies.
+   - **Capability probes** are `corpus/fixtures/probes/`: one ontology per v0 construct, with
+     `# construct:` (a `corpus/census.py` label) and `# expect:` / `# expect-not:` lines.
+     - Each probe's construct is load-bearing, **checked on every run**. The probe is rerun with
+       its construct's axioms deleted (probes are one axiom per line), and HOWL and HermiT must
+       both lose a positive expectation. The label must be one of the probe's census constructs.
+     - Which oracle passes which probe is recorded in `corpus/oracle-capabilities.txt`, and a
+       change fails the run until it is reviewed and regenerated.
+     - The run fails if HOWL or HermiT misses any probe.
+   - **Routing:** HermiT gates every fixture. ELK gates a fixture only when every census construct
+     in it passes all of ELK's probes and it has no range axiom.
+   - **External conformance** (`make conformance`) checks expected answers written by neither
+     HOWL nor this project. Both sources are pinned by commit and sha256 in
+     `corpus/conformance.sha256`.
+     - *The W3C OWL 2 conformance suite* (as HermiT carries it): every Approved EL-profile,
+       Direct-Semantics test.
+       - Consistency and inconsistency tests are checked against HOWL's `inconsistent` line.
+       - Positive and negative entailment tests are checked where the conclusion is a named-class
+         `SubClassOf`/`EquivalentClasses`. The rest are recorded `not-expressible`: individual
+         types, property axioms and complex expressions, which the report does not state.
+     - *ELK's tests* (`elk-reasoner/src/test/resources/test_input`):
+       - `classification/`: each input, converted to Turtle by the pinned OWL API, is checked
+         against the taxonomy ELK's authors expect. The taxonomy is transitively reduced, so it
+         is closed first, and `entdiff` compares it pair by pair.
+       - `query/entailment/`: the named-class subsumptions among the expected (non-)entailments.
+
+     **Outcomes and records.** Every outcome is recorded in `corpus/conformance-status.txt`, so a
+     test that starts being omitted fails the run instead of silently leaving the checked set.
+     - A test HOWL doesn't reason over completely is `outside-v0`, recorded with HOWL's omission
+       kinds and flagged `census-clean` when the independent census disagrees.
+     - A test whose input the OWL API cannot convert faithfully is `oracle-lossy` (see the
+       OWL API blind spots below).
+     - A mismatch is never recorded.
+
+     **Defects found.** The suites found three HOWL defects. Each is now a fixture, a
+     `src/test.slop` test and a golden:
+     - **A false coherent** (`hazards/undeclared-individual.ttl`; W3C DisjointClasses-002). An
+       individual that appears only in class assertions, with no `owl:NamedIndividual`
+       declaration, got no context, so its assertions derived nothing.
+     - **A needless inconclusive** (`hazards/anonymous-class-assertion.ttl`; W3C
+       WebOnt-Restriction-001). An `rdf:type` with a blank-node class expression was not read
+       as a class assertion.
+     - **A needless inconclusive** (`hazards/annotated-annotation.ttl`; W3C
+       AnnotationAnnotations-001). An annotation on an annotation (`owl:Annotation`) was read as
+       an anonymous individual instead of being consumed, as `owl:Axiom` reification is.
+   - **The OWL API's blind spots.** Both oracles, and `oracle convert`, sit behind the OWL API,
+     so input it cannot load as HOWL reads it is never diffed (`corpus/differential.py`). Each
+     blind spot has a fixture pinning HOWL's own answer instead.
+     - **Repeated operands** where OWL 2 reads operands pairwise by position (`AllDisjointClasses`,
+       `AllDifferent`, `disjointUnionOf`, and structurally equal anonymous operands too). The OWL
+       API stores these operands as a set and drops the repeat silently, so `(A B A)` loses "A
+       is empty" (ELK DisjointSelf; `hazards/disjoint-repeated-member.ttl`).
+     - **An annotation on an ontology annotation.** The OWL API's RDF parser leaves its triples
+       unparsed. The unparsed-triple refusal is not weakened to admit it.
 2. **Corpus — and every input must clear the v0 gate.** Start with small hand-built defined-class
    fixtures (including the §3.1 litmus test), then GO / a SNOMED fragment / OBO ontologies for EL;
    add BFO/CCO-with-definitions for v1.
@@ -2458,9 +2693,37 @@ the weaker, more useful condition.
    version and the projected ontology's own hash. Projection is part of the fixture, never a step
    the benchmark performs on the fly — otherwise the numbers are not reproducible and neither is the
    diff.
-3. **Contract obligations.** Every completion rule carries an `@post` *faithfulness* contract
-   ([§7](#7-verification--contracts)); the driver carries the termination invariant (v0). CI runs
-   `slop verify` (Z3) as GROWL does.
+
+   **How the corpus is projected and diffed** (M1 slice 4):
+   - **The projection is materialized** (`project.py --materialize`) as Turtle written by rdflib,
+     pinned by content rather than bytes. Read back, three things must match the pinned removal
+     list: its ground-triple hash, its blank-node triple count, and a digest of its blank-node
+     *structure*, in which each blank node is named by a hash of its own content instead of the
+     parser's label. Census must also find nothing out of profile. The corpus differential runs
+     the same check before it compares anything.
+     - N-Triples was rejected. HOWL's parser finds `_:` labels by linear scan, which is quadratic
+       on GO, and deterministic labels need canonical relabelling (9.3 h on OBI).
+     - A removed axiom takes its `owl:Axiom` reification with it: stage 0 would otherwise rebuild
+       the axiom from the reification. A reification is kept only while it matches a *surviving*
+       axiom.
+     - Chain admissibility (§5.2) is judged on the graph the other removals leave, so a chain is
+       not removed for a range the projection itself deletes.
+   - **Census and the gate must agree** on the materialized file: HOWL must report `omitted 0`.
+     A disagreement is triaged:
+     - census too permissive: fix census and re-project;
+     - gate too strict: fix HOWL, with a fixture;
+     - removals are never derived from HOWL's gate, or the projection would certify itself.
+   - **The corpus differential routes by the same rule as the fixtures.** ELK gates an entry only
+     when it is probe-capable for every construct and has no ranges (GO, EL-GALEN). HermiT gates
+     the rest (RO, OBI).
+     - HermiT does not gate GO or EL-GALEN, as it does every fixture: it is not the confirmed
+       oracle there, and it is far slower.
+     - An oracle that does not finish inside the timeout is "no oracle", a failure.
+     - The outcome is recorded in `corpus/corpus-differential.txt`.
+3. **Contract obligations.** Every loop-free completion rule carries a `sound`/`complete`
+   *faithfulness* pair of `@property`s ([§7](#7-verification--contracts)), each seen to stop
+   verifying under a mutation of the rule's body; the four loop rules are owed. The driver
+   carries the termination invariant (v0). CI runs `slop verify` (Z3) as GROWL does.
 4. **Verdict discipline (adversarial).** [§6.2](#62-data-model)'s verdict rule is a *safety*
    property, so test it by trying to break it — **all three rows**, since the failure modes are
    opposite:
@@ -2552,7 +2815,7 @@ the weaker, more useful condition.
 16. **Baseline diff safety.** With a deliberately incomplete baseline run, assert `subsumption_delta`
    is suppressed entirely rather than emitted partially, and that a subsumption entailed by both
    theories is never reported as new ([§6.7](#67-output--classification)).
-17. **Edge halves.** For every edge-concluding rule (CR3, CR6, CR7), assert both `derived-succ` and
+17. **Edge halves.** For every edge-concluding rule (CR3, CR7), assert both `derived-succ` and
    `derived-pred` land in the same next-round delta, and that a consuming rule reading `preds`
    (CR4/CR5) fires. Emitting one half under-derives silently, so assert the *consequence*, not just
    the message count.
@@ -2688,6 +2951,34 @@ flowchart TB
   > with ELK's own numbers regenerated rather than quoted from the literature. 5× is a starting
   > line, not a target: it is loose enough to be achievable for a first implementation and tight
   > enough that a wrong data structure fails it.
+  >
+  > **How the protocol is pinned** (M1 slice 6, `bench/bench.py`, results in `bench/results.txt`):
+  > - **Classification window: axioms in hand to taxonomy, on both sides.** For the oracle it is
+  >   reasoner creation + the consistency check + `precomputeInferences`, over an `OWLOntology` its
+  >   untimed parse built. The OWL API's parse does the text *and* the RDF-to-OWL mapping
+  >   (reification, lists, class expressions); ELK then loads, normalizes and indexes the axioms
+  >   lazily at the first query, and HermiT in its constructor, inside the window. For HOWL it is
+  >   `prepare_ms + reason_ms`: gate, normalize, rename, initialize, premise index, saturation and
+  >   extraction, over the axioms its untimed parse and decode built. HOWL's decode (triples →
+  >   axioms) is the counterpart of the OWL API's mapping, so it is outside the window as that is.
+  >   It is recorded beside the window (`howl_decode_ms`), never hidden. Until M1 slice 6b the
+  >   window included decode, which charged HOWL for work the oracle was not charged for.
+  > - **Which oracle.** The routing `make diff-corpus` recorded. ELK times GO and EL-GALEN, and only
+  >   those are gated. HermiT times the range-bearing RO and OBI, with the result reported, not gated.
+  > - **Runs.** HOWL's runs are separate processes. The oracle's share one JVM, so its measured runs
+  >   are JIT-warm. The machine's load average is recorded at the start and end of each run.
+  > - **Every timed run reproduces the certified answer.** HOWL's report must hash to the
+  >   differential's `howl-report`, with `termination fixpoint` and `omitted 0`. The oracle's
+  >   entailment lines must hash to `oracle-entailments`. A timing is always of the exact input and
+  >   answer the differential certified clean.
+  > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
+  >   content check (ground, blank-node count and structure against the pinned projection).
+  > - **Status: met.** EL-GALEN is at 3.8× and GO at 1.6× (`bench/results.txt`). With decode still
+  >   inside the window they were 6.1× and 5.05× after slice 6b and slop's map and lazy-collection
+  >   work (slop-lang/slop#205, #217), down from 30.1× and 19.2× at S6a. Slice 6b's changes: each
+  >   rule join done once from its cheaper side, HOWL's own triple store, a parallel round barrier,
+  >   saturation over renamed nodes, the axioms-in-hand boundary, and role inclusions matched
+  >   through the told closure.
 - **M2a — port amendments.** Land A1–A4 from [§8.5](#85-required-port-amendments) on the consumer
   side. Not HOWL work, but HOWL work is blocked on it, and it is listed as a milestone so the
   dependency is scheduled rather than discovered. **Acceptance:** `TBoxInput` carries per-document
@@ -2879,13 +3170,14 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
    this is a performance want, not a correctness blocker. The hard part when it does land is
    **deletion**: retracting an axiom can un-derive conclusions, which monotone saturation does not
    do for free.
-7. **Does SLOP's `@post` support quantifiers?** The faithfulness contracts in
-   [§6.4](#64-completion-rules) and [§7](#7-verification--contracts) are written with
-   `forall`/`exists` ranging over emitted conclusions. If SLOP's contract language is
-   quantifier-free, they cannot be stated as written and §7's "**Yes** — structural" rows overclaim
-   exactly as the old soundness row did. Fallbacks: have each rule return a **witness** alongside
-   every conclusion (naming the premises it fired on), which makes the check quantifier-free; or
-   bound-unroll over the emitted list. Resolve before M1 — it determines the rule signatures.
+7. ~~**Does SLOP's `@post` support quantifiers?**~~ **ANSWERED — yes, for loop-free rules.**
+   `forall`/`exists` over `$result` translate, and since slop-lang/slop #166 and #170 a result
+   built by guarded pushes with no loop is modelled exactly and a contract can `match` a union's
+   payloads, so both faithfulness directions are *proved* on the five loop-free rule functions,
+   with the rule signatures unchanged. Neither fallback (witnesses, bound-unrolling) was needed.
+   What remains open is narrower: the **four loop rules**, whose emitted lists the exact model
+   does not follow. Their properties stay owed in [§7](#7-verification--contracts); proving them
+   needs a loop model in the prover or a `@loop-invariant` per rule.
 
 ---
 
