@@ -360,24 +360,18 @@ types_Saturation saturate_round_commit(slop_arena* arena, types_Saturation sat, 
 
 types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config) {
     {
-        #ifdef SLOP_DEBUG
-        SLOP_PRE((16777216) > 0, "with-arena size must be positive");
-        #endif
-        slop_arena _arena_scratch = slop_arena_new(16777216);
-        #ifdef SLOP_DEBUG
-        SLOP_PRE(_arena_scratch.base != NULL, "arena allocation failed");
-        #endif
-        slop_arena* scratch = &_arena_scratch;
-        {
-            __auto_type delta = ((saturate_RoundDelta){.pending = slop_map_new_ptr(scratch, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node)});
-            if (config.worker_count <= 1) {
-                saturate_round_join(scratch, sat, idx, delta);
-            } else {
-                saturate_parallel_join(scratch, sat, idx, delta, config.worker_count);
-            }
-            return saturate_round_commit(arena, sat, delta);
+        __auto_type scratch = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
+        __auto_type delta = ((saturate_RoundDelta){.pending = slop_map_new_ptr(scratch, 16, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node)});
+        if (config.worker_count <= 1) {
+            saturate_round_join(scratch, sat, idx, delta);
+        } else {
+            saturate_parallel_join(scratch, sat, idx, delta, config.worker_count);
         }
-        slop_arena_free(scratch);
+        {
+            __auto_type next = saturate_round_commit(arena, sat, delta);
+            ({ slop_arena_free(scratch); free(scratch); });
+            return next;
+        }
     }
 }
 

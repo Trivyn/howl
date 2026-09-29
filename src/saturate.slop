@@ -451,13 +451,22 @@
     ;; an IRI whose bytes live in the parse arena — no rule creates a
     ;; string. `make test-asan` is what enforces this: a store that kept a
     ;; pointer into `scratch` is a use-after-free there.
-    (with-arena :as scratch 16777216
-      (let ((delta (record-new RoundDelta (pending (map-new scratch Node Context)))))
-        (do
-          (if (<= (. config worker-count) 1)
-            (round-join scratch sat idx delta)
-            (parallel-join scratch sat idx delta (. config worker-count)))
-          (round-commit arena sat delta)))))
+    ;;
+    ;; FREED EXPLICITLY, NOT BY `with-arena`. This body was a `with-arena`
+    ;; whose value was the commit, and slop lowers that to `return
+    ;; saturate_round_commit(...)` BEFORE the free: every round's scratch
+    ;; leaked, and the ASan check above never ran (M1 slice 6b C0). The
+    ;; result is let-bound, the scratch freed, and then the result returned.
+    (let ((scratch (arena-new 16777216))
+          (delta   (record-new RoundDelta (pending (map-new scratch Node Context)))))
+      (do
+        (if (<= (. config worker-count) 1)
+          (round-join scratch sat idx delta)
+          (parallel-join scratch sat idx delta (. config worker-count)))
+        (let ((next (round-commit arena sat delta)))
+          (do
+            (arena-free scratch)
+            next)))))
 
   (fn parallel-join ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (w Int))
     (@intent "The join on up to w workers, each over a share of the frontier, merged into delta")
