@@ -111,14 +111,8 @@ owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
             __auto_type _ = _mv_185.data.ra_declaration;
             return owl2_Disposition_d_consumed;
         }
-        case owl2_RawAxiom_ra_annotation_assertion:
+        case owl2_RawAxiom_ra_annotation:
         {
-            __auto_type _ = _mv_185.data.ra_annotation_assertion;
-            return owl2_Disposition_d_inert;
-        }
-        case owl2_RawAxiom_ra_annotation_axiom:
-        {
-            __auto_type _ = _mv_185.data.ra_annotation_axiom;
             return owl2_Disposition_d_inert;
         }
         case owl2_RawAxiom_ra_inverse_properties:
@@ -418,14 +412,8 @@ uint8_t owl2_axiom_in_profile(owl2_RawAxiom ax) {
                 __auto_type _ = _mv_192.data.ra_declaration;
                 return 0;
             }
-            case owl2_RawAxiom_ra_annotation_assertion:
+            case owl2_RawAxiom_ra_annotation:
             {
-                __auto_type _ = _mv_192.data.ra_annotation_assertion;
-                return 0;
-            }
-            case owl2_RawAxiom_ra_annotation_axiom:
-            {
-                __auto_type _ = _mv_192.data.ra_annotation_axiom;
                 return 0;
             }
             case owl2_RawAxiom_ra_inverse_properties:
@@ -1118,15 +1106,9 @@ slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax) {
             __auto_type d = _mv_211.data.ra_declaration;
             return owl2_wrap(arena, SLOP_STR("Declaration"), d.entity.value);
         }
-        case owl2_RawAxiom_ra_annotation_assertion:
+        case owl2_RawAxiom_ra_annotation:
         {
-            __auto_type a = _mv_211.data.ra_annotation_assertion;
-            return owl2_wrap(arena, SLOP_STR("AnnotationAssertion"), owl2_join2(arena, a.property.value, a.target));
-        }
-        case owl2_RawAxiom_ra_annotation_axiom:
-        {
-            __auto_type ref = _mv_211.data.ra_annotation_axiom;
-            return owl2_wrap(arena, SLOP_STR("AnnotationAxiom"), owl2_render_input_ref(ref));
+            return SLOP_STR("Annotation()");
         }
         case owl2_RawAxiom_ra_inverse_properties:
         {

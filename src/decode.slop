@@ -118,7 +118,7 @@
                 OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
                 OWL_DISJOINT_UNION_OF SWRL_IMP
                 RawAxiom RawChain RawEdge RawClassAssertion
-                RawAnnotation RawDeclaration PropCharacteristic
+                RawDeclaration PropCharacteristic Disposition disposition
                 signature-has-annotation-property
                 signature-has-object-property
                 signature-has-data-property))
@@ -1034,7 +1034,8 @@
 
   (type Stage1 (record
     (axioms    (List RawAxiom))
-    (signature Signature)))
+    (signature Signature)
+    (inert     Int)))       ; inert axioms recognized and dropped (annotations)
 
   ;; Deterministic N-Triples-ish rendering, for the InputRef an
   ;; out-of-profile or unrecognized axiom carries.
@@ -1466,7 +1467,7 @@
               ;; gates read, and can reject a valid RBox.
               (cond
                 ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                  (ok (union-new RawAxiom ra-annotation)))
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
@@ -1515,7 +1516,7 @@
               ;; is unsoundness, not incompleteness.
               (cond
                 ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                  (ok (union-new RawAxiom ra-annotation)))
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
@@ -1535,7 +1536,7 @@
               ;; then eliminated into real GCIs.
               (cond
                 ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                  (ok (union-new RawAxiom ra-annotation)))
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
@@ -1580,11 +1581,7 @@
             ;; custom curation property out-of-profile and fail
             ;; acceptance (a) on the fixture written to catch it.
             ((signature-has-annotation-property sig p)
-              (ok (union-new RawAxiom ra-annotation-assertion
-                    (record-new RawAnnotation
-                      (property p)
-                      (subject  (frag arena t))
-                      (target   (render-term arena (. t object)))))))
+              (ok (union-new RawAxiom ra-annotation)))
 
             ((signature-has-object-property sig p)
               (match (role-of-term (. t predicate))
@@ -1639,17 +1636,27 @@
     (let ((ig  (graph-to-indexed arena triples))
           (sig (build-signature arena triples))
           (mut out (list-new arena RawAxiom))
+          (mut inert 0)
           (mut fault (Option String) (none)))
       (do
         (set! fault (declaration-conflict arena sig triples))
+        ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
+        ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the
+        ;; decoded axioms. The count is what shows they were recognized
+        ;; as inert, rather than lost or misfiled out of profile.
         (for-each (t triples)
           (when (not (structural-triple t))
             (match (decode-axiom arena ig sig t)
               ((error m) (set! fault (some m)))
-              ((ok ax)   (list-push out ax)))))
+              ((ok ax)
+                (match (disposition ax)
+                  ('d-inert          (set! inert (+ inert 1)))
+                  ('d-consumed       (list-push out ax))
+                  ('d-in-profile     (list-push out ax))
+                  ('d-out-of-profile (list-push out ax)))))))
         (match fault
           ((some m) (error (union-new Fault input-error m)))
-          ((none)   (ok (record-new Stage1 (axioms out) (signature sig))))))))
+          ((none)   (ok (record-new Stage1 (axioms out) (signature sig) (inert inert))))))))
 
   (fn declaration-conflict ((arena Arena) (sig Signature) (triples (List Triple)))
     (@intent "An IRI declared under two mutually exclusive kinds")

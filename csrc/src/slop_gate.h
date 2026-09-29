@@ -119,7 +119,7 @@ SLOP_LIST_DEFINE(gate_RangeEntry, slop_list_gate_RangeEntry)
 struct gate_EntityRef {
     types_EntityKind kind;
     rdf_IRI entity;
-    types_AxiomRef ref;
+    owl2_RawAxiom axiom;
 };
 typedef struct gate_EntityRef gate_EntityRef;
 

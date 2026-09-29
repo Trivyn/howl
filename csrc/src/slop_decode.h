@@ -156,6 +156,7 @@ SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
 struct decode_Stage1 {
     slop_list_owl2_RawAxiom axioms;
     owl2_Signature signature;
+    int64_t inert;
 };
 typedef struct decode_Stage1 decode_Stage1;
 

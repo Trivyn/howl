@@ -85,6 +85,11 @@
   (ffi "string.h"
     (strlen ((s (Ptr U8))) U64))
 
+  ;; For `peak-mb`'s getrusage. An ffi block emits only the #include; the
+  ;; call itself is c-inline, since `struct rusage` has no SLOP type.
+  (ffi "sys/resource.h"
+    (getrusage ((who Int) (usage (Ptr U8))) Int))
+
   ;; ============================================================
   ;; Exit codes (§9) — the verdict table in the CLI's dialect
   ;; ============================================================
@@ -243,7 +248,7 @@
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
       (println "  --strict   refuse to run past any omission (exit 2, no report)")
       (println "  --report   print the canonical report instead of the summary")
-      (println "  --timings  print phase durations on stderr (never part of a report)")
+      (println "  --timings  print phase durations and peak memory on stderr (never part of a report)")
       (println "  --max-iterations N   the round budget, 0..10000 (default 1000)")
       (println "  --workers N          threads joining each round, 1..64 (default 4); never changes the report")
       (println "")
@@ -292,6 +297,37 @@
                     (string-concat arena (int-to-string arena (- t4 t3))
                       (string-concat arena " total_ms="
                         (string-concat arena (int-to-string arena (- t4 t0)) "\n"))))))))))))
+
+  (fn peak-mb ()
+    (@intent "The process's peak resident set so far, in MB")
+    (@spec (() -> Int))
+    ;; A HIGH-WATER MARK (ru_maxrss), never current usage: freeing memory
+    ;; does not lower it, so each figure in the memory line is the peak
+    ;; reached by the end of that phase. ru_maxrss is bytes on macOS and
+    ;; kilobytes on Linux.
+    (let ((mut mb 0))
+      (do
+        (c-inline "{ struct rusage ru; getrusage(RUSAGE_SELF, &ru);\n#ifdef __APPLE__\n mb = (int64_t)(ru.ru_maxrss / 1048576);\n#else\n mb = (int64_t)(ru.ru_maxrss / 1024);\n#endif\n }")
+        mb)))
+
+  (fn print-memory ((arena Arena) (m1 Int) (m2 Int) (m3 Int) (m4 Int) (m5 Int))
+    (@intent "Peak memory at the end of each phase on stderr: parse, decode, prepare, reasoning, report")
+    (@spec ((Arena Int Int Int Int Int) -> Unit))
+    (@alloc arena)
+    ;; Read at the same points as the timing clock, plus once after the
+    ;; report is written. Like the timings it is a CLI measurement and
+    ;; never part of a report.
+    (eprint
+      (string-concat arena "memory parse_mb="
+        (string-concat arena (int-to-string arena m1)
+          (string-concat arena " decode_mb="
+            (string-concat arena (int-to-string arena m2)
+              (string-concat arena " prepare_mb="
+                (string-concat arena (int-to-string arena m3)
+                  (string-concat arena " reason_mb="
+                    (string-concat arena (int-to-string arena m4)
+                      (string-concat arena " report_mb="
+                        (string-concat arena (int-to-string arena m5) "\n"))))))))))))
 
   (fn all-digits ((s String))
     (@intent "Non-empty, and every byte an ASCII digit — the only shape a budget may take")
@@ -370,7 +406,11 @@
                 (match (parse-ttl-file arena input)
                   ((error _)
                     (do (print "howl: cannot parse ") (println input) (set! failed true)))
-                  ((ok g) (for-each (t (. g triples)) (list-push triples t))))
+                  ;; The parsed list IS the buffer, not a copy of it: copying
+                  ;; every triple into a fresh list cost GO ~0.9 GB (the list
+                  ;; plus its abandoned doubling buffers) to hold the same
+                  ;; values. An -I document's triples are appended to it.
+                  ((ok g) (set! triples (. g triples))))
 
                 (while (< i argc)
                   (let ((arg (argv-to-string argv i))
@@ -507,12 +547,16 @@
                 (if failed
                   EXIT_ERROR
                   (let ((t-parsed   (now-ms))
+                        (m-parsed   (peak-mb))
                         (decoded    (decode arena triples resolved))
                         (t-decoded  (now-ms))
+                        (m-decoded  (peak-mb))
                         (prepared   (prepare-from arena decoded cfg))
                         (t-prepared (now-ms))
+                        (m-prepared (peak-mb))
                         (result     (reason-prepared arena prepared cfg))
-                        (t-reasoned (now-ms)))
+                        (t-reasoned (now-ms))
+                        (m-reasoned (peak-mb)))
                     (do
                       (when timings
                         (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
@@ -551,4 +595,6 @@
                                   (print (int-to-string arena (cast Int (list-len os))))
                                   (println " omitted")
                                   (print-omissions arena os))))))
+                      (when timings
+                        (print-memory arena m-parsed m-decoded m-prepared m-reasoned (peak-mb)))
                       (exit-code-for result))))))))))))

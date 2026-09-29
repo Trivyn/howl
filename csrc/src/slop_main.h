@@ -14,6 +14,7 @@
 #include "slop_vocab.h"
 #include "slop_canon.h"
 #include <string.h>
+#include <sys/resource.h>
 
 #ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_DEFINED
@@ -66,6 +67,8 @@ slop_string main_argv_to_string(uint8_t** argv, int64_t index);
 void main_print_usage(void);
 void main_eprint(slop_string s);
 void main_print_timings(slop_arena* arena, int64_t t0, int64_t t1, int64_t t2, int64_t t3, int64_t t4);
+int64_t main_peak_mb(void);
+void main_print_memory(slop_arena* arena, int64_t m1, int64_t m2, int64_t m3, int64_t m4, int64_t m5);
 uint8_t main_all_digits(slop_string s);
 slop_result_howl_Prepared_types_Fault main_prepare_from(slop_arena* arena, slop_result_normalize_Decoded_types_Fault d, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault main_reason_prepared(slop_arena* arena, slop_result_howl_Prepared_types_Fault p, types_ReasonerConfig config);

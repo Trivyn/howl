@@ -40,7 +40,7 @@
 ;; ============================================================
 
 (module owl2
-  (@doc "The lossless OWL 2 axiom AST, its disposition matrix, and the input signature (§5.2, §6.3)")
+  (@doc "The OWL 2 axiom AST (lossless for every non-annotation axiom), its disposition matrix, and the input signature (§5.2, §6.3)")
 
   (import rdf (IRI))
   (import canon (string-cmp node-cmp role-cmp sort-range))
@@ -53,7 +53,7 @@
     OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
     SWRL_NS SWRL_IMP SWRL_BODY SWRL_HEAD
     CardKind PropCharacteristic
-    RawConcept RawChain RawEdge RawClassAssertion RawAnnotation RawDeclaration
+    RawConcept RawChain RawEdge RawClassAssertion RawDeclaration
     RawAxiom Disposition
     Signature
     disposition concept-in-profile axiom-in-profile role-in-profile
@@ -164,11 +164,6 @@
     (concept (Ptr RawConcept))
     (subject Node)))
 
-  (type RawAnnotation (record
-    (property IRI)
-    (subject  InputRef)
-    (target   String)))
-
   (type RawDeclaration (record
     (kind   EntityKind)
     (entity IRI)))
@@ -199,8 +194,10 @@
     ;;     unsupported returns false-inconclusive on every documented
     ;;     ontology, which is the failure mode that makes a reasoner
     ;;     useless rather than merely incomplete. ---
-    (ra-annotation-assertion  RawAnnotation)
-    (ra-annotation-axiom      InputRef)
+    ;; No payload: nothing reads an annotation's content (it is never
+    ;; accepted, omitted or rendered), and on GO rendering ~0.8M of them
+    ;; cost ~0.6 GB. `decode-axioms` counts them rather than keeping them.
+    (ra-annotation)
 
     ;; --- out-of-profile: object side, structure retained ---
     (ra-inverse-properties    RoleId RoleId)
@@ -259,8 +256,7 @@
 
       ((ra-declaration _)               'd-consumed)
 
-      ((ra-annotation-assertion _)      'd-inert)
-      ((ra-annotation-axiom _)          'd-inert)
+      ((ra-annotation)                  'd-inert)
 
       ((ra-inverse-properties _ _)      'd-out-of-profile)
       ((ra-property-characteristic _ _) 'd-out-of-profile)
@@ -457,8 +453,7 @@
         ;; already returned. They are named anyway so that the switch
         ;; stays total and a disposition change cannot slip past.
         ((ra-declaration _)              false)
-        ((ra-annotation-assertion _)     false)
-        ((ra-annotation-axiom _)         false)
+        ((ra-annotation)                 false)
         ((ra-inverse-properties _ _)     false)
         ((ra-property-characteristic _ _) false)
         ((ra-disjoint-properties _)      false)
@@ -797,10 +792,7 @@
             (join2 arena (render-node (. e from)) (render-node (. e to))))))
       ((ra-declaration d)
         (wrap arena "Declaration" (. (. d entity) value)))
-      ((ra-annotation-assertion a)
-        (wrap arena "AnnotationAssertion"
-          (join2 arena (. (. a property) value) (. a target))))
-      ((ra-annotation-axiom ref)      (wrap arena "AnnotationAxiom" (render-input-ref ref)))
+      ((ra-annotation)                "Annotation()")
       ((ra-inverse-properties a b)
         (wrap arena "InverseObjectProperties" (join2 arena (render-role a) (render-role b))))
       ((ra-property-characteristic c r)

@@ -706,10 +706,14 @@
   ;; because there is no determinate EntityKind to put in the report.
   ;; ============================================================
 
+  ;; The referring axiom itself, not its rendering: the text is needed
+  ;; only when the entity turns out to be undeclared, which in a clean
+  ;; ontology is never, and rendering every accepted axiom up front cost
+  ;; GO a second full rendering pass (`sort-axioms` renders the first).
   (type EntityRef (record
     (kind   EntityKind)
     (entity IRI)
-    (ref    AxiomRef)))
+    (axiom  RawAxiom)))
 
   (fn axiom-ref-of ((arena Arena) (ax RawAxiom))
     (@intent "The canonical AxiomRef of an axiom")
@@ -742,8 +746,7 @@
     (let ((mut out (list-new arena EntityRef)))
       (do
         (for-each (ax axs)
-          (let ((r (axiom-ref-of arena ax))
-                (mut classes (list-new arena IRI))
+          (let ((mut classes (list-new arena IRI))
                 (mut roles (list-new arena RoleId)))
             (do
               (match ax
@@ -773,12 +776,12 @@
                 (_ (do)))
               (for-each (i classes)
                 (list-push out (record-new EntityRef
-                                 (kind 'entity-class) (entity i) (ref r))))
+                                 (kind 'entity-class) (entity i) (axiom ax))))
               (for-each (rl roles)
                 (match rl
                   ((named-role i)
                     (list-push out (record-new EntityRef
-                                     (kind 'entity-object-property) (entity i) (ref r))))
+                                     (kind 'entity-object-property) (entity i) (axiom ax))))
                   ((fresh-role _) (do)))))))
         out)))
 
@@ -826,7 +829,7 @@
                       ;; ELEMENT-WISE — comparing two unsorted lists
                       ;; element-wise is not an order at all.
                       (for-each (f refs)
-                        (when (same-entity f e) (list-push refs-for (. f ref))))
+                        (when (same-entity f e) (list-push refs-for (axiom-ref-of arena (. f axiom)))))
                       (list-push out
                         (union-new Omission missing-declaration
                           (record-new MissingDeclaration

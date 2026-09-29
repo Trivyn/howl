@@ -1562,7 +1562,7 @@
             ;; still there. A decoder that dropped everything would also
             ;; score zero out-of-profile.
             (and (> (count-disposition axs 'd-in-profile) 0)
-              (and (> (count-disposition axs 'd-inert) 0)
+              (and (> (. s1 inert) 0)
                    (> (count-disposition axs 'd-consumed) 0))))))))
 
   (fn test-litmus-decodes-clean ((arena Arena))
