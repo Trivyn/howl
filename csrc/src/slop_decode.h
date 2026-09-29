@@ -15,6 +15,7 @@
 typedef struct decode_ListFault decode_ListFault;
 typedef struct decode_Stage0 decode_Stage0;
 typedef struct decode_HeaderSubjects decode_HeaderSubjects;
+typedef struct decode_Rebuilt decode_Rebuilt;
 typedef struct decode_Stage1 decode_Stage1;
 
 typedef enum {
@@ -163,6 +164,17 @@ typedef struct decode_HeaderSubjects decode_HeaderSubjects;
 #ifndef SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
 #define SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
 SLOP_OPTION_DEFINE(decode_HeaderSubjects, slop_option_decode_HeaderSubjects)
+#endif
+
+struct decode_Rebuilt {
+    slop_list_rdf_Triple triples;
+    slop_option_string fault;
+};
+typedef struct decode_Rebuilt decode_Rebuilt;
+
+#ifndef SLOP_OPTION_DECODE_REBUILT_DEFINED
+#define SLOP_OPTION_DECODE_REBUILT_DEFINED
+SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 #endif
 
 struct decode_Stage1 {
@@ -337,6 +349,9 @@ rdf_Triple decode_ex_hdr(slop_string p, slop_string o);
 uint8_t decode_header_consumable(rdf_Triple t);
 slop_result_decode_Stage0_types_Fault decode_stage0_header(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 decode_HeaderSubjects decode_header_subjects(slop_arena* arena, slop_list_rdf_Term ont, slop_list_rdf_Term ax, slop_list_rdf_Term ann);
+termstore_TermStore decode_annotated_store(slop_arena* arena, slop_list_rdf_Triple triples);
+decode_Rebuilt decode_rebuild_candidates(slop_arena* arena, termstore_TermStore st, slop_list_rdf_Term ax_subjs);
+slop_list_rdf_Triple decode_asserted_candidates(slop_arena* arena, termstore_TermStore candidates, slop_list_rdf_Triple triples);
 slop_result_decode_Stage0_types_Fault decode_stage0_scan(slop_arena* arena, slop_arena* scratch, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 owl2_RawConcept* decode_box_concept(slop_arena* arena, owl2_RawConcept c);
 slop_string decode_list_fault_message(decode_ListFault f);
@@ -413,6 +428,11 @@ SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
 #ifndef SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
 #define SLOP_OPTION_DECODE_HEADERSUBJECTS_DEFINED
 SLOP_OPTION_DEFINE(decode_HeaderSubjects, slop_option_decode_HeaderSubjects)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_REBUILT_DEFINED
+#define SLOP_OPTION_DECODE_REBUILT_DEFINED
+SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED

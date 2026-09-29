@@ -243,6 +243,7 @@ uint8_t test_test_term_store_by_content(slop_arena* arena);
 uint8_t test_test_term_store_quoted_and_tagged(slop_arena* arena);
 slop_string test_stage0_fault_of(slop_arena* arena, slop_list_rdf_Triple ts);
 uint8_t test_test_stage0_fault_follows_the_document(slop_arena* arena);
+uint8_t test_test_stage0_rebuild_checks_the_whole_input(slop_arena* arena);
 uint8_t test_test_header_and_reification_are_consumed(slop_arena* arena);
 int64_t test_count_out_of_profile(slop_list_owl2_RawAxiom axs);
 int64_t test_count_disposition(slop_list_owl2_RawAxiom axs, owl2_Disposition want);

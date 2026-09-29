@@ -52,8 +52,12 @@
 
   (export
     TermStore
+    empty-store
+    store-insert
     build-store
     store-objects
+    store-object-count
+    store-sole-object
     store-typed
     store-contains
     store-has-any)
@@ -69,6 +73,16 @@
 
   (type IdSet (Set Int))
 
+  ;; An (s, p) pair's objects: the FIRST inline, any further distinct ones
+  ;; in `more`. Nearly every pair has one object, and a Set per pair cost a
+  ;; 48 B header plus a 512 B first table - ~0.6 GB of GO's decode store.
+  ;; `more` is created empty (a header, no table until a second object).
+  ;; `more` is spelled (Set Int), not IdSet: slop's checker does not see
+  ;; through the alias for `set-len`, though the transpiler does.
+  (type Objects (record
+    (first Int)
+    (more  (Set Int))))
+
   ;; Every Map field is shared by copies of the record, so the build
   ;; mutates in place. The next id is the table's size. `rdf-type` is
   ;; interned first, so it is id 0 in every store.
@@ -76,7 +90,7 @@
     (ids     (Map Term Int))       ; IRI, blank node and literal terms
     (quoted  (Map IdTriple Int))   ; quoted triples, by their parts' ids
     (terms   (Map Int Term))       ; id -> term, for query results
-    (spo     (Map IdPair IdSet))   ; (s, p) -> objects
+    (spo     (Map IdPair Objects)) ; (s, p) -> objects, distinct
     (typed   (Map Int IdSet))      ; type -> subjects, rdf:type triples only
     (rdf-type Int)))
 
@@ -158,16 +172,15 @@
           (sp (record-new IdPair (a s) (b p))))
       (match (map-get (. st spo) sp)
         ((some objs)
-          (if (set-has objs o)
+          (if (or (== (. objs first) o) (set-has (. objs more) o))
             false
             (do
-              (set-put objs o)
+              (set-put (. objs more) o)
               (when (== p (. st rdf-type)) (typed-put arena st o s))
               true)))
         ((none)
-          (let ((objs (set-new arena Int)))
+          (let ((objs (record-new Objects (first o) (more (set-new arena Int)))))
             (do
-              (set-put objs o)
               (map-put (. st spo) sp objs)
               (when (== p (. st rdf-type)) (typed-put arena st o s))
               true))))))
@@ -176,11 +189,23 @@
     (@intent "Intern and index every triple, in list order")
     (@spec ((Arena (List Triple)) -> TermStore))
     (@alloc arena)
+    (let ((st (empty-store arena)))
+      (do
+        (for-each (t triples)
+          (store-insert arena st t))
+        st)))
+
+  (fn empty-store ((arena Arena))
+    (@intent "A store with nothing indexed; `store-insert` fills it")
+    (@spec ((Arena) -> TermStore))
+    (@alloc arena)
+    ;; For a caller that indexes only SOME triples: inserting as it walks
+    ;; saves building a filtered list of them first (216 B a triple).
     (let ((st0 (record-new TermStore
                  (ids      (map-new arena Term Int))
                  (quoted   (map-new arena IdTriple Int))
                  (terms    (map-new arena Int Term))
-                 (spo      (map-new arena IdPair IdSet))
+                 (spo      (map-new arena IdPair Objects))
                  (typed    (map-new arena Int IdSet))
                  (rdf-type 0)))
           (ty  (intern-term arena st0 (make-iri arena RDF_TYPE)))
@@ -191,17 +216,14 @@
                  (spo      (. st0 spo))
                  (typed    (. st0 typed))
                  (rdf-type ty))))
-      (do
-        (for-each (t triples)
-          (store-insert arena st t))
-        st)))
+      st))
 
   ;; ============================================================
   ;; Queries - Terms in, Terms out; an unseen term matches nothing
   ;; ============================================================
 
   (fn store-objects ((arena Arena) (st TermStore) (s Term) (p Term))
-    (@intent "Every o with (s, p, o) in the store, in set order")
+    (@intent "Every o with (s, p, o) in the store: the first one inserted, then the rest in set order")
     (@spec ((Arena TermStore Term Term) -> (List Term)))
     (@alloc arena)
     (let ((mut out (list-new arena Term)))
@@ -213,14 +235,53 @@
                 (let ((key (record-new IdPair (a si) (b pi))))
                   (match (map-get (. st spo) key)
                     ((some objs)
-                      (for-each (o objs)
-                        (match (map-get (. st terms) o)
+                      (do
+                        (match (map-get (. st terms) (. objs first))
                           ((some term) (list-push out term))
-                          ((none)      (do)))))
+                          ((none)      (do)))
+                        (for-each (o (. objs more))
+                          (match (map-get (. st terms) o)
+                            ((some term) (list-push out term))
+                            ((none)      (do))))))
                     ((none) (do)))))
               ((none) (do))))
           ((none) (do)))
         out)))
+
+  ;; COUNT-ONLY QUERIES, allocating nothing. A caller that wants "the one
+  ;; object, or a fault" (decode's `one-object`, three times per reified
+  ;; axiom) used to build a result list per question - at least 16 slots of
+  ;; 72 B - only to read its length: ~0.4 GB of lists on GO.
+  (fn store-object-count ((st TermStore) (s Term) (p Term))
+    (@intent "How many distinct o have (s, p, o) in the store")
+    (@spec ((TermStore Term Term) -> Int))
+    (match (lookup-term st s)
+      ((some si)
+        (match (lookup-term st p)
+          ((some pi)
+            (let ((key (record-new IdPair (a si) (b pi))))
+              (match (map-get (. st spo) key)
+                ((some objs) (+ 1 (cast Int (set-len (. objs more)))))
+                ((none)      0))))
+          ((none) 0)))
+      ((none) 0)))
+
+  (fn store-sole-object ((st TermStore) (s Term) (p Term))
+    (@intent "The o of (s, p, o) when there is exactly one, else none")
+    (@spec ((TermStore Term Term) -> (Option Term)))
+    (match (lookup-term st s)
+      ((some si)
+        (match (lookup-term st p)
+          ((some pi)
+            (let ((key (record-new IdPair (a si) (b pi))))
+              (match (map-get (. st spo) key)
+                ((some objs)
+                  (if (== (set-len (. objs more)) 0)
+                    (map-get (. st terms) (. objs first))
+                    (none)))
+                ((none) (none)))))
+          ((none) (none))))
+      ((none) (none))))
 
   (fn store-typed ((arena Arena) (st TermStore) (type Term))
     (@intent "Every s with (s, rdf:type, type) in the store, in set order")
@@ -254,16 +315,15 @@
               ((some oi)
                 (let ((key (record-new IdPair (a si) (b pi))))
                   (match (map-get (. st spo) key)
-                    ((some objs) (set-has objs oi))
+                    ((some objs) (or (== (. objs first) oi) (set-has (. objs more) oi)))
                     ((none)      false))))))))))
 
   (fn store-has-any ((st TermStore) (s Term) (p Term))
     (@intent "Is there any o with (s, p, o) in the store? Allocates nothing")
     (@spec ((TermStore Term Term) -> Bool))
-    ;; An (s, p) entry exists exactly when it has an object: sets are
-    ;; created by the insert that puts their first element in, and nothing
-    ;; removes. So the lookup alone answers, with no need to count (and
-    ;; `set-len` on a map-get result did not compile before slop #216).
+    ;; An (s, p) entry exists exactly when it has an object: an entry is
+    ;; created by the insert that brings its first object, and nothing
+    ;; removes. So the lookup alone answers, with no need to count.
     (match (lookup-term st s)
       ((none) false)
       ((some si)

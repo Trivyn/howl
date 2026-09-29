@@ -80,7 +80,7 @@
 
   (import rdf (Term Triple IRI BlankNode
                make-iri term-eq))
-  (import termstore (TermStore build-store store-objects store-typed
+  (import termstore (TermStore empty-store store-insert build-store store-objects store-object-count store-sole-object store-typed
                      store-contains store-has-any))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDF_TYPE
                  OWL_ONTOLOGY OWL_IMPORTS
@@ -197,10 +197,14 @@
     ;; on one restriction have no determinate reading, and picking
     ;; either would make the answer depend on hash order. slop-rdf's
     ;; list walker takes index 0 here; that is the bug this avoids.
-    (let ((objs (store-objects arena g subj pred))
-          (n    (cast Int (list-len objs))))
+    ;;
+    ;; Counted, not listed: nothing is allocated (termstore.slop).
+    (let ((n (store-object-count g subj pred)))
       (cond
-        ((== n 1) (ok (term-at objs 0)))
+        ((== n 1)
+          (match (store-sole-object g subj pred)
+            ((some o) (ok o))
+            ((none)   (error 'lookup-missing))))
         ((== n 0) (error 'lookup-missing))
         (else     (error 'lookup-ambiguous)))))
 
@@ -514,6 +518,81 @@
             (_ (set-put s a))))
         (record-new HeaderSubjects (set s) (quoted quoted)))))
 
+  ;; ============================================================
+  ;; Stage 0's working stores - SUBSETS, not the document
+  ;;
+  ;; Stage 0 asks three questions: which subjects are typed owl:Annotation
+  ;; (a set), each owl:Axiom node's one annotatedSource / Property /
+  ;; Target, and whether each rebuilt triple occurs anywhere in the input.
+  ;; A TermStore over the whole document answered them, and on GO it was
+  ;; ~1.6 GB resident - the run's peak. Each question is now answered by a
+  ;; TermStore over just the triples it can be about, so every equality and
+  ;; dedup rule (terms by content, quoted triples by their parts) is the
+  ;; store's own, unchanged. Each helper builds in the arena it is handed:
+  ;; stage 0's scratch.
+  ;; ============================================================
+
+  (fn annotated-store ((arena Arena) (triples (List Triple)))
+    (@intent "A store of the owl:annotatedSource / annotatedProperty / annotatedTarget triples")
+    (@spec ((Arena (List Triple)) -> TermStore))
+    (@alloc arena)
+    (let ((st (empty-store arena)))
+      (do
+        (for-each (t triples)
+          (when (or (is-pred t OWL_ANNOTATED_SOURCE)
+                    (is-pred t OWL_ANNOTATED_PROPERTY)
+                    (is-pred t OWL_ANNOTATED_TARGET))
+            (store-insert arena st t)))
+        st)))
+
+  ;; The triples the reified axioms rebuild to, in `ax-subjs` order, and
+  ;; the fault of the LAST node that could not be rebuilt.
+  (type Rebuilt (record
+    (triples (List Triple))
+    (fault   (Option String))))
+
+  (fn rebuild-candidates ((arena Arena) (st TermStore) (ax-subjs (List Term)))
+    (@intent "Each owl:Axiom node's rebuilt triple, from a store of the annotated* triples")
+    (@spec ((Arena TermStore (List Term)) -> Rebuilt))
+    (@alloc arena)
+    ;; `one-object` over the annotated* triples alone answers exactly what
+    ;; it answered over the document: an (a, annotatedX) query only ever
+    ;; sees annotatedX triples, deduplicated by content as before.
+    (let ((src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
+          (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
+          (tgt-pred  (make-iri arena OWL_ANNOTATED_TARGET))
+          (mut out   (list-new arena Triple))
+          (mut fault (Option String) (none)))
+      (do
+        (for-each (a ax-subjs)
+          (match (one-object arena st a src-pred)
+            ((error _)
+              (set! fault (some "owl:Axiom node without a usable owl:annotatedSource")))
+            ((ok subj)
+              (match (one-object arena st a prop-pred)
+                ((error _)
+                  (set! fault (some "owl:Axiom node without a usable owl:annotatedProperty")))
+                ((ok pred)
+                  (match (one-object arena st a tgt-pred)
+                    ((error _)
+                      (set! fault (some "owl:Axiom node without a usable owl:annotatedTarget")))
+                    ((ok obj)
+                      (list-push out (record-new Triple
+                                       (subject subj) (predicate pred) (object obj))))))))))
+        (record-new Rebuilt (triples out) (fault fault)))))
+
+  (fn asserted-candidates ((arena Arena) (candidates TermStore) (triples (List Triple)))
+    (@intent "The input triples equal, by content, to some rebuilt candidate")
+    (@spec ((Arena TermStore (List Triple)) -> (List Triple)))
+    (@alloc arena)
+    ;; With these in a store, a candidate occurs in the input exactly when
+    ;; that store contains it: equality by content is transitive.
+    (let ((mut out (list-new arena Triple)))
+      (do
+        (for-each (t triples)
+          (when (store-contains candidates t) (list-push out t)))
+        out)))
+
   (fn stage0-scan ((arena Arena) (scratch Arena) (triples (List Triple)) (imports-resolved (List IRI)))
     (@intent "Stage 0's work: results in arena, the store and working lists in scratch")
     (@spec ((Arena Arena (List Triple) (List IRI)) -> (Result Stage0 Fault)))
@@ -540,17 +619,13 @@
     ;; anonymous individual, and a document carrying nothing but annotations
     ;; came back INCONCLUSIVE (W3C OWL 2 conformance test
     ;; New-Feature-AnnotationAnnotations-001).
-    (let ((ig        (graph-to-indexed scratch triples))
-          ;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
+    (let (;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
           ;; and the named ontology follows ont-subjs - so both come from
           ;; the document. ann-subjs is only ever a membership test.
           (ont-subjs (typed-subjects-in-order scratch triples OWL_ONTOLOGY))
           (ax-subjs  (typed-subjects-in-order scratch triples OWL_AXIOM))
-          (ann-subjs (subjects-of-type scratch ig OWL_ANNOTATION))
+          (ann-subjs (typed-subjects-in-order scratch triples OWL_ANNOTATION))
           (declared  (collect-imports arena triples))
-          (src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
-          (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
-          (tgt-pred  (make-iri arena OWL_ANNOTATED_TARGET))
           (mut out   (list-new arena Triple))
           (mut ont   (Option IRI) (none))
           (mut fault (Option String) (none)))
@@ -586,26 +661,18 @@
                   ;; material: they go on to the decoder (header-consumable).
                   (when (or (not header) (not (header-consumable t))) (list-push out t)))))))
 
-        ;; Rebuild each reified axiom, unless the document also asserts it.
-        (for-each (a ax-subjs)
-          (match (one-object scratch ig a src-pred)
-            ((error _)
-              (set! fault (some "owl:Axiom node without a usable owl:annotatedSource")))
-            ((ok subj)
-              (match (one-object scratch ig a prop-pred)
-                ((error _)
-                  (set! fault (some "owl:Axiom node without a usable owl:annotatedProperty")))
-                ((ok pred)
-                  (match (one-object scratch ig a tgt-pred)
-                    ((error _)
-                      (set! fault (some "owl:Axiom node without a usable owl:annotatedTarget")))
-                    ((ok obj)
-                      (let ((rebuilt (record-new Triple
-                                       (subject subj) (predicate pred) (object obj))))
-                        ;; annotation-heavy.ttl asserts the axiom AND
-                        ;; reifies it; without this the axiom decodes twice.
-                        (when (not (store-contains ig rebuilt))
-                          (list-push out rebuilt))))))))))
+        ;; Rebuild each reified axiom, unless the document also asserts it
+        ;; - anywhere in the INPUT, header triples included. annotation-
+        ;; heavy.ttl asserts the axiom AND reifies it; without the test the
+        ;; axiom decodes twice.
+        (let ((rb       (rebuild-candidates scratch (annotated-store scratch triples) ax-subjs))
+              (asserted (build-store scratch
+                          (asserted-candidates scratch (build-store scratch (. rb triples)) triples))))
+          (do
+            (for-each (c (. rb triples))
+              (when (not (store-contains asserted c))
+                (list-push out c)))
+            (set! fault (. rb fault))))
 
         ;; The ontology IRI, when there is exactly one named one.
         (for-each (o ont-subjs)

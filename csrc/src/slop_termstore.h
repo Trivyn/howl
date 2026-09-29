@@ -9,6 +9,7 @@
 
 typedef struct termstore_IdPair termstore_IdPair;
 typedef struct termstore_IdTriple termstore_IdTriple;
+typedef struct termstore_Objects termstore_Objects;
 typedef struct termstore_TermStore termstore_TermStore;
 
 typedef slop_map* termstore_IdSet;
@@ -68,6 +69,17 @@ SLOP_OPTION_DEFINE(termstore_IdTriple, slop_option_termstore_IdTriple)
 #define SLOP_LIST_TERMSTORE_IDTRIPLE_DEFINED
 #define SLOP_LIST_TERMSTORE_IDTRIPLE_IMPL_DEFINED
 SLOP_LIST_DEFINE(termstore_IdTriple, slop_list_termstore_IdTriple)
+#endif
+
+struct termstore_Objects {
+    int64_t first;
+    slop_map* more;
+};
+typedef struct termstore_Objects termstore_Objects;
+
+#ifndef SLOP_OPTION_TERMSTORE_OBJECTS_DEFINED
+#define SLOP_OPTION_TERMSTORE_OBJECTS_DEFINED
+SLOP_OPTION_DEFINE(termstore_Objects, slop_option_termstore_Objects)
 #endif
 
 struct termstore_TermStore {
@@ -218,7 +230,10 @@ slop_option_int termstore_lookup_term(termstore_TermStore st, rdf_Term t);
 void termstore_typed_put(slop_arena* arena, termstore_TermStore st, int64_t type, int64_t s);
 uint8_t termstore_store_insert(slop_arena* arena, termstore_TermStore st, rdf_Triple t);
 termstore_TermStore termstore_build_store(slop_arena* arena, slop_list_rdf_Triple triples);
+termstore_TermStore termstore_empty_store(slop_arena* arena);
 slop_list_rdf_Term termstore_store_objects(slop_arena* arena, termstore_TermStore st, rdf_Term s, rdf_Term p);
+int64_t termstore_store_object_count(termstore_TermStore st, rdf_Term s, rdf_Term p);
+slop_option_rdf_Term termstore_store_sole_object(termstore_TermStore st, rdf_Term s, rdf_Term p);
 slop_list_rdf_Term termstore_store_typed(slop_arena* arena, termstore_TermStore st, rdf_Term type);
 uint8_t termstore_store_contains(termstore_TermStore st, rdf_Triple t);
 uint8_t termstore_store_has_any(termstore_TermStore st, rdf_Term s, rdf_Term p);
@@ -231,6 +246,11 @@ SLOP_OPTION_DEFINE(termstore_IdPair, slop_option_termstore_IdPair)
 #ifndef SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
 #define SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
 SLOP_OPTION_DEFINE(termstore_IdTriple, slop_option_termstore_IdTriple)
+#endif
+
+#ifndef SLOP_OPTION_TERMSTORE_OBJECTS_DEFINED
+#define SLOP_OPTION_TERMSTORE_OBJECTS_DEFINED
+SLOP_OPTION_DEFINE(termstore_Objects, slop_option_termstore_Objects)
 #endif
 
 #ifndef SLOP_OPTION_RDF_TERM_DEFINED

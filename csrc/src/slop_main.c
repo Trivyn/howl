@@ -25,34 +25,34 @@ int main(int argc, char** _c_argv);
 
 int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r) {
     int64_t _retval = {0};
-    __auto_type _mv_582 = r;
-    if (_mv_582.is_ok) {
-        __auto_type o = _mv_582.data.ok;
-        __auto_type _mv_583 = howl_verdict(o);
-        if (_mv_583 == howl_Verdict_verdict_coherent) {
+    __auto_type _mv_593 = r;
+    if (_mv_593.is_ok) {
+        __auto_type o = _mv_593.data.ok;
+        __auto_type _mv_594 = howl_verdict(o);
+        if (_mv_594 == howl_Verdict_verdict_coherent) {
             return 0;
-        } else if (_mv_583 == howl_Verdict_verdict_incoherent) {
+        } else if (_mv_594 == howl_Verdict_verdict_incoherent) {
             return 1;
-        } else if (_mv_583 == howl_Verdict_verdict_inconclusive) {
+        } else if (_mv_594 == howl_Verdict_verdict_inconclusive) {
             return 2;
         }
         SLOP_UNREACHABLE();
-    } else if (!_mv_582.is_ok) {
-        __auto_type f = _mv_582.data.err;
-        __auto_type _mv_584 = f;
-        switch (_mv_584.tag) {
+    } else if (!_mv_593.is_ok) {
+        __auto_type f = _mv_593.data.err;
+        __auto_type _mv_595 = f;
+        switch (_mv_595.tag) {
             case types_Fault_cancelled:
             {
                 return 2;
             }
             case types_Fault_refused:
             {
-                __auto_type _ = _mv_584.data.refused;
+                __auto_type _ = _mv_595.data.refused;
                 return 2;
             }
             case types_Fault_input_error:
             {
-                __auto_type _ = _mv_584.data.input_error;
+                __auto_type _ = _mv_595.data.input_error;
                 return 3;
             }
         }
@@ -66,26 +66,26 @@ int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r) {
 }
 
 int64_t main_max_blank_in_term(rdf_Term t) {
-    __auto_type _mv_585 = t;
-    switch (_mv_585.tag) {
+    __auto_type _mv_596 = t;
+    switch (_mv_596.tag) {
         case rdf_Term_term_blank:
         {
-            __auto_type b = _mv_585.data.term_blank;
+            __auto_type b = _mv_596.data.term_blank;
             return b.id;
         }
         case rdf_Term_term_iri:
         {
-            __auto_type _ = _mv_585.data.term_iri;
+            __auto_type _ = _mv_596.data.term_iri;
             return 0;
         }
         case rdf_Term_term_literal:
         {
-            __auto_type _ = _mv_585.data.term_literal;
+            __auto_type _ = _mv_596.data.term_literal;
             return 0;
         }
         case rdf_Term_term_triple:
         {
-            __auto_type tt = _mv_585.data.term_triple;
+            __auto_type tt = _mv_596.data.term_triple;
             {
                 __auto_type tr = (*tt);
                 return ((main_max_blank_in_term(tr.subject)) > (((main_max_blank_in_term(tr.predicate)) > (main_max_blank_in_term(tr.object)) ? (main_max_blank_in_term(tr.predicate)) : (main_max_blank_in_term(tr.object)))) ? (main_max_blank_in_term(tr.subject)) : (((main_max_blank_in_term(tr.predicate)) > (main_max_blank_in_term(tr.object)) ? (main_max_blank_in_term(tr.predicate)) : (main_max_blank_in_term(tr.object)))));
@@ -112,26 +112,26 @@ int64_t main_max_blank_id(slop_list_rdf_Triple ts) {
 }
 
 rdf_Term main_remap_blank(slop_arena* arena, rdf_Term t, int64_t offset) {
-    __auto_type _mv_586 = t;
-    switch (_mv_586.tag) {
+    __auto_type _mv_597 = t;
+    switch (_mv_597.tag) {
         case rdf_Term_term_blank:
         {
-            __auto_type b = _mv_586.data.term_blank;
+            __auto_type b = _mv_597.data.term_blank;
             return rdf_make_blank(arena, (b.id + offset));
         }
         case rdf_Term_term_iri:
         {
-            __auto_type _ = _mv_586.data.term_iri;
+            __auto_type _ = _mv_597.data.term_iri;
             return t;
         }
         case rdf_Term_term_literal:
         {
-            __auto_type _ = _mv_586.data.term_literal;
+            __auto_type _ = _mv_597.data.term_literal;
             return t;
         }
         case rdf_Term_term_triple:
         {
-            __auto_type tt = _mv_586.data.term_triple;
+            __auto_type tt = _mv_597.data.term_triple;
             {
                 __auto_type tr = (*tt);
                 return rdf_make_triple_term(arena, rdf_make_triple(arena, main_remap_blank(arena, tr.subject, offset), main_remap_blank(arena, tr.predicate, offset), main_remap_blank(arena, tr.object, offset)));
@@ -148,23 +148,23 @@ slop_option_rdf_IRI main_ontology_iri_of(slop_list_rdf_Triple ts) {
             __auto_type _coll = ts;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type t = _coll.data[_i];
-                __auto_type _mv_587 = t.predicate;
-                switch (_mv_587.tag) {
+                __auto_type _mv_598 = t.predicate;
+                switch (_mv_598.tag) {
                     case rdf_Term_term_iri:
                     {
-                        __auto_type p = _mv_587.data.term_iri;
+                        __auto_type p = _mv_598.data.term_iri;
                         if (canon_string_cmp(p.value, vocab_RDF_TYPE) == 0) {
-                            __auto_type _mv_588 = t.object;
-                            switch (_mv_588.tag) {
+                            __auto_type _mv_599 = t.object;
+                            switch (_mv_599.tag) {
                                 case rdf_Term_term_iri:
                                 {
-                                    __auto_type o = _mv_588.data.term_iri;
+                                    __auto_type o = _mv_599.data.term_iri;
                                     if (canon_string_cmp(o.value, vocab_OWL_ONTOLOGY) == 0) {
-                                        __auto_type _mv_589 = t.subject;
-                                        switch (_mv_589.tag) {
+                                        __auto_type _mv_600 = t.subject;
+                                        switch (_mv_600.tag) {
                                             case rdf_Term_term_iri:
                                             {
-                                                __auto_type sub = _mv_589.data.term_iri;
+                                                __auto_type sub = _mv_600.data.term_iri;
                                                 found = (slop_option_rdf_IRI){.has_value = 1, .value = sub};
                                                 break;
                                             }
@@ -272,12 +272,12 @@ slop_result_howl_Prepared_types_Fault main_prepare_from(slop_arena* arena, slop_
 }
 
 slop_result_types_Outcome_types_Fault main_reason_prepared(slop_arena* arena, slop_result_howl_Prepared_types_Fault p, types_ReasonerConfig config) {
-    __auto_type _mv_590 = p;
-    if (!_mv_590.is_ok) {
-        __auto_type f = _mv_590.data.err;
+    __auto_type _mv_601 = p;
+    if (!_mv_601.is_ok) {
+        __auto_type f = _mv_601.data.err;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_590.is_ok) {
-        __auto_type pp = _mv_590.data.ok;
+    } else if (_mv_601.is_ok) {
+        __auto_type pp = _mv_601.data.ok;
         return howl_reason(arena, pp, config);
     }
     SLOP_UNREACHABLE();
@@ -335,14 +335,14 @@ int main(int argc, char** _c_argv) {
                         uint8_t timings = 0;
                         __auto_type t_start = slop_now_ms();
                         __auto_type input = main_argv_to_string(argv, 2);
-                        __auto_type _mv_591 = ttl_parse_ttl_file(front, input);
-                        if (!_mv_591.is_ok) {
-                            __auto_type _ = _mv_591.data.err;
+                        __auto_type _mv_602 = ttl_parse_ttl_file(front, input);
+                        if (!_mv_602.is_ok) {
+                            __auto_type _ = _mv_602.data.err;
                             printf("%s", "howl: cannot parse ");
                             printf("%.*s\n", (int)(input).len, (input).data);
                             failed = 1;
-                        } else if (_mv_591.is_ok) {
-                            __auto_type g = _mv_591.data.ok;
+                        } else if (_mv_602.is_ok) {
+                            __auto_type g = _mv_602.data.ok;
                             triples = g.triples;
                         }
                         while (i < argc) {
@@ -360,21 +360,21 @@ int main(int argc, char** _c_argv) {
                                     if ((i + 1) < argc) {
                                         {
                                             __auto_type path = main_argv_to_string(argv, (i + 1));
-                                            __auto_type _mv_592 = ttl_parse_ttl_file(front, path);
-                                            if (!_mv_592.is_ok) {
-                                                __auto_type _ = _mv_592.data.err;
+                                            __auto_type _mv_603 = ttl_parse_ttl_file(front, path);
+                                            if (!_mv_603.is_ok) {
+                                                __auto_type _ = _mv_603.data.err;
                                                 printf("%s", "howl: cannot parse import ");
                                                 printf("%.*s\n", (int)(path).len, (path).data);
                                                 failed = 1;
-                                            } else if (_mv_592.is_ok) {
-                                                __auto_type ig = _mv_592.data.ok;
-                                                __auto_type _mv_593 = main_ontology_iri_of(ig.triples);
-                                                if (!_mv_593.has_value) {
+                                            } else if (_mv_603.is_ok) {
+                                                __auto_type ig = _mv_603.data.ok;
+                                                __auto_type _mv_604 = main_ontology_iri_of(ig.triples);
+                                                if (!_mv_604.has_value) {
                                                     printf("%s", "howl: import declares no owl:Ontology IRI, so it attests nothing: ");
                                                     printf("%.*s\n", (int)(path).len, (path).data);
                                                     failed = 1;
-                                                } else if (_mv_593.has_value) {
-                                                    __auto_type o = _mv_593.value;
+                                                } else if (_mv_604.has_value) {
+                                                    __auto_type o = _mv_604.value;
                                                     {
                                                         __auto_type offset = (main_max_blank_id(triples) + 1);
                                                         {
@@ -441,17 +441,17 @@ int main(int argc, char** _c_argv) {
                                                 printf("%s\n", "howl: --max-iterations needs a whole number 0..10000");
                                                 failed = 1;
                                             } else {
-                                                __auto_type _mv_594 = strlib_parse_int(v);
-                                                if (_mv_594.is_ok) {
-                                                    __auto_type n = _mv_594.data.ok;
+                                                __auto_type _mv_605 = strlib_parse_int(v);
+                                                if (_mv_605.is_ok) {
+                                                    __auto_type n = _mv_605.data.ok;
                                                     if (n <= 10000) {
                                                         cfg.max_iterations = ((int64_t)(n));
                                                     } else {
                                                         printf("%s\n", "howl: --max-iterations must be 0..10000");
                                                         failed = 1;
                                                     }
-                                                } else if (!_mv_594.is_ok) {
-                                                    __auto_type _ = _mv_594.data.err;
+                                                } else if (!_mv_605.is_ok) {
+                                                    __auto_type _ = _mv_605.data.err;
                                                     printf("%s\n", "howl: --max-iterations needs a whole number 0..10000");
                                                     failed = 1;
                                                 }
@@ -473,17 +473,17 @@ int main(int argc, char** _c_argv) {
                                                 printf("%s\n", "howl: --workers needs a whole number 1..64");
                                                 failed = 1;
                                             } else {
-                                                __auto_type _mv_595 = strlib_parse_int(v);
-                                                if (_mv_595.is_ok) {
-                                                    __auto_type n = _mv_595.data.ok;
+                                                __auto_type _mv_606 = strlib_parse_int(v);
+                                                if (_mv_606.is_ok) {
+                                                    __auto_type n = _mv_606.data.ok;
                                                     if ((n >= 1) && (n <= 64)) {
                                                         cfg.worker_count = ((int64_t)(n));
                                                     } else {
                                                         printf("%s\n", "howl: --workers must be 1..64");
                                                         failed = 1;
                                                     }
-                                                } else if (!_mv_595.is_ok) {
-                                                    __auto_type _ = _mv_595.data.err;
+                                                } else if (!_mv_606.is_ok) {
+                                                    __auto_type _ = _mv_606.data.err;
                                                     printf("%s\n", "howl: --workers needs a whole number 1..64");
                                                     failed = 1;
                                                 }
@@ -531,9 +531,9 @@ int main(int argc, char** _c_argv) {
                                 if (timings) {
                                     main_print_timings(arena, t_start, t_parsed, t_decoded, t_prepared, t_reasoned);
                                 }
-                                __auto_type _mv_596 = result;
-                                if (_mv_596.is_ok) {
-                                    __auto_type o = _mv_596.data.ok;
+                                __auto_type _mv_607 = result;
+                                if (_mv_607.is_ok) {
+                                    __auto_type o = _mv_607.data.ok;
                                     if (report_mode) {
                                         {
                                             __auto_type _coll = report_report_lines(arena, o);
@@ -551,22 +551,22 @@ int main(int argc, char** _c_argv) {
                                         printf("%.*s", (int)(int_to_string(arena, ((int64_t)(((int64_t)((o.coverage.omitted).len)))))).len, (int_to_string(arena, ((int64_t)(((int64_t)((o.coverage.omitted).len)))))).data);
                                         printf("%s\n", " omitted");
                                         main_print_omissions(arena, o.coverage.omitted);
-                                        __auto_type _mv_597 = howl_verdict(o);
-                                        if (_mv_597 == howl_Verdict_verdict_coherent) {
+                                        __auto_type _mv_608 = howl_verdict(o);
+                                        if (_mv_608 == howl_Verdict_verdict_coherent) {
                                             printf("%s\n", "howl: coherent");
-                                        } else if (_mv_597 == howl_Verdict_verdict_incoherent) {
+                                        } else if (_mv_608 == howl_Verdict_verdict_incoherent) {
                                             printf("%s\n", "howl: INCOHERENT");
-                                        } else if (_mv_597 == howl_Verdict_verdict_inconclusive) {
+                                        } else if (_mv_608 == howl_Verdict_verdict_inconclusive) {
                                             printf("%s\n", "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass");
                                         }
                                     }
-                                } else if (!_mv_596.is_ok) {
-                                    __auto_type f = _mv_596.data.err;
-                                    __auto_type _mv_598 = f;
-                                    switch (_mv_598.tag) {
+                                } else if (!_mv_607.is_ok) {
+                                    __auto_type f = _mv_607.data.err;
+                                    __auto_type _mv_609 = f;
+                                    switch (_mv_609.tag) {
                                         case types_Fault_input_error:
                                         {
-                                            __auto_type msg = _mv_598.data.input_error;
+                                            __auto_type msg = _mv_609.data.input_error;
                                             printf("%s", "howl: ");
                                             printf("%.*s\n", (int)(msg).len, (msg).data);
                                             break;
@@ -578,7 +578,7 @@ int main(int argc, char** _c_argv) {
                                         }
                                         case types_Fault_refused:
                                         {
-                                            __auto_type os = _mv_598.data.refused;
+                                            __auto_type os = _mv_609.data.refused;
                                             printf("%s", "howl: refused (--strict), no report — ");
                                             printf("%.*s", (int)(int_to_string(arena, ((int64_t)(((int64_t)((os).len)))))).len, (int_to_string(arena, ((int64_t)(((int64_t)((os).len)))))).data);
                                             printf("%s\n", " omitted");

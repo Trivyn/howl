@@ -1368,6 +1368,24 @@
                (== (string-cmp (stage0-fault-of arena (reversed-triples arena (. g triples)))
                      "owl:Axiom node without a usable owl:annotatedSource") 0))))))
 
+  (fn test-stage0-rebuild-checks-the-whole-input ((arena Arena))
+    (@intent "A reified triple asserted anywhere in the input - header included - is not rebuilt")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The owl:Axiom reifies `<t> rdfs:comment "c"`, which the document
+    ;; also asserts - on the ontology node, where stage 0 consumes it as
+    ;; header material. "Also asserted" means in the INPUT, so nothing is
+    ;; rebuilt and nothing is left. Stage 0 now answers containment from
+    ;; small stores rather than one over the document; testing it against
+    ;; the KEPT triples instead would leave the rebuilt comment here.
+    (let ((ttl "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n<http://example.org/t> a owl:Ontology ; rdfs:comment \"c\" .\n_:x a owl:Axiom ; owl:annotatedSource <http://example.org/t> ; owl:annotatedProperty rdfs:comment ; owl:annotatedTarget \"c\" .\n"))
+      (match (parse-ttl-string arena ttl)
+        ((error _) false)
+        ((ok g)
+          (match (stage0-header arena (. g triples) (list-new arena IRI))
+            ((error _) false)
+            ((ok s0) (== (cast Int (list-len (. s0 triples))) 0)))))))
+
   (fn test-header-and-reification-are-consumed ((arena Arena))
     (@intent "Ontology header and owl:Axiom scaffolding leave stage 0 as logical content")
     (@spec ((Arena) -> Bool))
@@ -3391,6 +3409,10 @@
 
           (let ((r (test-header-and-reification-are-consumed arena)))
             (print-test-result "stage 0: header and owl:Axiom scaffolding consumed" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-stage0-rebuild-checks-the-whole-input arena)))
+            (print-test-result "stage 0: a reified triple asserted anywhere in the input is not rebuilt" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-role-hierarchy-carries-edges arena)))
