@@ -21,7 +21,8 @@
                  Profile ProfileSelection ReasonerConfig
                  default-config emit-edge make-context copy-fault
                  outcome-is-complete findings-are-incoherent))
-  (import normalize (Decoded NormResult decode-document normalize-decoded))
+  (import normalize (Decoded NormResult decode-document decode-encoded normalize-decoded))
+  (import termstore (Encoded))
   (import select (select-profile))
   (import saturate (RoundResult saturate))
   (import classify (extract-findings entails-sub))
@@ -58,6 +59,7 @@
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
     Decoded
     decode
+    decode-from
     Prepared
     prepare-decoded
     prepare
@@ -204,6 +206,15 @@
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
     (@alloc arena)
     (decode-document arena triples imports-resolved))
+
+  (fn decode-from ((arena Arena) (doc Encoded) (imports-resolved (List IRI)))
+    (@intent "The front end's first half over an already encoded document")
+    (@spec ((Arena Encoded (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    ;; For a caller that encoded its input as it parsed (the CLI streams
+    ;; the Turtle straight into an Encoded): `doc`'s arena must outlive
+    ;; the Decoded, whose strings are its dictionary's.
+    (decode-encoded arena doc imports-resolved))
 
   (fn prepare-decoded ((arena Arena) (d Decoded) (config ReasonerConfig))
     (@intent "The front end's second half: gate, normalize, initialize, index — and --strict's refusal")

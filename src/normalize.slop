@@ -74,7 +74,8 @@
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
                 Signature make-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
-  (import decode (Stage0 Stage1 stage0-header decode-axioms))
+  (import decode (Stage0 Stage1 stage0-header stage0-encoded decode-axioms))
+  (import termstore (Encoded encode-triples))
   (import saturate (make-initial-saturation deliver-seed))
   (import canon (string-cmp))
 
@@ -82,7 +83,7 @@
     Decoded NormResult NormOutput
     NormState new-state
     normalize-accepted
-    decode-document normalize-decoded
+    decode-document decode-encoded normalize-decoded
     normalize-input)
 
   ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
@@ -932,10 +933,21 @@
     (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
     (@alloc arena)
-    (match (stage0-header arena triples imports-resolved)
+    ;; ENCODED ONCE, HERE: the port's input is a slop-rdf triple list, and
+    ;; everything after this reads the encoded document (termstore.slop).
+    (decode-encoded arena (encode-triples arena triples) imports-resolved))
+
+  (fn decode-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)))
+    (@intent "Header pre-pass and decode over an encoded document")
+    (@spec ((Arena Encoded (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    ;; The Decoded's strings are the dictionary's, so `doc` must live in an
+    ;; arena that outlives the Decoded - until `normalize-decoded` has
+    ;; copied what survives it.
+    (match (stage0-encoded arena doc imports-resolved)
       ((error f) (error f))
       ((ok s0)
-        (match (decode-axioms arena (. s0 triples))
+        (match (decode-axioms arena (. s0 dict) (. s0 triples))
           ((error f) (error f))
           ((ok s1)
             (ok (record-new Decoded

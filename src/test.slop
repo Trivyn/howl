@@ -21,12 +21,13 @@
   (@doc "Verdict-discipline and structural-invariant tests")
 
   (import rdf (IRI Triple Term make-iri make-blank make-literal make-triple make-triple-term term-eq))
-  (import termstore (build-store store-objects store-typed store-contains store-has-any))
+  (import termstore (build-store store-objects store-typed store-contains store-has-any triple-of
+                     store-over store-insert-ids))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
                  OWL_THING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
   (import decode (graph-to-indexed rdf-list-checked term-at stage0-header Stage0
                   one-object decode-concept CONCEPT_FUEL build-signature
-                  decode-axioms Stage1))
+                  decode-axioms decode-axioms-with decode-store Stage1))
   (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity))
   (import normalize (NormOutput normalize-accepted))
   (import owl2 (RawConcept Signature signature-has-class
@@ -42,7 +43,7 @@
                  Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
-  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at sort-range
+  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at str-at sort-range
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
@@ -588,7 +589,7 @@
               ((error _) false)
               ((ok s0)
                 (and (== (count-subclass-triples (. g triples) src-pred) 1)
-                     (and (== (count-subclass-triples (. s0 triples) src-pred) 0)
+                     (and (== (count-subclass-triples (stage0-triples arena s0) src-pred) 0)
                           (== (cast Int (list-len (. s0 omissions))) 0)))))))
         (match (classify-fixture arena path)
           ((none) false)
@@ -1306,7 +1307,7 @@
     (@intent "Quoted triples are one term by structure, nested too; literals differ by language tag")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    ;; Built directly: Turtle cannot carry a quoted triple. q1 and q2 are
+    ;; Built directly, so the two are certainly allocated apart. q1 and q2 are
     ;; allocated apart but equal, as `term-eq` means it, so the store must
     ;; find q1's triple through q2 - and the same one level down, for a
     ;; quoted triple that contains them. A pointer-keyed store (slop-rdf's
@@ -1337,6 +1338,87 @@
                (store-contains st (make-triple arena a p en2))
                (not (store-contains st (make-triple arena a p fr)))
                (not (store-contains st (make-triple arena a p plain))))))))
+
+  (fn stage0-triples ((arena Arena) (s0 Stage0))
+    (@intent "Stage 0's logical triples as slop-rdf triples, for a test to read")
+    (@spec ((Arena Stage0) -> (List Triple)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Triple)))
+      (do
+        (for-each (it (. s0 triples)) (list-push out (triple-of (. s0 dict) it)))
+        out)))
+
+  (fn decode-rendered ((arena Arena) (r (Result Stage1 Fault)))
+    (@intent "A decode's outcome as text: every axiom rendered in order, or the fault")
+    (@spec ((Arena (Result Stage1 Fault)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (match r
+          ((ok s1) (for-each (ax (. s1 axioms)) (list-push out (render-axiom arena ax))))
+          ((error f)
+            (match f
+              ((input-error m) (list-push out m))
+              ((refused _)     (list-push out "refused"))
+              ((cancelled)     (list-push out "cancelled")))))
+        out)))
+
+  (fn decode-store-agrees ((arena Arena) (path String))
+    (@intent "On one fixture, decode over its filtered store equals decode over a store of every triple")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) false)
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) false)
+          ((ok s0)
+            (let ((full (store-over arena (. s0 dict))))
+              (do
+                (for-each (it (. s0 triples)) (store-insert-ids arena full it))
+                (let ((a (decode-rendered arena (decode-axioms-with arena full (. s0 dict) (. s0 triples))))
+                      (b (decode-rendered arena (decode-axioms-with arena (decode-store arena (. s0 dict) (. s0 triples))
+                                                   (. s0 dict) (. s0 triples))))
+                      (mut same (== (list-len a) (list-len b)))
+                      (mut i 0))
+                  (do
+                    (while (and same (< i (cast Int (list-len a))))
+                      (do
+                        (when (!= (string-cmp (str-at a i) (str-at b i)) 0) (set! same false))
+                        (set! i (+ i 1))))
+                    (when (not same) (do (print "  [decode-store] differs: ") (println path)))
+                    same)))))))))
+
+  (fn test-decode-store-answers-as-the-full-store ((arena Arena))
+    (@intent "Decode's store indexes only the predicates it queries, and decodes exactly as a full store does")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; `decode-store` keeps the triples of 21 predicates - the ones decode's
+    ;; queries ask about. If a query on another predicate is ever added,
+    ;; the fixture exercising it decodes differently here. The fixtures
+    ;; cover RDF lists (IRI and blank cells), restrictions, cardinalities,
+    ;; n-ary axioms with owl:members, inverse expressions and chains.
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/intersection.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-lhs.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/abox-assertions.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/cardinality.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/complement.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/union.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/nominals.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/has-self.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/equality.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/allvalues.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/datatypes.ttl")
+        (list-push ps "corpus/fixtures/hazards/annotation-heavy.ttl")
+        (for-each (p ps) (when (not (decode-store-agrees arena p)) (set! ok false)))
+        ok)))
 
   (fn stage0-fault-of ((arena Arena) (ts (List Triple)))
     (@intent "Stage 0's input-error message for these triples, or empty when it succeeds")
@@ -1402,7 +1484,7 @@
           ((error _) false)
           ((ok s0)
             (let ((sub-pred (make-iri arena RDFS_SUBCLASS_OF))
-                  (kept (count-subclass-triples (. s0 triples) sub-pred))
+                  (kept (count-subclass-triples (stage0-triples arena s0) sub-pred))
                   (before (count-subclass-triples (. g triples) sub-pred)))
               ;; The document writes the subclass triple once, plus an
               ;; owl:annotatedProperty naming rdfs:subClassOf — which is
@@ -1456,7 +1538,7 @@
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) (none))
           ((ok s0)
-            (match (decode-axioms arena (. s0 triples))
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
               ((error _) (none))
               ((ok s1)  (some s1))))))))
 
@@ -1642,7 +1724,7 @@
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) -1)
           ((ok s0)
-            (match (decode-axioms arena (. s0 triples))
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
               ((error _) -1)
               ((ok s1)
                 (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
@@ -1698,7 +1780,7 @@
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) false)
           ((ok s0)
-            (match (decode-axioms arena (. s0 triples))
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
               ((error _) false)
               ((ok _)    true)))))))
 
@@ -1755,7 +1837,7 @@
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) -1)
           ((ok s0)
-            (match (decode-axioms arena (. s0 triples))
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
               ((error _) -1)
               ((ok s1)
                 (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
@@ -2256,7 +2338,7 @@
     (match (stage0-header arena ts (list-new arena IRI))
       ((error _) (none))
       ((ok s0)
-        (match (decode-axioms arena (. s0 triples))
+        (match (decode-axioms arena (. s0 dict) (. s0 triples))
           ((error _) (none))
           ((ok s1)
             (some (normalize-accepted arena
@@ -2513,11 +2595,11 @@
   ;; Stage 0 filters header subjects through a SET (GO reifies 131,783
   ;; axioms, and a list scan per triple never finished). A set compares a
   ;; quoted triple by POINTER while `term-eq` compares it structurally, so
-  ;; quoted-triple subjects keep the structural scan. Turtle cannot carry
-  ;; one (slop-rdf rejects `<< >>`); the library's triple buffer can, so
-  ;; the case is built directly: two separately allocated, structurally
-  ;; equal quoted triples, one typed owl:Ontology. Both triples are header
-  ;; material, and stage 0 must consume both.
+  ;; the encoding gives structurally equal quoted triples one id. The case
+  ;; is built directly, two separately allocated, structurally equal
+  ;; quoted triples, one typed owl:Ontology - Turtle's `<<( )>>` reaches
+  ;; it too. Both triples are header material, and stage 0 must consume
+  ;; both.
   ;; ------------------------------------------------------------
 
   (fn test-quoted-triple-header-subjects ((arena Arena))
@@ -2596,7 +2678,7 @@
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) (none))
           ((ok s0)
-            (match (decode-axioms arena (. s0 triples))
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
               ((error _) (none))
               ((ok s1)
                 (match (check-regularity arena (expand-sugar arena (. s1 axioms)))
@@ -2674,7 +2756,7 @@
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) (none))
           ((ok s0)
-            (match (decode-axioms arena (. s0 triples))
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
@@ -2849,7 +2931,7 @@
       ((ok g)
         (match (stage0-header arena (. g triples) (list-new arena IRI))
           ((error _) (none))
-          ((ok s0)  (some (build-signature arena (. s0 triples))))))))
+          ((ok s0)  (some (build-signature arena (. s0 dict) (. s0 triples))))))))
 
   (fn test-declared-unused-class-reaches-the-signature ((arena Arena))
     (@intent "M0 ACCEPTANCE (c): a declared, unmentioned class is in the signature")
@@ -2946,7 +3028,7 @@
           (match (stage0-header arena (. g triples) (list-new arena IRI))
             ((error _) false)
             ((ok s0)
-              (let ((ig (graph-to-indexed arena (. s0 triples)))
+              (let ((ig (graph-to-indexed arena (stage0-triples arena s0)))
                     (parent (make-iri arena "http://example.org/t#Parent"))
                     (eq-pred (make-iri arena OWL_EQUIVALENT_CLASS)))
                 (match (one-object arena ig parent eq-pred)
@@ -3413,6 +3495,10 @@
 
           (let ((r (test-stage0-rebuild-checks-the-whole-input arena)))
             (print-test-result "stage 0: a reified triple asserted anywhere in the input is not rebuilt" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-decode-store-answers-as-the-full-store arena)))
+            (print-test-result "decode: the store of queried predicates decodes as a full store" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-role-hierarchy-carries-edges arena)))

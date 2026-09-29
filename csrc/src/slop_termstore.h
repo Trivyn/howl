@@ -11,6 +11,7 @@ typedef struct termstore_IdPair termstore_IdPair;
 typedef struct termstore_IdTriple termstore_IdTriple;
 typedef struct termstore_Objects termstore_Objects;
 typedef struct termstore_TermStore termstore_TermStore;
+typedef struct termstore_Encoded termstore_Encoded;
 
 typedef slop_map* termstore_IdSet;
 
@@ -95,6 +96,19 @@ typedef struct termstore_TermStore termstore_TermStore;
 #ifndef SLOP_OPTION_TERMSTORE_TERMSTORE_DEFINED
 #define SLOP_OPTION_TERMSTORE_TERMSTORE_DEFINED
 SLOP_OPTION_DEFINE(termstore_TermStore, slop_option_termstore_TermStore)
+#endif
+
+struct termstore_Encoded {
+    termstore_TermStore dict;
+    slop_list_termstore_IdTriple triples;
+    int64_t offset;
+    int64_t max_blank;
+};
+typedef struct termstore_Encoded termstore_Encoded;
+
+#ifndef SLOP_OPTION_TERMSTORE_ENCODED_DEFINED
+#define SLOP_OPTION_TERMSTORE_ENCODED_DEFINED
+SLOP_OPTION_DEFINE(termstore_Encoded, slop_option_termstore_Encoded)
 #endif
 
 
@@ -227,10 +241,24 @@ static inline bool slop_eq_termstore_IdPair(const void* a, const void* b) {
 
 int64_t termstore_intern_term(slop_arena* arena, termstore_TermStore st, rdf_Term t);
 slop_option_int termstore_lookup_term(termstore_TermStore st, rdf_Term t);
+slop_string termstore_copy_string(slop_arena* arena, slop_string s);
+slop_option_string termstore_copy_option_string(slop_arena* arena, slop_option_string s);
+rdf_Term termstore_own_plain_term(slop_arena* arena, rdf_Term t);
+rdf_Term termstore_term_of(termstore_TermStore st, int64_t id);
+rdf_Triple termstore_triple_of(termstore_TermStore st, termstore_IdTriple it);
+int64_t termstore_intern_owned(slop_arena* arena, termstore_TermStore st, rdf_Term t);
 void termstore_typed_put(slop_arena* arena, termstore_TermStore st, int64_t type, int64_t s);
 uint8_t termstore_store_insert(slop_arena* arena, termstore_TermStore st, rdf_Triple t);
+uint8_t termstore_store_insert_ids(slop_arena* arena, termstore_TermStore st, termstore_IdTriple it);
 termstore_TermStore termstore_build_store(slop_arena* arena, slop_list_rdf_Triple triples);
 termstore_TermStore termstore_empty_store(slop_arena* arena);
+termstore_TermStore termstore_store_over(slop_arena* arena, termstore_TermStore dict);
+termstore_Encoded* termstore_new_encoded(slop_arena* arena);
+int64_t termstore_max_blank_in(rdf_Term t);
+rdf_Term termstore_shift_blanks(slop_arena* arena, rdf_Term t, int64_t offset);
+void termstore_encoded_add(slop_arena* arena, termstore_Encoded* p, rdf_Triple t);
+void termstore_encoded_next_document(slop_arena* arena, termstore_Encoded* p);
+termstore_Encoded termstore_encode_triples(slop_arena* arena, slop_list_rdf_Triple triples);
 slop_list_rdf_Term termstore_store_objects(slop_arena* arena, termstore_TermStore st, rdf_Term s, rdf_Term p);
 int64_t termstore_store_object_count(termstore_TermStore st, rdf_Term s, rdf_Term p);
 slop_option_rdf_Term termstore_store_sole_object(termstore_TermStore st, rdf_Term s, rdf_Term p);
@@ -271,6 +299,11 @@ SLOP_OPTION_DEFINE(termstore_TermStore, slop_option_termstore_TermStore)
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
 #define SLOP_OPTION_RDF_TRIPLE_DEFINED
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_TERMSTORE_ENCODED_DEFINED
+#define SLOP_OPTION_TERMSTORE_ENCODED_DEFINED
+SLOP_OPTION_DEFINE(termstore_Encoded, slop_option_termstore_Encoded)
 #endif
 
 #ifndef SLOP_OPTION_MAP_PTR_DEFINED
