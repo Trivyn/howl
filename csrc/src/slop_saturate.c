@@ -22,10 +22,13 @@ slop_list_saturate_Touched saturate_bucket_items(slop_arena* arena, slop_option_
 saturate_Partition saturate_partition_round(slop_arena* arena, slop_arena* run, types_Saturation sat, slop_list_saturate_RoundDelta deltas, int64_t w);
 uint8_t saturate_commit_succ(slop_arena* arena, types_Context store, types_RoleId r, types_Node y);
 uint8_t saturate_commit_pred(slop_arena* arena, types_Context store, types_RoleId r, types_Node x);
-void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Touched e, saturate_Queues qs);
-int64_t saturate_commit_bucket(slop_arena* arena, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs);
-types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas);
-types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas);
+uint8_t saturate_commit_sub(slop_arena* arena, types_Context store, types_Node b);
+void saturate_commit_entry(slop_arena* arena, slop_arena* ca, types_Saturation sat, saturate_Touched e, saturate_Queues qs);
+int64_t saturate_commit_bucket(slop_arena* arena, slop_arena* ca, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs);
+types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* run, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas, slop_list_arena_ptr qas);
+slop_list_arena_ptr saturate_generation_arenas(slop_arena* arena, int64_t w);
+slop_list_arena_ptr saturate_committer_arenas(slop_arena* arena, slop_list_arena_ptr gen);
+saturate_Advanced saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas);
 saturate_Joined saturate_parallel_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, int64_t w);
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
@@ -35,9 +38,9 @@ slop_list_arena_ptr saturate_commit_arenas(slop_arena* arena, int64_t w);
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);
 
-typedef struct { slop_arena* ca; types_Saturation sat; slop_list_saturate_Touched share; saturate_Queues qs; } saturate__lambda_323_env_t;
+typedef struct { slop_arena* qa; slop_arena* ca; types_Saturation sat; slop_list_saturate_Touched share; saturate_Queues qs; } saturate__lambda_323_env_t;
 
-static int64_t saturate__lambda_323(saturate__lambda_323_env_t* _env) { return saturate_commit_bucket(_env->ca, _env->sat, _env->share, _env->qs); }
+static int64_t saturate__lambda_323(saturate__lambda_323_env_t* _env) { return saturate_commit_bucket(_env->qa, _env->ca, _env->sat, _env->share, _env->qs); }
 
 typedef struct { slop_arena* wa; types_Saturation sat; premise_RuleIndex idx; saturate_RoundDelta d; slop_list_types_Node share; } saturate__lambda_327_env_t;
 
@@ -350,13 +353,22 @@ uint8_t saturate_commit_pred(slop_arena* arena, types_Context store, types_RoleI
     SLOP_UNREACHABLE();
 }
 
-void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Touched e, saturate_Queues qs) {
+uint8_t saturate_commit_sub(slop_arena* arena, types_Context store, types_Node b) {
+    if (slop_map_get(store.subsumers, &(b)) != NULL) {
+        return 0;
+    } else {
+        ({ uint8_t _dummy = 1; slop_map_put(arena, store.subsumers, &(b), &_dummy); });
+        return 1;
+    }
+}
+
+void saturate_commit_entry(slop_arena* arena, slop_arena* ca, types_Saturation sat, saturate_Touched e, saturate_Queues qs) {
     {
         __auto_type x = e.node;
         __auto_type dc = e.pending;
-        __auto_type _mv_317 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-        if (_mv_317.has_value) {
-            __auto_type store = _mv_317.value;
+        __auto_type _mv_319 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+        if (_mv_319.has_value) {
+            __auto_type store = _mv_319.value;
             {
                 __auto_type q = ({ __auto_type _mv = ({ void* _ptr = slop_map_get(qs.by_node, &(x)); _ptr ? (slop_option_types_Queue){ .has_value = true, .value = *(types_Queue*)_ptr } : (slop_option_types_Queue){ .has_value = false }; }); _mv.has_value ? ({ __auto_type q0 = _mv.value; q0; }) : (types_make_queue(arena)); });
                 {
@@ -364,8 +376,7 @@ void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Tou
                     for (size_t _i = 0; _i < _coll->cap; _i++) {
                         if (_coll->entries[_i].occupied) {
                             types_Node b = *(types_Node*)_coll->entries[_i].key;
-                            if (!((slop_map_get(store.subsumers, &(b)) != NULL))) {
-                                ({ uint8_t _dummy = 1; slop_map_put(arena, store.subsumers, &(b), &_dummy); });
+                            if (saturate_commit_sub(ca, store, b)) {
                                 ({ __auto_type _lst_p = &(q.items); __auto_type _item = (((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = b })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
@@ -382,7 +393,7 @@ void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Tou
                                 for (size_t _i = 0; _i < _coll->cap; _i++) {
                                     if (_coll->entries[_i].occupied) {
                                         types_Node y = *(types_Node*)_coll->entries[_i].key;
-                                        if (saturate_commit_succ(arena, store, r, y)) {
+                                        if (saturate_commit_succ(ca, store, r, y)) {
                                             ({ __auto_type _lst_p = &(q.items); __auto_type _item = (((types_Derived){ .tag = types_Derived_derived_succ, .data.derived_succ = { .f0 = r, .f1 = y } })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                         }
                                     }
@@ -402,7 +413,7 @@ void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Tou
                                 for (size_t _i = 0; _i < _coll->cap; _i++) {
                                     if (_coll->entries[_i].occupied) {
                                         types_Node p = *(types_Node*)_coll->entries[_i].key;
-                                        if (saturate_commit_pred(arena, store, r, p)) {
+                                        if (saturate_commit_pred(ca, store, r, p)) {
                                             ({ __auto_type _lst_p = &(q.items); __auto_type _item = (((types_Derived){ .tag = types_Derived_derived_pred, .data.derived_pred = { .f0 = r, .f1 = p } })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                         }
                                     }
@@ -413,40 +424,41 @@ void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Tou
                 }
                 ({ __auto_type _val = q; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, qs.by_node, &(x), _vptr); });
             }
-        } else if (!_mv_317.has_value) {
+        } else if (!_mv_319.has_value) {
         }
     }
 }
 
-int64_t saturate_commit_bucket(slop_arena* arena, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs) {
+int64_t saturate_commit_bucket(slop_arena* arena, slop_arena* ca, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs) {
     {
         __auto_type _coll = entries;
         for (size_t _i = 0; _i < _coll.len; _i++) {
             __auto_type e = _coll.data[_i];
-            saturate_commit_entry(arena, sat, e, qs);
+            saturate_commit_entry(arena, ca, sat, e, qs);
         }
     }
     return 0;
 }
 
-types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas) {
+types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* run, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas, slop_list_arena_ptr qas) {
     types_Saturation _retval = {0};
     {
         __auto_type w = ((int64_t)(((int64_t)((cas).len))));
-        __auto_type buckets = saturate_partition_round(scratch, arena, sat, deltas, w);
+        __auto_type buckets = saturate_partition_round(scratch, run, sat, deltas, w);
         __auto_type qss = ((slop_list_saturate_Queues){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type threads = ((slop_list_thread_int_ptr){ .data = NULL, .len = 0, .cap = 0 });
         int64_t k = 0;
         while (k < w) {
             {
                 __auto_type qs = ((saturate_Queues){.by_node = slop_map_new_ptr(scratch, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node)});
-                __auto_type ca = ({ __auto_type _mv = ({ __auto_type _lst = cas; size_t _idx = (size_t)k; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type a = _mv.value; a; }) : (arena); });
+                __auto_type ca = ({ __auto_type _mv = ({ __auto_type _lst = cas; size_t _idx = (size_t)k; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type a = _mv.value; a; }) : (run); });
+                __auto_type qa = ({ __auto_type _mv = ({ __auto_type _lst = qas; size_t _idx = (size_t)k; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type a = _mv.value; a; }) : (arena); });
                 __auto_type share = saturate_bucket_items(scratch, ({ void* _ptr = slop_map_get(buckets.by_owner, &(int64_t){k}); _ptr ? (slop_option_saturate_Bucket){ .has_value = true, .value = *(saturate_Bucket*)_ptr } : (slop_option_saturate_Bucket){ .has_value = false }; }));
                 ({ __auto_type _lst_p = &(qss); __auto_type _item = (qs); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 if (w <= 1) {
-                    saturate_commit_bucket(ca, sat, share, qs);
+                    saturate_commit_bucket(qa, ca, sat, share, qs);
                 } else {
-                    ({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_closure_t _spawn_cl = ({ saturate__lambda_323_env_t* saturate__lambda_323_env = (saturate__lambda_323_env_t*)slop_arena_alloc(arena, sizeof(saturate__lambda_323_env_t)); *saturate__lambda_323_env = (saturate__lambda_323_env_t){ .ca = ca, .sat = sat, .share = share, .qs = qs }; (slop_closure_t){ (void*)saturate__lambda_323, (void*)saturate__lambda_323_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(scratch, sizeof(slop_thread_int)); _spawn_th->func = _spawn_cl.fn; _spawn_th->env = _spawn_cl.env; _spawn_th->done = false; pthread_create(&_spawn_th->id, NULL, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_closure_t _spawn_cl = ({ saturate__lambda_323_env_t* saturate__lambda_323_env = (saturate__lambda_323_env_t*)slop_arena_alloc(arena, sizeof(saturate__lambda_323_env_t)); *saturate__lambda_323_env = (saturate__lambda_323_env_t){ .qa = qa, .ca = ca, .sat = sat, .share = share, .qs = qs }; (slop_closure_t){ (void*)saturate__lambda_323, (void*)saturate__lambda_323_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(scratch, sizeof(slop_thread_int)); _spawn_th->func = _spawn_cl.fn; _spawn_th->env = _spawn_cl.env; _spawn_th->done = false; pthread_create(&_spawn_th->id, NULL, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
                 k = (k + 1);
             }
@@ -489,11 +501,48 @@ types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* scratch, t
     return _retval;
 }
 
-types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas) {
+slop_list_arena_ptr saturate_generation_arenas(slop_arena* arena, int64_t w) {
+    {
+        __auto_type out = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0 });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        if (w > 1) {
+            {
+                int64_t k = 0;
+                while (k < w) {
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    k = (k + 1);
+                }
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_arena_ptr saturate_committer_arenas(slop_arena* arena, slop_list_arena_ptr gen) {
+    {
+        __auto_type out = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0 });
+        int64_t i = 0;
+        {
+            __auto_type _coll = gen;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type a = _coll.data[_i];
+                if (i > 0) {
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
+                i = (i + 1);
+            }
+        }
+        return out;
+    }
+}
+
+saturate_Advanced saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas) {
     {
         __auto_type scratch = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
         __auto_type joined = (((config.worker_count <= 1)) ? ({ __auto_type d = ((saturate_RoundDelta){.pending = slop_map_new_ptr(scratch, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node)}); __auto_type ds = ((slop_list_saturate_RoundDelta){ .data = NULL, .len = 0, .cap = 0 }); ({ saturate_round_join(scratch, sat, idx, d); ({ __auto_type _lst_p = &(ds); __auto_type _item = (d); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; }); ((saturate_Joined){.deltas = ds, .arenas = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0 })}); }); }) : saturate_parallel_join(scratch, sat, idx, config.worker_count));
-        __auto_type next = saturate_commit_round(arena, scratch, sat, joined.deltas, cas);
+        __auto_type gen = saturate_generation_arenas(arena, ((int64_t)(((int64_t)((cas).len)))));
+        __auto_type g = ({ __auto_type _mv = ({ __auto_type _lst = gen; size_t _idx = (size_t)0; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type a = _mv.value; a; }) : (arena); });
+        __auto_type next = saturate_commit_round(g, arena, scratch, sat, joined.deltas, cas, saturate_committer_arenas(scratch, gen));
         {
             __auto_type _coll = joined.arenas;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -502,7 +551,7 @@ types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat,
             }
         }
         ({ slop_arena_free(scratch); free(scratch); });
-        return next;
+        return ((saturate_Advanced){.saturation = next, .arenas = gen});
     }
 }
 
@@ -643,6 +692,7 @@ slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena
     {
         __auto_type state = sat;
         uint8_t cancelled = 0;
+        __auto_type prev = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0 });
         __auto_type cas = saturate_commit_arenas(arena, config.worker_count);
         while (!(saturate_frontier_is_empty(state))) {
             if (config.cancel_ptr && __atomic_load_n((uint32_t*)(uintptr_t)config.cancel_ptr, __ATOMIC_RELAXED)) { cancelled = 1; };
@@ -652,7 +702,18 @@ slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena
                 if (saturate_budget_exhausted(state, config)) {
                     break;
                 } else {
-                    state = saturate_advance_round(arena, state, idx, config, cas);
+                    {
+                        __auto_type adv = saturate_advance_round(arena, state, idx, config, cas);
+                        {
+                            __auto_type _coll = prev;
+                            for (size_t _i = 0; _i < _coll.len; _i++) {
+                                __auto_type a = _coll.data[_i];
+                                ({ slop_arena_free(a); free(a); });
+                            }
+                        }
+                        prev = adv.arenas;
+                        state = adv.saturation;
+                    }
                 }
             }
         }
