@@ -68,10 +68,10 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.69 s (reasoning 0.51 s), 8 GB peak | 1.4 s | 0.44 s | 1.6× | **passes** 5× |
-| EL-GALEN | ELK 0.6.0 | 1.06 s (reasoning 0.85 s), 4 GB peak | 0.25 s | 0.28 s | 3.8× | **passes** 5× |
-| OBI 2026-07-27 | HermiT | 0.08 s | 0.10 s | 0.49 s | 0.2× | reported |
-| RO 2025-12-17 | HermiT | 0.02 s | 0.01 s | 0.15 s | 0.1× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 0.59 s (reasoning 0.48 s), 2.6 GB peak | 0.54 s | 0.45 s | 1.3× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 1.00 s (reasoning 0.83 s), 2.1 GB peak | 0.07 s | 0.28 s | 3.5× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.07 s | 0.03 s | 0.51 s | 0.1× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.003 s | 0.16 s | 0.1× | reported |
 
 M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
 side of their join, and role inclusions are matched through the told role closure rather than
@@ -81,14 +81,33 @@ SPO index and an rdf:type index, instead of slop-rdf's four-index store) a round
 parallel instead of merging serially, and saturation over nodes renamed to integer ids at its
 boundary took S6a's 19.2× (GO) and 30.1× (EL-GALEN) to 5.05× and 6.1× with decode still inside the
 window. Moving the window to axioms in hand took them to 5.3× (EL-GALEN) and 1.4× (GO), and
-matching role inclusions through the closure cut EL-GALEN's reasoning by 38%, to the figures above.
-GO's single-threaded decode (~1.4 s) is outside the window but is still the bulk of its end-to-end
-time.
+matching role inclusions through the closure cut EL-GALEN's reasoning by 38%. Encoding the input
+once, at the boundary (below), made decode faster still.
+
+**Memory.** Peak resident set of one full run, parse to report, W = 4. The oracles' figures are
+measured two ways: at their default 32 GB heap, where the JVM's peak mostly reflects how lazily it
+collects garbage, and at the smallest heap that still reproduces the certified entailments, which is
+what they actually need:
+
+| Entry | HOWL | HOWL, allocator returning freed memory | Oracle, default heap | Oracle, smallest heap |
+|---|---|---|---|---|
+| GO | 2.6 GB | 1.7 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
+| EL-GALEN | 2.1 GB | 1.1 GB | ELK 1.9 GB | ELK 0.43 GB |
+| OBI | 0.58 GB | 0.29 GB | HermiT 1.4 GB | HermiT 0.24 GB |
+| RO | 33 MB | 32 MB | HermiT 0.36 GB | HermiT 0.23 GB |
+
+HOWL was 7.9 GB on GO before its memory work. It now parses each document straight into an encoded
+form (a dictionary of owned terms and the triples as ids), frees every phase's working memory as the
+phase ends, and frees each saturation round's queues a round later; every report is unchanged. The
+second HOWL column runs with macOS's large-block cache off (`MallocLargeCache=0`), which keeps freed
+arena blocks resident; slop's arena runtime returning them to the OS is the fix, in progress. What
+remains is mostly per-element: a slop `Set` or `Map` entry costs roughly 50–200 bytes where the JVM
+stores a 4-byte reference.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 1.6× and EL-GALEN 3.8× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 1.3× and EL-GALEN 3.5× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
