@@ -274,6 +274,11 @@ corpus-acceptance: cli
 # `golden-update` is for deliberate changes only.
 GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl \
                               corpus/fixtures/probes/*.ttl)
+# IMPORT RUNS, `howl validate DOC.ttl -I IMPORT.ttl --report`, one per
+# DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
+# an attested import - its blank nodes standardized apart from the root's -
+# which no single-file golden reaches.
+GOLDEN_IMPORTS  := root:imported
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
@@ -301,6 +306,12 @@ golden: cli
 	  case "$$out" in "howl-report 1"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
 	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL $$f differs from $$g"; fail=1; fi; \
 	done; \
+	for pair in $(GOLDEN_IMPORTS); do \
+	  d=$${pair%%:*}; i=$${pair#*:}; g=corpus/goldens/imports/$$d.report; \
+	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate corpus/fixtures/imports/$$d.ttl -I corpus/fixtures/imports/$$i.ttl --report 2>/dev/null; echo "exit $$?"; }); \
+	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL imports $$d -I $$i differs from $$g"; fail=1; fi; \
+	done; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/$$c.sha256; \
 	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
@@ -319,6 +330,13 @@ golden-update: cli
 	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
 	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > $$g;; \
 	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
+	done; \
+	mkdir -p corpus/goldens/imports; \
+	for pair in $(GOLDEN_IMPORTS); do \
+	  d=$${pair%%:*}; i=$${pair#*:}; \
+	  out=$$({ $(HOWL) validate corpus/fixtures/imports/$$d.ttl -I corpus/fixtures/imports/$$i.ttl --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > corpus/goldens/imports/$$d.report;; \
+	    *) echo "  NOT A REPORT imports $$d -- golden not written"; fail=1;; esac; \
 	done; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; \
