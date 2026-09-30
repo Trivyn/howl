@@ -97,18 +97,20 @@ what they actually need:
 |---|---|---|---|
 | GO | 0.91 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
 | EL-GALEN | 0.62 GB | ELK 1.9 GB | ELK 0.43 GB |
-| OBI | 0.24 GB | HermiT 1.4 GB | HermiT 0.24 GB |
-| RO | 23 MB | HermiT 0.36 GB | HermiT 0.23 GB |
+| OBI | 0.14 GB | HermiT 1.4 GB | HermiT 0.24 GB |
+| RO | 16 MB | HermiT 0.36 GB | HermiT 0.23 GB |
 
 HOWL was 7.9 GB on GO before its memory work. It now parses each document straight into an encoded
 form (a dictionary of owned terms and the triples as ids), frees every phase's working memory as the
 phase ends, and frees each saturation round's queues a round later; every report is unchanged. Two
 slop runtime changes did the rest: compact collections (#234, a Map's and Set's keys and values
 inline in a dense table; GO 2.6 → 1.8 GB) and arena blocks mapped from the OS, so freeing an arena
-returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks resident). Each phase now
-has its own high-water mark, since the one before it is freed: GO peaks in `prepare` (0.91 GB,
-the input's dictionary plus the decoded axioms, gate and normalizer; the parse reaches 0.85 GB),
-EL-GALEN in writing the report (0.59 GB; the parse reaches 0.54 GB), OBI and RO in the parse.
+returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks resident). slop-rdf's
+streaming parser now holds one statement's memory at a time rather than the whole document's
+(slop-rdf #8; GO's parse 0.85 → 0.47 GB, EL-GALEN's 0.54 → 0.06 GB, OBI 0.24 → 0.14 GB). Each
+phase has its own high-water mark, since the one before it is freed: GO, OBI and RO peak in
+`prepare` (GO 0.91 GB: the input's dictionary plus the decoded axioms, gate and normalizer),
+EL-GALEN in writing the report (0.59 GB).
 Returning memory has a small time cost: later rounds touch fresh pages rather than reusing dirty ones.
 
 | Milestone | Scope | State |
@@ -320,7 +322,7 @@ those properties come back unknown or failed; CI's verify step is non-blocking. 
 needs [#173](https://github.com/slop-lang/slop/issues/173) (a call resolves within its module, so
 `join` is the thread's and not `strlib`'s). 0.3.0 makes an unmarked parameter read-only
 ([#180](https://github.com/slop-lang/slop/issues/180)), so slop-rdf must be at or after its
-`param-mode-fixes` merge. The
+`param-mode-fixes` merge; the memory figures need its streaming scratch arena (slop-rdf #8). The
 rows below were re-probed on each bump rather than assumed from release notes.
 
 | Works | Does not |
