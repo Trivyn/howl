@@ -105,10 +105,11 @@ form (a dictionary of owned terms and the triples as ids), frees every phase's w
 phase ends, and frees each saturation round's queues a round later; every report is unchanged. Two
 slop runtime changes did the rest: compact collections (#234, a Map's and Set's keys and values
 inline in a dense table; GO 2.6 → 1.8 GB) and arena blocks mapped from the OS, so freeing an arena
-returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks resident). The peak is now
-the parse: GO reaches 0.85 GB of its 0.91 GB while parsing, because slop-rdf's parser holds every
-term occurrence's strings until the parse ends. Returning memory has a small time cost: later rounds
-touch fresh pages rather than reusing dirty ones.
+returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks resident). Each phase now
+has its own high-water mark, since the one before it is freed: GO peaks in `prepare` (0.91 GB,
+the input's dictionary plus the decoded axioms, gate and normalizer; the parse reaches 0.85 GB),
+EL-GALEN in writing the report (0.59 GB; the parse reaches 0.54 GB), OBI and RO in the parse.
+Returning memory has a small time cost: later rounds touch fresh pages rather than reusing dirty ones.
 
 | Milestone | Scope | State |
 |---|---|---|
