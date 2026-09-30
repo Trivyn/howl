@@ -222,7 +222,11 @@ acceptance: cli
 	check corpus/fixtures/hazards/cyclic-hierarchy.ttl 0; \
 	check corpus/fixtures/hazards/range-complex-fillers.ttl 0; \
 	check corpus/fixtures/hazards/role-hierarchy-deep.ttl 0; \
+	check corpus/fixtures/hazards/range-key-collision.ttl 0; \
+	check corpus/fixtures/hazards/chain-prefix-collision.ttl 0; \
+	check corpus/fixtures/hazards/thing-key-collision.ttl 0; \
 	check corpus/fixtures/out-of-profile/inverse-expressions.ttl 2; \
+	check corpus/fixtures/out-of-profile/disjoint-arity.ttl 2; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi
 

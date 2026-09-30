@@ -1,0 +1,24 @@
+howl-report 1
+verdict coherent
+termination fixpoint
+rounds 2
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 15
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+sub urn:A http://www.w3.org/2002/07/owl#Thing
+sub urn:A urn:A
+sub urn:B http://www.w3.org/2002/07/owl#Thing
+sub urn:B urn:B
+sub urn:C http://www.w3.org/2002/07/owl#Thing
+sub urn:C urn:C
+sub urn:R1 http://www.w3.org/2002/07/owl#Thing
+sub urn:R1 urn:R1
+sub urn:R2 http://www.w3.org/2002/07/owl#Thing
+sub urn:R2 urn:R2
+sub urn:y:z http://www.w3.org/2002/07/owl#Thing
+sub urn:y:z urn:y:z
+sub y:z http://www.w3.org/2002/07/owl#Thing
+sub y:z y:z
+exit 0

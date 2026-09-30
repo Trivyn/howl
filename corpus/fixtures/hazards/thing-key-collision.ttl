@@ -1,0 +1,21 @@
+# A FRESH-NAME KEY THAT COLLIDED WITH owl:Thing. The normalizer names each
+# complex subexpression once, keyed by its rendered text, and the renderer
+# writes ⊤ as "owl:Thing". But <owl:Thing> - scheme "owl" - is a legal class
+# IRI in its own right, so ∃r.⊤ and ∃r.<owl:Thing> keyed alike and shared ONE
+# fresh name. Its definition was emitted once, for whichever came first, and
+# the other GCI lost its left-hand side: ∃r.⊤ ⊑ C never reached A, which has
+# an r-successor. The keys now come from a renderer whose IRIs are bracketed,
+# which no IRI can imitate.
+# Expect: COHERENT, A ⊑ C (and A ⊑ B does NOT hold), exit 0.
+
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/thing-key-collision> a owl:Ontology .
+<urn:A> a owl:Class . <urn:B> a owl:Class . <urn:C> a owl:Class .
+<owl:Thing> a owl:Class .
+<urn:r> a owl:ObjectProperty .
+
+<urn:A> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty <urn:r> ; owl:someValuesFrom owl:Thing ] .
+[ a owl:Restriction ; owl:onProperty <urn:r> ; owl:someValuesFrom <owl:Thing> ] rdfs:subClassOf <urn:B> .
+[ a owl:Restriction ; owl:onProperty <urn:r> ; owl:someValuesFrom owl:Thing ] rdfs:subClassOf <urn:C> .

@@ -298,6 +298,9 @@ uint8_t normalize_st_mark_neg(slop_arena* arena, normalize_NormState* p, slop_st
 uint8_t normalize_st_mark_pos(slop_arena* arena, normalize_NormState* p, slop_string text);
 owl2_RawConcept normalize_rc_of_node(types_Node n);
 slop_list_owl2_RawConcept normalize_flatten_and(slop_arena* arena, owl2_RawConcept c, slop_list_owl2_RawConcept acc);
+slop_string normalize_concept_key(slop_arena* arena, owl2_RawConcept c);
+slop_string normalize_node_key(slop_arena* arena, types_Node n);
+slop_string normalize_role_key(slop_arena* arena, types_RoleId r);
 slop_string normalize_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept conj, int64_t upto);
 types_Node normalize_neg_atom(slop_arena* arena, normalize_NormState* p, owl2_RawConcept c);
 types_Node normalize_fold_conjuncts(slop_arena* arena, normalize_NormState* p, slop_list_owl2_RawConcept conj, int64_t n);

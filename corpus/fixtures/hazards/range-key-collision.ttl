@@ -1,0 +1,23 @@
+# TWO RANGE-ELIMINATION KEYS THAT COLLIDED. Range elimination names one fresh
+# X_{r,D} per (role, filler) pair, keyed by text. The key was
+# "range-elim:" + r + ":" + D, and ':' is legal inside an IRI, so the pairs
+# (urn:x, urn:y:z) and (urn:x:urn, y:z) both keyed "range-elim:urn:x:urn:y:z":
+# ONE X for both, inheriting both fillers. Then A ⊑ ∃urn:x.urn:y:z made A an
+# instance of ∃urn:x.y:z, and the GCI below manufactured A ⊑ B - a false
+# subsumption, which no oracle derives. The key now separates its parts with
+# spaces, which an IRI cannot contain.
+# Expect: COHERENT, A NOT subsumed by B, exit 0.
+
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/range-key-collision> a owl:Ontology .
+<urn:A> a owl:Class . <urn:B> a owl:Class . <urn:C> a owl:Class .
+<urn:y:z> a owl:Class . <y:z> a owl:Class .
+<urn:R1> a owl:Class . <urn:R2> a owl:Class .
+<urn:x> a owl:ObjectProperty ; rdfs:range <urn:R1> .
+<urn:x:urn> a owl:ObjectProperty ; rdfs:range <urn:R2> .
+
+<urn:A> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty <urn:x> ; owl:someValuesFrom <urn:y:z> ] .
+<urn:C> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty <urn:x:urn> ; owl:someValuesFrom <y:z> ] .
+[ a owl:Restriction ; owl:onProperty <urn:x> ; owl:someValuesFrom <y:z> ] rdfs:subClassOf <urn:B> .
