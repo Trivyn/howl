@@ -1,0 +1,17 @@
+# A CLASS ASSERTION OF A COMPLEX CONCEPT (SPEC 5.3 L1, L2). (B ⊓ ∃r.E)(a) is
+# the GCI individual(a) ⊑ B ⊓ ∃r.E, split and normalized like any other right-
+# hand side; ∃r.E ⊑ F makes a an F, and B disjoint from nothing here but F
+# disjoint from G, with G(a). Expect: INCONSISTENT (exit 1).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+<http://example.org/t> a owl:Ontology .
+:B a owl:Class . :E a owl:Class . :F a owl:Class . :G a owl:Class .
+:F owl:disjointWith :G .
+:r a owl:ObjectProperty .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :E ] rdfs:subClassOf :F .
+:a a owl:NamedIndividual , :G ,
+   [ a owl:Class ; owl:intersectionOf ( :B [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :E ] ) ] .

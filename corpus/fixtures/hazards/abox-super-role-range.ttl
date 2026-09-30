@@ -1,0 +1,19 @@
+# A SUPER-ROLE'S RANGE REACHES AN ASSERTED EDGE'S TARGET (SPEC 5.3 L3, L4).
+# s ⊑ t, range(t) = C, s(a,b), D(b), C disjoint from D. The range is imposed on
+# s through the told hierarchy, so the seed for s(a,b) must carry it: b is in C
+# and D, and the ontology is INCONSISTENT. Seeding only ranges declared on s
+# itself would report it coherent.
+# Expect: INCONSISTENT (exit 1).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :D a owl:Class . :C owl:disjointWith :D .
+:s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:s rdfs:subPropertyOf :t .
+:t rdfs:range :C .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual , :D .
+:a :s :b .

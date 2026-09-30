@@ -1,0 +1,16 @@
+# A DOMAIN FIRES ON AN ASSERTED EDGE (SPEC 5.3 L2, L6). domain(r) = C is
+# ∃r.⊤ ⊑ C; it reaches a only if the asserted edge r(a,b) is visible to CR4 and
+# ⊤ is seeded in b's context. D(a), C disjoint from D.
+# Expect: INCONSISTENT (exit 1).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :D a owl:Class . :C owl:disjointWith :D .
+:r a owl:ObjectProperty .
+:r rdfs:domain :C .
+:a a owl:NamedIndividual , :D . :b a owl:NamedIndividual .
+:a :r :b .

@@ -1,0 +1,2 @@
+# corpus/abox_fuzz.py outcome (make abox-fuzz). Regenerate with --update.
+seeds 1:400 ontologies 400 clean 400 of-which-inconsistent 169 failed 0

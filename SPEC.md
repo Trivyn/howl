@@ -847,33 +847,34 @@ asymmetry is essential, not incidental:
 | `C(a)` | the pre-normalization GCI `individual(a) ⊑ C` — `C` stays a full `Concept`, so `(B ⊓ ∃r.D)(a)` normalizes like any other right-hand side |
 | `r(a,b)` | an edge emitted into **Δ₀** via `emit-edge` on the `LogicalEdge` (individual(a), r, individual(b)), plus `derived-sub(A)` to `individual(b)` for every `A ∈ ran_T(r)` — *not* the GCI `individual(a) ⊑ ∃r.individual(b)` |
 
-> **Why role assertions cannot go through `∃`.** `individual(b)` is an ordinary concept name, not a
-> singleton — nothing makes it a one-element set. So `individual(a) ⊑ ∃r.individual(b)` says only
-> "some member of `individual(b)`", and two assertions naming the same `b` may be witnessed by
-> *different* members. Consequences accumulated on one witness never reach the other, and the
-> identity of a repeated individual name — which is intrinsic to the ABox, not a matter of equality
-> between distinct names — is lost. Concretely:
+> **Why role assertions are edges, not `individual(a) ⊑ ∃r.individual(b)`.** As semantics the
+> existential reading is weaker: it says only "some member of `individual(b)`", so two assertions
+> naming the same `b` may be witnessed by *different* members. But the calculus alone would not lose
+> that identity — CR3 sends `∃r.individual(b)` to the one `individual(b)` context. What loses it is
+> **range elimination** ([§6.3](#63-normalization)): it rewrites `C ⊑ ∃r.D` into
+> `C ⊑ ∃r.X_{r,D}`, one fresh `X` **per role**, so `r(a,b)` and `s(c,b)` would reach two contexts,
+> `X_{r,b}` and `X_{s,b}`, each carrying only its own role's range. Concretely:
 >
 > ```
 > DisjointClasses(C, D)    range(r) = C    range(s) = D    r(a,b)    s(c,b)
 > ```
 >
 > This ontology is **inconsistent**: `b` is in both `C` and `D`. Under the existential encoding the
-> `r`-successor and the `s`-successor can be different members of `individual(b)`, one in `C` and
-> one in `D`, no proxy becomes unsatisfiable, and HOWL reports **coherent**. Installing the edge
-> directly points both assertions at the one `individual(b)` *context*, so both range consequences
-> land on it and the disjointness fires.
+> two ranges land on `X_{r,b}` and `X_{s,b}`, neither becomes unsatisfiable, and HOWL reports
+> **coherent**. Installing the edge directly points both assertions at the one `individual(b)`
+> context, the seeds put both ranges on it, and the disjointness fires. The direct edge with its
+> seeds is exactly the eliminated form collapsed back onto `individual(b)`, and
+> [§5.3](#53-the-abox-reduction-is-sound-and-complete) (L4) shows that collapse is exact, because
+> `individual(b)` stands for one element.
 >
 > An earlier draft used the existential form and justified it by noting that nothing in a
 > nominal-free fragment can force two *distinct* individuals to be equal. That is true and
 > irrelevant: the failure is a single name occurring twice, not two names merging.
 >
-> **This reduction is not lifted from a published proof, and that is a live risk.** The cited CEL
-> results cover the TBox; the direct-edge ABox encoding is HOWL's own. Under
-> [§7](#7-verification--contracts)'s discipline it therefore needs its own soundness and
-> completeness argument before M1 — either a citation for this reduction or a proof written here.
-> The example above is a **mandatory regression fixture** either way
-> ([§10](#10-testing-strategy)); it is the smallest case that distinguishes the two encodings.
+> **The reduction is proved in [§5.3](#53-the-abox-reduction-is-sound-and-complete)**, by reduction to
+> the published EL++ results with nominals and range restrictions. The example above stays a
+> **mandatory regression fixture** ([§10](#10-testing-strategy)): it is the smallest case that
+> distinguishes the two encodings.
 
 **Asserted edges enter through the delta, not the store — and they carry their ranges with them.**
 Two things follow from the row above and neither is optional:
@@ -925,6 +926,235 @@ the entire reasoner. Semi-naive rules fire only on facts arriving in a delta; if
 immediately, and CR1–CR3 never see `N` or `⊤` at all. The result is a run that terminates instantly
 and reports a complete, empty classification — sound, catastrophically incomplete, and it looks like
 success. Seeding `⊤` this way is also what lets a `⊤ ⊑ C` axiom reach every context via CR1.
+
+### 5.3 The ABox reduction is sound and complete
+
+This section discharges [§12](#12-milestones--acceptance-criteria) M1 (f): the argument that the
+[§5.2](#52-the-exact-v0-language) direct-edge encoding of the ABox is sound and complete. It is a
+**reduction to published results** — EL++ with nominals and its completion calculus, and EL++'s
+range-restriction extension — plus the steps where HOWL's encoding differs from theirs, each proved
+here because no citation covers it.
+
+> **Review status.** Written 2026-09-30.
+> - **Adversarial review (Codex, four passes, 2026-09-30): signed off.** Its findings, each fixed in the
+>   text: the theorem quantified over every class name, not the input signature; `⊥` as a premise,
+>   filler and range filler lay outside [BBL05]'s normal form, and the "sink" claim needed a
+>   dependency invariant; L5 ignored the removed `{a}` contexts' outgoing edges; L4 needed the
+>   operational fixpoint argument, the `{a}`-to-`I_a` substitution and the empty-range case; L7 needed
+>   the no-unregistered-address invariant; L1 overattributed the reduction; L9 stated soundness over
+>   internal symbols; Lemma 3 was applied to names occurring in no axiom.
+> - **Project owner: accepted, 2026-09-30.** M1 (f) is discharged ([§12](#12-milestones--acceptance-criteria)).
+
+**Sources.** [BBL05] Baader, Brandt, Lutz, *Pushing the EL Envelope*, IJCAI 2005: EL++, whose basic
+concepts include nominals `{a}` (§2 notes that ABox consistency reduces to subsumption, citing its
+technical report; the reduction used here is elementary and given in L1); its **Lemma 3** proves the completion rules CR1–CR11 sound and complete for a normalized CBox —
+`A ⊑ B` iff `S(A) ∩ {B, ⊥} ≠ ∅` or `⊥ ∈ S({a})` for some nominal `{a}`. [BBL08] Baader, Brandt,
+Lutz, *Pushing the EL Envelope Further*, OWLED 2008: EL++ with range restrictions under the §3
+syntactic restriction HOWL's gate enforces ([§5.2](#52-the-exact-v0-language)); its **Lemma 1**
+eliminates ranges through fresh `X_{r,D}` and proves subsumption between concept names preserved.
+
+**Setting.** `O = T ∪ A` is an ontology the gate accepts: `T` in the §5.2 language (nominal-free),
+`A` a set of `C(a)` and `r(a,b)`. Write `I_a` for `individual(a)`. HOWL (i) normalizes
+`T ∪ {I_a ⊑ C | C(a) ∈ A}`, decomposes chains and eliminates ranges; (ii) seeds every context with
+`{self, ⊤}`, installs each `r(a,b)` as the edge `(I_a, I_b)` stored under `r`, and seeds every
+`A ∈ ran_T(r)` into `S(I_b)`; (iii) saturates with CR1–CR5 and CR7 (published CR11), matching role
+inclusions through the told closure ([§6.4](#64-completion-rules)); (iv) reports.
+
+**Theorem.** If `coverage.omitted = ∅` and termination is `fixpoint`, then:
+`inconsistent true` iff `O` is inconsistent; for consistent `O`, `unsat A` iff `O ⊨ A ⊑ ⊥`, and
+`entails-sub(A, B)` iff `O ⊨ A ⊑ B`, for all class names `A`, `B` **of the input signature** (the
+names the report is about; a name the input never mentions has no context, and `entails-sub` does not
+answer for it). Under partial coverage or a capped run, every finding reported is still **entailed**
+by `O` (L9) — which is what lets an *incoherent* verdict stand whatever the coverage
+([§6.2](#62-data-model)). "Complete" is relative to the input HOWL was given: with `owl:imports`, it
+trusts the caller's attestation that the supplied documents are the import closure
+([§6.2](#62-data-model)'s trust boundary), which no omission list can check.
+
+**The route.** Six theories, each shown to agree with the next on everything the report reads:
+
+```
+O  ─L1→  T_ν  (ABox as nominal GCIs)  ─L2→  T_n  (normal form)  ─L3→  T_e  (ranges eliminated)
+   ─L4→  T_H  (X_{r,{b}} collapsed: HOWL's edges and seeds)  ─L5, L6, L7→  HOWL's saturation  ─L8→  report
+```
+
+**L1 — the ABox as nominals** (elementary). Let `T_ν = T ∪ {{a} ⊑ C | C(a) ∈ A} ∪
+{{a} ⊑ ∃r.{b} | r(a,b) ∈ A}`. For every interpretation, `a ∈ C` iff `{a} ⊆ C`, and
+`(a, b) ∈ r` iff `{a} ⊆ ∃r.{b}`; so `O` and `T_ν` have the same models. Name each nominal with a
+fresh `I_a` (`I_a ⊑ {a}`, `{a} ⊑ I_a`), a conservative extension, and then **replace `{a}` by `I_a`
+in every other axiom** — a substitution of equivalents, which preserves the models. From here on the
+ABox axioms read `I_a ⊑ C` and `I_a ⊑ ∃r.I_b`, and a nominal occurs **only** in the two axioms
+`I_a ⊑ {a}` and `{a} ⊑ I_a`. (That is HOWL's input: `I_a` is `individual(a)`.) Consistency is a subsumption
+between names: add fresh names `A′`, `B′` through the tautologies `A′ ⊑ A′` and `B′ ⊑ B′` (so they
+occur in the CBox, as [BBL05] Lemma 3 requires, while constraining nothing). Then `A′ ⊑ B′` holds iff
+no model can make `A′` non-empty, i.e. iff `T_ν` has no model at all — so `O` is inconsistent iff
+`A′ ⊑ B′`.
+
+**L2 — HOWL's preprocessing yields [BBL05]'s normal form, conservatively.** HOWL's six `NormAxiom`
+shapes (`A ⊑ B`, `A₁ ⊓ A₂ ⊑ B`, `A ⊑ ∃r.B`, `∃r.A ⊑ B`, `r ⊑ s`, `r₁ ∘ r₂ ⊑ t`) are [BBL05]'s normal
+form. Each step introducing them is a conservative extension — every model of the output is one of
+the input, and every model of the input extends to one of the output:
+- **Definitional fresh names.** A fresh `X` stands for one expression `E`, defined `X ⊑ E` where `E`
+  occurs positively, `E ⊑ X` where negatively, or both; extend by `X := E`. This needs the keys to be
+  **injective** — two expressions sharing an `X` would give it both definitions — and HOWL's are:
+  `concept-key` brackets every IRI (no IRI contains `<`, `>` or a space) and tags each form, the
+  range key and the chain key separate their parts with spaces. (Each was once not injective; the
+  fixtures `thing-key-collision`, `range-key-collision` and `chain-prefix-collision` pin it.)
+- **Sugar and special forms.** `dom(r) ⊑ C` becomes `∃r.⊤ ⊑ X`, `X ⊑ C`. A complex range filler
+  becomes `ran(r) ⊑ X`, `X ⊑ C`. `EquivalentClasses` becomes a star of inclusions, `DisjointClasses`
+  pairwise `Cᵢ ⊓ Cⱼ ⊑ ⊥` — for two or more operands only, as OWL 2 requires (a list of fewer is
+  decoded as unrecognized, `out-of-profile/disjoint-arity`). `TransitiveObjectProperty(r)` is
+  `r ∘ r ⊑ r`.
+- **Chains, decomposed left-associated.** `r₁ ∘ … ∘ rₙ ⊑ t` becomes `r₁ ∘ r₂ ⊑ u₂`,
+  `uᵢ ∘ rᵢ₊₁ ⊑ uᵢ₊₁`, `uₙ₋₁ ∘ rₙ ⊑ t` with fresh `uᵢ`; extend by `uᵢ := r₁ ∘ … ∘ rᵢ`, and any model
+  of the output satisfies the input by monotonicity of composition. The fresh `uᵢ` have no range
+  and no super-role, so `ran_T(uᵢ) = ∅`.
+- **The range restriction survives.** [BBL08] §3 requires: `r₁ ∘ … ∘ rₙ ⊑ s` (`n ≥ 1`) and
+  `T ⊨ ran(s) ⊑ C` imply `T ⊨ ran(rₙ) ⊑ C`, over the told hierarchy. For `n = 1` it holds by
+  construction (`ran_T` inherits along `⊑*`). For a chain as written, the gate enforces it with
+  **the same** `C`, and the same expression gets the same fresh name, so `ran_T(t) ⊆ ran_T(rₙ)` as
+  sets of names. After decomposition, the last piece keeps `rₙ` last, and every other piece's
+  super-role is a fresh `u` with `ran_T(u) = ∅` — vacuous. (Right-association would put a fresh role
+  last and break it.)
+- **`⊥` where [BBL05]'s normal form has none.** [BBL05] allows `⊥` only as a conclusion; HOWL also
+  lets it appear as a premise (`A ⊓ ⊥ ⊑ D`, `∃r.⊥ ⊑ D`), as an existential filler
+  (`C ⊑ ∃r.⊥`) and as a range filler (`ran(r) ⊑ ⊥`), and gives `⊥` a context `S(⊥) = {⊥, ⊤}`. Each
+  is the normal form of a [BBL05] axiom: a premise-`⊥` axiom is a tautology, dropped there;
+  `C ⊑ ∃r.⊥` is `C ⊑ ⊥`, which HOWL derives by CR3 then CR5 (`⊥ ∈ S(⊥)`); `ran(r) ⊑ ⊥` is
+  `ran(r) ⊑ Z`, `Z ⊑ ⊥`, which HOWL gets by using `⊥` itself as the filler. The two calculi then
+  agree on every context that does not contain `⊥`, and on which contexts contain it. Let `B` be the
+  contexts whose `S` contains `⊥` at the fixpoint. Every conclusion about a context `X` — a subsumer
+  of `X`, or an edge leaving `X` — depends only on `S(X)`, `X`'s edges, and the `S` and edges of
+  `X`'s successors (CR4, CR5, CR11); none depends on a predecessor, so a fact never moves forwards
+  along an edge (in HOWL a CR4 or CR5 application is *triggered* in the successor, but its conclusion
+  is about the predecessor). If a successor `Y` of `X` is in `B`, CR5 puts `X` in `B` too. So every
+  conclusion about a context outside `B` depends only on contexts outside `B`,
+  and there an extra form never fires: a premise-`⊥` axiom needs `⊥` in the context or in a successor.
+  Hence outside `B` the facts are [BBL05]'s, and `B` is the same set in both — an extra form adds `⊥`
+  only where [BBL05]'s counterpart does. Inside `B` the report reads only "`⊥` is here"
+  (bottom-compression, [§6.7](#67-output--classification)), so whatever else HOWL derives there —
+  outgoing CR3 edges included — changes nothing it reports.
+
+**L3 — range elimination, in the stronger form its proof gives** ([BBL08] Lemma 1). Let `T_e` be
+`T_n` with its range restrictions dropped and each `C ⊑ ∃r.D` with `ran_T(r) ≠ ∅` replaced by
+`C ⊑ ∃r.X_{r,D}`, `X_{r,D} ⊑ D` and `X_{r,D} ⊑ A` for each `A ∈ ran_T(r)` (one `X` per `(r, D)`).
+(a) Every model of `T_n` extends to one of `T_e`, with `X_{r,D} := {d ∈ D | ∃e. (e, d) ∈ r}`.
+(b) Every model `J` of `T_e` yields a model `I` of `T_n` with **the same domain and the same concept
+and nominal extensions**, by keeping only the `r`-edges whose target lies in every `A ∈ ran_T(r)`.
+The proof is [BBL08]'s, case by case: `C ⊑ ∃r.D` survives because the witness is in `X_{r,D}`;
+`∃r.C ⊑ D` because edges were only removed; `s ⊑ r` because `ran_T(r) ⊆ ran_T(s)`; `r₁ ∘ r₂ ⊑ r`
+because `ran_T(r) ⊆ ran_T(r₂)` (L2); every range because of the filter. Nominal axioms and `I_a ⊑ C`
+mention no role and are untouched. [BBL08] states the conclusion for subsumption between concept
+names; (b) keeps every concept and nominal extension, so it also preserves `A ⊑ ⊥`, the `{a}`
+subsumptions and, with (a), consistency.
+
+**L4 — collapsing `X_{r,{b}}` gives HOWL's edges and seeds.** If `ran_T(r) = ∅`, L3 leaves
+`I_a ⊑ ∃r.I_b` as it is (HOWL skips the rewrite for a role with no range, as the elimination itself
+would impose nothing): it is already `T_H`'s form, CR3 yields exactly the asserted edge, and there is no
+seed. Otherwise, in `T_e`, each `r(a,b)` has become
+`I_a ⊑ ∃r.X`, `X ⊑ I_b`, `X ⊑ A` (`A ∈ ran_T(r)`), with `X = X_{r,I_b}` shared only by other
+assertions `r(c, b)`. Let `T_H` replace each `I_c ⊑ ∃r.X` by `I_c ⊑ ∃r.I_b` and each `X ⊑ A` by
+`I_b ⊑ A`, dropping `X`. In any model of `T_e`, `I_a = {a}` is non-empty, so `a` has an
+`r`-successor in `X ⊆ I_b = {b}`: hence `X = I_b`, and the model satisfies `T_H`. Conversely a model
+of `T_H` extends to `T_e` with `X := I_b`. So `T_e` and `T_H` are equisatisfiable and agree on every
+name (for an inconsistent theory the first direction is vacuous and the second still gives it).
+
+*Operationally.* HOWL holds `T_H`'s two new forms as facts rather than GCIs: `I_a ⊑ ∃r.I_b` as the
+edge `(I_a, I_b)` stored under `r`, and `I_b ⊑ A` as the seed `A ∈ S(I_b)`. These reach the same
+fixpoint because each GCI fires in exactly one retained context — L5 confines `I_a` to `S(I_a)` and
+`I_b` to `S(I_b)`, besides the `{a}` contexts it removes — so CR3 on `I_a ⊑ ∃r.I_b` produces exactly
+that one edge, and
+CR1 on `I_b ⊑ A` exactly that one fact, and both premises hold from initialization. An asserted edge
+is delivered like any derived one: `emit-edge` addresses its successor half to `I_a` and its
+predecessor half to `I_b`, the two messages through which CR4, CR5 and CR11 see a CR3 edge
+([§6.4](#64-completion-rules)). And `T_H` has **no** range restrictions left: no edge — asserted,
+existential, or composed by CR11 — needs a range seed beyond these.
+
+**L5 — no identification: the nominal rule never fires, so HOWL may omit it.** Run [BBL05]'s calculus
+on `T_H`, nominal axioms included. By induction over rule applications, `{a} ∈ S(C)` or `I_a ∈ S(C)`
+only if `C ∈ {I_a, {a}}`: the initial sets hold `{C, ⊤}`; the only GCIs with `{a}` or `I_a` on the
+right are `I_a ⊑ {a}` and `{a} ⊑ I_a`, whose premise is already one of them (CR1); no conjunction
+GCI or `∃r.D ⊑ E` has either on the right — `T` never mentions individuals, ABox GCIs put `I_a` only
+on the left, seeds add class names (CR2, CR4); CR5 adds only `⊥`. So CR6's premise
+`{a} ∈ S(C) ∩ S(D)` needs `C, D ∈ {I_a, {a}}`, whose sets are equal (each contains the other's name
+and derives the same), and CR6 adds nothing. (This does **not** rely on CR6's reachability
+side-condition, which later work refined: the rule never applies.)
+
+HOWL drops the nominal axioms, and with them the `{a}` contexts — which in [BBL05]'s run hold
+`S(I_a)` plus `{a}`, and their own outgoing edges (CR3 fires there too, since `I_a ∈ S({a})`). Remove
+those contexts and every edge incident to them: what remains is HOWL's run, fact for fact. Nothing
+the removed contexts derive reaches a retained one, because facts move only backwards along an edge
+(CR4, CR5) or into a composed edge's source (CR11), and **no edge enters an `{a}` context**: after L4
+every ABox edge ends at an `I_b`, and `T` never mentions an individual, so no filler is a nominal.
+So on the retained contexts — every class, fresh and `I_a` context — HOWL's `S` and `R` equal
+[BBL05]'s, less the entries `{a} ∈ S(I_a)`.
+
+**L6 — role inclusions through the told closure equal CR10.** HOWL stores each edge under the role it
+was derived for and reads `(C, D) ∈ R(s)` as `(C, D)` stored under some `e ∈ sub*(s)`; call that
+`R*(s)`. `R*` is closed under CR10 by transitivity of `⊑*`. HOWL's CR7 composes an arriving edge
+stored under `e₁` for every `r₁ ∈ sup*(e₁)` with stored edges under every `e₂ ∈ sub*(r₂)`, and
+stores `(C, E)` under `r₃` — CR11 over `R*`; CR4 and CR5 read `R*` the same way. Every stored edge
+is a CR3 conclusion, an asserted edge, or a CR11 conclusion over `R*`, so `R*` is the published least
+`R`. ([§6.4](#64-completion-rules); AD 017b993e.)
+
+**L7 — every context a rule can address exists, seeded, from the start.** [BBL05] keeps
+`S(C) = {C, ⊤}` initially for every basic concept. HOWL seeds a context for every node
+`signature-nodes` returns — declared classes and individuals, both ends of every asserted edge, every
+class-assertion subject, every seed target, every fresh node — and for `⊤` and `⊥`
+(`make-initial-saturation`). The invariant needed is that no rule ever addresses anything else, and it
+holds on complete input. A rule's conclusion goes to its own context, to a CR3 filler (a node of a
+normal axiom), or to the endpoint of an existing edge (CR4, CR5, CR11), so every address is a node of
+a normal axiom or of an asserted edge. Every such node is in the registry: a fresh node by its id, `⊤`
+and `⊥` always, an individual because it is an assertion operand, and a class node because a class
+used in an accepted axiom but not declared is a missing-declaration omission — excluded by
+`coverage.omitted = ∅`. So `ensure-context`, which creates a context mid-run without seeds, is never
+reached on complete input; it exists for the partial runs of L9 (`hazards/undeclared-filler`). The
+nominal basic concepts `{a}` are replaced by the `I_a` contexts (L5).
+
+**L8 — the report reads Lemma 3.** By L1–L7, HOWL's `S` is [BBL05]'s on `T_H`, and Lemma 3 applies:
+- **Inconsistency.** `O` is inconsistent iff `A′ ⊑ B′` (L1) iff `⊥ ∈ S(A′)` or `⊥ ∈ S({a})` for some
+  `a`. `A′`'s only axiom is `A′ ⊑ A′`, so `S(A′) = S(⊤) ∪ {A′}`. So `O` is inconsistent iff
+  `⊥ ∈ S(⊤)` or `⊥ ∈ S(I_a)` for some `a` — `detect-inconsistent`, exactly.
+- **Consistent `O`.** Lemma 3's nominal arm is false, so `O ⊨ A ⊑ B` iff `S(A) ∩ {B, ⊥} ≠ ∅` —
+  `entails-sub`, and the `sub`/`unsat` lines ([§6.7](#67-output--classification)). Under inconsistency
+  every subsumption holds, which is `entails-sub`'s first arm.
+- **Class answers do not depend on the ABox.** Edges into an `I_b` context start only at individual
+  contexts (asserted edges; CR3 targets are never individuals; a CR11 edge ends where a stored edge
+  ends), and CR4/CR5 propagate backwards along edges, so no class context sees an individual's
+  facts. That matches the semantics: for consistent `O`, `O ⊨ A ⊑ B` iff `T ⊨ A ⊑ B`, since a disjoint
+  union of a model of `O` and a countermodel of `T` is a model of `O`.
+
+**L9 — soundness needs none of the completeness conditions.** On partial coverage HOWL reasons over
+the accepted subset `O′ ⊆ O`, and a capped run stops below the fixpoint. Soundness is stated over the
+translated theory, where HOWL's internal symbols have a meaning: every fact HOWL holds is entailed by
+`O′`'s translation `T_H(O′)` read with `I_a = {a}` and each fresh name as the expression it stands
+for — `B ∈ S(C)` means `C ⊑ B`, an edge `(C, D)` under `r` means `C ⊑ ∃r.D`. That holds without the
+completeness conditions: the definitional names and L1, L4 are conservative; L3 (a) — the direction
+soundness uses — needs no range restriction, since `X_{r,D} := D ⊓ ⨅ran_T(r)` works for any chains;
+the seeds use `ran_T` over `O′`, a subset of the ranges `O` imposes; and each rule preserves
+[BBL05]'s invariants (I1)/(I2) (Lemma 3's if-direction). Only findings about **input** names are
+projected back: `⊥ ∈ S(⊤)` or `⊥ ∈ S(I_a)` means `O′` is inconsistent, and `B ∈ S(A)` or
+`⊥ ∈ S(A)` for input classes means `O′ ⊨ A ⊑ B` or `O′ ⊨ A ⊑ ⊥`. By monotonicity those are `O`'s
+consequences too, so an *inconsistent*, *unsatisfiable* or *subsumption* finding is sound whatever
+the coverage.
+
+**What (f) asked for, and where it is.**
+
+| (f) subject | Lemmas |
+|---|---|
+| Repeated-name identity (one `b` in two assertions) | L4, L5 |
+| Asserted edges | L1, L4, L6 |
+| Range seeding | L3, L4 |
+| Interaction with role inclusions and chains | L2 (restriction survives decomposition), L3, L6 |
+| Every node the encoding introduces has a seeded context | L7 |
+
+**What is not claimed.** Instance retrieval and realization (not part of the report); OWL consistency
+beyond the §5.2 language (equality, nominals and the rest are out of profile, so their input is
+*inconclusive*, never *coherent*); completeness under omissions or a cap (L9 is soundness only).
+
+**Evidence beside the proof.** The argument is about the calculus; the fixtures and the differential
+check the code against it. One fixture per lemma is diffed against HermiT
+([§10](#10-testing-strategy)), and a randomized ABox differential (`make abox-fuzz`) compares HOWL
+with HermiT over generated v0 ontologies with ABoxes.
 
 ---
 
@@ -2172,7 +2402,7 @@ row below sits on one side of that line.
 | **Normalization structural correctness** — fresh names are fresh; every gated-in axiom yields normal forms | Per-function contract on the rewrite | **Yes** |
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
 | **Range-elimination preservation** — the *listed query classes* survive the rewrite, which is **not** conservative ([§6.3](#63-normalization)) | Published proof **+ differential testing** | **No** — model-theoretic |
-| **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Owed.** HOWL's own construction, not lifted from a cited proof ([§5.2](#52-the-exact-v0-language)) | **No** — and currently unproved |
+| **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ results with nominals and range restrictions, plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
 | **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK, Kazakov for Horn-SHIQ) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
@@ -2937,6 +3167,11 @@ flowchart TB
   obligation as **owed**, and an acceptance list that never mentions it lets M1 ship with a
   model-theoretic hole the spec itself flagged. Until (f) is met, ABox support ships *outside* the
   sound-and-complete v0 claim rather than inside it.
+
+  **Status: all six met; M1 is complete.** (f) is discharged by
+  [§5.3](#53-the-abox-reduction-is-sound-and-complete), reviewed 2026-09-30, so ABox support is
+  inside the claim. Writing it found four soundness defects in the fresh-name keys and the
+  `AllDisjointClasses` decode, fixed with a fixture each.
 
   > **Benchmark protocol (replaces "a small multiple of ELK").** That phrase was not a criterion —
   > it named no corpus version, no hardware, no worker count, and no measurement boundary, so it
