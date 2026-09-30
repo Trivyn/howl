@@ -132,14 +132,17 @@ intersection. Each removal list reports `in_v0_swept_in` for exactly this:
 | Entry | axioms removed | triples | in-v0 swept in |
 |---|---:|---:|---:|
 | GO | 1 | 1 | **0** |
-| RO | 390 | 1,644 | 66 |
-| OBI | 385 | 5,849 | **1,249** |
+| RO | 388 | 1,626 | 62 |
+| OBI | 383 | 5,828 | **1,243** |
 | EL-GALEN | 0 | 0 | 0 |
 
 RO's and OBI's grew in M1 slice 4, when the census learned what HOWL's gate already
 refused: RO's 48 property chains that break §5.2's range/composition condition
 (with the `owl:Axiom` reifications of three of them — stage 0 would otherwise
-rebuild those chains), and OBI's one data-property sub-property axiom.
+rebuild those chains), and OBI's one data-property sub-property axiom. Each then
+shrank by two when §5.2 took in negation in positive positions: RO's domain and
+range of RO_0001025 (`BFO_0000004 ⊓ ¬BFO_0000006`), and OBI's two
+`CL_0000001 ⊑ ¬∃r.E` axioms.
 
 **This changes corpus selection.** OBI looks like a 1.5% out-of-profile entry, but
 its projection costs ~4.7% of its in-profile content. GO's costs nothing at all —

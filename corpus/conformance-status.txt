@@ -126,10 +126,10 @@ elk outside-v0 InconsistentDifferentSameIndividual DifferentIndividuals SameIndi
 elk ok InconsistentDisjoint
 elk outside-v0 InconsistentDisjointUnion DisjointUnion
 elk outside-v0 InconsistentManyDifferentSameIndividual DifferentIndividuals SameIndividual
-elk outside-v0 InconsistentNegation SubClassOf
+elk ok InconsistentNegation
 elk ok MultipleDefinitions
-elk outside-v0 Negation SubClassOf
-elk outside-v0 NegationExistential SubClassOf
+elk ok Negation
+elk ok NegationExistential
 elk outside-v0 OneOf SubClassOf
 elk ok PropertyChains
 elk outside-v0 PropertyChainsWithInverses ObjectInverseOf
@@ -140,7 +140,7 @@ elk outside-v0 PropertyRangesChainsReflexivity ReflexiveObjectProperty
 elk ok PropertyRangesDisjointness
 elk ok PropertyRangesHierarchy
 elk ok PropertyRangesInconsistency
-elk outside-v0 PropertyRangesNegation ObjectPropertyRange
+elk ok PropertyRangesNegation
 elk outside-v0 PropertyRangesReflexivity ReflexiveObjectProperty
 elk outside-v0 PropertyRangesReflexivityComplex ReflexiveObjectProperty
 elk ok ReflexiveExistential

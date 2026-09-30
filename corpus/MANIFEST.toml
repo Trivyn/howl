@@ -32,10 +32,10 @@ sha256         = "a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10a
 bytes          = 1_226_000
 licence        = "CC BY 4.0"
 logical_axioms = 1983
-in_v0          = 1415
-out_of_profile = 568
+in_v0          = 1417
+out_of_profile = 566
 projection     = "corpus/projections/ro-2025-12-17.removals"
-projection_removes = { axioms = 390, triples = 1644, in_v0_swept_in = 66 }
+projection_removes = { axioms = 388, triples = 1626, in_v0_swept_in = 62 }
 role           = "RBOX. 160 property chains, 45 transitive properties, 801 sub-property axioms — by far the best exercise available for CR6/CR7, which have no fixtures of their own. Also the SWRL case: 25 rules, 2 of which derive owl:Nothing."
 
 [[ontology]]
@@ -46,10 +46,10 @@ sha256         = "8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b9
 bytes          = 9_961_000
 licence        = "CC BY 4.0"
 logical_axioms = 26813
-in_v0          = 26397
-out_of_profile = 416
+in_v0          = 26399
+out_of_profile = 414
 projection     = "corpus/projections/obi-2026-07-27.removals"
-projection_removes = { axioms = 385, triples = 5849, in_v0_swept_in = 1249 }
+projection_removes = { axioms = 383, triples = 5828, in_v0_swept_in = 1243 }
 role           = "PRIMARY v0 ENTRY. Only 1.5% out-of-profile over 26k in-profile axioms — the closest fit to v0 of anything measured, and large enough to be a real differential and benchmark target."
 
 [[ontology]]

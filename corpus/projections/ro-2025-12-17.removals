@@ -5,13 +5,13 @@
 # source                  ro-2025-12-17.owl
 # source_sha256           a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10aaf
 # source_triples          11,640
-# axioms_removed          390
-# triples_removed         1,644
-# in_v0_swept_in          66   <- collateral from blank-node closures
-# projected_triples       9,996
+# axioms_removed          388
+# triples_removed         1,626
+# in_v0_swept_in          62   <- collateral from blank-node closures
+# projected_triples       10,014
 # projected_ground_sha256 79679dc93b7cb41e9c851b1fedddd616a1172bd8b4f5eaa54037e1caa4c3619c
-# projected_bnode_triples 2,534
-# projected_bnode_sha256  b88747fe31db36e03d159a1fa91ec20a27a1ded3dc570fcd93a01433d0198430
+# projected_bnode_triples 2,552
+# projected_bnode_sha256  f618c254f244001e3ededd8f785fc88a10f8c796e270fc1d26fdc51a7c2fddd0
 #
 # The ground hash covers every triple with no blank node on either
 # end, which is canonical as it stands. The blank-node hash covers the
@@ -60,8 +60,6 @@
 <http://purl.obolibrary.org/obo/RO_0001015> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001025> .    # InverseObjectProperties [bee4f93b]
 <http://purl.obolibrary.org/obo/RO_0001020> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001022> .    # InverseObjectProperties [dcbe5eb7]
 <http://purl.obolibrary.org/obo/RO_0001021> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0001023> .    # InverseObjectProperties [dd238626]
-<http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf [c36cdf5b]  (+8 in blank-node closure)
-<http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf [d58354f8]  (+8 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0001025> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [5bdc1521]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002000> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002002> .    # InverseObjectProperties [49e13b2a]
 <http://purl.obolibrary.org/obo/RO_0002005> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002134> .    # InverseObjectProperties [6a51d52a]

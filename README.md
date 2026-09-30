@@ -59,7 +59,7 @@ failed, and both failures are fixed and pinned by `make corpus-acceptance`:
 
 | Ontology | Before | Now |
 |---|---|---|
-| RO 2025-12-17 (11.6k triples) | exit 3 — an inverse property in a property chain faulted the whole document | exit 2, 0 unsatisfiable, 847 omitted |
+| RO 2025-12-17 (11.6k triples) | exit 3 — an inverse property in a property chain faulted the whole document | exit 2, 0 unsatisfiable, 845 omitted |
 | OBI 2026-07-27 (118k triples) | exit 1, *inconsistent* — every complex range filler of a role shared one fresh node | exit 2, 0 unsatisfiable, 38,681 subsumptions, 1.0 s (reasoning 0.4 s) |
 | GO 2026-07-26 (1.4M triples) | never finished — the header pass scanned lists per triple, and every fact was matched against every axiom | exit 2, 0 unsatisfiable, 1 omitted (one `owl:inverseOf`), 459,329 subsumptions, 13.4 s (reasoning 5.5 s) |
 
@@ -76,9 +76,9 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.40 s (reasoning 0.29 s), 0.57 GB peak | 0.46 s | 0.47 s | 0.85× | **passes** 5× |
-| EL-GALEN | ELK 0.6.0 | 0.84 s (reasoning 0.68 s), 0.59 GB peak | 0.08 s | 0.28 s | 3.0× | **passes** 5× |
-| OBI 2026-07-27 | HermiT | 0.05 s | 0.03 s | 0.51 s | 0.1× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 0.38 s (reasoning 0.28 s), 0.57 GB peak | 0.44 s | 0.46 s | 0.84× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 0.82 s (reasoning 0.66 s), 0.59 GB peak | 0.07 s | 0.28 s | 2.9× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.05 s | 0.03 s | 0.50 s | 0.1× | reported |
 | RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.16 s | 0.1× | reported |
 
 ELK's time moves more between benches than HOWL's does: one earlier bench had ELK at 0.58 s (GO) and
@@ -128,7 +128,7 @@ Returning memory has a small time cost: later rounds touch fresh pages rather th
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | **done** — rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.85× and EL-GALEN 3.0× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`); the ABox reduction is proved sound and complete ([SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)) and checked against HermiT over 400 generated ontologies (`make abox-fuzz`) |
+| M1 | CR1–CR7, driver, verdict discipline | **done** — rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.84× and EL-GALEN 2.9× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`); the ABox reduction is proved sound and complete ([SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)) and checked against HermiT over 400 generated ontologies, and 400 more that use negation in positive positions (`make abox-fuzz`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
