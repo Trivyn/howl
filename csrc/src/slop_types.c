@@ -170,7 +170,7 @@ uint8_t types_role_eq(types_RoleId a, types_RoleId b) {
 }
 
 types_Names types_empty_names(slop_arena* arena) {
-    return ((types_Names){.node_ids = slop_map_new_ptr(arena, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .nodes = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int), .role_ids = slop_map_new_ptr(arena, 0, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .roles = slop_map_new_ptr(arena, 0, sizeof(int64_t), slop_hash_int, slop_eq_int)});
+    return ((types_Names){.node_ids = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_Node, slop_hash_types_Node, slop_eq_types_Node, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .nodes = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, types_Node); slop_map_new_ptr(arena, 0, &_d); }), .role_ids = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .roles = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, types_RoleId); slop_map_new_ptr(arena, 0, &_d); })});
 }
 
 types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n) {
@@ -191,8 +191,8 @@ types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n)
                     {
                         __auto_type k = ((int64_t)(((int64_t)(names.nodes)->len)));
                         __auto_type c = types_copy_node(arena, n);
-                        ({ int64_t _val = k; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, names.node_ids, &(c), _vptr); });
-                        ({ __auto_type _val = c; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, names.nodes, &(int64_t){k}, _vptr); });
+                        ({ int64_t _val = k; slop_map_put(arena, names.node_ids, &(c), &_val, sizeof(_val)); });
+                        ({ types_Node _val = c; slop_map_put(arena, names.nodes, &(int64_t){k}, &_val, sizeof(_val)); });
                         return ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = k });
                     }
                 }
@@ -211,8 +211,8 @@ types_RoleId types_intern_role(slop_arena* arena, types_Names names, types_RoleI
         {
             __auto_type k = ((int64_t)(((int64_t)(names.roles)->len)));
             __auto_type c = types_copy_role(arena, r);
-            ({ int64_t _val = k; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, names.role_ids, &(c), _vptr); });
-            ({ __auto_type _val = c; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, names.roles, &(int64_t){k}, _vptr); });
+            ({ int64_t _val = k; slop_map_put(arena, names.role_ids, &(c), &_val, sizeof(_val)); });
+            ({ types_RoleId _val = c; slop_map_put(arena, names.roles, &(int64_t){k}, &_val, sizeof(_val)); });
             return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = k });
         }
     }
@@ -314,7 +314,7 @@ types_Omission types_copy_omission(slop_arena* arena, types_Omission o) {
                     __auto_type _coll = m.referring;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type a = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(refs); __auto_type _item = (types_copy_axiom_ref(arena, a)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(refs); __auto_type _item = (types_copy_axiom_ref(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 return ((types_Omission){ .tag = types_Omission_missing_declaration, .data.missing_declaration = ((types_MissingDeclaration){.kind = m.kind, .entity = types_copy_iri(arena, m.entity), .referring = refs}) });
@@ -331,7 +331,7 @@ slop_list_types_Omission types_copy_omissions(slop_arena* arena, slop_list_types
             __auto_type _coll = os;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type o = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_copy_omission(arena, o)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_copy_omission(arena, o)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -447,7 +447,7 @@ types_RoleId types_original_role(types_Names names, types_RoleId r) {
 
 types_Context types_make_context(slop_arena* arena, types_Node root) {
     types_Context _retval = {0};
-    _retval = ((types_Context){.root = root, .subsumers = slop_map_new_ptr(arena, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node), .succs = slop_map_new_ptr(arena, 0, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId), .preds = slop_map_new_ptr(arena, 0, sizeof(types_RoleId), slop_hash_types_RoleId, slop_eq_types_RoleId)});
+    _retval = ((types_Context){.root = root, .subsumers = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_Node, slop_hash_types_Node, slop_eq_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .succs = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, slop_map*); slop_map_new_ptr(arena, 0, &_d); }), .preds = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, slop_map*); slop_map_new_ptr(arena, 0, &_d); })});
     SLOP_POST((({ types_Node _eq_l_41 = (_retval.root); types_Node _eq_r_42 = (root); slop_eq_types_Node(&_eq_l_41, &_eq_r_42); })), "(== (. $result root) root)");
     return _retval;
 }

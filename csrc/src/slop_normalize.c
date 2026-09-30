@@ -48,7 +48,7 @@ slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_aren
 normalize_NormState* normalize_new_state(slop_arena* arena) {
     {
         __auto_type p = ((normalize_NormState*)(({ __auto_type _alloc = (normalize_NormState*)slop_arena_alloc(arena, sizeof(normalize_NormState)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
-        (*p) = ((normalize_NormState){.axioms = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 }), .fresh = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_index = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .fresh_roles = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_role_index = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .neg_done = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .pos_done = slop_map_new_ptr(arena, 0, sizeof(slop_string), slop_hash_string, slop_eq_string), .edges = ((slop_list_types_LogicalEdge){ .data = NULL, .len = 0, .cap = 0 }), .asserted = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 })});
+        (*p) = ((normalize_NormState){.axioms = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 }), .fresh = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_index = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .fresh_roles = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_role_index = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .neg_done = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .pos_done = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .edges = ((slop_list_types_LogicalEdge){ .data = NULL, .len = 0, .cap = 0 }), .asserted = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 })});
         return p;
     }
 }
@@ -56,7 +56,7 @@ normalize_NormState* normalize_new_state(slop_arena* arena) {
 uint8_t normalize_st_emit(slop_arena* arena, normalize_NormState* p, types_NormAxiom ax) {
     {
         __auto_type s = (*p);
-        ({ __auto_type _lst_p = &(s.axioms); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(s.axioms); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         (*p) = s;
         return 1;
     }
@@ -65,7 +65,7 @@ uint8_t normalize_st_emit(slop_arena* arena, normalize_NormState* p, types_NormA
 uint8_t normalize_st_emit_edge(slop_arena* arena, normalize_NormState* p, types_LogicalEdge e) {
     {
         __auto_type s = (*p);
-        ({ __auto_type _lst_p = &(s.edges); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(s.edges); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         (*p) = s;
         return 1;
     }
@@ -74,7 +74,7 @@ uint8_t normalize_st_emit_edge(slop_arena* arena, normalize_NormState* p, types_
 uint8_t normalize_st_note_asserted(slop_arena* arena, normalize_NormState* p, types_Node n) {
     {
         __auto_type s = (*p);
-        ({ __auto_type _lst_p = &(s.asserted); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(s.asserted); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         (*p) = s;
         return 1;
     }
@@ -89,8 +89,8 @@ int64_t normalize_st_fresh_id(slop_arena* arena, normalize_NormState* p, slop_st
         {
             __auto_type s = (*p);
             __auto_type id = ((int64_t)(((int64_t)(((*p).fresh).len))));
-            ({ __auto_type _lst_p = &(s.fresh); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ int64_t _val = id; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, s.fresh_index, &(text), _vptr); });
+            ({ __auto_type _lst_p = &(s.fresh); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ int64_t _val = id; slop_map_put(arena, s.fresh_index, &(text), &_val, sizeof(_val)); });
             (*p) = s;
             return id;
         }
@@ -107,8 +107,8 @@ int64_t normalize_st_fresh_role_id(slop_arena* arena, normalize_NormState* p, sl
         {
             __auto_type s = (*p);
             __auto_type id = ((int64_t)(((int64_t)(((*p).fresh_roles).len))));
-            ({ __auto_type _lst_p = &(s.fresh_roles); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ int64_t _val = id; void* _vptr = slop_arena_alloc(arena, sizeof(_val)); memcpy(_vptr, &_val, sizeof(_val)); slop_map_put(arena, s.fresh_role_index, &(text), _vptr); });
+            ({ __auto_type _lst_p = &(s.fresh_roles); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ int64_t _val = id; slop_map_put(arena, s.fresh_role_index, &(text), &_val, sizeof(_val)); });
             (*p) = s;
             return id;
         }
@@ -117,12 +117,12 @@ int64_t normalize_st_fresh_role_id(slop_arena* arena, normalize_NormState* p, sl
 }
 
 uint8_t normalize_st_mark_neg(slop_arena* arena, normalize_NormState* p, slop_string text) {
-    ({ uint8_t _dummy = 1; slop_map_put(arena, (*p).neg_done, &(text), &_dummy); });
+    ({ slop_map_put(arena, (*p).neg_done, &(text), NULL, 0); });
     return 1;
 }
 
 uint8_t normalize_st_mark_pos(slop_arena* arena, normalize_NormState* p, slop_string text) {
-    ({ uint8_t _dummy = 1; slop_map_put(arena, (*p).pos_done, &(text), &_dummy); });
+    ({ slop_map_put(arena, (*p).pos_done, &(text), NULL, 0); });
     return 1;
 }
 
@@ -152,7 +152,7 @@ slop_list_owl2_RawConcept normalize_flatten_and(slop_arena* arena, owl2_RawConce
                 break;
             }
             default: {
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
         }
@@ -165,7 +165,7 @@ slop_string normalize_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept c
         __auto_type pre = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
         int64_t i = 0;
         while (i < upto) {
-            ({ __auto_type _lst_p = &(pre); __auto_type _item = (owl2_concept_at(conj, i)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(pre); __auto_type _item = (owl2_concept_at(conj, i)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             i = (i + 1);
         }
         return owl2_render_concept(arena, ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_and, .data.rc_and = pre }));
@@ -195,7 +195,7 @@ types_Node normalize_neg_atom(slop_arena* arena, normalize_NormState* p, owl2_Ra
             {
                 __auto_type text = owl2_render_concept(arena, c);
                 __auto_type x = ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = normalize_st_fresh_id(arena, p, text) });
-                if (!((slop_map_get((*p).neg_done, &(text)) != NULL))) {
+                if (!(slop_map_has((*p).neg_done, &(text)))) {
                     normalize_st_mark_neg(arena, p, text);
                     normalize_st_emit(arena, p, ((types_NormAxiom){ .tag = types_NormAxiom_sub_some_lhs, .data.sub_some_lhs = { .f0 = r, .f1 = normalize_neg_atom(arena, p, (*f)), .f2 = x } }));
                 }
@@ -259,7 +259,7 @@ types_Node normalize_pos_atom(slop_arena* arena, normalize_NormState* p, owl2_Ra
             {
                 __auto_type text = owl2_render_concept(arena, c);
                 __auto_type x = ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = normalize_st_fresh_id(arena, p, text) });
-                if (!((slop_map_get((*p).pos_done, &(text)) != NULL))) {
+                if (!(slop_map_has((*p).pos_done, &(text)))) {
                     normalize_st_mark_pos(arena, p, text);
                     normalize_normalize_gci(arena, p, normalize_rc_of_node(x), c);
                 }
@@ -424,7 +424,7 @@ slop_list_normalize_RangeFact normalize_collect_range_facts(slop_arena* arena, n
                         {
                             __auto_type ir = gate_role_idx(roles, r);
                             if (ir >= 0) {
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (((normalize_RangeFact){.role = ir, .filler = normalize_pos_atom(arena, p, (*c))})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (((normalize_RangeFact){.role = ir, .filler = normalize_pos_atom(arena, p, (*c))})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                         break;
@@ -460,7 +460,7 @@ slop_list_types_Node normalize_ran_t(slop_arena* arena, slop_list_normalize_Rang
                                 }
                             }
                             if (!(dup)) {
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (f.filler); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (f.filler); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                     }
@@ -526,17 +526,17 @@ uint8_t normalize_eliminate_ranges(slop_arena* arena, normalize_NormState* p, sl
                         {
                             __auto_type fillers = normalize_ran_t(arena, facts, told, n, gate_role_idx(roles, r));
                             if (((int64_t)(((int64_t)((fillers).len)))) == 0) {
-                                ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             } else {
                                 {
                                     __auto_type x = ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = normalize_st_fresh_id(arena, p, normalize_range_elim_key(arena, r, d)) });
-                                    ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (((types_NormAxiom){ .tag = types_NormAxiom_sub_some_rhs, .data.sub_some_rhs = { .f0 = c, .f1 = r, .f2 = x } })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (((types_NormAxiom){ .tag = types_NormAxiom_sub_name, .data.sub_name = { .f0 = x, .f1 = d } })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (((types_NormAxiom){ .tag = types_NormAxiom_sub_some_rhs, .data.sub_some_rhs = { .f0 = c, .f1 = r, .f2 = x } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (((types_NormAxiom){ .tag = types_NormAxiom_sub_name, .data.sub_name = { .f0 = x, .f1 = d } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     {
                                         __auto_type _coll = fillers;
                                         for (size_t _i = 0; _i < _coll.len; _i++) {
                                             __auto_type a = _coll.data[_i];
-                                            ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (((types_NormAxiom){ .tag = types_NormAxiom_sub_name, .data.sub_name = { .f0 = x, .f1 = a } })); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                            ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (((types_NormAxiom){ .tag = types_NormAxiom_sub_name, .data.sub_name = { .f0 = x, .f1 = a } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                         }
                                     }
                                 }
@@ -545,7 +545,7 @@ uint8_t normalize_eliminate_ranges(slop_arena* arena, normalize_NormState* p, sl
                         break;
                     }
                     default: {
-                        ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(rebuilt); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         break;
                     }
                 }
@@ -571,7 +571,7 @@ slop_list_types_Addressed normalize_edge_range_seeds(slop_arena* arena, slop_lis
                     __auto_type _coll = normalize_ran_t(arena, facts, told, n, gate_role_idx(roles, e.role));
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type a = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_Addressed){.to = e.to, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_Addressed){.to = e.to, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
@@ -667,7 +667,7 @@ types_Node normalize_ex_stewie(void) {
 normalize_NormOutput normalize_ex_asserting_stewie(slop_arena* arena) {
     {
         __auto_type asserted = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
-        ({ __auto_type _lst_p = &(asserted); __auto_type _item = (normalize_ex_stewie()); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(asserted); __auto_type _item = (normalize_ex_stewie()); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         return ((normalize_NormOutput){.axioms = ((slop_list_types_NormAxiom){ .data = NULL, .len = 0, .cap = 0 }), .edges = ((slop_list_types_LogicalEdge){ .data = NULL, .len = 0, .cap = 0 }), .asserted = asserted, .seeds = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 }), .fresh_count = 0});
     }
 }
@@ -675,7 +675,7 @@ normalize_NormOutput normalize_ex_asserting_stewie(slop_arena* arena) {
 owl2_Signature normalize_ex_declaring_stewie(slop_arena* arena) {
     {
         __auto_type sig = owl2_make_signature(arena);
-        ({ rdf_IRI _key_571 = (((rdf_IRI){.value = SLOP_STR("http://example.org/stewie")})); uint8_t _dummy = 1; slop_map_put(arena, sig.individuals, &_key_571, &_dummy); });
+        ({ rdf_IRI _key_571 = (((rdf_IRI){.value = SLOP_STR("http://example.org/stewie")})); slop_map_put(arena, sig.individuals, &_key_571, NULL, 0); });
         return sig;
     }
 }
@@ -683,7 +683,7 @@ owl2_Signature normalize_ex_declaring_stewie(slop_arena* arena) {
 slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature sig, normalize_NormOutput no) {
     {
         __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
-        __auto_type seen = slop_map_new_ptr(arena, 0, sizeof(types_Node), slop_hash_types_Node, slop_eq_types_Node);
+        __auto_type seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_Node, slop_hash_types_Node, slop_eq_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
         int64_t i = 0;
         {
             __auto_type _coll = ({ slop_set_elements_result _r = slop_set_elements_raw(arena, sig.classes); (slop_list_rdf_IRI){.data = (rdf_IRI*)_r.data, .len = _r.len, .cap = _r.cap}; });
@@ -691,9 +691,9 @@ slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature
                 __auto_type c = _coll.data[_i];
                 {
                     __auto_type n = ((types_Node){ .tag = types_Node_class_node, .data.class_node = c });
-                    if (!((slop_map_get(seen, &(n)) != NULL))) {
-                        ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(n), &_dummy); });
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    if (!(slop_map_has(seen, &(n)))) {
+                        ({ slop_map_put(arena, seen, &(n), NULL, 0); });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
@@ -704,9 +704,9 @@ slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature
                 __auto_type a = _coll.data[_i];
                 {
                     __auto_type n = ((types_Node){ .tag = types_Node_individual_node, .data.individual_node = a });
-                    if (!((slop_map_get(seen, &(n)) != NULL))) {
-                        ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(n), &_dummy); });
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    if (!(slop_map_has(seen, &(n)))) {
+                        ({ slop_map_put(arena, seen, &(n), NULL, 0); });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
@@ -718,13 +718,13 @@ slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature
                 {
                     __auto_type from = e.from;
                     __auto_type to = e.to;
-                    if (!((slop_map_get(seen, &(from)) != NULL))) {
-                        ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(from), &_dummy); });
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (from); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    if (!(slop_map_has(seen, &(from)))) {
+                        ({ slop_map_put(arena, seen, &(from), NULL, 0); });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (from); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
-                    if (!((slop_map_get(seen, &(to)) != NULL))) {
-                        ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(to), &_dummy); });
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (to); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    if (!(slop_map_has(seen, &(to)))) {
+                        ({ slop_map_put(arena, seen, &(to), NULL, 0); });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (to); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
@@ -733,9 +733,9 @@ slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature
             __auto_type _coll = no.asserted;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type a = _coll.data[_i];
-                if (!((slop_map_get(seen, &(a)) != NULL))) {
-                    ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(a), &_dummy); });
-                    ({ __auto_type _lst_p = &(out); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                if (!(slop_map_has(seen, &(a)))) {
+                    ({ slop_map_put(arena, seen, &(a), NULL, 0); });
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
             }
         }
@@ -745,9 +745,9 @@ slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature
                 __auto_type sd = _coll.data[_i];
                 {
                     __auto_type to = sd.to;
-                    if (!((slop_map_get(seen, &(to)) != NULL))) {
-                        ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(to), &_dummy); });
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (to); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    if (!(slop_map_has(seen, &(to)))) {
+                        ({ slop_map_put(arena, seen, &(to), NULL, 0); });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (to); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
@@ -755,9 +755,9 @@ slop_list_types_Node normalize_signature_nodes(slop_arena* arena, owl2_Signature
         while (i < no.fresh_count) {
             {
                 __auto_type n = ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = i });
-                if (!((slop_map_get(seen, &(n)) != NULL))) {
-                    ({ uint8_t _dummy = 1; slop_map_put(arena, seen, &(n), &_dummy); });
-                    ({ __auto_type _lst_p = &(out); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                if (!(slop_map_has(seen, &(n)))) {
+                    ({ slop_map_put(arena, seen, &(n), NULL, 0); });
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (n); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
                 i = (i + 1);
             }
@@ -875,7 +875,7 @@ slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names
             __auto_type _coll = ns;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type n = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_intern_node(arena, names, n)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_intern_node(arena, names, n)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -891,21 +891,21 @@ normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names name
             __auto_type _coll = no.axioms;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                ({ __auto_type _lst_p = &(axioms); __auto_type _item = (normalize_rename_axiom(arena, names, ax)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(axioms); __auto_type _item = (normalize_rename_axiom(arena, names, ax)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         {
             __auto_type _coll = no.edges;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type e = _coll.data[_i];
-                ({ __auto_type _lst_p = &(edges); __auto_type _item = (((types_LogicalEdge){.from = types_intern_node(arena, names, e.from), .role = types_intern_role(arena, names, e.role), .to = types_intern_node(arena, names, e.to)})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(edges); __auto_type _item = (((types_LogicalEdge){.from = types_intern_node(arena, names, e.from), .role = types_intern_role(arena, names, e.role), .to = types_intern_node(arena, names, e.to)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         {
             __auto_type _coll = no.seeds;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type sd = _coll.data[_i];
-                ({ __auto_type _lst_p = &(seeds); __auto_type _item = (((types_Addressed){.to = types_intern_node(arena, names, sd.to), .what = normalize_rename_derived(arena, names, sd.what)})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(seeds); __auto_type _item = (((types_Addressed){.to = types_intern_node(arena, names, sd.to), .what = normalize_rename_derived(arena, names, sd.what)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return ((normalize_NormOutput){.axioms = axioms, .edges = edges, .asserted = normalize_rename_nodes(arena, names, no.asserted), .seeds = seeds, .fresh_count = no.fresh_count});

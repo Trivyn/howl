@@ -193,23 +193,23 @@ owl2_Disposition owl2_disposition(owl2_RawAxiom ax) {
 }
 
 owl2_Signature owl2_make_signature(slop_arena* arena) {
-    return ((owl2_Signature){.classes = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .obj_props = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .data_props = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .annot_props = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .individuals = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI), .datatypes = slop_map_new_ptr(arena, 0, sizeof(rdf_IRI), slop_hash_rdf_IRI, slop_eq_rdf_IRI)});
+    return ((owl2_Signature){.classes = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .obj_props = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .data_props = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .annot_props = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .individuals = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .datatypes = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); })});
 }
 
 uint8_t owl2_signature_has_class(owl2_Signature sig, rdf_IRI i) {
-    return (slop_map_get(sig.classes, &(i)) != NULL);
+    return slop_map_has(sig.classes, &(i));
 }
 
 uint8_t owl2_signature_has_object_property(owl2_Signature sig, rdf_IRI i) {
-    return (slop_map_get(sig.obj_props, &(i)) != NULL);
+    return slop_map_has(sig.obj_props, &(i));
 }
 
 uint8_t owl2_signature_has_annotation_property(owl2_Signature sig, rdf_IRI i) {
-    return (slop_map_get(sig.annot_props, &(i)) != NULL);
+    return slop_map_has(sig.annot_props, &(i));
 }
 
 uint8_t owl2_signature_has_data_property(owl2_Signature sig, rdf_IRI i) {
-    return (slop_map_get(sig.data_props, &(i)) != NULL);
+    return slop_map_has(sig.data_props, &(i));
 }
 
 int64_t owl2_signature_size(slop_arena* arena, owl2_Signature sig) {
@@ -1217,7 +1217,7 @@ slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_R
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (owl2_concept_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (owl2_concept_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;

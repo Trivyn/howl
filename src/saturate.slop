@@ -678,11 +678,12 @@
     (@intent "Execute one barrier-synchronized round: join read-only, then commit")
     (@spec ((Arena Saturation RuleIndex ReasonerConfig (List Arena)) -> Advanced))
     (@alloc arena)
-    ;; The round-count contract lives on `commit-round`, where the body
-    ;; is a `record-new` and the checker can discharge it. Restating it
-    ;; here would be unprovable — there is no interprocedural reasoning,
-    ;; so a callee is an uninterpreted function — and a @post the
-    ;; checker cannot establish reads as coverage without being any (§7).
+    ;; ONE ROUND, EXACTLY, from `commit-round`'s own @post: slop's verifier
+    ;; assumes a callee's @post where the call runs. (`saturate`'s budget
+    ;; invariant rests on this, but the verifier cannot yet follow a call
+    ;; like this one - its arguments carry maps - inside the invariant's
+    ;; check, so that invariant is reported unknown rather than trusted.)
+    (@post {(. (. $result saturation) iteration) == ((. sat iteration) + 1)})
     ;;
     ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. Every
     ;; rule call builds a result list and the round's delta is a map of
@@ -951,12 +952,15 @@
     ;;   - `max-iterations = 0` performs no rounds and ALWAYS yields
     ;;     `resource-limit`, since Δ₀ is never empty.
     ;;
-    ;; THE BUDGET BOUND, discharged via the `@loop-invariant` below.
-    ;; §7 calls termination for v0 "expressible as a
-    ;; monotone-growth-toward-a-finite-cap loop invariant" — this is
-    ;; that invariant, and it holds even though `advance-round` is
-    ;; uninterpreted to the checker, because the bound is carried by the
-    ;; invariant rather than inferred from what that call returns.
+    ;; THE BUDGET BOUND, stated as the `@loop-invariant` below. §7 calls
+    ;; termination for v0 "expressible as a monotone-growth-toward-a-
+    ;; finite-cap loop invariant" — this is that invariant. It holds: the
+    ;; loop advances only while `budget-exhausted` is false, and each
+    ;; `advance-round` adds exactly one round (its proved @post). slop's
+    ;; verifier used to TRUST a loop invariant; it now proves them, and
+    ;; reports this one unknown, because its check cannot follow the
+    ;; `c-inline` cancel test, the `break`s, or a call whose arguments
+    ;; carry maps. So it is not claimed as verified.
     (@post (match $result
              ((ok r) {(. (. r saturation) iteration) <= (. config max-iterations)})
              ((error _) true)))

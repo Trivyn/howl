@@ -254,7 +254,7 @@ rdf_Graph rdf_graph_add(slop_arena* arena, rdf_Graph g, rdf_Triple t) {
     if (rdf_graph_contains(g, t)) {
         _retval = g;
     } else {
-        _retval = ((rdf_Graph){.triples = ({ ({ __auto_type _lst_p = &(g.triples); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; }); g.triples; }), .size = ((rdf_GraphSize)((g.size + 1)))});
+        _retval = ((rdf_Graph){.triples = ({ ({ __auto_type _lst_p = &(g.triples); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }); g.triples; }), .size = ((rdf_GraphSize)((g.size + 1)))});
     }
     SLOP_POST(((rdf_graph_size(_retval) >= rdf_graph_size(g))), "(>= (graph-size $result) (graph-size g))");
     SLOP_POST((rdf_graph_contains(_retval, t)), "(graph-contains $result t)");
@@ -263,7 +263,7 @@ rdf_Graph rdf_graph_add(slop_arena* arena, rdf_Graph g, rdf_Triple t) {
 
 rdf_Graph rdf_graph_add_unchecked(slop_arena* arena, rdf_Graph g, rdf_Triple t) {
     rdf_Graph _retval = {0};
-    _retval = ((rdf_Graph){.triples = ({ ({ __auto_type _lst_p = &(g.triples); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; }); g.triples; }), .size = ((rdf_GraphSize)((g.size + 1)))});
+    _retval = ((rdf_Graph){.triples = ({ ({ __auto_type _lst_p = &(g.triples); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }); g.triples; }), .size = ((rdf_GraphSize)((g.size + 1)))});
     SLOP_POST(((rdf_graph_size(_retval) == (rdf_graph_size(g) + 1))), "(== (graph-size $result) (+ (graph-size g) 1))");
     return _retval;
 }

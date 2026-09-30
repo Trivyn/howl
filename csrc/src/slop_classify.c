@@ -16,7 +16,7 @@ uint8_t classify_context_has_bottom(types_Saturation sat, types_Node n) {
         __auto_type _mv_534 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
         if (_mv_534.has_value) {
             __auto_type ctx = _mv_534.value;
-            return (slop_map_get(ctx.subsumers, &(bottom)) != NULL);
+            return slop_map_has(ctx.subsumers, &(bottom));
         } else if (!_mv_534.has_value) {
             return 0;
         }
@@ -29,9 +29,9 @@ uint8_t classify_detect_inconsistent(types_Saturation sat, types_Names names) {
         uint8_t found = classify_context_has_bottom(sat, types_node_top());
         {
             slop_map* _coll = (slop_map*)sat.contexts;
-            for (size_t _i = 0; _i < _coll->cap; _i++) {
-                if (_coll->entries[_i].occupied) {
-                    types_Node n = *(types_Node*)_coll->entries[_i].key;
+            for (size_t _i = 0; _i < _coll->len; _i++) {
+                {
+                    types_Node n = *(types_Node*)slop_map_key_at(_coll, _i);
                     if (classify_is_individual(names, n)) {
                         if (classify_context_has_bottom(sat, n)) {
                             found = 1;
@@ -81,13 +81,13 @@ uint8_t classify_entails_sub(types_Saturation sat, types_Names names, uint8_t in
                 __auto_type _mv_539 = ({ void* _ptr = slop_map_get(sat.contexts, &(ra)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
                 if (_mv_539.has_value) {
                     __auto_type ctx = _mv_539.value;
-                    if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
+                    if (slop_map_has(ctx.subsumers, &(bottom))) {
                         return 1;
                     } else {
                         __auto_type _mv_541 = types_renamed_node(names, b);
                         if (_mv_541.has_value) {
                             __auto_type rb = _mv_541.value;
-                            return (slop_map_get(ctx.subsumers, &(rb)) != NULL);
+                            return slop_map_has(ctx.subsumers, &(rb));
                         } else if (!_mv_541.has_value) {
                             return 0;
                         }
@@ -114,18 +114,18 @@ slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Satura
         __auto_type bottom = types_node_bottom();
         {
             slop_map* _coll = (slop_map*)sat.contexts;
-            for (size_t _i = 0; _i < _coll->cap; _i++) {
-                if (_coll->entries[_i].occupied) {
-                    types_Node n = *(types_Node*)_coll->entries[_i].key;
-                    types_Context ctx = *(types_Context*)_coll->entries[_i].value;
+            for (size_t _i = 0; _i < _coll->len; _i++) {
+                {
+                    types_Node n = *(types_Node*)slop_map_key_at(_coll, _i);
+                    types_Context ctx = *(types_Context*)slop_map_value_at(_coll, _i);
                     __auto_type _mv_543 = types_original_node(names, n);
                     switch (_mv_543.tag) {
                         case types_Node_class_node:
                         {
                             __auto_type iri = _mv_543.data.class_node;
                             if (!(classify_is_bottom_iri(iri))) {
-                                if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
-                                    ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                if (slop_map_has(ctx.subsumers, &(bottom))) {
+                                    ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                             break;
@@ -154,27 +154,27 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
         __auto_type bottom = types_node_bottom();
         {
             slop_map* _coll = (slop_map*)sat.contexts;
-            for (size_t _i = 0; _i < _coll->cap; _i++) {
-                if (_coll->entries[_i].occupied) {
-                    types_Node rn = *(types_Node*)_coll->entries[_i].key;
-                    types_Context ctx = *(types_Context*)_coll->entries[_i].value;
+            for (size_t _i = 0; _i < _coll->len; _i++) {
+                {
+                    types_Node rn = *(types_Node*)slop_map_key_at(_coll, _i);
+                    types_Context ctx = *(types_Context*)slop_map_value_at(_coll, _i);
                     __auto_type _mv_545 = types_original_node(names, rn);
                     switch (_mv_545.tag) {
                         case types_Node_class_node:
                         {
                             __auto_type iri = _mv_545.data.class_node;
                             if (!(classify_is_bottom_iri(iri))) {
-                                if (slop_map_get(ctx.subsumers, &(bottom)) != NULL) {
+                                if (slop_map_has(ctx.subsumers, &(bottom))) {
                                     {
                                         __auto_type n = types_original_node(names, rn);
-                                        ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 } else {
                                     {
                                         slop_map* _coll = (slop_map*)ctx.subsumers;
-                                        for (size_t _i = 0; _i < _coll->cap; _i++) {
-                                            if (_coll->entries[_i].occupied) {
-                                                types_Node rb = *(types_Node*)_coll->entries[_i].key;
+                                        for (size_t _i = 0; _i < _coll->len; _i++) {
+                                            {
+                                                types_Node rb = *(types_Node*)slop_map_key_at(_coll, _i);
                                                 __auto_type _mv_547 = types_original_node(names, rb);
                                                 switch (_mv_547.tag) {
                                                     case types_Node_class_node:
@@ -183,7 +183,7 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
                                                         {
                                                             __auto_type n = types_original_node(names, rn);
                                                             __auto_type b = types_original_node(names, rb);
-                                                            ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = b})); if (_lst_p->len >= _lst_p->cap) { size_t _new_cap = _lst_p->cap == 0 ? 16 : _lst_p->cap * 2; __typeof__(_lst_p->data) _new_data = (__typeof__(_lst_p->data))slop_arena_alloc(arena, _new_cap * sizeof(*_lst_p->data)); if (_lst_p->len > 0) memcpy(_new_data, _lst_p->data, _lst_p->len * sizeof(*_lst_p->data)); _lst_p->data = _new_data; _lst_p->cap = _new_cap; } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                            ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = b})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                         }
                                                         break;
                                                     }
