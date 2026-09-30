@@ -68,14 +68,14 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.39 s (reasoning 0.30 s), 1.8 GB peak | 0.45 s | 0.56 s | 0.7× | **passes** 5× |
-| EL-GALEN | ELK 0.6.0 | 0.89 s (reasoning 0.73 s), 1.5 GB peak | 0.07 s | 0.33 s | 2.7× | **passes** 5× |
-| OBI 2026-07-27 | HermiT | 0.05 s | 0.03 s | 0.62 s | 0.1× | reported |
-| RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.20 s | 0.1× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 0.44 s (reasoning 0.33 s), 0.9 GB peak | 0.44 s | 0.58 s | 0.8× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 0.91 s (reasoning 0.74 s), 0.6 GB peak | 0.07 s | 0.35 s | 2.6× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.06 s | 0.03 s | 0.52 s | 0.1× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.19 s | 0.1× | reported |
 
-ELK ran slower in this bench than in earlier ones (GO 0.56 s against 0.45 s, EL-GALEN 0.33 s against
+ELK ran slower in this bench than in earlier ones (GO 0.58 s against 0.45 s, EL-GALEN 0.35 s against
 0.28 s, each run-to-run range recorded in `bench/results.txt`); against those earlier medians HOWL is
-at about 0.9× on GO and 3.1× on EL-GALEN.
+at about 1.0× on GO and 3.2× on EL-GALEN.
 
 M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
 side of their join, and role inclusions are matched through the told role closure rather than
@@ -93,25 +93,27 @@ measured two ways: at their default 32 GB heap, where the JVM's peak mostly refl
 collects garbage, and at the smallest heap that still reproduces the certified entailments, which is
 what they actually need:
 
-| Entry | HOWL | HOWL, allocator returning freed memory | Oracle, default heap | Oracle, smallest heap |
-|---|---|---|---|---|
-| GO | 1.8 GB | 0.9 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
-| EL-GALEN | 1.5 GB | 0.64 GB | ELK 1.9 GB | ELK 0.43 GB |
-| OBI | 0.41 GB | 0.24 GB | HermiT 1.4 GB | HermiT 0.24 GB |
-| RO | 29 MB | 28 MB | HermiT 0.36 GB | HermiT 0.23 GB |
+| Entry | HOWL | Oracle, default heap | Oracle, smallest heap |
+|---|---|---|---|
+| GO | 0.91 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
+| EL-GALEN | 0.62 GB | ELK 1.9 GB | ELK 0.43 GB |
+| OBI | 0.24 GB | HermiT 1.4 GB | HermiT 0.24 GB |
+| RO | 23 MB | HermiT 0.36 GB | HermiT 0.23 GB |
 
 HOWL was 7.9 GB on GO before its memory work. It now parses each document straight into an encoded
 form (a dictionary of owned terms and the triples as ids), frees every phase's working memory as the
-phase ends, and frees each saturation round's queues a round later; every report is unchanged. The
-second HOWL column runs with macOS's large-block cache off (`MallocLargeCache=0`), which keeps freed
-arena blocks resident; slop's arena runtime returning them to the OS is the fix, in progress. slop's
-compact collections (#234: a Map's and Set's keys and values inline in a dense table) took the rest:
-GO was 2.6 GB (1.7 GB) before them.
+phase ends, and frees each saturation round's queues a round later; every report is unchanged. Two
+slop runtime changes did the rest: compact collections (#234, a Map's and Set's keys and values
+inline in a dense table; GO 2.6 → 1.8 GB) and arena blocks mapped from the OS, so freeing an arena
+returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks resident). The peak is now
+the parse: GO reaches 0.85 GB of its 0.91 GB while parsing, because slop-rdf's parser holds every
+term occurrence's strings until the parse ends. Returning memory has a small time cost: later rounds
+touch fresh pages rather than reusing dirty ones.
 
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.7× and EL-GALEN 2.7× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.8× and EL-GALEN 2.6× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -305,10 +307,10 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop `main` at or after [#234](https://github.com/slop-lang/slop/pull/234), not yet
-in a release.** #234 stores a Map's and Set's keys and values inline in a dense table, which cut
-GO's peak from 2.6 to 1.8 GB (0.9 GB with macOS's large-block cache off). #217 makes empty
-collections allocate nothing. CR2 and CR4's smaller-side dispatch uses #205's `set-len`, and its map rework (stored
+**Toolchain: slop `main` at or after [#235](https://github.com/slop-lang/slop/pull/235), not yet
+in a release.** #235 maps big arena blocks from the OS, so freeing an arena returns its memory (GO's
+peak 1.8 → 0.9 GB); #234 stores a Map's and Set's keys and values inline in a dense table (2.6 →
+1.8 GB). #217 makes empty collections allocate nothing. CR2 and CR4's smaller-side dispatch uses #205's `set-len`, and its map rework (stored
 hashes, a word-at-a-time string hash) is most of the M1 slice 6b speedup. The faithfulness pairs need
 [#168](https://github.com/slop-lang/slop/pull/168) (`match` binds every payload, at its declared
 sort) and [#172](https://github.com/slop-lang/slop/pull/172) (the exact model of a loop-free
