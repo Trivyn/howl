@@ -48,21 +48,22 @@ jobs:
         run: make test-tsan CC=clang
 
       # A CI job that accepts exit 2 reintroduces the silent-false-pass
-      # hazard the gate exists to prevent, so assert the codes rather
-      # than assuming them. While the pipeline is unimplemented the
-      # library refuses and every command exits 3 — the point is that it
-      # is never 0.
+      # hazard the gate exists to prevent, so assert the codes rather than
+      # assuming them. `make acceptance` runs §6.2's exit-code table over
+      # every fixture it lists — 0 coherent, 1 incoherent, 2 inconclusive,
+      # each where the fixture says — and a usage error must exit 3. (This
+      # step once asserted "never 0", from before the pipeline existed; an
+      # empty ontology is coherent, so it failed on every run since M0.)
       - name: Assert CLI exit codes
         run: |
+          make acceptance CC=${{ matrix.cc }}
           set +e
           ./build/howl > /dev/null 2>&1
           usage=$?
-          ./build/howl validate /dev/null > /dev/null 2>&1
-          validate=$?
           set -e
-          echo "no-args exit=$usage, validate exit=$validate"
-          if [ "$usage" -eq 0 ] || [ "$validate" -eq 0 ]; then
-            echo "FAIL: an unimplemented pipeline must never exit 0" >&2
+          echo "no-args exit=$usage"
+          if [ "$usage" -ne 3 ]; then
+            echo "FAIL: a usage error must exit 3, got $usage" >&2
             exit 1
           fi
 
