@@ -35,8 +35,9 @@ howl: refused (--strict), no report — 1 omitted
 ```
 
 **Profiles.** `--profile` selects the calculus, one rung per named logic
-([SPEC §5](./SPEC.md#5-fragment-roadmap)): `el` (ELH⊥R+ with domain/range and an ABox — built, and
-the default on every surface), `el++` (the OWL 2 EL object fragment), `horn-sriq` (Horn-SRIQ) and
+([SPEC §5](./SPEC.md#5-fragment-roadmap)): `el` (ELH⊥R+ with domain/range and an ABox, plus `¬` in a
+superclass, domain or range, which it rewrites into ⊥ axioms — built, and the default on every
+surface), `el++` (the OWL 2 EL object fragment), `horn-sriq` (Horn-SRIQ) and
 `sriq` (the SRIQ object fragment), or `auto` for the cheapest built rung that contains the whole
 ontology. A rung that is not built yet exits 3; it is never quietly run as `el`. The report's second
 line names the profile that ran. The Rust crate exposes the same choice as `Config::selection`.
@@ -136,7 +137,10 @@ Returning memory has a small time cost: later rounds touch fresh pages rather th
 ## On the way to EL++
 
 v0 is **ELH<sub>⊥</sub><sup>R+</sup> with domain and range** — EL with role hierarchies, ⊥, role
-composition, and property domains/ranges. This table tracks the distance from there to EL++,
+composition, and property domains/ranges. It also accepts `¬E` as a superclass, domain or range
+(or a conjunct of one), which is outside OWL 2 EL's syntax but not its logic: `C ⊑ ¬E` is
+`C ⊓ E ⊑ ⊥`, and v0 rewrites it so before the gate ([SPEC §5.2](./SPEC.md#52-the-exact-v0-language)).
+That is BFO's `independent continuant ⊓ ¬spatial region` domain and range. This table tracks the distance from there to EL++,
 construct by construct, against both forms of the target: **EL++** the description logic (Baader,
 Brandt & Lutz, 2005, extended with ranges and reflexive roles in 2008), and the **OWL 2 EL** profile,
 its W3C syntax. The two are not the same list — OWL 2 EL adds `ObjectHasSelf`, keys and the built-in
@@ -196,7 +200,8 @@ are recognized and enumerated like every open row above.
 
 | Construct | Where it lives |
 |---|---|
-| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — `sriq` (v2); several-member `ObjectOneOf` needs nominals, which no rung plans |
+| `ObjectUnionOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — `sriq` (v2); several-member `ObjectOneOf` needs nominals, which no rung plans |
+| `ObjectComplementOf` | **done** where it is a superclass, domain or range (or a conjunct of one): rewritten into ⊥ axioms, an exact equivalence. Anywhere else — under `∃`, in a union, on the left — `sriq` (v2) |
 | `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — `horn-sriq` (v1) |
 | `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL — `horn-sriq` (v1) |
 | Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |

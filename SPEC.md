@@ -191,7 +191,7 @@ v2.
 
 | Rung (`--profile`) | Logic | Worst case | Calculus it cites | Adds over `el` | Status |
 |---|---|---|---|---|---|
-| **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)) | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
+| **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)); `¬` in a superclass, domain or range is taken by rewriting, so the logic is unchanged | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
 | **`el++`** | the **OWL 2 EL object fragment** | PTIME | [KKS12]'s ELO rules (ELK's) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions. Datatypes and keys stay omissions | planned |
 | **`horn-sriq`** (v1) | **Horn-SRIQ** | ExpTime | [Kaz09] + chain elimination, or the Horn slice of [Bate+18] | inverses, functionality, `∀` on the right, symmetric/asymmetric/irreflexive roles, disjoint roles, Horn number restrictions | planned (M5) |
 | **`sriq`** (v2) | **SRIQ object fragment** (non-Horn) | 2ExpTime | [Bate+18] | disjunction, full negation, number restrictions | not scheduled |
@@ -260,7 +260,7 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
 ;; The selectable unit, one per rung of §5's ladder, in the fixed tie-break order.
 ;; Each profile supplies its own normalization + rule set; the driver and I/O are shared.
 (enum Profile
-  profile-el             ; ELH⊥R+ + domain/range + ABox, exactly §5.2 (implemented)
+  profile-el             ; ELH⊥R+ + domain/range + ABox, exactly §5.2, positive ¬ rewritten (implemented)
   profile-el-plus-plus   ; the OWL 2 EL object fragment
   profile-horn-sriq      ; Horn-SRIQ
   profile-sriq)          ; SRIQ object fragment, non-Horn (not OWL 2 DL: no datatypes, no nominals)
@@ -354,6 +354,43 @@ RBox   r ⊑ s    |    r₁ ∘ … ∘ rₙ ⊑ t  (n ≥ 2)    |    domain(r) 
 ABox   C(a)     |    r(a,b)
 ```
 
+**Negation in positive positions is accepted by rewriting, before the gate.** `¬E`, with `E` a
+concept of the grammar above, may be the whole filler — or a top-level conjunct of it — of a
+superclass, a domain or a range. Such an axiom says only that something is *empty*, which is `⊥` on
+the right of an ordinary GCI:
+
+| Accepted input | Rewritten to (no fresh names) |
+|---|---|
+| `C ⊑ P ⊓ ¬E` | `C ⊑ P`, `C ⊓ E ⊑ ⊥` |
+| `domain(r) ⊑ P ⊓ ¬E` | `domain(r) ⊑ P`, `∃r.⊤ ⊓ E ⊑ ⊥` |
+| `range(r) ⊑ P ⊓ ¬E` | `range(r) ⊑ P`, `∃r.E ⊑ ⊥` |
+
+`P` is the remaining conjuncts in their written order; when there are none (the filler is `¬E`
+alone) no positive axiom is emitted. Several `¬E` conjuncts give several `⊥` axioms. An equivalence
+is split into its two inclusions first, so `B ≡ ¬A` contributes its forward half `B ⊑ ¬A` and omits
+the backward `¬A ⊑ B`.
+
+- **The logic does not grow; the accepted syntax does.** The rewritten theory `T_¬` has the signature
+  and the models of `T` ([§5.3](#53-the-abox-reduction-is-sound-and-complete) L0), and `T_¬` is
+  in the grammar above. BFO, CCO and RO use exactly this shape — `domain`/`range` =
+  `BFO_0000004 ⊓ ¬BFO_0000006`, *independent continuant that is not a spatial region* — and OBI
+  uses `CL_0000001 ⊑ ¬∃r.E`.
+- **It runs before every gate condition, and that placement is the point.** Regularity, the
+  range/composition condition below and the declaration check all judge `T_¬`. A negative range
+  there is the GCI `∃t.E ⊑ ⊥`, which range elimination never touches, so it imposes nothing on a
+  chain's last role; only `P` is a range. Rewritten after the gate, `range(t) = A ⊓ ¬B` would demand
+  `A ⊓ ¬B` of every chain into `t`, refusing chains `T_¬` admits.
+- **Whole axioms or nothing.** The rewrite applies only when every piece — `C`, each `E`, each
+  conjunct of `P`, and the role — is in the fragment. Anything else passes through unchanged and is
+  omitted as written, so an omission always shows the user's own axiom, never a piece of it.
+- **Everywhere else `¬` stays out:** under `∃`, in a union, on the left of `⊑`, as a
+  `DisjointClasses` member, in `∀r.¬E` (which is `¬∃r.E` on the right, and the next equivalence of
+  this kind to take), and in a class assertion `(¬B)(a)` (which is `{a} ⊓ B ⊑ ⊥` and would touch
+  the ABox reduction).
+- **This is outside OWL 2 EL's syntax.** `ObjectComplementOf` is not in the profile at all, so an
+  input using it is no OWL 2 EL document, although `T_¬` is one. ELK is a differential oracle for it
+  only as far as its capability probes show ([§10](#10-testing-strategy)).
+
 **ABox forms are exactly those two.** The remaining assertion vocabulary is classified explicitly,
 because "ABox axioms are in v0" is not a grammar:
 
@@ -361,7 +398,7 @@ because "ABox axioms are in v0" is not a grammar:
 |---|---|
 | `C(a)`, `r(a,b)` | **in v0** — encoded as concepts, below |
 | `owl:sameAs`, `owl:differentFrom`, `AllDifferent` | **out-of-profile** — equality is what the nominal-free encoding deliberately lacks |
-| Negative property assertions | **out-of-profile** — negation is not in the fragment |
+| Negative property assertions | **out-of-profile** — `¬r(a,b)` is `{a} ⊓ ∃r.{b} ⊑ ⊥`, and the filler `{b}` is a nominal |
 | Datatype property assertions | **out-of-profile** (concrete domains) |
 | Annotation assertions (`rdfs:label`, `rdfs:comment`, …) | **inert** |
 | Declaration triples (`rdf:type owl:Class` / `owl:ObjectProperty` / `owl:NamedIndividual`) | **inert semantically, but read** — see below |
@@ -464,6 +501,8 @@ nominals and concrete domains, and describing it that way (as earlier drafts did
 coverage in exactly the way [§8.4](#84-the-moose-tboxreasoner-port) warns about for `profile()`. The
 complete omitted list is the "Not in v0" table below: nominals, concrete domains/datatypes,
 `ObjectHasSelf`, **reflexive role inclusions**, and the two built-in object properties. That is a claim about the **syntactic profile**, and nothing more.
+The one construct accepted from *outside* OWL 2 EL, `¬` in a positive position, does not move it:
+the claim is about the rewritten theory `T_¬`, which is in the grammar above.
 
 Whether a given **ELK** build covers it is a separate, empirical question — ELK describes itself as
 implementing *a fragment of* OWL 2 EL, and object-property ranges have historically been outside it.
@@ -569,6 +608,9 @@ expression, and "imposed on" means **through the told role hierarchy on both sid
 
 where `⊑*` is the reflexive-transitive closure of **told** `rdfs:subPropertyOf`. This is the OWL 2 EL
 global restriction on property chains and ranges, matched literally — same `C`, not a subclass of it.
+The ranges are those of the theory **after** the negation rewrite above: `range(t) = C ⊓ ¬E` imposes
+`C`, and `range(t) = ¬E` imposes nothing. A range the rewrite cannot take is left as written and
+imposes its whole filler.
 
 > **Both sides must be quantified, not just the consequent.** An earlier version tested only a
 > *direct* `range(t) = C` while allowing the range on `s` to be inherited. That is asymmetric and
@@ -618,6 +660,10 @@ chains are decomposed**, so `fresh-role` never appears in a gate question.
 | `r ∘ s ⊑ t`, no range on `t` and none inherited | **accepted** — `t` imposes nothing to violate |
 | `r ⊑ s` with ranges on both | **accepted** — role *hierarchy* is unaffected; only composition shares a target |
 | `p ∘ q ∘ s ⊑ t`, `range(t) = Agent`, `range(s) = Agent` | **accepted** — `s` is `rₙ`; the intermediate roles are not consulted |
+| `r ∘ s ⊑ t`, `range(t) = Agent ⊓ ¬Person`, `range(s) = Agent` | **accepted** — after the negation rewrite `t`'s only range is `Agent`; `¬Person` became `∃t.Person ⊑ ⊥` |
+| `r ∘ s ⊑ t`, `range(t) = Agent ⊓ ¬Person`, `s` has no range | **rejected** — the positive part is still imposed |
+| `r ∘ s ⊑ t`, `range(t) = ¬Person` | **accepted** — a purely negative range imposes nothing |
+| `r ∘ s ⊑ t`, `range(t) = Agent ⊓ ¬(Agent ⊔ Person)`, `range(s) = Agent` | **both rejected** — the range cannot be rewritten (a union), so it is omitted as written and still imposes its whole filler |
 
 > **Verify before M1 — but note which way.** Check the exact formulation against
 > [OWL 2 Profiles §Global Restrictions](https://www.w3.org/TR/owl2-profiles/#Global_Restrictions_2)
@@ -770,7 +816,7 @@ through two gates at once.
 | **Reflexive role inclusions** (`ReflexiveObjectProperty`) | covered by the updated EL++ paper (global reflexive roles) and by OWL 2 EL — deferred |
 | `owl:topObjectProperty`, `owl:bottomObjectProperty` | built-in role semantics CR1–CR7 do not implement — see below |
 | Nominals `{a}`, `ObjectHasValue` | deferred, and now **answered no** for the first consumer ([§15 Q3](#15-open-questions)) |
-| `⊔`, `¬`, `∀` | **v2** (SROIQ) |
+| `⊔`, `∀`, and `¬` outside a positive position | **v2** (`sriq`) — `¬` in a positive position is in v0 by rewriting (above) |
 
 **Every recognized OWL construct has exactly one disposition, and this table is the authority.** The
 grammar above says what v0 *reasons over*; it does not say what the front end *does with everything
@@ -787,7 +833,8 @@ judgement call.
 | **`TransitiveObjectProperty`** | desugar to the chain `r ∘ r ⊑ r` |
 | `ObjectPropertyDomain`, `ObjectPropertyRange` | in v0 (range via elimination) |
 | `ClassAssertion`, `ObjectPropertyAssertion` | in v0, per the ABox encoding below |
-| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities, `ObjectOneOf`, `ObjectHasValue`, `ObjectHasSelf`, `ReflexiveObjectProperty`, inverse/functional properties | **out-of-profile** |
+| `ObjectComplementOf` as the whole filler, or a top-level conjunct, of a superclass, domain or range | in v0 — **rewritten before the gate** into `⊥` GCIs (above) |
+| `ObjectComplementOf` anywhere else, `ObjectUnionOf`, `ObjectAllValuesFrom`, cardinalities, `ObjectOneOf`, `ObjectHasValue`, `ObjectHasSelf`, `ReflexiveObjectProperty`, inverse/functional properties | **out-of-profile** |
 | **Anonymous individuals** (blank-node individuals) | **out-of-profile** — excluded by OWL 2 EL, and unrepresentable by `individual-node IRI` |
 | **Reserved-vocabulary IRIs as entity names** (e.g. `owl:Nothing` as an individual) | **out-of-profile** — OWL 2 forbids reserved IRIs as named individuals; not a punning case to support |
 | `DisjointUnion` | **out-of-profile** — union |
@@ -997,6 +1044,14 @@ proved here because no citation covers it. The ABox enters as nominals (L1) and 
 >   the no-unregistered-address invariant; L1 overattributed the reduction; L9 stated soundness over
 >   internal symbols; Lemma 3 was applied to names occurring in no axiom.
 > - **Project owner: accepted, 2026-09-30.** M1 (f) is discharged ([§12](#12-milestones--acceptance-criteria)).
+> - **Added 2026-09-30 (L0):** negation in positive positions ([§5.2](#52-the-exact-v0-language)) enters
+>   as a model-preserving rewrite ahead of L1; L1–L9 are unchanged and apply to the rewritten theory.
+>   Adversarial review (Codex, 2026-09-30): **signed off** — no counterexample to the equivalence
+>   (including `E = ⊤`/`⊥`, no `P`, several `¬E`, a conjunctive `C`), to a negative range imposing
+>   nothing under [BBL08]'s condition, to L0's fit with L1–L9, or to `expand-negation`. It found two
+>   places where the independent census disagreed with the gate: `rdf:type` in its structural key
+>   (fixed, with a test), and a complement node shared by a positive and a negative use, where the
+>   census is deliberately stricter (documented). **Project owner: pending.**
 > - **Revised 2026-09-30 (L1, L5, L8):** the accepted text applied [BBL05] Lemma 3 to a CBox with
 >   nominals, whose completeness [KKS12] refutes. The theorem is unchanged; the route now runs the
 >   calculus on the nominal-free `T_H′` and recovers the nominals by a canonical model (L8), using
@@ -1018,8 +1073,9 @@ Lutz, *Pushing the EL Envelope Further*, OWLED 2008: EL++ with range restriction
 syntactic restriction HOWL's gate enforces ([§5.2](#52-the-exact-v0-language)); its **Lemma 1**
 eliminates ranges through fresh `X_{r,D}` and proves subsumption between concept names preserved.
 
-**Setting.** `O = T ∪ A` is an ontology the gate accepts: `T` in the §5.2 language (nominal-free),
-`A` a set of `C(a)` and `r(a,b)`. Write `I_a` for `individual(a)`. HOWL (i) normalizes
+**Setting.** `O = T ∪ A` is an ontology the gate accepts: `T` in the §5.2 language (nominal-free)
+once L0 has rewritten its positive negations, `A` a set of `C(a)` and `r(a,b)`. From L1 on, `O`
+and `T` name the rewritten theory, which L0 shows has the same models. Write `I_a` for `individual(a)`. HOWL (i) normalizes
 `T ∪ {I_a ⊑ C | C(a) ∈ A}`, decomposes chains and eliminates ranges; (ii) seeds every context with
 `{self, ⊤}`, installs each `r(a,b)` as the edge `(I_a, I_b)` stored under `r`, and seeds every
 `A ∈ ran_T(r)` into `S(I_b)`; (iii) saturates with CR1–CR5 and CR7 (published CR11), matching role
@@ -1035,12 +1091,31 @@ by `O` (L9) — which is what lets an *incoherent* verdict stand whatever the co
 trusts the caller's attestation that the supplied documents are the import closure
 ([§6.2](#62-data-model)'s trust boundary), which no omission list can check.
 
-**The route.** Six theories, each shown to agree with the next on everything the report reads:
+**The route.** Seven theories, each shown to agree with the next on everything the report reads:
 
 ```
-O  ─L1→  T_ν  (ABox as nominal GCIs)  ─L2→  T_n  (normal form)  ─L3→  T_e  (ranges eliminated)
+O  ─L0→  O_¬  (positive ¬E rewritten to ⊥ GCIs)  ─L1→  T_ν  (ABox as nominal GCIs)  ─L2→  T_n  (normal form)  ─L3→  T_e  (ranges eliminated)
    ─L4→  T_H  (X_{r,{b}} collapsed: HOWL's edges and seeds)  ─L5, L6, L7→  HOWL's saturation  ─L8→  report
 ```
+
+**L0 — negation in positive positions is an equivalence** (elementary). Let `O_¬ = T_¬ ∪ A`, where
+`T_¬` replaces each axiom §5.2's negation rewrite takes by its pieces. For every interpretation `I`
+and concepts `C`, `P`, `E`:
+
+1. `(P ⊓ ¬E)^I = P^I ∖ E^I`, so `C^I ⊆ (P ⊓ ¬E)^I` iff `C^I ⊆ P^I` and `C^I ∩ E^I = ∅`, that is
+   `(C ⊓ E)^I = ∅`. Several `¬Eᵢ` conjuncts give one such conjunct each; with no `P` the first half
+   is `C^I ⊆ Δ^I`, which always holds, so it is dropped.
+2. `domain(r) ⊑ D` says `(∃r.⊤)^I ⊆ D^I`: case 1 with `C = ∃r.⊤`.
+3. `range(r) ⊑ D` says every `r`-successor is in `D^I`. For `D = P ⊓ ¬E` that is: every
+   `r`-successor is in `P^I` (`range(r) ⊑ P`), and none is in `E^I`, which is `(∃r.E)^I = ∅`.
+
+The rewrite introduces no symbol, so `Mod(O) = Mod(O_¬)`, and every entailment the report reads is
+the same for both. The gate evaluates **all** its conditions on `O_¬`, because the rewrite runs
+first ([§5.2](#52-the-exact-v0-language)): regularity is untouched (no role axiom changes), the
+range/composition condition reads `O_¬`'s ranges, and the rewrite applies only when every piece is in
+the fragment, so `T_¬` is in the §5.2 grammar. That is the setting of L1–L9, verbatim, with `O_¬`
+for `O`. The ABox is untouched, so `I_a` still occurs only where L1 puts it and L5's invariant is
+unaffected.
 
 **L1 — the ABox as nominals** (elementary). Let `T_ν = T ∪ {{a} ⊑ C | C(a) ∈ A} ∪
 {{a} ⊑ ∃r.{b} | r(a,b) ∈ A}`. For every interpretation, `a ∈ C` iff `{a} ⊆ C`, and
@@ -1203,7 +1278,7 @@ HOWL's `S` and `R*` are the closure of the nominal-free `T_H′` under [BBL05]'s
   union of a model of `O` and a countermodel of `T` is a model of `O`.
 
 **L9 — soundness needs none of the completeness conditions.** On partial coverage HOWL reasons over
-the accepted subset `O′ ⊆ O`, and a capped run stops below the fixpoint. Soundness is stated over the
+the accepted subset `O′ ⊆ O_¬`, and a capped run stops below the fixpoint. Soundness is stated over the
 translated theory, where HOWL's internal symbols have a meaning: every fact HOWL holds is entailed by
 `O′`'s translation `T_H(O′)` read with `I_a = {a}` and each fresh name as the expression it stands
 for — `B ∈ S(C)` means `C ⊑ B`, an edge `(C, D)` under `r` means `C ⊑ ∃r.D`. That holds without the
@@ -1212,8 +1287,8 @@ soundness uses — needs no range restriction, since `X_{r,D} := D ⊓ ⨅ran_T(
 the seeds use `ran_T` over `O′`, a subset of the ranges `O` imposes; and each rule preserves
 [BBL05]'s invariants (I1)/(I2) (Lemma 3's if-direction). Only findings about **input** names are
 projected back: `⊥ ∈ S(⊤)` or `⊥ ∈ S(I_a)` means `O′` is inconsistent, and `B ∈ S(A)` or
-`⊥ ∈ S(A)` for input classes means `O′ ⊨ A ⊑ B` or `O′ ⊨ A ⊑ ⊥`. By monotonicity those are `O`'s
-consequences too, so an *inconsistent*, *unsatisfiable* or *subsumption* finding is sound whatever
+`⊥ ∈ S(A)` for input classes means `O′ ⊨ A ⊑ B` or `O′ ⊨ A ⊑ ⊥`. Every axiom of `O_¬` is entailed by
+`O` (L0), so by monotonicity those are `O`'s consequences too, so an *inconsistent*, *unsatisfiable* or *subsumption* finding is sound whatever
 the coverage.
 
 **What (f) asked for, and where it is.**
@@ -1225,6 +1300,7 @@ the coverage.
 | Range seeding | L3, L4 |
 | Interaction with role inclusions and chains | L2 (restriction survives decomposition), L3, L6 |
 | Every node the encoding introduces has a seeded context | L7 |
+| Negation in a superclass, domain or range (not an (f) subject; added with it) | L0 |
 
 **What is not claimed.** Instance retrieval and realization (not part of the report); OWL consistency
 beyond the §5.2 language (equality, nominals and the rest are out of profile, so their input is
