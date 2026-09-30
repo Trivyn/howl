@@ -42,6 +42,10 @@ pub enum Fault {
     Cancelled,
     /// Unparseable or structurally malformed input.
     InputError(String),
+    /// An explicit request for a profile whose calculus is not built
+    /// yet. Refused, never quietly run as another profile: that would
+    /// classify a smaller theory than asked for, under the wrong name.
+    ProfileUnavailable(Profile),
 }
 
 impl fmt::Display for Fault {
@@ -50,6 +54,9 @@ impl fmt::Display for Fault {
             Fault::NotImplemented(m) => write!(f, "not implemented: {m}"),
             Fault::Cancelled => write!(f, "cancelled"),
             Fault::InputError(m) => write!(f, "input error: {m}"),
+            Fault::ProfileUnavailable(p) => {
+                write!(f, "profile {} is not implemented yet (implemented: el)", p.name())
+            }
         }
     }
 }
@@ -76,6 +83,90 @@ pub enum Verdict {
     Inconclusive,
 }
 
+/// A rung of the profile ladder (SPEC §5.1): each is complete for
+/// exactly the logic it names, and no wider label.
+///
+/// | Profile | Logic | Worst case | Built |
+/// |---|---|---|---|
+/// | [`El`](Profile::El) | ELH⊥R+ + domain/range + ABox | PTIME | yes |
+/// | [`ElPlusPlus`](Profile::ElPlusPlus) | the OWL 2 EL object fragment | PTIME | no |
+/// | [`HornSriq`](Profile::HornSriq) | Horn-SRIQ | ExpTime | no |
+/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment (non-Horn) | 2ExpTime | no |
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Profile {
+    El,
+    ElPlusPlus,
+    HornSriq,
+    Sriq,
+}
+
+impl Profile {
+    /// The name the CLI flag and the report use.
+    pub fn name(self) -> &'static str {
+        match self {
+            Profile::El => "el",
+            Profile::ElPlusPlus => "el++",
+            Profile::HornSriq => "horn-sriq",
+            Profile::Sriq => "sriq",
+        }
+    }
+
+    fn to_ffi(self) -> ffi::Profile {
+        match self {
+            Profile::El => ffi::Profile::El,
+            Profile::ElPlusPlus => ffi::Profile::ElPlusPlus,
+            Profile::HornSriq => ffi::Profile::HornSriq,
+            Profile::Sriq => ffi::Profile::Sriq,
+        }
+    }
+
+    fn from_ffi(p: ffi::Profile) -> Self {
+        match p {
+            ffi::Profile::El => Profile::El,
+            ffi::Profile::ElPlusPlus => Profile::ElPlusPlus,
+            ffi::Profile::HornSriq => Profile::HornSriq,
+            ffi::Profile::Sriq => Profile::Sriq,
+        }
+    }
+}
+
+/// Which calculus a run uses.
+///
+/// The default is `Explicit(Profile::El)`, not `Auto`: a default run
+/// keeps one cost class and one theory across upgrades. `Auto` picks
+/// the cheapest built profile containing the whole ontology.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ProfileSelection {
+    Auto,
+    Explicit(Profile),
+}
+
+impl ProfileSelection {
+    #[allow(dead_code)] // used once `classify` crosses the FFI (M2b)
+    fn to_ffi(self) -> ffi::ProfileSelection {
+        match self {
+            ProfileSelection::Auto => ffi::ProfileSelection {
+                tag: ffi::ProfileSelectionTag::Auto,
+                data: ffi::ProfileSelectionData { explicit: ffi::Profile::El },
+            },
+            ProfileSelection::Explicit(p) => ffi::ProfileSelection {
+                tag: ffi::ProfileSelectionTag::Explicit,
+                data: ffi::ProfileSelectionData { explicit: p.to_ffi() },
+            },
+        }
+    }
+
+    fn from_ffi(s: ffi::ProfileSelection) -> Self {
+        match s.tag {
+            ffi::ProfileSelectionTag::Auto => ProfileSelection::Auto,
+            // SAFETY: the tag says the `explicit` arm is the live one.
+            ffi::ProfileSelectionTag::Explicit => {
+                ProfileSelection::Explicit(Profile::from_ffi(unsafe { s.data.explicit }))
+            }
+        }
+    }
+}
+
 /// Reasoner configuration.
 ///
 /// Mirrors the engine's own defaults rather than inventing new ones, so
@@ -90,6 +181,10 @@ pub struct Config {
     /// `0` performs no rounds and always yields an incomplete run.
     pub max_iterations: u16,
     pub cancel_ptr: i64,
+    /// The calculus. There is deliberately no `strict` field: the
+    /// library always runs non-strict — an omission is a report, not a
+    /// refusal (SPEC §8.4).
+    pub selection: ProfileSelection,
 }
 
 impl Default for Config {
@@ -103,6 +198,7 @@ impl Default for Config {
             channel_buffer: c.channel_buffer,
             max_iterations: c.max_iterations,
             cancel_ptr: c.cancel_ptr,
+            selection: ProfileSelection::from_ffi(c.selection),
         }
     }
 }
@@ -178,6 +274,26 @@ mod tests {
         let c = Config::default();
         assert_eq!(c.worker_count, 4);
         assert_eq!(c.max_iterations, 1000);
+        assert_eq!(c.selection, ProfileSelection::Explicit(Profile::El));
+    }
+
+    #[test]
+    fn selections_survive_the_crossing() {
+        for s in [
+            ProfileSelection::Auto,
+            ProfileSelection::Explicit(Profile::El),
+            ProfileSelection::Explicit(Profile::ElPlusPlus),
+            ProfileSelection::Explicit(Profile::HornSriq),
+            ProfileSelection::Explicit(Profile::Sriq),
+        ] {
+            assert_eq!(ProfileSelection::from_ffi(s.to_ffi()), s);
+        }
+    }
+
+    #[test]
+    fn unavailable_names_the_profile() {
+        let f = Fault::ProfileUnavailable(Profile::HornSriq);
+        assert_eq!(f.to_string(), "profile horn-sriq is not implemented yet (implemented: el)");
     }
 
     /// The stub must not be able to express a pass. This is the same

@@ -68,6 +68,13 @@ size_t howl_layout_fieldsize_cfg_cancel_ptr(void)     { return sizeof(((types_Re
 size_t howl_layout_fieldsize_cfg_verbose(void)        { return sizeof(((types_ReasonerConfig*)0)->verbose); }
 
 size_t howl_layout_sizeof_profile_selection(void)    { return sizeof(types_ProfileSelection); }
+/* The Profile enum's discriminants, one per rung: a mirror whose variants
+ * drift out of the C order still has the right SIZE, and would hand the
+ * engine a different rung than the caller named. */
+int howl_layout_profile_el(void)                     { return types_Profile_profile_el; }
+int howl_layout_profile_el_plus_plus(void)           { return types_Profile_profile_el_plus_plus; }
+int howl_layout_profile_horn_sriq(void)              { return types_Profile_profile_horn_sriq; }
+int howl_layout_profile_sriq(void)                   { return types_Profile_profile_sriq; }
 size_t howl_layout_sizeof_rdf_term(void)             { return sizeof(rdf_Term); }
 size_t howl_layout_sizeof_rdf_triple(void)           { return sizeof(rdf_Triple); }
 size_t howl_layout_offset_triple_predicate(void)     { return offsetof(rdf_Triple, predicate); }

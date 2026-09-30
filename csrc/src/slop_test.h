@@ -20,6 +20,7 @@
 #include "slop_el.h"
 #include "slop_premise.h"
 #include "slop_report.h"
+#include "slop_select.h"
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -180,6 +181,11 @@ typedef struct { bool is_ok; union { saturate_RoundResult ok; types_Fault err; }
 typedef struct { bool is_ok; union { decode_Stage1 ok; types_Fault err; } data; } slop_result_decode_Stage1_types_Fault;
 #endif
 
+#ifndef SLOP_RESULT_TYPES_PROFILE_TYPES_PROFILE_DEFINED
+#define SLOP_RESULT_TYPES_PROFILE_TYPES_PROFILE_DEFINED
+typedef struct { bool is_ok; union { types_Profile ok; types_Profile err; } data; } slop_result_types_Profile_types_Profile;
+#endif
+
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Findings test_make_findings(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count);
 types_Outcome test_make_outcome(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count, int64_t omitted_count, uint8_t reached_fixpoint);
@@ -308,6 +314,12 @@ uint8_t test_dispatch_agrees(slop_arena* arena, slop_string path);
 uint8_t test_test_indexed_dispatch_matches_reference(slop_arena* arena);
 uint8_t test_test_quoted_triple_header_subjects(slop_arena* arena);
 int64_t test_strict_outcome(slop_arena* arena, slop_string path);
+slop_result_types_Profile_types_Profile test_profile_run(slop_arena* arena, types_ProfileSelection selection);
+uint8_t test_ran_as(slop_result_types_Profile_types_Profile r, types_Profile want);
+uint8_t test_refused_as(slop_result_types_Profile_types_Profile r, types_Profile want);
+uint8_t test_test_profile_selection(slop_arena* arena);
+uint8_t test_test_profile_names_round_trip(slop_arena* arena);
+uint8_t test_name_round_trips(types_Profile p);
 uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
 uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
 slop_option_u8 test_regularity_of(slop_arena* arena, slop_string path);

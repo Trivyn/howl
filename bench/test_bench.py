@@ -23,7 +23,7 @@ _spec = importlib.util.spec_from_file_location(
 bench = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bench)
 
-REPORT = b"howl-report 1\nverdict coherent\ntermination fixpoint\nrounds 3\ninconsistent false\n" \
+REPORT = b"howl-report 2\nprofile el\nverdict coherent\ntermination fixpoint\nrounds 3\ninconsistent false\n" \
          b"omitted 0\nunsatisfiable 0\nsubsumptions 1\nsub http://x/A http://x/A\n"
 PIN = hashlib.sha256(REPORT).hexdigest()[:16]
 ENT = "ab" * 32

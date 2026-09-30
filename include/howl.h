@@ -57,8 +57,9 @@ typedef enum {
 
 typedef enum {
     types_Profile_profile_el,
-    types_Profile_profile_horn_shiq,
-    types_Profile_profile_sroiq
+    types_Profile_profile_el_plus_plus,
+    types_Profile_profile_horn_sriq,
+    types_Profile_profile_sriq
 } types_Profile;
 
 typedef enum {

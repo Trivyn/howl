@@ -52,7 +52,7 @@ def inputs(corpus):
 def run(path, cap, workers):
     p = subprocess.run([HOWL, "validate", path, "--report", "--max-iterations", str(cap),
                         "--workers", str(workers)], capture_output=True)
-    if not p.stdout.startswith(b"howl-report 1\n"):
+    if not p.stdout.startswith(b"howl-report 2\n"):
         sys.exit(f"howl gave no report for {path} (cap {cap}, W {workers}): {p.stderr.decode().strip()}")
     return p.stdout, p.returncode
 

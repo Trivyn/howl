@@ -38,7 +38,7 @@
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
                  Omission Coverage Termination SubPair Findings Outcome Fault
-                 ReasonerConfig
+                 ReasonerConfig Profile ProfileSelection
                  default-config emit-edge make-context make-queue
                  Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
@@ -51,6 +51,7 @@
   (import el (apply-el-rules apply-el-rules-reference))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
+  (import select (profile-name parse-profile))
 
   ;; ============================================================
   ;; Fixture builders
@@ -93,6 +94,7 @@
             (union-new Omission unresolved-import
               (record-new IRI (value "http://example.org/missing-import")))))
         (record-new Outcome
+          (profile     'profile-el)
           (coverage    (record-new Coverage (omitted omitted)))
           (termination (if reached-fixpoint
                          (union-new Termination fixpoint)
@@ -1360,7 +1362,8 @@
             (match f
               ((input-error m) (list-push out m))
               ((refused _)     (list-push out "refused"))
-              ((cancelled)     (list-push out "cancelled")))))
+              ((cancelled)     (list-push out "cancelled"))
+              ((unavailable _) (list-push out "unavailable")))))
         out)))
 
   (fn decode-store-agrees ((arena Arena) (path String))
@@ -1430,7 +1433,8 @@
         (match f
           ((input-error m) m)
           ((refused _)     "refused")
-          ((cancelled)     "cancelled")))))
+          ((cancelled)     "cancelled")
+          ((unavailable _) "unavailable")))))
 
   (fn test-stage0-fault-follows-the-document ((arena Arena))
     (@intent "Which malformed reification's fault is reported follows the document, never hash order")
@@ -2638,7 +2642,75 @@
                 (match f
                   ((refused os)    (if (> (cast Int (list-len os)) 0) 1 -1))
                   ((cancelled)     -1)
-                  ((input-error _) -1)))))))))
+                  ((input-error _) -1)
+                  ((unavailable _) -1)))))))))
+
+  (fn profile-run ((arena Arena) (selection ProfileSelection))
+    (@intent "Classify the litmus under a selection: the profile that ran, or the one refused as unavailable")
+    (@spec ((Arena ProfileSelection) -> (Result Profile Profile)))
+    (@alloc arena)
+    ;; ok p: an Outcome, and it says p ran. error p: refused as
+    ;; unavailable, naming p. Any other fault is an error on el++, which
+    ;; no test below expects, so it fails whichever test asked.
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg selection selection)
+        (match (parse-ttl-file arena "corpus/fixtures/v0/litmus.ttl")
+          ((error _) (error 'profile-el-plus-plus))
+          ((ok g)
+            (match (classify arena (. g triples) (list-new arena IRI) cfg)
+              ((ok o) (ok (. o profile)))
+              ((error f)
+                (match f
+                  ((unavailable p) (error p))
+                  ((refused _)     (error 'profile-el-plus-plus))
+                  ((cancelled)     (error 'profile-el-plus-plus))
+                  ((input-error _) (error 'profile-el-plus-plus))))))))))
+
+  (fn ran-as ((r (Result Profile Profile)) (want Profile))
+    (@intent "Whether a profile-run ran, under want")
+    (@spec (((Result Profile Profile) Profile) -> Bool))
+    (@pure)
+    (match r ((ok p) (== p want)) ((error _) false)))
+
+  (fn refused-as ((r (Result Profile Profile)) (want Profile))
+    (@intent "Whether a profile-run was refused as unavailable, naming want")
+    (@spec (((Result Profile Profile) Profile) -> Bool))
+    (@pure)
+    (match r ((ok _) false) ((error p) (== p want))))
+
+  (fn test-profile-selection ((arena Arena))
+    (@intent "§5.1: the default and auto run el; el runs el; every unbuilt rung is refused, by name")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The refusal is the point: a library that ran `el` for an explicit
+    ;; `sriq` would classify a smaller theory than asked for and report it
+    ;; as complete under the wrong name.
+    (and (ran-as (profile-run arena (. (default-config) selection)) 'profile-el)
+         (ran-as (profile-run arena (union-new ProfileSelection auto)) 'profile-el)
+         (ran-as (profile-run arena (union-new ProfileSelection explicit 'profile-el)) 'profile-el)
+         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-el-plus-plus))
+                     'profile-el-plus-plus)
+         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-horn-sriq))
+                     'profile-horn-sriq)
+         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-sriq))
+                     'profile-sriq)))
+
+  (fn test-profile-names-round-trip ((arena Arena))
+    (@intent "Every rung's name parses back to the rung, and nothing else parses")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (name-round-trips 'profile-el) (name-round-trips 'profile-el-plus-plus)
+         (name-round-trips 'profile-horn-sriq) (name-round-trips 'profile-sriq)
+         (match (parse-profile "auto") ((some _) false) ((none) true))
+         (match (parse-profile "EL") ((some _) false) ((none) true))
+         (match (parse-profile "sroiq") ((some _) false) ((none) true))))
+
+  (fn name-round-trips ((p Profile))
+    (@intent "Whether p's name parses back to p")
+    (@spec ((Profile) -> Bool))
+    (@pure)
+    (match (parse-profile (profile-name p)) ((some q) (== q p)) ((none) false)))
 
   (fn test-strict-refuses-past-omissions ((arena Arena))
     (@intent "§10 item 12: strict yields refused carrying the omissions, and only when there are some")
@@ -3703,6 +3775,14 @@
 
           (let ((r (test-strict-refuses-past-omissions arena)))
             (print-test-result "§10.12: strict refuses with omissions, and only then" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-profile-selection arena)))
+            (print-test-result "§5.1: default and auto run el; unbuilt rungs are refused by name" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-profile-names-round-trip arena)))
+            (print-test-result "§5.1: rung names round-trip" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

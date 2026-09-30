@@ -198,9 +198,9 @@ example:
 # 2 is deliberately NOT a pass.
 acceptance: cli
 	@rc=0; fail=0; \
-	check() { ./$(BIN)/howl validate $$1 >/dev/null 2>&1; rc=$$?; \
-	          if [ "$$rc" -eq "$$2" ]; then echo "  ok   $$1 -> $$rc"; \
-	          else echo "  FAIL $$1 -> $$rc (expected $$2)"; fail=1; fi; }; \
+	check() { f=$$1; want=$$2; shift 2; ./$(BIN)/howl validate $$f "$$@" >/dev/null 2>&1; rc=$$?; \
+	          if [ "$$rc" -eq "$$want" ]; then echo "  ok   $$f $$* -> $$rc"; \
+	          else echo "  FAIL $$f $$* -> $$rc (expected $$want)"; fail=1; fi; }; \
 	check corpus/fixtures/v0/litmus.ttl 0; \
 	check corpus/fixtures/hazards/unattested-import.ttl 2; \
 	check corpus/fixtures/hazards/abox-disjoint-range.ttl 1; \
@@ -234,6 +234,13 @@ acceptance: cli
 	check corpus/fixtures/hazards/abox-complex-assertion.ttl 1; \
 	check corpus/fixtures/out-of-profile/inverse-expressions.ttl 2; \
 	check corpus/fixtures/out-of-profile/disjoint-arity.ttl 2; \
+	check corpus/fixtures/v0/litmus.ttl 0 --profile el; \
+	check corpus/fixtures/v0/litmus.ttl 0 --profile auto; \
+	check corpus/fixtures/out-of-profile/union.ttl 2 --profile el; \
+	check corpus/fixtures/v0/litmus.ttl 3 --profile el++; \
+	check corpus/fixtures/v0/litmus.ttl 3 --profile horn-sriq; \
+	check corpus/fixtures/v0/litmus.ttl 3 --profile sriq; \
+	check corpus/fixtures/v0/litmus.ttl 3 --profile sroiq; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi
 
@@ -314,7 +321,7 @@ golden: cli
 	  g=corpus/goldens/fixtures/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
 	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \
 	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
-	  case "$$out" in "howl-report 1"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
+	  case "$$out" in "howl-report 2"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
 	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL $$f differs from $$g"; fail=1; fi; \
 	done; \
 	for pair in $(GOLDEN_IMPORTS); do \
@@ -327,7 +334,7 @@ golden: cli
 	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/$$c.sha256; \
 	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
 	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
-	  case "$$out" in "howl-report 1"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
+	  case "$$out" in "howl-report 2"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
 	  h=$$(printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1); \
 	  if [ "$$h" = "$$(cat $$g)" ]; then echo "  ok   $$c"; else echo "  FAIL $$c report hash $$h"; fail=1; fi; \
 	done; \
@@ -339,21 +346,21 @@ golden-update: cli
 	for f in $(GOLDEN_FIXTURES); do \
 	  g=corpus/goldens/fixtures/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
 	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
-	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > $$g;; \
+	  case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > $$g;; \
 	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
 	done; \
 	mkdir -p corpus/goldens/imports; \
 	for pair in $(GOLDEN_IMPORTS); do \
 	  d=$${pair%%:*}; i=$${pair#*:}; \
 	  out=$$({ $(HOWL) validate corpus/fixtures/imports/$$d.ttl -I corpus/fixtures/imports/$$i.ttl --report 2>/dev/null; echo "exit $$?"; }); \
-	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > corpus/goldens/imports/$$d.report;; \
+	  case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > corpus/goldens/imports/$$d.report;; \
 	    *) echo "  NOT A REPORT imports $$d -- golden not written"; fail=1;; esac; \
 	done; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; \
 	  if [ ! -f "$$f" ]; then echo "  skip $$c (no $$f)"; continue; fi; \
 	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
-	  case "$$out" in "howl-report 1"*) \
+	  case "$$out" in "howl-report 2"*) \
 	    printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1 > corpus/goldens/$$c.sha256; \
 	    echo "  -> corpus/goldens/$$c.sha256";; \
 	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
