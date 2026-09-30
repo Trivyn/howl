@@ -302,8 +302,11 @@
     ;; function ever grows a `set-put`/`map-put`/`list-push` against
     ;; anything reachable from `sat`, the freeze is broken and the
     ;; determinism guarantee goes with it.
-    (for-each (n (. sat active))
-      (join-context arena sat idx delta n)))
+    (let ((ra (arena-new 1048576)))
+      (do
+        (for-each (n (. sat active))
+          (join-context arena ra sat idx delta n))
+        (arena-free ra))))
 
   (fn round-join-part ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta)
                        (part (List Node)))
@@ -317,15 +320,32 @@
     ;; else it reads — the store, the queues, the premise index — is frozen
     ;; for the whole round. Returns an Int because a spawned function is
     ;; called through `int64_t(*)(void*)`.
-    (do
-      (for-each (n part)
-        (join-context arena sat idx delta n))
-      0))
+    (let ((ra (arena-new 1048576)))
+      (do
+        (for-each (n part)
+          (join-context arena ra sat idx delta n))
+        (arena-free ra)
+        0)))
 
-  (fn join-context ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (n Node))
+  (fn reuse-arena ((a Arena))
+    (@intent "Empty an arena for reuse: its first block stays, any chained blocks are freed")
+    (@spec ((Arena) -> Unit))
+    ;; slop has `arena-new` and `arena-free` but no reset; the runtime's
+    ;; `slop_arena_reset` is it. `a` is the C parameter name.
+    (c-inline "slop_arena_reset(a);"))
+
+  (fn join-context ((arena Arena) (ra Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (n Node))
     (@intent "Join one context's Δₙ against the frozen Sₙ")
-    (@spec ((Arena Saturation RuleIndex RoundDelta Node) -> Unit))
+    (@spec ((Arena Arena Saturation RuleIndex RoundDelta Node) -> Unit))
     (@alloc arena)
+    ;; THE RULES' RESULT LISTS LIVE ONE CONTEXT. They are dead once
+    ;; admitted - `admit` copies each conclusion into the delta, in `arena` -
+    ;; but grown in the round's arena they stayed to the barrier: most of a
+    ;; round's scratch, ~300 MB in GO's busiest round, and at W = 4 a peak
+    ;; that moved with how the workers' joins overlapped. So the rules build
+    ;; them in `ra`, the worker's rule arena, emptied once this context is
+    ;; done. One arena per worker, reset rather than made per context: a
+    ;; fresh arena per context cost GO a quarter of its reasoning time.
     (match (context-of sat n)
         ((some ctx)
           (match (queue-of sat n)
@@ -338,9 +358,11 @@
               ;; dispatcher would emit |axioms| copies of every
               ;; ⊥-propagation. The dispatcher owns that distinction,
               ;; and the index is read-only for the whole run.
-              (for-each (d (. q items))
-                (for-each (m (apply-el-rules arena ctx d idx))
-                  (admit arena sat delta m))))
+              (do
+                (for-each (d (. q items))
+                  (for-each (m (apply-el-rules ra ctx d idx))
+                    (admit arena sat delta m)))
+                (reuse-arena ra)))
             ((none) (do))))
         ((none) (do))))
 
@@ -685,10 +707,11 @@
     ;; check, so that invariant is reported unknown rather than trusted.)
     (@post {(. (. $result saturation) iteration) == ((. sat iteration) + 1)})
     ;;
-    ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. Every
-    ;; rule call builds a result list and the round's delta is a map of
-    ;; contexts; none of it is needed once the round commits. So the join
-    ;; and its RoundDeltas allocate in `scratch` (or a worker's arena). The
+    ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. The
+    ;; round's delta is a map of contexts, not needed once the round
+    ;; commits, so the join and its RoundDeltas allocate in `scratch` (or a
+    ;; worker's arena). Each rule call's result list is shorter-lived still:
+    ;; `join-context` empties it with its context. The
     ;; commit writes the store in the run arena and the commit arenas
     ;; `cas`, and the next round's queues and frontier in this round's
     ;; generation arenas, which the caller frees a round later.

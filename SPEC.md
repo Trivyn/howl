@@ -2975,8 +2975,8 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: met.** EL-GALEN is at 3.2× and GO at 0.9× (`bench/results.txt`; ELK's time varies
-  >   more between benches than HOWL's, and the previous bench put them at 2.6× and 0.8×). With decode still
+  > - **Status: met.** EL-GALEN is at 3.1× and GO at 0.8× (`bench/results.txt`; ELK's time varies
+  >   more between benches than HOWL's). With decode still
   >   inside the window they were 6.1× and 5.05× after slice 6b and slop's map and lazy-collection
   >   work (slop-lang/slop#205, #217), down from 30.1× and 19.2× at S6a. Slice 6b's changes: each
   >   rule join done once from its cheaper side, HOWL's own triple store, a parallel round barrier,

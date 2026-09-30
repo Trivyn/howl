@@ -68,14 +68,14 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.44 s (reasoning 0.34 s), 0.8 GB peak | 0.46 s | 0.49 s | 0.9× | **passes** 5× |
-| EL-GALEN | ELK 0.6.0 | 0.89 s (reasoning 0.72 s), 0.6 GB peak | 0.07 s | 0.28 s | 3.2× | **passes** 5× |
-| OBI 2026-07-27 | HermiT | 0.06 s | 0.03 s | 0.52 s | 0.1× | reported |
-| RO 2025-12-17 | HermiT | 0.02 s | 0.003 s | 0.18 s | 0.1× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 0.38 s (reasoning 0.28 s), 0.57 GB peak | 0.44 s | 0.49 s | 0.8× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 0.82 s (reasoning 0.66 s), 0.59 GB peak | 0.07 s | 0.27 s | 3.1× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.05 s | 0.03 s | 0.49 s | 0.1× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.17 s | 0.1× | reported |
 
-ELK's time moves more between benches than HOWL's does: the bench before this one had ELK at 0.58 s
-(GO) and 0.35 s (EL-GALEN), which put HOWL at 0.8× and 2.6×; this one, like earlier ones, has 0.49 s
-and 0.28 s. Each run-to-run range is recorded in `bench/results.txt`.
+ELK's time moves more between benches than HOWL's does: one earlier bench had ELK at 0.58 s (GO) and
+0.35 s (EL-GALEN); this one, like most, has 0.49 s and 0.27 s. Each run-to-run range is recorded in
+`bench/results.txt`.
 
 M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
 side of their join, and role inclusions are matched through the told role closure rather than
@@ -95,9 +95,9 @@ what they actually need:
 
 | Entry | HOWL | Oracle, default heap | Oracle, smallest heap |
 |---|---|---|---|
-| GO | 0.6–0.8 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
-| EL-GALEN | 0.63 GB | ELK 1.9 GB | ELK 0.43 GB |
-| OBI | 0.13 GB | HermiT 1.4 GB | HermiT 0.24 GB |
+| GO | 0.57 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
+| EL-GALEN | 0.59 GB | ELK 1.9 GB | ELK 0.43 GB |
+| OBI | 0.10 GB | HermiT 1.4 GB | HermiT 0.24 GB |
 | RO | 13 MB | HermiT 0.36 GB | HermiT 0.23 GB |
 
 HOWL was 7.9 GB on GO before its memory work. It now parses each document straight into an encoded
@@ -109,10 +109,12 @@ returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks reside
 streaming parser now holds one statement's memory at a time rather than the whole document's
 (slop-rdf #8; GO's parse 0.85 → 0.47 GB, EL-GALEN's 0.54 → 0.06 GB, OBI 0.24 → 0.14 GB). And the
 decoded axioms are copied out of the encoded input, which is freed before the gate runs rather than
-held through it (GO 0.91 → 0.6–0.8 GB). Each phase has its own high-water mark, since the one before
-it is freed: GO and OBI peak in reasoning, EL-GALEN in writing the report, RO in `prepare`. GO's
-figure is a RANGE because its reasoning peak depends on how the 4 workers' rounds overlap: 0.61 to
-0.82 GB across runs, and a steady 0.59 GB at W = 1. The report is the same either way.
+held through it (GO 0.91 → 0.6–0.8 GB). Last, each rule call's result list lives only while its
+context is joined, in a per-worker arena emptied after each context, rather than to the end of the
+round: that was most of a round's memory, ~300 MB in GO's busiest, and with 4 workers a peak that
+moved from run to run with how their joins overlapped (GO 0.6–0.8 GB → a steady 0.57 GB, and
+reasoning 14% faster). Each phase has its own high-water mark, since the one before it is freed: GO
+peaks in decode, EL-GALEN in writing the report, OBI and RO in `prepare`.
 Returning memory has a small time cost: later rounds touch fresh pages rather than reusing dirty ones.
 
 | Milestone | Scope | State |

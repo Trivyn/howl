@@ -13,7 +13,8 @@ void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_Round
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
 void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta);
 int64_t saturate_round_join_part(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, slop_list_types_Node part);
-void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
+void saturate_reuse_arena(slop_arena* a);
+void saturate_join_context(slop_arena* arena, slop_arena* ra, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
 saturate_Bucket saturate_bucketed(slop_arena* arena, slop_option_saturate_Bucket found, saturate_Touched e);
 int64_t saturate_partition_one(slop_arena* arena, slop_arena* run, types_Saturation sat, saturate_Partition part, types_Node x, types_Context dc, int64_t turn, int64_t w);
@@ -174,28 +175,40 @@ void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta
 
 void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta) {
     {
-        slop_map* _coll = (slop_map*)sat.active;
-        for (size_t _i = 0; _i < _coll->len; _i++) {
-            {
-                types_Node n = *(types_Node*)slop_map_key_at(_coll, _i);
-                saturate_join_context(arena, sat, idx, delta, n);
+        __auto_type ra = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; });
+        {
+            slop_map* _coll = (slop_map*)sat.active;
+            for (size_t _i = 0; _i < _coll->len; _i++) {
+                {
+                    types_Node n = *(types_Node*)slop_map_key_at(_coll, _i);
+                    saturate_join_context(arena, ra, sat, idx, delta, n);
+                }
             }
         }
+        ({ slop_arena_free(ra); free(ra); });
     }
 }
 
 int64_t saturate_round_join_part(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, slop_list_types_Node part) {
     {
-        __auto_type _coll = part;
-        for (size_t _i = 0; _i < _coll.len; _i++) {
-            __auto_type n = _coll.data[_i];
-            saturate_join_context(arena, sat, idx, delta, n);
+        __auto_type ra = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; });
+        {
+            __auto_type _coll = part;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type n = _coll.data[_i];
+                saturate_join_context(arena, ra, sat, idx, delta, n);
+            }
         }
+        ({ slop_arena_free(ra); free(ra); });
+        return 0;
     }
-    return 0;
 }
 
-void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n) {
+void saturate_reuse_arena(slop_arena* a) {
+    slop_arena_reset(a);;
+}
+
+void saturate_join_context(slop_arena* arena, slop_arena* ra, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n) {
     __auto_type _mv_325 = saturate_context_of(sat, n);
     if (_mv_325.has_value) {
         __auto_type ctx = _mv_325.value;
@@ -207,7 +220,7 @@ void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_Rule
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type d = _coll.data[_i];
                     {
-                        __auto_type _coll = el_apply_el_rules(arena, ctx, d, idx);
+                        __auto_type _coll = el_apply_el_rules(ra, ctx, d, idx);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type m = _coll.data[_i];
                             saturate_admit(arena, sat, delta, m);
@@ -215,6 +228,7 @@ void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_Rule
                     }
                 }
             }
+            saturate_reuse_arena(ra);
         } else if (!_mv_326.has_value) {
         }
     } else if (!_mv_325.has_value) {

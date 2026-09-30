@@ -228,7 +228,8 @@ void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_Round
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
 void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta);
 int64_t saturate_round_join_part(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, slop_list_types_Node part);
-void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
+void saturate_reuse_arena(slop_arena* a);
+void saturate_join_context(slop_arena* arena, slop_arena* ra, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
 saturate_Bucket saturate_bucketed(slop_arena* arena, slop_option_saturate_Bucket found, saturate_Touched e);
 int64_t saturate_partition_one(slop_arena* arena, slop_arena* run, types_Saturation sat, saturate_Partition part, types_Node x, types_Context dc, int64_t turn, int64_t w);
