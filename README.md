@@ -8,7 +8,7 @@ including the defined-class subsumptions that RL materialization cannot see. The
 RDF: HOWL classifies → emits inferred `subClassOf` → GROWL materializes/enriches.
 
 - **GR-OWL / H-OWL** — the RL engine and the DL engine. "HOWL = **Horn OWL**" is apt: the first two
-  targets (CB-EL, Horn-SHIQ) are Horn fragments.
+  targets (CB-EL, Horn-SRIQ) are Horn fragments.
 - **Design:** [`SPEC.md`](./SPEC.md) — approved 2026-08-17.
 
 ## Status: Turtle in, classified out
@@ -33,6 +33,13 @@ howl: refused (--strict), no report — 1 omitted
   omitted: SubClassOf(http://example.org/t#C ObjectUnionOf(http://example.org/t#A http://example.org/t#B))
                                                                   # exit 2
 ```
+
+**Profiles.** `--profile` selects the calculus, one rung per named logic
+([SPEC §5](./SPEC.md#5-fragment-roadmap)): `el` (ELH⊥R+ with domain/range and an ABox — built, and
+the default on every surface), `el++` (the OWL 2 EL object fragment), `horn-sriq` (Horn-SRIQ) and
+`sriq` (the SRIQ object fragment), or `auto` for the cheapest built rung that contains the whole
+ontology. A rung that is not built yet exits 3; it is never quietly run as `el`. The report's second
+line names the profile that ran. The Rust crate exposes the same choice as `Config::selection`.
 
 `classify` no longer refuses. It still returns a `Fault` rather than a report when the front end
 cannot decode the input, and that is the safety-relevant choice: a `Fault` has no verdict to
@@ -68,13 +75,13 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.38 s (reasoning 0.28 s), 0.57 GB peak | 0.44 s | 0.49 s | 0.8× | **passes** 5× |
-| EL-GALEN | ELK 0.6.0 | 0.82 s (reasoning 0.66 s), 0.59 GB peak | 0.07 s | 0.27 s | 3.1× | **passes** 5× |
-| OBI 2026-07-27 | HermiT | 0.05 s | 0.03 s | 0.49 s | 0.1× | reported |
-| RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.17 s | 0.1× | reported |
+| GO 2026-07-26 | ELK 0.6.0 | 0.40 s (reasoning 0.29 s), 0.57 GB peak | 0.46 s | 0.47 s | 0.85× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 0.84 s (reasoning 0.68 s), 0.59 GB peak | 0.08 s | 0.28 s | 3.0× | **passes** 5× |
+| OBI 2026-07-27 | HermiT | 0.05 s | 0.03 s | 0.51 s | 0.1× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.16 s | 0.1× | reported |
 
 ELK's time moves more between benches than HOWL's does: one earlier bench had ELK at 0.58 s (GO) and
-0.35 s (EL-GALEN); this one, like most, has 0.49 s and 0.27 s. Each run-to-run range is recorded in
+0.35 s (EL-GALEN); this one, like most, has 0.47 s and 0.28 s. Each run-to-run range is recorded in
 `bench/results.txt`.
 
 M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
@@ -120,7 +127,7 @@ Returning memory has a small time cost: later rounds touch fresh pages rather th
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | **done** — rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.8× and EL-GALEN 3.1× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`); the ABox reduction is proved sound and complete ([SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)) and checked against HermiT over 400 generated ontologies (`make abox-fuzz`) |
+| M1 | CR1–CR7, driver, verdict discipline | **done** — rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.85× and EL-GALEN 3.0× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`); the ABox reduction is proved sound and complete ([SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)) and checked against HermiT over 400 generated ontologies (`make abox-fuzz`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -172,24 +179,26 @@ document using it reports *inconclusive*, never *coherent*. **non-goal** — exc
 | `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
 
 † Sound and complete by the argument in [SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)
-(M1 (f), reviewed 2026-09-30): a reduction to the published EL++ results with nominals and range
-restrictions, plus the steps specific to HOWL's direct-edge encoding. `make abox-fuzz` checks the code
-against it: 400 generated ontologies with ABoxes, every one matching HermiT.
+(M1 (f), reviewed 2026-09-30): a reduction to the published EL++ calculus on a nominal-free CBox and
+its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument
+(the published completeness for nominals fails, KKS12), plus the steps specific to HOWL's direct-edge
+encoding. `make abox-fuzz` checks the code against it: 400 generated ontologies with ABoxes, every one matching HermiT.
 
 **14 of 23 rows done.** Every open EL++ row traces to one of three things: **nominals** (four rows),
 **reflexive roles** (one), and **concrete domains** (the non-goal). OWL 2 EL adds three more:
-`ObjectHasSelf`, the built-in properties, and `HasKey`. None of the open rows has a milestone yet —
-[§12](./SPEC.md#12-milestones--acceptance-criteria) goes from v0 to Horn-SHIQ, which is incomparable
-with EL++ rather than a step toward it.
+`ObjectHasSelf`, the built-in properties, and `HasKey`. They close with the
+`el++` profile, which is planned but not scheduled ([§5](./SPEC.md#5-fragment-roadmap)); the next
+milestone is `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)), which contains v0 but
+not EL++'s nominals.
 
 **Off the path entirely.** These are outside OWL 2 EL, so no progress toward EL++ reaches them; they
 are recognized and enumerated like every open row above.
 
 | Construct | Where it lives |
 |---|---|
-| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — v2 (SROIQ) |
-| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — v1 (Horn-SHIQ) |
-| `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL |
+| `ObjectUnionOf`, `ObjectComplementOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — `sriq` (v2); several-member `ObjectOneOf` needs nominals, which no rung plans |
+| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — `horn-sriq` (v1) |
+| `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL — `horn-sriq` (v1) |
 | Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |
 | SWRL rules | **never**, at any rung — unrestricted SWRL is undecidable, and it is in neither OWL 2 DL nor OWL 2 EL |
 
@@ -297,11 +306,13 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **38 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **39 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
-on, is proved. Among the verified, the five loop-free completion
+on, is proved. The profile seam's contracts are among the verified: `select-profile` resolves an
+explicit request to exactly itself, `profile-implemented` admits only `el`, and `default-config`
+selects `el`; each was seen to fail under a mutation. Among the verified, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
 (nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of
 its rule's body. `make example` runs **15 executable examples**: 6 per rule, 7 on the canonical sort, and

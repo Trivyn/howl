@@ -130,7 +130,7 @@ def howl_report(ttl, out_dir):
     """
     import census
     p = subprocess.run([HOWL, "validate", ttl, "--report"], capture_output=True, text=True)
-    if not p.stdout.startswith("howl-report 1\n"):
+    if not p.stdout.startswith("howl-report 2\n"):
         raise HarnessError(f"howl gave no report for {ttl} (exit {p.returncode}): {p.stderr.strip()}")
     path = os.path.join(out_dir, os.path.splitext(os.path.basename(ttl))[0] + ".report")
     with open(path, "w", encoding="utf-8") as fh:

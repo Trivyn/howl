@@ -1,36 +1,36 @@
 ;; ============================================================
 ;; Profile selection and calculus dispatch  —  SPEC.md §5.1
 ;;
-;; ⚠  M0, NOT YET IMPLEMENTED.
+;; THE LADDER. One rung per named logic, each complete for exactly
+;; that logic and never registered under a wider label:
+;;   el          ELH⊥R+ + domain/range + ABox (§5.2)    PTIME     implemented
+;;   el++        the OWL 2 EL object fragment            PTIME
+;;   horn-sriq   Horn-SRIQ                               ExpTime
+;;   sriq        the SRIQ object fragment (non-Horn)     2ExpTime
+;; el ⊂ horn-sriq ⊂ sriq, and el ⊂ el++; el++ is incomparable with the
+;; two above it (nominals). The declaration order of `Profile` is the
+;; fixed tie-break order.
 ;;
-;; The rungs differ only in their CALCULUS — the rule set plus its
-;; normal form and saturation-state variant — while sharing the front
-;; end, the fixpoint driver, and the output stage. A profile is
-;; therefore a pluggable component behind a stable interface, and the
-;; seam is built in v0 even with only `profile-el` behind it: a
-;; dispatch point left in place is far cheaper than one retrofitted.
+;; THE DEFAULT IS `explicit el`, not `auto` (types.slop,
+;; default-config): a default run keeps one cost class and one theory
+;; across upgrades. `auto` is an opt-in.
 ;;
-;; SELECTION IS WHOLE-ONTOLOGY MEMBERSHIP IN A SINGLE IMPLEMENTED
-;; PROFILE — NEVER A UNION. Pick the cheapest implemented profile that
+;; AN EXPLICIT REQUEST IS HONOURED EXACTLY OR REFUSED. A request for a
+;; rung that is not built yet is `Fault::unavailable`, never quietly
+;; run as `el`: that would classify a strictly smaller theory than the
+;; caller asked for and report it under the wrong name.
+;;
+;; `auto` IS WHOLE-ONTOLOGY MEMBERSHIP IN A SINGLE IMPLEMENTED PROFILE
+;; — NEVER A UNION. Pick the cheapest implemented profile that
 ;; contains EVERY construct in the ontology. If none does, the run is
 ;; partial, and WHICH profile it runs under is fixed by rule rather
-;; than left open: choose the one leaving the fewest logical axioms
-;; omitted, breaking ties by the fixed order el < horn-shiq < sroiq.
-;; Without that rule two conforming implementations classify different
-;; sub-theories of the same input and return different findings — both
-;; sound, neither reproducible, and §6.8 violated ACROSS
-;; IMPLEMENTATIONS rather than across runs.
-;;
-;; This matters because EL++ and Horn-SHIQ are INCOMPARABLE: an
-;; ontology with both a role chain (v0, not v1) and an inverse (v1,
-;; not v0) is inside neither, and "escalate when constructs span
-;; fragments" would have an implementation pick one and silently drop
-;; the other's constructs. Calling that escalation is wrong until a
-;; rung actually CONTAINS the mixed language — which is v2's job.
-;;
-;; IN A v0-ONLY BUILD there is no rung to escalate to: an ontology
-;; outside §5.2 has nothing above it, and the run is inconclusive —
-;; never "coherent".
+;; than left open: the one leaving the fewest logical axioms omitted,
+;; ties broken by the declaration order. Without that rule two
+;; conforming implementations classify different sub-theories of the
+;; same input and return different findings — both sound, neither
+;; reproducible, and §6.8 violated ACROSS IMPLEMENTATIONS rather than
+;; across runs. With only `el` implemented, `auto` resolves to `el`;
+;; the membership test lands with the second rung.
 ;;
 ;; THE GATE TESTS MEMBERSHIP IN HOWL'S IMPLEMENTED LANGUAGE, NOT IN
 ;; OWL 2 EL. The two are not the same set, and testing the wrong one is
@@ -45,32 +45,61 @@
 ;; ============================================================
 
 (module select
-  (@doc "Syntactic profile detection and calculus dispatch (M0)")
+  (@doc "Profile selection: the ladder's names, resolution, and what is implemented")
 
-  (import types (Profile ProfileSelection Omission ReasonerConfig))
+  (import types (Profile ProfileSelection))
 
   (export
-    select-profile)
+    select-profile
+    profile-implemented
+    profile-name
+    parse-profile)
 
-  (fn select-profile ((arena Arena) (selection ProfileSelection))
-    (@intent "Resolve a ProfileSelection to the calculus that will run")
-    (@spec ((Arena ProfileSelection) -> Profile))
-    (@alloc arena)
-    ;; An EXPLICIT request is honoured exactly; `auto` resolves to the
-    ;; cheapest implemented calculus, which in a v0-only build is the
-    ;; only one. Pinned as a contract because the failure mode is
-    ;; silent: a selector that quietly downgraded an explicit
-    ;; `horn-shiq` request to `el` would classify a strictly smaller
-    ;; theory than the caller asked for and report it as complete.
+  (fn select-profile ((selection ProfileSelection))
+    (@intent "Resolve a ProfileSelection to the calculus it asks for")
+    (@spec ((ProfileSelection) -> Profile))
+    (@pure)
+    ;; An EXPLICIT request resolves to exactly itself; whether it can
+    ;; run is `profile-implemented`'s question, asked separately so a
+    ;; refusal names what was asked for. `auto` resolves to the cheapest
+    ;; implemented calculus, which today is the only one.
     (@post (match selection
              ((auto)       {$result == 'profile-el})
              ((explicit p) {$result == p})))
-    ;; v0 has exactly one calculus wired in, so `auto` and any explicit
-    ;; request both land on profile-el. The DISPATCH POINT is what
-    ;; matters here, not the branching: when v1 lands, auto-selection
-    ;; must start returning profile-horn-shiq for ontologies using
-    ;; inverses or qualified number restrictions rather than reporting
-    ;; inconclusive, and that change belongs in this function alone.
     (match selection
       ((auto)       'profile-el)
-      ((explicit p) p))))
+      ((explicit p) p)))
+
+  (fn profile-implemented ((p Profile))
+    (@intent "Whether a calculus for this rung is built")
+    (@spec ((Profile) -> Bool))
+    (@pure)
+    ;; Pinned so that wiring a rung in is a deliberate, visible edit:
+    ;; the postcondition and the match change together.
+    (@post {$result == (p == 'profile-el)})
+    (match p
+      ('profile-el           true)
+      ('profile-el-plus-plus false)
+      ('profile-horn-sriq    false)
+      ('profile-sriq         false)))
+
+  (fn profile-name ((p Profile))
+    (@intent "A rung's name, as the CLI flag and the report spell it")
+    (@spec ((Profile) -> String))
+    (@pure)
+    (match p
+      ('profile-el           "el")
+      ('profile-el-plus-plus "el++")
+      ('profile-horn-sriq    "horn-sriq")
+      ('profile-sriq         "sriq")))
+
+  (fn parse-profile ((s String))
+    (@intent "The rung a name denotes, the inverse of profile-name")
+    (@spec ((String) -> (Option Profile)))
+    (@pure)
+    (cond
+      ((string-eq s "el")        (some 'profile-el))
+      ((string-eq s "el++")      (some 'profile-el-plus-plus))
+      ((string-eq s "horn-sriq") (some 'profile-horn-sriq))
+      ((string-eq s "sriq")      (some 'profile-sriq))
+      (else                      none))))

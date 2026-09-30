@@ -90,7 +90,7 @@ def run_howl(files):
     reports = {}
     for f in files:
         p = subprocess.run([HOWL, "validate", f, "--report"], capture_output=True, text=True)
-        if not p.stdout.startswith("howl-report 1\n"):
+        if not p.stdout.startswith("howl-report 2\n"):
             raise HarnessError(f"howl gave no report for {rel(f)} (exit {p.returncode}): {p.stderr.strip()}")
         path = os.path.join(out, name_of(f) + ".report")
         with open(path, "w", encoding="utf-8") as fh:

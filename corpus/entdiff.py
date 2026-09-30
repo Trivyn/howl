@@ -75,7 +75,7 @@ def parse(path):
     if not lines:
         raise Refused(f"{path}: empty")
     head = lines[0]
-    if head == "howl-report 1":
+    if head == "howl-report 2":
         kind = "howl"
     elif head == "oracle-report 1":
         kind = "oracle"
@@ -90,7 +90,7 @@ def parse(path):
         key, _, rest = line.partition(" ")
         tally[key] += 1
         if key in ("inconsistent", "termination", "omitted", "unsatisfiable", "subsumptions",
-                   "verdict", "exit"):
+                   "verdict", "exit", "profile"):
             if key in single:
                 raise Refused(f"{path}:{n}: a second {key} line")
             single[key] = rest
@@ -111,7 +111,7 @@ def parse(path):
             pass  # checked below, against the lines they count
         elif key in ("verdict", "exit"):
             pass  # checked below, against the facts they summarize
-        elif key in ("rounds", "omission", "reasoner"):
+        elif key in ("rounds", "omission", "reasoner", "profile"):
             meta.append(line)
         else:
             raise Refused(f"{path}:{n}: unknown line key {key!r}")
@@ -127,6 +127,10 @@ def parse(path):
                 raise Refused(f"{path}: no {count_key} line")
             if single[count_key] != str(tally[item_key]):
                 raise Refused(f"{path}: {count_key} {single[count_key]} but {tally[item_key]} {item_key} line(s)")
+        # A version-2 report states the calculus that ran (SPEC §5.1): its
+        # findings are complete for that rung's logic and no other.
+        if single.get("profile") not in ("el", "el++", "horn-sriq", "sriq"):
+            raise Refused(f"{path}: profile {single.get('profile')!r}")
         termination = single.get("termination")
         if termination not in ("fixpoint", "resource-limit"):
             raise Refused(f"{path}: termination {termination!r}")

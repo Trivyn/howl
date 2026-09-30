@@ -43,8 +43,9 @@ typedef enum {
 
 typedef enum {
     types_Profile_profile_el,
-    types_Profile_profile_horn_shiq,
-    types_Profile_profile_sroiq
+    types_Profile_profile_el_plus_plus,
+    types_Profile_profile_horn_sriq,
+    types_Profile_profile_sriq
 } types_Profile;
 
 #ifndef SLOP_OPTION_MAP_PTR_DEFINED
@@ -406,7 +407,8 @@ SLOP_OPTION_DEFINE(types_Findings, slop_option_types_Findings)
 typedef enum {
     types_Fault_cancelled,
     types_Fault_input_error,
-    types_Fault_refused
+    types_Fault_refused,
+    types_Fault_unavailable
 } types_Fault_tag;
 
 struct types_Fault {
@@ -414,6 +416,7 @@ struct types_Fault {
     union {
         slop_string input_error;
         slop_list_types_Omission refused;
+        types_Profile unavailable;
     } data;
 };
 typedef struct types_Fault types_Fault;
@@ -471,6 +474,7 @@ SLOP_OPTION_DEFINE(types_Names, slop_option_types_Names)
 #endif
 
 struct types_Outcome {
+    types_Profile profile;
     types_Coverage coverage;
     types_Termination termination;
     types_Findings findings;

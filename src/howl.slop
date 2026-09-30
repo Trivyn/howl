@@ -23,7 +23,7 @@
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded))
-  (import select (select-profile))
+  (import select (select-profile profile-implemented))
   (import saturate (RoundResult saturate))
   (import classify (extract-findings entails-sub))
   (import premise (RuleIndex build-rule-index))
@@ -196,6 +196,7 @@
   ;; `decode_ms` (triples to axioms) is outside it, as the OWL API's
   ;; RDF-to-axiom mapping is outside ELK's, and is reported beside it.
   (type Prepared (record
+    (profile    Profile)      ; resolved from the selection before the gate ran
     (axioms     (List NormAxiom))
     (index      RuleIndex)
     (saturation Saturation)
@@ -244,7 +245,7 @@
         res)))
 
   (fn prepare-decoded ((arena Arena) (d Decoded) (config ReasonerConfig))
-    (@intent "The front end's second half: gate, normalize, initialize, index — and --strict's refusal")
+    (@intent "The front end's second half: resolve the profile, gate, normalize, initialize, index")
     (@spec ((Arena Decoded ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
     ;; WHY THE PIPELINE STILL REFUSES ON A FRONT-END FAULT.
@@ -255,6 +256,22 @@
     ;; `coherent` — sound, catastrophically incomplete, and
     ;; indistinguishable from success at every interface. (A decode
     ;; fault never gets here: `decode` returns it.)
+    ;;
+    ;; THE PROFILE IS RESOLVED FIRST (§5.1). An explicit request for a
+    ;; rung that is not built is refused as `unavailable` before any
+    ;; work: running `el` in its place would classify a smaller theory
+    ;; than was asked for and report it under the wrong name.
+    (let ((profile (select-profile (. config selection))))
+      (if (not (profile-implemented profile))
+        (error (union-new Fault unavailable profile))
+        (prepare-in-profile arena d config profile))))
+
+  (fn prepare-in-profile ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
+    (@intent "prepare-decoded once the profile is resolved and implemented")
+    (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; Only `el` reaches here today (profile-implemented), so the gate,
+    ;; normalizer and rules below are §5.2's. A second rung dispatches here.
     ;;
     ;; --strict REFUSES AFTER THE GATE, BEFORE SATURATION. The omissions
     ;; are exactly what the caller asked not to run past, so `refused`
@@ -271,6 +288,7 @@
                             (> (list-len (. (. nr coverage) omitted)) 0))
                      (error (union-new Fault refused (. (. nr coverage) omitted)))
                      (ok (record-new Prepared
+                           (profile    profile)
                            (axioms     (. nr axioms))
                            (index      (build-rule-index arena (. nr axioms)))
                            (saturation (. nr saturation))
@@ -311,6 +329,7 @@
       ((error f) (error f))
       ((ok rr)
         (ok (record-new Outcome
+              (profile     (. p profile))
               (coverage    (. p coverage))
               (termination (. rr termination))
               (findings    (extract-findings arena (. rr saturation) (. p names)))

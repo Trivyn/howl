@@ -79,7 +79,7 @@
     ;; even though `memcmp` itself is uninterpreted to the WP checker —
     ;; which is the honest division of labour: Z3 pins the SHAPE of the
     ;; answer, the C library supplies its meaning.
-    (@post (or {$result == -1} (or {$result == 0} {$result == 1})))
+    (@post (or {$result == -1} {$result == 0} {$result == 1}))
     (@example ("abc" "abd") -> -1)
     (@example ("abd" "abc") -> 1)
     (@example ("abc" "abc") -> 0)

@@ -10,6 +10,7 @@
 #include "slop_howl.h"
 #include "slop_termstore.h"
 #include "slop_report.h"
+#include "slop_select.h"
 #include "slop_strlib.h"
 #include "slop_ttl.h"
 #include "slop_vocab.h"

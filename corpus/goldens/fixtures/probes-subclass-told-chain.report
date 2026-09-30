@@ -1,4 +1,5 @@
-howl-report 1
+howl-report 2
+profile el
 verdict coherent
 termination fixpoint
 rounds 3

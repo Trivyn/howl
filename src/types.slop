@@ -400,6 +400,7 @@
                                     ; a safety mechanism (§8.4)
 
   (type Outcome (record
+    (profile     Profile)      ; the calculus that ran (§5.1); the report states it
     (coverage    Coverage)
     (termination Termination)
     (findings    Findings)     ; what WAS derived — always present, always meaningful
@@ -411,23 +412,30 @@
   (type Fault (union
     (cancelled)                 ; cancel-ptr observed at a round boundary — no payload
     (input-error String)        ; unparseable / structurally malformed input
-    (refused (List Omission)))) ; --strict: the gate found omissions and the caller
+    (refused (List Omission))   ; --strict: the gate found omissions and the caller
                                 ; asked to refuse rather than run partially
+    (unavailable Profile)))     ; an explicit request for a calculus not built yet:
+                                ; refused, never quietly run as another (§5.1)
 
   ;; ============================================================
   ;; Configuration (§5.1)
   ;; ============================================================
 
-  ;; The selectable unit. Each profile supplies its own normalization
-  ;; and rule set; the driver and I/O are shared across all of them.
+  ;; The selectable unit, one per rung of §5.1's ladder. Each names
+  ;; the logic its calculus is complete for — never a label wider than
+  ;; that. Each profile supplies its own normalization and rule set; the
+  ;; driver and I/O are shared across all of them. The declaration
+  ;; order is the fixed tie-break order of §5.1.
   (type Profile (enum
-    profile-el          ; v0 — CB EL, exactly §5.2  (the only one implemented)
-    profile-horn-shiq   ; v1
-    profile-sroiq))     ; v2 — object fragment; not yet OWL 2 DL
+    profile-el            ; ELH⊥R+ + domain/range + ABox, exactly §5.2 (implemented)
+    profile-el-plus-plus  ; the OWL 2 EL object fragment: + nominals, Self, reflexive roles
+    profile-horn-sriq     ; Horn-SRIQ: + inverses, functionality, ∀ on the right
+    profile-sriq))        ; SRIQ object fragment (non-Horn); not OWL 2 DL
 
-  ;; What the caller asks for. `auto` is the DEFAULT and is NOT a
-  ;; Profile — typing the config field as `Profile` while calling
-  ;; `auto` the default is something the type cannot express.
+  ;; What the caller asks for. `auto` is NOT a Profile: it resolves to
+  ;; one, per ontology. The DEFAULT is `explicit profile-el`, so a
+  ;; default run's cost class (PTIME) and theory never change under an
+  ;; upgrade; `auto` is an opt-in (§5.1).
   (type ProfileSelection (union
     (auto)
     (explicit Profile)))
@@ -458,12 +466,17 @@
     ;; report, not a refusal, and the port always consumes it that way.
     ;; --strict is a CLI affordance layered on top, never the default.
     (@post {(. $result strict-profile) == false})
+    ;; `el` by default, not `auto`: one inverse added to an ontology
+    ;; must not silently move every default run to an ExpTime calculus.
+    (@post (match (. $result selection)
+             ((auto)       false)
+             ((explicit p) {p == 'profile-el})))
     :c-name "howl_default_config"
     (record-new ReasonerConfig
       (worker-count 4)
       (channel-buffer 256)
       (max-iterations 1000)
-      (selection (union-new ProfileSelection auto))
+      (selection (union-new ProfileSelection explicit 'profile-el))
       (strict-profile false)
       (cancel-ptr 0)
       (verbose false)))
@@ -698,7 +711,8 @@
     (match f
       ((cancelled)       (union-new Fault cancelled))
       ((input-error m)   (union-new Fault input-error (copy-string arena m)))
-      ((refused os)      (union-new Fault refused (copy-omissions arena os)))))
+      ((refused os)      (union-new Fault refused (copy-omissions arena os)))
+      ((unavailable p)   (union-new Fault unavailable p))))
 
   (fn renamed-node ((names Names) (n Node))
     (@intent "n as saturation knows it, without minting; none if n cannot be in the saturation")

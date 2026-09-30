@@ -241,7 +241,7 @@ gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs,
                     if (_mv_525 == owl2_Disposition_d_consumed) {
                     } else if (_mv_525 == owl2_Disposition_d_inert) {
                     } else if (_mv_525 == owl2_Disposition_d_in_profile) {
-                        if (owl2_axiom_in_profile(ax) && (!((rbox_bad && gate_is_rbox_axiom(ax))) && gate_axiom_range_ok(ranges, told, ((int64_t)(((int64_t)((rroles).len)))), rroles, ax))) {
+                        if ((owl2_axiom_in_profile(ax)) && (!((rbox_bad && gate_is_rbox_axiom(ax)))) && (gate_axiom_range_ok(ranges, told, ((int64_t)(((int64_t)((rroles).len)))), rroles, ax))) {
                             ({ __auto_type _lst_p = &(accepted); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         } else {
                             ({ __auto_type _lst_p = &(omitted); __auto_type _item = (((types_Omission){ .tag = types_Omission_out_of_profile, .data.out_of_profile = gate_axiom_input_ref(arena, ax) })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -577,7 +577,7 @@ gate_RboxVerdict gate_check_regularity(slop_arena* arena, slop_list_owl2_RawAxio
                                         {
                                             __auto_type left_ok = (canon_role_cmp(gate_role_at(steps, 0), sup) == 0);
                                             __auto_type right_ok = (canon_role_cmp(gate_role_at(steps, (len - 1)), sup) == 0);
-                                            if ((len == 2) && (left_ok && right_ok)) {
+                                            if (((len == 2)) && (left_ok) && (right_ok)) {
                                             } else {
                                                 {
                                                     __auto_type gen = gate_candidate_size(ch, 0, (len - 1));

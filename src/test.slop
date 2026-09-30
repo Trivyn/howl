@@ -38,7 +38,7 @@
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
                  Omission Coverage Termination SubPair Findings Outcome Fault
-                 ReasonerConfig
+                 ReasonerConfig Profile ProfileSelection
                  default-config emit-edge make-context make-queue
                  Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
@@ -51,6 +51,7 @@
   (import el (apply-el-rules apply-el-rules-reference))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
+  (import select (profile-name parse-profile))
 
   ;; ============================================================
   ;; Fixture builders
@@ -93,6 +94,7 @@
             (union-new Omission unresolved-import
               (record-new IRI (value "http://example.org/missing-import")))))
         (record-new Outcome
+          (profile     'profile-el)
           (coverage    (record-new Coverage (omitted omitted)))
           (termination (if reached-fixpoint
                          (union-new Termination fixpoint)
@@ -423,8 +425,8 @@
         ((none) false)
         ((some o)
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
-            (and (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent) mother parent)
-                 (match (verdict o) ('verdict-coherent true) (_ false))))))))
+               (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent) mother parent)
+               (match (verdict o) ('verdict-coherent true) (_ false)))))))
 
   (fn test-role-hierarchy-carries-edges ((arena Arena))
     (@intent "Role hierarchy: an r-edge is an s-edge when r ⊑ s, and not the converse")
@@ -556,8 +558,8 @@
       ((none) false)
       ((some o)
         (and (== (omitted-count o) 0)
-             (and (. (. o findings) inconsistent)
-                  (match (verdict o) ('verdict-incoherent true) (_ false)))))))
+             (. (. o findings) inconsistent)
+             (match (verdict o) ('verdict-incoherent true) (_ false))))))
 
   (fn test-anonymous-class-assertion-is-read ((arena Arena))
     (@intent "W3C WebOnt-Restriction-001: `:a a [∃op.⊥]` is a class assertion, not unrecognized")
@@ -589,8 +591,8 @@
               ((error _) false)
               ((ok s0)
                 (and (== (count-subclass-triples (. g triples) src-pred) 1)
-                     (and (== (count-subclass-triples (stage0-triples arena s0) src-pred) 0)
-                          (== (cast Int (list-len (. s0 omissions))) 0)))))))
+                     (== (count-subclass-triples (stage0-triples arena s0) src-pred) 0)
+                     (== (cast Int (list-len (. s0 omissions))) 0))))))
         (match (classify-fixture arena path)
           ((none) false)
           ((some o)
@@ -623,11 +625,11 @@
         ((some o)
           (let ((unsat (. (. o findings) unsatisfiable)))
             (and (== (omitted-count o) 0)
-                 (and (not (. (. o findings) inconsistent))
-                      (and (== (cast Int (list-len unsat)) 1)
-                           (match (list-get unsat 0)
-                             ((some u) (string-eq (. u value) (. a value)))
-                             ((none) false))))))))))
+                 (not (. (. o findings) inconsistent))
+                 (== (cast Int (list-len unsat)) 1)
+                 (match (list-get unsat 0)
+                   ((some u) (string-eq (. u value) (. a value)))
+                   ((none) false))))))))
 
   ;; ------------------------------------------------------------
   ;; THE PROBE AGREES WITH THE REPORT. The differential (SPEC §10 item 1,
@@ -707,16 +709,16 @@
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     (and (probe-agrees-with-report arena "corpus/fixtures/v0/litmus.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/v0/top-bottom.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/inconsistent-via-individual.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/abox-disjoint-range.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/punning.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/owl-nothing-present.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/hazards/declared-unused-class.ttl")
-    (and (probe-agrees-with-report arena "corpus/fixtures/probes/some-unsat-filler.ttl")
-         (probe-agrees-with-report arena "corpus/fixtures/probes/top-subsumes-everything.ttl"))))))))))))
+         (probe-agrees-with-report arena "corpus/fixtures/v0/top-bottom.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/unsatisfiable-consistent.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/inconsistent-via-individual.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/cyclic-hierarchy.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/punning.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/owl-nothing-present.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/hazards/declared-unused-class.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/probes/some-unsat-filler.ttl")
+         (probe-agrees-with-report arena "corpus/fixtures/probes/top-subsumes-everything.ttl")))
 
   ;; ============================================================
   ;; M1 — the reasoning fixtures
@@ -1147,9 +1149,9 @@
     (let ((buf   "applesauce")
           (apple (String (. buf data) 5)))
       (and (== (string-cmp apple buf) -1)
-        (and (== (string-cmp buf apple) 1)
-          (and (== (string-cmp apple "apple") 0)
-               (== (string-cmp apple apple) 0))))))
+           (== (string-cmp buf apple) 1)
+           (== (string-cmp apple "apple") 0)
+           (== (string-cmp apple apple) 0))))
 
   (fn test-node-cmp-separates-punned-iris ((arena Arena))
     (@intent "class-node(:x) and individual-node(:x) are DISTINCT under the order")
@@ -1164,9 +1166,9 @@
     (let ((c (union-new Node class-node (mk-iri "http://example.org/x")))
           (i (union-new Node individual-node (mk-iri "http://example.org/x"))))
       (and (!= (node-cmp c i) 0)
-        (and (== (node-cmp c i) -1)          ; class-node sorts first
-          (and (== (node-cmp i c) 1)
-               (== (node-cmp c c) 0))))))
+           (== (node-cmp c i) -1)          ; class-node sorts first
+           (== (node-cmp i c) 1)
+           (== (node-cmp c c) 0))))
 
   (fn test-sort-orders-and-is-input-determined ((arena Arena))
     (@intent "Sorting is a function of CONTENT, not of insertion order (§6.8)")
@@ -1360,7 +1362,8 @@
             (match f
               ((input-error m) (list-push out m))
               ((refused _)     (list-push out "refused"))
-              ((cancelled)     (list-push out "cancelled")))))
+              ((cancelled)     (list-push out "cancelled"))
+              ((unavailable _) (list-push out "unavailable")))))
         out)))
 
   (fn decode-store-agrees ((arena Arena) (path String))
@@ -1430,7 +1433,8 @@
         (match f
           ((input-error m) m)
           ((refused _)     "refused")
-          ((cancelled)     "cancelled")))))
+          ((cancelled)     "cancelled")
+          ((unavailable _) "unavailable")))))
 
   (fn test-stage0-fault-follows-the-document ((arena Arena))
     (@intent "Which malformed reification's fault is reported follows the document, never hash order")
@@ -1490,10 +1494,10 @@
               ;; owl:annotatedProperty naming rdfs:subClassOf — which is
               ;; NOT a subclass triple and must not be counted as one.
               (and (== kept 1)
-                   (and (== before 1)
-                        (and (== (cast Int (list-len (. s0 omissions))) 0)
-                             (< (cast Int (list-len (. s0 triples)))
-                                (cast Int (list-len (. g triples)))))))))))))
+                   (== before 1)
+                   (== (cast Int (list-len (. s0 omissions))) 0)
+                   (< (cast Int (list-len (. s0 triples)))
+                      (cast Int (list-len (. g triples)))))))))))
 
   ;; ============================================================
   ;; Front end — stage 1a, class expressions (M0 slice 2)
@@ -1663,12 +1667,12 @@
       ((some s1)
         (let ((axs (. s1 axioms)))
           (and (== (count-out-of-profile axs) 0)
-            ;; and the logical content SURVIVED: the subclass axiom is
-            ;; still there. A decoder that dropped everything would also
-            ;; score zero out-of-profile.
-            (and (> (count-disposition axs 'd-in-profile) 0)
-              (and (> (. s1 inert) 0)
-                   (> (count-disposition axs 'd-consumed) 0))))))))
+               ;; and the logical content SURVIVED: the subclass axiom is
+               ;; still there. A decoder that dropped everything would also
+               ;; score zero out-of-profile.
+               (> (count-disposition axs 'd-in-profile) 0)
+               (> (. s1 inert) 0)
+               (> (count-disposition axs 'd-consumed) 0))))))
 
   (fn test-litmus-decodes-clean ((arena Arena))
     (@intent "The litmus ontology decodes with nothing out of profile")
@@ -1743,13 +1747,13 @@
     (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:A a owl:Class . :p a owl:ObjectProperty . :a a owl:NamedIndividual .\n"))
       (and (> (gate-omissions-of-ttl arena (string-concat arena pre
                 "owl:Nothing a owl:NamedIndividual .")) 0)
-        (and (> (gate-omissions-of-ttl arena (string-concat arena pre
-                  ":a :p owl:Nothing .")) 0)
-             ;; THE ACCEPTING HALF: `owl:Thing a owl:Class` is
-             ;; legitimate — it IS a class — and rejecting it would
-             ;; refuse ordinary published documents.
-             (== (gate-omissions-of-ttl arena (string-concat arena pre
-                   "owl:Thing a owl:Class .")) 0)))))
+           (> (gate-omissions-of-ttl arena (string-concat arena pre
+                ":a :p owl:Nothing .")) 0)
+           ;; THE ACCEPTING HALF: `owl:Thing a owl:Class` is
+           ;; legitimate — it IS a class — and rejecting it would
+           ;; refuse ordinary published documents.
+           (== (gate-omissions-of-ttl arena (string-concat arena pre
+                "owl:Thing a owl:Class .")) 0))))
 
   (fn test-annotation-property-axioms-are-inert ((arena Arena))
     (@intent "SubAnnotationPropertyOf / AnnotationPropertyDomain carry NO logical content")
@@ -1765,10 +1769,10 @@
     (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class .\n:note a owl:AnnotationProperty . :other a owl:AnnotationProperty .\n"))
       (and (== (accepted-count-of-ttl arena (string-concat arena pre
                  ":note rdfs:domain :A .")) 0)
-        (and (== (accepted-count-of-ttl arena (string-concat arena pre
-                   ":note rdfs:range :A .")) 0)
-             (== (accepted-count-of-ttl arena (string-concat arena pre
-                   ":note rdfs:subPropertyOf :other .")) 0)))))
+           (== (accepted-count-of-ttl arena (string-concat arena pre
+                 ":note rdfs:range :A .")) 0)
+           (== (accepted-count-of-ttl arena (string-concat arena pre
+                 ":note rdfs:subPropertyOf :other .")) 0))))
 
   (fn decodes-ok ((arena Arena) (ttl String))
     (@intent "Does this document get past stage 1 without an input-error?")
@@ -1917,18 +1921,18 @@
         (match b ((sub-name p q) (and (node-eq x p) (node-eq y q))) (_ false)))
       ((sub-and x y z)
         (match b ((sub-and p q r)
-                   (and (node-eq x p) (and (node-eq y q) (node-eq z r)))) (_ false)))
+                   (and (node-eq x p) (node-eq y q) (node-eq z r))) (_ false)))
       ((sub-some-rhs x r y)
         (match b ((sub-some-rhs p q z)
-                   (and (node-eq x p) (and (role-eq r q) (node-eq y z)))) (_ false)))
+                   (and (node-eq x p) (role-eq r q) (node-eq y z))) (_ false)))
       ((sub-some-lhs r x y)
         (match b ((sub-some-lhs q p z)
-                   (and (role-eq r q) (and (node-eq x p) (node-eq y z)))) (_ false)))
+                   (and (role-eq r q) (node-eq x p) (node-eq y z))) (_ false)))
       ((sub-role r s2)
         (match b ((sub-role q t2) (and (role-eq r q) (role-eq s2 t2))) (_ false)))
       ((role-chain r s2 t2)
         (match b ((role-chain q u v)
-                   (and (role-eq r q) (and (role-eq s2 u) (role-eq t2 v)))) (_ false)))))
+                   (and (role-eq r q) (role-eq s2 u) (role-eq t2 v))) (_ false)))))
 
   (fn norm-contains ((xs (List NormAxiom)) (a NormAxiom))
     (@intent "Is this axiom present?")
@@ -1968,13 +1972,13 @@
         ((some no)
           (let ((ax (. no axioms)))
             (and (== (cast Int (list-len ax)) 6)
-              (and (== (. no fresh-count) 1)
-                (and (norm-contains ax (union-new NormAxiom sub-some-lhs hc person x))
-                  (and (norm-contains ax (union-new NormAxiom sub-and person x parent))
-                    (and (norm-contains ax (union-new NormAxiom sub-name parent person))
-                      (and (norm-contains ax (union-new NormAxiom sub-some-rhs parent hc person))
-                        (and (norm-contains ax (union-new NormAxiom sub-name mother person))
-                             (norm-contains ax (union-new NormAxiom sub-some-rhs mother hc person))))))))))))))
+                 (== (. no fresh-count) 1)
+                 (norm-contains ax (union-new NormAxiom sub-some-lhs hc person x))
+                 (norm-contains ax (union-new NormAxiom sub-and person x parent))
+                 (norm-contains ax (union-new NormAxiom sub-name parent person))
+                 (norm-contains ax (union-new NormAxiom sub-some-rhs parent hc person))
+                 (norm-contains ax (union-new NormAxiom sub-name mother person))
+                 (norm-contains ax (union-new NormAxiom sub-some-rhs mother hc person))))))))
 
   (fn test-normalization-polarity-is-negative-on-the-left ((arena Arena))
     (@intent "The defining existential is normalized in the NEGATIVE direction")
@@ -2057,7 +2061,7 @@
                     (_ (do)))))
               ;; both edges installed, and BOTH ranges land on :b — which
               ;; is what makes the disjointness detectable at all
-              (and (== edges 2) (and saw-c saw-d))))))))
+              (and (== edges 2) saw-c saw-d)))))))
 
   (fn test-range-complex-fillers-stay-apart ((arena Arena))
     (@intent "X_{r,D} is keyed by the whole filler: two complex fillers, two X")
@@ -2124,17 +2128,16 @@
         ;; out-of-profile operand, so the GATE omits it — hence 2 here and
         ;; 3 after classification.
         (>= (out-of-profile-count-of arena path) 2)
-        (and
-          (match (classify-fixture arena path)
-            ((none) false)
-            ((some o)
-              (and (>= (cast Int (list-len (. (. o coverage) omitted))) 3)
-                   (match (verdict o) ('verdict-inconclusive true) (_ false)))))
-          ;; THE REJECTING HALF: a blank node naming no property at all is
-          ;; malformed and must still fault, or the inverse check launders
-          ;; every broken property axiom into a quiet omission.
-          (and (decodes-ok arena (string-concat arena pre ":q rdfs:subPropertyOf [ owl:inverseOf :p ] ."))
-               (not (decodes-ok arena (string-concat arena pre ":q rdfs:subPropertyOf [ ] ."))))))))
+        (match (classify-fixture arena path)
+          ((none) false)
+          ((some o)
+            (and (>= (cast Int (list-len (. (. o coverage) omitted))) 3)
+                 (match (verdict o) ('verdict-inconclusive true) (_ false)))))
+        ;; THE REJECTING HALF: a blank node naming no property at all is
+        ;; malformed and must still fault, or the inverse check launders
+        ;; every broken property axiom into a quiet omission.
+        (decodes-ok arena (string-concat arena pre ":q rdfs:subPropertyOf [ owl:inverseOf :p ] ."))
+        (not (decodes-ok arena (string-concat arena pre ":q rdfs:subPropertyOf [ ] ."))))))
 
   ;; ============================================================
   ;; SPEC §12's structural invariants and §6.8 order-independence
@@ -2196,9 +2199,9 @@
         (list-push one ax)
         (let ((no (normalize-accepted arena one)))
           (or (accounting-exempt ax)
-            (or (> (cast Int (list-len (. no axioms))) 0)
-              (or (> (cast Int (list-len (. no edges))) 0)
-                  (> (cast Int (list-len (. no seeds))) 0))))))))
+              (> (cast Int (list-len (. no axioms))) 0)
+              (> (cast Int (list-len (. no edges))) 0)
+              (> (cast Int (list-len (. no seeds))) 0))))))
 
   (fn test-accounting-holds ((arena Arena))
     (@intent "§12: every accepted logical axiom is discharged by NormAxioms, edges/seeds, or a named elimination")
@@ -2376,8 +2379,8 @@
           (mut i 0))
       (do
         (when (or (!= (list-len sa) (list-len sb))
-                  (or (!= (list-len ua) (list-len ub))
-                      (!= (list-len oa) (list-len ob))))
+                  (!= (list-len ua) (list-len ub))
+                  (!= (list-len oa) (list-len ob)))
           (set! ok false))
         (while (and ok (< i (cast Int (list-len sa))))
           (do
@@ -2638,7 +2641,75 @@
                 (match f
                   ((refused os)    (if (> (cast Int (list-len os)) 0) 1 -1))
                   ((cancelled)     -1)
-                  ((input-error _) -1)))))))))
+                  ((input-error _) -1)
+                  ((unavailable _) -1)))))))))
+
+  (fn profile-run ((arena Arena) (selection ProfileSelection))
+    (@intent "Classify the litmus under a selection: the profile that ran, or the one refused as unavailable")
+    (@spec ((Arena ProfileSelection) -> (Result Profile Profile)))
+    (@alloc arena)
+    ;; ok p: an Outcome, and it says p ran. error p: refused as
+    ;; unavailable, naming p. Any other fault is an error on el++, which
+    ;; no test below expects, so it fails whichever test asked.
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg selection selection)
+        (match (parse-ttl-file arena "corpus/fixtures/v0/litmus.ttl")
+          ((error _) (error 'profile-el-plus-plus))
+          ((ok g)
+            (match (classify arena (. g triples) (list-new arena IRI) cfg)
+              ((ok o) (ok (. o profile)))
+              ((error f)
+                (match f
+                  ((unavailable p) (error p))
+                  ((refused _)     (error 'profile-el-plus-plus))
+                  ((cancelled)     (error 'profile-el-plus-plus))
+                  ((input-error _) (error 'profile-el-plus-plus))))))))))
+
+  (fn ran-as ((r (Result Profile Profile)) (want Profile))
+    (@intent "Whether a profile-run ran, under want")
+    (@spec (((Result Profile Profile) Profile) -> Bool))
+    (@pure)
+    (match r ((ok p) (== p want)) ((error _) false)))
+
+  (fn refused-as ((r (Result Profile Profile)) (want Profile))
+    (@intent "Whether a profile-run was refused as unavailable, naming want")
+    (@spec (((Result Profile Profile) Profile) -> Bool))
+    (@pure)
+    (match r ((ok _) false) ((error p) (== p want))))
+
+  (fn test-profile-selection ((arena Arena))
+    (@intent "§5.1: the default and auto run el; el runs el; every unbuilt rung is refused, by name")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The refusal is the point: a library that ran `el` for an explicit
+    ;; `sriq` would classify a smaller theory than asked for and report it
+    ;; as complete under the wrong name.
+    (and (ran-as (profile-run arena (. (default-config) selection)) 'profile-el)
+         (ran-as (profile-run arena (union-new ProfileSelection auto)) 'profile-el)
+         (ran-as (profile-run arena (union-new ProfileSelection explicit 'profile-el)) 'profile-el)
+         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-el-plus-plus))
+                     'profile-el-plus-plus)
+         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-horn-sriq))
+                     'profile-horn-sriq)
+         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-sriq))
+                     'profile-sriq)))
+
+  (fn test-profile-names-round-trip ((arena Arena))
+    (@intent "Every rung's name parses back to the rung, and nothing else parses")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (name-round-trips 'profile-el) (name-round-trips 'profile-el-plus-plus)
+         (name-round-trips 'profile-horn-sriq) (name-round-trips 'profile-sriq)
+         (match (parse-profile "auto") ((some _) false) ((none) true))
+         (match (parse-profile "EL") ((some _) false) ((none) true))
+         (match (parse-profile "sroiq") ((some _) false) ((none) true))))
+
+  (fn name-round-trips ((p Profile))
+    (@intent "Whether p's name parses back to p")
+    (@spec ((Profile) -> Bool))
+    (@pure)
+    (match (parse-profile (profile-name p)) ((some q) (== q p)) ((none) false)))
 
   (fn test-strict-refuses-past-omissions ((arena Arena))
     (@intent "§10 item 12: strict yields refused carrying the omissions, and only when there are some")
@@ -2980,10 +3051,10 @@
       ((some sig)
         (and (signature-has-annotation-property sig
                (record-new IRI (value "http://example.org/t#curatorNote")))
-             (and (signature-has-class sig (record-new IRI (value "http://example.org/t#A")))
-                  ;; and it is NOT mistaken for a class
-                  (not (signature-has-class sig
-                         (record-new IRI (value "http://example.org/t#curatorNote")))))))))
+             (signature-has-class sig (record-new IRI (value "http://example.org/t#A")))
+             ;; and it is NOT mistaken for a class
+             (not (signature-has-class sig
+                    (record-new IRI (value "http://example.org/t#curatorNote"))))))))
 
   (fn is-named-class ((c RawConcept) (iri String))
     (@intent "Is this concept exactly the named class with this IRI?")
@@ -3052,7 +3123,7 @@
                                 ;; BOTH conjuncts, and exactly two. A
                                 ;; truncated RDF list would give n = 1
                                 ;; and a strictly stronger axiom.
-                                (and (== n 2) (and saw-person saw-some)))))
+                                (and (== n 2) saw-person saw-some))))
                           (_ false)))))))))))))
 
   (fn test-decode-represents-out-of-profile-rather-than-failing ((arena Arena))
@@ -3127,9 +3198,9 @@
           ((error _) false)
           ((ok els)
             (and (== (cast Int (list-len els)) 3)
-              (and (term-eq (term-at els 0) ea)
-                (and (term-eq (term-at els 1) eb)
-                     (term-eq (term-at els 2) ec)))))))))
+                 (term-eq (term-at els 0) ea)
+                 (term-eq (term-at els 1) eb)
+                 (term-eq (term-at els 2) ec)))))))
 
   (fn test-rdf-list-truncation-is-a-fault ((arena Arena))
     (@intent "A cell with no rdf:first FAULTS — it must never yield a shorter list")
@@ -3703,6 +3774,14 @@
 
           (let ((r (test-strict-refuses-past-omissions arena)))
             (print-test-result "§10.12: strict refuses with omissions, and only then" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-profile-selection arena)))
+            (print-test-result "§5.1: default and auto run el; unbuilt rungs are refused by name" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-profile-names-round-trip arena)))
+            (print-test-result "§5.1: rung names round-trip" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

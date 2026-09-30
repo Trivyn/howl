@@ -11,7 +11,7 @@ The two engines answer different questions over the same ontologies:
 |---|---|---|
 | Service | **Materialization** — forward-chain sound consequences | **Classification** — complete hierarchy + coherence |
 | Method | Semi-naive fixpoint over RDF triples | Consequence-based saturation over derived axioms |
-| Logic | OWL 2 RL (a rule fragment) | A named description logic (EL → Horn-SHIQ → SROIQ) |
+| Logic | OWL 2 RL (a rule fragment) | A named description logic (EL → Horn-SRIQ → SRIQ) |
 | Completeness | Sound; deliberately incomplete for OWL-DL | Sound **and complete** for its fragment |
 
 RL cannot introduce existential successors, so it silently misses subsumptions that run *through*
@@ -205,8 +205,9 @@ So the honest claim is *verified faithful to a proven calculus* — not "verifie
 
 **The ABox obligation is discharged.** The direct-edge ABox encoding is HOWL's own construction, not
 lifted from a published proof. SPEC §5.3 proves it sound and complete by reduction to the published
-EL++ results with nominals and range restrictions, reviewed 2026-09-30, so ABox support is inside the
-sound-and-complete v0 claim.
+EL++ calculus on a nominal-free CBox and its range-restriction extension, with the ABox's nominals
+discharged by a canonical-model argument (the published completeness for nominals fails, KKS12). It
+was reviewed 2026-09-30, so ABox support is inside the sound-and-complete v0 claim.
 
 ---
 
@@ -261,7 +262,7 @@ flowchart TB
   A["M2a · port amendments<br/>A1 · A2 · A3 · A4"] --> M2b
   M2b --> M3["M3 · emit + GROWL round-trip"]
   M3 --> M4["M4 · alignment, minimal repair"]
-  M4 --> M5["M5 · v1 Horn-SHIQ"]
+  M4 --> M5["M5 · v1 Horn-SRIQ"]
   style A stroke-dasharray: 4 3
 ```
 
@@ -272,7 +273,7 @@ an incomplete run** while still reporting incoherent whenever a contradiction wa
 byte-identical reports across worker counts; and discharges the ABox proof obligation.
 
 **M5 is where the first consumer's coverage gap actually closes** — 33 `owl:inverseOf` uses in its
-corpus stay out-of-profile until Horn-SHIQ lands. v0 buys instance-bearing verdicts and range
+corpus stay out-of-profile until Horn-SRIQ lands. v0 buys instance-bearing verdicts and range
 coherence, not a clean pass on that consumer's own theory.
 
 ---

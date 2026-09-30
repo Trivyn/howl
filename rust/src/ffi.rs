@@ -5,7 +5,7 @@
 //! `layout_guard` test module at the bottom of this file — see the
 //! comment there for why that is mandatory rather than fastidious.
 
-use std::os::raw::c_char;
+use std::os::raw::{c_char, c_int};
 
 /// Opaque arena allocator.
 #[repr(C)]
@@ -88,8 +88,9 @@ pub struct RdfTriple {
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Profile {
     El = 0,
-    HornShiq = 1,
-    Sroiq = 2,
+    ElPlusPlus = 1,
+    HornSriq = 2,
+    Sriq = 3,
 }
 
 #[repr(C)]
@@ -159,6 +160,10 @@ extern "C" {
     pub fn howl_layout_fieldsize_cfg_cancel_ptr() -> usize;
     pub fn howl_layout_fieldsize_cfg_verbose() -> usize;
     pub fn howl_layout_sizeof_profile_selection() -> usize;
+    pub fn howl_layout_profile_el() -> c_int;
+    pub fn howl_layout_profile_el_plus_plus() -> c_int;
+    pub fn howl_layout_profile_horn_sriq() -> c_int;
+    pub fn howl_layout_profile_sriq() -> c_int;
     pub fn howl_layout_sizeof_rdf_term() -> usize;
     pub fn howl_layout_sizeof_rdf_triple() -> usize;
     pub fn howl_layout_offset_triple_predicate() -> usize;
@@ -283,6 +288,18 @@ mod layout_guard {
         }
     }
 
+    /// Each rung's discriminant, against the C enum: a reordered mirror
+    /// keeps its size and silently requests a different calculus.
+    #[test]
+    fn profile_discriminants_match_c_abi() {
+        unsafe {
+            assert_eq!(Profile::El as c_int, howl_layout_profile_el());
+            assert_eq!(Profile::ElPlusPlus as c_int, howl_layout_profile_el_plus_plus());
+            assert_eq!(Profile::HornSriq as c_int, howl_layout_profile_horn_sriq());
+            assert_eq!(Profile::Sriq as c_int, howl_layout_profile_sriq());
+        }
+    }
+
     #[test]
     fn rdf_types_match_c_abi() {
         unsafe {
@@ -305,10 +322,17 @@ mod layout_guard {
         assert_eq!(cfg.max_iterations, 1000, "max_iterations");
         assert_eq!(cfg.strict_profile, 0, "strict_profile must default false");
         assert_eq!(cfg.cancel_ptr, 0, "cancel_ptr");
+        // `explicit el`, not `auto`: a default run keeps one cost class
+        // (PTIME) and one theory across upgrades (SPEC §5.1).
         assert_eq!(
             cfg.selection.tag,
-            ProfileSelectionTag::Auto,
-            "auto is the default selection and is NOT a Profile"
+            ProfileSelectionTag::Explicit,
+            "the default selection is explicit"
+        );
+        assert_eq!(
+            unsafe { cfg.selection.data.explicit },
+            Profile::El,
+            "the default profile is el"
         );
     }
 

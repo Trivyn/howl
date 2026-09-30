@@ -31,7 +31,7 @@ def howl(body, termination="fixpoint", omitted="0", counts=True):
         verdict = "coherent"
     else:
         verdict = "inconclusive"
-    lines = ["howl-report 1", f"verdict {verdict}", f"termination {termination}", "rounds 3",
+    lines = ["howl-report 2", "profile el", f"verdict {verdict}", f"termination {termination}", "rounds 3",
              *body[:1], f"omitted {omitted}", *omissions]
     if counts:
         lines += [f"unsatisfiable {len(unsat)}", *unsat, f"subsumptions {len(subs)}", *subs]
@@ -146,6 +146,14 @@ class EntdiffTest(unittest.TestCase):
     def test_refuses_a_howl_report_without_termination(self):
         h = howl(BASE).replace("termination fixpoint\n", "")
         self.assertRefused(self.run_diff(h, oracle(BASE)), "termination None")
+
+    def test_refuses_a_howl_report_without_a_known_profile(self):
+        # A report's findings are complete for the rung that ran and no
+        # other, so a report that does not say which is not comparable.
+        self.assertRefused(self.run_diff(howl(BASE).replace("profile el\n", ""), oracle(BASE)),
+                           "profile None")
+        self.assertRefused(self.run_diff(howl(BASE).replace("profile el\n", "profile sroiq\n"),
+                                         oracle(BASE)), "profile 'sroiq'")
 
     def test_refuses_an_omission_count_that_lies(self):
         # `omitted 0` above an omission line: the count decides comparability,

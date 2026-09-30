@@ -32,13 +32,14 @@ uint8_t types_findings_are_incoherent(types_Findings f);
 
 types_ReasonerConfig howl_default_config(void) {
     types_ReasonerConfig _retval = {0};
-    _retval = ((types_ReasonerConfig){.worker_count = 4, .channel_buffer = 256, .max_iterations = 1000, .selection = ((types_ProfileSelection){ .tag = types_ProfileSelection_slop_auto }), .strict_profile = 0, .cancel_ptr = 0, .verbose = 0});
+    _retval = ((types_ReasonerConfig){.worker_count = 4, .channel_buffer = 256, .max_iterations = 1000, .selection = ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = types_Profile_profile_el }), .strict_profile = 0, .cancel_ptr = 0, .verbose = 0});
     SLOP_POST(((_retval.worker_count == 4)), "(== (. $result worker-count) 4)");
     SLOP_POST(((_retval.channel_buffer == 256)), "(== (. $result channel-buffer) 256)");
     SLOP_POST(((_retval.max_iterations == 1000)), "(== (. $result max-iterations) 1000)");
     SLOP_POST(((_retval.cancel_ptr == 0)), "(== (. $result cancel-ptr) 0)");
     SLOP_POST(((_retval.verbose == 0)), "(== (. $result verbose) false)");
     SLOP_POST(((_retval.strict_profile == 0)), "(== (. $result strict-profile) false)");
+    SLOP_POST((({ __auto_type _mv = _retval.selection; uint8_t _mr = {0}; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = 0; break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = (p == types_Profile_profile_el); break; }  } _mr; })), "(match (. $result selection) ((auto) false) ((explicit p) (== p (quote profile-el))))");
     return _retval;
 }
 
@@ -354,6 +355,11 @@ types_Fault types_copy_fault(slop_arena* arena, types_Fault f) {
         {
             __auto_type os = _mv_31.data.refused;
             return ((types_Fault){ .tag = types_Fault_refused, .data.refused = types_copy_omissions(arena, os) });
+        }
+        case types_Fault_unavailable:
+        {
+            __auto_type p = _mv_31.data.unavailable;
+            return ((types_Fault){ .tag = types_Fault_unavailable, .data.unavailable = p });
         }
     }
     SLOP_UNREACHABLE();

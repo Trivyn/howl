@@ -4,8 +4,9 @@
 ;; ONE TEXT, AND THE ONE A RUN IS COMPARED BY. M1 (e) asks for
 ;; byte-identical reports across worker counts at the same budget, and
 ;; the goldens gate every performance change on exactly these bytes. So
-;; the report carries everything that is a function of (input, budget)
-;; and NOTHING that is not: no worker count, no timings, no file paths.
+;; the report carries everything that is a function of (input, budget,
+;; profile) — and states the profile — and NOTHING that is not: no
+;; worker count, no timings, no file paths.
 ;; A timing that leaked in here would make two correct runs differ.
 ;;
 ;; A LIST OF LINES, NOT ONE STRING. `string-concat` copies, so growing
@@ -28,6 +29,7 @@
   (import types (Node SubPair Omission Outcome Termination))
   (import owl2 (render-omission))
   (import howl (Verdict verdict))
+  (import select (profile-name))
 
   (export report-lines)
 
@@ -79,7 +81,11 @@
           (f       (. o findings))
           (omitted (. (. o coverage) omitted)))
       (do
-        (list-push out "howl-report 1")
+        (list-push out "howl-report 2")
+        ;; Version 2 adds the profile: the calculus that ran is part of
+        ;; what the verdict means, so a report is a function of (input,
+        ;; budget, profile) and must say which (§5.1).
+        (list-push out (keyed arena "profile" (profile-name (. o profile))))
         (list-push out (verdict-line o))
         (list-push out (termination-line (. o termination)))
         (list-push out (keyed arena "rounds" (int-to-string arena (. (. o saturation) iteration))))
