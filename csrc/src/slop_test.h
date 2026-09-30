@@ -87,6 +87,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #endif
 
+#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
+#define SLOP_OPTION_GATE_GATERESULT_DEFINED
+SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 #define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
@@ -95,11 +100,6 @@ SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 #ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 #define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
-#endif
-
-#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
-#define SLOP_OPTION_GATE_GATERESULT_DEFINED
-SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
@@ -279,9 +279,16 @@ uint8_t test_decodes_ok(slop_arena* arena, slop_string ttl);
 uint8_t test_test_undeclared_property_is_an_input_error(slop_arena* arena);
 uint8_t test_test_unknown_owl_vocabulary_still_decodes(slop_arena* arena);
 uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena);
+slop_option_gate_GateResult test_gate_ttl(slop_arena* arena, slop_string ttl);
 int64_t test_gate_omissions_of_ttl(slop_arena* arena, slop_string ttl);
+slop_string test_gate_accepted_of_ttl(slop_arena* arena, slop_string ttl);
 slop_string test_rc_prefix(void);
 uint8_t test_test_range_composition_table(slop_arena* arena);
+slop_string test_neg_prefix(void);
+uint8_t test_accepts_exactly(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
+uint8_t test_test_negation_rewrites_to_bottom_gcis(slop_arena* arena);
+uint8_t test_test_negation_rewrites_whole_axioms_or_none(slop_arena* arena);
+uint8_t test_test_negative_range_normalizes_to_bottom(slop_arena* arena);
 uint8_t test_norm_eq(types_NormAxiom a, types_NormAxiom b);
 uint8_t test_norm_contains(slop_list_types_NormAxiom xs, types_NormAxiom a);
 slop_option_normalize_NormOutput test_normalize_fixture(slop_arena* arena, slop_string path);
@@ -388,6 +395,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #endif
 
+#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
+#define SLOP_OPTION_GATE_GATERESULT_DEFINED
+SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 #define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
@@ -401,11 +413,6 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
-#endif
-
-#ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
-#define SLOP_OPTION_GATE_GATERESULT_DEFINED
-SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED

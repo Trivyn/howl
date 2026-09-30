@@ -1,0 +1,21 @@
+# ¬E in a domain and a range (§5.2 negation rewrite), in BFO's own shape:
+# BFO_0000171 'located in' has domain and range BFO_0000004 ⊓ ¬BFO_0000006
+# (independent continuant, not a spatial region). The rewrite gives
+#   dom(loc) ⊑ IC,  ∃loc.⊤ ⊓ SR ⊑ ⊥        ran(loc) ⊑ IC,  ∃loc.SR ⊑ ⊥
+# so a spatial region located in anything, and anything located in a spatial
+# region, is a contradiction. The ABox commits the second: inconsistent.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:IC a owl:Class . :SR a owl:Class . :Region a owl:Class .
+:loc a owl:ObjectProperty .
+:Region rdfs:subClassOf :SR .
+:loc rdfs:domain [ a owl:Class ; owl:intersectionOf ( :IC [ a owl:Class ; owl:complementOf :SR ] ) ] .
+:loc rdfs:range  [ a owl:Class ; owl:intersectionOf ( :IC [ a owl:Class ; owl:complementOf :SR ] ) ] .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:b a :Region .
+:a :loc :b .

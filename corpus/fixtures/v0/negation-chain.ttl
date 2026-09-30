@@ -1,0 +1,19 @@
+# A negative range on a chain's super-role (§5.2 negation rewrite). ran(t) = ¬B
+# becomes ∃t.B ⊑ ⊥, a GCI that range elimination never touches, so the
+# range/composition condition asks nothing of the chain's last role s -- and
+# the chain must still carry the ⊥: A ⊑ ∃r.∃s.B with r ∘ s ⊑ t puts a B at the
+# end of a t-edge, so A is unsatisfiable. The positive range C on t is still
+# imposed on s, as the condition requires.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:t owl:propertyChainAxiom ( :r :s ) .
+:t rdfs:range [ a owl:Class ; owl:intersectionOf ( :C [ a owl:Class ; owl:complementOf :B ] ) ] .
+:s rdfs:range :C .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] ] .

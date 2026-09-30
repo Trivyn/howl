@@ -39,6 +39,7 @@
                  MissingDeclaration))
   (import owl2 (RawAxiom RawConcept RawChain Signature
                 disposition axiom-in-profile
+                concept-in-profile concepts-in-profile role-in-profile
                 concept-cmp sort-concepts concept-at
                 render-axiom render-role
                 signature-has-class signature-has-object-property))
@@ -48,7 +49,7 @@
   (export
     GateResult RboxVerdict
     axiom-input-ref
-    expand-sugar
+    expand-sugar expand-negation
     gate-axioms
     collect-rbox-roles role-idx
     told-closure check-regularity
@@ -161,6 +162,174 @@
             (_ (list-push out ax))))
         out)))
 
+  ;; ============================================================
+  ;; Negation in positive positions (§5.2; SPEC §5.3 L0)
+  ;;
+  ;; ¬E as the whole filler, or a top-level conjunct, of a superclass,
+  ;; domain or range says only that something is EMPTY, and emptiness
+  ;; is ⊥ on the right of an EL GCI:
+  ;;
+  ;;   C ⊑ P ⊓ ¬E       ⇒  C ⊑ P,       C ⊓ E ⊑ ⊥
+  ;;   dom(r) ⊑ P ⊓ ¬E  ⇒  dom(r) ⊑ P,  ∃r.⊤ ⊓ E ⊑ ⊥
+  ;;   ran(r) ⊑ P ⊓ ¬E  ⇒  ran(r) ⊑ P,  ∃r.E ⊑ ⊥
+  ;;
+  ;; No fresh names, so the rewritten theory has the SAME models (L0),
+  ;; not merely a conservative extension — nothing downstream can tell
+  ;; which one it was handed.
+  ;;
+  ;; IT RUNS BEFORE EVERY GATE CONDITION, and that placement is the
+  ;; point. The range/composition condition must judge the rewritten
+  ;; theory, where a negative range is a GCI that range elimination
+  ;; never touches and so demands nothing of a chain's last role.
+  ;; Rewritten after the gate, `ran(t) = A ⊓ ¬B` would still impose
+  ;; `A ⊓ ¬B` on every chain into t.
+  ;;
+  ;; WHOLE AXIOMS OR NOTHING. An axiom is rewritten only when every
+  ;; piece lands in the fragment; otherwise it passes through and is
+  ;; omitted as written, so an omission always shows the user's own
+  ;; axiom rather than a fragment of it.
+  ;; ============================================================
+
+  (type NegSplit (record
+    (pos (List RawConcept))     ; P's conjuncts, in written order
+    (neg (List RawConcept))))   ; the E of each ¬E conjunct
+
+  (fn has-negated-conjunct ((c RawConcept))
+    (@intent "Is ¬E the whole concept or one of its top-level conjuncts?")
+    (@spec ((RawConcept) -> Bool))
+    (@pure)
+    ;; The cheap test that keeps every other axiom allocation-free: GO
+    ;; has ~70,000 subclass axioms and none of them is negated.
+    (match c
+      ((rc-not _)  true)
+      ((rc-and cs)
+        (let ((mut found false))
+          (do
+            (for-each (x cs)
+              (match x
+                ((rc-not _) (set! found true))
+                (_          (do))))
+            found)))
+      (_ false)))
+
+  (fn conjuncts ((arena Arena) (c RawConcept))
+    (@intent "A fresh list of c's top-level conjuncts: c itself unless it is a conjunction")
+    (@spec ((Arena RawConcept) -> (List RawConcept)))
+    (@alloc arena)
+    ;; Always a COPY. Callers push onto the result, and pushing onto an
+    ;; rc-and's own list would write into the axiom it came from.
+    (let ((mut out (list-new arena RawConcept)))
+      (do
+        (match c
+          ((rc-and cs) (for-each (x cs) (list-push out x)))
+          (_           (list-push out c)))
+        out)))
+
+  (fn negation-split ((arena Arena) (c RawConcept))
+    (@intent "Split a positive-position concept into P's conjuncts and the negated operands")
+    (@spec ((Arena RawConcept) -> NegSplit))
+    (@alloc arena)
+    (let ((mut pos (list-new arena RawConcept))
+          (mut neg (list-new arena RawConcept)))
+      (do
+        (for-each (x (conjuncts arena c))
+          (match x
+            ((rc-not e) (list-push neg (deref e)))
+            (_          (list-push pos x))))
+        (record-new NegSplit (pos pos) (neg neg)))))
+
+  (fn split-rewritable ((s NegSplit))
+    (@intent "Is there a negation, with every piece inside the fragment?")
+    (@spec ((NegSplit) -> Bool))
+    (@pure)
+    (and (> (list-len (. s neg)) 0)
+         (concepts-in-profile (. s pos))
+         (concepts-in-profile (. s neg))))
+
+  (fn conjunction ((cs (List RawConcept)))
+    (@intent "The conjunction of a non-empty list: its one member, or an rc-and")
+    (@spec (((List RawConcept)) -> RawConcept))
+    (@pure)
+    (@pre {(list-len cs) > 0})
+    (if (== (list-len cs) 1)
+      (concept-at cs 0)
+      (union-new RawConcept rc-and cs)))
+
+  (fn with-conjunct ((arena Arena) (c RawConcept) (e RawConcept))
+    (@intent "c ⊓ e, with c's own conjuncts spliced in rather than nested")
+    (@spec ((Arena RawConcept RawConcept) -> RawConcept))
+    (@alloc arena)
+    (let ((mut cs (conjuncts arena c)))
+      (do
+        (list-push cs e)
+        (union-new RawConcept rc-and cs))))
+
+  (fn empty-axiom ((arena Arena) (c RawConcept))
+    (@intent "c ⊑ ⊥")
+    (@spec ((Arena RawConcept) -> RawAxiom))
+    (@alloc arena)
+    (union-new RawAxiom ra-sub-class-of
+      (box-c arena c) (box-c arena (union-new RawConcept rc-nothing))))
+
+  (fn expand-negation ((arena Arena) (axs (List RawAxiom)))
+    (@intent "Rewrite ¬E in a superclass, domain or range into ⊥ GCIs (§5.2)")
+    (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    ;; One local list, as in expand-sugar and for its reason.
+    (let ((mut out (list-new arena RawAxiom)))
+      (do
+        (for-each (ax axs)
+          (match ax
+            ;; C ⊑ P ⊓ ¬E  ⇒  C ⊑ P,  C ⊓ E ⊑ ⊥
+            ((ra-sub-class-of l r)
+              (if (not (has-negated-conjunct (deref r)))
+                (list-push out ax)
+                (let ((s (negation-split arena (deref r))))
+                  (if (not (and (concept-in-profile (deref l)) (split-rewritable s)))
+                    (list-push out ax)
+                    (do
+                      (when (> (list-len (. s pos)) 0)
+                        (list-push out (union-new RawAxiom ra-sub-class-of
+                                         l (box-c arena (conjunction (. s pos))))))
+                      (for-each (e (. s neg))
+                        (list-push out (empty-axiom arena
+                                         (with-conjunct arena (deref l) e)))))))))
+
+            ;; dom(r) ⊑ P ⊓ ¬E  ⇒  dom(r) ⊑ P,  ∃r.⊤ ⊓ E ⊑ ⊥
+            ((ra-object-property-domain r c)
+              (if (not (has-negated-conjunct (deref c)))
+                (list-push out ax)
+                (let ((s (negation-split arena (deref c))))
+                  (if (not (and (role-in-profile r) (split-rewritable s)))
+                    (list-push out ax)
+                    (let ((some-r (union-new RawConcept rc-some r
+                                    (box-c arena (union-new RawConcept rc-thing)))))
+                      (do
+                        (when (> (list-len (. s pos)) 0)
+                          (list-push out (union-new RawAxiom ra-object-property-domain
+                                           r (box-c arena (conjunction (. s pos))))))
+                        (for-each (e (. s neg))
+                          (list-push out (empty-axiom arena
+                                           (with-conjunct arena some-r e))))))))))
+
+            ;; ran(r) ⊑ P ⊓ ¬E  ⇒  ran(r) ⊑ P,  ∃r.E ⊑ ⊥
+            ((ra-object-property-range r c)
+              (if (not (has-negated-conjunct (deref c)))
+                (list-push out ax)
+                (let ((s (negation-split arena (deref c))))
+                  (if (not (and (role-in-profile r) (split-rewritable s)))
+                    (list-push out ax)
+                    (do
+                      (when (> (list-len (. s pos)) 0)
+                        (list-push out (union-new RawAxiom ra-object-property-range
+                                         r (box-c arena (conjunction (. s pos))))))
+                      (for-each (e (. s neg))
+                        (list-push out (empty-axiom arena
+                                         (union-new RawConcept rc-some r (box-c arena e))))))))))
+
+            (_ (list-push out ax))))
+        out)))
+
   (fn box-c ((arena Arena) (c RawConcept))
     (@intent "Heap-box a concept for a union variant that carries a pointer")
     (@spec ((Arena RawConcept) -> (Ptr RawConcept)))
@@ -200,7 +369,10 @@
     ;; imports from stage 0. They ride through rather than being
     ;; recomputed, because coverage is one list and §6.2's verdict rule
     ;; reads its emptiness.
-    (let ((expanded (expand-sugar arena axs))
+    ;; Negation is rewritten AFTER sugar, so an equivalence's halves are
+    ;; judged one by one, and BEFORE everything else, so every gate
+    ;; condition below judges the rewritten theory.
+    (let ((expanded (expand-negation arena (expand-sugar arena axs)))
           (mut accepted (list-new arena RawAxiom))
           (mut omitted  (list-new arena Omission)))
       (do

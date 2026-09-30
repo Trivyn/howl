@@ -1,0 +1,16 @@
+# ¬E in a superclass (§5.2 negation rewrite): C ⊑ P ⊓ ¬E becomes C ⊑ P and
+# C ⊓ E ⊑ ⊥, with no fresh names. E may be any EL concept -- OBI's shape is
+# CL_0000001 ⊑ ¬∃r.E. Here A ⊑ ¬∃r.B and D ⊑ A ⊓ ∃r.B make D unsatisfiable,
+# and C ⊑ P ⊓ ¬B keeps its positive half C ⊑ P.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :P a owl:Class .
+:r a owl:ObjectProperty .
+:A rdfs:subClassOf [ a owl:Class ; owl:complementOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ] .
+:D rdfs:subClassOf :A , [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+:C rdfs:subClassOf [ a owl:Class ; owl:intersectionOf ( :P [ a owl:Class ; owl:complementOf :B ] ) ] .

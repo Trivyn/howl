@@ -398,6 +398,7 @@ diff-fixtures: cli oracle
 # `python3 corpus/abox_fuzz.py --update` rewrites.
 abox-fuzz: cli oracle
 	python3 corpus/abox_fuzz.py
+	python3 corpus/abox_fuzz.py --negation
 
 # EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
 # W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's

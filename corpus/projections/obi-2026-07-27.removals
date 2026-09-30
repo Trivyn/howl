@@ -5,13 +5,13 @@
 # source                  obi-2026-07-27.owl
 # source_sha256           8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b946
 # source_triples          117,997
-# axioms_removed          385
-# triples_removed         5,849
-# in_v0_swept_in          1,249   <- collateral from blank-node closures
-# projected_triples       112,148
+# axioms_removed          383
+# triples_removed         5,828
+# in_v0_swept_in          1,243   <- collateral from blank-node closures
+# projected_triples       112,169
 # projected_ground_sha256 db04e098e8ee908825869c31c9661a27b4dff3ef77ee30bd1a3fc26135ca7ed0
-# projected_bnode_triples 62,220
-# projected_bnode_sha256  1f731f935cfb6d0daf17df10fe0f5cdfa63a5bdbe68ab8c262a5dd50f9b23b41
+# projected_bnode_triples 62,241
+# projected_bnode_sha256  423cd25e55c3cdd2c3d474a77c3ea75dc69f25c423de400b0b2842b2df224c1c
 #
 # The ground hash covers every triple with no blank node on either
 # end, which is canonical as it stands. The blank-node hash covers the
@@ -29,8 +29,6 @@
 <http://purl.obolibrary.org/obo/CLO_0009828> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [d1962a23]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/CLO_0009829> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [22cfc8bb]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/CLO_0009829> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # qualified cardinality [81c08afd]  (+4 in blank-node closure)
-<http://purl.obolibrary.org/obo/CL_0000001> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectComplementOf [4c465509]  (+5 in blank-node closure)
-<http://purl.obolibrary.org/obo/CL_0000001> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectComplementOf [a2a0dd26]  (+14 in blank-node closure)
 <http://purl.obolibrary.org/obo/CL_0000010> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectUnionOf [72d852da]  (+15 in blank-node closure)
 <http://purl.obolibrary.org/obo/COB_0000800> <http://www.w3.org/2000/01/rdf-schema#domain> <http://purl.obolibrary.org/obo/COB_0000011> .    # DataPropertyDomain/Range [32651ed8]
 <http://purl.obolibrary.org/obo/COB_0000801> <http://www.w3.org/2000/01/rdf-schema#domain> <http://purl.obolibrary.org/obo/BFO_0000040> .    # DataPropertyDomain/Range [1cf87d30]

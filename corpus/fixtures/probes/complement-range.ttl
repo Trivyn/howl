@@ -1,0 +1,15 @@
+# PROBE complement-range. ran(r) ⊑ ¬B with A ⊑ ∃r.B makes A unsatisfiable,
+# and B itself stays satisfiable: the range forbids r-edges INTO B, not B.
+# construct: ObjectComplementOf (positive position)
+# expect: unsat :A
+# expect-not: unsat :B
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :r a owl:ObjectProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+:r rdfs:range [ a owl:Class ; owl:complementOf :B ] .
