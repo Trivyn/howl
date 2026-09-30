@@ -237,13 +237,13 @@
             ('d-inert    (do))
             ('d-in-profile
               (if (and (axiom-in-profile ax)
-                    (and (not (and rbox-bad (is-rbox-axiom ax)))
-                         ;; A range-condition violation is PER-AXIOM:
-                         ;; the offending RIA is its own witness, so it
-                         ;; is omitted alone rather than collapsing the
-                         ;; whole RBox the way non-regularity does.
-                         (axiom-range-ok ranges told
-                           (cast Int (list-len rroles)) rroles ax)))
+                       (not (and rbox-bad (is-rbox-axiom ax)))
+                       ;; A range-condition violation is PER-AXIOM:
+                       ;; the offending RIA is its own witness, so it
+                       ;; is omitted alone rather than collapsing the
+                       ;; whole RBox the way non-regularity does.
+                       (axiom-range-ok ranges told
+                         (cast Int (list-len rroles)) rroles ax))
                 (list-push accepted ax)
                 ;; In-profile FORM with out-of-profile operands, or an
                 ;; RBox axiom in an RBox that failed regularity.
@@ -551,7 +551,7 @@
                           ;; It also matches the generic case, which
                           ;; would yield `t ≺ t` and falsely reject —
                           ;; dominance picks the ⊆-least set, and ∅ wins.
-                          ((and (== len 2) (and left-ok right-ok)) (do))
+                          ((and (== len 2) left-ok right-ok) (do))
                           (else
                             ;; CANDIDATES ARE WHOLE CASES, never
                             ;; independently-skipped end positions.

@@ -1,21 +1,6 @@
 #include "../runtime/slop_runtime.h"
 #include "slop_owl2.h"
 
-const slop_string owl2_OWL_AXIOM = SLOP_STR("http://www.w3.org/2002/07/owl#Axiom");
-const slop_string owl2_OWL_ANNOTATED_SOURCE = SLOP_STR("http://www.w3.org/2002/07/owl#annotatedSource");
-const slop_string owl2_OWL_ANNOTATED_PROPERTY = SLOP_STR("http://www.w3.org/2002/07/owl#annotatedProperty");
-const slop_string owl2_OWL_ANNOTATED_TARGET = SLOP_STR("http://www.w3.org/2002/07/owl#annotatedTarget");
-const slop_string owl2_OWL_ANNOTATION = SLOP_STR("http://www.w3.org/2002/07/owl#Annotation");
-const slop_string owl2_OWL_DISJOINT_UNION_OF = SLOP_STR("http://www.w3.org/2002/07/owl#disjointUnionOf");
-const slop_string owl2_OWL_TOP_OBJECT_PROPERTY = SLOP_STR("http://www.w3.org/2002/07/owl#topObjectProperty");
-const slop_string owl2_OWL_BOTTOM_OBJECT_PROPERTY = SLOP_STR("http://www.w3.org/2002/07/owl#bottomObjectProperty");
-const slop_string owl2_OWL_TOP_DATA_PROPERTY = SLOP_STR("http://www.w3.org/2002/07/owl#topDataProperty");
-const slop_string owl2_OWL_BOTTOM_DATA_PROPERTY = SLOP_STR("http://www.w3.org/2002/07/owl#bottomDataProperty");
-const slop_string owl2_SWRL_NS = SLOP_STR("http://www.w3.org/2003/11/swrl#");
-const slop_string owl2_SWRL_IMP = SLOP_STR("http://www.w3.org/2003/11/swrl#Imp");
-const slop_string owl2_SWRL_BODY = SLOP_STR("http://www.w3.org/2003/11/swrl#body");
-const slop_string owl2_SWRL_HEAD = SLOP_STR("http://www.w3.org/2003/11/swrl#head");
-
 owl2_Disposition owl2_disposition(owl2_RawAxiom ax);
 owl2_Signature owl2_make_signature(slop_arena* arena);
 uint8_t owl2_signature_has_class(owl2_Signature sig, rdf_IRI i);
@@ -236,7 +221,7 @@ uint8_t owl2_role_in_profile(types_RoleId r) {
         case types_RoleId_named_role:
         {
             __auto_type i = _mv_195.data.named_role;
-            return ((canon_string_cmp(i.value, owl2_OWL_TOP_OBJECT_PROPERTY) != 0) && ((canon_string_cmp(i.value, owl2_OWL_BOTTOM_OBJECT_PROPERTY) != 0) && ((canon_string_cmp(i.value, owl2_OWL_TOP_DATA_PROPERTY) != 0) && (canon_string_cmp(i.value, owl2_OWL_BOTTOM_DATA_PROPERTY) != 0))));
+            return (((canon_string_cmp(i.value, vocab_OWL_TOP_OBJECT_PROPERTY) != 0)) && ((canon_string_cmp(i.value, vocab_OWL_BOTTOM_OBJECT_PROPERTY) != 0)) && ((canon_string_cmp(i.value, vocab_OWL_TOP_DATA_PROPERTY) != 0)) && ((canon_string_cmp(i.value, vocab_OWL_BOTTOM_DATA_PROPERTY) != 0)));
         }
     }
     SLOP_UNREACHABLE();

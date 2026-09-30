@@ -84,7 +84,13 @@
                      store-over store-insert-ids empty-store store-insert build-store
                      store-objects store-object-count store-sole-object store-typed
                      store-contains store-has-any))
-  (import vocab (RDF_FIRST RDF_REST RDF_NIL RDF_TYPE
+  (import vocab (RDF_NS RDFS_NS XSD_NS OWL_NS SWRL_NS
+                 RDF_FIRST RDF_REST RDF_NIL RDF_TYPE
+                 OWL_AXIOM OWL_ANNOTATION OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY
+                 OWL_ANNOTATED_TARGET OWL_DISJOINT_UNION_OF
+                 OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
+                 OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
+                 SWRL_IMP
                  OWL_ONTOLOGY OWL_IMPORTS
                  OWL_THING OWL_NOTHING
                  OWL_INTERSECTION_OF OWL_UNION_OF OWL_COMPLEMENT_OF OWL_ONE_OF
@@ -113,12 +119,7 @@
                  OWL_ASYMMETRIC_PROPERTY OWL_REFLEXIVE_PROPERTY
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF))
-  (import owl2 (OWL_AXIOM OWL_ANNOTATION OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY
-                OWL_ANNOTATED_TARGET
-                RawConcept CardKind Signature make-signature
-                OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
-                OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
-                OWL_DISJOINT_UNION_OF SWRL_IMP
+  (import owl2 (RawConcept CardKind Signature make-signature
                 RawAxiom RawChain RawEdge RawClassAssertion
                 RawDeclaration PropCharacteristic Disposition disposition
                 signature-has-annotation-property
@@ -792,8 +793,8 @@
         (or (inverse-expression-term arena g (. t subject))
             (list-has-inverse arena g (. t object))))
       ((or (== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)
-         (or (== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
-             (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)))
+           (== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
+           (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0))
         (or (inverse-expression-term arena g (. t subject))
             (inverse-expression-term arena g (. t object))))
       ((== (string-cmp pv OWL_INVERSE_OF) 0)
@@ -1403,6 +1404,10 @@
                   ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs))))))))
         ((== (string-cmp ov OWL_NEGATIVE_PROPERTY_ASSERTION) 0)
           (ok (union-new RawAxiom ra-negative-assertion (frag arena t))))
+        ;; SWRL is out of profile at every rung and never to be
+        ;; implemented (unrestricted SWRL is undecidable), but it is
+        ;; RECOGNIZED: RO carries 25 rules, two of which derive
+        ;; disjointness, so treating them as inert would drop logic.
         ((== (string-cmp ov SWRL_IMP) 0)
           (ok (union-new RawAxiom ra-swrl-rule (frag arena t))))
 
@@ -1460,11 +1465,11 @@
     ;; `starts-with` is bounded by the PREFIX length and length-checks
     ;; first, so unlike `strlib.compare` it is safe on a String that
     ;; slices into a larger buffer (slop-lang/slop#161).
-    (or (starts-with v "http://www.w3.org/2002/07/owl#")
-      (or (starts-with v "http://www.w3.org/1999/02/22-rdf-syntax-ns#")
-        (or (starts-with v "http://www.w3.org/2000/01/rdf-schema#")
-          (or (starts-with v "http://www.w3.org/2003/11/swrl#")
-              (starts-with v "http://www.w3.org/2001/XMLSchema#"))))))
+    (or (starts-with v OWL_NS)
+        (starts-with v RDF_NS)
+        (starts-with v RDFS_NS)
+        (starts-with v SWRL_NS)
+        (starts-with v XSD_NS)))
 
   (fn property-axiom-kind ((sig Signature) (subj Term))
     (@intent "Which property kind a property axiom's SUBJECT is declared as")

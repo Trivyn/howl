@@ -43,16 +43,13 @@
   (@doc "The OWL 2 axiom AST (lossless for every non-annotation axiom), its disposition matrix, and the input signature (§5.2, §6.3)")
 
   (import rdf (IRI))
+  (import vocab (OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
+                 OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY))
   (import canon (string-cmp node-cmp role-cmp sort-range))
   (import types (Node RoleId EntityKind InputRef AxiomRef Omission MissingDeclaration
                  copy-iri copy-node copy-role copy-input-ref))
 
   (export
-    OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY OWL_ANNOTATED_TARGET
-    OWL_ANNOTATION OWL_DISJOINT_UNION_OF
-    OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
-    OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
-    SWRL_NS SWRL_IMP SWRL_BODY SWRL_HEAD
     CardKind PropCharacteristic
     RawConcept RawChain RawEdge RawClassAssertion RawDeclaration
     RawAxiom Disposition
@@ -64,50 +61,6 @@
     make-signature signature-has-class signature-has-object-property
     signature-has-annotation-property signature-has-data-property
     signature-size)
-
-  ;; ============================================================
-  ;; Vocabulary slop-rdf's `vocab` module does not carry
-  ;;
-  ;; Confirmed absent from ../slop-rdf/src/vocab.slop, which is
-  ;; otherwise thorough for OWL 2. Defined here rather than upstream so
-  ;; M0 does not block on a sibling release; an upstream PR is owed.
-  ;; ============================================================
-
-  ;; Axiom-annotation reification (§6.3 step 0). WITHOUT THESE THE
-  ;; HEADER PRE-PASS CANNOT RUN, and every annotated `rdfs:subClassOf`
-  ;; in a real ontology would reach the gate as four unrecognized
-  ;; triples — marking every versioned, annotation-heavy ontology
-  ;; out-of-profile, which is M0 acceptance (a) failing outright.
-  (const OWL_AXIOM              String "http://www.w3.org/2002/07/owl#Axiom")
-  (const OWL_ANNOTATED_SOURCE   String "http://www.w3.org/2002/07/owl#annotatedSource")
-  (const OWL_ANNOTATED_PROPERTY String "http://www.w3.org/2002/07/owl#annotatedProperty")
-  (const OWL_ANNOTATED_TARGET   String "http://www.w3.org/2002/07/owl#annotatedTarget")
-  (const OWL_ANNOTATION         String "http://www.w3.org/2002/07/owl#Annotation")
-
-  (const OWL_DISJOINT_UNION_OF  String "http://www.w3.org/2002/07/owl#disjointUnionOf")
-
-  ;; THE BUILT-IN OBJECT PROPERTIES. §5.2 requires these to be
-  ;; RECOGNIZED and gated OUT — never treated as ordinary role names —
-  ;; and the reason `bottomObjectProperty` matters is a false pass, not
-  ;; a missing feature: it connects no pair, so `A ⊑ ∃⊥ᵣ.⊤` entails
-  ;; `A ⊑ ⊥`. Treated as an ordinary role, CR3 happily builds an edge
-  ;; and `A` is reported SATISFIABLE — a missed unsatisfiability.
-  ;; `topObjectProperty` interacts with every existential in the
-  ;; ontology and nothing in CR1–CR7 accounts for it.
-  (const OWL_TOP_OBJECT_PROPERTY    String "http://www.w3.org/2002/07/owl#topObjectProperty")
-  (const OWL_BOTTOM_OBJECT_PROPERTY String "http://www.w3.org/2002/07/owl#bottomObjectProperty")
-  (const OWL_TOP_DATA_PROPERTY      String "http://www.w3.org/2002/07/owl#topDataProperty")
-  (const OWL_BOTTOM_DATA_PROPERTY   String "http://www.w3.org/2002/07/owl#bottomDataProperty")
-
-  ;; SWRL. Out-of-profile at every rung and never to be implemented
-  ;; (unrestricted SWRL is undecidable), but it must be RECOGNIZED —
-  ;; RO, a mainstream OBO ontology, carries 25 rules, and treating them
-  ;; as inert would drop logical content two of them use to derive
-  ;; disjointness.
-  (const SWRL_NS   String "http://www.w3.org/2003/11/swrl#")
-  (const SWRL_IMP  String "http://www.w3.org/2003/11/swrl#Imp")
-  (const SWRL_BODY String "http://www.w3.org/2003/11/swrl#body")
-  (const SWRL_HEAD String "http://www.w3.org/2003/11/swrl#head")
 
   ;; ============================================================
   ;; Class expressions
@@ -377,9 +330,9 @@
       ((fresh-role _) true)
       ((named-role i)
         (and (!= (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0)
-          (and (!= (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0)
-            (and (!= (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)
-                 (!= (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)))))))
+             (!= (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0)
+             (!= (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)
+             (!= (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)))))
 
   (fn roles-in-profile ((rs (List RoleId)))
     (@intent "Is every role in this list an ordinary one?")

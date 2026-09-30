@@ -372,9 +372,9 @@ uint8_t decode_header_consumable(rdf_Triple t) {
                 __auto_type o = _mv_387.value;
                 if (canon_string_cmp(o.value, vocab_OWL_ONTOLOGY) == 0) {
                     return 1;
-                } else if (canon_string_cmp(o.value, owl2_OWL_AXIOM) == 0) {
+                } else if (canon_string_cmp(o.value, vocab_OWL_AXIOM) == 0) {
                     return 1;
-                } else if (canon_string_cmp(o.value, owl2_OWL_ANNOTATION) == 0) {
+                } else if (canon_string_cmp(o.value, vocab_OWL_ANNOTATION) == 0) {
                     return 1;
                 } else {
                     return 0;
@@ -432,9 +432,9 @@ slop_map* decode_id_set(slop_arena* arena, slop_list_int a, slop_list_int b, slo
 termstore_TermStore decode_annotated_store(slop_arena* arena, termstore_Encoded doc) {
     {
         __auto_type st = termstore_store_over(arena, doc.dict);
-        __auto_type src = decode_vocab_id(arena, doc.dict, owl2_OWL_ANNOTATED_SOURCE);
-        __auto_type prop = decode_vocab_id(arena, doc.dict, owl2_OWL_ANNOTATED_PROPERTY);
-        __auto_type tgt = decode_vocab_id(arena, doc.dict, owl2_OWL_ANNOTATED_TARGET);
+        __auto_type src = decode_vocab_id(arena, doc.dict, vocab_OWL_ANNOTATED_SOURCE);
+        __auto_type prop = decode_vocab_id(arena, doc.dict, vocab_OWL_ANNOTATED_PROPERTY);
+        __auto_type tgt = decode_vocab_id(arena, doc.dict, vocab_OWL_ANNOTATED_TARGET);
         {
             __auto_type _coll = doc.triples;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -461,9 +461,9 @@ int64_t decode_term_id(termstore_TermStore st, rdf_Term t) {
 
 decode_Rebuilt decode_rebuild_candidates(slop_arena* arena, termstore_TermStore st, slop_list_int ax_subjs) {
     {
-        __auto_type src_pred = rdf_make_iri(arena, owl2_OWL_ANNOTATED_SOURCE);
-        __auto_type prop_pred = rdf_make_iri(arena, owl2_OWL_ANNOTATED_PROPERTY);
-        __auto_type tgt_pred = rdf_make_iri(arena, owl2_OWL_ANNOTATED_TARGET);
+        __auto_type src_pred = rdf_make_iri(arena, vocab_OWL_ANNOTATED_SOURCE);
+        __auto_type prop_pred = rdf_make_iri(arena, vocab_OWL_ANNOTATED_PROPERTY);
+        __auto_type tgt_pred = rdf_make_iri(arena, vocab_OWL_ANNOTATED_TARGET);
         __auto_type out = ((slop_list_termstore_IdTriple){ .data = NULL, .len = 0, .cap = 0 });
         slop_option_string fault = (slop_option_string){.has_value = false};
         {
@@ -528,8 +528,8 @@ slop_map* decode_asserted_among(slop_arena* arena, slop_list_termstore_IdTriple 
 slop_result_decode_Stage0_types_Fault decode_stage0_scan(slop_arena* arena, slop_arena* scratch, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved) {
     {
         __auto_type ont_subjs = decode_typed_ids_in_order(scratch, doc, vocab_OWL_ONTOLOGY);
-        __auto_type ax_subjs = decode_typed_ids_in_order(scratch, doc, owl2_OWL_AXIOM);
-        __auto_type ann_subjs = decode_typed_ids_in_order(scratch, doc, owl2_OWL_ANNOTATION);
+        __auto_type ax_subjs = decode_typed_ids_in_order(scratch, doc, vocab_OWL_AXIOM);
+        __auto_type ann_subjs = decode_typed_ids_in_order(scratch, doc, vocab_OWL_ANNOTATION);
         __auto_type declared = decode_collect_imports(arena, doc);
         __auto_type dict = doc.dict;
         __auto_type out = ((slop_list_termstore_IdTriple){ .data = NULL, .len = 0, .cap = 0 });
@@ -709,7 +709,7 @@ uint8_t decode_list_has_inverse(slop_arena* arena, termstore_TermStore g, rdf_Te
 uint8_t decode_property_axiom_on_inverse(slop_arena* arena, termstore_TermStore g, slop_string pv, rdf_Triple t) {
     if (canon_string_cmp(pv, vocab_OWL_PROPERTY_CHAIN_AXIOM) == 0) {
         return (decode_inverse_expression_term(arena, g, t.subject) || decode_list_has_inverse(arena, g, t.object));
-    } else if ((canon_string_cmp(pv, vocab_RDFS_SUBPROPERTY_OF) == 0) || ((canon_string_cmp(pv, vocab_OWL_EQUIVALENT_PROPERTY) == 0) || (canon_string_cmp(pv, vocab_OWL_PROPERTY_DISJOINT_WITH) == 0))) {
+    } else if (((canon_string_cmp(pv, vocab_RDFS_SUBPROPERTY_OF) == 0)) || ((canon_string_cmp(pv, vocab_OWL_EQUIVALENT_PROPERTY) == 0)) || ((canon_string_cmp(pv, vocab_OWL_PROPERTY_DISJOINT_WITH) == 0))) {
         return (decode_inverse_expression_term(arena, g, t.subject) || decode_inverse_expression_term(arena, g, t.object));
     } else if (canon_string_cmp(pv, vocab_OWL_INVERSE_OF) == 0) {
         return decode_inverse_expression_term(arena, g, t.object);
@@ -1107,10 +1107,10 @@ uint8_t decode_declare_entity(slop_arena* arena, owl2_Signature sig, rdf_IRI ent
 uint8_t decode_add_builtins(slop_arena* arena, owl2_Signature sig) {
     ({ rdf_IRI _key_445 = (((rdf_IRI){.value = vocab_OWL_THING})); slop_map_put(arena, sig.classes, &_key_445, NULL, 0); });
     ({ rdf_IRI _key_446 = (((rdf_IRI){.value = vocab_OWL_NOTHING})); slop_map_put(arena, sig.classes, &_key_446, NULL, 0); });
-    ({ rdf_IRI _key_447 = (((rdf_IRI){.value = owl2_OWL_TOP_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_447, NULL, 0); });
-    ({ rdf_IRI _key_448 = (((rdf_IRI){.value = owl2_OWL_BOTTOM_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_448, NULL, 0); });
-    ({ rdf_IRI _key_449 = (((rdf_IRI){.value = owl2_OWL_TOP_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_449, NULL, 0); });
-    ({ rdf_IRI _key_450 = (((rdf_IRI){.value = owl2_OWL_BOTTOM_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_450, NULL, 0); });
+    ({ rdf_IRI _key_447 = (((rdf_IRI){.value = vocab_OWL_TOP_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_447, NULL, 0); });
+    ({ rdf_IRI _key_448 = (((rdf_IRI){.value = vocab_OWL_BOTTOM_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_448, NULL, 0); });
+    ({ rdf_IRI _key_449 = (((rdf_IRI){.value = vocab_OWL_TOP_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_449, NULL, 0); });
+    ({ rdf_IRI _key_450 = (((rdf_IRI){.value = vocab_OWL_BOTTOM_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_450, NULL, 0); });
     ({ rdf_IRI _key_451 = (((rdf_IRI){.value = vocab_RDFS_LABEL})); slop_map_put(arena, sig.annot_props, &_key_451, NULL, 0); });
     ({ rdf_IRI _key_452 = (((rdf_IRI){.value = vocab_RDFS_COMMENT})); slop_map_put(arena, sig.annot_props, &_key_452, NULL, 0); });
     ({ rdf_IRI _key_453 = (((rdf_IRI){.value = vocab_RDFS_SEE_ALSO})); slop_map_put(arena, sig.annot_props, &_key_453, NULL, 0); });
@@ -1515,7 +1515,7 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
             SLOP_UNREACHABLE();
         } else if (canon_string_cmp(ov, vocab_OWL_NEGATIVE_PROPERTY_ASSERTION) == 0) {
             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_negative_assertion, .data.ra_negative_assertion = decode_frag(arena, t) }) });
-        } else if (canon_string_cmp(ov, owl2_SWRL_IMP) == 0) {
+        } else if (canon_string_cmp(ov, vocab_SWRL_IMP) == 0) {
             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_swrl_rule, .data.ra_swrl_rule = decode_frag(arena, t) }) });
         } else {
             return decode_decode_class_assertion(arena, g, t);
@@ -1547,7 +1547,7 @@ slop_result_owl2_RawAxiom_string decode_decode_class_assertion(slop_arena* arena
 }
 
 uint8_t decode_is_reserved_iri(slop_string v) {
-    return (strlib_starts_with(v, SLOP_STR("http://www.w3.org/2002/07/owl#")) || (strlib_starts_with(v, SLOP_STR("http://www.w3.org/1999/02/22-rdf-syntax-ns#")) || (strlib_starts_with(v, SLOP_STR("http://www.w3.org/2000/01/rdf-schema#")) || (strlib_starts_with(v, SLOP_STR("http://www.w3.org/2003/11/swrl#")) || strlib_starts_with(v, SLOP_STR("http://www.w3.org/2001/XMLSchema#"))))));
+    return ((strlib_starts_with(v, vocab_OWL_NS)) || (strlib_starts_with(v, vocab_RDF_NS)) || (strlib_starts_with(v, vocab_RDFS_NS)) || (strlib_starts_with(v, vocab_SWRL_NS)) || (strlib_starts_with(v, vocab_XSD_NS)));
 }
 
 int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj) {
@@ -1809,7 +1809,7 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                     }
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_different_individuals, .data.ra_different_individuals = ns }) });
                 }
-            } else if (canon_string_cmp(pv, owl2_OWL_DISJOINT_UNION_OF) == 0) {
+            } else if (canon_string_cmp(pv, vocab_OWL_DISJOINT_UNION_OF) == 0) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_union, .data.ra_disjoint_union = decode_frag(arena, t) }) });
             } else if (canon_string_cmp(pv, vocab_OWL_HAS_KEY) == 0) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_has_key, .data.ra_has_key = decode_frag(arena, t) }) });

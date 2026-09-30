@@ -71,7 +71,7 @@ int64_t canon_string_cmp(slop_string a, slop_string b) {
             _retval = 0;
         }
     }
-    SLOP_POST((((_retval == -1) || ((_retval == 0) || (_retval == 1)))), "(or (== $result -1) (or (== $result 0) (== $result 1)))");
+    SLOP_POST(((((_retval == -1)) || ((_retval == 0)) || ((_retval == 1)))), "(or (== $result -1) (== $result 0) (== $result 1))");
     return _retval;
 }
 

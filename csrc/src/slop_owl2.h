@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_vocab.h"
 #include "slop_canon.h"
 #include "slop_types.h"
 
@@ -355,21 +356,6 @@ owl2_RawAxiom owl2_raw_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i);
 slop_list_owl2_RawAxiom owl2_copy_axioms(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 owl2_Signature owl2_copy_signature(slop_arena* arena, owl2_Signature sig);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);
-
-extern const slop_string owl2_OWL_AXIOM;
-extern const slop_string owl2_OWL_ANNOTATED_SOURCE;
-extern const slop_string owl2_OWL_ANNOTATED_PROPERTY;
-extern const slop_string owl2_OWL_ANNOTATED_TARGET;
-extern const slop_string owl2_OWL_ANNOTATION;
-extern const slop_string owl2_OWL_DISJOINT_UNION_OF;
-extern const slop_string owl2_OWL_TOP_OBJECT_PROPERTY;
-extern const slop_string owl2_OWL_BOTTOM_OBJECT_PROPERTY;
-extern const slop_string owl2_OWL_TOP_DATA_PROPERTY;
-extern const slop_string owl2_OWL_BOTTOM_DATA_PROPERTY;
-extern const slop_string owl2_SWRL_NS;
-extern const slop_string owl2_SWRL_IMP;
-extern const slop_string owl2_SWRL_BODY;
-extern const slop_string owl2_SWRL_HEAD;
 
 #ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
 #define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
