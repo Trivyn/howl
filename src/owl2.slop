@@ -54,7 +54,7 @@
     RawConcept RawChain RawEdge RawClassAssertion RawDeclaration
     RawAxiom Disposition
     Signature
-    disposition concept-in-profile axiom-in-profile role-in-profile
+    disposition concept-in-profile concepts-in-profile axiom-in-profile role-in-profile
     concept-tag-rank concept-cmp concept-at sort-concepts
     render-concept render-axiom render-role render-omission
     copy-concept copy-raw-axiom copy-axioms copy-signature
@@ -369,6 +369,9 @@
       ((rc-and cs)        (concepts-in-profile cs))
       ((rc-some r f)      (and (role-in-profile r) (concept-in-profile (deref f))))
       ((rc-or _)          false)
+      ;; ¬E is never a concept of the fragment. Where it is a superclass,
+      ;; domain or range (or a conjunct of one), the gate rewrites the
+      ;; AXIOM into ⊥ GCIs before asking (gate.slop, expand-negation).
       ((rc-not _)         false)
       ((rc-all _ _)       false)
       ((rc-oneof _)       false)

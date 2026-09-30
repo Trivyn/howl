@@ -10,6 +10,7 @@
 #include "slop_canon.h"
 
 typedef struct gate_GateResult gate_GateResult;
+typedef struct gate_NegSplit gate_NegSplit;
 typedef struct gate_RboxVerdict gate_RboxVerdict;
 typedef struct gate_RangeEntry gate_RangeEntry;
 typedef struct gate_EntityRef gate_EntityRef;
@@ -43,6 +44,12 @@ SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 SLOP_LIST_DEFINE(types_RoleId, slop_list_types_RoleId)
 #endif
 
+#ifndef SLOP_LIST_OWL2_RAWCONCEPT_DEFINED
+#define SLOP_LIST_OWL2_RAWCONCEPT_DEFINED
+#define SLOP_LIST_OWL2_RAWCONCEPT_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawConcept, slop_list_owl2_RawConcept)
+#endif
+
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
@@ -64,6 +71,11 @@ SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
+#ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
+#define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
+#endif
+
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
@@ -79,6 +91,17 @@ typedef struct gate_GateResult gate_GateResult;
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
+struct gate_NegSplit {
+    slop_list_owl2_RawConcept pos;
+    slop_list_owl2_RawConcept neg;
+};
+typedef struct gate_NegSplit gate_NegSplit;
+
+#ifndef SLOP_OPTION_GATE_NEGSPLIT_DEFINED
+#define SLOP_OPTION_GATE_NEGSPLIT_DEFINED
+SLOP_OPTION_DEFINE(gate_NegSplit, slop_option_gate_NegSplit)
 #endif
 
 typedef enum {
@@ -137,6 +160,14 @@ SLOP_LIST_DEFINE(gate_EntityRef, slop_list_gate_EntityRef)
 types_InputRef gate_axiom_input_ref(slop_arena* arena, owl2_RawAxiom ax);
 slop_option_types_RoleId gate_least_role(slop_list_types_RoleId rs);
 slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+uint8_t gate_has_negated_conjunct(owl2_RawConcept c);
+slop_list_owl2_RawConcept gate_conjuncts(slop_arena* arena, owl2_RawConcept c);
+gate_NegSplit gate_negation_split(slop_arena* arena, owl2_RawConcept c);
+uint8_t gate_split_rewritable(gate_NegSplit s);
+owl2_RawConcept gate_conjunction(slop_list_owl2_RawConcept cs);
+owl2_RawConcept gate_with_conjunct(slop_arena* arena, owl2_RawConcept c, owl2_RawConcept e);
+owl2_RawAxiom gate_empty_axiom(slop_arena* arena, owl2_RawConcept c);
+slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 owl2_RawConcept* gate_box_c(slop_arena* arena, owl2_RawConcept c);
 uint8_t gate_is_rbox_axiom(owl2_RawAxiom ax);
 uint8_t gate_axiom_range_ok(slop_list_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles, owl2_RawAxiom ax);
@@ -187,6 +218,16 @@ SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
+#ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
+#define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
+#endif
+
+#ifndef SLOP_OPTION_GATE_NEGSPLIT_DEFINED
+#define SLOP_OPTION_GATE_NEGSPLIT_DEFINED
+SLOP_OPTION_DEFINE(gate_NegSplit, slop_option_gate_NegSplit)
+#endif
+
 #ifndef SLOP_OPTION_GATE_RANGEENTRY_DEFINED
 #define SLOP_OPTION_GATE_RANGEENTRY_DEFINED
 SLOP_OPTION_DEFINE(gate_RangeEntry, slop_option_gate_RangeEntry)
@@ -212,20 +253,9 @@ SLOP_OPTION_DEFINE(gate_EntityRef, slop_option_gate_EntityRef)
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
-#ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
-#define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
-SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
-#endif
-
 #ifndef SLOP_OPTION_TYPES_AXIOMREF_DEFINED
 #define SLOP_OPTION_TYPES_AXIOMREF_DEFINED
 SLOP_OPTION_DEFINE(types_AxiomRef, slop_option_types_AxiomRef)
-#endif
-
-#ifndef SLOP_LIST_OWL2_RAWCONCEPT_DEFINED
-#define SLOP_LIST_OWL2_RAWCONCEPT_DEFINED
-#define SLOP_LIST_OWL2_RAWCONCEPT_IMPL_DEFINED
-SLOP_LIST_DEFINE(owl2_RawConcept, slop_list_owl2_RawConcept)
 #endif
 
 #ifndef SLOP_LIST_TYPES_AXIOMREF_DEFINED

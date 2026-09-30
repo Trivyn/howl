@@ -1,0 +1,10 @@
+howl-report 2
+profile el
+verdict incoherent
+termination fixpoint
+rounds 5
+inconsistent true
+omitted 0
+unsatisfiable 0
+subsumptions 0
+exit 1

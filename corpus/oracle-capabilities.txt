@@ -5,6 +5,9 @@ elk pass probes-bottom-unsat SubClassOf
 elk pass probes-chain-binary ObjectPropertyChain
 elk pass probes-chain-nary ObjectPropertyChain
 elk pass probes-class-assertion-inconsistent ClassAssertion
+elk pass probes-complement-domain ObjectComplementOf (positive position)
+elk pass probes-complement-range ObjectComplementOf (positive position)
+elk pass probes-complement-superclass ObjectComplementOf (positive position)
 elk pass probes-disjoint-binary DisjointClasses
 elk pass probes-disjoint-nary DisjointClasses
 elk pass probes-domain ObjectPropertyDomain
@@ -31,6 +34,9 @@ hermit pass probes-bottom-unsat SubClassOf
 hermit pass probes-chain-binary ObjectPropertyChain
 hermit pass probes-chain-nary ObjectPropertyChain
 hermit pass probes-class-assertion-inconsistent ClassAssertion
+hermit pass probes-complement-domain ObjectComplementOf (positive position)
+hermit pass probes-complement-range ObjectComplementOf (positive position)
+hermit pass probes-complement-superclass ObjectComplementOf (positive position)
 hermit pass probes-disjoint-binary DisjointClasses
 hermit pass probes-disjoint-nary DisjointClasses
 hermit pass probes-domain ObjectPropertyDomain

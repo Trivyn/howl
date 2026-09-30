@@ -1589,7 +1589,10 @@
     ;; The v0 corpus IS the profile, fixture by fixture. One of these
     ;; going out-of-profile means a construct the spec admits has no
     ;; decoder — which downstream looks like an incomplete ontology
-    ;; rather than a missing feature.
+    ;; rather than a missing feature. The v0/negation-* fixtures are
+    ;; not here: a positive complement is in the fragment only AFTER the
+    ;; gate's rewrite (expand-negation), so they decode with rc-not and
+    ;; are checked where the rewrite runs, in the gate test below.
     (let ((mut paths (list-new arena String))
           (mut ok true))
       (do
@@ -1831,21 +1834,43 @@
            (decodes-ok arena (string-concat arena pre
              ":x a owl:Class . :x a owl:NamedIndividual .")))))
 
+  (fn gate-ttl ((arena Arena) (ttl String))
+    (@intent "Parse, stage 0, decode and gate an inline Turtle document")
+    (@spec ((Arena String) -> (Option GateResult)))
+    (@alloc arena)
+    (match (parse-ttl-string arena ttl)
+      ((error _) (none))
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) (none))
+          ((ok s0)
+            (match (decode-axioms arena (. s0 dict) (. s0 triples))
+              ((error _) (none))
+              ((ok s1)
+                (some (gate-axioms arena (. s1 axioms) (. s1 signature)
+                        (. s0 omissions))))))))))
+
   (fn gate-omissions-of-ttl ((arena Arena) (ttl String))
     (@intent "Gate an inline Turtle document and count its omissions")
     (@spec ((Arena String) -> Int))
     (@alloc arena)
-    (match (parse-ttl-string arena ttl)
-      ((error _) -1)
-      ((ok g)
-        (match (stage0-header arena (. g triples) (list-new arena IRI))
-          ((error _) -1)
-          ((ok s0)
-            (match (decode-axioms arena (. s0 dict) (. s0 triples))
-              ((error _) -1)
-              ((ok s1)
-                (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
-                                         (. s0 omissions)) omissions))))))))))
+    (match (gate-ttl arena ttl)
+      ((none)    -1)
+      ((some gr) (cast Int (list-len (. gr omissions))))))
+
+  (fn gate-accepted-of-ttl ((arena Arena) (ttl String))
+    (@intent "Gate an inline Turtle document; its accepted axioms' renderings, one per line")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (match (gate-ttl arena ttl)
+      ((none) "<did not gate>")
+      ((some gr)
+        (let ((mut out ""))
+          (do
+            (for-each (ax (. gr accepted))
+              (set! out (string-concat arena out
+                          (string-concat arena (render-axiom arena ax) "\n"))))
+            out)))))
 
   (fn rc-prefix ()
     (@intent "The shared prefix block for the range-condition table")
@@ -1854,7 +1879,7 @@
     "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .\n:u a owl:ObjectProperty . :s2 a owl:ObjectProperty . :p a owl:ObjectProperty .\n:q a owl:ObjectProperty .\n:Agent a owl:Class . :Person a owl:Class .\n")
 
   (fn test-range-composition-table ((arena Arena))
-    (@intent "§5.2's eight-row range/composition verdict table, row by row")
+    (@intent "§5.2's twelve-row range/composition verdict table, row by row")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; THE PUBLISHED CONDITION, ROW BY ROW. Row 3 is the one that
@@ -1906,7 +1931,123 @@
         (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
                     ":t owl:propertyChainAxiom ( :p :q :s ) . :t rdfs:range :Agent . :s rdfs:range :Agent .")) 0)
           (do (println "  [range] row 8 should be ACCEPTED (n-ary, last role carries it)") (set! ok false)))
+
+        ;; 9–12: A NEGATIVE RANGE IMPOSES NOTHING. The gate judges the
+        ;; theory after the negation rewrite, where ran(t) = C ⊓ ¬B is
+        ;; ran(t) = C plus the GCI ∃t.B ⊑ ⊥, and only C is a range.
+
+        ;; 9. the positive part is shared, so the chain is accepted
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range [ owl:intersectionOf ( :Agent [ owl:complementOf :Person ] ) ] . :s rdfs:range :Agent .")) 0)
+          (do (println "  [range] row 9 should be ACCEPTED (only the positive part is imposed)") (set! ok false)))
+
+        ;; 10. the positive part is still imposed
+        (when (< (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range [ owl:intersectionOf ( :Agent [ owl:complementOf :Person ] ) ] .")) 1)
+          (do (println "  [range] row 10 should be REJECTED (positive part not on s)") (set! ok false)))
+
+        ;; 11. a purely negative range imposes nothing at all
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range [ owl:complementOf :Person ] .")) 0)
+          (do (println "  [range] row 11 should be ACCEPTED (negative range only)") (set! ok false)))
+
+        ;; 12. a range the rewrite cannot take is omitted AS WRITTEN and
+        ;;     keeps imposing its whole filler, so the chain goes too
+        (when (!= (gate-omissions-of-ttl arena (string-concat arena pre
+                    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range [ owl:intersectionOf ( :Agent [ owl:complementOf [ owl:unionOf ( :Agent :Person ) ] ] ) ] . :s rdfs:range :Agent .")) 2)
+          (do (println "  [range] row 12 should omit the range AND the chain") (set! ok false)))
         ok)))
+
+  ;; ============================================================
+  ;; Negation in positive positions (§5.2's rewrite; SPEC §5.3 L0)
+  ;; ============================================================
+
+  (fn neg-prefix ()
+    (@intent "The shared prefix block for the negation-rewrite tests")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class . :B a owl:Class . :C a owl:Class .\n:r a owl:ObjectProperty .\n")
+
+  (fn accepts-exactly ((arena Arena) (label String) (ttl String) (want String))
+    (@intent "Does the gate accept exactly these renderings? Prints what it got when not")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((got (gate-accepted-of-ttl arena (string-concat arena (neg-prefix) ttl))))
+      (if (== (string-cmp got want) 0)
+        true
+        (do
+          (println (string-concat arena (string-concat arena "  [negation] " label) ": accepted"))
+          (println got)
+          false))))
+
+  (fn test-negation-rewrites-to-bottom-gcis ((arena Arena))
+    (@intent "Each positive-position ¬E becomes exactly its ⊥ GCI, beside the positive part")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; EXACT SETS, because the two wrong rewrites both look plausible:
+    ;; dropping the ⊥ piece keeps every positive consequence, and giving
+    ;; a range the DOMAIN form ∃r.⊤ ⊓ B ⊑ ⊥ is still a ⊥ GCI — it just
+    ;; forbids r-edges FROM a B instead of INTO one.
+    (and
+      ;; ran(r) ⊑ A ⊓ ¬B  ⇒  ran(r) ⊑ A,  ∃r.B ⊑ ⊥
+      (accepts-exactly arena "range"
+        ":r rdfs:range [ owl:intersectionOf ( :A [ owl:complementOf :B ] ) ] ."
+        "ObjectPropertyRange(http://example.org/t#r http://example.org/t#A)\nSubClassOf(ObjectSomeValuesFrom(http://example.org/t#r http://example.org/t#B) owl:Nothing)\n")
+      ;; dom(r) ⊑ ¬B  ⇒  ∃r.⊤ ⊓ B ⊑ ⊥, and no domain axiom is left
+      (accepts-exactly arena "domain"
+        ":r rdfs:domain [ owl:complementOf :B ] ."
+        "SubClassOf(ObjectIntersectionOf(ObjectSomeValuesFrom(http://example.org/t#r owl:Thing) http://example.org/t#B) owl:Nothing)\n")
+      ;; C ⊑ A ⊓ ¬∃r.B ⊓ ¬B  ⇒  C ⊑ A,  C ⊓ ∃r.B ⊑ ⊥,  C ⊓ B ⊑ ⊥
+      (accepts-exactly arena "superclass"
+        ":C rdfs:subClassOf [ owl:intersectionOf ( :A [ owl:complementOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ] [ owl:complementOf :B ] ) ] ."
+        "SubClassOf(ObjectIntersectionOf(http://example.org/t#C ObjectSomeValuesFrom(http://example.org/t#r http://example.org/t#B)) owl:Nothing)\nSubClassOf(ObjectIntersectionOf(http://example.org/t#C http://example.org/t#B) owl:Nothing)\nSubClassOf(http://example.org/t#C http://example.org/t#A)\n")
+      ;; a conjunction on the left is extended, not nested
+      (accepts-exactly arena "conjunction on the left"
+        "[ owl:intersectionOf ( :A :C ) ] rdfs:subClassOf [ owl:complementOf :B ] ."
+        "SubClassOf(ObjectIntersectionOf(http://example.org/t#A http://example.org/t#C http://example.org/t#B) owl:Nothing)\n")))
+
+  (fn test-negation-rewrites-whole-axioms-or-none ((arena Arena))
+    (@intent "An axiom the rewrite cannot fully take is omitted as written, never split")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Splitting would accept ran(r) ⊑ A and report a ⊥ GCI the user
+    ;; never wrote; the omission must be the user's own axiom.
+    (let ((pre (neg-prefix)))
+      (and
+        ;; an out-of-profile E
+        (accepts-exactly arena "E out of profile"
+          ":r rdfs:range [ owl:intersectionOf ( :A [ owl:complementOf [ owl:unionOf ( :B :C ) ] ] ) ] ." "")
+        (== (gate-omissions-of-ttl arena (string-concat arena pre
+              ":r rdfs:range [ owl:intersectionOf ( :A [ owl:complementOf [ owl:unionOf ( :B :C ) ] ] ) ] .")) 1)
+        ;; an out-of-profile subclass
+        (accepts-exactly arena "C out of profile"
+          "[ owl:unionOf ( :A :C ) ] rdfs:subClassOf [ owl:complementOf :B ] ." "")
+        ;; ¬E under ∃ is not a positive position at all
+        (accepts-exactly arena "under an existential"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:complementOf :B ] ] ." ""))))
+
+  (fn test-negative-range-normalizes-to-bottom ((arena Arena))
+    (@intent "ran(r) ⊑ ¬B normalizes to ∃r.B ⊑ X, X ⊑ ⊥ — negative on the left")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((b-cls (cls "http://example.org/t#B"))
+          (r     (rol "http://example.org/t#r")))
+      (match (normalize-fixture arena "corpus/fixtures/probes/complement-range.ttl")
+        ((none) false)
+        ((some no)
+          (let ((ax (. no axioms))
+                (mut target (Option Node) (none)))
+            (do
+              (for-each (a ax)
+                (match a
+                  ((sub-some-lhs rr c d)
+                    (when (and (role-eq rr r) (node-eq c b-cls)) (set! target (some d))))
+                  (_ (do))))
+              (match target
+                ((none) false)
+                ((some x)
+                  (and (match x ((fresh-node _) true) (_ false))
+                       (norm-contains ax (union-new NormAxiom sub-name x (node-bottom))))))))))))
 
   ;; ============================================================
   ;; Front end — normalization (M0 slice 4)
@@ -2170,6 +2311,9 @@
         (list-push ps "corpus/fixtures/v0/abox-assertions.ttl")
         (list-push ps "corpus/fixtures/v0/top-bottom.ttl")
         (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-superclass.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-domain-range.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-chain.ttl")
         (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
         (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
         ps)))
@@ -2928,7 +3072,7 @@
       ((some gr) (cast Int (list-len (. gr omissions))))))
 
   (fn test-gate-accepts-every-v0-fixture ((arena Arena))
-    (@intent "All 17 v0 fixtures gate with EMPTY coverage.omitted")
+    (@intent "All 20 v0 fixtures gate with EMPTY coverage.omitted")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; THE FALSE-FAIL HALF, and the one review habitually skips. A gate
@@ -2956,6 +3100,9 @@
         (list-push paths "corpus/fixtures/v0/abox-assertions.ttl")
         (list-push paths "corpus/fixtures/v0/top-bottom.ttl")
         (list-push paths "corpus/fixtures/v0/litmus.ttl")
+        (list-push paths "corpus/fixtures/v0/negation-superclass.ttl")
+        (list-push paths "corpus/fixtures/v0/negation-domain-range.ttl")
+        (list-push paths "corpus/fixtures/v0/negation-chain.ttl")
         (for-each (p paths)
           (when (!= (gate-omission-count arena p) 0)
             (do (print "  [gate] expected 0 omissions, got ")
@@ -3661,7 +3808,7 @@
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-gate-accepts-every-v0-fixture arena)))
-            (print-test-result "gate: all 17 v0 fixtures gate CLEAN (false-fail half)" r)
+            (print-test-result "gate: all 20 v0 fixtures gate CLEAN (false-fail half)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-gate-rejects-every-out-of-profile-fixture arena)))
@@ -3689,7 +3836,19 @@
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-range-composition-table arena)))
-            (print-test-result "range: all 8 rows of §5.2's verdict table" r)
+            (print-test-result "range: all 12 rows of §5.2's verdict table" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-negation-rewrites-to-bottom-gcis arena)))
+            (print-test-result "negation: each positive ¬E becomes exactly its ⊥ GCI" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-negation-rewrites-whole-axioms-or-none arena)))
+            (print-test-result "negation: a partly-out axiom is omitted as written" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-negative-range-normalizes-to-bottom arena)))
+            (print-test-result "negation: a negative range is ∃r.B ⊑ ⊥, on the left" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-undeclared-property-is-an-input-error arena)))
