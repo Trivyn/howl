@@ -267,6 +267,7 @@ CONSTRUCT_LINES = {
     "TransitiveObjectProperty (-> r o r subseteq r)": r"owl:TransitiveProperty",
     "ObjectPropertyDomain": r"rdfs:domain",
     "ObjectPropertyRange": r"rdfs:range",
+    "ObjectComplementOf (positive position)": r"owl:complementOf",
     "ClassAssertion": r"^:\w+ a :",
     "ObjectPropertyAssertion": r"^:\w+ :\w+ :\w+ \.",
 }

@@ -141,5 +141,61 @@ class ChainTest(unittest.TestCase):
         self.assertEqual(census.inadmissible_chains(g), {})
 
 
+class NegationTest(unittest.TestCase):
+    """SPEC.md §5.2's negation rewrite, as the census implements it."""
+    DECL = """:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :X a owl:Class .
+"""
+
+    def out_of(self, text):
+        _, _, out, _, _ = census.census(None, graph=graph(self.DECL + text))
+        return out
+
+    def test_positive_positions_are_in(self):
+        for text in (":A rdfs:subClassOf [ owl:complementOf :B ] .",
+                     ":A rdfs:subClassOf [ owl:intersectionOf ( :C [ owl:complementOf :B ] ) ] .",
+                     ":r rdfs:domain [ owl:intersectionOf ( :C [ owl:complementOf :B ] ) ] .",
+                     ":r rdfs:range [ owl:complementOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] ] ."):
+            self.assertEqual(sum(self.out_of(text).values()), 0, text)
+
+    def test_other_positions_are_out(self):
+        for text in ("[ owl:complementOf :B ] rdfs:subClassOf :A .",
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:complementOf :B ] ] .",
+                     ":A rdfs:subClassOf [ owl:unionOf ( :C [ owl:complementOf :B ] ) ] .",
+                     ":A owl:equivalentClass [ owl:complementOf :B ] .",
+                     # one blank node, referenced from a positive AND a negative position
+                     "_:n owl:complementOf :B . :A rdfs:subClassOf _:n . _:n rdfs:subClassOf :C .",
+                     "_:m owl:intersectionOf ( :C [ owl:complementOf :B ] ) . :A rdfs:subClassOf _:m . _:m rdfs:subClassOf :X ."):
+            self.assertIn("ObjectComplementOf", self.out_of(text), text)
+
+    def chains(self, ranges):
+        return census.inadmissible_chains(graph(self.DECL + ":t owl:propertyChainAxiom ( :r :s ) .\n" + ranges))
+
+    def test_a_negative_range_imposes_nothing(self):
+        self.assertEqual(self.chains(":t rdfs:range [ owl:complementOf :B ] ."), {})
+
+    def test_the_positive_part_is_still_imposed(self):
+        both = ":t rdfs:range [ owl:intersectionOf ( :C [ owl:complementOf :B ] ) ] ."
+        self.assertEqual(self.chains(both + " :s rdfs:range :C ."), {})
+        self.assertEqual(len(self.chains(both)), 1)
+
+    def test_several_positive_conjuncts_match_a_written_conjunction(self):
+        self.assertEqual(self.chains(
+            ":t rdfs:range [ owl:intersectionOf ( :C :X [ owl:complementOf :B ] ) ] ."
+            " :s rdfs:range [ a owl:Class ; owl:intersectionOf ( :C :X ) ] ."), {})
+
+    def test_a_restriction_keys_the_same_with_or_without_its_type(self):
+        # HOWL decodes both spellings to one concept, so the chain is admissible.
+        self.assertEqual(self.chains(
+            ":t rdfs:range [ owl:intersectionOf ( [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :A ]"
+            " [ owl:complementOf :B ] ) ] ."
+            " :s rdfs:range [ owl:onProperty :r ; owl:someValuesFrom :A ] ."), {})
+
+    def test_an_unrewritable_range_imposes_its_whole_filler(self):
+        self.assertEqual(len(self.chains(
+            ":t rdfs:range [ owl:intersectionOf ( :C [ owl:complementOf [ owl:unionOf ( :A :B ) ] ] ) ] ."
+            " :s rdfs:range :C .")), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

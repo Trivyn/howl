@@ -99,13 +99,83 @@ OUT, IN, INERT, CONSUMED = "out", "in_v0", "inert", "consumed"
 def _expression_key(g, t, seen=()):
     """A class expression as a structural key: an IRI by value, a blank node by
     what it says. "The same class expression" of SPEC §5.2's range/composition
-    condition is syntactic, so two blank nodes spelling the same ∃r.C match."""
+    condition is syntactic, so two blank nodes spelling the same ∃r.C match.
+    A conjunction is keyed by its members alone, in order, so that the positive
+    part of a negated range (below) and a conjunction written out directly
+    compare as the same expression. rdf:type is not part of the key: HOWL's
+    decoder reads `[ a owl:Restriction ; ... ]` and `[ ... ]` as one concept,
+    and a key that told them apart would refuse a chain HOWL accepts."""
     if not isinstance(t, BNode) or t in seen:
         return str(t)
-    return tuple(sorted((str(p), _expression_key(g, o, seen + (t,))) for p, o in g.predicate_objects(t)))
+    head = g.value(t, OWL.intersectionOf)
+    if head is not None:
+        return ("and",) + tuple(_expression_key(g, m, seen + (t,)) for m in Collection(g, head))
+    return tuple(sorted((str(p), _expression_key(g, o, seen + (t,)))
+                        for p, o in g.predicate_objects(t) if p != RDF.type))
 
 
-def inadmissible_chains(g):
+# NEGATION IN POSITIVE POSITIONS (SPEC.md §5.2's negation rewrite). ¬E as the
+# whole object of rdfs:subClassOf / rdfs:domain / rdfs:range, or a member of
+# the owl:intersectionOf list that is such an object, is rewritten into EL
+# (C ⊓ E ⊑ ⊥, ∃r.⊤ ⊓ E ⊑ ⊥, ∃r.E ⊑ ⊥). Anywhere else a complement is out.
+POSITIVE_PRED = (RDFS.subClassOf, RDFS.domain, RDFS.range)
+
+
+def _conjuncts(g, c):
+    """c's top-level conjuncts: the members of its intersection, else c."""
+    head = g.value(c, OWL.intersectionOf) if isinstance(c, BNode) else None
+    return list(Collection(g, head)) if head is not None else [c]
+
+
+def _only_positive(g, n, own):
+    """Is every reference to n the object of a positive predicate, and does n
+    say nothing but `own` (its constructor) and rdf:type? A blank node that is
+    also, say, the SUBJECT of rdfs:subClassOf sits on the left of that axiom."""
+    refs = list(g.subject_predicates(n))
+    return (bool(refs) and all(p in POSITIVE_PRED for _, p in refs)
+            and all(p in (own, RDF.type) for p in g.predicates(n)))
+
+
+def positive_complements(g):
+    """Complement nodes the negation rewrite takes. A node referenced from
+    anywhere else too (a shared blank node) is not one. DELIBERATELY STRICTER
+    than HOWL there: HOWL decodes each reference separately and rewrites the
+    positive one, but the census gives the complementOf TRIPLE one disposition,
+    so it marks it out and a projection drops both axioms. That can only remove
+    an axiom HOWL would keep, never keep one HOWL would omit."""
+    out = set()
+    for c in set(g.subjects(OWL.complementOf, None)):
+        if _only_positive(g, c, OWL.complementOf):
+            out.add(c)
+            continue
+        # A member of a positive conjunction: c's one reference is an
+        # rdf:first cell of the intersection's list; walk back to its head.
+        refs = list(g.subject_predicates(c))
+        if len(refs) != 1 or refs[0][1] != RDF.first or not all(
+                p in (OWL.complementOf, RDF.type) for p in g.predicates(c)):
+            continue
+        cell = refs[0][0]
+        while True:
+            back = list(g.subjects(RDF.rest, cell))
+            if len(back) != 1:
+                break
+            cell = back[0]
+        owners = list(g.subjects(OWL.intersectionOf, cell))
+        if len(owners) == 1 and _only_positive(g, owners[0], OWL.intersectionOf):
+            out.add(c)
+    return out
+
+
+def _tree(g, t, seen=()):
+    """Every triple of a class expression's blank-node tree."""
+    if not isinstance(t, BNode) or t in seen:
+        return
+    for p, o in g.predicate_objects(t):
+        yield t, p, o
+        yield from _tree(g, o, seen + (t,))
+
+
+def inadmissible_chains(g, sig=None):
     """{(t, list head): reason} for every property chain that is not a v0
     chain: malformed (fewer than two named roles), or violating SPEC §5.2's
     range/composition condition, implemented from the SPEC, not from HOWL:
@@ -119,7 +189,28 @@ def inadmissible_chains(g):
     the s-edge's target, which was built to satisfy range(rn) only, so a
     range on t that rn does not share would be silently unmet. A chain with a
     non-IRI step (an inverse) is out of profile already and not judged here.
+
+    "Imposed" is judged on the theory AFTER the negation rewrite, as HOWL's gate
+    judges it: a range C ⊓ ¬E imposes only C (¬E became the GCI ∃r.E ⊑ ⊥,
+    which ranges never touch), and a range that is only ¬E imposes nothing. A
+    range the rewrite cannot take (some part of it is out of profile) is left
+    as written and imposes its whole filler.
     """
+    sig = sig or _base_signature(g)
+    positive = sig["positive_complements"]
+
+    def range_keys(c):
+        conj = _conjuncts(g, c)
+        if not any(m in positive for m in conj) or any(
+                classify_triple(sig, *t)[0] == OUT for t in _tree(g, c)):
+            return {_expression_key(g, c)}
+        kept = [m for m in conj if m not in positive]
+        if not kept:
+            return set()
+        if len(kept) == 1:
+            return {_expression_key(g, kept[0])}
+        return {("and",) + tuple(_expression_key(g, m) for m in kept)}
+
     up = {}
     for a, b in g.subject_objects(RDFS.subPropertyOf):
         up.setdefault(a, set()).add(b)
@@ -128,7 +219,7 @@ def inadmissible_chains(g):
         up.setdefault(b, set()).add(a)
     ranges = {}
     for r, c in g.subject_objects(RDFS.range):
-        ranges.setdefault(r, set()).add(_expression_key(g, c))
+        ranges.setdefault(r, set()).update(range_keys(c))
 
     def imposed(r):
         seen, todo, out = {r}, [r], set()
@@ -159,6 +250,13 @@ def inadmissible_chains(g):
 
 def signature(g):
     """Declared entity sets, needed to disposition a triple in context."""
+    sig = _base_signature(g)
+    sig["inadmissible_chains"] = inadmissible_chains(g, sig)
+    return sig
+
+
+def _base_signature(g):
+    """The signature without the chain verdicts, which are judged over it."""
     # The built-in data properties are data properties without a declaration,
     # as HOWL's add-builtins (decode.slop) registers them.
     data = set(g.subjects(RDF.type, OWL.DatatypeProperty)) | {OWL.topDataProperty, OWL.bottomDataProperty}
@@ -172,7 +270,8 @@ def signature(g):
         # restriction's owl:onProperty tells them apart, and a predicate-only
         # table would count the data one as in v0.
         "data_restrictions": {s for s, o in g.subject_objects(OWL.onProperty) if o in data},
-        "inadmissible_chains": inadmissible_chains(g),
+        "inadmissible_chains": {},
+        "positive_complements": positive_complements(g),
         # AllDisjointClasses nodes with fewer than two members. OWL 2's mapping
         # requires at least two, so such a node is no DisjointClasses axiom;
         # HOWL decodes it as unrecognized (out-of-profile/disjoint-arity.ttl).
@@ -241,6 +340,8 @@ def classify_triple(sig, s, p, o):
     if p in sig["ann"] or p in (RDFS.label, RDFS.comment, RDFS.seeAlso,
                                RDFS.isDefinedBy):
         return INERT, "annotation assertion"
+    if p == OWL.complementOf and s in sig["positive_complements"]:
+        return IN, "ObjectComplementOf (positive position)"
     if p in OUT_PRED:
         return OUT, OUT_PRED[p]
     if p in sig["data"] or isinstance(o, Literal):
