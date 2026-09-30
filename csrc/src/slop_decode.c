@@ -1483,7 +1483,11 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
                 } else if (_mv_481.is_ok) {
                     __auto_type cs = _mv_481.data.ok;
-                    return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_classes, .data.ra_disjoint_classes = cs }) });
+                    if (((int64_t)((cs).len)) < 2) {
+                        return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_unrecognized, .data.ra_unrecognized = decode_frag(arena, t) }) });
+                    } else {
+                        return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_classes, .data.ra_disjoint_classes = cs }) });
+                    }
                 }
                 SLOP_UNREACHABLE();
             }

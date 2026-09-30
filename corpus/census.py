@@ -17,6 +17,7 @@ gate under test, the acceptance criterion would be self-certifying.
 import sys
 from collections import Counter
 from rdflib import Graph, RDF, RDFS, OWL, BNode, URIRef, Literal, Namespace
+from rdflib.collection import Collection
 
 SWRL = Namespace("http://www.w3.org/2003/11/swrl#")
 
@@ -119,7 +120,6 @@ def inadmissible_chains(g):
     range on t that rn does not share would be silently unmet. A chain with a
     non-IRI step (an inverse) is out of profile already and not judged here.
     """
-    from rdflib.collection import Collection
     up = {}
     for a, b in g.subject_objects(RDFS.subPropertyOf):
         up.setdefault(a, set()).add(b)
@@ -173,6 +173,13 @@ def signature(g):
         # table would count the data one as in v0.
         "data_restrictions": {s for s, o in g.subject_objects(OWL.onProperty) if o in data},
         "inadmissible_chains": inadmissible_chains(g),
+        # AllDisjointClasses nodes with fewer than two members. OWL 2's mapping
+        # requires at least two, so such a node is no DisjointClasses axiom;
+        # HOWL decodes it as unrecognized (out-of-profile/disjoint-arity.ttl).
+        "short_disjoint": {
+            s for s in g.subjects(RDF.type, OWL.AllDisjointClasses)
+            if len([m for h in g.objects(s, OWL.members) for m in Collection(g, h)]) < 2
+        },
     }
 
 
@@ -218,6 +225,8 @@ def classify_triple(sig, s, p, o):
             return CONSUMED, "declaration / header"
         if o in OUT_TYPE:
             return OUT, OUT_TYPE[o]
+        if o == OWL.AllDisjointClasses and s in sig["short_disjoint"]:
+            return OUT, "AllDisjointClasses with fewer than two members"
         if o in IN_V0_TYPE:
             return IN, IN_V0_TYPE[o]
         # A blank-node object is an anonymous class expression -- the only

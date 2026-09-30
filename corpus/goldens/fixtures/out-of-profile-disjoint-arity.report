@@ -1,0 +1,14 @@
+howl-report 1
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 2
+omission Unrecognized(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AllDisjointClasses> .)
+omission Unrecognized(_:b2 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AllDisjointClasses> .)
+unsatisfiable 0
+subsumptions 3
+sub http://example.org/t#A http://example.org/t#A
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

@@ -1,0 +1,9 @@
+howl-report 1
+verdict incoherent
+termination fixpoint
+rounds 4
+inconsistent true
+omitted 0
+unsatisfiable 0
+subsumptions 0
+exit 1

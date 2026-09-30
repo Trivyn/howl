@@ -1382,7 +1382,16 @@
             ((some head)
               (match (decode-concept-list arena g head CONCEPT_FUEL)
                 ((error m) (error m))
-                ((ok cs)   (ok (union-new RawAxiom ra-disjoint-classes cs)))))))
+                ;; FEWER THAN TWO MEMBERS IS NO AXIOM. OWL 2's mapping
+                ;; requires at least two; read as DisjointClasses, one
+                ;; member became disjoint from itself (a false
+                ;; unsatisfiable) and none became ⊤ ⊑ ⊥ (a false
+                ;; inconsistent). It is kept as unrecognized, so it is
+                ;; omitted and the run is inconclusive
+                ;; (out-of-profile/disjoint-arity).
+                ((ok cs)   (if (< (list-len cs) 2)
+                             (ok (union-new RawAxiom ra-unrecognized (frag arena t)))
+                             (ok (union-new RawAxiom ra-disjoint-classes cs))))))))
         ((== (string-cmp ov OWL_ALL_DISJOINT_PROPERTIES) 0)
           (match (members-head arena g (. t subject))
             ((none) (error "owl:AllDisjointProperties without owl:members"))

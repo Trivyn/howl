@@ -1,0 +1,18 @@
+# A COMPLEX RANGE FILLER ON AN ASSERTED EDGE (SPEC 5.3 L2, L4). range(r) is
+# C ⊓ ∃p.E, normalized through a fresh name that the seed for r(a,b) must place
+# on b. Then ∃p.E ⊑ F makes b an F, and G(b) with F disjoint from G is a
+# contradiction. Expect: INCONSISTENT (exit 1).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :E a owl:Class . :F a owl:Class . :G a owl:Class .
+:F owl:disjointWith :G .
+:r a owl:ObjectProperty . :p a owl:ObjectProperty .
+:r rdfs:range [ a owl:Class ; owl:intersectionOf ( :C [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :E ] ) ] .
+[ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom :E ] rdfs:subClassOf :F .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual , :G .
+:a :r :b .

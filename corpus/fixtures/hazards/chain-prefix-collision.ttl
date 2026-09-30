@@ -1,0 +1,27 @@
+# TWO CHAIN PREFIXES THAT COLLIDED. An n-ary chain is decomposed left-
+# associated through fresh intermediate roles, one per (prefix, super-role),
+# keyed by text. The key joined the prefix's roles with '.', which is legal
+# inside an IRI (even in a scheme), so the prefixes (urn:a.b, urn:c) and
+# (urn:a, b.urn:c) of two chains into urn:t both keyed
+# "chain:urn:a.b.urn:c.=>urn:t": ONE intermediate role for both. Then the
+# second chain's prefix followed by the FIRST chain's last role composed into
+# urn:t, which neither chain states, and A ⊑ B followed. The key now
+# separates its parts with spaces, which an IRI cannot contain.
+# Expect: COHERENT, A NOT subsumed by B, exit 0.
+
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/chain-prefix-collision> a owl:Ontology .
+<urn:A> a owl:Class . <urn:B> a owl:Class . <urn:D> a owl:Class .
+<urn:a.b> a owl:ObjectProperty . <urn:c> a owl:ObjectProperty . <urn:d> a owl:ObjectProperty .
+<urn:a> a owl:ObjectProperty . <b.urn:c> a owl:ObjectProperty . <urn:e> a owl:ObjectProperty .
+<urn:t> a owl:ObjectProperty .
+
+<urn:t> owl:propertyChainAxiom ( <urn:a.b> <urn:c> <urn:d> ) .
+<urn:t> owl:propertyChainAxiom ( <urn:a> <b.urn:c> <urn:e> ) .
+
+<urn:A> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty <urn:a> ; owl:someValuesFrom
+          [ a owl:Restriction ; owl:onProperty <b.urn:c> ; owl:someValuesFrom
+            [ a owl:Restriction ; owl:onProperty <urn:d> ; owl:someValuesFrom <urn:D> ] ] ] .
+[ a owl:Restriction ; owl:onProperty <urn:t> ; owl:someValuesFrom <urn:D> ] rdfs:subClassOf <urn:B> .

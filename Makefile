@@ -44,7 +44,7 @@ SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan golden-asan crate-vendor crate-build crate-test crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
-        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-check
+        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-check abox-fuzz
 
 PLATFORM ?= unknown
 
@@ -222,7 +222,18 @@ acceptance: cli
 	check corpus/fixtures/hazards/cyclic-hierarchy.ttl 0; \
 	check corpus/fixtures/hazards/range-complex-fillers.ttl 0; \
 	check corpus/fixtures/hazards/role-hierarchy-deep.ttl 0; \
+	check corpus/fixtures/hazards/range-key-collision.ttl 0; \
+	check corpus/fixtures/hazards/chain-prefix-collision.ttl 0; \
+	check corpus/fixtures/hazards/thing-key-collision.ttl 0; \
+	check corpus/fixtures/hazards/abox-super-role-range.ttl 1; \
+	check corpus/fixtures/hazards/abox-complex-range.ttl 1; \
+	check corpus/fixtures/hazards/abox-domain.ttl 1; \
+	check corpus/fixtures/hazards/abox-chain-mixed.ttl 1; \
+	check corpus/fixtures/hazards/abox-nary-chain.ttl 1; \
+	check corpus/fixtures/hazards/abox-nothing.ttl 1; \
+	check corpus/fixtures/hazards/abox-complex-assertion.ttl 1; \
 	check corpus/fixtures/out-of-profile/inverse-expressions.ttl 2; \
+	check corpus/fixtures/out-of-profile/disjoint-arity.ttl 2; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi
 
@@ -371,6 +382,15 @@ probes-update: cli oracle
 diff-fixtures: cli oracle
 	python3 -m unittest -q corpus/test_entdiff.py
 	python3 corpus/differential.py fixtures
+
+# THE ABOX REDUCTION, CHECKED AGAINST HERMIT OVER GENERATED INPUT (SPEC.md
+# §5.3). The proof is about the calculus; this checks the code against it,
+# over 400 seeded v0 ontologies with ABoxes that nobody wrote by hand. Every
+# one must clear the gate and match HermiT: consistency, unsatisfiable classes
+# and every class pair. The counts must match corpus/abox-fuzz.txt, which only
+# `python3 corpus/abox_fuzz.py --update` rewrites.
+abox-fuzz: cli oracle
+	python3 corpus/abox_fuzz.py
 
 # EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
 # W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's

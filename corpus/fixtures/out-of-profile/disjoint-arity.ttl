@@ -1,0 +1,16 @@
+# AN AllDisjointClasses WITH FEWER THAN TWO MEMBERS. OWL 2 requires at least
+# two operands, so this is not a DisjointClasses axiom at all. Decoded as one,
+# the single member became disjoint from itself - A unsatisfiable, a false
+# INCOHERENT - and an empty member list became ⊤ ⊑ ⊥, a false INCONSISTENT.
+# It is now recognized as malformed and omitted: the run is INCONCLUSIVE, and
+# nothing is derived from it. (The OWL API reads it as an axiom anyway, so
+# HermiT calls A unsatisfiable; this directory is not diffed against oracles.)
+# Expect: INCONCLUSIVE, consistent, A satisfiable, 2 omissions, exit 2.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class .
+[] a owl:AllDisjointClasses ; owl:members ( :A ) .
+[] a owl:AllDisjointClasses ; owl:members () .

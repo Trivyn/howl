@@ -143,8 +143,8 @@
   ;; without any extra write-back.
   (type NormState (record
     (axioms           (List NormAxiom))
-    (fresh            (List String))      ; index = fresh-node id, value = canonical text
-    (fresh-index      (Map String Int))   ; canonical text -> fresh-node id
+    (fresh            (List String))      ; index = fresh-node id, value = its key (concept-key)
+    (fresh-index      (Map String Int))   ; key -> fresh-node id
     (fresh-roles      (List String))      ; index = fresh-role id, value = provenance text
     (fresh-role-index (Map String Int))   ; provenance text -> fresh-role id
     (neg-done         (Set String))       ; expressions whose NEGATIVE definition is emitted
@@ -274,8 +274,71 @@
           (_           (list-push out c)))
         out)))
 
+  ;; ============================================================
+  ;; Fresh-name keys
+  ;;
+  ;; A FRESH NAME STANDS FOR ONE EXPRESSION, so its key must be INJECTIVE:
+  ;; two different expressions keyed alike share one name, and whichever
+  ;; definition is emitted first is the only one (`neg-done`/`pos-done` are
+  ;; keyed the same way). The canonical rendering is not injective here. It
+  ;; writes ⊤ as "owl:Thing", which <owl:Thing> - scheme "owl", a legal class
+  ;; IRI - also renders as, so ∃r.⊤ and ∃r.<owl:Thing> shared a name and one
+  ;; GCI lost its left-hand side (hazards/thing-key-collision); and an IRI
+  ;; may contain parentheses. So keys come from this renderer instead: every
+  ;; IRI in angle brackets, which no IRI can contain, and ⊤/⊥ as symbols
+  ;; that no bracketed IRI can be. Each form then begins with a distinct
+  ;; token and its parts are delimited, so it reads back one way only.
+  ;;
+  ;; Only the v0 constructors reach a key - the gate admits nothing else -
+  ;; so the remaining variants share one arm, marked so it cannot collide.
+  ;; The keys are never printed: reports use the canonical rendering.
+  ;; ============================================================
+
+  (fn concept-key ((arena Arena) (c RawConcept))
+    (@intent "An injective key for a v0 class expression")
+    (@spec ((Arena RawConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((rc-thing)   "⊤")
+      ((rc-nothing) "⊥")
+      ((rc-name n)  (node-key arena n))
+      ((rc-and cs)
+        (let ((mut out "and(")
+              (mut first true))
+          (do
+            (for-each (x cs)
+              (do
+                (when (not first) (set! out (string-concat arena out " ")))
+                (set! out (string-concat arena out (concept-key arena x)))
+                (set! first false)))
+            (string-concat arena out ")"))))
+      ((rc-some r f)
+        (string-concat arena "some("
+          (string-concat arena (role-key arena r)
+            (string-concat arena " "
+              (string-concat arena (concept-key arena (deref f)) ")")))))
+      ;; UNREACHABLE BY THE GATE. "!" begins no other form.
+      (_ (string-concat arena "!" (render-concept arena c)))))
+
+  (fn node-key ((arena Arena) (n Node))
+    (@intent "A node's key: its IRI bracketed, tagged by kind")
+    (@spec ((Arena Node) -> String))
+    (@alloc arena)
+    (match n
+      ((class-node i)      (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((individual-node i) (string-concat arena "{<" (string-concat arena (. i value) ">}")))
+      ((fresh-node k)      (string-concat arena "_:" (int-to-string arena k)))))
+
+  (fn role-key ((arena Arena) (r RoleId))
+    (@intent "A role's key: its IRI bracketed")
+    (@spec ((Arena RoleId) -> String))
+    (@alloc arena)
+    (match r
+      ((named-role i) (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((fresh-role k) (string-concat arena "_:r" (int-to-string arena k)))))
+
   (fn prefix-text ((arena Arena) (conj (List RawConcept)) (upto Int))
-    (@intent "Canonical text of the first `upto` conjuncts, as one intersection")
+    (@intent "The key of the first `upto` conjuncts, as one intersection")
     (@spec ((Arena (List RawConcept) Int) -> String))
     (@alloc arena)
     ;; The KEY for an intermediate fresh name. Keying on the prefix
@@ -286,7 +349,7 @@
       (do
         (while (< i upto)
           (do (list-push pre (concept-at conj i)) (set! i (+ i 1))))
-        (render-concept arena (union-new RawConcept rc-and pre)))))
+        (concept-key arena (union-new RawConcept rc-and pre)))))
 
   (fn neg-atom ((arena Arena) (p (Ptr NormState)) (c RawConcept))
     (@intent "A concept NAME standing for `c` in negative position")
@@ -297,7 +360,7 @@
       ((rc-thing)   (node-top))
       ((rc-nothing) (node-bottom))
       ((rc-some r f)
-        (let ((text (render-concept arena c))
+        (let ((text (concept-key arena c))
               (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
             (when (not (set-has (. (deref p) neg-done) text))
@@ -350,7 +413,7 @@
       ;; neg-atom's ⊥ — in POSITIVE position `C ⊑ ⊤` is vacuous, while
       ;; ⊥ would make C unsatisfiable and manufacture an incoherence.
       (_
-        (let ((text (render-concept arena c))
+        (let ((text (concept-key arena c))
               (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
             (when (not (set-has (. (deref p) pos-done) text))
@@ -463,16 +526,23 @@
     (@alloc arena)
     ;; Keyed by (chain prefix, super) so two chains sharing a prefix but
     ;; a different super do not collide onto one intermediate role.
-    (let ((mut out "chain:")
+    ;;
+    ;; THE PARTS ARE SPACE-SEPARATED, because a key must be INJECTIVE and a
+    ;; space is the one separator no IRI can contain (IRIREF forbids it).
+    ;; The '.' this used to join roles with is legal inside an IRI, even in
+    ;; its scheme, so the prefixes (urn:a.b, urn:c) and (urn:a, b.urn:c) of
+    ;; two chains into one super keyed alike, shared ONE intermediate role,
+    ;; and composed a chain neither states (hazards/chain-prefix-collision).
+    ;; The super comes first, so every token after it is a prefix role.
+    (let ((mut out (string-concat arena "chain " (render-role-name super)))
           (mut i 0))
       (do
         (while (< i upto)
           (do
             (set! out (string-concat arena out
-                        (string-concat arena (render-role-name (role-at-n steps i)) ".")))
+                        (string-concat arena " " (render-role-name (role-at-n steps i)))))
             (set! i (+ i 1))))
-        (string-concat arena out
-          (string-concat arena "=>" (render-role-name super))))))
+        out)))
 
   (fn render-role-name ((r RoleId))
     (@intent "A stable textual key for a role")
@@ -563,9 +633,17 @@
     (@intent "The canonical key for X_{r,D} — shared per (r,D) pair")
     (@spec ((Arena RoleId Node) -> String))
     (@alloc arena)
-    (string-concat arena "range-elim:"
+    ;; INJECTIVE ONLY BECAUSE THE SEPARATOR CANNOT OCCUR IN A PART. This was
+    ;; "range-elim:" + r + ":" + D, and ':' is legal inside an IRI, so the
+    ;; pairs (urn:x, urn:y:z) and (urn:x:urn, y:z) keyed alike and shared ONE
+    ;; X, which inherited both fillers and manufactured a subsumption
+    ;; (hazards/range-key-collision). No IRI contains a space, and neither
+    ;; does any `render-node-name` form, so these three tokens split one way.
+    ;; The key shares `fresh-index` with canonical concept texts, none of
+    ;; which begins "range-elim ".
+    (string-concat arena "range-elim "
       (string-concat arena (render-role-name r)
-        (string-concat arena ":" (render-node-name arena d)))))
+        (string-concat arena " " (render-node-name arena d)))))
 
   (fn render-node-name ((arena Arena) (n Node))
     (@intent "A textual key for a node, injective over nodes")

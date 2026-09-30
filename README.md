@@ -120,7 +120,7 @@ Returning memory has a small time cost: later rounds touch fresh pages rather th
 | Milestone | Scope | State |
 |---|---|---|
 | M0 | types, front end, normalization | **done** — 14 fixtures by exit code (`make acceptance`), RO and OBI end to end (`make corpus-acceptance`), §12's accounting / idempotence / freshness invariants and triple-order independence tested |
-| M1 | CR1–CR7, driver, verdict discipline | rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.8× and EL-GALEN 2.6× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`) |
+| M1 | CR1–CR7, driver, verdict discipline | **done** — rules, driver, extraction and premise index done; RO, OBI and GO run end to end; golden reports gate performance changes (`make golden`); every fixture diff-clean against HermiT, and against ELK where probed capable (`make diff-fixtures`); the W3C OWL 2 EL tests and ELK's classification and entailment tests pass wherever HOWL reasons completely and the report can state the answer (`make conformance`); the v0 projections of RO, OBI, GO and EL-GALEN are diff-clean against their routed oracle over every class pair (`make diff-corpus`, recorded in `corpus/corpus-differential.txt`); each round is joined on worker threads and the report is byte-identical at W ∈ {1,2,4,8} for every cap, capped runs included (`make determinism`, `make test-tsan`); the §12 benchmark is **met**: GO 0.8× and EL-GALEN 3.1× ELK, axioms in hand to taxonomy (`make bench`, `bench/results.txt`); the ABox reduction is proved sound and complete ([SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)) and checked against HermiT over 400 generated ontologies (`make abox-fuzz`) |
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | not started |
 | M3 | Turtle emission + GROWL round-trip | not started |
@@ -171,9 +171,10 @@ document using it reports *inconclusive*, never *coherent*. **non-goal** — exc
 | ***Concrete domains*** | | | | |
 | `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
 
-† Implemented and tested, but the reviewed argument that the direct-edge encoding is sound and
-complete ([§12](./SPEC.md#12-milestones--acceptance-criteria) M1 (f)) is still owed, so assertions
-ship outside the sound-and-complete claim until it lands.
+† Sound and complete by the argument in [SPEC §5.3](./SPEC.md#53-the-abox-reduction-is-sound-and-complete)
+(M1 (f), reviewed 2026-09-30): a reduction to the published EL++ results with nominals and range
+restrictions, plus the steps specific to HOWL's direct-edge encoding. `make abox-fuzz` checks the code
+against it: 400 generated ontologies with ABoxes, every one matching HermiT.
 
 **14 of 23 rows done.** Every open EL++ row traces to one of three things: **nominals** (four rows),
 **reflexive roles** (one), and **concrete domains** (the non-goal). OWL 2 EL adds three more:

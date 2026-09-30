@@ -203,9 +203,10 @@ empty and the driver reports `fixpoint` before firing a rule.
 So the honest claim is *verified faithful to a proven calculus* — not "verified sound", not
 "verified complete".
 
-**One obligation is currently owed.** The direct-edge ABox encoding is HOWL's own construction, not
-lifted from a published proof, and M1 acceptance requires it be discharged. Until then ABox support
-ships *outside* the sound-and-complete v0 claim.
+**The ABox obligation is discharged.** The direct-edge ABox encoding is HOWL's own construction, not
+lifted from a published proof. SPEC §5.3 proves it sound and complete by reduction to the published
+EL++ results with nominals and range restrictions, reviewed 2026-09-30, so ABox support is inside the
+sound-and-complete v0 claim.
 
 ---
 
