@@ -72,7 +72,7 @@
                  node-top node-bottom node-eq role-eq
                  Names empty-names intern-node intern-role copy-omissions))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
-                Signature make-signature))
+                Signature make-signature copy-axioms copy-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
   (import decode (Stage0 Stage1 stage0-header stage0-encoded decode-axioms))
   (import termstore (Encoded encode-triples))
@@ -83,7 +83,7 @@
     Decoded NormResult NormOutput
     NormState new-state
     normalize-accepted
-    decode-document decode-encoded normalize-decoded
+    decode-document decode-encoded copy-decoded normalize-decoded
     normalize-input)
 
   ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
@@ -954,6 +954,23 @@
                   (axioms    (. s1 axioms))
                   (signature (. s1 signature))
                   (omissions (. s0 omissions)))))))))
+
+  (fn copy-decoded ((arena Arena) (d Decoded))
+    (@intent "The decoded document, every string and operand owned in arena")
+    (@spec ((Arena Decoded) -> Decoded))
+    (@alloc arena)
+    ;; What lets the encoded input's arena go before the gate runs: a
+    ;; Decoded borrows its IRIs from the input's dictionary (decode-encoded),
+    ;; and this copy borrows nothing. The axiom COUNT is carried from
+    ;; `copy-axioms`'s proved @post (a count, not identity - see there). The
+    ;; call is let-bound on purpose: slop verify assumes a callee's @post of
+    ;; a bound result, not of a call nested inside `record-new`.
+    (@post {(list-len (. $result axioms)) == (list-len (. d axioms))})
+    (let ((axioms (copy-axioms arena (. d axioms))))
+      (record-new Decoded
+        (axioms    axioms)
+        (signature (copy-signature arena (. d signature)))
+        (omissions (copy-omissions arena (. d omissions))))))
 
   (fn normalize-decoded ((arena Arena) (scratch Arena) (d Decoded))
     (@intent "The front end's second half: gate, normalize, rename, initialize")

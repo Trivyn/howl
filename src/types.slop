@@ -58,7 +58,10 @@
     make-context
     make-queue
     empty-names
+    copy-iri
     copy-node
+    copy-role
+    copy-input-ref
     copy-omissions
     copy-fault
     intern-node

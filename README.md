@@ -68,14 +68,14 @@ is about ±10% (`bench/results.txt`, Apple M3 Ultra):
 
 | Entry | Oracle | HOWL classify | HOWL decode (untimed) | Oracle classify | Ratio | |
 |---|---|---|---|---|---|---|
-| GO 2026-07-26 | ELK 0.6.0 | 0.44 s (reasoning 0.33 s), 0.9 GB peak | 0.44 s | 0.58 s | 0.8× | **passes** 5× |
-| EL-GALEN | ELK 0.6.0 | 0.91 s (reasoning 0.74 s), 0.6 GB peak | 0.07 s | 0.35 s | 2.6× | **passes** 5× |
+| GO 2026-07-26 | ELK 0.6.0 | 0.44 s (reasoning 0.34 s), 0.8 GB peak | 0.46 s | 0.49 s | 0.9× | **passes** 5× |
+| EL-GALEN | ELK 0.6.0 | 0.89 s (reasoning 0.72 s), 0.6 GB peak | 0.07 s | 0.28 s | 3.2× | **passes** 5× |
 | OBI 2026-07-27 | HermiT | 0.06 s | 0.03 s | 0.52 s | 0.1× | reported |
-| RO 2025-12-17 | HermiT | 0.02 s | 0.002 s | 0.19 s | 0.1× | reported |
+| RO 2025-12-17 | HermiT | 0.02 s | 0.003 s | 0.18 s | 0.1× | reported |
 
-ELK ran slower in this bench than in earlier ones (GO 0.58 s against 0.45 s, EL-GALEN 0.35 s against
-0.28 s, each run-to-run range recorded in `bench/results.txt`); against those earlier medians HOWL is
-at about 1.0× on GO and 3.2× on EL-GALEN.
+ELK's time moves more between benches than HOWL's does: the bench before this one had ELK at 0.58 s
+(GO) and 0.35 s (EL-GALEN), which put HOWL at 0.8× and 2.6×; this one, like earlier ones, has 0.49 s
+and 0.28 s. Each run-to-run range is recorded in `bench/results.txt`.
 
 M1 slice 6b removed the rules' redundant work: each edge is admitted once, CR2/CR4 walk the smaller
 side of their join, and role inclusions are matched through the told role closure rather than
@@ -95,10 +95,10 @@ what they actually need:
 
 | Entry | HOWL | Oracle, default heap | Oracle, smallest heap |
 |---|---|---|---|
-| GO | 0.91 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
-| EL-GALEN | 0.62 GB | ELK 1.9 GB | ELK 0.43 GB |
-| OBI | 0.14 GB | HermiT 1.4 GB | HermiT 0.24 GB |
-| RO | 16 MB | HermiT 0.36 GB | HermiT 0.23 GB |
+| GO | 0.6–0.8 GB | ELK 4.1–7.6 GB | ELK 0.9 GB |
+| EL-GALEN | 0.63 GB | ELK 1.9 GB | ELK 0.43 GB |
+| OBI | 0.13 GB | HermiT 1.4 GB | HermiT 0.24 GB |
+| RO | 13 MB | HermiT 0.36 GB | HermiT 0.23 GB |
 
 HOWL was 7.9 GB on GO before its memory work. It now parses each document straight into an encoded
 form (a dictionary of owned terms and the triples as ids), frees every phase's working memory as the
@@ -107,10 +107,12 @@ slop runtime changes did the rest: compact collections (#234, a Map's and Set's 
 inline in a dense table; GO 2.6 → 1.8 GB) and arena blocks mapped from the OS, so freeing an arena
 returns its memory (#235; GO 1.8 → 0.9 GB - macOS had kept freed blocks resident). slop-rdf's
 streaming parser now holds one statement's memory at a time rather than the whole document's
-(slop-rdf #8; GO's parse 0.85 → 0.47 GB, EL-GALEN's 0.54 → 0.06 GB, OBI 0.24 → 0.14 GB). Each
-phase has its own high-water mark, since the one before it is freed: GO, OBI and RO peak in
-`prepare` (GO 0.91 GB: the input's dictionary plus the decoded axioms, gate and normalizer),
-EL-GALEN in writing the report (0.59 GB).
+(slop-rdf #8; GO's parse 0.85 → 0.47 GB, EL-GALEN's 0.54 → 0.06 GB, OBI 0.24 → 0.14 GB). And the
+decoded axioms are copied out of the encoded input, which is freed before the gate runs rather than
+held through it (GO 0.91 → 0.6–0.8 GB). Each phase has its own high-water mark, since the one before
+it is freed: GO and OBI peak in reasoning, EL-GALEN in writing the report, RO in `prepare`. GO's
+figure is a RANGE because its reasoning peak depends on how the 4 workers' rounds overlap: 0.61 to
+0.82 GB across runs, and a steady 0.59 GB at W = 1. The report is the same either way.
 Returning memory has a small time cost: later rounds touch fresh pages rather than reusing dirty ones.
 
 | Milestone | Scope | State |
@@ -292,7 +294,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **35 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **38 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
@@ -334,7 +336,9 @@ rows below were re-probed on each bump rather than assumed from release notes.
 | `while` loops, with or without `@loop-invariant` | **`if` between two `record-new`s** — loses field projection on `$result` ([#70](https://github.com/slop-lang/slop/issues/70), open) |
 | A single unconditional `record-new` — fields stay visible | `const` values — opaque, so `{$result == EXIT_ERROR}` cannot be proved |
 | A guarded push inside a `match` arm — bounds like `<= 1` prove | `set-elements`, `list-get` — uninterpreted functions |
-| `(Int 0 ..)` fields — interpreted, unlike `set-elements` | Reasoning **across a call** |
+| `(Int 0 ..)` fields — interpreted, unlike `set-elements` | Reasoning **across a call** nested in an expression — `(record-new T (f (callee x)))` does not see `callee`'s `@post` |
+| A callee's `@post` on a **`let`-bound** result, callee in another module included (`copy-decoded`) | — |
+| A counted `while` with `@loop-invariant {(list-len out) == i}` — a pushed list's length, across a non-pure call in the body (`copy-axioms`) | — |
 | **`@example` — genuinely executes** (0.2.1) | — |
 
 Four consequences worth knowing before writing a contract:

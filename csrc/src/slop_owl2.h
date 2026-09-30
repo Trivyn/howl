@@ -290,6 +290,12 @@ typedef struct owl2_RawAxiom owl2_RawAxiom;
 SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #endif
 
+#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
 
 /* Hash/eq functions and list types for struct map/set keys */
 #ifndef RDF_IRI_HASH_EQ_DEFINED
@@ -339,6 +345,15 @@ slop_string owl2_render_entity_kind(types_EntityKind k);
 slop_string owl2_render_omission(slop_arena* arena, types_Omission o);
 slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax);
 slop_string owl2_render_characteristic(owl2_PropCharacteristic c);
+owl2_RawConcept owl2_copy_concept(slop_arena* arena, owl2_RawConcept c);
+owl2_RawConcept* owl2_copy_boxed(slop_arena* arena, owl2_RawConcept* p);
+slop_list_owl2_RawConcept owl2_copy_concepts(slop_arena* arena, slop_list_owl2_RawConcept cs);
+slop_list_types_Node owl2_copy_nodes(slop_arena* arena, slop_list_types_Node ns);
+slop_list_types_RoleId owl2_copy_roles(slop_arena* arena, slop_list_types_RoleId rs);
+owl2_RawAxiom owl2_copy_raw_axiom(slop_arena* arena, owl2_RawAxiom ax);
+owl2_RawAxiom owl2_raw_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i);
+slop_list_owl2_RawAxiom owl2_copy_axioms(slop_arena* arena, slop_list_owl2_RawAxiom xs);
+owl2_Signature owl2_copy_signature(slop_arena* arena, owl2_Signature sig);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);
 
 extern const slop_string owl2_OWL_AXIOM;

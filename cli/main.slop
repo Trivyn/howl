@@ -76,7 +76,7 @@
   (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config
                  copy-fault))
   (import owl2 (render-omission))
-  (import howl (Verdict verdict Decoded decode-from Prepared prepare-decoded reason))
+  (import howl (Verdict verdict Decoded decode-from own-decoded Prepared prepare-decoded reason))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
   (import report (report-lines))
   (import strlib (parse-int is-digit char-at))
@@ -266,8 +266,8 @@
     ;; a clock inside a reasoning call (§6.8); `make test` fails if one
     ;; appears under src/. `prepare_ms + reason_ms` - axioms in hand to
     ;; taxonomy - is the classification figure §12 M1 (c) compares against
-    ;; ELK (bench/bench.py); `decode_ms` (encoded triples to axioms) is
-    ;; reported beside it. `parse_ms` includes encoding: the Turtle is
+    ;; ELK (bench/bench.py); `decode_ms` (encoded triples to axioms, owned
+    ;; and the input's arena freed) is reported beside it. `parse_ms` includes encoding: the Turtle is
     ;; streamed straight into the encoded document. `total_ms` is parse
     ;; through reasoning: the clock stops before the report is rendered
     ;; and printed.
@@ -333,21 +333,34 @@
             (set! i (+ i 1))))
         ok)))
 
-  (fn prepare-from ((arena Arena) (front Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
-    (@intent "Finish the front end over a decode, then free the front end's arena")
+  (fn decode-held ((held Arena) (front Arena) (doc Encoded) (resolved (List IRI)))
+    (@intent "Decode the encoded input into an owned copy in `held`, then free the input's arena")
+    (@spec ((Arena Arena Encoded (List IRI)) -> (Result Decoded Fault)))
+    (@alloc held)
+    ;; This IS `howl.decode-owned`, split so the parse can stream into
+    ;; `front` first. `front` holds the encoded documents and the decode's
+    ;; working memory; nothing in the result points into it, so it is freed
+    ;; here, before the gate starts.
+    (let ((res (own-decoded held (decode-from front doc resolved))))
+      (do
+        (arena-free front)
+        res)))
+
+  (fn prepare-from ((arena Arena) (held Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
+    (@intent "Finish the front end over a decode, then free the decode's arena")
     (@spec ((Arena Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
-    ;; This IS `howl.prepare`, split so decode can be timed apart. `front`
-    ;; holds the parsed documents and the decode; nothing in the result
-    ;; points into it (a Prepared owns its strings, and a decode fault is
-    ;; copied out), so it is freed here, before reasoning starts.
+    ;; This IS the rest of `howl.prepare`, split so decode can be timed
+    ;; apart. `held` holds the owned Decoded; nothing in the result points
+    ;; into it (a Prepared owns its strings, and a decode fault is copied
+    ;; out), so it is freed here, before reasoning starts.
     ;; The `ok` arm comes first: slop types a match's result from its first
     ;; arm, and an `error` arm first leaves the ok type void in the C.
     (let ((res (match d
                  ((ok dd)   (prepare-decoded arena dd config))
                  ((error f) (error (copy-fault arena f))))))
       (do
-        (arena-free front)
+        (arena-free held)
         res)))
 
   (fn reason-prepared ((arena Arena) (p (Result Prepared Fault)) (config ReasonerConfig))
@@ -385,7 +398,7 @@
           (if (not (or (string-eq command "validate") (string-eq command "classify")))
             (do (print "howl: unknown or unimplemented command: ") (println command)
                 EXIT_ERROR)
-            (let ((front        (arena-new 16777216))   ; the encoded input and its decode: freed after prepare
+            (let ((front        (arena-new 16777216))   ; the encoded input and its decode: freed after decode
                   (enc          (new-encoded front))
                   (mut resolved (list-new arena IRI))
                   (mut cfg      (default-config))
@@ -529,10 +542,11 @@
                   EXIT_ERROR
                   (let ((t-parsed   (now-ms))
                         (m-parsed   (peak-mb))
-                        (decoded    (decode-from front (deref enc) resolved))
+                        (held       (arena-new 16777216))   ; the owned Decoded: freed after prepare
+                        (decoded    (decode-held held front (deref enc) resolved))
                         (t-decoded  (now-ms))
                         (m-decoded  (peak-mb))
-                        (prepared   (prepare-from arena front decoded cfg))
+                        (prepared   (prepare-from arena held decoded cfg))
                         (t-prepared (now-ms))
                         (m-prepared (peak-mb))
                         (result     (reason-prepared arena prepared cfg))

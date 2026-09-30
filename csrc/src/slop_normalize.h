@@ -329,6 +329,7 @@ slop_list_types_Node normalize_rename_nodes(slop_arena* arena, types_Names names
 normalize_NormOutput normalize_rename_output(slop_arena* arena, types_Names names, normalize_NormOutput no);
 slop_result_normalize_Decoded_types_Fault normalize_decode_document(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 slop_result_normalize_Decoded_types_Fault normalize_decode_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved);
+normalize_Decoded normalize_copy_decoded(slop_arena* arena, normalize_Decoded d);
 normalize_NormResult normalize_normalize_decoded(slop_arena* arena, slop_arena* scratch, normalize_Decoded d);
 slop_result_normalize_NormResult_types_Fault normalize_normalize_input(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 

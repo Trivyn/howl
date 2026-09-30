@@ -2488,7 +2488,7 @@ can change only speed, never the report, and it appears nowhere in the report or
 fingerprint. `--timings` prints phase
 durations on **stderr**: `parse_ms` (the Turtle, streamed into HOWL's encoded document: a
 dictionary of owned terms and the triples as ids), `decode_ms` (header pre-pass and decode, encoded
-triples to axioms), `prepare_ms` (gate, normalize, rename, initialize, premise index), `reason_ms`
+triples to axioms, which are then copied out so the encoded input can be freed before the gate), `prepare_ms` (gate, normalize, rename, initialize, premise index), `reason_ms`
 and `total_ms`. A second line, `memory`, gives the process's peak resident set at the end of each
 phase. **Timings are a CLI measurement, never
 part of a report**: the engine never reads a clock, and a duration on stdout would make two correct
@@ -2975,8 +2975,8 @@ flowchart TB
   >   answer the differential certified clean.
   > - **The certified input and answer, every run.** The input must first pass `make diff-corpus`'s
   >   content check (ground, blank-node count and structure against the pinned projection).
-  > - **Status: met.** EL-GALEN is at 2.6× and GO at 0.8× (`bench/results.txt`; ELK ran slower than
-  >   in earlier benches, and against their medians the figures are 3.2× and 1.0×). With decode still
+  > - **Status: met.** EL-GALEN is at 3.2× and GO at 0.9× (`bench/results.txt`; ELK's time varies
+  >   more between benches than HOWL's, and the previous bench put them at 2.6× and 0.8×). With decode still
   >   inside the window they were 6.1× and 5.05× after slice 6b and slop's map and lazy-collection
   >   work (slop-lang/slop#205, #217), down from 30.1× and 19.2× at S6a. Slice 6b's changes: each
   >   rule join done once from its cheaper side, HOWL's own triple store, a parallel round barrier,
