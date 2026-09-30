@@ -21,6 +21,13 @@ by construction — whatever range a chain's super-role inherits is also given
 to its last role, repeated to a fixpoint. An omission is therefore a generator
 bug, reported as a failure, never skipped.
 
+With --negation the generator also writes ¬E into positive positions -- a
+domain or range filler that is ¬E or P ⊓ ¬E, and GCIs C ⊑ ¬E or C ⊑ P ⊓ ¬E
+-- which §5.2 rewrites into ⊥ GCIs before the gate (SPEC.md §5.3 L0). A
+negative range is not a range after that rewrite, so it is kept out of the
+range/composition closure; only its positive part P takes part. The two modes
+are recorded on separate lines, so each run checks its own.
+
 The outcome is written to corpus/abox-fuzz.txt with --update (a deliberate
 act, as `make probes-update`); without it the run must reproduce the recorded
 counts. Reports land in build/abox-fuzz/ for inspection. Exit 0 when every
@@ -52,8 +59,9 @@ PREFIXES = """@prefix :     <http://example.org/fuzz#> .
 class Gen:
     """One ontology's worth of Turtle, from one seed."""
 
-    def __init__(self, seed):
+    def __init__(self, seed, negation=False):
         self.rng = random.Random(seed)
+        self.negation = negation
         self.lines = []
         self.nc = self.rng.randint(4, 7)
         self.nr = self.rng.randint(2, 4)
@@ -77,9 +85,24 @@ class Gen:
             return self.some(depth)
         return f"[ a owl:Class ; owl:intersectionOf ( {self.concept(depth - 1)} {self.concept(depth - 1)} ) ]"
 
+    def negated(self, positive=None):
+        """¬E, or P ⊓ ¬E when a positive part is given: a positive position's filler."""
+        neg = f"[ a owl:Class ; owl:complementOf {self.concept(1)} ]"
+        if positive is None:
+            return neg
+        return f"[ a owl:Class ; owl:intersectionOf ( {positive} {neg} ) ]"
+
+    def maybe_negated(self, positive, keep=False):
+        """In --negation mode, sometimes give a positive filler a ¬E conjunct,
+        or (unless `keep`) replace it by ¬E. A range keeps its positive part:
+        the range/composition closure above has already counted it."""
+        if not self.negation or self.rng.random() >= 0.25:
+            return positive
+        return self.negated(positive if keep or self.rng.random() < 0.6 else None)
+
     def tbox(self):
         for _ in range(self.rng.randint(3, 8)):
-            self.lines.append(f"{self.concept(2)} rdfs:subClassOf {self.concept(2)} .")
+            self.lines.append(f"{self.concept(2)} rdfs:subClassOf {self.maybe_negated(self.concept(2))} .")
         for _ in range(self.rng.choice((0, 1, 1, 2))):
             a, b = self.rng.sample(self.classes, 2)
             self.lines.append(f"{a} owl:disjointWith {b} .")
@@ -118,7 +141,7 @@ class Gen:
             if self.rng.random() < 0.4:
                 ranges[r].add(self.concept(1) if self.rng.random() < 0.3 else self.cls())
             if self.rng.random() < 0.4:
-                self.lines.append(f"{r} rdfs:domain {self.concept(1)} .")
+                self.lines.append(f"{r} rdfs:domain {self.maybe_negated(self.concept(1))} .")
 
         def inherited(r):
             out = set()
@@ -137,7 +160,10 @@ class Gen:
                     changed = True
         for r in self.roles:
             for c in sorted(ranges[r]):
-                self.lines.append(f"{r} rdfs:range {c} .")
+                self.lines.append(f"{r} rdfs:range {self.maybe_negated(c, keep=True)} .")
+            # A purely negative range imposes nothing, so it may go anywhere.
+            if self.negation and self.rng.random() < 0.15:
+                self.lines.append(f"{r} rdfs:range {self.negated()} .")
         # Two roles' ranges made disjoint: with edges over both into one target,
         # only the target's single context can bring the two ranges together.
         named = [(r, c) for r in self.roles for c in sorted(ranges[r]) if c in self.classes]
@@ -169,13 +195,15 @@ class Gen:
         return PREFIXES + "\n" + "\n".join(decl + self.lines) + "\n"
 
 
-def generate(seeds):
+def generate(seeds, negation):
     os.makedirs(os.path.join(OUT, "input"), exist_ok=True)
+    for stale in os.listdir(os.path.join(OUT, "input")):
+        os.remove(os.path.join(OUT, "input", stale))
     files = []
     for seed in range(seeds[0], seeds[1] + 1):
         path = os.path.join(OUT, "input", f"seed{seed:04d}.ttl")
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write(Gen(seed).turtle(seed))
+            fh.write(Gen(seed, negation).turtle(seed))
         files.append(path)
     return files
 
@@ -214,13 +242,14 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", default=f"{DEFAULT_SEEDS[0]}:{DEFAULT_SEEDS[1]}")
     ap.add_argument("--update", action="store_true")
+    ap.add_argument("--negation", action="store_true")
     args = ap.parse_args(argv[1:])
     first, last = (int(x) for x in args.seeds.split(":"))
     for tool in (HOWL, ORACLE):
         if not os.path.exists(tool):
             print(f"  cannot run: {tool} is missing (make cli oracle)")
             return 3
-    files = generate((first, last))
+    files = generate((first, last), args.negation)
     howl = run_howl(files)
     try:
         hermit = run_hermit(files)
@@ -249,18 +278,24 @@ def main(argv):
         counts["clean"] += 1
         if h.inconsistent:
             counts["inconsistent"] += 1
-    line = (f"seeds {first}:{last} ontologies {last - first + 1} clean {counts['clean']} "
+    mode = "negation " if args.negation else ""
+    line = (f"{mode}seeds {first}:{last} ontologies {last - first + 1} clean {counts['clean']} "
             f"of-which-inconsistent {counts['inconsistent']} failed {counts['failed']}")
     print(f"  {line}")
+    # One line per mode; each run checks, or rewrites, only its own.
+    recorded = []
+    if os.path.exists(RECORD):
+        recorded = [l.strip() for l in open(RECORD, encoding="utf-8") if not l.startswith("#") and l.strip()]
+    mine = [l for l in recorded if l.startswith("negation ") == args.negation]
     if args.update:
+        others = [l for l in recorded if l.startswith("negation ") != args.negation]
         with open(RECORD, "w", encoding="utf-8") as fh:
             fh.write("# corpus/abox_fuzz.py outcome (make abox-fuzz). Regenerate with --update.\n")
-            fh.write(line + "\n")
-    elif os.path.exists(RECORD):
-        recorded = [l.strip() for l in open(RECORD, encoding="utf-8") if not l.startswith("#")]
-        if recorded and recorded[0] != line and f"seeds {first}:{last} " in recorded[0]:
-            print(f"  DRIFT from corpus/abox-fuzz.txt: recorded `{recorded[0]}`")
-            return 1
+            for l in sorted(others + [line], key=lambda l: l.startswith("negation ")):
+                fh.write(l + "\n")
+    elif mine and mine[0] != line and f"{mode}seeds {first}:{last} " in mine[0]:
+        print(f"  DRIFT from corpus/abox-fuzz.txt: recorded `{mine[0]}`")
+        return 1
     return 0 if counts["failed"] == 0 else 1
 
 
