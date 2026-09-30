@@ -175,6 +175,11 @@ static inline bool slop_eq_types_Node(const void* a, const void* b) {
 typedef struct { bool is_ok; union { saturate_RoundResult ok; types_Fault err; } data; } slop_result_saturate_RoundResult_types_Fault;
 #endif
 
+#ifndef SLOP_RESULT_DECODE_STAGE1_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_DECODE_STAGE1_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { decode_Stage1 ok; types_Fault err; } data; } slop_result_decode_Stage1_types_Fault;
+#endif
+
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Findings test_make_findings(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count);
 types_Outcome test_make_outcome(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count, int64_t omitted_count, uint8_t reached_fixpoint);
@@ -241,8 +246,13 @@ uint8_t test_test_unattested_import_yields_an_omission(slop_arena* arena);
 uint8_t test_test_attested_import_yields_none(slop_arena* arena);
 uint8_t test_test_term_store_by_content(slop_arena* arena);
 uint8_t test_test_term_store_quoted_and_tagged(slop_arena* arena);
+slop_list_rdf_Triple test_stage0_triples(slop_arena* arena, decode_Stage0 s0);
+slop_list_string test_decode_rendered(slop_arena* arena, slop_result_decode_Stage1_types_Fault r);
+uint8_t test_decode_store_agrees(slop_arena* arena, slop_string path);
+uint8_t test_test_decode_store_answers_as_the_full_store(slop_arena* arena);
 slop_string test_stage0_fault_of(slop_arena* arena, slop_list_rdf_Triple ts);
 uint8_t test_test_stage0_fault_follows_the_document(slop_arena* arena);
+uint8_t test_test_stage0_rebuild_checks_the_whole_input(slop_arena* arena);
 uint8_t test_test_header_and_reification_are_consumed(slop_arena* arena);
 int64_t test_count_out_of_profile(slop_list_owl2_RawAxiom axs);
 int64_t test_count_disposition(slop_list_owl2_RawAxiom axs, owl2_Disposition want);

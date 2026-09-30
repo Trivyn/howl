@@ -19,9 +19,10 @@
                  EdgePair
                  SubPair Findings Outcome Fault Names
                  Profile ProfileSelection ReasonerConfig
-                 default-config emit-edge make-context
+                 default-config emit-edge make-context copy-fault
                  outcome-is-complete findings-are-incoherent))
-  (import normalize (Decoded NormResult decode-document normalize-decoded))
+  (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
+  (import termstore (Encoded))
   (import select (select-profile))
   (import saturate (RoundResult saturate))
   (import classify (extract-findings entails-sub))
@@ -58,6 +59,8 @@
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
     Decoded
     decode
+    decode-from
+    own-decoded
     Prepared
     prepare-decoded
     prepare
@@ -205,6 +208,41 @@
     (@alloc arena)
     (decode-document arena triples imports-resolved))
 
+  (fn decode-from ((arena Arena) (doc Encoded) (imports-resolved (List IRI)))
+    (@intent "The front end's first half over an already encoded document")
+    (@spec ((Arena Encoded (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    ;; For a caller that encoded its input as it parsed (the CLI streams
+    ;; the Turtle straight into an Encoded): the Decoded's strings are
+    ;; `doc`'s dictionary's, so `doc`'s arena must outlive it - or the
+    ;; caller takes an owned copy with `own-decoded` and frees `doc`'s
+    ;; arena, as the CLI does.
+    (decode-encoded arena doc imports-resolved))
+
+  (fn own-decoded ((arena Arena) (r (Result Decoded Fault)))
+    (@intent "A decode's result owning every string it holds, so the input's arena can be freed")
+    (@spec ((Arena (Result Decoded Fault)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    ;; THE INPUT GOES BEFORE THE GATE STARTS. A Decoded borrows its IRIs
+    ;; from the encoded input, whose arena also holds the id triples, stage
+    ;; 0's output and the decode stores: on GO about half a gigabyte, dead
+    ;; once decode returns but held through the gate and normalizer. The
+    ;; copy is a few percent of that.
+    ;; The `ok` arm first: slop types a match's result from its first arm.
+    (match r
+      ((ok d)    (ok (copy-decoded arena d)))
+      ((error f) (error (copy-fault arena f)))))
+
+  (fn decode-owned ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
+    (@intent "Decode in an arena of its own, freed before returning; the result is owned in arena")
+    (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    (let ((front (arena-new 16777216))
+          (res   (own-decoded arena (decode front triples imports-resolved))))
+      (do
+        (arena-free front)
+        res)))
+
   (fn prepare-decoded ((arena Arena) (d Decoded) (config ReasonerConfig))
     (@intent "The front end's second half: gate, normalize, initialize, index — and --strict's refusal")
     (@spec ((Arena Decoded ReasonerConfig) -> (Result Prepared Fault)))
@@ -222,24 +260,45 @@
     ;; are exactly what the caller asked not to run past, so `refused`
     ;; carries them and nothing else: no Outcome, so no verdict and no
     ;; findings a partial run might have produced (§9, §10 item 12).
-    (let ((nr (normalize-decoded arena d)))
-      (if (and (. config strict-profile)
-               (> (list-len (. (. nr coverage) omitted)) 0))
-        (error (union-new Fault refused (. (. nr coverage) omitted)))
-        (ok (record-new Prepared
-              (axioms     (. nr axioms))
-              (index      (build-rule-index arena (. nr axioms)))
-              (saturation (. nr saturation))
-              (coverage   (. nr coverage))
-              (names      (. nr names)))))))
+    ;;
+    ;; THE GATE AND THE NORMALIZER RUN IN A SCRATCH ARENA, freed before
+    ;; returning: everything in a Prepared - and in the refusal - is built
+    ;; in `arena` and owns its strings (normalize-decoded). `d` is the
+    ;; caller's and is not freed here.
+    (let ((scratch (arena-new 16777216))
+          (nr      (normalize-decoded arena scratch d))
+          (res     (if (and (. config strict-profile)
+                            (> (list-len (. (. nr coverage) omitted)) 0))
+                     (error (union-new Fault refused (. (. nr coverage) omitted)))
+                     (ok (record-new Prepared
+                           (axioms     (. nr axioms))
+                           (index      (build-rule-index arena (. nr axioms)))
+                           (saturation (. nr saturation))
+                           (coverage   (. nr coverage))
+                           (names      (. nr names)))))))
+      (do
+        (arena-free scratch)
+        res)))
 
   (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
     (@spec ((Arena (List Triple) (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
-    (match (decode arena triples imports-resolved)
-      ((error f) (error f))
-      ((ok d)    (prepare-decoded arena d config))))
+    ;;
+    ;; DECODE RUNS IN AN ARENA OF ITS OWN, freed as soon as it returns
+    ;; (`decode-owned`): only an owned copy of the Decoded is held through
+    ;; the gate and normalizer, and that goes before this returns, so a
+    ;; Prepared owns every string it holds and the caller's triples may go
+    ;; as soon as this returns. A decode fault's message is copied out.
+    (let ((held (arena-new 16777216))
+          ;; The `ok` arm first: slop types a match's result from its first
+          ;; arm, and an `error` arm first leaves the ok type void in the C.
+          (res  (match (decode-owned held triples imports-resolved)
+                  ((ok d)    (prepare-decoded arena d config))
+                  ((error f) (error (copy-fault arena f))))))
+      (do
+        (arena-free held)
+        res)))
 
   (fn reason ((arena Arena) (p Prepared) (config ReasonerConfig))
     (@intent "Saturate a prepared theory and extract its findings")

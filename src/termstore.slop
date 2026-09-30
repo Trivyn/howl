@@ -20,10 +20,9 @@
 ;;     `term-eq` means by equal; a Map would compare them by pointer.
 ;;     That last is a deliberate change from slop-rdf's IndexedGraph,
 ;;     which keyed quoted triples by POINTER, so two equal ones built
-;;     apart were two terms. Stage 0 already treats them structurally
-;;     (decode.slop's header filter), and no file can reach the case:
-;;     slop-rdf's Turtle parser rejects `<< >>`, so only a library caller
-;;     building triples directly ever supplies one.
+;;     apart were two terms. Files do reach the case: slop-rdf's Turtle
+;;     parser reads RDF 1.2's `<<( s p o )>>` and `{| ... |}`
+;;     annotations, allocating each quoted triple apart.
 ;;   - SPO over those ids, (s, p) -> {o}, for every triple: objects,
 ;;     presence, and "has any". A term is hashed once per occurrence, when
 ;;     it is interned; the index hashes integer pairs.
@@ -47,13 +46,28 @@
 (module termstore
   (@doc "Term ids by content, and the SPO/POS indexes decode reads")
 
-  (import rdf (Term Triple make-iri))
+  (import rdf (Term Triple IRI BlankNode make-iri make-literal make-triple make-triple-term make-blank))
   (import vocab (RDF_TYPE))
 
   (export
     TermStore
+    IdTriple
+    Encoded
+    lookup-term
+    term-of
+    triple-of
+    new-encoded
+    encoded-add
+    encoded-next-document
+    encode-triples
+    store-over
+    store-insert-ids
+    empty-store
+    store-insert
     build-store
     store-objects
+    store-object-count
+    store-sole-object
     store-typed
     store-contains
     store-has-any)
@@ -69,6 +83,16 @@
 
   (type IdSet (Set Int))
 
+  ;; An (s, p) pair's objects: the FIRST inline, any further distinct ones
+  ;; in `more`. Nearly every pair has one object, and a Set per pair cost a
+  ;; 48 B header plus a 512 B first table - ~0.6 GB of GO's decode store.
+  ;; `more` is created empty (a header, no table until a second object).
+  ;; `more` is spelled (Set Int), not IdSet: slop's checker does not see
+  ;; through the alias for `set-len`, though the transpiler does.
+  (type Objects (record
+    (first Int)
+    (more  (Set Int))))
+
   ;; Every Map field is shared by copies of the record, so the build
   ;; mutates in place. The next id is the table's size. `rdf-type` is
   ;; interned first, so it is id 0 in every store.
@@ -76,7 +100,7 @@
     (ids     (Map Term Int))       ; IRI, blank node and literal terms
     (quoted  (Map IdTriple Int))   ; quoted triples, by their parts' ids
     (terms   (Map Int Term))       ; id -> term, for query results
-    (spo     (Map IdPair IdSet))   ; (s, p) -> objects
+    (spo     (Map IdPair Objects)) ; (s, p) -> objects, distinct
     (typed   (Map Int IdSet))      ; type -> subjects, rdf:type triples only
     (rdf-type Int)))
 
@@ -133,6 +157,96 @@
       (_ (map-get (. st ids) t))))
 
   ;; ============================================================
+  ;; The dictionary: owned terms
+  ;;
+  ;; A store's term tables are also HOWL's DICTIONARY for a document
+  ;; (Encoded, below): every distinct term once, with an Int id. Interned
+  ;; with `intern-owned`, a term's strings - IRI, literal value, datatype,
+  ;; language - are COPIED into the store's arena on first sight, and a
+  ;; quoted triple is rebuilt from its parts' owned terms. Nothing then
+  ;; points into the parser's memory, which can be freed as soon as the
+  ;; document is encoded. A blank node keeps its id: the id is what a
+  ;; report prints (`_:b<id>`), so it is never renumbered.
+  ;; ============================================================
+
+  (fn copy-string ((arena Arena) (s String))
+    (@intent "s's bytes, copied into arena")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (string-concat arena s ""))
+
+  (fn copy-option-string ((arena Arena) (s (Option String)))
+    (@intent "An optional string, its bytes copied into arena")
+    (@spec ((Arena (Option String)) -> (Option String)))
+    (@alloc arena)
+    (match s
+      ((some v) (some (copy-string arena v)))
+      ((none)   (none))))
+
+  (fn own-plain-term ((arena Arena) (t Term))
+    (@intent "t with its strings copied into arena; a quoted triple is returned as is")
+    (@spec ((Arena Term) -> Term))
+    (@alloc arena)
+    (match t
+      ((term-iri i)     (union-new Term term-iri (record-new IRI (value (copy-string arena (. i value))))))
+      ((term-blank _)   t)
+      ((term-literal l) (make-literal arena (copy-string arena (. l value))
+                          (copy-option-string arena (. l datatype))
+                          (copy-option-string arena (. l lang))))
+      ((term-triple _)  t)))
+
+  (fn term-of ((st TermStore) (id Int))
+    (@intent "The term with this id")
+    (@spec ((TermStore Int) -> Term))
+    ;; Every id a store hands out has a term; the fallback is unreachable.
+    (match (map-get (. st terms) id)
+      ((some t) t)
+      ((none)   (union-new Term term-blank (record-new BlankNode (id 0))))))
+
+  (fn triple-of ((st TermStore) (it IdTriple))
+    (@intent "The triple these three ids stand for, as slop-rdf terms")
+    (@spec ((TermStore IdTriple) -> Triple))
+    (record-new Triple
+      (subject   (term-of st (. it s)))
+      (predicate (term-of st (. it p)))
+      (object    (term-of st (. it o)))))
+
+  (fn intern-owned ((arena Arena) (st TermStore) (t Term))
+    (@intent "t's id, minted the first time t is seen, keeping an owned copy - by content, quoted triples by their parts")
+    (@spec ((Arena TermStore Term) -> Int))
+    (@alloc arena)
+    (match t
+      ((term-triple tt)
+        (let ((tr  (deref tt))
+              (key (record-new IdTriple
+                     (s (intern-owned arena st (. tr subject)))
+                     (p (intern-owned arena st (. tr predicate)))
+                     (o (intern-owned arena st (. tr object))))))
+          (match (map-get (. st quoted) key)
+            ((some id) id)
+            ((none)
+              (let ((id    (cast Int (map-len (. st terms))))
+                    (owned (make-triple-term arena
+                             (make-triple arena (term-of st (. key s)) (term-of st (. key p))
+                                          (term-of st (. key o))))))
+                (do
+                  (map-put (. st quoted) key id)
+                  (map-put (. st terms) id owned)
+                  id))))))
+      (_
+        (match (map-get (. st ids) t)
+          ((some id) id)
+          ((none)
+            ;; The KEY is the owned copy too: a map keeps the key it was
+            ;; given, and a key pointing into the parser would dangle.
+            (let ((id (cast Int (map-len (. st terms))))
+                  (c  (own-plain-term arena t)))
+              (do
+                (map-put (. st ids) c id)
+                (map-put (. st terms) id c)
+                id)))))))
+
+  ;; ============================================================
   ;; Building
   ;; ============================================================
 
@@ -152,22 +266,31 @@
     (@intent "Index one triple; true when it is new, false for a duplicate, which changes nothing")
     (@spec ((Arena TermStore Triple) -> Bool))
     (@alloc arena)
-    (let ((s  (intern-term arena st (. t subject)))
-          (p  (intern-term arena st (. t predicate)))
-          (o  (intern-term arena st (. t object)))
+    (store-insert-ids arena st
+      (record-new IdTriple
+        (s (intern-term arena st (. t subject)))
+        (p (intern-term arena st (. t predicate)))
+        (o (intern-term arena st (. t object))))))
+
+  (fn store-insert-ids ((arena Arena) (st TermStore) (it IdTriple))
+    (@intent "Index one triple already interned in the store's dictionary; true when it is new")
+    (@spec ((Arena TermStore IdTriple) -> Bool))
+    (@alloc arena)
+    (let ((s  (. it s))
+          (p  (. it p))
+          (o  (. it o))
           (sp (record-new IdPair (a s) (b p))))
       (match (map-get (. st spo) sp)
         ((some objs)
-          (if (set-has objs o)
+          (if (or (== (. objs first) o) (set-has (. objs more) o))
             false
             (do
-              (set-put objs o)
+              (set-put (. objs more) o)
               (when (== p (. st rdf-type)) (typed-put arena st o s))
               true)))
         ((none)
-          (let ((objs (set-new arena Int)))
+          (let ((objs (record-new Objects (first o) (more (set-new arena Int)))))
             (do
-              (set-put objs o)
               (map-put (. st spo) sp objs)
               (when (== p (. st rdf-type)) (typed-put arena st o s))
               true))))))
@@ -176,11 +299,23 @@
     (@intent "Intern and index every triple, in list order")
     (@spec ((Arena (List Triple)) -> TermStore))
     (@alloc arena)
+    (let ((st (empty-store arena)))
+      (do
+        (for-each (t triples)
+          (store-insert arena st t))
+        st)))
+
+  (fn empty-store ((arena Arena))
+    (@intent "A store with nothing indexed; `store-insert` fills it")
+    (@spec ((Arena) -> TermStore))
+    (@alloc arena)
+    ;; For a caller that indexes only SOME triples: inserting as it walks
+    ;; saves building a filtered list of them first (216 B a triple).
     (let ((st0 (record-new TermStore
                  (ids      (map-new arena Term Int))
                  (quoted   (map-new arena IdTriple Int))
                  (terms    (map-new arena Int Term))
-                 (spo      (map-new arena IdPair IdSet))
+                 (spo      (map-new arena IdPair Objects))
                  (typed    (map-new arena Int IdSet))
                  (rdf-type 0)))
           (ty  (intern-term arena st0 (make-iri arena RDF_TYPE)))
@@ -191,17 +326,135 @@
                  (spo      (. st0 spo))
                  (typed    (. st0 typed))
                  (rdf-type ty))))
+      st))
+
+  (fn store-over ((arena Arena) (dict TermStore))
+    (@intent "An empty index over dict's terms: its own SPO and typed maps, dict's term tables")
+    (@spec ((Arena TermStore) -> TermStore))
+    (@alloc arena)
+    ;; For a store over part of an encoded document: `store-insert-ids`
+    ;; indexes id triples straight from the document, re-interning
+    ;; nothing. The term tables are dict's (Maps are shared by copies of
+    ;; the record), so an index must be dropped before dict is.
+    (record-new TermStore
+      (ids      (. dict ids))
+      (quoted   (. dict quoted))
+      (terms    (. dict terms))
+      (spo      (map-new arena IdPair Objects))
+      (typed    (map-new arena Int IdSet))
+      (rdf-type (. dict rdf-type))))
+
+  ;; ============================================================
+  ;; An encoded document
+  ;;
+  ;; The input, encoded once at the boundary (HOWL's internal form; slop-rdf
+  ;; Triples stay the interface): a dictionary of owned terms, and the
+  ;; triples as id triples in DOCUMENT ORDER with duplicates kept - stage 0
+  ;; and decode depend on both.
+  ;;
+  ;; DOCUMENTS ARE STANDARDIZED APART exactly as the CLI's merge always
+  ;; did: every parse numbers its blank nodes from 0, so each document
+  ;; after the first has its blank ids shifted, in subject and object (a
+  ;; quoted triple's parts included) but never the predicate, by one more
+  ;; than the highest blank id already encoded (all positions counted).
+  ;;
+  ;; Built through a Ptr, as the normalizer's state is: `encoded-add` is
+  ;; also the body of a streaming parser's callback, and a Ptr is what a
+  ;; closure can capture by value and still mutate through.
+  ;; ============================================================
+
+  (type Encoded (record
+    (dict      TermStore)
+    (triples   (List IdTriple))
+    (offset    Int)             ; blank-id shift for the current document
+    (max-blank Int)))           ; highest blank id encoded so far (0 when none)
+
+  (fn new-encoded ((arena Arena))
+    (@intent "An empty encoded document, its first document begun")
+    (@spec ((Arena) -> (Ptr Encoded)))
+    (@alloc arena)
+    (let ((p (cast (Ptr Encoded) (arena-alloc arena (sizeof Encoded)))))
       (do
-        (for-each (t triples)
-          (store-insert arena st t))
-        st)))
+        (set! (deref p) (record-new Encoded
+                          (dict      (empty-store arena))
+                          (triples   (list-new arena IdTriple))
+                          (offset    0)
+                          (max-blank 0)))
+        p)))
+
+  (fn max-blank-in ((t Term))
+    (@intent "Highest blank-node id in a term, recursing into triple terms")
+    (@spec ((Term) -> Int))
+    (@pure)
+    (match t
+      ((term-blank b)   (. b id))
+      ((term-iri _)     0)
+      ((term-literal _) 0)
+      ((term-triple tt)
+        (let ((tr (deref tt)))
+          (max (max-blank-in (. tr subject))
+            (max (max-blank-in (. tr predicate))
+                 (max-blank-in (. tr object))))))))
+
+  (fn shift-blanks ((arena Arena) (t Term) (offset Int))
+    (@intent "t with its blank-node ids shifted by offset, recursing into triple terms")
+    (@spec ((Arena Term Int) -> Term))
+    (@alloc arena)
+    (match t
+      ((term-blank b)   (make-blank arena (+ (. b id) offset)))
+      ((term-iri _)     t)
+      ((term-literal _) t)
+      ((term-triple tt)
+        (let ((tr (deref tt)))
+          (make-triple-term arena
+            (make-triple arena
+              (shift-blanks arena (. tr subject) offset)
+              (shift-blanks arena (. tr predicate) offset)
+              (shift-blanks arena (. tr object) offset)))))))
+
+  (fn encoded-add ((arena Arena) (p (Ptr Encoded)) (t Triple))
+    (@intent "Encode one triple of the current document, appending it in order")
+    (@spec ((Arena (Ptr Encoded) Triple) -> Unit))
+    (@alloc arena)
+    (let ((mut e (deref p))
+          (off (. e offset))
+          (sj  (if (== off 0) (. t subject) (shift-blanks arena (. t subject) off)))
+          (pr  (. t predicate))
+          (ob  (if (== off 0) (. t object) (shift-blanks arena (. t object) off)))
+          (it  (record-new IdTriple
+                 (s (intern-owned arena (. e dict) sj))
+                 (p (intern-owned arena (. e dict) pr))
+                 (o (intern-owned arena (. e dict) ob)))))
+      (do
+        (list-push (. e triples) it)
+        (set! (. e max-blank)
+          (max (. e max-blank) (max (max-blank-in sj) (max (max-blank-in pr) (max-blank-in ob)))))
+        (set! (deref p) e))))
+
+  (fn encoded-next-document ((arena Arena) (p (Ptr Encoded)))
+    (@intent "Begin the next document: shift its blank ids apart from everything encoded so far")
+    (@spec ((Arena (Ptr Encoded)) -> Unit))
+    (@alloc arena)
+    (let ((mut e (deref p)))
+      (do
+        (set! (. e offset) (+ (. e max-blank) 1))
+        (set! (deref p) e))))
+
+  (fn encode-triples ((arena Arena) (triples (List Triple)))
+    (@intent "One document's triples, encoded")
+    (@spec ((Arena (List Triple)) -> Encoded))
+    (@alloc arena)
+    (let ((p (new-encoded arena)))
+      (do
+        (for-each (t triples) (encoded-add arena p t))
+        (deref p))))
 
   ;; ============================================================
   ;; Queries - Terms in, Terms out; an unseen term matches nothing
   ;; ============================================================
 
   (fn store-objects ((arena Arena) (st TermStore) (s Term) (p Term))
-    (@intent "Every o with (s, p, o) in the store, in set order")
+    (@intent "Every o with (s, p, o) in the store: the first one inserted, then the rest in set order")
     (@spec ((Arena TermStore Term Term) -> (List Term)))
     (@alloc arena)
     (let ((mut out (list-new arena Term)))
@@ -213,14 +466,53 @@
                 (let ((key (record-new IdPair (a si) (b pi))))
                   (match (map-get (. st spo) key)
                     ((some objs)
-                      (for-each (o objs)
-                        (match (map-get (. st terms) o)
+                      (do
+                        (match (map-get (. st terms) (. objs first))
                           ((some term) (list-push out term))
-                          ((none)      (do)))))
+                          ((none)      (do)))
+                        (for-each (o (. objs more))
+                          (match (map-get (. st terms) o)
+                            ((some term) (list-push out term))
+                            ((none)      (do))))))
                     ((none) (do)))))
               ((none) (do))))
           ((none) (do)))
         out)))
+
+  ;; COUNT-ONLY QUERIES, allocating nothing. A caller that wants "the one
+  ;; object, or a fault" (decode's `one-object`, three times per reified
+  ;; axiom) used to build a result list per question - at least 16 slots of
+  ;; 72 B - only to read its length: ~0.4 GB of lists on GO.
+  (fn store-object-count ((st TermStore) (s Term) (p Term))
+    (@intent "How many distinct o have (s, p, o) in the store")
+    (@spec ((TermStore Term Term) -> Int))
+    (match (lookup-term st s)
+      ((some si)
+        (match (lookup-term st p)
+          ((some pi)
+            (let ((key (record-new IdPair (a si) (b pi))))
+              (match (map-get (. st spo) key)
+                ((some objs) (+ 1 (cast Int (set-len (. objs more)))))
+                ((none)      0))))
+          ((none) 0)))
+      ((none) 0)))
+
+  (fn store-sole-object ((st TermStore) (s Term) (p Term))
+    (@intent "The o of (s, p, o) when there is exactly one, else none")
+    (@spec ((TermStore Term Term) -> (Option Term)))
+    (match (lookup-term st s)
+      ((some si)
+        (match (lookup-term st p)
+          ((some pi)
+            (let ((key (record-new IdPair (a si) (b pi))))
+              (match (map-get (. st spo) key)
+                ((some objs)
+                  (if (== (set-len (. objs more)) 0)
+                    (map-get (. st terms) (. objs first))
+                    (none)))
+                ((none) (none)))))
+          ((none) (none))))
+      ((none) (none))))
 
   (fn store-typed ((arena Arena) (st TermStore) (type Term))
     (@intent "Every s with (s, rdf:type, type) in the store, in set order")
@@ -254,16 +546,15 @@
               ((some oi)
                 (let ((key (record-new IdPair (a si) (b pi))))
                   (match (map-get (. st spo) key)
-                    ((some objs) (set-has objs oi))
+                    ((some objs) (or (== (. objs first) oi) (set-has (. objs more) oi)))
                     ((none)      false))))))))))
 
   (fn store-has-any ((st TermStore) (s Term) (p Term))
     (@intent "Is there any o with (s, p, o) in the store? Allocates nothing")
     (@spec ((TermStore Term Term) -> Bool))
-    ;; An (s, p) entry exists exactly when it has an object: sets are
-    ;; created by the insert that puts their first element in, and nothing
-    ;; removes. So the lookup alone answers, with no need to count (and
-    ;; `set-len` on a map-get result did not compile before slop #216).
+    ;; An (s, p) entry exists exactly when it has an object: an entry is
+    ;; created by the insert that brings its first object, and nothing
+    ;; removes. So the lookup alone answers, with no need to count.
     (match (lookup-term st s)
       ((none) false)
       ((some si)

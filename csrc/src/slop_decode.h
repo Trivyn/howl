@@ -14,6 +14,7 @@
 
 typedef struct decode_ListFault decode_ListFault;
 typedef struct decode_Stage0 decode_Stage0;
+typedef struct decode_Rebuilt decode_Rebuilt;
 typedef struct decode_Stage1 decode_Stage1;
 
 typedef enum {
@@ -31,6 +32,12 @@ SLOP_LIST_DEFINE(rdf_Term, slop_list_rdf_Term)
 #define SLOP_LIST_RDF_TRIPLE_DEFINED
 #define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
+#endif
+
+#ifndef SLOP_LIST_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_LIST_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_LIST_TERMSTORE_IDTRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(termstore_IdTriple, slop_list_termstore_IdTriple)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
@@ -77,6 +84,11 @@ SLOP_OPTION_DEFINE(rdf_Term, slop_option_rdf_Term)
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
 #define SLOP_OPTION_RDF_TRIPLE_DEFINED
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
+#ifndef SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdTriple, slop_option_termstore_IdTriple)
 #endif
 
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
@@ -141,7 +153,8 @@ SLOP_OPTION_DEFINE(decode_ListFault, slop_option_decode_ListFault)
 #endif
 
 struct decode_Stage0 {
-    slop_list_rdf_Triple triples;
+    termstore_TermStore dict;
+    slop_list_termstore_IdTriple triples;
     slop_list_rdf_IRI imports_declared;
     slop_list_types_Omission omissions;
     slop_option_rdf_IRI ontology_iri;
@@ -153,9 +166,21 @@ typedef struct decode_Stage0 decode_Stage0;
 SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
 #endif
 
+struct decode_Rebuilt {
+    slop_list_termstore_IdTriple triples;
+    slop_option_string fault;
+};
+typedef struct decode_Rebuilt decode_Rebuilt;
+
+#ifndef SLOP_OPTION_DECODE_REBUILT_DEFINED
+#define SLOP_OPTION_DECODE_REBUILT_DEFINED
+SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
+#endif
+
 struct decode_Stage1 {
     slop_list_owl2_RawAxiom axioms;
     owl2_Signature signature;
+    int64_t inert;
 };
 typedef struct decode_Stage1 decode_Stage1;
 
@@ -252,6 +277,27 @@ static inline bool slop_eq_rdf_Term(const void* a, const void* b) {
 }
 #endif
 
+#ifndef TERMSTORE_IDTRIPLE_HASH_EQ_DEFINED
+#define TERMSTORE_IDTRIPLE_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_termstore_IdTriple(const void* key) {
+    const termstore_IdTriple* _k = (const termstore_IdTriple*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_int(&_k->s); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->p); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->o); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_termstore_IdTriple(const void* a, const void* b) {
+    const termstore_IdTriple* _a = (const termstore_IdTriple*)a;
+    const termstore_IdTriple* _b = (const termstore_IdTriple*)b;
+    return true
+        && (_a->s == _b->s)
+        && (_a->p == _b->p)
+        && (_a->o == _b->o)
+    ;
+}
+#endif
+
 #ifndef SLOP_RESULT_RDF_TERM_DECODE_LOOKUPFAULT_DEFINED
 #define SLOP_RESULT_RDF_TERM_DECODE_LOOKUPFAULT_DEFINED
 typedef struct { bool is_ok; union { rdf_Term ok; decode_LookupFault err; } data; } slop_result_rdf_Term_decode_LookupFault;
@@ -314,15 +360,22 @@ slop_result_rdf_Term_decode_LookupFault decode_one_object(slop_arena* arena, ter
 slop_result_list_rdf_Term_decode_ListFault decode_rdf_list_checked(slop_arena* arena, termstore_TermStore g, rdf_Term head);
 slop_option_rdf_IRI decode_term_iri_value(rdf_Term t);
 uint8_t decode_iri_in_list(slop_list_rdf_IRI xs, rdf_IRI target);
-slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, slop_list_rdf_Triple triples);
+slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, termstore_Encoded doc);
+int64_t decode_vocab_id(slop_arena* arena, termstore_TermStore dict, slop_string iri);
 slop_list_types_Omission decode_unresolved_imports(slop_arena* arena, slop_list_rdf_IRI declared, slop_list_rdf_IRI resolved);
-slop_list_rdf_Term decode_subjects_of_type(slop_arena* arena, termstore_TermStore g, slop_string type_iri);
 uint8_t decode_typed_as(rdf_Triple t, slop_string type_iri);
-slop_list_rdf_Term decode_typed_subjects_in_order(slop_arena* arena, slop_list_rdf_Triple triples, slop_string type_iri);
+slop_list_int decode_typed_ids_in_order(slop_arena* arena, termstore_Encoded doc, slop_string type_iri);
 uint8_t decode_logical_predicate(slop_string pv);
 rdf_Triple decode_ex_hdr(slop_string p, slop_string o);
 uint8_t decode_header_consumable(rdf_Triple t);
 slop_result_decode_Stage0_types_Fault decode_stage0_header(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
+slop_result_decode_Stage0_types_Fault decode_stage0_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved);
+slop_map* decode_id_set(slop_arena* arena, slop_list_int a, slop_list_int b, slop_list_int c);
+termstore_TermStore decode_annotated_store(slop_arena* arena, termstore_Encoded doc);
+int64_t decode_term_id(termstore_TermStore st, rdf_Term t);
+decode_Rebuilt decode_rebuild_candidates(slop_arena* arena, termstore_TermStore st, slop_list_int ax_subjs);
+slop_map* decode_asserted_among(slop_arena* arena, slop_list_termstore_IdTriple candidates, termstore_Encoded doc);
+slop_result_decode_Stage0_types_Fault decode_stage0_scan(slop_arena* arena, slop_arena* scratch, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved);
 owl2_RawConcept* decode_box_concept(slop_arena* arena, owl2_RawConcept c);
 slop_string decode_list_fault_message(decode_ListFault f);
 uint8_t decode_has_pred(slop_arena* arena, termstore_TermStore g, rdf_Term s, slop_string pred_iri);
@@ -341,7 +394,7 @@ slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, termsto
 slop_result_owl2_RawConcept_string decode_decode_concept(slop_arena* arena, termstore_TermStore g, rdf_Term t, int64_t fuel);
 uint8_t decode_declare_entity(slop_arena* arena, owl2_Signature sig, rdf_IRI entity, slop_string type_iri);
 uint8_t decode_add_builtins(slop_arena* arena, owl2_Signature sig);
-owl2_Signature decode_build_signature(slop_arena* arena, slop_list_rdf_Triple triples);
+owl2_Signature decode_build_signature(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_string decode_render_term(slop_arena* arena, rdf_Term t);
 slop_string decode_render_triple(slop_arena* arena, rdf_Triple t);
 types_InputRef decode_frag(slop_arena* arena, rdf_Triple t);
@@ -359,8 +412,11 @@ slop_result_owl2_RawAxiom_string decode_decode_class_assertion(slop_arena* arena
 uint8_t decode_is_reserved_iri(slop_string v);
 int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj);
 slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstore_TermStore g, owl2_Signature sig, rdf_Triple t);
-slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, slop_list_rdf_Triple triples);
-slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature sig, slop_list_rdf_Triple triples);
+slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+termstore_TermStore decode_decode_store(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+slop_list_string decode_queried_predicates(slop_arena* arena);
+slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature sig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 
 #define decode_CONCEPT_FUEL (64)
 
@@ -379,6 +435,11 @@ SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 SLOP_OPTION_DEFINE(decode_ListFault, slop_option_decode_ListFault)
 #endif
 
+#ifndef SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+#define SLOP_OPTION_TERMSTORE_IDTRIPLE_DEFINED
+SLOP_OPTION_DEFINE(termstore_IdTriple, slop_option_termstore_IdTriple)
+#endif
+
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
@@ -392,6 +453,11 @@ SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #ifndef SLOP_OPTION_DECODE_STAGE0_DEFINED
 #define SLOP_OPTION_DECODE_STAGE0_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_REBUILT_DEFINED
+#define SLOP_OPTION_DECODE_REBUILT_DEFINED
+SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED

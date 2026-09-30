@@ -1,0 +1,16 @@
+# IMPORT MERGING (-I): the root document imports imported.ttl, and both use
+# blank nodes. Each parse numbers its blank nodes from 0, so the CLI must
+# standardize the documents apart (an offset on the import's ids) or the
+# two restrictions below would collide. Pinned by `golden` with
+#   howl validate root.ttl -I imported.ttl --report
+# Expect: A subClassOf C, through the root's A ⊑ ∃r.B and the import's
+# ∃r.B ⊑ C; the import's anonymous-individual assertion is an omission
+# whose text shows its (offset) blank id.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/root> a owl:Ontology ; owl:imports <http://example.org/imported> .
+:r a owl:ObjectProperty .
+:A a owl:Class . :B a owl:Class .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .

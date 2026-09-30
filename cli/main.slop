@@ -73,17 +73,24 @@
 
   (import rdf (IRI Triple Term BlankNode make-blank make-triple make-triple-term
                term-eq make-iri))
-  (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config))
+  (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config
+                 copy-fault))
   (import owl2 (render-omission))
-  (import howl (Verdict verdict Decoded decode Prepared prepare-decoded reason))
+  (import howl (Verdict verdict Decoded decode-from own-decoded Prepared prepare-decoded reason))
+  (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
   (import report (report-lines))
   (import strlib (parse-int is-digit char-at))
-  (import ttl (parse-ttl-file))
+  (import ttl (parse-ttl-file-for-each-triple))
   (import vocab (RDF_TYPE OWL_ONTOLOGY))
   (import canon (string-cmp))
 
   (ffi "string.h"
     (strlen ((s (Ptr U8))) U64))
+
+  ;; For `peak-mb`'s getrusage. An ffi block emits only the #include; the
+  ;; call itself is c-inline, since `struct rusage` has no SLOP type.
+  (ffi "sys/resource.h"
+    (getrusage ((who Int) (usage (Ptr U8))) Int))
 
   ;; ============================================================
   ;; Exit codes (§9) — the verdict table in the CLI's dialect
@@ -141,83 +148,64 @@
 
 
   ;; ============================================================
-  ;; Multi-document loading
+  ;; Loading: each document streamed into one encoded document
   ;;
-  ;; BLANK NODES MUST BE STANDARDIZED APART PER DOCUMENT. The Turtle
-  ;; parser restarts its blank counter at 0 for every parse, so two
-  ;; documents both using `_:x` arrive with the same id — and merging
-  ;; them by concatenation WELDS UNRELATED NODES TOGETHER. RDF merge is
-  ;; defined to rename them apart; concatenation is not RDF merge.
+  ;; A document is parsed with slop-rdf's streaming parser straight into
+  ;; HOWL's encoded form (termstore.slop, Encoded): no list of slop-rdf
+  ;; Triples is ever built, and the parser's memory - the file text and
+  ;; every term's strings - is freed as soon as the parse returns, since
+  ;; the encoding owns copies of what it keeps.
   ;;
-  ;; This lives in the CLI rather than in `decode` because `classify`
-  ;; receives one flat triple list and never sees document boundaries
-  ;; (§8.5 A1). The CLI is the last place that still knows.
+  ;; BLANK NODES ARE STANDARDIZED APART PER DOCUMENT. The Turtle parser
+  ;; restarts its blank counter at 0 for every parse, so two documents
+  ;; both using `_:x` arrive with the same id, and merging them by
+  ;; concatenation would WELD UNRELATED NODES TOGETHER; RDF merge renames
+  ;; them apart. `encoded-next-document` begins each import with its blank
+  ;; ids shifted past every id already encoded. This lives with loading
+  ;; because `classify` receives one flat triple list and never sees
+  ;; document boundaries (§8.5 A1); loading is the last place that knows.
   ;; ============================================================
 
-  (fn max-blank-in-term ((t Term))
-    (@intent "Highest blank-node id in a term, recursing into triple terms")
-    (@spec ((Term) -> Int))
-    (@pure)
-    (match t
-      ((term-blank b)   (. b id))
-      ((term-iri _)     0)
-      ((term-literal _) 0)
-      ((term-triple tt)
-        (let ((tr (deref tt)))
-          (max (max-blank-in-term (. tr subject))
-            (max (max-blank-in-term (. tr predicate))
-                 (max-blank-in-term (. tr object))))))))
-
-  (fn max-blank-id ((ts (List Triple)))
-    (@intent "Highest blank-node id across a triple list")
-    (@spec (((List Triple)) -> Int))
-    (@pure)
-    ;; Starts at 0, so a graph with no blank nodes is indistinguishable
-    ;; from one whose only blank node is _:0 — the caller adds 1, which
-    ;; is correct either way.
-    (let ((mut m 0))
-      (do
-        (for-each (t ts)
-          (do
-            (set! m (max m (max-blank-in-term (. t subject))))
-            (set! m (max m (max-blank-in-term (. t predicate))))
-            (set! m (max m (max-blank-in-term (. t object))))))
-        m)))
-
-  (fn remap-blank ((arena Arena) (t Term) (offset Int))
-    (@intent "Shift a term's blank-node ids by an offset")
-    (@spec ((Arena Term Int) -> Term))
+  (fn parse-into ((arena Arena) (enc (Ptr Encoded)) (path String))
+    (@intent "Stream one Turtle file into the encoded document; false when it cannot be parsed")
+    (@spec ((Arena (Ptr Encoded) String) -> Bool))
     (@alloc arena)
-    (match t
-      ((term-blank b)   (make-blank arena (+ (. b id) offset)))
-      ((term-iri _)     t)
-      ((term-literal _) t)
-      ((term-triple tt)
-        (let ((tr (deref tt)))
-          (make-triple-term arena
-            (make-triple arena
-              (remap-blank arena (. tr subject) offset)
-              (remap-blank arena (. tr predicate) offset)
-              (remap-blank arena (. tr object) offset)))))))
-
-  (fn ontology-iri-of ((ts (List Triple)))
-    (@intent "The IRI asserted to be an owl:Ontology, if there is one")
-    (@spec (((List Triple)) -> (Option IRI)))
-    (@pure)
-    (let ((mut found (Option IRI) (none)))
+    ;; The callback only calls `encoded-add`, and captures `arena` and
+    ;; `enc` - both immutable, so both by value: a closure capturing a
+    ;; `mut` local gets its address, and a push onto a captured list would
+    ;; grow a copy of its header, silently (slop#193).
+    (let ((parse (arena-new 16777216))
+          (ok    (match (parse-ttl-file-for-each-triple parse path
+                          (fn ((t Triple)) (encoded-add arena enc t)))
+                   ((ok _)    true)
+                   ((error _) false))))
       (do
-        (for-each (t ts)
-          (match (. t predicate)
-            ((term-iri p)
-              (when (== (string-cmp (. p value) RDF_TYPE) 0)
-                (match (. t object)
-                  ((term-iri o)
-                    (when (== (string-cmp (. o value) OWL_ONTOLOGY) 0)
-                      (match (. t subject)
-                        ((term-iri sub) (set! found (some sub)))
+        (arena-free parse)
+        ok)))
+
+  (fn ontology-iri-from ((e Encoded) (from Int))
+    (@intent "The IRI asserted to be an owl:Ontology among the triples from index `from` on, if there is one")
+    (@spec ((Encoded Int) -> (Option IRI)))
+    ;; The LAST such IRI in document order, as always.
+    (let ((mut found (Option IRI) (none))
+          (mut k 0))
+      (do
+        (for-each (it (. e triples))
+          (do
+            (when (>= k from)
+              (let ((t (triple-of (. e dict) it)))
+                (match (. t predicate)
+                  ((term-iri p)
+                    (when (== (string-cmp (. p value) RDF_TYPE) 0)
+                      (match (. t object)
+                        ((term-iri o)
+                          (when (== (string-cmp (. o value) OWL_ONTOLOGY) 0)
+                            (match (. t subject)
+                              ((term-iri sub) (set! found (some sub)))
+                              (_ (do)))))
                         (_ (do)))))
                   (_ (do)))))
-            (_ (do))))
+            (set! k (+ k 1))))
         found)))
 
   ;; ============================================================
@@ -243,7 +231,7 @@
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
       (println "  --strict   refuse to run past any omission (exit 2, no report)")
       (println "  --report   print the canonical report instead of the summary")
-      (println "  --timings  print phase durations on stderr (never part of a report)")
+      (println "  --timings  print phase durations and peak memory on stderr (never part of a report)")
       (println "  --max-iterations N   the round budget, 0..10000 (default 1000)")
       (println "  --workers N          threads joining each round, 1..64 (default 4); never changes the report")
       (println "")
@@ -278,9 +266,11 @@
     ;; a clock inside a reasoning call (§6.8); `make test` fails if one
     ;; appears under src/. `prepare_ms + reason_ms` - axioms in hand to
     ;; taxonomy - is the classification figure §12 M1 (c) compares against
-    ;; ELK (bench/bench.py); `decode_ms` (triples to axioms) is reported
-    ;; beside it. `total_ms` is parse through reasoning: the clock stops
-    ;; before the report is rendered and printed.
+    ;; ELK (bench/bench.py); `decode_ms` (encoded triples to axioms, owned
+    ;; and the input's arena freed) is reported beside it. `parse_ms` includes encoding: the Turtle is
+    ;; streamed straight into the encoded document. `total_ms` is parse
+    ;; through reasoning: the clock stops before the report is rendered
+    ;; and printed.
     (eprint
       (string-concat arena "timing parse_ms="
         (string-concat arena (int-to-string arena (- t1 t0))
@@ -292,6 +282,37 @@
                     (string-concat arena (int-to-string arena (- t4 t3))
                       (string-concat arena " total_ms="
                         (string-concat arena (int-to-string arena (- t4 t0)) "\n"))))))))))))
+
+  (fn peak-mb ()
+    (@intent "The process's peak resident set so far, in MB")
+    (@spec (() -> Int))
+    ;; A HIGH-WATER MARK (ru_maxrss), never current usage: freeing memory
+    ;; does not lower it, so each figure in the memory line is the peak
+    ;; reached by the end of that phase. ru_maxrss is bytes on macOS and
+    ;; kilobytes on Linux.
+    (let ((mut mb 0))
+      (do
+        (c-inline "{ struct rusage ru; getrusage(RUSAGE_SELF, &ru);\n#ifdef __APPLE__\n mb = (int64_t)(ru.ru_maxrss / 1048576);\n#else\n mb = (int64_t)(ru.ru_maxrss / 1024);\n#endif\n }")
+        mb)))
+
+  (fn print-memory ((arena Arena) (m1 Int) (m2 Int) (m3 Int) (m4 Int) (m5 Int))
+    (@intent "Peak memory at the end of each phase on stderr: parse, decode, prepare, reasoning, report")
+    (@spec ((Arena Int Int Int Int Int) -> Unit))
+    (@alloc arena)
+    ;; Read at the same points as the timing clock, plus once after the
+    ;; report is written. Like the timings it is a CLI measurement and
+    ;; never part of a report.
+    (eprint
+      (string-concat arena "memory parse_mb="
+        (string-concat arena (int-to-string arena m1)
+          (string-concat arena " decode_mb="
+            (string-concat arena (int-to-string arena m2)
+              (string-concat arena " prepare_mb="
+                (string-concat arena (int-to-string arena m3)
+                  (string-concat arena " reason_mb="
+                    (string-concat arena (int-to-string arena m4)
+                      (string-concat arena " report_mb="
+                        (string-concat arena (int-to-string arena m5) "\n"))))))))))))
 
   (fn all-digits ((s String))
     (@intent "Non-empty, and every byte an ASCII digit — the only shape a budget may take")
@@ -312,14 +333,35 @@
             (set! i (+ i 1))))
         ok)))
 
-  (fn prepare-from ((arena Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
-    (@intent "Finish the front end over a successful decode; pass a decode fault straight through")
-    (@spec ((Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
+  (fn decode-held ((held Arena) (front Arena) (doc Encoded) (resolved (List IRI)))
+    (@intent "Decode the encoded input into an owned copy in `held`, then free the input's arena")
+    (@spec ((Arena Arena Encoded (List IRI)) -> (Result Decoded Fault)))
+    (@alloc held)
+    ;; This IS `howl.decode-owned`, split so the parse can stream into
+    ;; `front` first. `front` holds the encoded documents and the decode's
+    ;; working memory; nothing in the result points into it, so it is freed
+    ;; here, before the gate starts.
+    (let ((res (own-decoded held (decode-from front doc resolved))))
+      (do
+        (arena-free front)
+        res)))
+
+  (fn prepare-from ((arena Arena) (held Arena) (d (Result Decoded Fault)) (config ReasonerConfig))
+    (@intent "Finish the front end over a decode, then free the decode's arena")
+    (@spec ((Arena Arena (Result Decoded Fault) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
-    ;; This IS `howl.prepare`, split so decode can be timed apart.
-    (match d
-      ((error f) (error f))
-      ((ok dd)   (prepare-decoded arena dd config))))
+    ;; This IS the rest of `howl.prepare`, split so decode can be timed
+    ;; apart. `held` holds the owned Decoded; nothing in the result points
+    ;; into it (a Prepared owns its strings, and a decode fault is copied
+    ;; out), so it is freed here, before reasoning starts.
+    ;; The `ok` arm comes first: slop types a match's result from its first
+    ;; arm, and an `error` arm first leaves the ok type void in the C.
+    (let ((res (match d
+                 ((ok dd)   (prepare-decoded arena dd config))
+                 ((error f) (error (copy-fault arena f))))))
+      (do
+        (arena-free held)
+        res)))
 
   (fn reason-prepared ((arena Arena) (p (Result Prepared Fault)) (config ReasonerConfig))
     (@intent "Reason over a successful front end; pass a front-end fault straight through")
@@ -356,7 +398,8 @@
           (if (not (or (string-eq command "validate") (string-eq command "classify")))
             (do (print "howl: unknown or unimplemented command: ") (println command)
                 EXIT_ERROR)
-            (let ((mut triples  (list-new arena Triple))
+            (let ((front        (arena-new 16777216))   ; the encoded input and its decode: freed after decode
+                  (enc          (new-encoded front))
                   (mut resolved (list-new arena IRI))
                   (mut cfg      (default-config))
                   (mut failed   false)
@@ -367,10 +410,8 @@
                   (input (argv-to-string argv 2)))
               (do
                 ;; The root document.
-                (match (parse-ttl-file arena input)
-                  ((error _)
-                    (do (print "howl: cannot parse ") (println input) (set! failed true)))
-                  ((ok g) (for-each (t (. g triples)) (list-push triples t))))
+                (when (not (parse-into front enc input))
+                  (do (print "howl: cannot parse ") (println input) (set! failed true)))
 
                 (while (< i argc)
                   (let ((arg (argv-to-string argv i))
@@ -389,32 +430,25 @@
                           (when (>= (+ i 1) argc)
                             (do (println "howl: -I needs a FILE") (set! failed true)))
                           (when (< (+ i 1) argc)
-                            (let ((path (argv-to-string argv (+ i 1))))
-                              (match (parse-ttl-file arena path)
-                                ((error _)
+                            (let ((path (argv-to-string argv (+ i 1)))
+                                  (from (cast Int (list-len (. (deref enc) triples)))))
+                              (do
+                                (encoded-next-document front enc)
+                                (if (not (parse-into front enc path))
                                   (do (print "howl: cannot parse import ") (println path)
-                                      (set! failed true)))
-                                ((ok ig)
-                                  (match (ontology-iri-of (. ig triples))
+                                      (set! failed true))
+                                  (match (ontology-iri-from (deref enc) from)
                                     ;; A document naming no ontology attests
                                     ;; NOTHING, yet its triples would still be
                                     ;; merged — the import it was meant to
                                     ;; resolve stays an omission, and nobody
-                                    ;; is told why.
+                                    ;; is told why. The run fails, so the
+                                    ;; triples already encoded never decode.
                                     ((none)
                                       (do (print "howl: import declares no owl:Ontology IRI, so it attests nothing: ")
                                           (println path)
                                           (set! failed true)))
-                                    ((some o)
-                                      (let ((offset (+ (max-blank-id triples) 1)))
-                                        (do
-                                          (for-each (t (. ig triples))
-                                            (list-push triples
-                                              (make-triple arena
-                                                (remap-blank arena (. t subject) offset)
-                                                (. t predicate)
-                                                (remap-blank arena (. t object) offset))))
-                                          (list-push resolved o)))))))))))
+                                    ((some o) (list-push resolved o)))))))))
 
                       (when (string-eq arg "--strict")
                         (do (set! known true) (set! cfg strict-profile true)))
@@ -507,12 +541,17 @@
                 (if failed
                   EXIT_ERROR
                   (let ((t-parsed   (now-ms))
-                        (decoded    (decode arena triples resolved))
+                        (m-parsed   (peak-mb))
+                        (held       (arena-new 16777216))   ; the owned Decoded: freed after prepare
+                        (decoded    (decode-held held front (deref enc) resolved))
                         (t-decoded  (now-ms))
-                        (prepared   (prepare-from arena decoded cfg))
+                        (m-decoded  (peak-mb))
+                        (prepared   (prepare-from arena held decoded cfg))
                         (t-prepared (now-ms))
+                        (m-prepared (peak-mb))
                         (result     (reason-prepared arena prepared cfg))
-                        (t-reasoned (now-ms)))
+                        (t-reasoned (now-ms))
+                        (m-reasoned (peak-mb)))
                     (do
                       (when timings
                         (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
@@ -551,4 +590,6 @@
                                   (print (int-to-string arena (cast Int (list-len os))))
                                   (println " omitted")
                                   (print-omissions arena os))))))
+                      (when timings
+                        (print-memory arena m-parsed m-decoded m-prepared m-reasoned (peak-mb)))
                       (exit-code-for result))))))))))))

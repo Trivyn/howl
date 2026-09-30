@@ -70,11 +70,12 @@
                  Saturation ReasonerConfig Fault LogicalEdge
                  Derived Addressed EdgePair emit-edge
                  node-top node-bottom node-eq role-eq
-                 Names empty-names intern-node intern-role))
+                 Names empty-names intern-node intern-role copy-omissions))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
-                Signature make-signature))
+                Signature make-signature copy-axioms copy-signature))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
-  (import decode (Stage0 Stage1 stage0-header decode-axioms))
+  (import decode (Stage0 Stage1 stage0-header stage0-encoded decode-axioms))
+  (import termstore (Encoded encode-triples))
   (import saturate (make-initial-saturation deliver-seed))
   (import canon (string-cmp))
 
@@ -82,7 +83,7 @@
     Decoded NormResult NormOutput
     NormState new-state
     normalize-accepted
-    decode-document normalize-decoded
+    decode-document decode-encoded copy-decoded normalize-decoded
     normalize-input)
 
   ;; Normalization makes TWO DIFFERENT GUARANTEES, and conflating them
@@ -932,10 +933,21 @@
     (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Decoded Fault)))
     (@alloc arena)
-    (match (stage0-header arena triples imports-resolved)
+    ;; ENCODED ONCE, HERE: the port's input is a slop-rdf triple list, and
+    ;; everything after this reads the encoded document (termstore.slop).
+    (decode-encoded arena (encode-triples arena triples) imports-resolved))
+
+  (fn decode-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)))
+    (@intent "Header pre-pass and decode over an encoded document")
+    (@spec ((Arena Encoded (List IRI)) -> (Result Decoded Fault)))
+    (@alloc arena)
+    ;; The Decoded's strings are the dictionary's, so `doc` must live in an
+    ;; arena that outlives the Decoded - until `normalize-decoded` has
+    ;; copied what survives it.
+    (match (stage0-encoded arena doc imports-resolved)
       ((error f) (error f))
       ((ok s0)
-        (match (decode-axioms arena (. s0 triples))
+        (match (decode-axioms arena (. s0 dict) (. s0 triples))
           ((error f) (error f))
           ((ok s1)
             (ok (record-new Decoded
@@ -943,10 +955,34 @@
                   (signature (. s1 signature))
                   (omissions (. s0 omissions)))))))))
 
-  (fn normalize-decoded ((arena Arena) (d Decoded))
-    (@intent "The front end's second half: gate, normalize, rename, initialize")
-    (@spec ((Arena Decoded) -> NormResult))
+  (fn copy-decoded ((arena Arena) (d Decoded))
+    (@intent "The decoded document, every string and operand owned in arena")
+    (@spec ((Arena Decoded) -> Decoded))
     (@alloc arena)
+    ;; What lets the encoded input's arena go before the gate runs: a
+    ;; Decoded borrows its IRIs from the input's dictionary (decode-encoded),
+    ;; and this copy borrows nothing. The axiom COUNT is carried from
+    ;; `copy-axioms`'s proved @post (a count, not identity - see there). The
+    ;; call is let-bound on purpose: slop verify assumes a callee's @post of
+    ;; a bound result, not of a call nested inside `record-new`.
+    (@post {(list-len (. $result axioms)) == (list-len (. d axioms))})
+    (let ((axioms (copy-axioms arena (. d axioms))))
+      (record-new Decoded
+        (axioms    axioms)
+        (signature (copy-signature arena (. d signature)))
+        (omissions (copy-omissions arena (. d omissions))))))
+
+  (fn normalize-decoded ((arena Arena) (scratch Arena) (d Decoded))
+    (@intent "The front end's second half: gate, normalize, rename, initialize")
+    (@spec ((Arena Arena Decoded) -> NormResult))
+    (@alloc arena)
+    ;; TWO ARENAS. The gate and the normalizer run in `scratch`, which the
+    ;; caller frees once this returns; everything in the result is built in
+    ;; `arena`: the name table (which copies the strings it keeps), the
+    ;; renamed axioms and signature, the saturation, and a copy of the
+    ;; omissions. A collection grows in the arena named `arena` at the site
+    ;; that pushes into it, so each survivor is built by a call that is
+    ;; handed `arena`, and each scratch structure by one handed `scratch`.
     ;; ACCOUNTING, NOT "one normal form per axiom". Every accepted
     ;; logical axiom must be discharged by ONE of: the NormAxioms it
     ;; produced, the initial Derived facts it produced, or a named
@@ -964,10 +1000,10 @@
     ;; output - it mints `fresh-node i` for i < fresh-count, which would
     ;; collide with renamed ids - and then everything saturation will see
     ;; is renamed through one table.
-    (let ((gr    (gate-axioms arena (. d axioms) (. d signature) (. d omissions)))
-          (no    (normalize-accepted arena (. gr accepted)))
+    (let ((gr    (gate-axioms scratch (. d axioms) (. d signature) (. d omissions)))
+          (no    (normalize-accepted scratch (. gr accepted)))
           (names (empty-names arena))
-          (sig   (rename-nodes arena names (signature-nodes arena (. gr signature) no)))
+          (sig   (rename-nodes arena names (signature-nodes scratch (. gr signature) no)))
           (rno   (rename-output arena names no)))
       (let ((sat (make-initial-saturation arena sig)))
         (do
@@ -975,7 +1011,7 @@
           (record-new NormResult
             (axioms     (. rno axioms))
             (saturation sat)
-            (coverage   (record-new Coverage (omitted (. gr omissions))))
+            (coverage   (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))))
             (names      names))))))
 
   (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
@@ -984,5 +1020,5 @@
     (@alloc arena)
     (match (decode-document arena triples imports-resolved)
       ((error f) (error f))
-      ((ok d)    (ok (normalize-decoded arena d)))))
+      ((ok d)    (ok (normalize-decoded arena arena d)))))
 )

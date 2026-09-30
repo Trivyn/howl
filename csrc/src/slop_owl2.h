@@ -12,7 +12,6 @@ typedef struct owl2_RawConcept owl2_RawConcept;
 typedef struct owl2_RawChain owl2_RawChain;
 typedef struct owl2_RawEdge owl2_RawEdge;
 typedef struct owl2_RawClassAssertion owl2_RawClassAssertion;
-typedef struct owl2_RawAnnotation owl2_RawAnnotation;
 typedef struct owl2_RawDeclaration owl2_RawDeclaration;
 typedef struct owl2_RawAxiom owl2_RawAxiom;
 typedef struct owl2_Signature owl2_Signature;
@@ -104,18 +103,6 @@ typedef struct owl2_RawClassAssertion owl2_RawClassAssertion;
 #ifndef SLOP_OPTION_OWL2_RAWCLASSASSERTION_DEFINED
 #define SLOP_OPTION_OWL2_RAWCLASSASSERTION_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawClassAssertion, slop_option_owl2_RawClassAssertion)
-#endif
-
-struct owl2_RawAnnotation {
-    rdf_IRI property;
-    types_InputRef subject;
-    slop_string target;
-};
-typedef struct owl2_RawAnnotation owl2_RawAnnotation;
-
-#ifndef SLOP_OPTION_OWL2_RAWANNOTATION_DEFINED
-#define SLOP_OPTION_OWL2_RAWANNOTATION_DEFINED
-SLOP_OPTION_DEFINE(owl2_RawAnnotation, slop_option_owl2_RawAnnotation)
 #endif
 
 struct owl2_RawDeclaration {
@@ -228,8 +215,7 @@ typedef enum {
     owl2_RawAxiom_ra_class_assertion,
     owl2_RawAxiom_ra_object_property_assertion,
     owl2_RawAxiom_ra_declaration,
-    owl2_RawAxiom_ra_annotation_assertion,
-    owl2_RawAxiom_ra_annotation_axiom,
+    owl2_RawAxiom_ra_annotation,
     owl2_RawAxiom_ra_inverse_properties,
     owl2_RawAxiom_ra_property_characteristic,
     owl2_RawAxiom_ra_disjoint_properties,
@@ -274,8 +260,6 @@ struct owl2_RawAxiom {
         owl2_RawClassAssertion ra_class_assertion;
         owl2_RawEdge ra_object_property_assertion;
         owl2_RawDeclaration ra_declaration;
-        owl2_RawAnnotation ra_annotation_assertion;
-        types_InputRef ra_annotation_axiom;
         struct {
             types_RoleId f0;
             types_RoleId f1;
@@ -304,6 +288,12 @@ typedef struct owl2_RawAxiom owl2_RawAxiom;
 #ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #endif
 
 
@@ -355,6 +345,15 @@ slop_string owl2_render_entity_kind(types_EntityKind k);
 slop_string owl2_render_omission(slop_arena* arena, types_Omission o);
 slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax);
 slop_string owl2_render_characteristic(owl2_PropCharacteristic c);
+owl2_RawConcept owl2_copy_concept(slop_arena* arena, owl2_RawConcept c);
+owl2_RawConcept* owl2_copy_boxed(slop_arena* arena, owl2_RawConcept* p);
+slop_list_owl2_RawConcept owl2_copy_concepts(slop_arena* arena, slop_list_owl2_RawConcept cs);
+slop_list_types_Node owl2_copy_nodes(slop_arena* arena, slop_list_types_Node ns);
+slop_list_types_RoleId owl2_copy_roles(slop_arena* arena, slop_list_types_RoleId rs);
+owl2_RawAxiom owl2_copy_raw_axiom(slop_arena* arena, owl2_RawAxiom ax);
+owl2_RawAxiom owl2_raw_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i);
+slop_list_owl2_RawAxiom owl2_copy_axioms(slop_arena* arena, slop_list_owl2_RawAxiom xs);
+owl2_Signature owl2_copy_signature(slop_arena* arena, owl2_Signature sig);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);
 
 extern const slop_string owl2_OWL_AXIOM;
@@ -400,11 +399,6 @@ SLOP_OPTION_DEFINE(owl2_RawEdge, slop_option_owl2_RawEdge)
 #ifndef SLOP_OPTION_OWL2_RAWCLASSASSERTION_DEFINED
 #define SLOP_OPTION_OWL2_RAWCLASSASSERTION_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawClassAssertion, slop_option_owl2_RawClassAssertion)
-#endif
-
-#ifndef SLOP_OPTION_OWL2_RAWANNOTATION_DEFINED
-#define SLOP_OPTION_OWL2_RAWANNOTATION_DEFINED
-SLOP_OPTION_DEFINE(owl2_RawAnnotation, slop_option_owl2_RawAnnotation)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_RAWDECLARATION_DEFINED

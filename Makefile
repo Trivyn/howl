@@ -42,7 +42,7 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        acceptance corpus-acceptance golden golden-update test-asan crate-vendor crate-build crate-test crate-publish \
+        acceptance corpus-acceptance golden golden-update test-asan golden-asan crate-vendor crate-build crate-test crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-check
 
@@ -92,6 +92,22 @@ test-asan: $(BIN)
 	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
 	  $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test-asan
 	ASAN_OPTIONS=detect_leaks=0 $(BIN)/howl-test-asan
+
+# THE CLI UNDER ASan, OVER THE GOLDENS. HOWL frees arenas as each phase of a
+# run ends, so a string or table left pointing into a freed arena is the
+# failure to fear - and only a real run over real input reaches every such
+# pointer; the unit tests do not. This builds the CLI under ASan and runs
+# `golden` with it: every fixture, plus RO and OBI (GO and EL-GALEN are left
+# out for time and memory; `golden` covers them without ASan). A memory error
+# exits 99, which no verdict uses, so it can never match a golden.
+golden-asan: $(BIN)
+	$(CC) -O1 -g -fsanitize=address -fno-omit-frame-pointer -Wall -Werror=switch \
+	  -Wno-unused-function -Wno-unused-variable -Wno-return-type -Wno-pointer-sign \
+	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
+	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
+	  $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl-asan
+	ASAN_OPTIONS=detect_leaks=0:exitcode=99 $(MAKE) --no-print-directory golden \
+	  HOWL=./$(BIN)/howl-asan GOLDEN_CORPUS="ro-2025-12-17 obi-2026-07-27"
 
 # THE ROUND-JOIN RUNS ON WORKER THREADS (M1 slice 5), and ThreadSanitizer is
 # what shows the join shares nothing mutable: workers read the frozen store
@@ -258,6 +274,11 @@ corpus-acceptance: cli
 # `golden-update` is for deliberate changes only.
 GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl \
                               corpus/fixtures/probes/*.ttl)
+# IMPORT RUNS, `howl validate DOC.ttl -I IMPORT.ttl --report`, one per
+# DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
+# an attested import - its blank nodes standardized apart from the root's -
+# which no single-file golden reaches.
+GOLDEN_IMPORTS  := root:imported
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
@@ -285,6 +306,12 @@ golden: cli
 	  case "$$out" in "howl-report 1"*) ;; *) echo "  NOT A REPORT $$f"; fail=1; continue;; esac; \
 	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL $$f differs from $$g"; fail=1; fi; \
 	done; \
+	for pair in $(GOLDEN_IMPORTS); do \
+	  d=$${pair%%:*}; i=$${pair#*:}; g=corpus/goldens/imports/$$d.report; \
+	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate corpus/fixtures/imports/$$d.ttl -I corpus/fixtures/imports/$$i.ttl --report 2>/dev/null; echo "exit $$?"; }); \
+	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL imports $$d -I $$i differs from $$g"; fail=1; fi; \
+	done; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/$$c.sha256; \
 	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
@@ -303,6 +330,13 @@ golden-update: cli
 	  out=$$({ $(HOWL) validate $$f --report 2>/dev/null; echo "exit $$?"; }); \
 	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > $$g;; \
 	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
+	done; \
+	mkdir -p corpus/goldens/imports; \
+	for pair in $(GOLDEN_IMPORTS); do \
+	  d=$${pair%%:*}; i=$${pair#*:}; \
+	  out=$$({ $(HOWL) validate corpus/fixtures/imports/$$d.ttl -I corpus/fixtures/imports/$$i.ttl --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 1"*) printf '%s\n' "$$out" > corpus/goldens/imports/$$d.report;; \
+	    *) echo "  NOT A REPORT imports $$d -- golden not written"; fail=1;; esac; \
 	done; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; \

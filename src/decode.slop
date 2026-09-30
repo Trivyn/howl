@@ -80,7 +80,9 @@
 
   (import rdf (Term Triple IRI BlankNode
                make-iri term-eq))
-  (import termstore (TermStore build-store store-objects store-typed
+  (import termstore (TermStore IdTriple Encoded lookup-term term-of triple-of encode-triples
+                     store-over store-insert-ids empty-store store-insert build-store
+                     store-objects store-object-count store-sole-object store-typed
                      store-contains store-has-any))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDF_TYPE
                  OWL_ONTOLOGY OWL_IMPORTS
@@ -118,7 +120,7 @@
                 OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
                 OWL_DISJOINT_UNION_OF SWRL_IMP
                 RawAxiom RawChain RawEdge RawClassAssertion
-                RawAnnotation RawDeclaration PropCharacteristic
+                RawDeclaration PropCharacteristic Disposition disposition
                 signature-has-annotation-property
                 signature-has-object-property
                 signature-has-data-property))
@@ -132,11 +134,11 @@
     term-at triple-at
     one-object
     rdf-list-checked
-    stage0-header
+    stage0-header stage0-encoded
     term-iri-value
     CONCEPT_FUEL box-concept decode-concept
     build-signature
-    Stage1 decode-axioms render-triple
+    Stage1 decode-axioms decode-axioms-with decode-store render-triple
     declaration-conflict)
 
   ;; ============================================================
@@ -197,10 +199,14 @@
     ;; on one restriction have no determinate reading, and picking
     ;; either would make the answer depend on hash order. slop-rdf's
     ;; list walker takes index 0 here; that is the bug this avoids.
-    (let ((objs (store-objects arena g subj pred))
-          (n    (cast Int (list-len objs))))
+    ;;
+    ;; Counted, not listed: nothing is allocated (termstore.slop).
+    (let ((n (store-object-count g subj pred)))
       (cond
-        ((== n 1) (ok (term-at objs 0)))
+        ((== n 1)
+          (match (store-sole-object g subj pred)
+            ((some o) (ok o))
+            ((none)   (error 'lookup-missing))))
         ((== n 0) (error 'lookup-missing))
         (else     (error 'lookup-ambiguous)))))
 
@@ -277,8 +283,11 @@
   ;; Stage 0 — the header pre-pass (§6.3 step 0)
   ;; ============================================================
 
+  ;; The document stays ENCODED past stage 0: `dict` is its terms, owning
+  ;; their strings, and `triples` the logical triples as ids, in order.
   (type Stage0 (record
-    (triples          (List Triple))    ; logical triples: header consumed, reified axioms restored
+    (dict             TermStore)        ; the document's terms (termstore.slop, Encoded)
+    (triples          (List IdTriple))  ; logical triples: header consumed, reified axioms restored
     (imports-declared (List IRI))       ; canonically sorted — Findings.imports-seen
     (omissions        (List Omission))  ; (unresolved-import ...), canonically sorted
     (ontology-iri     (Option IRI))))
@@ -306,22 +315,32 @@
           (when (== (iri-cmp x target) 0) (set! found true)))
         found)))
 
-  (fn collect-imports ((arena Arena) (triples (List Triple)))
+  (fn collect-imports ((arena Arena) (doc Encoded))
     (@intent "Every owl:imports object, in canonical order")
-    (@spec ((Arena (List Triple)) -> (List IRI)))
+    (@spec ((Arena Encoded) -> (List IRI)))
     (@alloc arena)
-    ;; Walks the INSERTION-ORDERED triple list rather than querying the
-    ;; index: index iteration is hash-bucket order, and this list is
-    ;; reported as `Findings.imports-seen`.
-    (let ((imports-iri (make-iri arena OWL_IMPORTS))
+    ;; Walks the document in order rather than querying an index: index
+    ;; iteration is hash-bucket order, and this list is reported as
+    ;; `Findings.imports-seen`.
+    (let ((imports-id (vocab-id arena (. doc dict) OWL_IMPORTS))
           (mut out (list-new arena IRI)))
       (do
-        (for-each (t triples)
-          (when (term-eq (. t predicate) imports-iri)
-            (match (term-iri-value (. t object))
+        (for-each (it (. doc triples))
+          (when (== (. it p) imports-id)
+            (match (term-iri-value (term-of (. doc dict) (. it o)))
               ((some i) (when (not (iri-in-list out i)) (list-push out i)))
               ((none)   (do)))))
         (sort-iris arena out))))
+
+  (fn vocab-id ((arena Arena) (dict TermStore) (iri String))
+    (@intent "The id of an IRI in the document's dictionary, or -1 if the document never uses it")
+    (@spec ((Arena TermStore String) -> Int))
+    (@alloc arena)
+    ;; -1 matches no id, so a test against it is simply false: a document
+    ;; that never mentions owl:imports has no owl:imports triple.
+    (match (lookup-term dict (make-iri arena iri))
+      ((some i) i)
+      ((none)   -1)))
 
   (fn unresolved-imports ((arena Arena) (declared (List IRI)) (resolved (List IRI)))
     (@intent "Declared imports the caller did not attest to supplying — M0 acceptance (b)")
@@ -340,12 +359,6 @@
             (list-push out (union-new Omission unresolved-import d))))
         (sort-omissions arena out))))
 
-  (fn subjects-of-type ((arena Arena) (g TermStore) (type-iri String))
-    (@intent "Every subject asserted to have the given rdf:type")
-    (@spec ((Arena TermStore String) -> (List Term)))
-    (@alloc arena)
-    (store-typed arena g (make-iri arena type-iri)))
-
   (fn typed-as ((t Triple) (type-iri String))
     (@intent "Is this triple `?s rdf:type <type-iri>`?")
     (@spec ((Triple String) -> Bool))
@@ -358,37 +371,27 @@
                ((none)   false)
                ((some o) (== (string-cmp (. o value) type-iri) 0)))))))
 
-  (fn typed-subjects-in-order ((arena Arena) (triples (List Triple)) (type-iri String))
-    (@intent "Every subject typed <type-iri>, once each, in first-occurrence document order")
-    (@spec ((Arena (List Triple) String) -> (List Term)))
+  (fn typed-ids-in-order ((arena Arena) (doc Encoded) (type-iri String))
+    (@intent "Every subject typed <type-iri>, once each, in first-occurrence document order, as ids")
+    (@spec ((Arena Encoded String) -> (List Int)))
     (@alloc arena)
-    ;; DOCUMENT ORDER, NOT THE INDEX'S. `subjects-of-type` answers from a
-    ;; hash set, so its order is bucket order: a function of the hash
-    ;; function and the table's growth, not of the input. Stage 0 used it
-    ;; for the owl:Axiom nodes, and that order reached the output twice -
-    ;; the order rebuilt triples join the list, and which of several
-    ;; malformed reifications' faults is the one reported. A new string
-    ;; hash would have changed the reported fault (§6.8). Walking the list
-    ;; ties both to the document, as `decode-axioms` already is.
+    ;; DOCUMENT ORDER, NOT A HASH SET'S. Stage 0 takes the owl:Axiom nodes
+    ;; from here, and that order reaches the output twice - the order
+    ;; rebuilt triples join the list, and which of several malformed
+    ;; reifications' faults is reported. Walking the document ties both
+    ;; to the input (§6.8).
     ;;
-    ;; Deduplicated as the header filter below is: a set for IRIs and blank
-    ;; nodes, a `term-eq` scan for quoted triples, which a set would compare
-    ;; by pointer.
-    (let ((seen (set-new arena Term))
-          (mut out (list-new arena Term)))
+    ;; Ids make deduplication exact: the dictionary gives equal terms one
+    ;; id, quoted triples included, so a set of ids is `term-eq` itself.
+    (let ((type-pred (. (. doc dict) rdf-type))
+          (type-id   (vocab-id arena (. doc dict) type-iri))
+          (seen      (set-new arena Int))
+          (mut out   (list-new arena Int)))
       (do
-        (for-each (t triples)
-          (when (typed-as t type-iri)
-            (let ((s (. t subject)))
-              (match s
-                ((term-triple _)
-                  (let ((mut dup false))
-                    (do
-                      (for-each (q out) (when (term-eq q s) (set! dup true)))
-                      (when (not dup) (list-push out s)))))
-                (_
-                  (when (not (set-has seen s))
-                    (do (set-put seen s) (list-push out s))))))))
+        (for-each (it (. doc triples))
+          (when (and (== (. it p) type-pred) (== (. it o) type-id))
+            (when (not (set-has seen (. it s)))
+              (do (set-put seen (. it s)) (list-push out (. it s))))))
         out)))
 
   (fn logical-predicate ((pv String))
@@ -474,6 +477,127 @@
     (@intent "Consume the ontology header and axiom reification; reconcile imports")
     (@spec ((Arena (List Triple) (List IRI)) -> (Result Stage0 Fault)))
     (@alloc arena)
+    ;; One document, encoded here. A caller that already has an encoded
+    ;; document (the CLI, which streams its parse) uses `stage0-encoded`.
+    (stage0-encoded arena (encode-triples arena triples) imports-resolved))
+
+  (fn stage0-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)))
+    (@intent "Stage 0 over an encoded document")
+    (@spec ((Arena Encoded (List IRI)) -> (Result Stage0 Fault)))
+    (@alloc arena)
+    ;; THE WORKING SETS AND STORES ARE SCRATCH, freed before stage 0
+    ;; returns. Everything in the result - the kept and rebuilt id triples,
+    ;; the imports, the omissions - is built in `arena`, and its terms are
+    ;; the dictionary's, which own their strings.
+    (let ((scratch (arena-new 16777216))
+          (res     (stage0-scan arena scratch doc imports-resolved)))
+      (do
+        (arena-free scratch)
+        res)))
+
+  ;; ============================================================
+  ;; Stage 0's questions, answered by id
+  ;;
+  ;; Stage 0 asks which subjects are typed owl:Ontology, owl:Axiom or
+  ;; owl:Annotation, each owl:Axiom node's one annotatedSource / Property /
+  ;; Target, and whether each rebuilt triple occurs anywhere in the input.
+  ;; Over an encoded document each is a question about ids: equal terms
+  ;; have one id, quoted triples included, so sets of ids and of id
+  ;; triples answer exactly what `term-eq` did. Each helper builds in the
+  ;; arena it is handed: stage 0's scratch.
+  ;; ============================================================
+
+  (fn id-set ((arena Arena) (a (List Int)) (b (List Int)) (c (List Int)))
+    (@intent "The ids of three lists, as one membership set")
+    (@spec ((Arena (List Int) (List Int) (List Int)) -> (Set Int)))
+    (@alloc arena)
+    (let ((s (set-new arena Int)))
+      (do
+        (for-each (x a) (set-put s x))
+        (for-each (x b) (set-put s x))
+        (for-each (x c) (set-put s x))
+        s)))
+
+  (fn annotated-store ((arena Arena) (doc Encoded))
+    (@intent "A store of the owl:annotatedSource / annotatedProperty / annotatedTarget triples")
+    (@spec ((Arena Encoded) -> TermStore))
+    (@alloc arena)
+    ;; `one-object` over these alone answers exactly what it answered over
+    ;; the document: an (a, annotatedX) query only ever sees annotatedX
+    ;; triples, deduplicated as before.
+    (let ((st   (store-over arena (. doc dict)))
+          (src  (vocab-id arena (. doc dict) OWL_ANNOTATED_SOURCE))
+          (prop (vocab-id arena (. doc dict) OWL_ANNOTATED_PROPERTY))
+          (tgt  (vocab-id arena (. doc dict) OWL_ANNOTATED_TARGET)))
+      (do
+        (for-each (it (. doc triples))
+          (when (or (== (. it p) src) (== (. it p) prop) (== (. it p) tgt))
+            (store-insert-ids arena st it)))
+        st)))
+
+  ;; The triples the reified axioms rebuild to, in `ax-subjs` order, and
+  ;; the fault of the LAST node that could not be rebuilt.
+  (type Rebuilt (record
+    (triples (List IdTriple))
+    (fault   (Option String))))
+
+  (fn term-id ((st TermStore) (t Term))
+    (@intent "The id of a term the dictionary holds")
+    (@spec ((TermStore Term) -> Int))
+    ;; Only ever asked of a term a query returned, so it is always there.
+    (match (lookup-term st t)
+      ((some i) i)
+      ((none)   -1)))
+
+  (fn rebuild-candidates ((arena Arena) (st TermStore) (ax-subjs (List Int)))
+    (@intent "Each owl:Axiom node's rebuilt triple, from a store of the annotated* triples")
+    (@spec ((Arena TermStore (List Int)) -> Rebuilt))
+    (@alloc arena)
+    (let ((src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
+          (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
+          (tgt-pred  (make-iri arena OWL_ANNOTATED_TARGET))
+          (mut out   (list-new arena IdTriple))
+          (mut fault (Option String) (none)))
+      (do
+        (for-each (ai ax-subjs)
+          (let ((a (term-of st ai)))
+            (match (one-object arena st a src-pred)
+              ((error _)
+                (set! fault (some "owl:Axiom node without a usable owl:annotatedSource")))
+              ((ok subj)
+                (match (one-object arena st a prop-pred)
+                  ((error _)
+                    (set! fault (some "owl:Axiom node without a usable owl:annotatedProperty")))
+                  ((ok pred)
+                    (match (one-object arena st a tgt-pred)
+                      ((error _)
+                        (set! fault (some "owl:Axiom node without a usable owl:annotatedTarget")))
+                      ((ok obj)
+                        (list-push out (record-new IdTriple
+                                         (s (term-id st subj))
+                                         (p (term-id st pred))
+                                         (o (term-id st obj))))))))))))
+        (record-new Rebuilt (triples out) (fault fault)))))
+
+  (fn asserted-among ((arena Arena) (candidates (List IdTriple)) (doc Encoded))
+    (@intent "The candidates that occur in the input, as a set")
+    (@spec ((Arena (List IdTriple) Encoded) -> (Set IdTriple)))
+    (@alloc arena)
+    ;; In the INPUT, header triples included: a reified axiom whose triple
+    ;; the document also asserts - even on the ontology node, where stage 0
+    ;; consumes it - is not rebuilt. Equal triples have equal ids.
+    (let ((cands (set-new arena IdTriple))
+          (found (set-new arena IdTriple)))
+      (do
+        (for-each (c candidates) (set-put cands c))
+        (for-each (it (. doc triples))
+          (when (set-has cands it) (set-put found it)))
+        found)))
+
+  (fn stage0-scan ((arena Arena) (scratch Arena) (doc Encoded) (imports-resolved (List IRI)))
+    (@intent "Stage 0's work: results in arena, the working sets and stores in scratch")
+    (@spec ((Arena Arena Encoded (List IRI)) -> (Result Stage0 Fault)))
+    (@alloc arena)
     ;; REIFICATION IS RECONSTRUCTED, NOT DROPPED. The OWL 2 RDF mapping
     ;; writes an annotated axiom as a blank node typed `owl:Axiom`
     ;; carrying annotatedSource / annotatedProperty / annotatedTarget
@@ -496,89 +620,43 @@
     ;; anonymous individual, and a document carrying nothing but annotations
     ;; came back INCONCLUSIVE (W3C OWL 2 conformance test
     ;; New-Feature-AnnotationAnnotations-001).
-    (let ((ig        (graph-to-indexed arena triples))
-          ;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
+    (let (;; ORDER-BEARING: rebuilt triples and the fault follow ax-subjs,
           ;; and the named ontology follows ont-subjs - so both come from
           ;; the document. ann-subjs is only ever a membership test.
-          (ont-subjs (typed-subjects-in-order arena triples OWL_ONTOLOGY))
-          (ax-subjs  (typed-subjects-in-order arena triples OWL_AXIOM))
-          (ann-subjs (subjects-of-type arena ig OWL_ANNOTATION))
-          (declared  (collect-imports arena triples))
-          (src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
-          (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
-          (tgt-pred  (make-iri arena OWL_ANNOTATED_TARGET))
-          (mut out   (list-new arena Triple))
+          (ont-subjs (typed-ids-in-order scratch doc OWL_ONTOLOGY))
+          (ax-subjs  (typed-ids-in-order scratch doc OWL_AXIOM))
+          (ann-subjs (typed-ids-in-order scratch doc OWL_ANNOTATION))
+          (declared  (collect-imports arena doc))
+          (dict      (. doc dict))
+          (mut out   (list-new arena IdTriple))
           (mut ont   (Option IRI) (none))
           (mut fault (Option String) (none)))
       (do
         ;; Keep everything that is not header or reification scaffolding.
-        ;;
-        ;; MEMBERSHIP IS A SET. This filter visits every triple, and it
-        ;; used to test each subject by scanning the ontology-node and
-        ;; axiom-node LISTS — fine for a hand-written fixture, and
-        ;; triples × reified axioms on a real one: GO reifies 131,783
-        ;; axioms over 1.4M triples and never left this loop.
-        ;;
-        ;; IRIs and blank nodes hash and compare by content, so for them
-        ;; the set answers exactly what the scan did. A QUOTED TRIPLE does
-        ;; not: a set compares `term-triple` by pointer, `term-eq` compares
-        ;; it structurally, and two parses of `<< :s :p :o >>` are two
-        ;; pointers. Turtle cannot deliver one here (slop-rdf rejects
-        ;; `<< >>`), but the library's triple buffer can, and a header node
-        ;; filed under one pointer would let its other triples through to
-        ;; decode as if they were ordinary axioms. So quoted-triple subjects
-        ;; keep the structural scan — over a list that is empty for OWL.
-        (let ((header-subjs (set-new arena Term))
-              (mut quoted (list-new arena Term)))
+        ;; A header node's LOGICAL triples are not header material: they go
+        ;; on to the decoder (header-consumable). Only a header subject's
+        ;; triples are read as terms.
+        (let ((header (id-set scratch ont-subjs ax-subjs ann-subjs)))
+          (for-each (it (. doc triples))
+            (when (or (not (set-has header (. it s)))
+                      (not (header-consumable (triple-of dict it))))
+              (list-push out it))))
+
+        ;; Rebuild each reified axiom, unless the document also asserts it
+        ;; - anywhere in the INPUT, header triples included. annotation-
+        ;; heavy.ttl asserts the axiom AND reifies it; without the test the
+        ;; axiom decodes twice.
+        (let ((rb       (rebuild-candidates scratch (annotated-store scratch doc) ax-subjs))
+              (asserted (asserted-among scratch (. rb triples) doc)))
           (do
-            (for-each (o ont-subjs)
-              (match o
-                ((term-triple _) (list-push quoted o))
-                (_ (set-put header-subjs o))))
-            (for-each (a ax-subjs)
-              (match a
-                ((term-triple _) (list-push quoted a))
-                (_ (set-put header-subjs a))))
-            (for-each (a ann-subjs)
-              (match a
-                ((term-triple _) (list-push quoted a))
-                (_ (set-put header-subjs a))))
-            (for-each (t triples)
-              (let ((s (. t subject))
-                    (mut header false))
-                (do
-                  (match s
-                    ((term-triple _)
-                      (for-each (q quoted) (when (term-eq q s) (set! header true))))
-                    (_ (when (set-has header-subjs s) (set! header true))))
-                  ;; A header node's LOGICAL triples are not header
-                  ;; material: they go on to the decoder (header-consumable).
-                  (when (or (not header) (not (header-consumable t))) (list-push out t)))))))
+            (for-each (c (. rb triples))
+              (when (not (set-has asserted c))
+                (list-push out c)))
+            (set! fault (. rb fault))))
 
-        ;; Rebuild each reified axiom, unless the document also asserts it.
-        (for-each (a ax-subjs)
-          (match (one-object arena ig a src-pred)
-            ((error _)
-              (set! fault (some "owl:Axiom node without a usable owl:annotatedSource")))
-            ((ok subj)
-              (match (one-object arena ig a prop-pred)
-                ((error _)
-                  (set! fault (some "owl:Axiom node without a usable owl:annotatedProperty")))
-                ((ok pred)
-                  (match (one-object arena ig a tgt-pred)
-                    ((error _)
-                      (set! fault (some "owl:Axiom node without a usable owl:annotatedTarget")))
-                    ((ok obj)
-                      (let ((rebuilt (record-new Triple
-                                       (subject subj) (predicate pred) (object obj))))
-                        ;; annotation-heavy.ttl asserts the axiom AND
-                        ;; reifies it; without this the axiom decodes twice.
-                        (when (not (store-contains ig rebuilt))
-                          (list-push out rebuilt))))))))))
-
-        ;; The ontology IRI, when there is exactly one named one.
+        ;; The ontology IRI: the last IRI-named ontology node, in order.
         (for-each (o ont-subjs)
-          (match (term-iri-value o)
+          (match (term-iri-value (term-of dict o))
             ((some i) (set! ont (some i)))
             ((none)   (do))))
 
@@ -586,6 +664,7 @@
           ((some msg) (error (union-new Fault input-error msg)))
           ((none)
             (ok (record-new Stage0
+                  (dict             dict)
                   (triples          out)
                   (imports-declared declared)
                   (omissions        (unresolved-imports arena declared imports-resolved))
@@ -1010,19 +1089,19 @@
       (set-put (. sig annot-props) (record-new IRI (value OWL_INCOMPATIBLE_WITH)))
       true))
 
-  (fn build-signature ((arena Arena) (triples (List Triple)))
+  (fn build-signature ((arena Arena) (dict TermStore) (triples (List IdTriple)))
     (@intent "Every declared entity, plus the OWL 2 built-ins")
-    (@spec ((Arena (List Triple)) -> Signature))
+    (@spec ((Arena TermStore (List IdTriple)) -> Signature))
     (@alloc arena)
     (let ((sig (make-signature arena))
-          (type-pred (make-iri arena RDF_TYPE)))
+          (type-pred (. dict rdf-type)))
       (do
         (add-builtins arena sig)
-        (for-each (t triples)
-          (when (term-eq (. t predicate) type-pred)
-            (match (term-iri-value (. t subject))
+        (for-each (it triples)
+          (when (== (. it p) type-pred)
+            (match (term-iri-value (term-of dict (. it s)))
               ((some s)
-                (match (term-iri-value (. t object))
+                (match (term-iri-value (term-of dict (. it o)))
                   ((some o) (declare-entity arena sig s (. o value)))
                   ((none)   false)))
               ((none) false))))
@@ -1034,7 +1113,8 @@
 
   (type Stage1 (record
     (axioms    (List RawAxiom))
-    (signature Signature)))
+    (signature Signature)
+    (inert     Int)))       ; inert axioms recognized and dropped (annotations)
 
   ;; Deterministic N-Triples-ish rendering, for the InputRef an
   ;; out-of-profile or unrecognized axiom carries.
@@ -1466,7 +1546,7 @@
               ;; gates read, and can reject a valid RBox.
               (cond
                 ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                  (ok (union-new RawAxiom ra-annotation)))
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
@@ -1515,7 +1595,7 @@
               ;; is unsoundness, not incompleteness.
               (cond
                 ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                  (ok (union-new RawAxiom ra-annotation)))
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
@@ -1535,7 +1615,7 @@
               ;; then eliminated into real GCIs.
               (cond
                 ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation-axiom (frag arena t))))
+                  (ok (union-new RawAxiom ra-annotation)))
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
@@ -1580,11 +1660,7 @@
             ;; custom curation property out-of-profile and fail
             ;; acceptance (a) on the fixture written to catch it.
             ((signature-has-annotation-property sig p)
-              (ok (union-new RawAxiom ra-annotation-assertion
-                    (record-new RawAnnotation
-                      (property p)
-                      (subject  (frag arena t))
-                      (target   (render-term arena (. t object)))))))
+              (ok (union-new RawAxiom ra-annotation)))
 
             ((signature-has-object-property sig p)
               (match (role-of-term (. t predicate))
@@ -1628,32 +1704,109 @@
                        "undeclared property, ambiguous between object, data and annotation property: "
                        pv)))))))) 
 
-  (fn decode-axioms ((arena Arena) (triples (List Triple)))
+  (fn decode-axioms ((arena Arena) (dict TermStore) (triples (List IdTriple)))
     (@intent "Stage 1: every logical triple → a RawAxiom, plus the signature")
-    (@spec ((Arena (List Triple)) -> (Result Stage1 Fault)))
+    (@spec ((Arena TermStore (List IdTriple)) -> (Result Stage1 Fault)))
     (@alloc arena)
-    ;; Walks the INSERTION-ORDERED triple list, never the index, so the
-    ;; axiom order is a function of the document rather than of hash
-    ;; layout. Canonical reordering is the gate's job; this stage must
-    ;; at least be deterministic.
-    (let ((ig  (graph-to-indexed arena triples))
-          (sig (build-signature arena triples))
+    ;; Walks the triples IN ORDER, never an index, so the axiom order is a
+    ;; function of the document rather than of hash layout. Canonical
+    ;; reordering is the gate's job; this stage must at least be
+    ;; deterministic.
+    ;;
+    ;; THE STORE IS SCRATCH, freed before returning, and indexes only what
+    ;; decode asks of it (`decode-store`). The axioms and signature are
+    ;; built in `arena`; their terms are the dictionary's.
+    (let ((scratch (arena-new 16777216))
+          (res     (decode-axioms-with arena (decode-store scratch dict triples) dict triples)))
+      (do
+        (arena-free scratch)
+        res)))
+
+  (fn decode-store ((arena Arena) (dict TermStore) (triples (List IdTriple)))
+    (@intent "An index of the triples whose predicate decode ever queries")
+    (@spec ((Arena TermStore (List IdTriple)) -> TermStore))
+    (@alloc arena)
+    ;; Decode's queries - `one-object`, `store-objects`, `store-has-any`,
+    ;; from the list walker, the class-expression decoder and the n-ary
+    ;; axioms - ask the objects of (s, p) for THESE predicates only, and
+    ;; never ask the type index or containment. So an index of these
+    ;; triples answers every query exactly as one of the whole document
+    ;; did (`test-decode-store-answers-as-the-full-store` holds the two to
+    ;; the same decode on every fixture). A new query on another predicate
+    ;; must add it here. Not blank-subject-only: an IRI-named
+    ;; owl:AllDisjointClasses node and IRI list cells are queried too.
+    (let ((st   (store-over arena dict))
+          (keep (set-new arena Int)))
+      (do
+        (for-each (iri (queried-predicates arena))
+          (let ((id (vocab-id arena dict iri)))
+            (when (>= id 0) (set-put keep id))))
+        (for-each (it triples)
+          (when (set-has keep (. it p))
+            (store-insert-ids arena st it)))
+        st)))
+
+  (fn queried-predicates ((arena Arena))
+    (@intent "Every predicate decode's store queries are asked about")
+    (@spec ((Arena) -> (List String)))
+    (@alloc arena)
+    (let ((mut ps (list-new arena String)))
+      (do
+        (list-push ps RDF_FIRST)
+        (list-push ps RDF_REST)
+        (list-push ps OWL_ON_PROPERTY)
+        (list-push ps OWL_INVERSE_OF)
+        (list-push ps OWL_INTERSECTION_OF)
+        (list-push ps OWL_UNION_OF)
+        (list-push ps OWL_ONE_OF)
+        (list-push ps OWL_COMPLEMENT_OF)
+        (list-push ps OWL_SOME_VALUES_FROM)
+        (list-push ps OWL_ALL_VALUES_FROM)
+        (list-push ps OWL_HAS_VALUE)
+        (list-push ps OWL_HAS_SELF)
+        (list-push ps OWL_QUALIFIED_CARDINALITY)
+        (list-push ps OWL_MIN_QUALIFIED_CARDINALITY)
+        (list-push ps OWL_MAX_QUALIFIED_CARDINALITY)
+        (list-push ps OWL_CARDINALITY)
+        (list-push ps OWL_MIN_CARDINALITY)
+        (list-push ps OWL_MAX_CARDINALITY)
+        (list-push ps OWL_ON_CLASS)
+        (list-push ps OWL_MEMBERS)
+        (list-push ps OWL_DISTINCT_MEMBERS)
+        ps)))
+
+  (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)))
+    (@intent "Stage 1 over a store built by the caller")
+    (@spec ((Arena TermStore TermStore (List IdTriple)) -> (Result Stage1 Fault)))
+    (@alloc arena)
+    (let ((sig (build-signature arena dict triples))
           (mut out (list-new arena RawAxiom))
+          (mut inert 0)
           (mut fault (Option String) (none)))
       (do
-        (set! fault (declaration-conflict arena sig triples))
-        (for-each (t triples)
-          (when (not (structural-triple t))
-            (match (decode-axiom arena ig sig t)
-              ((error m) (set! fault (some m)))
-              ((ok ax)   (list-push out ax)))))
+        (set! fault (declaration-conflict arena sig dict triples))
+        ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
+        ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the
+        ;; decoded axioms. The count is what shows they were recognized
+        ;; as inert, rather than lost or misfiled out of profile.
+        (for-each (it triples)
+          (let ((t (triple-of dict it)))
+            (when (not (structural-triple t))
+              (match (decode-axiom arena ig sig t)
+                ((error m) (set! fault (some m)))
+                ((ok ax)
+                  (match (disposition ax)
+                    ('d-inert          (set! inert (+ inert 1)))
+                    ('d-consumed       (list-push out ax))
+                    ('d-in-profile     (list-push out ax))
+                    ('d-out-of-profile (list-push out ax))))))))
         (match fault
           ((some m) (error (union-new Fault input-error m)))
-          ((none)   (ok (record-new Stage1 (axioms out) (signature sig))))))))
+          ((none)   (ok (record-new Stage1 (axioms out) (signature sig) (inert inert))))))))
 
-  (fn declaration-conflict ((arena Arena) (sig Signature) (triples (List Triple)))
+  (fn declaration-conflict ((arena Arena) (sig Signature) (dict TermStore) (triples (List IdTriple)))
     (@intent "An IRI declared under two mutually exclusive kinds")
-    (@spec ((Arena Signature (List Triple)) -> (Option String)))
+    (@spec ((Arena Signature TermStore (List IdTriple)) -> (Option String)))
     (@alloc arena)
     ;; OWL 2 DL PUNNING IS NOT UNRESTRICTED. A class may share an IRI
     ;; with an individual — that is legal punning, and `node-cmp`
@@ -1664,12 +1817,12 @@
     ;; `:a :p :b`, which is the same ambiguity an undeclared property
     ;; has and gets the same answer: input-error, not an omission,
     ;; because there is no determinate EntityKind to report.
-    (let ((type-pred (make-iri arena RDF_TYPE))
+    (let ((type-pred (. dict rdf-type))
           (mut bad (Option String) (none)))
       (do
-        (for-each (t triples)
-          (when (term-eq (. t predicate) type-pred)
-            (match (term-iri-value (. t subject))
+        (for-each (it triples)
+          (when (== (. it p) type-pred)
+            (match (term-iri-value (term-of dict (. it s)))
               ((some e)
                 (let ((np (+ (if (signature-has-object-property sig e) 1 0)
                           (+ (if (signature-has-data-property sig e) 1 0)

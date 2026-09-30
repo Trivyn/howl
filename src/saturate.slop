@@ -302,8 +302,11 @@
     ;; function ever grows a `set-put`/`map-put`/`list-push` against
     ;; anything reachable from `sat`, the freeze is broken and the
     ;; determinism guarantee goes with it.
-    (for-each (n (. sat active))
-      (join-context arena sat idx delta n)))
+    (let ((ra (arena-new 1048576)))
+      (do
+        (for-each (n (. sat active))
+          (join-context arena ra sat idx delta n))
+        (arena-free ra))))
 
   (fn round-join-part ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta)
                        (part (List Node)))
@@ -317,15 +320,32 @@
     ;; else it reads — the store, the queues, the premise index — is frozen
     ;; for the whole round. Returns an Int because a spawned function is
     ;; called through `int64_t(*)(void*)`.
-    (do
-      (for-each (n part)
-        (join-context arena sat idx delta n))
-      0))
+    (let ((ra (arena-new 1048576)))
+      (do
+        (for-each (n part)
+          (join-context arena ra sat idx delta n))
+        (arena-free ra)
+        0)))
 
-  (fn join-context ((arena Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (n Node))
+  (fn reuse-arena ((a Arena))
+    (@intent "Empty an arena for reuse: its first block stays, any chained blocks are freed")
+    (@spec ((Arena) -> Unit))
+    ;; slop has `arena-new` and `arena-free` but no reset; the runtime's
+    ;; `slop_arena_reset` is it. `a` is the C parameter name.
+    (c-inline "slop_arena_reset(a);"))
+
+  (fn join-context ((arena Arena) (ra Arena) (sat Saturation) (idx RuleIndex) (delta RoundDelta) (n Node))
     (@intent "Join one context's Δₙ against the frozen Sₙ")
-    (@spec ((Arena Saturation RuleIndex RoundDelta Node) -> Unit))
+    (@spec ((Arena Arena Saturation RuleIndex RoundDelta Node) -> Unit))
     (@alloc arena)
+    ;; THE RULES' RESULT LISTS LIVE ONE CONTEXT. They are dead once
+    ;; admitted - `admit` copies each conclusion into the delta, in `arena` -
+    ;; but grown in the round's arena they stayed to the barrier: most of a
+    ;; round's scratch, ~300 MB in GO's busiest round, and at W = 4 a peak
+    ;; that moved with how the workers' joins overlapped. So the rules build
+    ;; them in `ra`, the worker's rule arena, emptied once this context is
+    ;; done. One arena per worker, reset rather than made per context: a
+    ;; fresh arena per context cost GO a quarter of its reasoning time.
     (match (context-of sat n)
         ((some ctx)
           (match (queue-of sat n)
@@ -338,9 +358,11 @@
               ;; dispatcher would emit |axioms| copies of every
               ;; ⊥-propagation. The dispatcher owns that distinction,
               ;; and the index is read-only for the whole run.
-              (for-each (d (. q items))
-                (for-each (m (apply-el-rules arena ctx d idx))
-                  (admit arena sat delta m))))
+              (do
+                (for-each (d (. q items))
+                  (for-each (m (apply-el-rules ra ctx d idx))
+                    (admit arena sat delta m)))
+                (reuse-arena ra)))
             ((none) (do))))
         ((none) (do))))
 
@@ -506,13 +528,27 @@
         (let ((s (set-new arena Node)))
           (do (set-put s x) (map-put (. store preds) r s) true)))))
 
-  (fn commit-entry ((arena Arena) (sat Saturation) (e Touched) (qs Queues))
-    (@intent "Fold one delta's facts for one owned context into the store, queueing the new ones")
-    (@spec ((Arena Saturation Touched Queues) -> Unit))
+  (fn commit-sub ((arena Arena) (store Context) (b Node))
+    (@intent "Add b to S(X); true if it was new")
+    (@spec ((Arena Context Node) -> Bool))
     (@alloc arena)
-    ;; `arena` is this committer's own, so the store's sets for the
-    ;; contexts it owns grow there and nowhere else. `sat.contexts` is only
-    ;; READ: `partition-round` created every context an entry names.
+    ;; A function of its own so the set grows in the arena passed here -
+    ;; the committer's store arena - and not in the one `commit-entry`
+    ;; names `arena`, its queue arena.
+    (if (set-has (. store subsumers) b)
+      false
+      (do (set-put (. store subsumers) b) true)))
+
+  (fn commit-entry ((arena Arena) (ca Arena) (sat Saturation) (e Touched) (qs Queues))
+    (@intent "Fold one delta's facts for one owned context into the store, queueing the new ones")
+    (@spec ((Arena Arena Saturation Touched Queues) -> Unit))
+    (@alloc arena)
+    ;; TWO ARENAS, both this committer's own. The store's sets for the
+    ;; contexts it owns grow in `ca`, for the rest of the run (through
+    ;; `commit-sub`, `commit-succ`, `commit-pred`, which take it). The
+    ;; round's queues grow in `arena`, a queue arena freed once the next
+    ;; round has read them. `sat.contexts` is only READ: `partition-round`
+    ;; created every context an entry names.
     (let ((x (. e node))
           (dc (. e pending)))
       (match (map-get (. sat contexts) x)
@@ -522,38 +558,37 @@
                      ((none)    (make-queue arena)))))
             (do
               (for-each (b (. dc subsumers))
-                (when (not (set-has (. store subsumers) b))
-                  (do
-                    (set-put (. store subsumers) b)
-                    (list-push (. q items) (union-new Derived derived-sub b)))))
+                (when (commit-sub ca store b)
+                  (list-push (. q items) (union-new Derived derived-sub b))))
               (for-each ((r ys) (. dc succs))
                 (for-each (y ys)
-                  (when (commit-succ arena store r y)
+                  (when (commit-succ ca store r y)
                     (list-push (. q items) (union-new Derived derived-succ r y)))))
               (for-each ((r ps) (. dc preds))
                 (for-each (p ps)
-                  (when (commit-pred arena store r p)
+                  (when (commit-pred ca store r p)
                     (list-push (. q items) (union-new Derived derived-pred r p)))))
               ;; Written back AFTER every push: `q` is a value struct, and
               ;; storing it earlier would keep a copy of the wrong length.
               (map-put (. qs by-node) x q))))
         ((none) (do)))))
 
-  (fn commit-bucket ((arena Arena) (sat Saturation) (entries (List Touched)) (qs Queues))
+  (fn commit-bucket ((arena Arena) (ca Arena) (sat Saturation) (entries (List Touched)) (qs Queues))
     (@intent "One committer's whole job: every entry of the contexts it owns")
-    (@spec ((Arena Saturation (List Touched) Queues) -> Int))
+    (@spec ((Arena Arena Saturation (List Touched) Queues) -> Int))
     (@alloc arena)
     ;; Returns an Int because a spawned function is called through
-    ;; `int64_t(*)(void*)`.
+    ;; `int64_t(*)(void*)`. `arena` is the committer's queue arena, `ca`
+    ;; its store arena (commit-entry).
     (do
       (for-each (e entries)
-        (commit-entry arena sat e qs))
+        (commit-entry arena ca sat e qs))
       0))
 
-  (fn commit-round ((arena Arena) (scratch Arena) (sat Saturation) (deltas (List RoundDelta))
-                    (cas (List Arena)))
+  (fn commit-round ((arena Arena) (run Arena) (scratch Arena) (sat Saturation) (deltas (List RoundDelta))
+                    (cas (List Arena)) (qas (List Arena)))
     (@intent "The barrier: fold every delta into the store, one committer per context, and rebuild the frontier")
-    (@spec ((Arena Arena Saturation (List RoundDelta) (List Arena)) -> Saturation))
+    (@spec ((Arena Arena Arena Saturation (List RoundDelta) (List Arena) (List Arena)) -> Saturation))
     (@alloc arena)
     ;; Exactly one round per call. The round COUNT is what
     ;; max-iterations cuts on, and it must be a function of the input
@@ -570,24 +605,33 @@
     ;; and nothing is spawned, the sequential reference path; at W > 1 the
     ;; long-lived commit arenas `saturate` made for this run, which the
     ;; store grows into and extraction later reads.
+    ;;
+    ;; THIS ROUND'S QUEUES LIVE ONE ROUND. `arena` is the round's GENERATION
+    ;; arena: the new queue and frontier maps are built in it. `qas` holds
+    ;; one queue arena per committer (at W = 1, `arena` itself), where each
+    ;; committer's queues grow. The next round's join reads them, and then
+    ;; they are dead: `saturate` frees a generation once the round after it
+    ;; has committed. `run` is the run arena, where `partition-round`
+    ;; creates any context a delta names.
     (let ((w       (cast Int (list-len cas)))
-          (buckets (partition-round scratch arena sat deltas w))
+          (buckets (partition-round scratch run sat deltas w))
           (mut qss     (list-new scratch Queues))
           (mut threads (list-new scratch (Ptr (Thread Int))))
           (mut k 0))
       (do
         (while (< k w)
           (let ((qs (record-new Queues (by-node (map-new scratch Node Queue))))
-                (ca (match (list-get cas k) ((some a) a) ((none) arena)))
+                (ca (match (list-get cas k) ((some a) a) ((none) run)))
+                (qa (match (list-get qas k) ((some a) a) ((none) arena)))
                 (share (bucket-items scratch (map-get (. buckets by-owner) k))))
             (do
               (list-push qss qs)
-              ;; `share`, `ca` and `qs` are IMMUTABLE bindings, captured by
-              ;; value (slop#193: a `mut` local would be captured by address).
+              ;; `share`, `ca`, `qa` and `qs` are IMMUTABLE bindings, captured
+              ;; by value (slop#193: a `mut` local would be captured by address).
               (if (<= w 1)
-                (do (commit-bucket ca sat share qs) (do))
+                (do (commit-bucket qa ca sat share qs) (do))
                 (list-push threads
-                  (spawn scratch (fn () (commit-bucket ca sat share qs)))))
+                  (spawn scratch (fn () (commit-bucket qa ca sat share qs)))))
               (set! k (+ k 1)))))
         (for-each (t threads) (join t))
         (let ((new-queues (map-new arena Node Queue))
@@ -613,23 +657,64 @@
     (deltas (List RoundDelta))
     (arenas (List Arena))))
 
+  ;; A round's result, and the arenas its queues and frontier live in:
+  ;; the caller frees those once the NEXT round has committed.
+  (type Advanced (record
+    (saturation Saturation)
+    (arenas     (List Arena))))
+
+  (fn generation-arenas ((arena Arena) (w Int))
+    (@intent "A round's queue arenas: the generation arena, plus one per committer at W > 1")
+    (@spec ((Arena Int) -> (List Arena)))
+    (@alloc arena)
+    ;; The FIRST is the generation arena (the queue and frontier maps; at
+    ;; W = 1 the only committer's queues too). A committer's arena is its
+    ;; own because an arena is not safe to allocate from on two threads.
+    ;; 1 MB to start, as the worker arenas: a busy one grows by chaining.
+    (let ((mut out (list-new arena Arena)))
+      (do
+        (list-push out (arena-new 1048576))
+        (when (> w 1)
+          (let ((mut k 0))
+            (while (< k w)
+              (do
+                (list-push out (arena-new 1048576))
+                (set! k (+ k 1))))))
+        out)))
+
+  (fn committer-arenas ((arena Arena) (gen (List Arena)))
+    (@intent "The committers' queue arenas: all but the generation arena, or none at W = 1")
+    (@spec ((Arena (List Arena)) -> (List Arena)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Arena))
+          (mut i 0))
+      (do
+        (for-each (a gen)
+          (do
+            (when (> i 0) (list-push out a))
+            (set! i (+ i 1))))
+        out)))
+
   (fn advance-round ((arena Arena) (sat Saturation) (idx RuleIndex) (config ReasonerConfig)
                      (cas (List Arena)))
     (@intent "Execute one barrier-synchronized round: join read-only, then commit")
-    (@spec ((Arena Saturation RuleIndex ReasonerConfig (List Arena)) -> Saturation))
+    (@spec ((Arena Saturation RuleIndex ReasonerConfig (List Arena)) -> Advanced))
     (@alloc arena)
-    ;; The round-count contract lives on `commit-round`, where the body
-    ;; is a `record-new` and the checker can discharge it. Restating it
-    ;; here would be unprovable — there is no interprocedural reasoning,
-    ;; so a callee is an uninterpreted function — and a @post the
-    ;; checker cannot establish reads as coverage without being any (§7).
+    ;; ONE ROUND, EXACTLY, from `commit-round`'s own @post: slop's verifier
+    ;; assumes a callee's @post where the call runs. (`saturate`'s budget
+    ;; invariant rests on this, but the verifier cannot yet follow a call
+    ;; like this one - its arguments carry maps - inside the invariant's
+    ;; check, so that invariant is reported unknown rather than trusted.)
+    (@post {(. (. $result saturation) iteration) == ((. sat iteration) + 1)})
     ;;
-    ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. Every
-    ;; rule call builds a result list and the round's delta is a map of
-    ;; contexts; none of it is needed once the round commits. So the join
-    ;; and its RoundDeltas allocate in `scratch` (or a worker's arena), and
-    ;; only the commit, which writes the store, allocates in the run arena
-    ;; and the commit arenas `cas`.
+    ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. The
+    ;; round's delta is a map of contexts, not needed once the round
+    ;; commits, so the join and its RoundDeltas allocate in `scratch` (or a
+    ;; worker's arena). Each rule call's result list is shorter-lived still:
+    ;; `join-context` empties it with its context. The
+    ;; commit writes the store in the run arena and the commit arenas
+    ;; `cas`, and the next round's queues and frontier in this round's
+    ;; generation arenas, which the caller frees a round later.
     ;;
     ;; Why nothing escapes: commit copies every fact into sets and queues
     ;; it allocates itself, and a copied Node or RoleId holds only an id or
@@ -651,11 +736,16 @@
                          (list-push ds d)
                          (record-new Joined (deltas ds) (arenas (list-new scratch Arena)))))
                      (parallel-join scratch sat idx (. config worker-count))))
-          (next    (commit-round arena scratch sat (. joined deltas) cas)))
+          ;; The generation's arena list is in the RUN arena: the caller
+          ;; frees the arenas it names, so it must not live in one of them.
+          (gen     (generation-arenas arena (cast Int (list-len cas))))
+          (g       (match (list-get gen 0) ((some a) a) ((none) arena)))
+          (next    (commit-round g arena scratch sat (. joined deltas) cas
+                     (committer-arenas scratch gen))))
       (do
         (for-each (a (. joined arenas)) (arena-free a))
         (arena-free scratch)
-        next)))
+        (record-new Advanced (saturation next) (arenas gen)))))
 
   (fn parallel-join ((arena Arena) (sat Saturation) (idx RuleIndex) (w Int))
     (@intent "The join on up to w workers, each over a share of the frontier, into its own delta")
@@ -885,17 +975,27 @@
     ;;   - `max-iterations = 0` performs no rounds and ALWAYS yields
     ;;     `resource-limit`, since Δ₀ is never empty.
     ;;
-    ;; THE BUDGET BOUND, discharged via the `@loop-invariant` below.
-    ;; §7 calls termination for v0 "expressible as a
-    ;; monotone-growth-toward-a-finite-cap loop invariant" — this is
-    ;; that invariant, and it holds even though `advance-round` is
-    ;; uninterpreted to the checker, because the bound is carried by the
-    ;; invariant rather than inferred from what that call returns.
+    ;; THE BUDGET BOUND, stated as the `@loop-invariant` below. §7 calls
+    ;; termination for v0 "expressible as a monotone-growth-toward-a-
+    ;; finite-cap loop invariant" — this is that invariant. It holds: the
+    ;; loop advances only while `budget-exhausted` is false, and each
+    ;; `advance-round` adds exactly one round (its proved @post). slop's
+    ;; verifier used to TRUST a loop invariant; it now proves them, and
+    ;; reports this one unknown, because its check cannot follow the
+    ;; `c-inline` cancel test, the `break`s, or a call whose arguments
+    ;; carry maps. So it is not claimed as verified.
     (@post (match $result
              ((ok r) {(. (. r saturation) iteration) <= (. config max-iterations)})
              ((error _) true)))
+    ;;
+    ;; A ROUND'S QUEUES ARE FREED ONE ROUND LATER. Round n's queues and
+    ;; frontier (its generation's arenas) are what round n+1 joins over,
+    ;; and dead once round n+1 has committed its own. Δ₀'s live in the run
+    ;; arena, from initialization, and the last generation is kept: the
+    ;; returned saturation holds its queues.
     (let ((mut state sat)
           (mut cancelled false)
+          (mut prev (list-new arena Arena))
           (cas (commit-arenas arena (. config worker-count))))
       (do
         ;; Fixpoint first, budget second — in that order.
@@ -913,7 +1013,11 @@
               (break)
               (if (budget-exhausted state config)
                 (break)
-                (set! state (advance-round arena state idx config cas))))))
+                (let ((adv (advance-round arena state idx config cas)))
+                  (do
+                    (for-each (a prev) (arena-free a))
+                    (set! prev (. adv arenas))
+                    (set! state (. adv saturation))))))))
         (if cancelled
           (error (union-new Fault cancelled))
           (if (frontier-is-empty state)

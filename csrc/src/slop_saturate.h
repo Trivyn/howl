@@ -16,6 +16,7 @@ typedef struct saturate_Bucket saturate_Bucket;
 typedef struct saturate_Queues saturate_Queues;
 typedef struct saturate_Partition saturate_Partition;
 typedef struct saturate_Joined saturate_Joined;
+typedef struct saturate_Advanced saturate_Advanced;
 
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_DEFINED
@@ -135,6 +136,17 @@ typedef struct saturate_Joined saturate_Joined;
 SLOP_OPTION_DEFINE(saturate_Joined, slop_option_saturate_Joined)
 #endif
 
+struct saturate_Advanced {
+    types_Saturation saturation;
+    slop_list_arena_ptr arenas;
+};
+typedef struct saturate_Advanced saturate_Advanced;
+
+#ifndef SLOP_OPTION_SATURATE_ADVANCED_DEFINED
+#define SLOP_OPTION_SATURATE_ADVANCED_DEFINED
+SLOP_OPTION_DEFINE(saturate_Advanced, slop_option_saturate_Advanced)
+#endif
+
 
 /* Hash/eq functions and list types for struct map/set keys */
 #ifndef TYPES_NODE_HASH_EQ_DEFINED
@@ -216,7 +228,8 @@ void saturate_admit_edge(slop_arena* arena, types_Saturation sat, saturate_Round
 void saturate_admit(slop_arena* arena, types_Saturation sat, saturate_RoundDelta delta, types_Addressed m);
 void saturate_round_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta);
 int64_t saturate_round_join_part(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, slop_list_types_Node part);
-void saturate_join_context(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
+void saturate_reuse_arena(slop_arena* a);
+void saturate_join_context(slop_arena* arena, slop_arena* ra, types_Saturation sat, premise_RuleIndex idx, saturate_RoundDelta delta, types_Node n);
 types_Context saturate_ensure_context(slop_arena* arena, types_Saturation sat, types_Node n);
 saturate_Bucket saturate_bucketed(slop_arena* arena, slop_option_saturate_Bucket found, saturate_Touched e);
 int64_t saturate_partition_one(slop_arena* arena, slop_arena* run, types_Saturation sat, saturate_Partition part, types_Node x, types_Context dc, int64_t turn, int64_t w);
@@ -225,10 +238,13 @@ slop_list_saturate_Touched saturate_bucket_items(slop_arena* arena, slop_option_
 saturate_Partition saturate_partition_round(slop_arena* arena, slop_arena* run, types_Saturation sat, slop_list_saturate_RoundDelta deltas, int64_t w);
 uint8_t saturate_commit_succ(slop_arena* arena, types_Context store, types_RoleId r, types_Node y);
 uint8_t saturate_commit_pred(slop_arena* arena, types_Context store, types_RoleId r, types_Node x);
-void saturate_commit_entry(slop_arena* arena, types_Saturation sat, saturate_Touched e, saturate_Queues qs);
-int64_t saturate_commit_bucket(slop_arena* arena, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs);
-types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas);
-types_Saturation saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas);
+uint8_t saturate_commit_sub(slop_arena* arena, types_Context store, types_Node b);
+void saturate_commit_entry(slop_arena* arena, slop_arena* ca, types_Saturation sat, saturate_Touched e, saturate_Queues qs);
+int64_t saturate_commit_bucket(slop_arena* arena, slop_arena* ca, types_Saturation sat, slop_list_saturate_Touched entries, saturate_Queues qs);
+types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* run, slop_arena* scratch, types_Saturation sat, slop_list_saturate_RoundDelta deltas, slop_list_arena_ptr cas, slop_list_arena_ptr qas);
+slop_list_arena_ptr saturate_generation_arenas(slop_arena* arena, int64_t w);
+slop_list_arena_ptr saturate_committer_arenas(slop_arena* arena, slop_list_arena_ptr gen);
+saturate_Advanced saturate_advance_round(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config, slop_list_arena_ptr cas);
 saturate_Joined saturate_parallel_join(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, int64_t w);
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
@@ -291,6 +307,11 @@ SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #ifndef SLOP_OPTION_SATURATE_JOINED_DEFINED
 #define SLOP_OPTION_SATURATE_JOINED_DEFINED
 SLOP_OPTION_DEFINE(saturate_Joined, slop_option_saturate_Joined)
+#endif
+
+#ifndef SLOP_OPTION_SATURATE_ADVANCED_DEFINED
+#define SLOP_OPTION_SATURATE_ADVANCED_DEFINED
+SLOP_OPTION_DEFINE(saturate_Advanced, slop_option_saturate_Advanced)
 #endif
 
 #ifndef SLOP_OPTION_MAP_PTR_DEFINED

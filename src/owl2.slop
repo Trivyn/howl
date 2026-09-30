@@ -40,11 +40,12 @@
 ;; ============================================================
 
 (module owl2
-  (@doc "The lossless OWL 2 axiom AST, its disposition matrix, and the input signature (§5.2, §6.3)")
+  (@doc "The OWL 2 axiom AST (lossless for every non-annotation axiom), its disposition matrix, and the input signature (§5.2, §6.3)")
 
   (import rdf (IRI))
   (import canon (string-cmp node-cmp role-cmp sort-range))
-  (import types (Node RoleId EntityKind InputRef AxiomRef Omission MissingDeclaration))
+  (import types (Node RoleId EntityKind InputRef AxiomRef Omission MissingDeclaration
+                 copy-iri copy-node copy-role copy-input-ref))
 
   (export
     OWL_AXIOM OWL_ANNOTATED_SOURCE OWL_ANNOTATED_PROPERTY OWL_ANNOTATED_TARGET
@@ -53,12 +54,13 @@
     OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
     SWRL_NS SWRL_IMP SWRL_BODY SWRL_HEAD
     CardKind PropCharacteristic
-    RawConcept RawChain RawEdge RawClassAssertion RawAnnotation RawDeclaration
+    RawConcept RawChain RawEdge RawClassAssertion RawDeclaration
     RawAxiom Disposition
     Signature
     disposition concept-in-profile axiom-in-profile role-in-profile
     concept-tag-rank concept-cmp concept-at sort-concepts
     render-concept render-axiom render-role render-omission
+    copy-concept copy-raw-axiom copy-axioms copy-signature
     make-signature signature-has-class signature-has-object-property
     signature-has-annotation-property signature-has-data-property
     signature-size)
@@ -164,11 +166,6 @@
     (concept (Ptr RawConcept))
     (subject Node)))
 
-  (type RawAnnotation (record
-    (property IRI)
-    (subject  InputRef)
-    (target   String)))
-
   (type RawDeclaration (record
     (kind   EntityKind)
     (entity IRI)))
@@ -199,8 +196,10 @@
     ;;     unsupported returns false-inconclusive on every documented
     ;;     ontology, which is the failure mode that makes a reasoner
     ;;     useless rather than merely incomplete. ---
-    (ra-annotation-assertion  RawAnnotation)
-    (ra-annotation-axiom      InputRef)
+    ;; No payload: nothing reads an annotation's content (it is never
+    ;; accepted, omitted or rendered), and on GO rendering ~0.8M of them
+    ;; cost ~0.6 GB. `decode-axioms` counts them rather than keeping them.
+    (ra-annotation)
 
     ;; --- out-of-profile: object side, structure retained ---
     (ra-inverse-properties    RoleId RoleId)
@@ -259,8 +258,7 @@
 
       ((ra-declaration _)               'd-consumed)
 
-      ((ra-annotation-assertion _)      'd-inert)
-      ((ra-annotation-axiom _)          'd-inert)
+      ((ra-annotation)                  'd-inert)
 
       ((ra-inverse-properties _ _)      'd-out-of-profile)
       ((ra-property-characteristic _ _) 'd-out-of-profile)
@@ -457,8 +455,7 @@
         ;; already returned. They are named anyway so that the switch
         ;; stays total and a disposition change cannot slip past.
         ((ra-declaration _)              false)
-        ((ra-annotation-assertion _)     false)
-        ((ra-annotation-axiom _)         false)
+        ((ra-annotation)                 false)
         ((ra-inverse-properties _ _)     false)
         ((ra-property-characteristic _ _) false)
         ((ra-disjoint-properties _)      false)
@@ -797,10 +794,7 @@
             (join2 arena (render-node (. e from)) (render-node (. e to))))))
       ((ra-declaration d)
         (wrap arena "Declaration" (. (. d entity) value)))
-      ((ra-annotation-assertion a)
-        (wrap arena "AnnotationAssertion"
-          (join2 arena (. (. a property) value) (. a target))))
-      ((ra-annotation-axiom ref)      (wrap arena "AnnotationAxiom" (render-input-ref ref)))
+      ((ra-annotation)                "Annotation()")
       ((ra-inverse-properties a b)
         (wrap arena "InverseObjectProperties" (join2 arena (render-role a) (render-role b))))
       ((ra-property-characteristic c r)
@@ -831,6 +825,181 @@
       ('prop-asymmetric         "AsymmetricObjectProperty")
       ('prop-reflexive          "ReflexiveObjectProperty")
       ('prop-irreflexive        "IrreflexiveObjectProperty")))
+
+  ;; ============================================================
+  ;; Ownership copies of the decoded document
+  ;;
+  ;; Decode runs over the encoded input, whose dictionary owns every IRI a
+  ;; RawAxiom names, and whose arena also holds the id triples, stage 0's
+  ;; output and the stores - about half a gigabyte on GO, all dead once
+  ;; decode returns. These copies let the Decoded leave that arena, so it
+  ;; can be freed before the gate starts (normalize.slop, copy-decoded).
+  ;;
+  ;; EVERY VARIANT IS NAMED, no catch-all, as in `render-axiom`: a new
+  ;; RawAxiom or RawConcept variant fails the build (-Werror=switch) until
+  ;; it is copied, rather than crossing the boundary still pointing into
+  ;; freed memory. What is NOT checked here is that the copy is deep: that
+  ;; nothing reachable from it still points into the source arena. That is
+  ;; a lifetime, out of slop verify's reach; `make golden-asan` holds it.
+  ;; ============================================================
+
+  (fn copy-concept ((arena Arena) (c RawConcept))
+    (@intent "c, every string and every boxed operand owned in arena")
+    (@spec ((Arena RawConcept) -> RawConcept))
+    (@alloc arena)
+    (match c
+      ((rc-name n)          (union-new RawConcept rc-name (copy-node arena n)))
+      ((rc-thing)           (union-new RawConcept rc-thing))
+      ((rc-nothing)         (union-new RawConcept rc-nothing))
+      ((rc-and cs)          (union-new RawConcept rc-and (copy-concepts arena cs)))
+      ((rc-some r f)        (union-new RawConcept rc-some (copy-role arena r) (copy-boxed arena f)))
+      ((rc-or cs)           (union-new RawConcept rc-or (copy-concepts arena cs)))
+      ((rc-not f)           (union-new RawConcept rc-not (copy-boxed arena f)))
+      ((rc-all r f)         (union-new RawConcept rc-all (copy-role arena r) (copy-boxed arena f)))
+      ((rc-oneof ns)        (union-new RawConcept rc-oneof (copy-nodes arena ns)))
+      ((rc-has-value r n)   (union-new RawConcept rc-has-value (copy-role arena r) (copy-node arena n)))
+      ((rc-has-self r)      (union-new RawConcept rc-has-self (copy-role arena r)))
+      ((rc-card k r n)      (union-new RawConcept rc-card k (copy-role arena r) n))
+      ((rc-qcard k r n f)   (union-new RawConcept rc-qcard k (copy-role arena r) n (copy-boxed arena f)))
+      ((rc-data ref)        (union-new RawConcept rc-data (copy-input-ref arena ref)))
+      ((rc-anon ref)        (union-new RawConcept rc-anon (copy-input-ref arena ref)))))
+
+  (fn copy-boxed ((arena Arena) (p (Ptr RawConcept)))
+    (@intent "A boxed operand, re-boxed in arena around its copy")
+    (@spec ((Arena (Ptr RawConcept)) -> (Ptr RawConcept)))
+    (@alloc arena)
+    (let ((q (cast (Ptr RawConcept) (arena-alloc arena (sizeof RawConcept)))))
+      (do (set! (deref q) (copy-concept arena (deref p))) q)))
+
+  (fn copy-concepts ((arena Arena) (cs (List RawConcept)))
+    (@intent "Every operand, in order, owned in arena")
+    (@spec ((Arena (List RawConcept)) -> (List RawConcept)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RawConcept)))
+      (do (for-each (c cs) (list-push out (copy-concept arena c))) out)))
+
+  (fn copy-nodes ((arena Arena) (ns (List Node)))
+    (@intent "Every node, in order, owned in arena")
+    (@spec ((Arena (List Node)) -> (List Node)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Node)))
+      (do (for-each (n ns) (list-push out (copy-node arena n))) out)))
+
+  (fn copy-roles ((arena Arena) (rs (List RoleId)))
+    (@intent "Every role, in order, owned in arena")
+    (@spec ((Arena (List RoleId)) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RoleId)))
+      (do (for-each (r rs) (list-push out (copy-role arena r))) out)))
+
+  (fn copy-raw-axiom ((arena Arena) (ax RawAxiom))
+    (@intent "ax, every string and every boxed operand owned in arena")
+    (@spec ((Arena RawAxiom) -> RawAxiom))
+    (@alloc arena)
+    (match ax
+      ((ra-sub-class-of l r)
+        (union-new RawAxiom ra-sub-class-of (copy-boxed arena l) (copy-boxed arena r)))
+      ((ra-equivalent-classes cs)
+        (union-new RawAxiom ra-equivalent-classes (copy-concepts arena cs)))
+      ((ra-disjoint-classes cs)
+        (union-new RawAxiom ra-disjoint-classes (copy-concepts arena cs)))
+      ((ra-sub-object-property a b)
+        (union-new RawAxiom ra-sub-object-property (copy-role arena a) (copy-role arena b)))
+      ((ra-property-chain ch)
+        (union-new RawAxiom ra-property-chain
+          (record-new RawChain (steps (copy-roles arena (. ch steps)))
+                               (super (copy-role arena (. ch super))))))
+      ((ra-equivalent-properties rs)
+        (union-new RawAxiom ra-equivalent-properties (copy-roles arena rs)))
+      ((ra-transitive-property r)
+        (union-new RawAxiom ra-transitive-property (copy-role arena r)))
+      ((ra-object-property-domain r c)
+        (union-new RawAxiom ra-object-property-domain (copy-role arena r) (copy-boxed arena c)))
+      ((ra-object-property-range r c)
+        (union-new RawAxiom ra-object-property-range (copy-role arena r) (copy-boxed arena c)))
+      ((ra-class-assertion ca)
+        (union-new RawAxiom ra-class-assertion
+          (record-new RawClassAssertion (concept (copy-boxed arena (. ca concept)))
+                                        (subject (copy-node arena (. ca subject))))))
+      ((ra-object-property-assertion e)
+        (union-new RawAxiom ra-object-property-assertion
+          (record-new RawEdge (role (copy-role arena (. e role)))
+                              (from (copy-node arena (. e from)))
+                              (to   (copy-node arena (. e to))))))
+      ((ra-declaration d)
+        (union-new RawAxiom ra-declaration
+          (record-new RawDeclaration (kind (. d kind)) (entity (copy-iri arena (. d entity))))))
+      ((ra-annotation) (union-new RawAxiom ra-annotation))
+      ((ra-inverse-properties a b)
+        (union-new RawAxiom ra-inverse-properties (copy-role arena a) (copy-role arena b)))
+      ((ra-property-characteristic c r)
+        (union-new RawAxiom ra-property-characteristic c (copy-role arena r)))
+      ((ra-disjoint-properties rs)
+        (union-new RawAxiom ra-disjoint-properties (copy-roles arena rs)))
+      ((ra-same-individual ns)
+        (union-new RawAxiom ra-same-individual (copy-nodes arena ns)))
+      ((ra-different-individuals ns)
+        (union-new RawAxiom ra-different-individuals (copy-nodes arena ns)))
+      ((ra-negative-assertion ref)   (union-new RawAxiom ra-negative-assertion (copy-input-ref arena ref)))
+      ((ra-disjoint-union ref)       (union-new RawAxiom ra-disjoint-union (copy-input-ref arena ref)))
+      ((ra-has-key ref)              (union-new RawAxiom ra-has-key (copy-input-ref arena ref)))
+      ((ra-inverse-expression ref)   (union-new RawAxiom ra-inverse-expression (copy-input-ref arena ref)))
+      ((ra-data-axiom ref)           (union-new RawAxiom ra-data-axiom (copy-input-ref arena ref)))
+      ((ra-builtin-role ref)         (union-new RawAxiom ra-builtin-role (copy-input-ref arena ref)))
+      ((ra-anonymous-individual ref) (union-new RawAxiom ra-anonymous-individual (copy-input-ref arena ref)))
+      ((ra-reserved-vocabulary ref)  (union-new RawAxiom ra-reserved-vocabulary (copy-input-ref arena ref)))
+      ((ra-swrl-rule ref)            (union-new RawAxiom ra-swrl-rule (copy-input-ref arena ref)))
+      ((ra-unrecognized ref)         (union-new RawAxiom ra-unrecognized (copy-input-ref arena ref)))))
+
+  (fn raw-axiom-at ((xs (List RawAxiom)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List RawAxiom) Int) -> RawAxiom))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new RawAxiom ra-annotation))))
+
+  (fn copy-axioms ((arena Arena) (xs (List RawAxiom)))
+    (@intent "Every axiom, in order, owned in arena")
+    (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    ;; ONE AXIOM OUT FOR EVERY AXIOM IN, where the decoded document leaves
+    ;; the encoded input's arena. What is PROVED is the count, not identity:
+    ;; a copy that replaced every axiom by `ra-annotation` would satisfy the
+    ;; @post too. That each is the SAME axiom, in order, is held by the
+    ;; goldens and the corpus report hashes. The loop is counted rather than
+    ;; a for-each so the invariant can name the count, and `out` is only
+    ;; pushed to, so slop verify follows its length across the copy call.
+    (@post {(list-len $result) == (list-len xs)})
+    (let ((n (cast Int (list-len xs)))
+          (mut out (list-new arena RawAxiom))
+          (mut i 0))
+      (do
+        (while (< i n)
+          (@loop-invariant {(list-len out) == i})
+          (@loop-invariant {i <= n})
+          (do
+            (list-push out (copy-raw-axiom arena (raw-axiom-at xs i)))
+            (set! i (+ i 1))))
+        out)))
+
+  (fn copy-signature ((arena Arena) (sig Signature))
+    (@intent "The signature, every IRI owned in arena, each set in its insertion order")
+    (@spec ((Arena Signature) -> Signature))
+    (@alloc arena)
+    ;; Six loops written out: a Set cannot be a parameter (see Signature),
+    ;; so there is no per-set helper to call.
+    (let ((out (make-signature arena)))
+      (do
+        (for-each (i (. sig classes))     (set-put (. out classes)     (copy-iri arena i)))
+        (for-each (i (. sig obj-props))   (set-put (. out obj-props)   (copy-iri arena i)))
+        (for-each (i (. sig data-props))  (set-put (. out data-props)  (copy-iri arena i)))
+        (for-each (i (. sig annot-props)) (set-put (. out annot-props) (copy-iri arena i)))
+        (for-each (i (. sig individuals)) (set-put (. out individuals) (copy-iri arena i)))
+        (for-each (i (. sig datatypes))   (set-put (. out datatypes)   (copy-iri arena i)))
+        out)))
 
   (fn sort-concepts ((arena Arena) (xs (List RawConcept)))
     (@intent "Canonically sorted copy — the order n-ary operands are read in")
