@@ -190,10 +190,12 @@ encoding. `make abox-fuzz` checks the code against it: 400 generated ontologies 
 
 **14 of 23 rows done.** Every open EL++ row traces to one of three things: **nominals** (four rows),
 **reflexive roles** (one), and **concrete domains** (the non-goal). OWL 2 EL adds three more:
-`ObjectHasSelf`, the built-in properties, and `HasKey`. They close with the
-`el++` profile, which is planned but not scheduled ([§5](./SPEC.md#5-fragment-roadmap)); the next
-milestone is `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)), which contains v0 but
-not EL++'s nominals.
+`ObjectHasSelf`, the built-in properties, and `HasKey`. All but concrete domains, `HasKey` and
+`owl:topObjectProperty` outside a super-role position close with the `el++` profile. It is specified
+on Krötzsch's Ksc calculus, the one published proof that covers nominals together with ⊥, role
+chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)), and is being built in slices.
+`horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
+EL++'s nominals.
 
 **Off the path entirely.** These are outside OWL 2 EL, so no progress toward EL++ reaches them; they
 are recognized and enumerated like every open row above.
