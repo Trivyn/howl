@@ -21,6 +21,8 @@ common_ParseError common_make_parse_error(slop_arena* arena, common_ParseErrorKi
 common_ParseState common_make_parse_state(slop_arena* arena, slop_string input) {
     common_ParseState _retval = {0};
     _retval = ((common_ParseState){.input = input, .offset = 0, .line = 1, .column = 1});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval.offset == 0)), "(== $result.offset 0)");
     SLOP_POST(((_retval.line == 1)), "(== $result.line 1)");
     SLOP_POST(((_retval.column == 1)), "(== $result.column 1)");
@@ -30,6 +32,8 @@ common_ParseState common_make_parse_state(slop_arena* arena, slop_string input) 
 uint8_t common_state_at_end(common_ParseState state) {
     uint8_t _retval = {0};
     _retval = (state.offset >= string_len(state.input));
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval == (state.offset >= string_len(state.input)))), "(== $result (>= (. state offset) (string-len (. state input))))");
     return _retval;
 }
@@ -38,9 +42,12 @@ uint8_t common_state_peek(common_ParseState state) {
     uint8_t _retval = {0};
     if (common_state_at_end(state)) {
         _retval = 0;
+        goto _slop_post;
     } else {
         _retval = strlib_char_at(state.input, state.offset);
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((common_state_at_end(state) || (_retval == strlib_char_at(state.input, state.offset)))), "(or (state-at-end state) (== $result (char-at (. state input) (. state offset))))");
     SLOP_POST(((!(common_state_at_end(state)) || (_retval == 0))), "(or (not (state-at-end state)) (== $result 0))");
     return _retval;
@@ -61,10 +68,13 @@ common_ParseState common_state_advance(slop_arena* arena, common_ParseState stat
         __auto_type c = common_state_peek(state);
         if (c == 10) {
             _retval = ((common_ParseState){.input = state.input, .offset = (state.offset + 1), .line = (state.line + 1), .column = 1});
+            goto _slop_post;
         } else {
             _retval = ((common_ParseState){.input = state.input, .offset = (state.offset + 1), .line = state.line, .column = (state.column + 1)});
+            goto _slop_post;
         }
     }
+    _slop_post: ;
     SLOP_POST(((_retval.offset == (state.offset + 1))), "(== $result.offset (+ state.offset 1))");
     return _retval;
 }
@@ -72,6 +82,8 @@ common_ParseState common_state_advance(slop_arena* arena, common_ParseState stat
 common_ParseState common_state_with_position(common_ParseState state, int64_t offset, int64_t line, int64_t column) {
     common_ParseState _retval = {0};
     _retval = ((common_ParseState){.input = state.input, .offset = offset, .line = line, .column = column});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST((slop_string_eq(_retval.input, state.input)), "(== $result.input state.input)");
     SLOP_POST(((_retval.offset == offset)), "(== $result.offset offset)");
     SLOP_POST(((_retval.line == line)), "(== $result.line line)");
@@ -115,7 +127,9 @@ common_ParseState common_skip_whitespace(slop_arena* arena, common_ParseState st
             }
         }
         _retval = common_state_with_position(state, offset, line, column);
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((common_state_at_end(_retval) || !(strlib_is_space(common_state_peek(_retval))))), "(or (state-at-end $result) (not (is-space (state-peek $result))))");
     return _retval;
 }

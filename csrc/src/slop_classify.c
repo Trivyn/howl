@@ -72,35 +72,42 @@ uint8_t classify_entails_sub(types_Saturation sat, types_Names names, uint8_t in
         __auto_type bottom = types_node_bottom();
         if (inconsistent) {
             _retval = 1;
+            goto _slop_post;
         } else {
             __auto_type _mv_586 = types_renamed_node(names, a);
             if (!_mv_586.has_value) {
-                return 0;
+                _retval = 0;
+                goto _slop_post;
             } else if (_mv_586.has_value) {
                 __auto_type ra = _mv_586.value;
                 __auto_type _mv_588 = ({ void* _ptr = slop_map_get(sat.contexts, &(ra)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
                 if (_mv_588.has_value) {
                     __auto_type ctx = _mv_588.value;
                     if (slop_map_has(ctx.subsumers, &(bottom))) {
-                        return 1;
+                        _retval = 1;
+                        goto _slop_post;
                     } else {
                         __auto_type _mv_590 = types_renamed_node(names, b);
                         if (_mv_590.has_value) {
                             __auto_type rb = _mv_590.value;
-                            return slop_map_has(ctx.subsumers, &(rb));
+                            _retval = slop_map_has(ctx.subsumers, &(rb));
+                            goto _slop_post;
                         } else if (!_mv_590.has_value) {
-                            return 0;
+                            _retval = 0;
+                            goto _slop_post;
                         }
                         SLOP_UNREACHABLE();
                     }
                 } else if (!_mv_588.has_value) {
-                    return 0;
+                    _retval = 0;
+                    goto _slop_post;
                 }
                 SLOP_UNREACHABLE();
             }
             SLOP_UNREACHABLE();
         }
     }
+    _slop_post: ;
     return _retval;
 }
 

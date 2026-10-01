@@ -12,15 +12,18 @@ types_Profile select_select_profile(types_ProfileSelection selection) {
     switch (_mv_597.tag) {
         case types_ProfileSelection_slop_auto:
         {
-            return types_Profile_profile_el;
+            _retval = types_Profile_profile_el;
+            goto _slop_post;
         }
         case types_ProfileSelection_explicit:
         {
             __auto_type p = _mv_597.data.explicit;
-            return p;
+            _retval = p;
+            goto _slop_post;
         }
     }
     SLOP_UNREACHABLE();
+    _slop_post: ;
     SLOP_POST((({ __auto_type _mv = selection; uint8_t _mr = {0}; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = (_retval == types_Profile_profile_el); break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = (_retval == p); break; }  } _mr; })), "(match selection ((auto) (== $result (quote profile-el))) ((explicit p) (== $result p)))");
     return _retval;
 }
@@ -29,15 +32,20 @@ uint8_t select_profile_implemented(types_Profile p) {
     uint8_t _retval = {0};
     __auto_type _mv_598 = p;
     if (_mv_598 == types_Profile_profile_el) {
-        return 1;
+        _retval = 1;
+        goto _slop_post;
     } else if (_mv_598 == types_Profile_profile_el_plus_plus) {
-        return 0;
+        _retval = 0;
+        goto _slop_post;
     } else if (_mv_598 == types_Profile_profile_horn_sriq) {
-        return 0;
+        _retval = 0;
+        goto _slop_post;
     } else if (_mv_598 == types_Profile_profile_sriq) {
-        return 0;
+        _retval = 0;
+        goto _slop_post;
     }
     SLOP_UNREACHABLE();
+    _slop_post: ;
     SLOP_POST(((_retval == (p == types_Profile_profile_el))), "(== $result (== p (quote profile-el)))");
     return _retval;
 }

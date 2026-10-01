@@ -16,17 +16,22 @@ howl_Verdict howl_verdict(types_Outcome o) {
     howl_Verdict _retval = {0};
     if (types_findings_are_incoherent(o.findings)) {
         _retval = howl_Verdict_verdict_incoherent;
+        goto _slop_post;
     } else {
         if (((int64_t)((o.coverage.omitted).len)) > 0) {
             _retval = howl_Verdict_verdict_inconclusive;
+            goto _slop_post;
         } else {
             if (types_outcome_is_complete(o)) {
                 _retval = howl_Verdict_verdict_coherent;
+                goto _slop_post;
             } else {
                 _retval = howl_Verdict_verdict_inconclusive;
+                goto _slop_post;
             }
         }
     }
+    _slop_post: ;
     return _retval;
 }
 

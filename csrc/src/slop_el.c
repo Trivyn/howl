@@ -106,7 +106,9 @@ slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context
             }
         }
         _retval = result;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval).len)) <= 1)), "(<= (list-len $result) 1)");
     return _retval;
 }
@@ -163,7 +165,9 @@ slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx,
             }
         }
         _retval = result;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval).len)) <= 1)), "(<= (list-len $result) 1)");
     return _retval;
 }
@@ -210,7 +214,9 @@ slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context
             }
         }
         _retval = result;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval).len)) <= 2)), "(<= (list-len $result) 2)");
     return _retval;
 }
@@ -308,7 +314,9 @@ slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Cont
             }
         }
         _retval = result;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval).len)) <= 1)), "(<= (list-len $result) 1)");
     return _retval;
 }
@@ -350,7 +358,9 @@ slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context 
             ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = bottom })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         }
         _retval = result;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval).len)) <= 1)), "(<= (list-len $result) 1)");
     return _retval;
 }

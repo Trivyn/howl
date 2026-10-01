@@ -63,6 +63,8 @@ static uint8_t _wrap_ttl_is_pn_chars_base(void* _env, uint8_t _p0) { return ttl_
 ttl_PrefixMap ttl_make_prefix_map(slop_arena* arena) {
     ttl_PrefixMap _retval = {0};
     _retval = ((ttl_PrefixMap){.bindings = ((slop_list_ttl_PrefixBinding){ .data = NULL, .len = 0, .cap = 0 }), .count = 0});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval.count == 0)), "(== $result.count 0)");
     return _retval;
 }
@@ -71,6 +73,8 @@ ttl_PrefixMap ttl_prefix_map_add(slop_arena* arena, ttl_PrefixMap pm, slop_strin
     ttl_PrefixMap _retval = {0};
     ({ __auto_type _lst_p = &(pm.bindings); __auto_type _item = (((ttl_PrefixBinding){.prefix = prefix, .iri = iri})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
     _retval = ((ttl_PrefixMap){.bindings = pm.bindings, .count = (pm.count + 1)});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval.count >= pm.count)), "(>= $result.count pm.count)");
     return _retval;
 }
@@ -98,6 +102,8 @@ void ttl_blank_labels_add(slop_arena* arena, slop_map* ids, slop_string label, i
 ttl_TtlParseContext ttl_make_ttl_context(slop_arena* arena, slop_string input) {
     ttl_TtlParseContext _retval = {0};
     _retval = ((ttl_TtlParseContext){.prefixes = ttl_make_prefix_map(arena), .base_iri = (slop_option_string){.has_value = false}, .blank_labels = ((ttl_BlankLabelTable){.arena = arena, .ids = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); })}), .blank_counter = 0, .state = common_make_parse_state(arena, input)});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval.blank_counter == 0)), "(== $result.blank-counter 0)");
     return _retval;
 }
@@ -105,6 +111,8 @@ ttl_TtlParseContext ttl_make_ttl_context(slop_arena* arena, slop_string input) {
 ttl_GenBlankResult ttl_context_gen_blank_id(slop_arena* arena, ttl_TtlParseContext ctx) {
     ttl_GenBlankResult _retval = {0};
     _retval = ((ttl_GenBlankResult){.id = ctx.blank_counter, .ctx = ((ttl_TtlParseContext){.prefixes = ctx.prefixes, .base_iri = ctx.base_iri, .blank_labels = ctx.blank_labels, .blank_counter = (ctx.blank_counter + 1), .state = ctx.state})});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval.id == ctx.blank_counter)), "(== $result.id ctx.blank-counter)");
     SLOP_POST(((_retval.ctx.blank_counter == (ctx.blank_counter + 1))), "(== $result.ctx.blank-counter (+ ctx.blank-counter 1))");
     return _retval;

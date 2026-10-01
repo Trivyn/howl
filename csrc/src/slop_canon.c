@@ -61,16 +61,22 @@ int64_t canon_string_cmp(slop_string a, slop_string b) {
         __auto_type r = memcmp(((uint8_t*)(a.data)), ((uint8_t*)(b.data)), ((uint64_t)(n)));
         if (r < 0) {
             _retval = -1;
+            goto _slop_post;
         } else if (r > 0) {
             _retval = 1;
+            goto _slop_post;
         } else if (alen < blen) {
             _retval = -1;
+            goto _slop_post;
         } else if (alen > blen) {
             _retval = 1;
+            goto _slop_post;
         } else {
             _retval = 0;
+            goto _slop_post;
         }
     }
+    _slop_post: ;
     SLOP_POST(((((_retval == -1)) || ((_retval == 0)) || ((_retval == 1)))), "(or (== $result -1) (== $result 0) (== $result 1))");
     return _retval;
 }

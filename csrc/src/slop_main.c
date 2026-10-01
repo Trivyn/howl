@@ -33,11 +33,14 @@ int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r) {
         __auto_type o = _mv_651.data.ok;
         __auto_type _mv_652 = howl_verdict(o);
         if (_mv_652 == howl_Verdict_verdict_coherent) {
-            return 0;
+            _retval = 0;
+            goto _slop_post;
         } else if (_mv_652 == howl_Verdict_verdict_incoherent) {
-            return 1;
+            _retval = 1;
+            goto _slop_post;
         } else if (_mv_652 == howl_Verdict_verdict_inconclusive) {
-            return 2;
+            _retval = 2;
+            goto _slop_post;
         }
         SLOP_UNREACHABLE();
     } else if (!_mv_651.is_ok) {
@@ -46,27 +49,32 @@ int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r) {
         switch (_mv_653.tag) {
             case types_Fault_cancelled:
             {
-                return 2;
+                _retval = 2;
+                goto _slop_post;
             }
             case types_Fault_refused:
             {
                 __auto_type _ = _mv_653.data.refused;
-                return 2;
+                _retval = 2;
+                goto _slop_post;
             }
             case types_Fault_input_error:
             {
                 __auto_type _ = _mv_653.data.input_error;
-                return 3;
+                _retval = 3;
+                goto _slop_post;
             }
             case types_Fault_unavailable:
             {
                 __auto_type _ = _mv_653.data.unavailable;
-                return 3;
+                _retval = 3;
+                goto _slop_post;
             }
         }
         SLOP_UNREACHABLE();
     }
     SLOP_UNREACHABLE();
+    _slop_post: ;
     SLOP_POST(((_retval >= 0)), "(>= $result 0)");
     SLOP_POST(((_retval <= 3)), "(<= $result 3)");
     SLOP_POST((({ __auto_type _mv = r; uint8_t _mr; if (_mv.is_ok) { __auto_type o = _mv.data.ok; _mr = (_retval <= 2); } else { __auto_type f = _mv.data.err; _mr = ({ __auto_type _mv = f; uint8_t _mr = {0}; switch (_mv.tag) { case types_Fault_cancelled: { _mr = (_retval == 2); break; } case types_Fault_refused: { __auto_type _ = _mv.data.refused; _mr = (_retval == 2); break; } case types_Fault_input_error: { __auto_type _ = _mv.data.input_error; _mr = (_retval == 3); break; } case types_Fault_unavailable: { __auto_type _ = _mv.data.unavailable; _mr = (_retval == 3); break; }  } _mr; }); } _mr; })), "(match r ((ok o) (<= $result 2)) ((error f) (match f ((cancelled) (== $result 2)) ((refused _) (== $result 2)) ((input-error _) (== $result 3)) ((unavailable _) (== $result 3)))))");

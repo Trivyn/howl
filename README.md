@@ -333,8 +333,10 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop `main` at or after [#235](https://github.com/slop-lang/slop/pull/235), not yet
-in a release.** #235 maps big arena blocks from the OS, so freeing an arena returns its memory (GO's
+**Toolchain: slop `main` at or after [#244](https://github.com/slop-lang/slop/pull/244), not yet
+in a release.** #244 checks a postcondition at every return in the generated C, and
+[#243](https://github.com/slop-lang/slop/pull/243) has the verifier check the contract where each
+early return leaves. #235 maps big arena blocks from the OS, so freeing an arena returns its memory (GO's
 peak 1.8 → 0.9 GB); #234 stores a Map's and Set's keys and values inline in a dense table (2.6 →
 1.8 GB). #217 makes empty collections allocate nothing. CR2 and CR4's smaller-side dispatch uses #205's `set-len`, and its map rework (stored
 hashes, a word-at-a-time string hash) is most of the M1 slice 6b speedup. The faithfulness pairs need

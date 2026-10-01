@@ -507,8 +507,10 @@ types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* run, slop_
                 }
             }
             _retval = ((types_Saturation){.contexts = sat.contexts, .queues = new_queues, .active = new_active, .active_count = count, .iteration = (sat.iteration + 1)});
+            goto _slop_post;
         }
     }
+    _slop_post: ;
     SLOP_POST(((_retval.iteration == (sat.iteration + 1))), "(== (. $result iteration) (+ (. sat iteration) 1))");
     SLOP_POST(((_retval.iteration > sat.iteration)), "(> (. $result iteration) (. sat iteration))");
     SLOP_POST(((_retval.active_count >= 0)), "(>= (. $result active-count) 0)");
@@ -567,7 +569,9 @@ saturate_Advanced saturate_advance_round(slop_arena* arena, types_Saturation sat
         }
         ({ slop_arena_free(scratch); free(scratch); });
         _retval = ((saturate_Advanced){.saturation = next, .arenas = gen});
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval.saturation.iteration == (sat.iteration + 1))), "(== (. (. $result saturation) iteration) (+ (. sat iteration) 1))");
     return _retval;
 }
@@ -662,7 +666,9 @@ types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_t
             count = (count + 1);
         }
         _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = count, .iteration = 0});
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval.iteration == 0)), "(== (. $result iteration) 0)");
     return _retval;
 }
@@ -671,6 +677,8 @@ uint8_t saturate_frontier_is_empty(types_Saturation sat) {
     SLOP_PRE(((sat.active_count >= 0)), "(>= (. sat active-count) 0)");
     uint8_t _retval = {0};
     _retval = (sat.active_count == 0);
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval == (sat.active_count == 0))), "(== $result (== (. sat active-count) 0))");
     return _retval;
 }
@@ -679,6 +687,8 @@ uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig con
     SLOP_PRE(((sat.iteration >= 0)), "(>= (. sat iteration) 0)");
     uint8_t _retval = {0};
     _retval = (sat.iteration >= config.max_iterations);
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval == (sat.iteration >= config.max_iterations))), "(== $result (>= (. sat iteration) (. config max-iterations)))");
     return _retval;
 }
@@ -736,14 +746,18 @@ slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena
         }
         if (cancelled) {
             _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
+            goto _slop_post;
         } else {
             if (saturate_frontier_is_empty(state)) {
                 _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = true, .data.ok = ((saturate_RoundResult){.saturation = state, .termination = ((types_Termination){ .tag = types_Termination_fixpoint })}) });
+                goto _slop_post;
             } else {
                 _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = true, .data.ok = ((saturate_RoundResult){.saturation = state, .termination = ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = state.iteration })}) });
+                goto _slop_post;
             }
         }
     }
+    _slop_post: ;
     SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr; if (_mv.is_ok) { __auto_type r = _mv.data.ok; _mr = (r.saturation.iteration <= config.max_iterations); } else { __auto_type _ = _mv.data.err; _mr = 1; } _mr; })), "(match $result ((ok r) (<= (. (. r saturation) iteration) (. config max-iterations))) ((error _) true))");
     return _retval;
 }

@@ -823,7 +823,9 @@ normalize_Decoded normalize_copy_decoded(slop_arena* arena, normalize_Decoded d)
     {
         __auto_type axioms = owl2_copy_axioms(arena, d.axioms);
         _retval = ((normalize_Decoded){.axioms = axioms, .signature = owl2_copy_signature(arena, d.signature), .omissions = types_copy_omissions(arena, d.omissions)});
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval.axioms).len)) == ((int64_t)((d.axioms).len)))), "(== (list-len (. $result axioms)) (list-len (. d axioms)))");
     return _retval;
 }

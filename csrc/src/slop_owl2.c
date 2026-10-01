@@ -216,15 +216,20 @@ uint8_t owl2_is_el_plus_plus(types_Profile p) {
     uint8_t _retval = {0};
     __auto_type _mv_124 = p;
     if (_mv_124 == types_Profile_profile_el) {
-        return 0;
+        _retval = 0;
+        goto _slop_post;
     } else if (_mv_124 == types_Profile_profile_el_plus_plus) {
-        return 1;
+        _retval = 1;
+        goto _slop_post;
     } else if (_mv_124 == types_Profile_profile_horn_sriq) {
-        return 0;
+        _retval = 0;
+        goto _slop_post;
     } else if (_mv_124 == types_Profile_profile_sriq) {
-        return 0;
+        _retval = 0;
+        goto _slop_post;
     }
     SLOP_UNREACHABLE();
+    _slop_post: ;
     SLOP_POST(((_retval == (p == types_Profile_profile_el_plus_plus))), "(== $result (== p (quote profile-el-plus-plus)))");
     return _retval;
 }
@@ -233,9 +238,12 @@ owl2_Disposition owl2_when_el_plus_plus(types_Profile p) {
     owl2_Disposition _retval = {0};
     if (owl2_is_el_plus_plus(p)) {
         _retval = owl2_Disposition_d_in_profile;
+        goto _slop_post;
     } else {
         _retval = owl2_Disposition_d_out_of_profile;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST((((_retval == owl2_Disposition_d_in_profile) == (p == types_Profile_profile_el_plus_plus))), "(== (== $result (quote d-in-profile)) (== p (quote profile-el-plus-plus)))");
     return _retval;
 }
@@ -1560,7 +1568,9 @@ slop_list_owl2_RawAxiom owl2_copy_axioms(slop_arena* arena, slop_list_owl2_RawAx
             i = (i + 1);
         }
         _retval = out;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval).len)) == ((int64_t)((xs).len)))), "(== (list-len $result) (list-len xs))");
     return _retval;
 }

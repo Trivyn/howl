@@ -33,6 +33,8 @@ uint8_t types_findings_are_incoherent(types_Findings f);
 types_ReasonerConfig howl_default_config(void) {
     types_ReasonerConfig _retval = {0};
     _retval = ((types_ReasonerConfig){.worker_count = 4, .channel_buffer = 256, .max_iterations = 1000, .selection = ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = types_Profile_profile_el }), .strict_profile = 0, .cancel_ptr = 0, .verbose = 0});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval.worker_count == 4)), "(== (. $result worker-count) 4)");
     SLOP_POST(((_retval.channel_buffer == 256)), "(== (. $result channel-buffer) 256)");
     SLOP_POST(((_retval.max_iterations == 1000)), "(== (. $result max-iterations) 1000)");
@@ -454,6 +456,8 @@ types_RoleId types_original_role(types_Names names, types_RoleId r) {
 types_Context types_make_context(slop_arena* arena, types_Node root) {
     types_Context _retval = {0};
     _retval = ((types_Context){.root = root, .subsumers = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_Node, slop_hash_types_Node, slop_eq_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .succs = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, slop_map*); slop_map_new_ptr(arena, 0, &_d); }), .preds = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, slop_map*); slop_map_new_ptr(arena, 0, &_d); })});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST((({ types_Node _eq_l_41 = (_retval.root); types_Node _eq_r_42 = (root); slop_eq_types_Node(&_eq_l_41, &_eq_r_42); })), "(== (. $result root) root)");
     return _retval;
 }
@@ -461,6 +465,8 @@ types_Context types_make_context(slop_arena* arena, types_Node root) {
 types_Queue types_make_queue(slop_arena* arena) {
     types_Queue _retval = {0};
     _retval = ((types_Queue){.items = ((slop_list_types_Derived){ .data = NULL, .len = 0, .cap = 0 })});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((((int64_t)((_retval.items).len)) == 0)), "(== (list-len (. $result items)) 0)");
     return _retval;
 }
@@ -468,6 +474,8 @@ types_Queue types_make_queue(slop_arena* arena) {
 uint8_t types_queue_is_active(types_Queue q) {
     uint8_t _retval = {0};
     _retval = (((int64_t)((q.items).len)) > 0);
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST(((_retval == (((int64_t)((q.items).len)) > 0))), "(== $result (> (list-len (. q items)) 0))");
     return _retval;
 }
@@ -567,6 +575,8 @@ uint8_t types_addressed_eq(types_Addressed a, types_Addressed b) {
 types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e) {
     types_EdgePair _retval = {0};
     _retval = ((types_EdgePair){.succ_half = ((types_Addressed){.to = e.from, .what = ((types_Derived){ .tag = types_Derived_derived_succ, .data.derived_succ = { .f0 = e.role, .f1 = e.to } })}), .pred_half = ((types_Addressed){.to = e.to, .what = ((types_Derived){ .tag = types_Derived_derived_pred, .data.derived_pred = { .f0 = e.role, .f1 = e.from } })})});
+    goto _slop_post;
+    _slop_post: ;
     SLOP_POST((({ types_Node _eq_l_47 = (_retval.succ_half.to); types_Node _eq_r_48 = (e.from); slop_eq_types_Node(&_eq_l_47, &_eq_r_48); })), "(== (. (. $result succ-half) to) (. e from))");
     SLOP_POST((({ types_Node _eq_l_49 = (_retval.pred_half.to); types_Node _eq_r_50 = (e.to); slop_eq_types_Node(&_eq_l_49, &_eq_r_50); })), "(== (. (. $result pred-half) to) (. e to))");
     return _retval;
@@ -575,6 +585,8 @@ types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e) {
 uint8_t types_outcome_is_complete(types_Outcome o) {
     uint8_t _retval = {0};
     _retval = ((((int64_t)((o.coverage.omitted).len)) == 0) && ({ __auto_type _mv = o.termination; uint8_t _mr = {0}; switch (_mv.tag) { case types_Termination_fixpoint: { _mr = 1; break; } case types_Termination_resource_limit: { __auto_type _ = _mv.data.resource_limit; _mr = 0; break; }  } _mr; }));
+    goto _slop_post;
+    _slop_post: ;
     return _retval;
 }
 
@@ -582,9 +594,12 @@ uint8_t types_findings_are_incoherent(types_Findings f) {
     uint8_t _retval = {0};
     if (((int64_t)((f.unsatisfiable).len)) > 0) {
         _retval = 1;
+        goto _slop_post;
     } else {
         _retval = f.inconsistent;
+        goto _slop_post;
     }
+    _slop_post: ;
     return _retval;
 }
 
