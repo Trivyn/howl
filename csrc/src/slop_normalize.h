@@ -12,6 +12,7 @@
 #include "slop_termstore.h"
 #include "slop_saturate.h"
 #include "slop_canon.h"
+#include "slop_naming.h"
 
 typedef struct normalize_Decoded normalize_Decoded;
 typedef struct normalize_NormResult normalize_NormResult;
@@ -181,12 +182,7 @@ SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 
 struct normalize_NormState {
     slop_list_types_NormAxiom axioms;
-    slop_list_string fresh;
-    slop_map* fresh_index;
-    slop_list_string fresh_roles;
-    slop_map* fresh_role_index;
-    slop_map* neg_done;
-    slop_map* pos_done;
+    naming_Registry* registry;
     slop_list_types_LogicalEdge edges;
     slop_list_types_Node asserted;
 };
@@ -297,20 +293,12 @@ int64_t normalize_st_fresh_role_id(slop_arena* arena, normalize_NormState* p, sl
 uint8_t normalize_st_mark_neg(slop_arena* arena, normalize_NormState* p, slop_string text);
 uint8_t normalize_st_mark_pos(slop_arena* arena, normalize_NormState* p, slop_string text);
 owl2_RawConcept normalize_rc_of_node(types_Node n);
-slop_list_owl2_RawConcept normalize_flatten_and(slop_arena* arena, owl2_RawConcept c, slop_list_owl2_RawConcept acc);
-slop_string normalize_concept_key(slop_arena* arena, owl2_RawConcept c);
-slop_string normalize_node_key(slop_arena* arena, types_Node n);
-slop_string normalize_role_key(slop_arena* arena, types_RoleId r);
-slop_string normalize_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept conj, int64_t upto);
 types_Node normalize_neg_atom(slop_arena* arena, normalize_NormState* p, owl2_RawConcept c);
 types_Node normalize_fold_conjuncts(slop_arena* arena, normalize_NormState* p, slop_list_owl2_RawConcept conj, int64_t n);
 types_Node normalize_pos_atom(slop_arena* arena, normalize_NormState* p, owl2_RawConcept c);
 uint8_t normalize_emit_inclusion(slop_arena* arena, normalize_NormState* p, slop_list_owl2_RawConcept conj, int64_t n, types_Node target);
 uint8_t normalize_normalize_gci(slop_arena* arena, normalize_NormState* p, owl2_RawConcept lhs, owl2_RawConcept rhs);
 uint8_t normalize_decompose_chain(slop_arena* arena, normalize_NormState* p, owl2_RawChain ch);
-types_RoleId normalize_role_at_n(slop_list_types_RoleId xs, int64_t i);
-slop_string normalize_prefix_role_text(slop_arena* arena, slop_list_types_RoleId steps, int64_t upto, types_RoleId super);
-slop_string normalize_render_role_name(types_RoleId r);
 slop_list_normalize_RangeFact normalize_collect_range_facts(slop_arena* arena, normalize_NormState* p, slop_list_owl2_RawAxiom axs, slop_list_types_RoleId roles);
 slop_list_types_Node normalize_ran_t(slop_arena* arena, slop_list_normalize_RangeFact facts, slop_list_u8 told, int64_t n, int64_t r);
 uint8_t normalize_mat_get_b(slop_list_u8 m, int64_t i);
@@ -391,14 +379,14 @@ SLOP_OPTION_DEFINE(normalize_NormState, slop_option_normalize_NormState)
 SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
-#define SLOP_OPTION_TYPES_ROLEID_DEFINED
-SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
-#endif
-
 #ifndef SLOP_OPTION_NORMALIZE_RANGEFACT_DEFINED
 #define SLOP_OPTION_NORMALIZE_RANGEFACT_DEFINED
 SLOP_OPTION_DEFINE(normalize_RangeFact, slop_option_normalize_RangeFact)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
+#define SLOP_OPTION_TYPES_ROLEID_DEFINED
+SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED

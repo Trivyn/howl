@@ -78,6 +78,10 @@
   (import termstore (Encoded encode-triples))
   (import saturate (make-initial-saturation deliver-seed))
   (import canon (string-cmp))
+  (import naming (Registry new-registry fresh-id fresh-role-id mark-neg mark-pos
+                  neg-defined pos-defined fresh-count
+                  flatten-and concept-key prefix-text prefix-role-text role-at-n
+                  render-role-name))
 
   (export
     Decoded NormResult NormOutput
@@ -133,22 +137,12 @@
   ;; lowers correctly. Upstream issue owed for the missing diagnostic.
   ;; ============================================================
 
-  ;; LOOKUPS ARE MAPS AND SETS; IDS ARE STILL LIST POSITIONS. Each fresh
-  ;; name used to be found by a linear scan of `fresh`, so minting was
-  ;; quadratic in the number of fresh names. The index answers "seen
-  ;; before?" in constant time, while `fresh` keeps doing what it always
-  ;; did — the id IS the position a text was first appended at — so ids
-  ;; stay first-occurrence and nothing downstream moves. Map and Set
-  ;; fields are pointers, so the copy-mutate-write-back below shares them
-  ;; without any extra write-back.
+  ;; The fresh-name registry lives in `naming`, shared with el++'s
+  ;; normaliser; the state holds a pointer to it, so every branch of the
+  ;; recursion mints into one registry without any write-back.
   (type NormState (record
     (axioms           (List NormAxiom))
-    (fresh            (List String))      ; index = fresh-node id, value = its key (concept-key)
-    (fresh-index      (Map String Int))   ; key -> fresh-node id
-    (fresh-roles      (List String))      ; index = fresh-role id, value = provenance text
-    (fresh-role-index (Map String Int))   ; provenance text -> fresh-role id
-    (neg-done         (Set String))       ; expressions whose NEGATIVE definition is emitted
-    (pos-done         (Set String))       ; expressions whose POSITIVE definition is emitted
+    (registry         (Ptr Registry))
     (edges            (List LogicalEdge))
     (asserted         (List Node))))      ; C(a) subjects, in first-occurrence order
 
@@ -160,12 +154,7 @@
       (do
         (set! (deref p) (record-new NormState
                           (axioms           (list-new arena NormAxiom))
-                          (fresh            (list-new arena String))
-                          (fresh-index      (map-new arena String Int))
-                          (fresh-roles      (list-new arena String))
-                          (fresh-role-index (map-new arena String Int))
-                          (neg-done         (set-new arena String))
-                          (pos-done         (set-new arena String))
+                          (registry         (new-registry arena))
                           (edges            (list-new arena LogicalEdge))
                           (asserted         (list-new arena Node))))
         p)))
@@ -195,49 +184,25 @@
     (@intent "The fresh-node id for a canonical expression, minting on first use")
     (@spec ((Arena (Ptr NormState) String) -> Int))
     (@alloc arena)
-    ;; FRESH SYMBOLS ARE KEYED BY CANONICAL EXPRESSION ALONE — one node
-    ;; per distinct subexpression, carrying a negative-definition bit
-    ;; and a positive-definition bit. Keying by (expression, polarity)
-    ;; would mint two nodes for an expression occurring at both, which
-    ;; changes fresh ids, saturation size, derivation depth, and
-    ;; therefore every capped-run report.
-    (match (map-get (. (deref p) fresh-index) text)
-      ((some id) id)
-      ((none)
-        (let ((mut s (deref p))
-              (id (cast Int (list-len (. (deref p) fresh)))))
-          (do
-            (list-push (. s fresh) text)
-            (map-put (. s fresh-index) text id)
-            (set! (deref p) s)
-            id)))))
+    (fresh-id arena (. (deref p) registry) text))
 
   (fn st-fresh-role-id ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "A fresh role id for a chain decomposition step")
     (@spec ((Arena (Ptr NormState) String) -> Int))
     (@alloc arena)
-    (match (map-get (. (deref p) fresh-role-index) text)
-      ((some id) id)
-      ((none)
-        (let ((mut s (deref p))
-              (id (cast Int (list-len (. (deref p) fresh-roles)))))
-          (do
-            (list-push (. s fresh-roles) text)
-            (map-put (. s fresh-role-index) text id)
-            (set! (deref p) s)
-            id)))))
+    (fresh-role-id arena (. (deref p) registry) text))
 
   (fn st-mark-neg ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "Record that the negative definition for this expression is emitted")
     (@spec ((Arena (Ptr NormState) String) -> Bool))
     (@alloc arena)
-    (do (set-put (. (deref p) neg-done) text) true))
+    (mark-neg arena (. (deref p) registry) text))
 
   (fn st-mark-pos ((arena Arena) (p (Ptr NormState)) (text String))
     (@intent "Record that the positive definition for this expression is emitted")
     (@spec ((Arena (Ptr NormState) String) -> Bool))
     (@alloc arena)
-    (do (set-put (. (deref p) pos-done) text) true))
+    (mark-pos arena (. (deref p) registry) text))
 
   ;; ============================================================
   ;; Polarity-correct normalization
@@ -262,95 +227,6 @@
     (@pure)
     (union-new RawConcept rc-name n))
 
-  (fn flatten-and ((arena Arena) (c RawConcept) (acc (List RawConcept)))
-    (@intent "Conjuncts of a (possibly nested) intersection, in order")
-    (@spec ((Arena RawConcept (List RawConcept)) -> (List RawConcept)))
-    (@alloc arena)
-    (let ((mut out acc))
-      (do
-        (match c
-          ((rc-and cs) (for-each (x cs) (set! out (flatten-and arena x out))))
-          ((rc-thing)  (do))          ; ⊤ is the unit of ⊓ — drop it
-          (_           (list-push out c)))
-        out)))
-
-  ;; ============================================================
-  ;; Fresh-name keys
-  ;;
-  ;; A FRESH NAME STANDS FOR ONE EXPRESSION, so its key must be INJECTIVE:
-  ;; two different expressions keyed alike share one name, and whichever
-  ;; definition is emitted first is the only one (`neg-done`/`pos-done` are
-  ;; keyed the same way). The canonical rendering is not injective here. It
-  ;; writes ⊤ as "owl:Thing", which <owl:Thing> - scheme "owl", a legal class
-  ;; IRI - also renders as, so ∃r.⊤ and ∃r.<owl:Thing> shared a name and one
-  ;; GCI lost its left-hand side (hazards/thing-key-collision); and an IRI
-  ;; may contain parentheses. So keys come from this renderer instead: every
-  ;; IRI in angle brackets, which no IRI can contain, and ⊤/⊥ as symbols
-  ;; that no bracketed IRI can be. Each form then begins with a distinct
-  ;; token and its parts are delimited, so it reads back one way only.
-  ;;
-  ;; Only the v0 constructors reach a key - the gate admits nothing else -
-  ;; so the remaining variants share one arm, marked so it cannot collide.
-  ;; The keys are never printed: reports use the canonical rendering.
-  ;; ============================================================
-
-  (fn concept-key ((arena Arena) (c RawConcept))
-    (@intent "An injective key for a v0 class expression")
-    (@spec ((Arena RawConcept) -> String))
-    (@alloc arena)
-    (match c
-      ((rc-thing)   "⊤")
-      ((rc-nothing) "⊥")
-      ((rc-name n)  (node-key arena n))
-      ((rc-and cs)
-        (let ((mut out "and(")
-              (mut first true))
-          (do
-            (for-each (x cs)
-              (do
-                (when (not first) (set! out (string-concat arena out " ")))
-                (set! out (string-concat arena out (concept-key arena x)))
-                (set! first false)))
-            (string-concat arena out ")"))))
-      ((rc-some r f)
-        (string-concat arena "some("
-          (string-concat arena (role-key arena r)
-            (string-concat arena " "
-              (string-concat arena (concept-key arena (deref f)) ")")))))
-      ;; UNREACHABLE BY THE GATE. "!" begins no other form.
-      (_ (string-concat arena "!" (render-concept arena c)))))
-
-  (fn node-key ((arena Arena) (n Node))
-    (@intent "A node's key: its IRI bracketed, tagged by kind")
-    (@spec ((Arena Node) -> String))
-    (@alloc arena)
-    (match n
-      ((class-node i)      (string-concat arena "<" (string-concat arena (. i value) ">")))
-      ((individual-node i) (string-concat arena "{<" (string-concat arena (. i value) ">}")))
-      ((fresh-node k)      (string-concat arena "_:" (int-to-string arena k)))))
-
-  (fn role-key ((arena Arena) (r RoleId))
-    (@intent "A role's key: its IRI bracketed")
-    (@spec ((Arena RoleId) -> String))
-    (@alloc arena)
-    (match r
-      ((named-role i) (string-concat arena "<" (string-concat arena (. i value) ">")))
-      ((fresh-role k) (string-concat arena "_:r" (int-to-string arena k)))))
-
-  (fn prefix-text ((arena Arena) (conj (List RawConcept)) (upto Int))
-    (@intent "The key of the first `upto` conjuncts, as one intersection")
-    (@spec ((Arena (List RawConcept) Int) -> String))
-    (@alloc arena)
-    ;; The KEY for an intermediate fresh name. Keying on the prefix
-    ;; rather than on a counter is what makes two occurrences of the
-    ;; same conjunction share a node instead of minting two.
-    (let ((mut pre (list-new arena RawConcept))
-          (mut i 0))
-      (do
-        (while (< i upto)
-          (do (list-push pre (concept-at conj i)) (set! i (+ i 1))))
-        (concept-key arena (union-new RawConcept rc-and pre)))))
-
   (fn neg-atom ((arena Arena) (p (Ptr NormState)) (c RawConcept))
     (@intent "A concept NAME standing for `c` in negative position")
     (@spec ((Arena (Ptr NormState) RawConcept) -> Node))
@@ -363,7 +239,7 @@
         (let ((text (concept-key arena c))
               (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
-            (when (not (set-has (. (deref p) neg-done) text))
+            (when (not (neg-defined (. (deref p) registry) text))
               (do
                 (st-mark-neg arena p text)
                 ;; ∃r.F ⊑ X — the load-bearing direction.
@@ -416,7 +292,7 @@
         (let ((text (concept-key arena c))
               (x (union-new Node fresh-node (st-fresh-id arena p text))))
           (do
-            (when (not (set-has (. (deref p) pos-done) text))
+            (when (not (pos-defined (. (deref p) registry) text))
               (do
                 (st-mark-pos arena p text)
                 ;; X ⊑ E — the positive direction.
@@ -510,47 +386,6 @@
               (st-emit arena p (union-new NormAxiom role-chain
                                  acc (role-at-n steps (- len 1)) (. ch super)))))))))
 
-  (fn role-at-n ((xs (List RoleId)) (i Int))
-    (@intent "Element i, where the caller has already bounds-checked")
-    (@spec (((List RoleId) Int) -> RoleId))
-    (@pure)
-    (@pre {i >= 0})
-    (@pre {i < (list-len xs)})
-    (match (list-get xs i)
-      ((some v) v)
-      ((none)   (union-new RoleId fresh-role 0))))
-
-  (fn prefix-role-text ((arena Arena) (steps (List RoleId)) (upto Int) (super RoleId))
-    (@intent "Deterministic provenance key for a fresh intermediate role")
-    (@spec ((Arena (List RoleId) Int RoleId) -> String))
-    (@alloc arena)
-    ;; Keyed by (chain prefix, super) so two chains sharing a prefix but
-    ;; a different super do not collide onto one intermediate role.
-    ;;
-    ;; THE PARTS ARE SPACE-SEPARATED, because a key must be INJECTIVE and a
-    ;; space is the one separator no IRI can contain (IRIREF forbids it).
-    ;; The '.' this used to join roles with is legal inside an IRI, even in
-    ;; its scheme, so the prefixes (urn:a.b, urn:c) and (urn:a, b.urn:c) of
-    ;; two chains into one super keyed alike, shared ONE intermediate role,
-    ;; and composed a chain neither states (hazards/chain-prefix-collision).
-    ;; The super comes first, so every token after it is a prefix role.
-    (let ((mut out (string-concat arena "chain " (render-role-name super)))
-          (mut i 0))
-      (do
-        (while (< i upto)
-          (do
-            (set! out (string-concat arena out
-                        (string-concat arena " " (render-role-name (role-at-n steps i)))))
-            (set! i (+ i 1))))
-        out)))
-
-  (fn render-role-name ((r RoleId))
-    (@intent "A stable textual key for a role")
-    (@spec ((RoleId) -> String))
-    (@pure)
-    (match r
-      ((named-role i) (. i value))
-      ((fresh-role _) "_:fresh")))
 
 
   ;; ============================================================
@@ -802,7 +637,7 @@
               (asserted    (. (deref p) asserted))
               (seeds       (edge-range-seeds arena (. (deref p) edges)
                              facts told nr roles))
-              (fresh-count (cast Int (list-len (. (deref p) fresh)))))))))) 
+              (fresh-count (fresh-count (. (deref p) registry))))))))) 
 
   ;; ============================================================
   ;; Initialization — §6.3 step 4

@@ -313,7 +313,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **42 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **43 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests

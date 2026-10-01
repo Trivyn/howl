@@ -1,0 +1,653 @@
+;; ============================================================
+;; el++'s normaliser — accepted axioms into [Krö10] Definition 1
+;; (SPEC §5.4 K0, K1)
+;;
+;; The gate has already decided WHAT el++ reasons over (§5.4's language)
+;; and rewritten positive negation. This module decides only HOW each
+;; accepted axiom is written in Krötzsch's normal form, by his Fig. 1
+;; (Proposition 1: a conservative extension over the input signature),
+;; with the choices §5.3's L2 justifies for `el`: one definitional name
+;; per (expression, polarity), chains decomposed left-associatively.
+;;
+;; Unlike `el`'s normaliser it ELIMINATES NO RANGES — a range is the
+;; product `R ⊑ ⊤ × D`, native to the calculus — and it has no edges, no
+;; seeds and no I_a encoding: an individual is a constant of the calculus
+;; and the nominal {a} is the individual node in a class position.
+;;
+;; DEFINITION 1 IS THE TYPE OF WHAT THIS MODULE EMITS (types.slop: KName,
+;; KTerm, KscAxiom). A position Definition 1 reserves for a class name
+;; takes a KName, which cannot be an individual, so an axiom outside the
+;; normal form cannot be built here at all: the type checker discharges
+;; it at every construction, where a verifier precondition would not be
+;; checked at the call. The atom functions return KNames; the one form
+;; that takes a nominal, subClass, takes a KTerm.
+;; ============================================================
+
+(module kscnormal
+  (@doc "el++ normal form ([Krö10] Definition 1) from accepted axioms (SPEC §5.4)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_BOTTOM_OBJECT_PROPERTY OWL_THING OWL_NOTHING))
+  (import types (Node RoleId KName KTerm KscAxiom role-eq))
+  (import owl2 (RawAxiom RawConcept RawChain concept-at))
+  (import naming (Registry new-registry fresh-id fresh-role-id mark-neg mark-pos
+                  neg-defined pos-defined fresh-count fresh-role-count
+                  flatten-and concept-key node-key role-key prefix-text
+                  prefix-role-text role-at-n node-at))
+
+  (export
+    KscOutput normalize-ksc render-ksc-axiom)
+
+  (type KscOutput (record
+    (axioms           (List KscAxiom))
+    (fresh-count      Int)        ; fresh ids: definitional names and witnesses
+    (fresh-role-count Int)))      ; fresh roles: chain steps and reflexive Self roles
+
+  (type KscState (record
+    (axioms   (List KscAxiom))
+    (registry (Ptr Registry))))
+
+  (fn new-ksc-state ((arena Arena))
+    (@intent "An empty el++ normaliser state")
+    (@spec ((Arena) -> (Ptr KscState)))
+    (@alloc arena)
+    (let ((p (cast (Ptr KscState) (arena-alloc arena (sizeof KscState)))))
+      (do
+        (set! (deref p) (record-new KscState
+                          (axioms   (list-new arena KscAxiom))
+                          (registry (new-registry arena))))
+        p)))
+
+  (fn k-emit ((arena Arena) (p (Ptr KscState)) (ax KscAxiom))
+    (@intent "Append one normal-form axiom")
+    (@spec ((Arena (Ptr KscState) KscAxiom) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s axioms) ax) (set! (deref p) s) true)))
+
+  (fn mint ((arena Arena) (p (Ptr KscState)) (key String))
+    (@intent "The fresh name for a key, minting on first use")
+    (@spec ((Arena (Ptr KscState) String) -> KName))
+    (@alloc arena)
+    (union-new KName k-fresh (fresh-id arena (. (deref p) registry) key)))
+
+  (fn top-name ()
+    (@intent "⊤ as a class name: owl:Thing, with top(owl:Thing)")
+    (@spec (() -> KName))
+    (@pure)
+    (union-new KName k-class (record-new IRI (value OWL_THING))))
+
+  (fn bottom-name ()
+    (@intent "⊥ as a class name: owl:Nothing, with bot(owl:Nothing)")
+    (@spec (() -> KName))
+    (@pure)
+    (union-new KName k-class (record-new IRI (value OWL_NOTHING))))
+
+  (fn as-term ((k KName))
+    (@intent "A class name in a subClass position")
+    (@spec ((KName) -> KTerm))
+    (@pure)
+    (union-new KTerm k-name k))
+
+  (fn node-iri ((n Node))
+    (@intent "The IRI an input node names (fresh nodes never reach el++'s normaliser)")
+    (@spec ((Node) -> IRI))
+    (@pure)
+    (match n
+      ((class-node i)      i)
+      ((individual-node i) i)
+      ((fresh-node _)      (record-new IRI (value "")))))
+
+  (fn node-term ((n Node))
+    (@intent "An input node as a subClass term: a class name, or the nominal of an individual")
+    (@spec ((Node) -> KTerm))
+    (@pure)
+    (match n
+      ((class-node i)      (union-new KTerm k-name (union-new KName k-class i)))
+      ((individual-node i) (union-new KTerm k-nominal i))
+      ((fresh-node j)      (union-new KTerm k-name (union-new KName k-fresh j)))))
+
+  (fn name-key ((arena Arena) (k KName))
+    (@intent "A class name's key, written as node-key writes the same name")
+    (@spec ((Arena KName) -> String))
+    (@alloc arena)
+    (match k
+      ((k-class i) (node-key arena (union-new Node class-node i)))
+      ((k-fresh j) (node-key arena (union-new Node fresh-node j)))))
+
+  (fn term-key ((arena Arena) (t KTerm))
+    (@intent "A subClass term's key: a name, or the nominal {a}")
+    (@spec ((Arena KTerm) -> String))
+    (@alloc arena)
+    (match t
+      ((k-name k)    (name-key arena k))
+      ((k-nominal i) (node-key arena (union-new Node individual-node i)))))
+
+  (fn box ((arena Arena) (c RawConcept))
+    (@intent "Heap-box a concept")
+    (@spec ((Arena RawConcept) -> (Ptr RawConcept)))
+    (@alloc arena)
+    (let ((q (cast (Ptr RawConcept) (arena-alloc arena (sizeof RawConcept)))))
+      (do (set! (deref q) c) q)))
+
+  (fn node-of ((n Node))
+    (@intent "Wrap a node back into a concept")
+    (@spec ((Node) -> RawConcept))
+    (@pure)
+    (union-new RawConcept rc-name n))
+
+  ;; ============================================================
+  ;; Nominals in a class position
+  ;;
+  ;; Definition 1 puts a nominal only in subClass — `{a} ⊑ C`, `A ⊑ {c}`,
+  ;; `{a} ⊑ {c}`, and `C(a)` — so wherever {a} occurs inside a larger
+  ;; expression, Fig. 1 names it: `{a} ⊑ X` on the left, `X ⊑ {a}` on the
+  ;; right.
+  ;; ============================================================
+
+  (fn nominal-neg ((arena Arena) (p (Ptr KscState)) (a IRI))
+    (@intent "A name implied by the nominal {a}: {a} ⊑ X")
+    (@spec ((Arena (Ptr KscState) IRI) -> KName))
+    (@alloc arena)
+    (let ((key (node-key arena (union-new Node individual-node a)))
+          (x (mint arena p key)))
+      (do
+        (when (not (neg-defined (. (deref p) registry) key))
+          (do
+            (mark-neg arena (. (deref p) registry) key)
+            (k-emit arena p (union-new KscAxiom k-sub
+                              (union-new KTerm k-nominal a) (as-term x)))))
+        x)))
+
+  (fn nominal-pos ((arena Arena) (p (Ptr KscState)) (a IRI))
+    (@intent "A name implying the nominal {a}: X ⊑ {a}")
+    (@spec ((Arena (Ptr KscState) IRI) -> KName))
+    (@alloc arena)
+    (let ((key (node-key arena (union-new Node individual-node a)))
+          (x (mint arena p key)))
+      (do
+        (when (not (pos-defined (. (deref p) registry) key))
+          (do
+            (mark-pos arena (. (deref p) registry) key)
+            (k-emit arena p (union-new KscAxiom k-sub
+                              (as-term x) (union-new KTerm k-nominal a)))))
+        x)))
+
+  (fn single-individual ((ns (List Node)))
+    (@intent "The one individual of a one-member nominal, or none")
+    (@spec (((List Node)) -> (Option Node)))
+    (@pure)
+    (if (== (list-len ns) 1) (some (node-at ns 0)) (none)))
+
+  ;; ============================================================
+  ;; Polarity-correct atoms, as in `el`'s normaliser
+  ;;
+  ;;   negative (left of ⊑)   emit  E ⊑ X    X must be IMPLIED BY E
+  ;;   positive (right of ⊑)  emit  X ⊑ E    X must IMPLY E
+  ;; ============================================================
+
+  (fn neg-name ((arena Arena) (p (Ptr KscState)) (n Node))
+    (@intent "A node in negative position as a class name: an individual is named by {a} ⊑ X")
+    (@spec ((Arena (Ptr KscState) Node) -> KName))
+    (@alloc arena)
+    (match n
+      ((class-node i)      (union-new KName k-class i))
+      ((individual-node i) (nominal-neg arena p i))
+      ((fresh-node j)      (union-new KName k-fresh j))))
+
+  (fn pos-name ((arena Arena) (p (Ptr KscState)) (n Node))
+    (@intent "A node in positive position as a class name: an individual is named by X ⊑ {a}")
+    (@spec ((Arena (Ptr KscState) Node) -> KName))
+    (@alloc arena)
+    (match n
+      ((class-node i)      (union-new KName k-class i))
+      ((individual-node i) (nominal-pos arena p i))
+      ((fresh-node j)      (union-new KName k-fresh j))))
+
+  (fn neg-atom ((arena Arena) (p (Ptr KscState)) (c RawConcept))
+    (@intent "A class name standing for `c` in negative position")
+    (@spec ((Arena (Ptr KscState) RawConcept) -> KName))
+    (@alloc arena)
+    (match c
+      ((rc-name n)  (neg-name arena p n))
+      ((rc-thing)   (top-name))
+      ((rc-nothing) (bottom-name))
+      ((rc-oneof ns)
+        (match (single-individual ns)
+          ((some a) (neg-name arena p a))
+          ;; UNREACHABLE BY THE GATE (§5.4 admits one individual only).
+          ;; ⊥ on the left loses the axiom without inventing anything.
+          ((none)   (bottom-name))))
+      ((rc-some r f)
+        (let ((key (concept-key arena c))
+              (x (mint arena p key)))
+          (do
+            (when (not (neg-defined (. (deref p) registry) key))
+              (do
+                (mark-neg arena (. (deref p) registry) key)
+                ;; ∃R.F ⊑ X
+                (k-emit arena p (union-new KscAxiom k-some-lhs
+                                  r (neg-atom arena p (deref f)) x))))
+            x)))
+      ;; ∃R.{a} — the same expression as rc-some R {a}, and keyed alike.
+      ((rc-has-value r a)
+        (let ((key (concept-key arena c))
+              (x (mint arena p key)))
+          (do
+            (when (not (neg-defined (. (deref p) registry) key))
+              (do
+                (mark-neg arena (. (deref p) registry) key)
+                (k-emit arena p (union-new KscAxiom k-some-lhs
+                                  r (neg-name arena p a) x))))
+            x)))
+      ((rc-has-self r)
+        (let ((key (concept-key arena c))
+              (x (mint arena p key)))
+          (do
+            (when (not (neg-defined (. (deref p) registry) key))
+              (do
+                (mark-neg arena (. (deref p) registry) key)
+                ;; ∃R.Self ⊑ X
+                (k-emit arena p (union-new KscAxiom k-self-lhs r x))))
+            x)))
+      ((rc-and _)
+        (let ((flat (flatten-and arena c (list-new arena RawConcept)))
+              (n (cast Int (list-len flat))))
+          (cond
+            ((== n 0) (top-name))
+            ((== n 1) (neg-atom arena p (concept-at flat 0)))
+            (else (fold-conjuncts arena p flat n)))))
+      ;; UNREACHABLE BY THE GATE: only el++ concepts reach here.
+      (_ (bottom-name))))
+
+  (fn fold-conjuncts ((arena Arena) (p (Ptr KscState)) (conj (List RawConcept)) (n Int))
+    (@intent "One name for a whole conjunction, left-associated")
+    (@spec ((Arena (Ptr KscState) (List RawConcept) Int) -> KName))
+    (@alloc arena)
+    (let ((mut acc (neg-atom arena p (concept-at conj 0)))
+          (mut i 1))
+      (do
+        (while (< i n)
+          (let ((x (mint arena p (prefix-text arena conj (+ i 1)))))
+            (do
+              ;; A ⊓ B ⊑ X
+              (k-emit arena p (union-new KscAxiom k-and
+                                acc (neg-atom arena p (concept-at conj i)) x))
+              (set! acc x)
+              (set! i (+ i 1)))))
+        acc)))
+
+  (fn pos-atom ((arena Arena) (p (Ptr KscState)) (c RawConcept))
+    (@intent "A class name standing for `c` in positive position")
+    (@spec ((Arena (Ptr KscState) RawConcept) -> KName))
+    (@alloc arena)
+    (match c
+      ((rc-name n)  (pos-name arena p n))
+      ((rc-thing)   (top-name))
+      ((rc-nothing) (bottom-name))
+      ((rc-oneof ns)
+        (match (single-individual ns)
+          ((some a) (pos-name arena p a))
+          ;; UNREACHABLE BY THE GATE. ⊤ on the right is vacuous.
+          ((none)   (top-name))))
+      (_
+        (let ((key (concept-key arena c))
+              (x (mint arena p key)))
+          (do
+            (when (not (pos-defined (. (deref p) registry) key))
+              (do
+                (mark-pos arena (. (deref p) registry) key)
+                ;; X ⊑ E
+                (normalize-gci arena p (name-concept x) c)))
+            x)))))
+
+  (fn name-concept ((k KName))
+    (@intent "A class name back as a concept, for the gci that defines it")
+    (@spec ((KName) -> RawConcept))
+    (@pure)
+    (match k
+      ((k-class i) (union-new RawConcept rc-name (union-new Node class-node i)))
+      ((k-fresh j) (union-new RawConcept rc-name (union-new Node fresh-node j)))))
+
+  (fn lhs-name ((arena Arena) (p (Ptr KscState)) (conj (List RawConcept)) (n Int))
+    (@intent "A class name for the left-hand conjunction")
+    (@spec ((Arena (Ptr KscState) (List RawConcept) Int) -> KName))
+    (@alloc arena)
+    (cond
+      ((== n 0) (top-name))
+      ((== n 1) (neg-atom arena p (concept-at conj 0)))
+      (else     (fold-conjuncts arena p conj n))))
+
+  (fn sub-lhs ((arena Arena) (p (Ptr KscState)) (c RawConcept))
+    (@intent "The left of a subClass fact: an individual stands as its nominal, anything else as its name")
+    (@spec ((Arena (Ptr KscState) RawConcept) -> KTerm))
+    (@alloc arena)
+    ;; subClass is the one form that takes a nominal on the left, so
+    ;; `C(a)` and `{a} ⊑ C` are Fig. 2's `subClass(a, C)` directly.
+    (match c
+      ((rc-name n) (match n
+                     ((individual-node i) (union-new KTerm k-nominal i))
+                     (_ (as-term (neg-atom arena p c)))))
+      ((rc-oneof ns)
+        (match (single-individual ns)
+          ((some a) (node-term a))
+          ((none)   (as-term (neg-atom arena p c)))))
+      (_ (as-term (neg-atom arena p c)))))
+
+  (fn class-target ((arena Arena) (p (Ptr KscState)) (t KTerm))
+    (@intent "A target where Definition 1 wants a class name: a nominal is named by X ⊑ {a}")
+    (@spec ((Arena (Ptr KscState) KTerm) -> KName))
+    (@alloc arena)
+    (match t
+      ((k-name k)    k)
+      ((k-nominal i) (nominal-pos arena p i))))
+
+  (fn emit-inclusion ((arena Arena) (p (Ptr KscState))
+                      (conj (List RawConcept)) (n Int) (target KTerm))
+    (@intent "conj₁ ⊓ … ⊓ conjₙ ⊑ target, in normal form")
+    (@spec ((Arena (Ptr KscState) (List RawConcept) Int KTerm) -> Bool))
+    (@alloc arena)
+    (cond
+      ((== n 0) (k-emit arena p (union-new KscAxiom k-sub (as-term (top-name)) target)))
+      ((== n 1) (k-emit arena p (union-new KscAxiom k-sub
+                                  (sub-lhs arena p (concept-at conj 0)) target)))
+      ((== n 2) (k-emit arena p (union-new KscAxiom k-and
+                                  (neg-atom arena p (concept-at conj 0))
+                                  (neg-atom arena p (concept-at conj 1))
+                                  (class-target arena p target))))
+      (else
+        (let ((acc (fold-conjuncts arena p conj (- n 1))))
+          (k-emit arena p (union-new KscAxiom k-and
+                            acc (neg-atom arena p (concept-at conj (- n 1)))
+                            (class-target arena p target)))))))
+
+  (fn witness ((arena Arena) (p (Ptr KscState)) (a KName) (r RoleId) (b KName))
+    (@intent "The fresh witness constant of the supEx axiom A ⊑ ∃R.B")
+    (@spec ((Arena (Ptr KscState) KName RoleId KName) -> (Int 0 ..)))
+    (@alloc arena)
+    ;; ONE PER AXIOM, as [Krö10] Fig. 2 mints aux₁ per supEx. Keyed by the
+    ;; normalised axiom, so the same axiom stated twice — one axiom, in a
+    ;; set — has one witness. Sharing witnesses between DIFFERENT axioms
+    ;; with the same filler is what el's contexts do, and needs its own
+    ;; proof under nominals (§5.4, "Cost").
+    (fresh-id arena (. (deref p) registry)
+      (string-concat arena "witness("
+        (string-concat arena (name-key arena a)
+          (string-concat arena " "
+            (string-concat arena (role-key arena r)
+              (string-concat arena " " (string-concat arena (name-key arena b) ")"))))))))
+
+  (fn normalize-gci ((arena Arena) (p (Ptr KscState)) (lhs RawConcept) (rhs RawConcept))
+    (@intent "One GCI into normal form, splitting positive conjunctions")
+    (@spec ((Arena (Ptr KscState) RawConcept RawConcept) -> Bool))
+    (@alloc arena)
+    (match rhs
+      ((rc-and ds)
+        (let ((mut ok true))
+          (do (for-each (d ds) (set! ok (normalize-gci arena p lhs d))) ok)))
+      ((rc-thing) true)
+      (_
+        (let ((conj (flatten-and arena lhs (list-new arena RawConcept)))
+              (n (cast Int (list-len conj))))
+          (match rhs
+            ((rc-name b)  (emit-inclusion arena p conj n (node-term b)))
+            ((rc-nothing) (emit-inclusion arena p conj n (as-term (bottom-name))))
+            ((rc-oneof ns)
+              (match (single-individual ns)
+                ((some a) (emit-inclusion arena p conj n (node-term a)))
+                ((none)   true)))
+            ;; A ⊑ ∃R.B, witnessed
+            ((rc-some r f)
+              (let ((a (lhs-name arena p conj n))
+                    (b (pos-atom arena p (deref f))))
+                (k-emit arena p (union-new KscAxiom k-some-rhs
+                                  a r b (witness arena p a r b)))))
+            ;; A ⊑ ∃R.{c}: A ⊑ ∃R.X, X ⊑ {c} (Fig. 1)
+            ((rc-has-value r c)
+              (let ((a (lhs-name arena p conj n))
+                    (b (pos-name arena p c)))
+                (k-emit arena p (union-new KscAxiom k-some-rhs
+                                  a r b (witness arena p a r b)))))
+            ;; A ⊑ ∃R.Self
+            ((rc-has-self r)
+              (k-emit arena p (union-new KscAxiom k-self-rhs (lhs-name arena p conj n) r)))
+            (_ true))))))
+
+  ;; ============================================================
+  ;; Chains, left-associated through fresh roles, keyed as el keys them
+  ;; ============================================================
+
+  (fn decompose-chain ((arena Arena) (p (Ptr KscState)) (ch RawChain))
+    (@intent "An n-ary chain into binary R ∘ S ⊑ T axioms, left-associated")
+    (@spec ((Arena (Ptr KscState) RawChain) -> Bool))
+    (@alloc arena)
+    ;; A fresh intermediate role has no range, so [Krö10]'s ran(f) ⊆
+    ;; ran(S) holds for every step into it, and the last step carries the
+    ;; gate's condition (§5.4 K1).
+    (let ((steps (. ch steps))
+          (len (cast Int (list-len (. ch steps)))))
+      (cond
+        ((< len 2) true)
+        ((== len 2)
+          (k-emit arena p (union-new KscAxiom k-chain
+                            (role-at-n steps 0) (role-at-n steps 1) (. ch super))))
+        (else
+          (let ((mut acc (role-at-n steps 0))
+                (mut i 1))
+            (do
+              (while (< i (- len 1))
+                (let ((f (union-new RoleId fresh-role
+                           (fresh-role-id arena (. (deref p) registry)
+                             (prefix-role-text arena steps (+ i 1) (. ch super))))))
+                  (do
+                    (k-emit arena p (union-new KscAxiom k-chain acc (role-at-n steps i) f))
+                    (set! acc f)
+                    (set! i (+ i 1)))))
+              (k-emit arena p (union-new KscAxiom k-chain
+                                acc (role-at-n steps (- len 1)) (. ch super)))))))))
+
+  ;; ============================================================
+  ;; Axiom dispatch — §5.4's translation table, row by row (K0)
+  ;; ============================================================
+
+  (fn normalize-axiom ((arena Arena) (p (Ptr KscState)) (ax RawAxiom))
+    (@intent "One accepted RawAxiom into el++ normal form")
+    (@spec ((Arena (Ptr KscState) RawAxiom) -> Bool))
+    (@alloc arena)
+    (match ax
+      ((ra-sub-class-of l r) (normalize-gci arena p (deref l) (deref r)))
+
+      ((ra-disjoint-classes cs)
+        (normalize-gci arena p (union-new RawConcept rc-and cs)
+                               (union-new RawConcept rc-nothing)))
+
+      ;; domain(R) ⊑ C is ∃R.⊤ ⊑ C — NOT the product R ⊑ C × ⊤, which
+      ;; would put ⊤ into ran(R) and break the chain condition (§5.4).
+      ((ra-object-property-domain r c)
+        (normalize-gci arena p
+          (union-new RawConcept rc-some r (box arena (union-new RawConcept rc-thing)))
+          (deref c)))
+
+      ;; range(R) ⊑ D is the product R ⊑ ⊤ × D, native to the calculus.
+      ((ra-object-property-range r c)
+        (k-emit arena p (union-new KscAxiom k-range r (pos-atom arena p (deref c)))))
+
+      ((ra-sub-object-property a b)
+        (k-emit arena p (union-new KscAxiom k-role a b)))
+
+      ((ra-property-chain ch) (decompose-chain arena p ch))
+
+      ;; C(a) is subClass(a, C) (Fig. 2); a complex C gets a name, X(a)
+      ;; with X ⊑ C (Fig. 1) — emit-inclusion does exactly that.
+      ((ra-class-assertion ca)
+        (normalize-gci arena p (node-of (. ca subject)) (deref (. ca concept))))
+
+      ;; R(a, b) ↦ supEx(a, R, b, b): the Fig. 2 erratum, §5.4 K1.
+      ((ra-object-property-assertion e)
+        (k-emit arena p (union-new KscAxiom k-role-assert
+                          (node-iri (. e from)) (. e role) (node-iri (. e to)))))
+
+      ;; SameIndividual(a₁ … aₙ): {a₁} ⊑ {aᵢ} and {aᵢ} ⊑ {a₁}.
+      ((ra-same-individual ns)
+        (let ((a0 (node-term (node-at-or-top ns 0)))
+              (mut i 1)
+              (n (cast Int (list-len ns))))
+          (do
+            (while (< i n)
+              (let ((ai (node-term (node-at-or-top ns i))))
+                (do
+                  (k-emit arena p (union-new KscAxiom k-sub a0 ai))
+                  (k-emit arena p (union-new KscAxiom k-sub ai a0))
+                  (set! i (+ i 1)))))
+            true)))
+
+      ;; DifferentIndividuals(a₁ … aₙ): {aᵢ} ⊓ {aⱼ} ⊑ ⊥ for each i < j.
+      ((ra-different-individuals ns)
+        (let ((n (cast Int (list-len ns)))
+              (mut i 0))
+          (do
+            (while (< i n)
+              (let ((mut j (+ i 1)))
+                (do
+                  (while (< j n)
+                    (let ((mut pair (list-new arena RawConcept)))
+                      (do
+                        (list-push pair (node-of (node-at-or-top ns i)))
+                        (list-push pair (node-of (node-at-or-top ns j)))
+                        (normalize-gci arena p (union-new RawConcept rc-and pair)
+                                               (union-new RawConcept rc-nothing))
+                        (set! j (+ j 1)))))
+                  (set! i (+ i 1)))))
+            true)))
+
+      ;; ¬R(a, b): {a} ⊓ ∃R.{b} ⊑ ⊥.
+      ((ra-negative-assertion e)
+        (let ((mut both (list-new arena RawConcept)))
+          (do
+            (list-push both (node-of (. e from)))
+            (list-push both (union-new RawConcept rc-has-value (. e role) (. e to)))
+            (normalize-gci arena p (union-new RawConcept rc-and both)
+                                   (union-new RawConcept rc-nothing)))))
+
+      ;; ReflexiveObjectProperty(R): ⊤ ⊑ ∃S_R.Self and S_R ⊑ R, S_R fresh
+      ;; and simple (§5.4 K0). The gate admits no other characteristic.
+      ((ra-property-characteristic c r)
+        (match c
+          ('prop-reflexive
+            (let ((s (union-new RoleId fresh-role
+                       (fresh-role-id arena (. (deref p) registry)
+                         (string-concat arena "reflexive " (role-key arena r))))))
+              (do
+                (k-emit arena p (union-new KscAxiom k-self-rhs (top-name) s))
+                (k-emit arena p (union-new KscAxiom k-role s r)))))
+          (_ true)))
+
+      ;; Equivalences and transitivity were expanded by the gate; the
+      ;; rest never reach here (the gate omitted them) or add nothing.
+      (_ true)))
+
+  (fn node-at-or-top ((ns (List Node)) (i Int))
+    (@intent "Element i of an individual list, read where the caller bounds i")
+    (@spec (((List Node) Int) -> Node))
+    (@pure)
+    (match (list-get ns i)
+      ((some v) v)
+      ((none)   (union-new Node class-node (record-new IRI (value OWL_THING))))))
+
+  (fn bottom-role ()
+    (@intent "owl:bottomObjectProperty as a role")
+    (@spec (() -> RoleId))
+    (@pure)
+    (union-new RoleId named-role (record-new IRI (value OWL_BOTTOM_OBJECT_PROPERTY))))
+
+  (fn axiom-mentions-role ((ax KscAxiom) (r RoleId))
+    (@intent "Does this axiom name the role r?")
+    (@spec ((KscAxiom RoleId) -> Bool))
+    (@pure)
+    (match ax
+      ((k-sub _ _)           false)
+      ((k-and _ _ _)         false)
+      ((k-some-lhs s _ _)    (role-eq s r))
+      ((k-some-rhs _ s _ _)  (role-eq s r))
+      ((k-self-lhs s _)      (role-eq s r))
+      ((k-self-rhs _ s)      (role-eq s r))
+      ((k-role s t)          (if (role-eq s r) true (role-eq t r)))
+      ((k-chain s t u)       (if (role-eq s r) true (if (role-eq t r) true (role-eq u r))))
+      ((k-range s _)         (role-eq s r))
+      ((k-role-assert _ s _) (role-eq s r))))
+
+  (fn mentions-bottom-role ((axs (List KscAxiom)))
+    (@intent "Does any axiom name owl:bottomObjectProperty?")
+    (@spec (((List KscAxiom)) -> Bool))
+    (@pure)
+    (let ((n (bottom-role))
+          (mut found false))
+      (do
+        (for-each (ax axs) (when (axiom-mentions-role ax n) (set! found true)))
+        found)))
+
+  (fn normalize-ksc ((arena Arena) (axs (List RawAxiom)))
+    (@intent "Accepted el++ axioms into [Krö10] Definition 1's normal form")
+    (@spec ((Arena (List RawAxiom)) -> KscOutput))
+    (@alloc arena)
+    ;; Fresh ids follow first occurrence under the gate's canonical axiom
+    ;; order, so the normal form is a function of content, as for `el`.
+    (let ((p (new-ksc-state arena)))
+      (do
+        (for-each (ax axs) (normalize-axiom arena p ax))
+        ;; owl:bottomObjectProperty is the role N with `∃N.⊤ ⊑ ⊥` (§5.4
+        ;; K0). The calculus knows nothing of N otherwise, so without this
+        ;; axiom `C ⊑ ∃N.⊤` would leave C satisfiable. Emitted once, last,
+        ;; and only when N occurs, so no other normal form changes.
+        (when (mentions-bottom-role (. (deref p) axioms))
+          (k-emit arena p (union-new KscAxiom k-some-lhs
+                            (bottom-role) (top-name) (bottom-name))))
+        (record-new KscOutput
+          (axioms           (. (deref p) axioms))
+          (fresh-count      (fresh-count (. (deref p) registry)))
+          (fresh-role-count (fresh-role-count (. (deref p) registry)))))))
+
+  ;; ============================================================
+  ;; Rendering, for tests and diagnostics — Fig. 2's EDB fact names
+  ;; ============================================================
+
+  (fn render-ksc-axiom ((arena Arena) (ax KscAxiom))
+    (@intent "One normal-form axiom as its [Krö10] Fig. 2 fact")
+    (@spec ((Arena KscAxiom) -> String))
+    (@alloc arena)
+    (match ax
+      ((k-sub a b)          (fact2 arena "subClass" (term-key arena a) (term-key arena b)))
+      ((k-and a b c)        (fact3 arena "subConj" (name-key arena a) (name-key arena b) (name-key arena c)))
+      ((k-some-lhs r a c)   (fact3 arena "subEx" (role-key arena r) (name-key arena a) (name-key arena c)))
+      ((k-some-rhs a r b w) (fact4 arena "supEx" (name-key arena a) (role-key arena r)
+                              (name-key arena b) (node-key arena (union-new Node fresh-node w))))
+      ((k-self-lhs r c)     (fact2 arena "subSelf" (role-key arena r) (name-key arena c)))
+      ((k-self-rhs a r)     (fact2 arena "supSelf" (name-key arena a) (role-key arena r)))
+      ((k-role r t)         (fact2 arena "subRole" (role-key arena r) (role-key arena t)))
+      ((k-chain r s t)      (fact3 arena "subRChain" (role-key arena r) (role-key arena s) (role-key arena t)))
+      ((k-range r d)        (fact3 arena "supProd" (role-key arena r) "⊤" (name-key arena d)))
+      ((k-role-assert a r b)
+        (let ((bk (node-key arena (union-new Node individual-node b))))
+          (fact4 arena "supEx" (node-key arena (union-new Node individual-node a))
+                 (role-key arena r) bk bk)))))
+
+  (fn fact2 ((arena Arena) (name String) (x String) (y String))
+    (@intent "name(x, y)")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (string-concat arena name
+      (string-concat arena "(" (string-concat arena x
+        (string-concat arena ", " (string-concat arena y ")"))))))
+
+  (fn fact3 ((arena Arena) (name String) (x String) (y String) (z String))
+    (@intent "name(x, y, z)")
+    (@spec ((Arena String String String String) -> String))
+    (@alloc arena)
+    (fact2 arena name x (string-concat arena y (string-concat arena ", " z))))
+
+  (fn fact4 ((arena Arena) (name String) (x String) (y String) (z String) (w String))
+    (@intent "name(x, y, z, w)")
+    (@spec ((Arena String String String String String) -> String))
+    (@alloc arena)
+    (fact3 arena name x y (string-concat arena z (string-concat arena ", " w))))
+)

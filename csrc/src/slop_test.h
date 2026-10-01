@@ -21,6 +21,7 @@
 #include "slop_premise.h"
 #include "slop_report.h"
 #include "slop_select.h"
+#include "slop_kscnormal.h"
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -290,6 +291,9 @@ int64_t test_omissions_under(slop_arena* arena, slop_string ttl, types_Profile p
 uint8_t test_rungs_omit(slop_arena* arena, slop_string label, slop_string ttl, int64_t el_want, int64_t elpp_want);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
+slop_string test_ksc_form_of_ttl(slop_arena* arena, slop_string ttl);
+uint8_t test_ksc_form_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
+uint8_t test_test_ksc_normal_form_rows(slop_arena* arena);
 slop_string test_omissions_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_omits_exactly(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
 slop_string test_eq_prefix(void);
@@ -349,6 +353,7 @@ uint8_t test_test_regularity_accepts_plain_subproperty(slop_arena* arena);
 uint8_t test_test_regularity_accepts_nary_chain(slop_arena* arena);
 uint8_t test_test_irregular_rbox_is_omitted_whole(slop_arena* arena);
 slop_option_gate_GateResult test_gate_fixture(slop_arena* arena, slop_string path);
+slop_option_gate_GateResult test_gate_fixture_in(slop_arena* arena, slop_string path, types_Profile p);
 int64_t test_count_variant_chain(slop_list_owl2_RawAxiom axs);
 int64_t test_count_variant_disjoint(slop_list_owl2_RawAxiom axs);
 int64_t test_count_variant_subclass(slop_list_owl2_RawAxiom axs);
