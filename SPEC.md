@@ -1519,6 +1519,14 @@ witness contexts between assumptions where no nominal or `⊥` reaches them is t
 [Krö10] Theorem 3's construction is where its proof would start. It needs that proof before it is
 used. `el` stays the default ([§5.1](#51-profiles-are-selectable)).
 
+**Measured (slice 4's single-threaded prototype, `src/kscsat.slop`; arm64, this repo's corpus).**
+- OBI, el++ projection: all 5,241 classes in 1.6 s, a mean of 178 facts per class run.
+- GO: 0.6 ms per class on a 1-in-20 sample, about 31 s projected for its 51,988 classes.
+- EL-GALEN: 1.8 s per class on 11 sampled classes, about 11.5 h projected, 7.9 GB peak. The cost is
+  bimodal: a class needs under 400 facts, or about 3.8M (594k `inst`, 3.2M `triple`) when its
+  existential cone reaches the anatomy part. Every such class re-derives that cone, which is exactly
+  what sharing witness contexts would remove.
+
 **What is not claimed.**
 - Instance retrieval is not in the report, although Kinst decides it (Theorem 1).
 - Datatypes, keys, anonymous individuals, multi-member `ObjectOneOf` and `owl:topObjectProperty`
@@ -2775,7 +2783,7 @@ row below sits on one side of that line.
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
 | **Range-elimination preservation** — the *listed query classes* survive the rewrite, which is **not** conservative ([§6.3](#63-normalization)) | Published proof **+ differential testing** | **No** — model-theoretic |
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
-| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Per-instance rule functions carrying `sound`/`complete` `@property`s that read as the Datalog rule, lifted over stored partners by **one** join combinator whose `@loop-invariant`s state that every partner was visited and its conclusions appended. No rule is left owed; an invariant the verifier cannot settle is reported as unknown, never claimed. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)) | **Yes** — structural |
+| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | One loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `join`, whose soundness — every fact it returns is a firing instance's head for some partner in the snapshot — is a `@post` proved through a checked `@loop-invariant`. Every contract was seen to fail under a mutation of its body (109 mutants, each killed by exactly its contract). **Owed to the prover, not claimed:** the combinator's completeness, "every partner's firing head is returned". slop models a `for-each` element only as *some* member of the list, never the visited prefix, so the verifier refutes even the simplest filter's completeness with an empty result; it becomes a contract when slop models the prefix. The literal Psc reference evaluator holds it meanwhile: the engine must answer every class of every fixture as the reference does ([§5.4](#54-the-el-calculus)) | **Yes** — structural, except the combinator's completeness: **owed** (prover) |
 | **`el++` translation and sharing** — K0–K5: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction | [Krö10] Theorems 1–2 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
 | **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK; for v1, Kazakov's Horn-SHIQ calculus with chain elimination) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
@@ -3695,8 +3703,8 @@ flowchart TB
   actually closes** — 33 `owl:inverseOf` uses in its corpus are out-of-profile until then, so v0
   buys instance-bearing verdicts and range coherence, not a clean pass on its own theory.
 - *(`el++` — specified in [§5.4](#54-the-el-calculus), built in slices: decode fixes, a
-  profile-aware gate and census, the Ksc normaliser, the rules with their contracts, the engine,
-  then wiring. The approximation mode — planned, with its own plan. v2 `sriq` — separate
+  profile-aware gate and census, the Ksc normaliser, the rules with their contracts (with a
+  single-threaded prototype engine and the literal reference evaluator), the engine, then wiring. The approximation mode — planned, with its own plan. v2 `sriq` — separate
   decision, not scheduled; SROIQ is not planned, [§5](#5-fragment-roadmap).)*
 
 ---

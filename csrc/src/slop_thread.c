@@ -27,7 +27,9 @@ slop_chan_int* thread_chan(slop_arena* arena) {
         ch->tail = 0;
         ch->closed = 0;
         _retval = ch;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval != NULL)), "(!= $result nil)");
     return _retval;
 }
@@ -47,7 +49,9 @@ slop_chan_int* thread_chan_buffered(slop_arena* arena, int64_t capacity) {
         ch->tail = 0;
         ch->closed = 0;
         _retval = ch;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval != NULL)), "(!= $result nil)");
     return _retval;
 }
@@ -176,7 +180,9 @@ slop_thread_int* thread_spawn(slop_arena* arena, slop_closure_t func) {
         (*th).done = 0;
         pthread_create((&(*th).id), NULL, ((void*)((void*)slop_thread_int_entry)), ((void*)(th)));
         _retval = ((slop_thread_int*)(th));
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval != NULL)), "(!= $result nil)");
     return _retval;
 }
@@ -190,7 +196,9 @@ slop_thread_int* thread_spawn_closure(slop_arena* arena, thread_Closure closure)
         (*th).done = 0;
         pthread_create((&(*th).id), NULL, ((void*)((void*)slop_thread_int_entry)), ((void*)(th)));
         _retval = ((slop_thread_int*)(th));
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval != NULL)), "(!= $result nil)");
     return _retval;
 }
@@ -206,7 +214,9 @@ thread_ThreadWithChan* thread_spawn_with_chan(slop_arena* arena, slop_closure_t 
         (*th).done = 0;
         pthread_create((&(*th).id), NULL, ((void*)(thread_thread_with_chan_entry)), ((void*)(th)));
         _retval = th;
+        goto _slop_post;
     }
+    _slop_post: ;
     SLOP_POST(((_retval != NULL)), "(!= $result nil)");
     return _retval;
 }

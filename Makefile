@@ -187,6 +187,7 @@ verify:
 # skipped AND counted as a pass, so a green line meant nothing.
 example:
 	slop test src/rules/el.slop
+	slop test src/rules/ksc.slop
 	slop test src/canon.slop
 	slop test src/normalize.slop
 	slop test src/decode.slop

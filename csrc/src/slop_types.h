@@ -14,6 +14,8 @@ typedef struct types_NormAxiom types_NormAxiom;
 typedef struct types_KName types_KName;
 typedef struct types_KTerm types_KTerm;
 typedef struct types_KscAxiom types_KscAxiom;
+typedef struct types_KElem types_KElem;
+typedef struct types_KFact types_KFact;
 typedef struct types_Derived types_Derived;
 typedef struct types_Addressed types_Addressed;
 typedef struct types_LogicalEdge types_LogicalEdge;
@@ -275,6 +277,58 @@ typedef struct types_KscAxiom types_KscAxiom;
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+typedef enum {
+    types_KElem_e_ind,
+    types_KElem_e_aux,
+    types_KElem_e_class
+} types_KElem_tag;
+
+struct types_KElem {
+    types_KElem_tag tag;
+    union {
+        rdf_IRI e_ind;
+        int64_t e_aux;
+        types_KName e_class;
+    } data;
+};
+typedef struct types_KElem types_KElem;
+
+#ifndef SLOP_OPTION_TYPES_KELEM_DEFINED
+#define SLOP_OPTION_TYPES_KELEM_DEFINED
+SLOP_OPTION_DEFINE(types_KElem, slop_option_types_KElem)
+#endif
+
+typedef enum {
+    types_KFact_f_inst,
+    types_KFact_f_triple,
+    types_KFact_f_self
+} types_KFact_tag;
+
+struct types_KFact {
+    types_KFact_tag tag;
+    union {
+        struct {
+            types_KElem f0;
+            types_KTerm f1;
+        } f_inst;
+        struct {
+            types_KElem f0;
+            types_RoleId f1;
+            types_KElem f2;
+        } f_triple;
+        struct {
+            types_KElem f0;
+            types_RoleId f1;
+        } f_self;
+    } data;
+};
+typedef struct types_KFact types_KFact;
+
+#ifndef SLOP_OPTION_TYPES_KFACT_DEFINED
+#define SLOP_OPTION_TYPES_KFACT_DEFINED
+SLOP_OPTION_DEFINE(types_KFact, slop_option_types_KFact)
 #endif
 
 typedef enum {
@@ -747,6 +801,17 @@ types_Node types_node_top(void);
 types_Node types_node_bottom(void);
 uint8_t types_node_eq(types_Node a, types_Node b);
 uint8_t types_role_eq(types_RoleId a, types_RoleId b);
+uint8_t types_kname_eq(types_KName a, types_KName b);
+uint8_t types_kterm_eq(types_KTerm a, types_KTerm b);
+uint8_t types_kelem_eq(types_KElem a, types_KElem b);
+uint8_t types_kfact_eq(types_KFact a, types_KFact b);
+types_KTerm types_name_term(types_KName n);
+types_KTerm types_nominal_term(rdf_IRI a);
+types_KElem types_ind_elem(rdf_IRI a);
+types_KElem types_aux_elem(int64_t w);
+types_KElem types_class_elem(types_KName q);
+types_KTerm types_thing_term(void);
+types_KTerm types_nothing_term(void);
 types_Names types_empty_names(slop_arena* arena);
 types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n);
 types_RoleId types_intern_role(slop_arena* arena, types_Names names, types_RoleId r);
@@ -807,6 +872,16 @@ SLOP_OPTION_DEFINE(types_KTerm, slop_option_types_KTerm)
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KELEM_DEFINED
+#define SLOP_OPTION_TYPES_KELEM_DEFINED
+SLOP_OPTION_DEFINE(types_KElem, slop_option_types_KElem)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KFACT_DEFINED
+#define SLOP_OPTION_TYPES_KFACT_DEFINED
+SLOP_OPTION_DEFINE(types_KFact, slop_option_types_KFact)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DERIVED_DEFINED

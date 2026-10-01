@@ -22,6 +22,7 @@
     Concept
     NormAxiom
     KName KTerm KscAxiom
+    KElem KFact
     ;; saturation
     Derived
     Addressed
@@ -53,6 +54,9 @@
     node-bottom
     node-eq
     role-eq
+    kname-eq kterm-eq kelem-eq kfact-eq
+    name-term nominal-term ind-elem aux-elem class-elem
+    thing-term nothing-term
     derived-eq
     addressed-eq
     emit-edge
@@ -222,6 +226,29 @@
     (k-chain        RoleId RoleId RoleId)          ; subRChain  R ∘ S ⊑ T
     (k-range        RoleId KName)                  ; supProd    R ⊑ ⊤ × D
     (k-role-assert  IRI RoleId IRI)))              ; R(a, b) ↦ supEx(a, R, b, b) — §5.4's Fig. 2 erratum
+
+  ;; ============================================================
+  ;; el++ facts — Kinst's IDB, [Krö10] Fig. 3 (SPEC §5.4)
+  ;;
+  ;; An ELEMENT is a constant in the first position of a fact: an
+  ;; individual a (nom(a)), the witness constant aux of a supEx axiom, or
+  ;; the test individual q of a run (Theorem 2's inst(q, q, q)). A class
+  ;; name occurs there ONLY as its run's q (§5.4 K2 point 2), and the tag
+  ;; keeps it apart from an individual of the same IRI.
+  ;;
+  ;; The class position of inst is a KTerm: a class name, or a nominal {a}
+  ;; - inst(x, {a}) is "x = a", which rules (27)-(29) read.
+  ;; ============================================================
+
+  (type KElem (union
+    (e-ind   IRI)              ; an individual a
+    (e-aux   (Int 0 ..))       ; the witness of the supEx axiom that minted this id
+    (e-class KName)))          ; the test individual q of q's run
+
+  (type KFact (union
+    (f-inst   KElem KTerm)          ; inst(x, y)
+    (f-triple KElem RoleId KElem)   ; triple(x, v, x′)
+    (f-self   KElem RoleId)))       ; self(x, v)
 
   ;; ============================================================
   ;; Saturation state — the DL analogue of GROWL's Delta
@@ -584,6 +611,129 @@
         (match b
           ((fresh-role bi) (== ai bi))
           ((named-role _)  false)))))
+
+  ;; ============================================================
+  ;; el++ equality and the term constructors
+  ;;
+  ;; The rule contracts (rules/ksc.slop) name a conclusion's terms through
+  ;; these constructors rather than through `union-new`: the verifier
+  ;; models a multi-payload variant's fields but not a nested single-
+  ;; payload one, so `(== y (name-term z))` - the same call the body
+  ;; makes - is what it can compare. Each is the one-line injection its
+  ;; name says; test.slop's rule-instance table runs them.
+  ;; ============================================================
+
+  (fn kname-eq ((a KName) (b KName))
+    (@intent "Class-name equality — a fresh name never equals an input one")
+    (@spec ((KName KName) -> Bool))
+    (@pure)
+    (match a
+      ((k-class ai)
+        (match b
+          ((k-class bi) (string-eq (. ai value) (. bi value)))
+          ((k-fresh _)  false)))
+      ((k-fresh ai)
+        (match b
+          ((k-fresh bi) (== ai bi))
+          ((k-class _)  false)))))
+
+  (fn kterm-eq ((a KTerm) (b KTerm))
+    (@intent "Term equality — a class name never equals a nominal, punned or not")
+    (@spec ((KTerm KTerm) -> Bool))
+    (@pure)
+    (match a
+      ((k-name ai)
+        (match b
+          ((k-name bi)    (kname-eq ai bi))
+          ((k-nominal _)  false)))
+      ((k-nominal ai)
+        (match b
+          ((k-nominal bi) (string-eq (. ai value) (. bi value)))
+          ((k-name _)     false)))))
+
+  (fn kelem-eq ((a KElem) (b KElem))
+    (@intent "Element equality — tag-sensitive, so q never equals an individual of its IRI")
+    (@spec ((KElem KElem) -> Bool))
+    (@pure)
+    (match a
+      ((e-ind ai)
+        (match b
+          ((e-ind bi)   (string-eq (. ai value) (. bi value)))
+          ((e-aux _)    false)
+          ((e-class _)  false)))
+      ((e-aux ai)
+        (match b
+          ((e-aux bi)   (== ai bi))
+          ((e-ind _)    false)
+          ((e-class _)  false)))
+      ((e-class ai)
+        (match b
+          ((e-class bi) (kname-eq ai bi))
+          ((e-ind _)    false)
+          ((e-aux _)    false)))))
+
+  (fn kfact-eq ((a KFact) (b KFact))
+    (@intent "Fact equality, every position compared")
+    (@spec ((KFact KFact) -> Bool))
+    (@pure)
+    (match a
+      ((f-inst x y)
+        (match b
+          ((f-inst x2 y2)      (if (kelem-eq x x2) (kterm-eq y y2) false))
+          ((f-triple _ _ _)    false)
+          ((f-self _ _)        false)))
+      ((f-triple x v z)
+        (match b
+          ((f-triple x2 v2 z2) (if (kelem-eq x x2) (if (role-eq v v2) (kelem-eq z z2) false) false))
+          ((f-inst _ _)        false)
+          ((f-self _ _)        false)))
+      ((f-self x v)
+        (match b
+          ((f-self x2 v2)      (if (kelem-eq x x2) (role-eq v v2) false))
+          ((f-inst _ _)        false)
+          ((f-triple _ _ _)    false)))))
+
+  (fn name-term ((n KName))
+    (@intent "The class name n in a class position")
+    (@spec ((KName) -> KTerm))
+    (@pure)
+    (union-new KTerm k-name n))
+
+  (fn nominal-term ((a IRI))
+    (@intent "The nominal {a} in a class position")
+    (@spec ((IRI) -> KTerm))
+    (@pure)
+    (union-new KTerm k-nominal a))
+
+  (fn ind-elem ((a IRI))
+    (@intent "The individual a as an element")
+    (@spec ((IRI) -> KElem))
+    (@pure)
+    (union-new KElem e-ind a))
+
+  (fn aux-elem ((w (Int 0 ..)))
+    (@intent "A supEx axiom's witness constant as an element")
+    (@spec (((Int 0 ..)) -> KElem))
+    (@pure)
+    (union-new KElem e-aux w))
+
+  (fn class-elem ((q KName))
+    (@intent "q's test individual: the element of Theorem 2's inst(q, q, q)")
+    (@spec ((KName) -> KElem))
+    (@pure)
+    (union-new KElem e-class q))
+
+  (fn thing-term ()
+    (@intent "owl:Thing in a class position: top(z) holds of exactly this z")
+    (@spec (() -> KTerm))
+    (@pure)
+    (union-new KTerm k-name (union-new KName k-class (record-new IRI (value OWL_THING)))))
+
+  (fn nothing-term ()
+    (@intent "owl:Nothing in a class position: bot(z) holds of exactly this z")
+    (@spec (() -> KTerm))
+    (@pure)
+    (union-new KTerm k-name (union-new KName k-class (record-new IRI (value OWL_NOTHING)))))
 
 ;; ============================================================
   ;; Saturation-local names  —  M1 slice 6b C2
