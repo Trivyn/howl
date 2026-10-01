@@ -53,13 +53,9 @@
   (import report (report-lines))
   (import select (profile-name parse-profile))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
-  (import types (KscAxiom KName KTerm KElem KFact kname-eq name-term nominal-term ind-elem aux-elem class-elem
-                 thing-term))
+  (import types (KscAxiom KName kname-eq))
   (import kscsat (KscResult ClassAnswer ksc-classify answer-holds input-classes))
   (import ksc (reference-closure reference-answer))
-  (import ksc (Concl concl-eq term-elem ksc-1 ksc-q ksc-2 ksc-3 ksc-5 ksc-6 ksc-7 ksc-8
-               ksc-9 ksc-9-assert ksc-10 ksc-10-assert ksc-11 ksc-12 ksc-13 ksc-14
-               ksc-15 ksc-16 ksc-17 ksc-18 ksc-23 ksc-24 ksc-25 ksc-26 ksc-27 ksc-28 ksc-29))
 
   ;; ============================================================
   ;; Fixture builders
@@ -2112,261 +2108,6 @@
           false))))
 
   ;; ============================================================
-  ;; el++ rules (rules/ksc.slop): one firing and one non-firing instance
-  ;; per rule, by name. Each rule's contracts are proved; these are the
-  ;; concrete runs beside them. They live here rather than as @examples
-  ;; because slop's example harness compares a record result with C `==`
-  ;; (its `:eq` applies only to list results), which does not compile.
-  ;; ============================================================
-
-  (fn kx-a () (@intent "Individual a") (@spec (() -> IRI)) (@pure)
-    (record-new IRI (value "http://example.org/a")))
-  (fn kx-b () (@intent "Individual b") (@spec (() -> IRI)) (@pure)
-    (record-new IRI (value "http://example.org/b")))
-  (fn kx-A () (@intent "Class name A") (@spec (() -> KName)) (@pure)
-    (union-new KName k-class (record-new IRI (value "http://example.org/A"))))
-  (fn kx-B () (@intent "Class name B") (@spec (() -> KName)) (@pure)
-    (union-new KName k-class (record-new IRI (value "http://example.org/B"))))
-  (fn kx-C () (@intent "Class name C") (@spec (() -> KName)) (@pure)
-    (union-new KName k-class (record-new IRI (value "http://example.org/C"))))
-  (fn kx-r () (@intent "Role r") (@spec (() -> RoleId)) (@pure)
-    (union-new RoleId named-role (record-new IRI (value "http://example.org/r"))))
-  (fn kx-s () (@intent "Role s") (@spec (() -> RoleId)) (@pure)
-    (union-new RoleId named-role (record-new IRI (value "http://example.org/s"))))
-  (fn kx-t () (@intent "Role t") (@spec (() -> RoleId)) (@pure)
-    (union-new RoleId named-role (record-new IRI (value "http://example.org/t"))))
-  (fn kx-x () (@intent "q's test individual for A") (@spec (() -> KElem)) (@pure)
-    (class-elem (kx-A)))
-  (fn kx-w () (@intent "Witness 0") (@spec (() -> KElem)) (@pure)
-    (aux-elem 0))
-  (fn kx-ia () (@intent "The element a") (@spec (() -> KElem)) (@pure)
-    (ind-elem (kx-a)))
-  (fn kx-tA () (@intent "A in a class position") (@spec (() -> KTerm)) (@pure)
-    (name-term (kx-A)))
-  (fn kx-tB () (@intent "B in a class position") (@spec (() -> KTerm)) (@pure)
-    (name-term (kx-B)))
-  (fn kx-tC () (@intent "C in a class position") (@spec (() -> KTerm)) (@pure)
-    (name-term (kx-C)))
-  (fn kx-na () (@intent "The nominal {a}") (@spec (() -> KTerm)) (@pure)
-    (nominal-term (kx-a)))
-
-  (fn concl-is ((arena Arena) (label String) (got Concl) (fires Bool) (fact KFact))
-    (@intent "Is this rule instance's conclusion exactly (fires, fact)? Prints the label when not")
-    (@spec ((Arena String Concl Bool KFact) -> Bool))
-    (@alloc arena)
-    (if (concl-eq got (record-new Concl (fires fires) (fact fact)))
-      true
-      (do (println (string-concat arena "  [ksc rule] " label)) false)))
-
-  (fn test-ksc-rule-instances ((arena Arena))
-    (@intent "Each [Krö10] Fig. 3 rule fires on matching premises and not on a near miss")
-    (@spec ((Arena) -> Bool))
-    (@alloc arena)
-    (let ((mut ok true))
-      (do
-        (when (not (concl-is arena "ksc-1 fires"
-                     (ksc-1 (kx-a))
-                     true (union-new KFact f-inst (kx-ia) (kx-na))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-q fires"
-                     (ksc-q (kx-A))
-                     true (union-new KFact f-inst (kx-x) (kx-tA))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-2 fires"
-                     (ksc-2 (kx-ia) (kx-r) (kx-ia))
-                     true (union-new KFact f-self (kx-ia) (kx-r))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-2 does not fire"
-                     (ksc-2 (kx-w) (kx-r) (kx-w))
-                     false (union-new KFact f-self (kx-w) (kx-r))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-3 fires"
-                     (ksc-3 (kx-w) (kx-tB))
-                     true (union-new KFact f-inst (kx-w) (thing-term))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-5 fires"
-                     (ksc-5 (kx-tA) (kx-tB) (kx-x) (kx-tA))
-                     true (union-new KFact f-inst (kx-x) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-5 does not fire"
-                     (ksc-5 (kx-tA) (kx-tB) (kx-x) (kx-tC))
-                     false (union-new KFact f-inst (kx-x) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-6 fires"
-                     (ksc-6 (kx-A) (kx-B) (kx-C) (kx-w) (kx-tA) (kx-w) (kx-tB))
-                     true (union-new KFact f-inst (kx-w) (kx-tC))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-6 does not fire: The two conjuncts at different elements: no"
-                     (ksc-6 (kx-A) (kx-B) (kx-C) (kx-w) (kx-tA) (kx-x) (kx-tB))
-                     false (union-new KFact f-inst (kx-w) (kx-tC))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-7 fires"
-                     (ksc-7 (kx-r) (kx-B) (kx-C) (kx-x) (kx-r) (kx-w) (kx-w) (kx-tB))
-                     true (union-new KFact f-inst (kx-x) (kx-tC))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-7 does not fire: The filler is held by an element other than the successor: no"
-                     (ksc-7 (kx-r) (kx-B) (kx-C) (kx-x) (kx-r) (kx-w) (kx-ia) (kx-tB))
-                     false (union-new KFact f-inst (kx-x) (kx-tC))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-8 fires"
-                     (ksc-8 (kx-r) (kx-B) (kx-C) (kx-w) (kx-r) (kx-w) (kx-tB))
-                     true (union-new KFact f-inst (kx-w) (kx-tC))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-8 does not fire"
-                     (ksc-8 (kx-r) (kx-B) (kx-C) (kx-w) (kx-s) (kx-w) (kx-tB))
-                     false (union-new KFact f-inst (kx-w) (kx-tC))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-9 fires"
-                     (ksc-9 (kx-A) (kx-r) (kx-B) 0 (kx-x) (kx-tA))
-                     true (union-new KFact f-triple (kx-x) (kx-r) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-9 does not fire"
-                     (ksc-9 (kx-A) (kx-r) (kx-B) 0 (kx-x) (kx-tB))
-                     false (union-new KFact f-triple (kx-x) (kx-r) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-9-assert fires"
-                     (ksc-9-assert (kx-a) (kx-r) (kx-b) (kx-ia) (kx-na))
-                     true (union-new KFact f-triple (kx-ia) (kx-r) (ind-elem (kx-b)))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-9-assert does not fire"
-                     (ksc-9-assert (kx-a) (kx-r) (kx-b) (kx-ia) (kx-tA))
-                     false (union-new KFact f-triple (kx-ia) (kx-r) (ind-elem (kx-b)))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-10 fires"
-                     (ksc-10 (kx-A) (kx-r) (kx-B) 0 (kx-x) (kx-tA))
-                     true (union-new KFact f-inst (kx-w) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-10 does not fire"
-                     (ksc-10 (kx-A) (kx-r) (kx-B) 0 (kx-x) (kx-tC))
-                     false (union-new KFact f-inst (kx-w) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-10-assert fires"
-                     (ksc-10-assert (kx-a) (kx-r) (kx-b) (kx-ia) (kx-na))
-                     true (union-new KFact f-inst (ind-elem (kx-b)) (nominal-term (kx-b)))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-11 fires"
-                     (ksc-11 (kx-r) (kx-B) (kx-w) (kx-r))
-                     true (union-new KFact f-inst (kx-w) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-11 does not fire"
-                     (ksc-11 (kx-r) (kx-B) (kx-w) (kx-s))
-                     false (union-new KFact f-inst (kx-w) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-12 fires"
-                     (ksc-12 (kx-A) (kx-r) (kx-x) (kx-tA))
-                     true (union-new KFact f-self (kx-x) (kx-r))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-12 does not fire"
-                     (ksc-12 (kx-A) (kx-r) (kx-x) (kx-tB))
-                     false (union-new KFact f-self (kx-x) (kx-r))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-13 fires"
-                     (ksc-13 (kx-r) (kx-s) (kx-x) (kx-r) (kx-w))
-                     true (union-new KFact f-triple (kx-x) (kx-s) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-13 does not fire"
-                     (ksc-13 (kx-r) (kx-s) (kx-x) (kx-t) (kx-w))
-                     false (union-new KFact f-triple (kx-x) (kx-s) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-14 fires"
-                     (ksc-14 (kx-r) (kx-s) (kx-x) (kx-r))
-                     true (union-new KFact f-self (kx-x) (kx-s))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-14 does not fire"
-                     (ksc-14 (kx-r) (kx-s) (kx-x) (kx-t))
-                     false (union-new KFact f-self (kx-x) (kx-s))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-15 fires"
-                     (ksc-15 (kx-r) (kx-s) (kx-t) (kx-x) (kx-r) (kx-w) (kx-w) (kx-s) (kx-ia))
-                     true (union-new KFact f-triple (kx-x) (kx-t) (kx-ia))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-15 does not fire: The legs do not meet: no"
-                     (ksc-15 (kx-r) (kx-s) (kx-t) (kx-x) (kx-r) (kx-w) (kx-x) (kx-s) (kx-ia))
-                     false (union-new KFact f-triple (kx-x) (kx-t) (kx-ia))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-16 fires"
-                     (ksc-16 (kx-r) (kx-s) (kx-t) (kx-x) (kx-r) (kx-x) (kx-s) (kx-w))
-                     true (union-new KFact f-triple (kx-x) (kx-t) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-16 does not fire"
-                     (ksc-16 (kx-r) (kx-s) (kx-t) (kx-x) (kx-r) (kx-ia) (kx-s) (kx-w))
-                     false (union-new KFact f-triple (kx-x) (kx-t) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-17 fires"
-                     (ksc-17 (kx-r) (kx-s) (kx-t) (kx-x) (kx-r) (kx-w) (kx-w) (kx-s))
-                     true (union-new KFact f-triple (kx-x) (kx-t) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-17 does not fire"
-                     (ksc-17 (kx-r) (kx-s) (kx-t) (kx-x) (kx-r) (kx-w) (kx-w) (kx-r))
-                     false (union-new KFact f-triple (kx-x) (kx-t) (kx-w))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-18 fires"
-                     (ksc-18 (kx-r) (kx-s) (kx-t) (kx-ia) (kx-r) (kx-ia) (kx-s))
-                     true (union-new KFact f-triple (kx-ia) (kx-t) (kx-ia))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-18 does not fire"
-                     (ksc-18 (kx-r) (kx-s) (kx-t) (kx-ia) (kx-r) (kx-w) (kx-s))
-                     false (union-new KFact f-triple (kx-ia) (kx-t) (kx-ia))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-23 fires"
-                     (ksc-23 (kx-r) (kx-B) (kx-x) (kx-r) (kx-w))
-                     true (union-new KFact f-inst (kx-x) (thing-term))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-23 does not fire"
-                     (ksc-23 (kx-r) (kx-B) (kx-x) (kx-s) (kx-w))
-                     false (union-new KFact f-inst (kx-x) (thing-term))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-24 fires"
-                     (ksc-24 (kx-r) (kx-B) (kx-x) (kx-r))
-                     true (union-new KFact f-inst (kx-x) (thing-term))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-24 does not fire"
-                     (ksc-24 (kx-r) (kx-B) (kx-x) (kx-s))
-                     false (union-new KFact f-inst (kx-x) (thing-term))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-25 fires"
-                     (ksc-25 (kx-r) (kx-B) (kx-x) (kx-r) (kx-w))
-                     true (union-new KFact f-inst (kx-w) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-25 does not fire"
-                     (ksc-25 (kx-r) (kx-B) (kx-x) (kx-s) (kx-w))
-                     false (union-new KFact f-inst (kx-w) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-26 fires"
-                     (ksc-26 (kx-r) (kx-B) (kx-x) (kx-r))
-                     true (union-new KFact f-inst (kx-x) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-26 does not fire"
-                     (ksc-26 (kx-r) (kx-B) (kx-x) (kx-s))
-                     false (union-new KFact f-inst (kx-x) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-27 fires"
-                     (ksc-27 (kx-x) (kx-na) (kx-x) (kx-tB))
-                     true (union-new KFact f-inst (kx-ia) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-27 does not fire: y is a class name, not a nominal: no"
-                     (ksc-27 (kx-x) (kx-tA) (kx-x) (kx-tB))
-                     false (union-new KFact f-inst (term-elem (kx-tA)) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-28 fires"
-                     (ksc-28 (kx-x) (kx-na) (kx-ia) (kx-tB))
-                     true (union-new KFact f-inst (kx-x) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-28 does not fire"
-                     (ksc-28 (kx-x) (kx-na) (kx-w) (kx-tB))
-                     false (union-new KFact f-inst (kx-x) (kx-tB))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-29 fires"
-                     (ksc-29 (kx-w) (kx-na) (kx-x) (kx-r) (kx-w))
-                     true (union-new KFact f-triple (kx-x) (kx-r) (kx-ia))))
-          (set! ok false))
-        (when (not (concl-is arena "ksc-29 does not fire"
-                     (ksc-29 (kx-w) (kx-na) (kx-x) (kx-r) (kx-ia))
-                     false (union-new KFact f-triple (kx-x) (kx-r) (kx-ia))))
-          (set! ok false))
-        ok)))
-
-  ;; ============================================================
   ;; el++ engine (kscsat.slop) against the literal reference evaluator
   ;;
   ;; For every class of a fixture, the engine's answer - phase G, then the
@@ -2476,10 +2217,7 @@
     (@spec ((Int) -> String))
     (@pure)
     ;; Appended to rung-prefix: :r :s :t are roles, :C :D classes, :a :b
-    ;; individuals. A `match` on the index, not a `(list String ...)`
-    ;; literal: slop emits a list literal as a C compound literal in the
-    ;; function's own stack frame, so returning one hands the caller a
-    ;; dangling array (an -O2 segfault here, silent under ASan).
+    ;; individuals.
     (match i
       ;; 0. The litmus, nominal-free.
       (0 ":Person a owl:Class . :Parent a owl:Class . :Mother a owl:Class .\n:Parent owl:equivalentClass [ owl:intersectionOf ( :Person [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Person ] ) ] .\n:Mother rdfs:subClassOf :Person , [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Person ] .\n")
@@ -4731,10 +4469,6 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-normal-form-rows arena)))
             (print-test-result "kscnormal: each translation row gives exactly its Definition 1 facts" r)
-            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
-
-          (let ((r (test-ksc-rule-instances arena)))
-            (print-test-result "ksc: each Fig. 3 rule fires on its premises and not on a near miss" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-ksc-engine-matches-reference arena)))

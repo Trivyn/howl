@@ -615,12 +615,10 @@
   ;; ============================================================
   ;; el++ equality and the term constructors
   ;;
-  ;; The rule contracts (rules/ksc.slop) name a conclusion's terms through
-  ;; these constructors rather than through `union-new`: the verifier
-  ;; models a multi-payload variant's fields but not a nested single-
-  ;; payload one, so `(== y (name-term z))` - the same call the body
-  ;; makes - is what it can compare. Each is the one-line injection its
-  ;; name says; test.slop's rule-instance table runs them.
+  ;; The rule contracts (rules/ksc.slop) name a conclusion's nested terms
+  ;; through these constructors, the same calls the rule bodies make, so a
+  ;; rule's head is written the same way in its body and its contract.
+  ;; Each is the one-line injection its name says.
   ;; ============================================================
 
   (fn kname-eq ((a KName) (b KName))

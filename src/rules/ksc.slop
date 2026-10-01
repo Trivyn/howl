@@ -28,16 +28,14 @@
 ;; completeness is stated separately and both are proved. Every one is
 ;; seen to fail under a mutation of its body (the PR records them).
 ;;
-;; WHY A FLAG AND A FIXED HEAD, NOT AN `Option`. The verifier models the
-;; fields of a record and of a multi-payload variant, so `fires` and the
-;; head's positions are visible to it. It does not follow the payload of a
-;; nested single-payload constructor, nor a value chosen by a `match` in
-;; the body: an `(Option KFact)` result, or `(union-new KTerm k-name z)`
-;; written inside the head, leaves the head unprovable though true. So the
-;; head is built unconditionally, its nested terms through the
-;; constructors in types.slop (`name-term`, `ind-elem`, ...) which the
-;; contracts name too, and `fires` carries the condition. The flag is
-;; computed by nested `if`s: `and`/`or` in a body make its value opaque.
+;; WHY A FLAG AND A FIXED HEAD. The head is a function of the premises
+;; alone, so it is built unconditionally and `fires` carries the body's
+;; condition: the three contracts then read as the three parts of the
+;; rule (body, body, head) instead of as cases of a result. Nested terms
+;; are built through the constructors in types.slop (`name-term`,
+;; `ind-elem`, ...), which the contracts call too, so a head is written the
+;; same way in both. The flag is computed by nested `if`s, the body's
+;; conjunction spelled out.
 ;;
 ;; THE RULES NOT HERE. (4) is K3's flag, `ksc-4`, not a rule that
 ;; materialises inst(x, y) for every class. (19)-(22) need subRConj or
@@ -124,6 +122,43 @@
     (if (== (. a fires) (. b fires)) (kfact-eq (. a fact) (. b fact)) false))
 
   ;; ============================================================
+  ;; Fixtures for the @examples: each rule fires on matching premises and
+  ;; not on a near miss. The proved contracts are the guarantee; these are
+  ;; concrete runs beside them.
+  ;; ============================================================
+
+  (fn ex-a () (@intent "Individual a") (@spec (() -> IRI)) (@pure)
+    (record-new IRI (value "http://example.org/a")))
+  (fn ex-b () (@intent "Individual b") (@spec (() -> IRI)) (@pure)
+    (record-new IRI (value "http://example.org/b")))
+  (fn ex-A () (@intent "Class name A") (@spec (() -> KName)) (@pure)
+    (union-new KName k-class (record-new IRI (value "http://example.org/A"))))
+  (fn ex-B () (@intent "Class name B") (@spec (() -> KName)) (@pure)
+    (union-new KName k-class (record-new IRI (value "http://example.org/B"))))
+  (fn ex-C () (@intent "Class name C") (@spec (() -> KName)) (@pure)
+    (union-new KName k-class (record-new IRI (value "http://example.org/C"))))
+  (fn ex-r () (@intent "Role r") (@spec (() -> RoleId)) (@pure)
+    (union-new RoleId named-role (record-new IRI (value "http://example.org/r"))))
+  (fn ex-s () (@intent "Role s") (@spec (() -> RoleId)) (@pure)
+    (union-new RoleId named-role (record-new IRI (value "http://example.org/s"))))
+  (fn ex-t () (@intent "Role t") (@spec (() -> RoleId)) (@pure)
+    (union-new RoleId named-role (record-new IRI (value "http://example.org/t"))))
+  (fn ex-x () (@intent "q's test individual for A") (@spec (() -> KElem)) (@pure)
+    (class-elem (ex-A)))
+  (fn ex-w () (@intent "Witness 0") (@spec (() -> KElem)) (@pure)
+    (aux-elem 0))
+  (fn ex-ia () (@intent "The element a") (@spec (() -> KElem)) (@pure)
+    (ind-elem (ex-a)))
+  (fn ex-tA () (@intent "A in a class position") (@spec (() -> KTerm)) (@pure)
+    (name-term (ex-A)))
+  (fn ex-tB () (@intent "B in a class position") (@spec (() -> KTerm)) (@pure)
+    (name-term (ex-B)))
+  (fn ex-tC () (@intent "C in a class position") (@spec (() -> KTerm)) (@pure)
+    (name-term (ex-C)))
+  (fn ex-na () (@intent "The nominal {a}") (@spec (() -> KTerm)) (@pure)
+    (nominal-term (ex-a)))
+
+  ;; ============================================================
   ;; (1)  nom(x) → inst(x, x)
   ;; (*)  cls(q) → inst(q, q)          Theorem 2's seed of q's run
   ;; ============================================================
@@ -140,6 +175,8 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (ind-elem a)) (== cy (nominal-term a))))
         (_ false)))
+    (@example :eq concl-eq (ex-a)
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-ia) (ex-na)))))
     (record-new Concl (fires true) (fact (union-new KFact f-inst (ind-elem a) (nominal-term a)))))
 
   (fn ksc-q ((q KName))
@@ -151,6 +188,8 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (class-elem q)) (== cy (name-term q))))
         (_ false)))
+    (@example :eq concl-eq (ex-A)
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (ex-tA)))))
     (record-new Concl (fires true) (fact (union-new KFact f-inst (class-elem q) (name-term q)))))
 
   ;; ============================================================
@@ -168,6 +207,10 @@
       (match (. $result fact)
         ((f-self cx cv) (and (== cx x) (== cv v)))
         (_ false)))
+    (@example :eq concl-eq ((ex-ia) (ex-r) (ex-ia))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-self (ex-ia) (ex-r)))))
+    (@example :eq concl-eq ((ex-w) (ex-r) (ex-w))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-self (ex-w) (ex-r)))))
     (let ((fire (if (is-individual x) (kelem-eq x x1) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-self x v)))))
 
@@ -187,6 +230,8 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))
         (_ false)))
+    (@example :eq concl-eq ((ex-w) (ex-tB))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-w) (thing-term)))))
     (record-new Concl (fires true) (fact (union-new KFact f-inst x (thing-term)))))
 
   ;; ============================================================
@@ -221,6 +266,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy sz)))
         (_ false)))
+    (@example :eq concl-eq ((ex-tA) (ex-tB) (ex-x) (ex-tA))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (ex-tB)))))
+    (@example :eq concl-eq ((ex-tA) (ex-tB) (ex-x) (ex-tC))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-x) (ex-tB)))))
     (record-new Concl (fires (kterm-eq sy y)) (fact (union-new KFact f-inst x sz))))
 
   ;; ============================================================
@@ -241,6 +290,11 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
         (_ false)))
+    (@example :eq concl-eq ((ex-A) (ex-B) (ex-C) (ex-w) (ex-tA) (ex-w) (ex-tB))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-w) (ex-tC)))))
+    ;; The two conjuncts at different elements: no.
+    (@example :eq concl-eq ((ex-A) (ex-B) (ex-C) (ex-w) (ex-tA) (ex-x) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-w) (ex-tC)))))
     (let ((fire (if (is-name y1 a) (if (kelem-eq x x2) (is-name y2 b) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-inst x (name-term z))))))
 
@@ -262,6 +316,11 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-C) (ex-x) (ex-r) (ex-w) (ex-w) (ex-tB))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (ex-tC)))))
+    ;; The filler is held by an element other than the successor: no.
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-C) (ex-x) (ex-r) (ex-w) (ex-ia) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-x) (ex-tC)))))
     (let ((fire (if (role-eq v v1) (if (kelem-eq x1 x2) (is-name y a) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-inst x (name-term z))))))
 
@@ -283,6 +342,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-C) (ex-w) (ex-r) (ex-w) (ex-tB))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-w) (ex-tC)))))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-C) (ex-w) (ex-s) (ex-w) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-w) (ex-tC)))))
     (let ((fire (if (role-eq v v1) (if (kelem-eq x x2) (is-name y a) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-inst x (name-term z))))))
 
@@ -305,6 +368,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv v) (== cz (aux-elem w))))
         (_ false)))
+    (@example :eq concl-eq ((ex-A) (ex-r) (ex-B) 0 (ex-x) (ex-tA))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-x) (ex-r) (ex-w)))))
+    (@example :eq concl-eq ((ex-A) (ex-r) (ex-B) 0 (ex-x) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-x) (ex-r) (ex-w)))))
     (record-new Concl (fires (is-name y a)) (fact (union-new KFact f-triple x v (aux-elem w)))))
 
   (fn ksc-9-assert ((a IRI) (v RoleId) (b IRI) (x KElem) (y KTerm))
@@ -317,6 +384,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv v) (== cz (ind-elem b))))
         (_ false)))
+    (@example :eq concl-eq ((ex-a) (ex-r) (ex-b) (ex-ia) (ex-na))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-ia) (ex-r) (ind-elem (ex-b))))))
+    (@example :eq concl-eq ((ex-a) (ex-r) (ex-b) (ex-ia) (ex-tA))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-ia) (ex-r) (ind-elem (ex-b))))))
     (record-new Concl (fires (kterm-eq y (nominal-term a)))
                       (fact (union-new KFact f-triple x v (ind-elem b)))))
 
@@ -330,6 +401,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (aux-elem w)) (== cy (name-term b))))
         (_ false)))
+    (@example :eq concl-eq ((ex-A) (ex-r) (ex-B) 0 (ex-x) (ex-tA))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-w) (ex-tB)))))
+    (@example :eq concl-eq ((ex-A) (ex-r) (ex-B) 0 (ex-x) (ex-tC))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-w) (ex-tB)))))
     (record-new Concl (fires (is-name y a)) (fact (union-new KFact f-inst (aux-elem w) (name-term b)))))
 
   (fn ksc-10-assert ((a IRI) (v RoleId) (b IRI) (x KElem) (y KTerm))
@@ -342,6 +417,8 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (ind-elem b)) (== cy (nominal-term b))))
         (_ false)))
+    (@example :eq concl-eq ((ex-a) (ex-r) (ex-b) (ex-ia) (ex-na))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ind-elem (ex-b)) (nominal-term (ex-b))))))
     (record-new Concl (fires (kterm-eq y (nominal-term a)))
                       (fact (union-new KFact f-inst (ind-elem b) (nominal-term b)))))
 
@@ -360,6 +437,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-w) (ex-r))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-w) (ex-tB)))))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-w) (ex-s))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-w) (ex-tB)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (name-term z)))))
 
   (fn ksc-12 ((a KName) (v RoleId) (x KElem) (y KTerm))
@@ -372,6 +453,10 @@
       (match (. $result fact)
         ((f-self cx cv) (and (== cx x) (== cv v)))
         (_ false)))
+    (@example :eq concl-eq ((ex-A) (ex-r) (ex-x) (ex-tA))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-self (ex-x) (ex-r)))))
+    (@example :eq concl-eq ((ex-A) (ex-r) (ex-x) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-self (ex-x) (ex-r)))))
     (record-new Concl (fires (is-name y a)) (fact (union-new KFact f-self x v))))
 
   ;; ============================================================
@@ -392,6 +477,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x1)))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-x) (ex-r) (ex-w))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-x) (ex-s) (ex-w)))))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-x) (ex-t) (ex-w))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-x) (ex-s) (ex-w)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-triple x w x1))))
 
   (fn ksc-14 ((v RoleId) (w RoleId) (x KElem) (v1 RoleId))
@@ -404,6 +493,10 @@
       (match (. $result fact)
         ((f-self cx cv) (and (== cx x) (== cv w)))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-x) (ex-r))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-self (ex-x) (ex-s)))))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-x) (ex-t))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-self (ex-x) (ex-s)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-self x w))))
 
   ;; ============================================================
@@ -428,6 +521,11 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x3)))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-x) (ex-r) (ex-w) (ex-w) (ex-s) (ex-ia))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-x) (ex-t) (ex-ia)))))
+    ;; The legs do not meet: no.
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-x) (ex-r) (ex-w) (ex-x) (ex-s) (ex-ia))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-x) (ex-t) (ex-ia)))))
     (let ((fire (if (role-eq u u1) (if (kelem-eq x1 x2) (role-eq v v1) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x3)))))
 
@@ -446,6 +544,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x3)))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-x) (ex-r) (ex-x) (ex-s) (ex-w))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-x) (ex-t) (ex-w)))))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-x) (ex-r) (ex-ia) (ex-s) (ex-w))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-x) (ex-t) (ex-w)))))
     (let ((fire (if (role-eq u u1) (if (kelem-eq x x2) (role-eq v v1) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x3)))))
 
@@ -464,6 +566,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x1)))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-x) (ex-r) (ex-w) (ex-w) (ex-s))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-x) (ex-t) (ex-w)))))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-x) (ex-r) (ex-w) (ex-w) (ex-r))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-x) (ex-t) (ex-w)))))
     (let ((fire (if (role-eq u u1) (if (kelem-eq x1 x2) (role-eq v v1) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x1)))))
 
@@ -481,6 +587,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x)))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-ia) (ex-r) (ex-ia) (ex-s))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-ia) (ex-t) (ex-ia)))))
+    (@example :eq concl-eq ((ex-r) (ex-s) (ex-t) (ex-ia) (ex-r) (ex-w) (ex-s))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-ia) (ex-t) (ex-ia)))))
     (let ((fire (if (role-eq u u1) (if (kelem-eq x x2) (role-eq v v1) false) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x)))))
 
@@ -503,6 +613,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-r) (ex-w))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (thing-term)))))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-s) (ex-w))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-x) (thing-term)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (thing-term)))))
 
   (fn ksc-24 ((v RoleId) (d KName) (x KElem) (v1 RoleId))
@@ -515,6 +629,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-r))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (thing-term)))))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-s))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-x) (thing-term)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (thing-term)))))
 
   (fn ksc-25 ((v RoleId) (d KName) (x KElem) (v1 RoleId) (x1 KElem))
@@ -527,6 +645,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x1) (== cy (name-term d))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-r) (ex-w))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-w) (ex-tB)))))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-s) (ex-w))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-w) (ex-tB)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x1 (name-term d)))))
 
   (fn ksc-26 ((v RoleId) (d KName) (x KElem) (v1 RoleId))
@@ -539,6 +661,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (name-term d))))
         (_ false)))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-r))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (ex-tB)))))
+    (@example :eq concl-eq ((ex-r) (ex-B) (ex-x) (ex-s))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-x) (ex-tB)))))
     (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (name-term d)))))
 
   ;; ============================================================
@@ -562,6 +688,11 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (term-elem y)) (== cy z)))
         (_ false)))
+    (@example :eq concl-eq ((ex-x) (ex-na) (ex-x) (ex-tB))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-ia) (ex-tB)))))
+    ;; y is a class name, not a nominal: no.
+    (@example :eq concl-eq ((ex-x) (ex-tA) (ex-x) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (term-elem (ex-tA)) (ex-tB)))))
     (let ((fire (if (is-nominal y) (kelem-eq x x2) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-inst (term-elem y) z)))))
 
@@ -578,6 +709,10 @@
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy z)))
         (_ false)))
+    (@example :eq concl-eq ((ex-x) (ex-na) (ex-ia) (ex-tB))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-inst (ex-x) (ex-tB)))))
+    (@example :eq concl-eq ((ex-x) (ex-na) (ex-w) (ex-tB))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-inst (ex-x) (ex-tB)))))
     (let ((fire (if (is-nominal y) (kelem-eq (term-elem y) x2) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-inst x z)))))
 
@@ -593,6 +728,10 @@
       (match (. $result fact)
         ((f-triple cx cv cz) (and (== cx z) (== cv u) (== cz (term-elem y))))
         (_ false)))
+    (@example :eq concl-eq ((ex-w) (ex-na) (ex-x) (ex-r) (ex-w))
+      -> (record-new Concl (fires true) (fact (union-new KFact f-triple (ex-x) (ex-r) (ex-ia)))))
+    (@example :eq concl-eq ((ex-w) (ex-na) (ex-x) (ex-r) (ex-ia))
+      -> (record-new Concl (fires false) (fact (union-new KFact f-triple (ex-x) (ex-r) (ex-ia)))))
     (let ((fire (if (is-nominal y) (kelem-eq x x2) false)))
       (record-new Concl (fires fire) (fact (union-new KFact f-triple z u (term-elem y))))))
 
@@ -623,26 +762,22 @@
   ;;
   ;; `join-instance` only unpacks the two facts into the rule's premises,
   ;; in the rule's order, and calls the per-instance function, whose
-  ;; contracts say what fires. `join` walks the snapshot:
+  ;; contracts say what fires. `join-conclusion` is its Option view, with a
+  ;; proved @post linking the two. `join` walks the snapshot, and proves:
   ;;
-  ;;   sound     PROVED (`@post`, by a checked `@loop-invariant`): every
-  ;;             fact returned is the head of a firing instance with some
-  ;;             partner in the snapshot.
-  ;;   complete  OWED TO THE PROVER, NOT CLAIMED: every partner's firing
-  ;;             head is returned. slop models a for-each's element only as
-  ;;             SOME member of the list, never as having visited every
-  ;;             member, so "for every partner, ..." over a loop's output
-  ;;             does not verify for even the simplest filter (the verifier
-  ;;             refutes it with an empty result). Per the Constraint it is
-  ;;             reported, never claimed, and the remedy is upstream: a
-  ;;             for-each model that knows its visited prefix. The
-  ;;             reference evaluator is the empirical check meanwhile.
+  ;;   sound     every fact returned is the head of a firing instance with
+  ;;             some partner in the snapshot
+  ;;   complete  every partner's firing head is returned
   ;;
-  ;; `join-instance` and `join-conclusion` carry no contract: they unpack
-  ;; two facts into a rule's premises and turn its Concl into an Option,
-  ;; and the links the prover would need are field projections of a
-  ;; call's result, which it does not follow. They are glue, and the
-  ;; reference differential covers them.
+  ;; each a `@post`, through a checked `@loop-invariant`. Completeness
+  ;; quantifies over `(list-visited ps)`, the partners the loop has handed
+  ;; its body so far (slop #247): "every partner so far that fires has its
+  ;; head in the result" holds at every iteration and, where the loop ends,
+  ;; is the claim over all of `ps`.
+  ;;
+  ;; `join-instance` itself carries no contract: it is a dispatch on the
+  ;; tag whose arms are each one call, and the reference differential
+  ;; covers the argument order it passes.
   ;; ============================================================
 
   (type JoinRule (enum
@@ -760,32 +895,40 @@
     (@intent "One joined instance's conclusion, if it fires")
     (@spec ((JoinRule KFact KFact KscAxiom) -> (Option KFact)))
     (@pure)
-    ;; The combinator's invariant is stated over this Option: the prover
-    ;; links a call's Option result between the loop body and the
-    ;; invariant, but not a field projected from a call's record result -
-    ;; which is also why this function has no @post tying it to
-    ;; `join-instance`: that link is exactly such a projection. It is the
-    ;; two lines below, and the reference differential covers it.
+    ;; The combinator's invariants are stated over this Option rather than
+    ;; over the Concl's fields. Both forms prove on the real code, but over
+    ;; the Option the solver REFUTES a broken `join` (dropping, adding or
+    ;; inventing conclusions: "loop invariant not preserved"), while over
+    ;; the fields it only times out - and a contract should be seen to fail.
+    ;; The @post below links the two; its own mutants (swapping some and
+    ;; none, a foreign fact, always some) come back unknown even at 120 s,
+    ;; never verified: the solver cannot build a counter-model through
+    ;; join-instance's body.
+    (@post (match $result
+             ((some c) (and (== (. (join-instance tag t p ax) fires) true)
+                            (== (. (join-instance tag t p ax) fact) c)))
+             ((none)   (== (. (join-instance tag t p ax) fires) false))))
     (let ((c (join-instance tag t p ax)))
-      (if (== (. c fires) true) (some (. c fact)) (none))))
+      (if (. c fires) (some (. c fact)) (none))))
 
   (fn join ((arena Arena) (tag JoinRule) (t KFact) (ps (List KFact)) (ax KscAxiom))
     (@intent "Apply one joined rule to an arrived fact and every stored partner in a snapshot")
     (@spec ((Arena JoinRule KFact (List KFact) KscAxiom) -> (List KFact)))
     (@alloc arena)
     (@post (forall (c $result) (exists (q ps) (== (join-conclusion tag t q ax) (some c)))))
-    ;; COMPLETENESS IS NOT A CONTRACT HERE, AND IS NOT CLAIMED. Stated as
-    ;;   (forall (q ps) (match (join-conclusion tag t q ax)
-    ;;                    ((some c) (list-contains $result c)) ((none) true)))
-    ;; slop's verifier REFUTES it, with a model whose result is empty:
-    ;; its for-each element is only "some member of ps", so nothing makes
-    ;; the walk visit them all. That is the prover's gap, not the code's,
-    ;; and a contract the verifier reports failed cannot stand. It returns
-    ;; as a contract when slop models a for-each's visited prefix.
+    (@post (forall (q ps)
+             (match (join-conclusion tag t q ax)
+               ((some c) (list-contains $result c))
+               ((none)   true))))
     (let ((mut result (list-new arena KFact)))
       (for-each (q ps)
         (@loop-invariant
           (forall (c result) (exists (q2 ps) (== (join-conclusion tag t q2 ax) (some c)))))
+        (@loop-invariant
+          (forall (q2 (list-visited ps))
+            (match (join-conclusion tag t q2 ax)
+              ((some c) (list-contains result c))
+              ((none)   true))))
         (match (join-conclusion tag t q ax)
           ((some c) (list-push result c))
           ((none)   (do))))
