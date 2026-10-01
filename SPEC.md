@@ -192,7 +192,7 @@ v2.
 | Rung (`--profile`) | Logic | Worst case | Calculus it cites | Adds over `el` | Status |
 |---|---|---|---|---|---|
 | **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)); `¬` in a superclass, domain or range is taken by rewriting, so the logic is unchanged | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
-| **`el++`** | the **OWL 2 EL object fragment** | PTIME | [KKS12]'s ELO rules (ELK's) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions. Datatypes and keys stay omissions | planned |
+| **`el++`** | the **OWL 2 EL object fragment**: SROEL(⊓,×) without products on the left ([§5.4](#54-the-el-calculus)) | PTIME | [Krö10] Theorem 2 (Ksc); [§5.4](#54-the-el-calculus) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions, `owl:bottomObjectProperty`. Datatypes, keys, anonymous individuals and `owl:topObjectProperty` outside a super-role stay omissions | specified ([§5.4](#54-the-el-calculus)); not built |
 | **`horn-sriq`** (v1) | **Horn-SRIQ** | ExpTime | [Kaz09] + chain elimination, or the Horn slice of [Bate+18] | inverses, functionality, `∀` on the right, symmetric/asymmetric/irreflexive roles, disjoint roles, Horn number restrictions | planned (M5) |
 | **`sriq`** (v2) | **SRIQ object fragment** (non-Horn) | 2ExpTime | [Bate+18] | disjunction, full negation, number restrictions | not scheduled |
 
@@ -242,7 +242,9 @@ may report coherent", so that decision belongs to the plan for the mode, not to 
   description logic SROIQ*, AIJ 298, 2021.
 - [KRH13] Krötzsch, Rudolph, Hitzler, *Complexities of Horn Description Logics*, ACM TOCL 14(1), 2013.
 - [PAGOdA] Zhou, Cuenca Grau, Nenov, Kaminski, Horrocks, JAIR 54, 2015.
-- [BBL05], [BBL08] and [KKS12] as in [§5.3](#53-the-abox-reduction-is-sound-and-complete).
+- [BBL05], [BBL08] and [KKS12] as in [§5.3](#53-the-abox-reduction-is-sound-and-complete);
+  [Krö10] and [JAR14] as in [§5.4](#54-the-el-calculus). An earlier draft cited [KKS12] for `el++`;
+  its completeness theorem covers ELO only, so it does not cover the rung's combination.
 
 ### 5.1 Profiles are selectable
 
@@ -261,7 +263,7 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
 ;; Each profile supplies its own normalization + rule set; the driver and I/O are shared.
 (enum Profile
   profile-el             ; ELH⊥R+ + domain/range + ABox, exactly §5.2, positive ¬ rewritten (implemented)
-  profile-el-plus-plus   ; the OWL 2 EL object fragment
+  profile-el-plus-plus   ; the OWL 2 EL object fragment, §5.4 (specified, not built)
   profile-horn-sriq      ; Horn-SRIQ
   profile-sriq)          ; SRIQ object fragment, non-Horn (not OWL 2 DL: no datatypes, no nominals)
 
@@ -1310,6 +1312,217 @@ beyond the §5.2 language (equality, nominals and the rest are out of profile, s
 check the code against it. One fixture per lemma is diffed against HermiT
 ([§10](#10-testing-strategy)), and a randomized ABox differential (`make abox-fuzz`) compares HOWL
 with HermiT over generated v0 ontologies with ABoxes.
+
+### 5.4 The el++ calculus
+
+The `el++` rung ([§5](#5-fragment-roadmap)) adds nominals, `ObjectHasSelf`, reflexive roles,
+equality and inequality of individuals, negative assertions and the empty role to `el`. Its
+completeness rests on **one** published proof that covers that whole combination:
+**[Krö10] Theorem 2**, Krötzsch's materialisation calculus **Ksc** for classification in
+SROEL(⊓,×). The other candidates do not cover it:
+- [KKS12] Theorem 4 (ELK's nominal calculus) is proved for **ELO only**: no `⊥`, role hierarchies,
+  chains, ranges or Self. Its claim that the results "can be applied to other logics from the EL
+  family" is not a proof.
+- [JAR14] (*The Incredible ELK*) proves EL<sup>+</sup><sub>⊥</sub> complete and handles nominals
+  only where they are *safe* (its Theorem 4, Remark 2).
+- [BBL05]'s completion rules are incomplete with nominals ([KKS12] Example 5,
+  [§5.3](#53-the-abox-reduction-is-sound-and-complete)).
+
+HOWL implements Ksc as published, with one change of representation that needs no new proof
+(K2, sharing by monotonicity) and one that needs a paragraph (K3). Everything else here is the
+translation from OWL into [Krö10]'s language and the bookkeeping around it.
+
+> **Review status.** Written 2026-09-30.
+> - **Adversarial review (Codex, 2026-09-30): signed off.** It found no counterexample to K0's
+>   translation (reflexivity, the empty role, the dropped top-role inclusions, assertions, domains),
+>   to the gate conditions after reflexive-role introduction and chain decomposition, to shared
+>   definitional and range-filler names, to leaving out rules (19)–(22), to K2 under punning, or to
+>   inconsistency through the `owl:Thing` run. It confirmed the Fig. 2 erratum. Three findings,
+>   each fixed in the text: the `el`/`el++` report equality failed under a cap (now claimed for
+>   complete runs only); a run stopped on `⊥` is complete for its answers but not its facts (K3);
+>   and K5 conflated the raw queries with the report's exclusions (`owl:Nothing`, inconsistency).
+> - **Project owner: pending.** No `el++` code lands before acceptance; `--profile el++` exits 3
+>   until then.
+
+**Sources.** [Krö10] Markus Krötzsch, *Efficient Inferencing for the Description Logic Underlying
+OWL EL*, Technical Report 3005, Institute AIFB, KIT, 2010 (the long version of *Efficient
+Inferencing for OWL EL*, JELIA 2010). Used here: the SROEL(⊓,×) restrictions (§2), Definition 1
+(normal form), Fig. 1 and Proposition 1 (normalisation), Fig. 2 (input translation), Fig. 3
+(rules (1)–(29)), Theorem 1 with Lemmas 1–3 (Kinst complete for instance checking) and Theorem 2
+(Ksc complete for classification). [JAR14] Kazakov, Krötzsch, Simančík, *The Incredible ELK*,
+J. Automated Reasoning 53(1), 2014. [KKS12] as in [§5.3](#53-the-abox-reduction-is-sound-and-complete).
+
+**The language.** `el++` accepts [§5.2](#52-the-exact-v0-language)'s language, the negation rewrite
+included, plus the constructs below, translated into SROEL(⊓,×):
+
+| OWL | SROEL(⊓,×) |
+|---|---|
+| `ObjectHasValue(R a)` | `∃R.{a}` |
+| `ObjectOneOf(a)`, one individual | `{a}` |
+| `ObjectHasSelf(R)`, `R` simple | `∃R.Self` |
+| `ReflexiveObjectProperty(R)` | `⊤ ⊑ ∃S_R.Self`, `S_R ⊑ R`, with `S_R` a fresh role |
+| `SameIndividual(a₁ … aₙ)` | `{a₁} ⊑ {aᵢ}`, `{aᵢ} ⊑ {a₁}` for each `i` |
+| `DifferentIndividuals(a₁ … aₙ)` | `{aᵢ} ⊓ {aⱼ} ⊑ ⊥` for each `i < j` |
+| `NegativeObjectPropertyAssertion(R a b)` | `{a} ⊓ ∃R.{b} ⊑ ⊥` |
+| `owl:bottomObjectProperty` | a role name `N` with the axiom `∃N.⊤ ⊑ ⊥` |
+| `R ⊑ owl:topObjectProperty`, `R₁ ∘ … ∘ Rₙ ⊑ owl:topObjectProperty` | dropped: tautologies |
+| `ObjectPropertyRange(R D)` | `R ⊑ ⊤ × D` — native; `el++` eliminates no ranges |
+| `ObjectPropertyDomain(R C)` | `∃R.⊤ ⊑ C` — **not** `R ⊑ C × ⊤`, see the gate conditions |
+| `ClassAssertion(C a)`, `ObjectPropertyAssertion(R a b)` | `C(a)`, `R(a, b)` — native; no I_a encoding |
+| every other construct of §5.2 | as in §5.2 |
+
+**Out of profile in `el++`:**
+- **anonymous individuals** — OWL 2 EL excludes them (Profiles §2.2.1), and so does a `sameAs`,
+  `differentFrom` or `AllDifferent` with a blank-node member;
+- `ObjectOneOf` with more than one individual (a disjunction);
+- data: datatypes, data properties, a literal-valued `owl:hasValue`, `HasKey`;
+- `owl:topObjectProperty` in any other position (`∃U.C`, `U ⊑ R`, `U` as a chain step, ranges,
+  domains, assertions) — its consumers need their own lemma before they are taken;
+- `ObjectHasSelf` on a role that is not simple;
+- everything §5.2 omits for other reasons: inverses, `∀`, unions, cardinalities, `¬` outside a
+  positive position, SWRL.
+
+**Gate conditions.** Each is at least as strict as [Krö10]'s restrictions, never looser:
+- **Regularity** ([§5.2](#52-the-exact-v0-language)), which OWL 2 requires and [Krö10] does not.
+- **Range/composition** ([§5.2](#52-the-exact-v0-language)), which is [Krö10]'s
+  `ran(T) ⊆ ran(S)` for every `R ∘ S ⊑ T` once K1 has named equal range fillers alike. The
+  ranges are those after the negation rewrite. That is why **domains are not products**:
+  [Krö10]'s `ran(R)` collects the right factor of every product above `R`, so `R ⊑ C × ⊤` would put
+  `⊤` into `ran(R)` and refuse chains whose last role has no `⊤` range. `∃R.⊤ ⊑ C` is the same
+  axiom semantically and puts nothing into `ran(R)`.
+- **Self on simple roles only**, with "simple" as OWL 2 Structural Specification §11.1 defines it
+  over the expanded RBox (transitivity as `R ∘ R ⊑ R`). That is [Krö10]'s condition, made stricter by
+  treating the built-in roles as composite. `S_R` is simple by construction: nothing is below it.
+- **Role conjunctions and products on the left** have no OWL syntax here, `U` being dropped, so
+  [Krö10]'s restrictions on them hold vacuously.
+
+**K0 — the translation preserves every entailment the report reads** (elementary, row by row).
+- `∃R.{a}`, `{a}`, `∃R.Self`, `R ⊑ ⊤ × D`, `∃R.⊤ ⊑ C`, `C(a)` and `R(a,b)` are the Direct Semantics of
+  the OWL constructs, read off.
+- `SameIndividual`, `DifferentIndividuals` and the negative assertion: `a^I = b^I` iff
+  `{a}^I ⊆ {b}^I` and `{b}^I ⊆ {a}^I`; `a^I ≠ b^I` iff `({a} ⊓ {b})^I = ∅`; and
+  `(a^I, b^I) ∉ R^I` iff `({a} ⊓ ∃R.{b})^I = ∅`.
+- `owl:bottomObjectProperty`: the Direct Semantics fixes `N^I = ∅`, and with `N` an ordinary role
+  name, `∃N.⊤ ⊑ ⊥` holds iff `N^I = ∅`. The models coincide.
+- `owl:topObjectProperty`: the Direct Semantics fixes `U^I = Δ × Δ`, so `R ⊑ U` and every chain into
+  `U` hold in every interpretation. Dropping them removes nothing.
+- `ReflexiveObjectProperty(R)` is a **conservative extension**. A model of the translation has
+  `(x, x) ∈ S_R^I ⊆ R^I` for every `x`, so `R` is reflexive. Conversely, a model of the original,
+  extended with `S_R^I := {(x, x) | x ∈ Δ}`, satisfies `⊤ ⊑ ∃S_R.Self` and `S_R ⊑ R`. `S_R` occurs
+  nowhere else, so entailments over the input signature agree.
+- The positive-`¬` rewrite is [§5.3](#53-the-abox-reduction-is-sound-and-complete)'s L0, which
+  holds in any description logic.
+
+**K1 — the normal form.** HOWL normalises by [Krö10] Fig. 1, which Proposition 1 proves conservative
+over the input signature, with the choices [§5.3](#53-the-abox-reduction-is-sound-and-complete)'s
+L2 already justifies for `el`:
+- one definitional name per (expression, polarity), not one per occurrence;
+- n-ary chains decomposed left-associatively through fresh roles. A fresh role has no range, so
+  `ran(f) = ∅ ⊆ ran(S)` holds for `R ∘ S ⊑ f`, and `ran(T) ⊆ ran(Rₙ)` holds for the last step by the
+  gate.
+- **Equal range fillers get the same name.** The gate compares range fillers as class expressions,
+  and the normaliser names them by the same key. So the input's condition is [Krö10]'s condition on
+  the normal form.
+- `⊤` and `⊥` become the names `owl:Thing` and `owl:Nothing`, with `top(owl:Thing)` and
+  `bot(owl:Nothing)` — OWL's own `⊤ ⊑ owl:Thing` and `owl:Nothing ⊑ ⊥`.
+- **An erratum in [Krö10] Fig. 2.** It prints `R(a, b) ↦ subEx(a, R, b, b)`. `subEx` is ternary
+  and encodes `∃R.A ⊑ C`; the four-place predicate is `supEx`, which encodes `A ⊑ ∃R.B` with its
+  witness. So `R(a, b) ↦ supEx(a, R, b, b)`: "`a ⊑ ∃R.b`, witnessed by `b`". Rules (9) and (10)
+  then give `triple(a, R, b)` and `inst(b, b)`, which is `R(a, b)` read through Theorem 1's output.
+
+**The calculus.** HOWL's rules are [Krö10] Fig. 3's rules (1)–(29), each carrying the assumption
+parameter of Theorem 2's Psc. Rules (19)–(22) are not implemented. Their EDB predicates,
+`subRConj` and `subProd`, are empty for every ontology K0 produces, because OWL has no role
+conjunction here and the only product on the left would be `U`'s definition, which K0 drops. A rule
+with an empty body predicate never fires, so leaving it out changes no closure.
+
+**K2 — sharing by monotonicity.** For every class name `q` that the report asks about, Ksc's facts
+under `q` are exactly `closure(G ∪ {inst(q, q)})`, where `G` is the closure of Kinst over the
+translated ontology:
+1. Every Psc rule joins IDB atoms that carry **one** assumption variable, and Pinst has no
+   constants. So Ksc's closure is the disjoint union, over `q`, of independent closures. Theorem 2's
+   proof identifies the one for `q` with Kinst run on `I(KB) ∪ {inst(q, q)}`.
+2. A class name never occurs in the first position of a Kinst fact: rule (1) seeds individuals,
+   and the witnesses are fresh. Theorem 2's proof needs exactly that ("the same results as the
+   assertion q(c) for a new individual c"). HOWL keeps a class and an individual spelled by the same
+   IRI apart ([§6.2](#62-data-model)'s tagged `Node`), so this holds under punning too.
+3. The least fixpoint is monotone and idempotent, and `I(KB) ⊆ G ⊆ closure(I(KB) ∪ {inst(q, q)})`.
+   So `closure(G ∪ {inst(q, q)}) = closure(I(KB) ∪ {inst(q, q)})`.
+
+So HOWL computes `G` once, then runs each `q` from `G ∪ {inst(q, q)}`, storing only the facts not
+already in `G`. It keeps that run's answers (below) and discards the rest. Runs for names the report
+never reads — fresh names, witnesses — are not made, because no output reads them.
+
+**K3 — rule (4) as a flag; inconsistency.**
+- Rule (4) is `bot(z) ∧ inst(u, z) ∧ inst(x, z′) ∧ cls(y) → inst(x, y)`. Under `q`, once some element
+  `u` holds a class `z` with `bot(z)`, every element that holds anything holds every class.
+  `inst(q, q)` is always present, so `q` then holds every class. HOWL represents that state by a
+  flag, `unsat(q)`, and stops the run: every answer under `q` is then *yes*, which is what the
+  materialised rule (4) would give.
+- `u` is **any** element, not only `q`. Under `q`, `⊥` can arise at a nominal or a witness. For
+  example, with `q ⊑ ∃R.(A ⊓ {a})`, `B(a)` and `A ⊓ B ⊑ ⊥`, the witness for `q` is `a` (rule 27), so
+  `a` gains `A` and `⊥` arises at `a`, not at `q`. The flag tests every element.
+- Without the flag, rule (4) has not fired, so the represented facts are the whole closure.
+- **A flagged run is complete for its answers, not for its facts.** It may stop before deriving facts
+  the closure contains: with `A ⊑ ⊥`, `A ⊑ C` and `C ⊑ B`, `A`'s run can raise the flag before
+  `inst(A, B)`. That is harmless because the flag already makes every answer about `q` *yes*, and
+  no answer reads the stored facts of a flagged run.
+- **Inconsistency is `unsat(owl:Thing)`.** The ontology is inconsistent iff it entails
+  `owl:Thing ⊑ owl:Nothing`, which Theorem 2 decides through the run for `q = owl:Thing`. Reading
+  inconsistency from `G` alone would be wrong: with no individuals, `⊤ ⊑ ⊥` makes `G` empty. A `⊥`
+  in `G` flags every run (by K2), so it is a shortcut, not a second definition.
+
+**K4 — soundness under omissions and caps.** [Krö10] Lemma 1 shows every fact the rules derive is
+entailed, rule by rule. A capped run stops at a subset of the closure. An omitted axiom leaves an
+accepted subset `O′ ⊆ O_¬`, every axiom of which `O` entails (K0, and
+[§5.3](#53-the-abox-reduction-is-sound-and-complete)'s L0). So every *inconsistent*, *unsat* and
+*sub* finding is a consequence of `O` whatever the coverage, which is
+[§6.2](#62-data-model)'s "partial results are sound".
+
+**K5 — what the report reads.** Two layers, kept apart as [§6.7](#67-output--classification) keeps
+them for `el`. The **raw queries**, for class names `A` and `B`, are:
+- `unsat(A)`, K3's flag for `A`'s run;
+- `holds(A, B)` iff `unsat(A)` or `inst(A, B)` holds in `A`'s run (`inst_sc(A, B, A)`, Theorem 2's
+  output);
+- `inconsistent` iff `unsat(owl:Thing)`.
+
+The **report** is then extracted exactly as `el`'s is, from [§6.2](#62-data-model)'s three reportable
+sets, with these raw queries in place of `⊥ ∈ S(·)` and `B ∈ S(A)`:
+- `unsatisfiable` covers input classes other than `owl:Nothing`, which satisfies `unsat(owl:Nothing)`
+  by construction and is never a finding;
+- an inconsistent ontology reports no unsatisfiable classes and no hierarchy;
+- `entails-sub(A, B)` iff `inconsistent`, or `unsat(A)`, or `holds(A, B)`;
+- the taxonomy is bottom-compressed.
+
+So **on input inside `el`, when both runs are complete** (`fixpoint`, nothing omitted), the two
+rungs print the same report except for the `profile` and `rounds` lines. Capped runs carry no such
+claim: the two calculi spend their rounds differently, so a cap that lets `el` derive `A ⊑ B` in its
+first round can stop `el++` in phase G before `A`'s run starts. Both are still sound (K4, L9).
+
+**Rounds and the cap.** A round is one semi-naive step of all rules over the previous round's new
+facts. Phase G runs first; phase Q then runs each `q` from `G`.
+- `rounds` = `rounds(G)` + the most rounds any single `q` took.
+- `--max-iterations n` bounds that same sum: phase Q's runs get `n − rounds(G)` each, and none if G
+  was capped. Any run stopped by the bound makes the termination `resource-limit`.
+- A run stopped by `unsat(q)` counts as finished, not capped: its answers are complete (K3).
+- Runs are independent, so the report is the same at every worker count
+  ([§6.8](#68-determinism-binding)).
+
+**Cost, stated plainly.** Every `q` re-derives the witnesses reachable from it, because Ksc shares
+nothing between assumptions except `G`. The total work is roughly the number of classes times the
+size of a class's existential cone. `el`'s per-concept contexts avoid this, and so does ELK. Sharing
+witness contexts between assumptions where no nominal or `⊥` reaches them is the known optimisation;
+[Krö10] Theorem 3's construction is where its proof would start. It needs that proof before it is
+used. `el` stays the default ([§5.1](#51-profiles-are-selectable)).
+
+**What is not claimed.**
+- Instance retrieval is not in the report, although Kinst decides it (Theorem 1).
+- Datatypes, keys, anonymous individuals, multi-member `ObjectOneOf` and `owl:topObjectProperty`
+  outside a super-role position are out of profile, so their input is *inconclusive*, never
+  *coherent*.
+- There is no completeness under omissions or a cap: K4 is soundness only.
+- **Not `ElPlusPlus`.** EL++ [BBL05] includes concrete domains, which `el++` omits. So the rung
+  registers as `BoundedDl`, naming its logic ([§8.4](#84-the-moose-tboxreasoner-port)).
 
 ---
 
@@ -2558,6 +2771,8 @@ row below sits on one side of that line.
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
 | **Range-elimination preservation** — the *listed query classes* survive the rewrite, which is **not** conservative ([§6.3](#63-normalization)) | Published proof **+ differential testing** | **No** — model-theoretic |
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
+| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Per-instance rule functions carrying `sound`/`complete` `@property`s that read as the Datalog rule, lifted over stored partners by **one** join combinator whose `@loop-invariant`s state that every partner was visited and its conclusions appended. No rule is left owed; an invariant the verifier cannot settle is reported as unknown, never claimed. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)) | **Yes** — structural |
+| **`el++` translation and sharing** — K0–K5: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction | [Krö10] Theorems 1–2 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
 | **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK; for v1, Kazakov's Horn-SHIQ calculus with chain elimination) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
@@ -2720,8 +2935,11 @@ Five things the port constrains that are easy to get wrong:
   code, in a system whose entire posture is anti-overclaim. Register as
   `BoundedDl(ProfileDecl { name: "howl-el-v0/ELH⊥R+ …" })` and reserve `ElPlusPlus` for an engine
   that is actually complete for EL++. The registration follows the rung the port configures — `el`
-  by default ([§5.1](#51-profiles-are-selectable)) — and only the `el++` rung may register as
-  `ElPlusPlus`; `horn-sriq` and `sriq` register as `BoundedDl` naming their logic.
+  by default ([§5.1](#51-profiles-are-selectable)). **No rung registers as `ElPlusPlus`:** EL++
+  includes concrete domains, which `el++` omits, so `el++` registers as
+  `BoundedDl(ProfileDecl { name: "howl-el++/SROEL(⊓,×) object fragment, no datatypes or keys" })`
+  ([§5.4](#54-the-el-calculus)), and `horn-sriq` and `sriq` register as `BoundedDl` naming their
+  logic.
 - **The fingerprint is hashed into every verdict**, so it must cover name, version, profile, *and
   rule-set version* — it is what marks which stored verdicts need re-validation when the engine
   changes. Worker count must not appear in it ([§6.8](#68-determinism-binding)).
@@ -3472,7 +3690,9 @@ flowchart TB
   not cover and so needs its own argument, as v0's did ([§5.3](#53-the-abox-reduction-is-sound-and-complete)). **This is where the first consumer's coverage gap
   actually closes** — 33 `owl:inverseOf` uses in its corpus are out-of-profile until then, so v0
   buys instance-bearing verdicts and range coherence, not a clean pass on its own theory.
-- *(`el++` and the approximation mode — planned, each with its own plan. v2 `sriq` — separate
+- *(`el++` — specified in [§5.4](#54-the-el-calculus), built in slices: decode fixes, a
+  profile-aware gate and census, the Ksc normaliser, the rules with their contracts, the engine,
+  then wiring. The approximation mode — planned, with its own plan. v2 `sriq` — separate
   decision, not scheduled; SROIQ is not planned, [§5](#5-fragment-roadmap).)*
 
 ---
@@ -3608,7 +3828,11 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
 - Tena Cucala, Cuenca Grau, Horrocks. *Pay-as-you-go consequence-based reasoning for the description
   logic SROIQ.* AIJ 298, 2021. (Sequoia; why SROIQ is not planned, [§5](#5-fragment-roadmap).)
 - Kazakov, Krötzsch, Simančík. *Practical Reasoning with Nominals in the EL Family of Description
-  Logics.* KR 2012. (The `el++` calculus; the nominal counterexample [§5.3](#53-the-abox-reduction-is-sound-and-complete) routes around.)
+  Logics.* KR 2012. (ELK's nominal calculus, complete for ELO only; the nominal counterexample
+  [§5.3](#53-the-abox-reduction-is-sound-and-complete) routes around.)
+- Krötzsch. *Efficient Inferencing for the Description Logic Underlying OWL EL.* Technical Report
+  3005, Institute AIFB, KIT, 2010; short version *Efficient Inferencing for OWL EL*, JELIA 2010.
+  (**The `el++` calculus**: Ksc, Theorem 2, [§5.4](#54-the-el-calculus).)
 - Jiménez-Ruiz, Cuenca Grau. *LogMap: Logic-based and Scalable Ontology Matching.* ISWC 2011. (alignment repair precedent.)
 - W3C. *OWL 2 Web Ontology Language Profiles* (EL, QL, RL) and *Direct Semantics* — which
   **extends** SROIQ and interprets the structural language directly, including keys and punning.
