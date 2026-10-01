@@ -313,7 +313,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **72 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **73 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
@@ -325,12 +325,15 @@ rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted
 its rule's body. `el++`'s rules (`src/rules/ksc.slop`) go further: 26 per-instance functions for
 [Krö10] Fig. 3 and Theorem 2's seed (*) each prove `complete` (fires whenever the body matches) and
 `head` (the conclusion is the rule's head over the premises' own terms), the 24 that can decline to
-fire also prove `sound` (fires only when the body matches), rule (4)'s ⊥ flag proves its `@post`, and the one join combinator proves its
-soundness through a checked `@loop-invariant`. 109 mutants were each killed by exactly the contract
-they target. The combinator's completeness is owed to the prover, not claimed (the last row of the
-table below); the engine-against-reference differential holds it meanwhile. `make example` runs
-**22 executable examples**: 6 per rule, 2 on the el++ ⊥ flag, 7 on the canonical sort, 2 on
-context coverage (the W3C DisjointClasses-002 case) and 5 in the decoder. Two guarantees the external conformance suites
+fire also prove `sound` (fires only when the body matches), rule (4)'s ⊥ flag proves its `@post`, and the one join combinator proves
+both directions — every fact it returns is a firing instance's head for some partner, and every
+partner's firing head is returned — through checked `@loop-invariant`s, completeness over
+`(list-visited ps)`. 112 mutants: 111 refuted, each by exactly the contract it targets (one needs
+`make verify`'s 120 s timeout), and one unknown, never verified. The per-rule cases are `@example`s
+beside the contracts. `make example` runs
+**72 executable examples**: 6 per rule, 52 on el++'s rules (each rule firing and not, and the ⊥
+flag), 7 on the canonical sort, 2 on context coverage (the W3C DisjointClasses-002 case) and 5 in
+the decoder. Two guarantees the external conformance suites
 exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
 - context coverage in `signature-nodes`, which is loops;
 - "a class assertion is never set aside" in `decode-class-assertion`, which is blocked by
@@ -340,10 +343,12 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop `main` at or after [#244](https://github.com/slop-lang/slop/pull/244), not yet
-in a release.** #244 checks a postcondition at every return in the generated C, and
-[#243](https://github.com/slop-lang/slop/pull/243) has the verifier check the contract where each
-early return leaves. #235 maps big arena blocks from the OS, so freeing an arena returns its memory (GO's
+**Toolchain: slop `main` at or after [#255](https://github.com/slop-lang/slop/pull/255), not yet
+in a release.** el++'s rule contracts need #247 (`list-visited`, which makes the join's completeness
+statable), #248 (no trigger patterns on hypotheses; `list-contains` by structure), #251 (a pure
+call's record result is one term), and #252 (`@example :eq` on a record result). #244 checks a
+postcondition at every return in the generated C, and #243 has the verifier check the contract where
+each early return leaves. #235 maps big arena blocks from the OS, so freeing an arena returns its memory (GO's
 peak 1.8 → 0.9 GB); #234 stores a Map's and Set's keys and values inline in a dense table (2.6 →
 1.8 GB). #217 makes empty collections allocate nothing. CR2 and CR4's smaller-side dispatch uses #205's `set-len`, and its map rework (stored
 hashes, a word-at-a-time string hash) is most of the M1 slice 6b speedup. The faithfulness pairs need
@@ -370,11 +375,10 @@ rows below were re-probed on each bump rather than assumed from release notes.
 | A callee's `@post` on a **`let`-bound** result, callee in another module included (`copy-decoded`) | — |
 | A counted `while` with `@loop-invariant {(list-len out) == i}` — a pushed list's length, across a non-pure call in the body (`copy-axioms`) | — |
 | **`@example` — genuinely executes** (0.2.1) | — |
-| A `Bool` field compared explicitly, `(== (. $result fires) true)` (el++'s rules) | **`(not (. $result fires))`** — does not translate; write `(== (. $result fires) false)` |
-| A **multi-payload** variant's positions, `(match (. $result fact) ((f-inst x y) …))` | A **single-payload** `union-new` nested in a head, or returned directly — its payload is not modelled; name it through a helper call the contract makes too (`name-term`, `ind-elem`) |
-| A `@post` over a `for-each` result, proved by a checked `@loop-invariant`, when the loop matches an `Option`-returning call: `(match (f q) ((some c) (list-push r c)) …)` (`join`) | A field **projected from a call's record result**, `(. (f q) fires)`, in an invariant — not linked to the same call in the body |
-| — | **"Every element was visited"** — a `for-each` element is only *some* member of the list, so even a one-line filter's completeness is *refuted* with an empty result (el++'s `join`; owed upstream) |
-| — | A bare `Bool` field as a filter loop's `when` test **crashes** the verifier (a Z3 sort mismatch); write `(== (. c fires) true)` |
+| **Completeness of a `for-each`**, via `(list-visited xs)` in its `@loop-invariant` ([#247](https://github.com/slop-lang/slop/pull/247); el++'s `join`) | `(list-visited xs)` over a LOCAL list — not followed yet; the source must be a parameter |
+| A field projected from a pure call's record result, `(. (f q) fires)`, in a body, an invariant and a post alike ([#251](https://github.com/slop-lang/slop/pull/251)) | — |
+| A single-payload `union-new`'s payload ([#249](https://github.com/slop-lang/slop/pull/249)), and a bare `Bool` field as a filter test ([#246](https://github.com/slop-lang/slop/pull/246)) | — |
+| `@example :eq f` on a record result ([#252](https://github.com/slop-lang/slop/pull/252)) | — |
 
 Four consequences worth knowing before writing a contract:
 
