@@ -313,7 +313,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **43 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **72 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
@@ -322,8 +322,14 @@ explicit request to exactly itself, `profile-implemented` admits only `el`, and 
 selects `el`; each was seen to fail under a mutation. Among the verified, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
 (nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of
-its rule's body. `make example` runs **15 executable examples**: 6 per rule, 7 on the canonical sort, and
-2 on context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
+its rule's body. `el++`'s rules (`src/rules/ksc.slop`) go further: 27 per-instance functions for
+[Krö10] Fig. 3 each prove `sound`, `complete` and `head` (the conclusion is the rule's head over the
+premises' own terms), rule (4)'s ⊥ flag proves its `@post`, and the one join combinator proves its
+soundness through a checked `@loop-invariant`. 109 mutants were each killed by exactly the contract
+they target. The combinator's completeness is owed to the prover, not claimed (the last row of the
+table below); the engine-against-reference differential holds it meanwhile. `make example` runs
+**17 executable examples**: 6 per rule, 2 on the el++ ⊥ flag, 7 on the canonical sort, and 2 on
+context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
 exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
 - context coverage in `signature-nodes`, which is loops;
 - "a class assertion is never set aside" in `decode-class-assertion`, which is blocked by
@@ -363,6 +369,11 @@ rows below were re-probed on each bump rather than assumed from release notes.
 | A callee's `@post` on a **`let`-bound** result, callee in another module included (`copy-decoded`) | — |
 | A counted `while` with `@loop-invariant {(list-len out) == i}` — a pushed list's length, across a non-pure call in the body (`copy-axioms`) | — |
 | **`@example` — genuinely executes** (0.2.1) | — |
+| A `Bool` field compared explicitly, `(== (. $result fires) true)` (el++'s rules) | **`(not (. $result fires))`** — does not translate; write `(== (. $result fires) false)` |
+| A **multi-payload** variant's positions, `(match (. $result fact) ((f-inst x y) …))` | A **single-payload** `union-new` nested in a head, or returned directly — its payload is not modelled; name it through a helper call the contract makes too (`name-term`, `ind-elem`) |
+| A `@post` over a `for-each` result, proved by a checked `@loop-invariant`, when the loop matches an `Option`-returning call: `(match (f q) ((some c) (list-push r c)) …)` (`join`) | A field **projected from a call's record result**, `(. (f q) fires)`, in an invariant — not linked to the same call in the body |
+| — | **"Every element was visited"** — a `for-each` element is only *some* member of the list, so even a one-line filter's completeness is *refuted* with an empty result (el++'s `join`; owed upstream) |
+| — | A bare `Bool` field as a filter loop's `when` test **crashes** the verifier (a Z3 sort mismatch); write `(== (. c fires) true)` |
 
 Four consequences worth knowing before writing a contract:
 

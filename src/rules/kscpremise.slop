@@ -1,0 +1,165 @@
+;; ============================================================
+;; The el++ premise index  —  SPEC §5.4, the counterpart of premise.slop
+;;
+;; For an arriving fact, the normal-form axioms whose EDB atom can join
+;; it, looked up once per fact. Every Fig. 3 rule with an EDB atom joins
+;; that atom with an IDB fact on exactly one term: a class name for an
+;; inst premise, a role for a triple or self premise. So two maps cover
+;; every rule:
+;;
+;;   on-term   y  →  the axioms with an inst(·, y) premise
+;;     subClass(y, z)            (5)
+;;     subConj(y, ·, z) and subConj(·, y, z)        (6), filed under each
+;;                                                   conjunct, once if equal
+;;     subEx(v, y, z)            (7) and (8), on the inst side
+;;     supEx(y, v, z, x′)        (9) and (10); a role assertion v(a, b)
+;;                               is filed under {a}
+;;     supSelf(y, v)             (12)
+;;
+;;   on-role   v  →  the axioms with a triple(·, v, ·) or self(·, v) premise
+;;     subEx(v, y, z)            (7) and (8), on the triple and self side
+;;     subSelf(v, z)             (11)
+;;     subRole(v, w)             (13) and (14)
+;;     subRChain(v, ·, w) and subRChain(·, v, w)    (15)-(18), filed under
+;;                               each role, once if equal (transitivity)
+;;     supProd(v, ⊤, D)          (23)-(26)
+;;
+;; WHY FILTERING LOSES NOTHING. The dispatcher (kscsat.slop) offers an
+;; axiom from a bucket to the rules its variant names, and each rule's
+;; own first test is the equality on the bucket's key, so an axiom filed
+;; elsewhere is one the rule would have rejected. Where an axiom sits in
+;; a bucket under one of two positions (subConj, subRChain), the
+;; dispatcher tries both positions and each rule decides.
+;;
+;; `individuals` is NI, for rule (1): every individual an axiom names, in
+;; first-mention order, each once.
+;;
+;; Built once, read-only after, so parallel runs may share it.
+;; ============================================================
+
+(module kscpremise
+  (@doc "Premise index over el++ normal-form axioms, one lookup per arriving fact (SPEC §5.4)")
+
+  (import rdf (IRI))
+  (import types (RoleId KName KTerm KscAxiom role-eq kname-eq kterm-eq name-term nominal-term))
+
+  (export
+    KList KscIndex build-ksc-index term-bucket role-bucket)
+
+  ;; A record around the list, for premise.slop's AxList reason: a Map of
+  ;; records makes "read it, push, write it back" explicit.
+  (type KList (record
+    (items (List KscAxiom))))
+
+  (type KscIndex (record
+    (on-term     (Map KTerm KList))
+    (on-role     (Map RoleId KList))
+    (individuals (List IRI))))
+
+  (fn k-pushed ((arena Arena) (found (Option KList)) (ax KscAxiom))
+    (@intent "The bucket a lookup found, with one more axiom — or a new bucket")
+    (@spec ((Arena (Option KList) KscAxiom) -> KList))
+    (@alloc arena)
+    ;; As premise.slop's `pushed`: the caller writes the result back.
+    (let ((mut items (match found
+                       ((some l) (. l items))
+                       ((none)   (list-new arena KscAxiom)))))
+      (do
+        (list-push items ax)
+        (record-new KList (items items)))))
+
+  (fn file-term ((arena Arena) (m (Map KTerm KList)) (y KTerm) (ax KscAxiom))
+    (@intent "File ax under the class term y")
+    (@spec ((Arena (Map KTerm KList) KTerm KscAxiom) -> Bool))
+    (@alloc arena)
+    (let ((l (k-pushed arena (map-get m y) ax)))
+      (do (map-put m y l) true)))
+
+  (fn file-role ((arena Arena) (m (Map RoleId KList)) (v RoleId) (ax KscAxiom))
+    (@intent "File ax under the role v")
+    (@spec ((Arena (Map RoleId KList) RoleId KscAxiom) -> Bool))
+    (@alloc arena)
+    (let ((l (k-pushed arena (map-get m v) ax)))
+      (do (map-put m v l) true)))
+
+  (fn first-mention ((arena Arena) (seen (Set IRI)) (a IRI))
+    (@intent "Is this a's first mention? Marks it seen")
+    (@spec ((Arena (Set IRI) IRI) -> Bool))
+    (@alloc arena)
+    (if (set-has seen a)
+      false
+      (do (set-put seen a) true)))
+
+  (fn term-individual ((t KTerm))
+    (@intent "The individual a term names, if it is a nominal")
+    (@spec ((KTerm) -> (Option IRI)))
+    (@pure)
+    (match t
+      ((k-nominal a) (some a))
+      ((k-name _)    (none))))
+
+  (fn build-ksc-index ((arena Arena) (axioms (List KscAxiom)))
+    (@intent "File every el++ normal-form axiom under the key its rules join on")
+    (@spec ((Arena (List KscAxiom)) -> KscIndex))
+    (@alloc arena)
+    ;; Filed in list order, so every bucket is in the normaliser's
+    ;; canonical order; nothing depends on it, but it keeps the index a
+    ;; function of the input.
+    (let ((on-term (map-new arena KTerm KList))
+          (on-role (map-new arena RoleId KList))
+          (seen    (set-new arena IRI))
+          (mut nis (list-new arena IRI)))
+      (do
+        (for-each (ax axioms)
+          (match ax
+            ((k-sub y z)
+              (do
+                (file-term arena on-term y ax)
+                (match (term-individual y) ((some a) (when (first-mention arena seen a) (list-push nis a))) ((none) (do)))
+                (match (term-individual z) ((some a) (when (first-mention arena seen a) (list-push nis a))) ((none) (do)))))
+            ((k-and a b _)
+              (do
+                (file-term arena on-term (name-term a) ax)
+                (when (not (kname-eq a b))
+                  (file-term arena on-term (name-term b) ax))))
+            ((k-some-lhs v a _)
+              (do
+                (file-term arena on-term (name-term a) ax)
+                (file-role arena on-role v ax)))
+            ((k-some-rhs a _ _ _)
+              (file-term arena on-term (name-term a) ax))
+            ((k-self-lhs v _)
+              (file-role arena on-role v ax))
+            ((k-self-rhs a _)
+              (file-term arena on-term (name-term a) ax))
+            ((k-role v _)
+              (file-role arena on-role v ax))
+            ((k-chain u v _)
+              (do
+                (file-role arena on-role u ax)
+                (when (not (role-eq u v))
+                  (file-role arena on-role v ax))))
+            ((k-range v _)
+              (file-role arena on-role v ax))
+            ((k-role-assert a _ b)
+              (do
+                (file-term arena on-term (nominal-term a) ax)
+                (when (first-mention arena seen a) (list-push nis a))
+                (when (first-mention arena seen b) (list-push nis b))))))
+        (record-new KscIndex
+          (on-term     on-term)
+          (on-role     on-role)
+          (individuals nis)))))
+
+  (fn term-bucket ((idx KscIndex) (y KTerm))
+    (@intent "The axioms with an inst(·, y) premise")
+    (@spec ((KscIndex KTerm) -> (Option KList)))
+    (@pure)
+    (map-get (. idx on-term) y))
+
+  (fn role-bucket ((idx KscIndex) (v RoleId))
+    (@intent "The axioms with a triple(·, v, ·) or self(·, v) premise")
+    (@spec ((KscIndex RoleId) -> (Option KList)))
+    (@pure)
+    (map-get (. idx on-role) v))
+)

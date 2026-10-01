@@ -1,0 +1,1057 @@
+;; ============================================================
+;; el++ rules — [Krö10] Fig. 3, one function per rule instance
+;; (SPEC §5.4; Constraint "No el++ rule is left owed")
+;;
+;; Each function below is ONE rule of Fig. 3 applied to ONE choice of its
+;; premises. Its parameters are exactly those premises, written as their
+;; fields, in the rule's own order: the EDB axiom first, then the IDB
+;; facts left to right. It returns a `Concl`: `fact` is the rule's head
+;; over these premises, and `fires` says whether the premises match the
+;; rule's body - the joins (shared variables) and the type tests (nom).
+;;
+;; THREE CONTRACTS PER RULE, read against the Datalog rule line for line:
+;;
+;;   sound     fires only if the body matches: every shared variable is
+;;             equal across the premises it occurs in, and nom(·) holds
+;;             where the rule asks for it
+;;   complete  fires whenever the body matches - so no instance is lost
+;;   head      `fact` is the head, built from the premises' and the
+;;             axiom's own terms and nothing else. That last half is what
+;;             §5.4 K2 needs: a conclusion names only constants already in
+;;             the run, so per-class runs share nothing but G.
+;;
+;; Soundness alone is satisfied by a rule that never fires, which is why
+;; completeness is stated separately and both are proved. Every one is
+;; seen to fail under a mutation of its body (the PR records them).
+;;
+;; WHY A FLAG AND A FIXED HEAD, NOT AN `Option`. The verifier models the
+;; fields of a record and of a multi-payload variant, so `fires` and the
+;; head's positions are visible to it. It does not follow the payload of a
+;; nested single-payload constructor, nor a value chosen by a `match` in
+;; the body: an `(Option KFact)` result, or `(union-new KTerm k-name z)`
+;; written inside the head, leaves the head unprovable though true. So the
+;; head is built unconditionally, its nested terms through the
+;; constructors in types.slop (`name-term`, `ind-elem`, ...) which the
+;; contracts name too, and `fires` carries the condition. The flag is
+;; computed by nested `if`s: `and`/`or` in a body make its value opaque.
+;;
+;; THE RULES NOT HERE. (4) is K3's flag, `ksc-4`, not a rule that
+;; materialises inst(x, y) for every class. (19)-(22) need subRConj or
+;; subProd, which K0 never produces (§5.4 "The calculus"); KscAxiom has
+;; no variant for either, so they could not even be called. (*) is
+;; Theorem 2's seed cls(q) → inst(q, q, q), as `ksc-q`.
+;;
+;; THE JOINS ARE NOT HERE EITHER. A rule whose stored partner is a SET of
+;; facts - (7) on an arriving inst, (15)-(17) on a stored leg, (27)-(29) -
+;; is still a per-instance function here, applied by ONE join combinator
+;; (`join`, below) that walks a list snapshot of the partners.
+;; ============================================================
+
+(module ksc
+  (@doc "el++ rules: [Krö10] Fig. 3, per instance, and the one join combinator (SPEC §5.4)")
+
+  (import rdf (IRI))
+  (import types (RoleId KName KTerm KElem KFact KscAxiom
+                 role-eq kname-eq kterm-eq kelem-eq kfact-eq
+                 name-term nominal-term ind-elem aux-elem class-elem
+                 thing-term nothing-term))
+  (import vocab (OWL_THING OWL_NOTHING))
+
+  (export
+    Concl JoinRule
+    is-name is-nominal is-individual term-elem concl-eq
+    ksc-1 ksc-q ksc-2 ksc-3 ksc-4 ksc-5 ksc-6 ksc-7 ksc-8
+    ksc-9 ksc-9-assert ksc-10 ksc-10-assert
+    ksc-11 ksc-12 ksc-13 ksc-14 ksc-15 ksc-16 ksc-17 ksc-18
+    ksc-23 ksc-24 ksc-25 ksc-26 ksc-27 ksc-28 ksc-29
+    join-instance join-conclusion join join-trigger-fails
+    reference-closure reference-answer)
+
+  ;; A rule instance's conclusion: the head, and whether the body matched.
+  (type Concl (record
+    (fires Bool)
+    (fact  KFact)))
+
+  ;; ============================================================
+  ;; The body's tests, as functions the contracts name
+  ;; ============================================================
+
+  (fn is-name ((t KTerm) (n KName))
+    (@intent "Is the term t the class name n?")
+    (@spec ((KTerm KName) -> Bool))
+    (@pure)
+    (match t
+      ((k-name m)    (kname-eq m n))
+      ((k-nominal _) false)))
+
+  (fn is-nominal ((t KTerm))
+    (@intent "nom(t), for a term in a class position: is t a nominal {a}?")
+    (@spec ((KTerm) -> Bool))
+    (@pure)
+    (match t
+      ((k-nominal _) true)
+      ((k-name _)    false)))
+
+  (fn is-individual ((x KElem))
+    (@intent "nom(x), for an element: is x an individual?")
+    (@spec ((KElem) -> Bool))
+    (@pure)
+    (match x
+      ((e-ind _)   true)
+      ((e-aux _)   false)
+      ((e-class _) false)))
+
+  (fn term-elem ((t KTerm))
+    (@intent "The element a term in a class position denotes: {a} is the individual a")
+    (@spec ((KTerm) -> KElem))
+    (@pure)
+    ;; Rules (27)-(29) move a nominal y = {a} from the class position into
+    ;; the element position, where it is the individual a. They fire only
+    ;; when nom(y) holds, so the class-name arm is never a conclusion; it
+    ;; is q's test individual only so that the function is total.
+    (match t
+      ((k-nominal a) (ind-elem a))
+      ((k-name n)    (class-elem n))))
+
+  (fn concl-eq ((a Concl) (b Concl))
+    (@intent "Conclusion equality: the flag and every position of the head")
+    (@spec ((Concl Concl) -> Bool))
+    (@pure)
+    (if (== (. a fires) (. b fires)) (kfact-eq (. a fact) (. b fact)) false))
+
+  ;; ============================================================
+  ;; (1)  nom(x) → inst(x, x)
+  ;; (*)  cls(q) → inst(q, q)          Theorem 2's seed of q's run
+  ;; ============================================================
+
+  (fn ksc-1 ((a IRI))
+    (@intent "[Krö10] (1): nom(x) → inst(x, x)")
+    (@spec ((IRI) -> Concl))
+    (@pure)
+    ;; nom(a) is the type: `a` is an individual. Always fires.
+    (@property sound (== (. $result fires) true))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx (ind-elem a)) (== cy (nominal-term a))))
+        (_ false)))
+    (record-new Concl (fires true) (fact (union-new KFact f-inst (ind-elem a) (nominal-term a)))))
+
+  (fn ksc-q ((q KName))
+    (@intent "[Krö10] Theorem 2's (*): cls(q) → inst(q, q, q), q's run's seed")
+    (@spec ((KName) -> Concl))
+    (@pure)
+    (@property sound (== (. $result fires) true))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx (class-elem q)) (== cy (name-term q))))
+        (_ false)))
+    (record-new Concl (fires true) (fact (union-new KFact f-inst (class-elem q) (name-term q)))))
+
+  ;; ============================================================
+  ;; (2)  nom(x) ∧ triple(x, v, x) → self(x, v)
+  ;; ============================================================
+
+  (fn ksc-2 ((x KElem) (v RoleId) (x1 KElem))
+    (@intent "[Krö10] (2): nom(x) ∧ triple(x, v, x) → self(x, v)")
+    (@spec ((KElem RoleId KElem) -> Concl))
+    (@pure)
+    ;; The premise triple(x, v, x1) with the join x1 = x.
+    (@property sound (or (== (. $result fires) false) (and (is-individual x) (kelem-eq x x1))))
+    (@property complete (or (not (is-individual x)) (not (kelem-eq x x1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-self cx cv) (and (== cx x) (== cv v)))
+        (_ false)))
+    (let ((fire (if (is-individual x) (kelem-eq x x1) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-self x v)))))
+
+  ;; ============================================================
+  ;; (3)  top(z) ∧ inst(x, z′) → inst(x, z)
+  ;;
+  ;; top(z) holds of exactly owl:Thing (§5.4 K1: ⊤ ⊑ C is subClass from
+  ;; owl:Thing), so the head is inst(x, owl:Thing), for any z′.
+  ;; ============================================================
+
+  (fn ksc-3 ((x KElem) (y KTerm))
+    (@intent "[Krö10] (3): top(z) ∧ inst(x, z′) → inst(x, z), z = owl:Thing")
+    (@spec ((KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (== (. $result fires) true))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))
+        (_ false)))
+    (record-new Concl (fires true) (fact (union-new KFact f-inst x (thing-term)))))
+
+  ;; ============================================================
+  ;; (4)  bot(z) ∧ inst(u, z) ∧ inst(x, z′) ∧ cls(y) → inst(x, y)
+  ;;
+  ;; K3: not materialised. Once any element u holds a z with bot(z) - and
+  ;; bot holds of exactly owl:Nothing - every element of the run holds
+  ;; every class, q included, so every answer about q is yes. The engine
+  ;; keeps that as a flag and stops the run.
+  ;; ============================================================
+
+  (fn ksc-4 ((u KElem) (z KTerm))
+    (@intent "[Krö10] (4) as K3's flag: does inst(u, z) put bot(z) in the run?")
+    (@spec ((KElem KTerm) -> Bool))
+    (@pure)
+    (@post (== $result (kterm-eq z (nothing-term))))
+    (@example ((aux-elem 0) (nothing-term)) -> true)
+    (@example ((aux-elem 0) (thing-term)) -> false)
+    (kterm-eq z (nothing-term)))
+
+  ;; ============================================================
+  ;; (5)  subClass(y, z) ∧ inst(x, y) → inst(x, z)
+  ;; ============================================================
+
+  (fn ksc-5 ((sy KTerm) (sz KTerm) (x KElem) (y KTerm))
+    (@intent "[Krö10] (5): subClass(y, z) ∧ inst(x, y) → inst(x, z)")
+    (@spec ((KTerm KTerm KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (kterm-eq sy y)))
+    (@property complete (or (not (kterm-eq sy y)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy sz)))
+        (_ false)))
+    (record-new Concl (fires (kterm-eq sy y)) (fact (union-new KFact f-inst x sz))))
+
+  ;; ============================================================
+  ;; (6)  subConj(y₁, y₂, z) ∧ inst(x, y₁) ∧ inst(x, y₂) → inst(x, z)
+  ;; ============================================================
+
+  (fn ksc-6 ((a KName) (b KName) (z KName) (x KElem) (y1 KTerm) (x2 KElem) (y2 KTerm))
+    (@intent "[Krö10] (6): subConj(y₁, y₂, z) ∧ inst(x, y₁) ∧ inst(x, y₂) → inst(x, z)")
+    (@spec ((KName KName KName KElem KTerm KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (is-name y1 a) (kelem-eq x x2) (is-name y2 b))))
+    (@property complete
+      (or (not (is-name y1 a)) (not (kelem-eq x x2)) (not (is-name y2 b))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
+        (_ false)))
+    (let ((fire (if (is-name y1 a) (if (kelem-eq x x2) (is-name y2 b) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-inst x (name-term z))))))
+
+  ;; ============================================================
+  ;; (7)  subEx(v, y, z) ∧ triple(x, v, x′) ∧ inst(x′, y) → inst(x, z)
+  ;; ============================================================
+
+  (fn ksc-7 ((v RoleId) (a KName) (z KName) (x KElem) (v1 RoleId) (x1 KElem) (x2 KElem) (y KTerm))
+    (@intent "[Krö10] (7): subEx(v, y, z) ∧ triple(x, v, x′) ∧ inst(x′, y) → inst(x, z)")
+    (@spec ((RoleId KName KName KElem RoleId KElem KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (role-eq v v1) (kelem-eq x1 x2) (is-name y a))))
+    (@property complete
+      (or (not (role-eq v v1)) (not (kelem-eq x1 x2)) (not (is-name y a))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
+        (_ false)))
+    (let ((fire (if (role-eq v v1) (if (kelem-eq x1 x2) (is-name y a) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-inst x (name-term z))))))
+
+  ;; ============================================================
+  ;; (8)  subEx(v, y, z) ∧ self(x, v) ∧ inst(x, y) → inst(x, z)
+  ;; ============================================================
+
+  (fn ksc-8 ((v RoleId) (a KName) (z KName) (x KElem) (v1 RoleId) (x2 KElem) (y KTerm))
+    (@intent "[Krö10] (8): subEx(v, y, z) ∧ self(x, v) ∧ inst(x, y) → inst(x, z)")
+    (@spec ((RoleId KName KName KElem RoleId KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (role-eq v v1) (kelem-eq x x2) (is-name y a))))
+    (@property complete
+      (or (not (role-eq v v1)) (not (kelem-eq x x2)) (not (is-name y a))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
+        (_ false)))
+    (let ((fire (if (role-eq v v1) (if (kelem-eq x x2) (is-name y a) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-inst x (name-term z))))))
+
+  ;; ============================================================
+  ;; (9)   supEx(y, v, z, x′) ∧ inst(x, y) → triple(x, v, x′)
+  ;; (10)  supEx(y, v, z, x′) ∧ inst(x, y) → inst(x′, z)
+  ;;
+  ;; Two shapes of supEx: A ⊑ ∃v.B with its fresh witness w (k-some-rhs),
+  ;; and a role assertion v(a, b), which is supEx({a}, v, {b}, b) by §5.4's
+  ;; Fig. 2 erratum (k-role-assert) - its "witness" is b itself.
+  ;; ============================================================
+
+  (fn ksc-9 ((a KName) (v RoleId) (b KName) (w (Int 0 ..)) (x KElem) (y KTerm))
+    (@intent "[Krö10] (9) on A ⊑ ∃v.B: supEx(A, v, B, w) ∧ inst(x, A) → triple(x, v, w)")
+    (@spec ((KName RoleId KName (Int 0 ..) KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (is-name y a)))
+    (@property complete (or (not (is-name y a)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv v) (== cz (aux-elem w))))
+        (_ false)))
+    (record-new Concl (fires (is-name y a)) (fact (union-new KFact f-triple x v (aux-elem w)))))
+
+  (fn ksc-9-assert ((a IRI) (v RoleId) (b IRI) (x KElem) (y KTerm))
+    (@intent "[Krö10] (9) on v(a, b): supEx({a}, v, {b}, b) ∧ inst(x, {a}) → triple(x, v, b)")
+    (@spec ((IRI RoleId IRI KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (kterm-eq y (nominal-term a))))
+    (@property complete (or (not (kterm-eq y (nominal-term a))) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv v) (== cz (ind-elem b))))
+        (_ false)))
+    (record-new Concl (fires (kterm-eq y (nominal-term a)))
+                      (fact (union-new KFact f-triple x v (ind-elem b)))))
+
+  (fn ksc-10 ((a KName) (v RoleId) (b KName) (w (Int 0 ..)) (x KElem) (y KTerm))
+    (@intent "[Krö10] (10) on A ⊑ ∃v.B: supEx(A, v, B, w) ∧ inst(x, A) → inst(w, B)")
+    (@spec ((KName RoleId KName (Int 0 ..) KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (is-name y a)))
+    (@property complete (or (not (is-name y a)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx (aux-elem w)) (== cy (name-term b))))
+        (_ false)))
+    (record-new Concl (fires (is-name y a)) (fact (union-new KFact f-inst (aux-elem w) (name-term b)))))
+
+  (fn ksc-10-assert ((a IRI) (v RoleId) (b IRI) (x KElem) (y KTerm))
+    (@intent "[Krö10] (10) on v(a, b): supEx({a}, v, {b}, b) ∧ inst(x, {a}) → inst(b, {b})")
+    (@spec ((IRI RoleId IRI KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (kterm-eq y (nominal-term a))))
+    (@property complete (or (not (kterm-eq y (nominal-term a))) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx (ind-elem b)) (== cy (nominal-term b))))
+        (_ false)))
+    (record-new Concl (fires (kterm-eq y (nominal-term a)))
+                      (fact (union-new KFact f-inst (ind-elem b) (nominal-term b)))))
+
+  ;; ============================================================
+  ;; (11)  subSelf(v, z) ∧ self(x, v) → inst(x, z)
+  ;; (12)  supSelf(y, v) ∧ inst(x, y) → self(x, v)
+  ;; ============================================================
+
+  (fn ksc-11 ((v RoleId) (z KName) (x KElem) (v1 RoleId))
+    (@intent "[Krö10] (11): subSelf(v, z) ∧ self(x, v) → inst(x, z)")
+    (@spec ((RoleId KName KElem RoleId) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (name-term z))))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (name-term z)))))
+
+  (fn ksc-12 ((a KName) (v RoleId) (x KElem) (y KTerm))
+    (@intent "[Krö10] (12): supSelf(y, v) ∧ inst(x, y) → self(x, v)")
+    (@spec ((KName RoleId KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (is-name y a)))
+    (@property complete (or (not (is-name y a)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-self cx cv) (and (== cx x) (== cv v)))
+        (_ false)))
+    (record-new Concl (fires (is-name y a)) (fact (union-new KFact f-self x v))))
+
+  ;; ============================================================
+  ;; (13)  subRole(v, w) ∧ triple(x, v, x′) → triple(x, w, x′)
+  ;; (14)  subRole(v, w) ∧ self(x, v) → self(x, w)
+  ;;
+  ;; Materialised literally (§5.4): el++ stores a triple under every role
+  ;; above the one it was derived with, unlike el's read-through closure.
+  ;; ============================================================
+
+  (fn ksc-13 ((v RoleId) (w RoleId) (x KElem) (v1 RoleId) (x1 KElem))
+    (@intent "[Krö10] (13): subRole(v, w) ∧ triple(x, v, x′) → triple(x, w, x′)")
+    (@spec ((RoleId RoleId KElem RoleId KElem) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x1)))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-triple x w x1))))
+
+  (fn ksc-14 ((v RoleId) (w RoleId) (x KElem) (v1 RoleId))
+    (@intent "[Krö10] (14): subRole(v, w) ∧ self(x, v) → self(x, w)")
+    (@spec ((RoleId RoleId KElem RoleId) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-self cx cv) (and (== cx x) (== cv w)))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-self x w))))
+
+  ;; ============================================================
+  ;; (15)  subRChain(u, v, w) ∧ triple(x, u, x′) ∧ triple(x′, v, x″) → triple(x, w, x″)
+  ;; (16)  subRChain(u, v, w) ∧ self(x, u) ∧ triple(x, v, x′) → triple(x, w, x′)
+  ;; (17)  subRChain(u, v, w) ∧ triple(x, u, x′) ∧ self(x′, v) → triple(x, w, x′)
+  ;; (18)  subRChain(u, v, w) ∧ self(x, u) ∧ self(x, v) → triple(x, w, x)
+  ;; ============================================================
+
+  (fn ksc-15 ((u RoleId) (v RoleId) (w RoleId)
+              (x KElem) (u1 RoleId) (x1 KElem) (x2 KElem) (v1 RoleId) (x3 KElem))
+    (@intent "[Krö10] (15): subRChain(u, v, w) ∧ triple(x, u, x′) ∧ triple(x′, v, x″) → triple(x, w, x″)")
+    (@spec ((RoleId RoleId RoleId KElem RoleId KElem KElem RoleId KElem) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (role-eq u u1) (kelem-eq x1 x2) (role-eq v v1))))
+    (@property complete
+      (or (not (role-eq u u1)) (not (kelem-eq x1 x2)) (not (role-eq v v1))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x3)))
+        (_ false)))
+    (let ((fire (if (role-eq u u1) (if (kelem-eq x1 x2) (role-eq v v1) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x3)))))
+
+  (fn ksc-16 ((u RoleId) (v RoleId) (w RoleId)
+              (x KElem) (u1 RoleId) (x2 KElem) (v1 RoleId) (x3 KElem))
+    (@intent "[Krö10] (16): subRChain(u, v, w) ∧ self(x, u) ∧ triple(x, v, x′) → triple(x, w, x′)")
+    (@spec ((RoleId RoleId RoleId KElem RoleId KElem RoleId KElem) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (role-eq u u1) (kelem-eq x x2) (role-eq v v1))))
+    (@property complete
+      (or (not (role-eq u u1)) (not (kelem-eq x x2)) (not (role-eq v v1))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x3)))
+        (_ false)))
+    (let ((fire (if (role-eq u u1) (if (kelem-eq x x2) (role-eq v v1) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x3)))))
+
+  (fn ksc-17 ((u RoleId) (v RoleId) (w RoleId)
+              (x KElem) (u1 RoleId) (x1 KElem) (x2 KElem) (v1 RoleId))
+    (@intent "[Krö10] (17): subRChain(u, v, w) ∧ triple(x, u, x′) ∧ self(x′, v) → triple(x, w, x′)")
+    (@spec ((RoleId RoleId RoleId KElem RoleId KElem KElem RoleId) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (role-eq u u1) (kelem-eq x1 x2) (role-eq v v1))))
+    (@property complete
+      (or (not (role-eq u u1)) (not (kelem-eq x1 x2)) (not (role-eq v v1))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x1)))
+        (_ false)))
+    (let ((fire (if (role-eq u u1) (if (kelem-eq x1 x2) (role-eq v v1) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x1)))))
+
+  (fn ksc-18 ((u RoleId) (v RoleId) (w RoleId) (x KElem) (u1 RoleId) (x2 KElem) (v1 RoleId))
+    (@intent "[Krö10] (18): subRChain(u, v, w) ∧ self(x, u) ∧ self(x, v) → triple(x, w, x)")
+    (@spec ((RoleId RoleId RoleId KElem RoleId KElem RoleId) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false)
+          (and (role-eq u u1) (kelem-eq x x2) (role-eq v v1))))
+    (@property complete
+      (or (not (role-eq u u1)) (not (kelem-eq x x2)) (not (role-eq v v1))
+          (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx x) (== cv w) (== cz x)))
+        (_ false)))
+    (let ((fire (if (role-eq u u1) (if (kelem-eq x x2) (role-eq v v1) false) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-triple x w x)))))
+
+  ;; ============================================================
+  ;; (23)  supProd(v, z₁, z₂) ∧ triple(x, v, x′) → inst(x, z₁)
+  ;; (24)  supProd(v, z₁, z₂) ∧ self(x, v) → inst(x, z₁)
+  ;; (25)  supProd(v, z₁, z₂) ∧ triple(x, v, x′) → inst(x′, z₂)
+  ;; (26)  supProd(v, z₁, z₂) ∧ self(x, v) → inst(x, z₂)
+  ;;
+  ;; K0 writes only ranges, R ⊑ ⊤ × D, so z₁ is owl:Thing and z₂ is D.
+  ;; ============================================================
+
+  (fn ksc-23 ((v RoleId) (d KName) (x KElem) (v1 RoleId) (x1 KElem))
+    (@intent "[Krö10] (23): supProd(v, ⊤, D) ∧ triple(x, v, x′) → inst(x, ⊤)")
+    (@spec ((RoleId KName KElem RoleId KElem) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (thing-term)))))
+
+  (fn ksc-24 ((v RoleId) (d KName) (x KElem) (v1 RoleId))
+    (@intent "[Krö10] (24): supProd(v, ⊤, D) ∧ self(x, v) → inst(x, ⊤)")
+    (@spec ((RoleId KName KElem RoleId) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (thing-term)))))
+
+  (fn ksc-25 ((v RoleId) (d KName) (x KElem) (v1 RoleId) (x1 KElem))
+    (@intent "[Krö10] (25): supProd(v, ⊤, D) ∧ triple(x, v, x′) → inst(x′, D)")
+    (@spec ((RoleId KName KElem RoleId KElem) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x1) (== cy (name-term d))))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x1 (name-term d)))))
+
+  (fn ksc-26 ((v RoleId) (d KName) (x KElem) (v1 RoleId))
+    (@intent "[Krö10] (26): supProd(v, ⊤, D) ∧ self(x, v) → inst(x, D)")
+    (@spec ((RoleId KName KElem RoleId) -> Concl))
+    (@pure)
+    (@property sound (or (== (. $result fires) false) (role-eq v v1)))
+    (@property complete (or (not (role-eq v v1)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy (name-term d))))
+        (_ false)))
+    (record-new Concl (fires (role-eq v v1)) (fact (union-new KFact f-inst x (name-term d)))))
+
+  ;; ============================================================
+  ;; (27)  inst(x, y) ∧ nom(y) ∧ inst(x, z) → inst(y, z)
+  ;; (28)  inst(x, y) ∧ nom(y) ∧ inst(y, z) → inst(x, z)
+  ;; (29)  inst(x, y) ∧ nom(y) ∧ triple(z, u, x) → triple(z, u, y)
+  ;;
+  ;; Equality: inst(x, {a}) says x = a. y moves from the class position to
+  ;; the element position as `term-elem y`, the individual a.
+  ;; ============================================================
+
+  (fn ksc-27 ((x KElem) (y KTerm) (x2 KElem) (z KTerm))
+    (@intent "[Krö10] (27): inst(x, y) ∧ nom(y) ∧ inst(x, z) → inst(y, z)")
+    (@spec ((KElem KTerm KElem KTerm) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false) (and (is-nominal y) (kelem-eq x x2))))
+    (@property complete
+      (or (not (is-nominal y)) (not (kelem-eq x x2)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx (term-elem y)) (== cy z)))
+        (_ false)))
+    (let ((fire (if (is-nominal y) (kelem-eq x x2) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-inst (term-elem y) z)))))
+
+  (fn ksc-28 ((x KElem) (y KTerm) (x2 KElem) (z KTerm))
+    (@intent "[Krö10] (28): inst(x, y) ∧ nom(y) ∧ inst(y, z) → inst(x, z)")
+    (@spec ((KElem KTerm KElem KTerm) -> Concl))
+    (@pure)
+    ;; The second premise's element is y itself: x2 = term-elem y.
+    (@property sound
+      (or (== (. $result fires) false) (and (is-nominal y) (kelem-eq (term-elem y) x2))))
+    (@property complete
+      (or (not (is-nominal y)) (not (kelem-eq (term-elem y) x2)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-inst cx cy) (and (== cx x) (== cy z)))
+        (_ false)))
+    (let ((fire (if (is-nominal y) (kelem-eq (term-elem y) x2) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-inst x z)))))
+
+  (fn ksc-29 ((x KElem) (y KTerm) (z KElem) (u RoleId) (x2 KElem))
+    (@intent "[Krö10] (29): inst(x, y) ∧ nom(y) ∧ triple(z, u, x) → triple(z, u, y)")
+    (@spec ((KElem KTerm KElem RoleId KElem) -> Concl))
+    (@pure)
+    (@property sound
+      (or (== (. $result fires) false) (and (is-nominal y) (kelem-eq x x2))))
+    (@property complete
+      (or (not (is-nominal y)) (not (kelem-eq x x2)) (== (. $result fires) true)))
+    (@property head
+      (match (. $result fact)
+        ((f-triple cx cv cz) (and (== cx z) (== cv u) (== cz (term-elem y))))
+        (_ false)))
+    (let ((fire (if (is-nominal y) (kelem-eq x x2) false)))
+      (record-new Concl (fires fire) (fact (union-new KFact f-triple z u (term-elem y))))))
+
+  ;; ============================================================
+  ;; THE JOIN COMBINATOR
+  ;;
+  ;; A rule whose stored partner is a set of facts is applied to each
+  ;; partner in turn: the per-instance function above, once per partner.
+  ;; `JoinRule` names the rule and which of its premises arrived; the
+  ;; partners are the stored facts that can fill the other premise - a
+  ;; LIST SNAPSHOT the caller takes from the store, so facts committed
+  ;; while the walk runs are not in it (they arrive as triggers of their
+  ;; own, which is what semi-naive evaluation relies on).
+  ;;
+  ;;   tag         trigger (arrived)        partner (stored)           rule
+  ;;   ----------- ------------------------ -------------------------- ----
+  ;;   j7-inst     inst(x′, y)              triple(x, v, x′)           (7)
+  ;;   j15-first   triple(x, u, x′)         triple(x′, v, x″)          (15)
+  ;;   j15-second  triple(x′, v, x″)        triple(x, u, x′)           (15)
+  ;;   j16-self    self(x, u)               triple(x, v, x′)           (16)
+  ;;   j17-self    self(x′, v)              triple(x, u, x′)           (17)
+  ;;   j27-nom     inst(x, y), nom(y)       inst(x, z)                 (27)
+  ;;   j27-other   inst(x, z)               inst(x, y), nom(y)         (27)
+  ;;   j28-nom     inst(x, y), nom(y)       inst(y, z)                 (28)
+  ;;   j28-ind     inst(y, z), y = a        inst(x, {a})               (28)
+  ;;   j29-nom     inst(x, y), nom(y)       triple(z, u, x)            (29)
+  ;;   j29-triple  triple(z, u, x)          inst(x, y), nom(y)         (29)
+  ;;
+  ;; `join-instance` only unpacks the two facts into the rule's premises,
+  ;; in the rule's order, and calls the per-instance function, whose
+  ;; contracts say what fires. `join` walks the snapshot:
+  ;;
+  ;;   sound     PROVED (`@post`, by a checked `@loop-invariant`): every
+  ;;             fact returned is the head of a firing instance with some
+  ;;             partner in the snapshot.
+  ;;   complete  OWED TO THE PROVER, NOT CLAIMED: every partner's firing
+  ;;             head is returned. slop models a for-each's element only as
+  ;;             SOME member of the list, never as having visited every
+  ;;             member, so "for every partner, ..." over a loop's output
+  ;;             does not verify for even the simplest filter (the verifier
+  ;;             refutes it with an empty result). Per the Constraint it is
+  ;;             reported, never claimed, and the remedy is upstream: a
+  ;;             for-each model that knows its visited prefix. The
+  ;;             reference evaluator is the empirical check meanwhile.
+  ;;
+  ;; `join-instance` and `join-conclusion` carry no contract: they unpack
+  ;; two facts into a rule's premises and turn its Concl into an Option,
+  ;; and the links the prover would need are field projections of a
+  ;; call's result, which it does not follow. They are glue, and the
+  ;; reference differential covers them.
+  ;; ============================================================
+
+  (type JoinRule (enum
+    j7-inst j15-first j15-second j16-self j17-self
+    j27-nom j27-other j28-nom j28-ind j29-nom j29-triple))
+
+  (fn join-trigger-fails ((t KFact))
+    (@intent "The non-firing conclusion for a pair that does not fit its rule's shape")
+    (@spec ((KFact) -> Concl))
+    (@pure)
+    (record-new Concl (fires false) (fact t)))
+
+  (fn join-instance ((tag JoinRule) (t KFact) (p KFact) (ax KscAxiom))
+    (@intent "One instance of a joined rule: the arrived fact and one stored partner, as premises")
+    (@spec ((JoinRule KFact KFact KscAxiom) -> Concl))
+    (@pure)
+    ;; A pair whose facts or axiom are not the shapes the tag names is not
+    ;; an instance of the rule at all, and does not fire. The dispatcher
+    ;; never builds one; answering "no" keeps this total.
+    (match tag
+      ('j7-inst
+        (match ax
+          ((k-some-lhs v a z)
+            (match p
+              ((f-triple x v1 x1)
+                (match t
+                  ((f-inst x2 y) (ksc-7 v a z x v1 x1 x2 y))
+                  (_ (join-trigger-fails t))))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j15-first
+        (match ax
+          ((k-chain u v w)
+            (match t
+              ((f-triple x u1 x1)
+                (match p
+                  ((f-triple x2 v1 x3) (ksc-15 u v w x u1 x1 x2 v1 x3))
+                  (_ (join-trigger-fails t))))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j15-second
+        (match ax
+          ((k-chain u v w)
+            (match p
+              ((f-triple x u1 x1)
+                (match t
+                  ((f-triple x2 v1 x3) (ksc-15 u v w x u1 x1 x2 v1 x3))
+                  (_ (join-trigger-fails t))))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j16-self
+        (match ax
+          ((k-chain u v w)
+            (match t
+              ((f-self x u1)
+                (match p
+                  ((f-triple x2 v1 x3) (ksc-16 u v w x u1 x2 v1 x3))
+                  (_ (join-trigger-fails t))))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j17-self
+        (match ax
+          ((k-chain u v w)
+            (match p
+              ((f-triple x u1 x1)
+                (match t
+                  ((f-self x2 v1) (ksc-17 u v w x u1 x1 x2 v1))
+                  (_ (join-trigger-fails t))))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j27-nom
+        (match t
+          ((f-inst x y)
+            (match p
+              ((f-inst x2 z) (ksc-27 x y x2 z))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j27-other
+        (match p
+          ((f-inst x y)
+            (match t
+              ((f-inst x2 z) (ksc-27 x y x2 z))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j28-nom
+        (match t
+          ((f-inst x y)
+            (match p
+              ((f-inst x2 z) (ksc-28 x y x2 z))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j28-ind
+        (match p
+          ((f-inst x y)
+            (match t
+              ((f-inst x2 z) (ksc-28 x y x2 z))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j29-nom
+        (match t
+          ((f-inst x y)
+            (match p
+              ((f-triple z u x2) (ksc-29 x y z u x2))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))
+      ('j29-triple
+        (match p
+          ((f-inst x y)
+            (match t
+              ((f-triple z u x2) (ksc-29 x y z u x2))
+              (_ (join-trigger-fails t))))
+          (_ (join-trigger-fails t))))))
+
+  (fn join-conclusion ((tag JoinRule) (t KFact) (p KFact) (ax KscAxiom))
+    (@intent "One joined instance's conclusion, if it fires")
+    (@spec ((JoinRule KFact KFact KscAxiom) -> (Option KFact)))
+    (@pure)
+    ;; The combinator's invariant is stated over this Option: the prover
+    ;; links a call's Option result between the loop body and the
+    ;; invariant, but not a field projected from a call's record result -
+    ;; which is also why this function has no @post tying it to
+    ;; `join-instance`: that link is exactly such a projection. It is the
+    ;; two lines below, and the reference differential covers it.
+    (let ((c (join-instance tag t p ax)))
+      (if (== (. c fires) true) (some (. c fact)) (none))))
+
+  (fn join ((arena Arena) (tag JoinRule) (t KFact) (ps (List KFact)) (ax KscAxiom))
+    (@intent "Apply one joined rule to an arrived fact and every stored partner in a snapshot")
+    (@spec ((Arena JoinRule KFact (List KFact) KscAxiom) -> (List KFact)))
+    (@alloc arena)
+    (@post (forall (c $result) (exists (q ps) (== (join-conclusion tag t q ax) (some c)))))
+    ;; COMPLETENESS IS NOT A CONTRACT HERE, AND IS NOT CLAIMED. Stated as
+    ;;   (forall (q ps) (match (join-conclusion tag t q ax)
+    ;;                    ((some c) (list-contains $result c)) ((none) true)))
+    ;; slop's verifier REFUTES it, with a model whose result is empty:
+    ;; its for-each element is only "some member of ps", so nothing makes
+    ;; the walk visit them all. That is the prover's gap, not the code's,
+    ;; and a contract the verifier reports failed cannot stand. It returns
+    ;; as a contract when slop models a for-each's visited prefix.
+    (let ((mut result (list-new arena KFact)))
+      (for-each (q ps)
+        (@loop-invariant
+          (forall (c result) (exists (q2 ps) (== (join-conclusion tag t q2 ax) (some c)))))
+        (match (join-conclusion tag t q ax)
+          ((some c) (list-push result c))
+          ((none)   (do))))
+      result))
+
+  ;; ============================================================
+  ;; THE REFERENCE EVALUATOR — Theorem 2's Psc for one q, run naively
+  ;;
+  ;; The oracle for the engine, as `apply-el-rules-reference` is for el.
+  ;; It shares nothing with kscsat.slop but the per-instance functions,
+  ;; whose contracts are proved: no index, no store, no dispatcher, no
+  ;; join combinator, no G. Each round applies every rule to EVERY choice
+  ;; of premises among the facts so far - each fact against each axiom,
+  ;; each pair of facts against each axiom - until a round adds nothing.
+  ;; Quadratic per round, and meant only for fixtures and fuzz cases.
+  ;;
+  ;; It is the q-slice of Psc literally: Kinst on I(KB) ∪ {inst(q, q)},
+  ;; which Theorem 2's proof identifies with Ksc's facts under q. So the
+  ;; engine agreeing with it on every class is the empirical check of K2
+  ;; (sharing G). Rule (4) IS materialised here, for every class name of
+  ;; the KB, so the engine agreeing with it also checks K3 (the flag).
+  ;; With no q it computes G, Kinst's closure of I(KB) alone.
+  ;; ============================================================
+
+  (fn ref-add ((arena Arena) (seen (Set KFact)) (c Concl))
+    (@intent "Is c a firing conclusion not yet in the closure? Marks it seen")
+    (@spec ((Arena (Set KFact) Concl) -> Bool))
+    (@alloc arena)
+    (if (== (. c fires) true)
+      (if (set-has seen (. c fact))
+        false
+        (do (set-put seen (. c fact)) true))
+      false))
+
+  (fn ref-names ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)))
+    (@intent "cls(·): every class name the KB or the caller names, owl:Thing and owl:Nothing")
+    (@spec ((Arena (List KscAxiom) (List KName)) -> (List KName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KName))
+          (seen (set-new arena KName)))
+      (do
+        (for-each (n classes) (when (not (set-has seen n)) (do (set-put seen n) (list-push out n))))
+        (let ((t (union-new KName k-class (record-new IRI (value OWL_THING))))
+              (b (union-new KName k-class (record-new IRI (value OWL_NOTHING)))))
+          (do
+            (when (not (set-has seen t)) (do (set-put seen t) (list-push out t)))
+            (when (not (set-has seen b)) (do (set-put seen b) (list-push out b)))))
+        (for-each (ax axioms)
+          (for-each (n (axiom-names arena ax))
+            (when (not (set-has seen n)) (do (set-put seen n) (list-push out n)))))
+        out)))
+
+  (fn axiom-names ((arena Arena) (ax KscAxiom))
+    (@intent "The class names an axiom mentions")
+    (@spec ((Arena KscAxiom) -> (List KName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KName)))
+      (do
+        (match ax
+          ((k-sub y z)
+            (do
+              (match y ((k-name n) (list-push out n)) ((k-nominal _) (do)))
+              (match z ((k-name n) (list-push out n)) ((k-nominal _) (do)))))
+          ((k-and a b z)          (do (list-push out a) (list-push out b) (list-push out z)))
+          ((k-some-lhs _ a z)     (do (list-push out a) (list-push out z)))
+          ((k-some-rhs a _ b _)   (do (list-push out a) (list-push out b)))
+          ((k-self-lhs _ z)       (list-push out z))
+          ((k-self-rhs a _)       (list-push out a))
+          ((k-role _ _)           (do))
+          ((k-chain _ _ _)        (do))
+          ((k-range _ d)          (list-push out d))
+          ((k-role-assert _ _ _)  (do)))
+        out)))
+
+  (fn ref-individuals ((arena Arena) (axioms (List KscAxiom)))
+    (@intent "NI: every individual an axiom names, each once")
+    (@spec ((Arena (List KscAxiom)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI))
+          (seen (set-new arena IRI)))
+      (do
+        (for-each (ax axioms)
+          (match ax
+            ((k-sub y z)
+              (do
+                (match y ((k-nominal a) (when (not (set-has seen a)) (do (set-put seen a) (list-push out a)))) ((k-name _) (do)))
+                (match z ((k-nominal a) (when (not (set-has seen a)) (do (set-put seen a) (list-push out a)))) ((k-name _) (do)))))
+            ((k-role-assert a _ b)
+              (do
+                (when (not (set-has seen a)) (do (set-put seen a) (list-push out a)))
+                (when (not (set-has seen b)) (do (set-put seen b) (list-push out b)))))
+            ((k-and _ _ _)         (do))
+            ((k-some-lhs _ _ _)    (do))
+            ((k-some-rhs _ _ _ _)  (do))
+            ((k-self-lhs _ _)      (do))
+            ((k-self-rhs _ _)      (do))
+            ((k-role _ _)          (do))
+            ((k-chain _ _ _)       (do))
+            ((k-range _ _)         (do))))
+        out)))
+
+  (fn ref-unary ((arena Arena) (f KFact) (ax KscAxiom))
+    (@intent "Every one-IDB-premise rule instance with f and ax as its premises")
+    (@spec ((Arena KFact KscAxiom) -> (List Concl)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Concl)))
+      (do
+        (match f
+          ((f-inst x y)
+            (match ax
+              ((k-sub sy sz)          (list-push out (ksc-5 sy sz x y)))
+              ((k-some-rhs a v b w)   (do (list-push out (ksc-9 a v b w x y)) (list-push out (ksc-10 a v b w x y))))
+              ((k-role-assert a v b)  (do (list-push out (ksc-9-assert a v b x y)) (list-push out (ksc-10-assert a v b x y))))
+              ((k-self-rhs a v)       (list-push out (ksc-12 a v x y)))
+              ((k-and _ _ _)          (do))
+              ((k-some-lhs _ _ _)     (do))
+              ((k-self-lhs _ _)       (do))
+              ((k-role _ _)           (do))
+              ((k-chain _ _ _)        (do))
+              ((k-range _ _)          (do))))
+          ((f-triple x v1 x1)
+            (match ax
+              ((k-role v w)           (list-push out (ksc-13 v w x v1 x1)))
+              ((k-range v d)          (do (list-push out (ksc-23 v d x v1 x1)) (list-push out (ksc-25 v d x v1 x1))))
+              ((k-sub _ _)            (do))
+              ((k-and _ _ _)          (do))
+              ((k-some-lhs _ _ _)     (do))
+              ((k-some-rhs _ _ _ _)   (do))
+              ((k-self-lhs _ _)       (do))
+              ((k-self-rhs _ _)       (do))
+              ((k-chain _ _ _)        (do))
+              ((k-role-assert _ _ _)  (do))))
+          ((f-self x v1)
+            (match ax
+              ((k-self-lhs v z)       (list-push out (ksc-11 v z x v1)))
+              ((k-role v w)           (list-push out (ksc-14 v w x v1)))
+              ((k-range v d)          (do (list-push out (ksc-24 v d x v1)) (list-push out (ksc-26 v d x v1))))
+              ((k-sub _ _)            (do))
+              ((k-and _ _ _)          (do))
+              ((k-some-lhs _ _ _)     (do))
+              ((k-some-rhs _ _ _ _)   (do))
+              ((k-self-rhs _ _)       (do))
+              ((k-chain _ _ _)        (do))
+              ((k-role-assert _ _ _)  (do)))))
+        out)))
+
+  (fn ref-binary ((arena Arena) (f1 KFact) (f2 KFact) (ax KscAxiom))
+    (@intent "Every two-IDB-premise rule instance with f1, then f2, as its premises, and ax")
+    (@spec ((Arena KFact KFact KscAxiom) -> (List Concl)))
+    (@alloc arena)
+    ;; f1 fills the rule's first IDB premise and f2 its second; the caller
+    ;; offers every ordered pair, so both orders are tried.
+    (let ((mut out (list-new arena Concl)))
+      (do
+        (match ax
+          ((k-and a b z)
+            (match f1
+              ((f-inst x y1) (match f2 ((f-inst x2 y2) (list-push out (ksc-6 a b z x y1 x2 y2))) (_ (do))))
+              (_ (do))))
+          ((k-some-lhs v a z)
+            (match f2
+              ((f-inst x2 y)
+                (match f1
+                  ((f-triple x v1 x1) (list-push out (ksc-7 v a z x v1 x1 x2 y)))
+                  ((f-self x v1)      (list-push out (ksc-8 v a z x v1 x2 y)))
+                  ((f-inst _ _)       (do))))
+              (_ (do))))
+          ((k-chain u v w)
+            (match f1
+              ((f-triple x u1 x1)
+                (match f2
+                  ((f-triple x2 v1 x3) (list-push out (ksc-15 u v w x u1 x1 x2 v1 x3)))
+                  ((f-self x2 v1)      (list-push out (ksc-17 u v w x u1 x1 x2 v1)))
+                  ((f-inst _ _)        (do))))
+              ((f-self x u1)
+                (match f2
+                  ((f-triple x2 v1 x3) (list-push out (ksc-16 u v w x u1 x2 v1 x3)))
+                  ((f-self x2 v1)      (list-push out (ksc-18 u v w x u1 x2 v1)))
+                  ((f-inst _ _)        (do))))
+              ((f-inst _ _) (do))))
+          ((k-sub _ _)            (do))
+          ((k-some-rhs _ _ _ _)   (do))
+          ((k-self-lhs _ _)       (do))
+          ((k-self-rhs _ _)       (do))
+          ((k-role _ _)           (do))
+          ((k-range _ _)          (do))
+          ((k-role-assert _ _ _)  (do)))
+        out)))
+
+  (fn ref-equality ((arena Arena) (f1 KFact) (f2 KFact))
+    (@intent "Rules (27)-(29) with f1 as inst(x, y), nom(y), and f2 as their second premise")
+    (@spec ((Arena KFact KFact) -> (List Concl)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Concl)))
+      (do
+        (match f1
+          ((f-inst x y)
+            (match f2
+              ((f-inst x2 z)
+                (do (list-push out (ksc-27 x y x2 z)) (list-push out (ksc-28 x y x2 z))))
+              ((f-triple z u x2) (list-push out (ksc-29 x y z u x2)))
+              ((f-self _ _) (do))))
+          ((f-triple _ _ _) (do))
+          ((f-self _ _) (do)))
+        out)))
+
+  (fn reference-closure ((arena Arena) (axioms (List KscAxiom)) (q (Option KName)) (classes (List KName)))
+    (@intent "Psc's facts under q (or G with no q), by naive rounds to the fixpoint, rule (4) included")
+    (@spec ((Arena (List KscAxiom) (Option KName) (List KName)) -> (List KFact)))
+    (@alloc arena)
+    (let ((seen  (set-new arena KFact))
+          (mut facts (list-new arena KFact))
+          (names (ref-names arena axioms classes))
+          (mut changed true))
+      (do
+        (for-each (a (ref-individuals arena axioms))
+          (let ((c (ksc-1 a))) (when (ref-add arena seen c) (list-push facts (. c fact)))))
+        (match q
+          ((some qn) (let ((c (ksc-q qn))) (when (ref-add arena seen c) (list-push facts (. c fact)))))
+          ((none) (do)))
+        (while changed
+          (let ((snap facts)
+                (mut fresh (list-new arena KFact))
+                (mut bottom false))
+            (do
+              (for-each (f1 snap)
+                (do
+                  (match f1
+                    ((f-inst x y)
+                      (do
+                        (let ((c (ksc-3 x y))) (when (ref-add arena seen c) (list-push fresh (. c fact))))
+                        (when (ksc-4 x y) (set! bottom true))))
+                    ((f-triple x v x1)
+                      (let ((c (ksc-2 x v x1))) (when (ref-add arena seen c) (list-push fresh (. c fact)))))
+                    ((f-self _ _) (do)))
+                  (for-each (ax axioms)
+                    (for-each (c (ref-unary arena f1 ax))
+                      (when (ref-add arena seen c) (list-push fresh (. c fact)))))
+                  (for-each (f2 snap)
+                    (do
+                      (for-each (ax axioms)
+                        (for-each (c (ref-binary arena f1 f2 ax))
+                          (when (ref-add arena seen c) (list-push fresh (. c fact)))))
+                      (for-each (c (ref-equality arena f1 f2))
+                        (when (ref-add arena seen c) (list-push fresh (. c fact))))))))
+              ;; Rule (4), materialised: once any element holds a class
+              ;; with bot, every element holding anything holds every class.
+              (when bottom
+                (for-each (f snap)
+                  (match f
+                    ((f-inst x _)
+                      (for-each (n names)
+                        (let ((c (record-new Concl (fires true)
+                                   (fact (union-new KFact f-inst x (name-term n))))))
+                          (when (ref-add arena seen c) (list-push fresh (. c fact))))))
+                    ((f-triple _ _ _) (do))
+                    ((f-self _ _) (do)))))
+              (for-each (f fresh) (list-push facts f))
+              (set! changed (> (list-len fresh) 0)))))
+        facts)))
+
+  (fn reference-answer ((facts (List KFact)) (q KName) (b KName))
+    (@intent "Theorem 2's output: inst_sc(q, B, q), read from q's closure")
+    (@spec (((List KFact) KName KName) -> Bool))
+    (let ((mut found false))
+      (do
+        (for-each (f facts)
+          (match f
+            ((f-inst x y)
+              (when (kelem-eq x (class-elem q))
+                (when (is-name y b) (set! found true))))
+            ((f-triple _ _ _) (do))
+            ((f-self _ _) (do))))
+        found)))
+)

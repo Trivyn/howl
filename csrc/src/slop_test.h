@@ -22,6 +22,10 @@
 #include "slop_report.h"
 #include "slop_select.h"
 #include "slop_kscnormal.h"
+#include "slop_kscsat.h"
+#include "slop_ksc.h"
+
+typedef struct test_KscFixture test_KscFixture;
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -50,6 +54,18 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
+#define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
+#define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_KscAxiom, slop_list_types_KscAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_KNAME_DEFINED
+#define SLOP_LIST_TYPES_KNAME_DEFINED
+#define SLOP_LIST_TYPES_KNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_KName, slop_list_types_KName)
 #endif
 
 #ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
@@ -93,6 +109,16 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 #define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
@@ -106,6 +132,17 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 #define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
+#endif
+
+struct test_KscFixture {
+    slop_list_types_KscAxiom axioms;
+    slop_list_types_KName classes;
+};
+typedef struct test_KscFixture test_KscFixture;
+
+#ifndef SLOP_OPTION_TEST_KSCFIXTURE_DEFINED
+#define SLOP_OPTION_TEST_KSCFIXTURE_DEFINED
+SLOP_OPTION_DEFINE(test_KscFixture, slop_option_test_KscFixture)
 #endif
 
 
@@ -293,6 +330,32 @@ uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
 slop_string test_ksc_form_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_ksc_form_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
+rdf_IRI test_kx_a(void);
+rdf_IRI test_kx_b(void);
+types_KName test_kx_A(void);
+types_KName test_kx_B(void);
+types_KName test_kx_C(void);
+types_RoleId test_kx_r(void);
+types_RoleId test_kx_s(void);
+types_RoleId test_kx_t(void);
+types_KElem test_kx_x(void);
+types_KElem test_kx_w(void);
+types_KElem test_kx_ia(void);
+types_KTerm test_kx_tA(void);
+types_KTerm test_kx_tB(void);
+types_KTerm test_kx_tC(void);
+types_KTerm test_kx_na(void);
+uint8_t test_concl_is(slop_arena* arena, slop_string label, ksc_Concl got, uint8_t fires, types_KFact fact);
+uint8_t test_test_ksc_rule_instances(slop_arena* arena);
+slop_option_test_KscFixture test_ksc_fixture(slop_arena* arena, slop_string ttl);
+slop_string test_kname_label(slop_arena* arena, types_KName n);
+uint8_t test_ksc_engine_matches_reference(slop_arena* arena, slop_string label, slop_string ttl);
+int64_t test_ksc_holds(slop_arena* arena, slop_string ttl, slop_string a, slop_string b);
+int64_t test_ksc_inconsistent(slop_arena* arena, slop_string ttl);
+int64_t test_ksc_fixture_count(void);
+slop_string test_ksc_fixture_at(int64_t i);
+uint8_t test_test_ksc_engine_matches_reference(slop_arena* arena);
+uint8_t test_test_ksc_entailments(slop_arena* arena);
 uint8_t test_test_ksc_normal_form_rows(slop_arena* arena);
 slop_string test_omissions_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_omits_exactly(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
@@ -416,6 +479,21 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
+#ifndef SLOP_OPTION_TEST_KSCFIXTURE_DEFINED
+#define SLOP_OPTION_TEST_KSCFIXTURE_DEFINED
+SLOP_OPTION_DEFINE(test_KscFixture, slop_option_test_KscFixture)
 #endif
 
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
