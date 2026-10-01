@@ -1343,6 +1343,13 @@ translation from OWL into [Krö10]'s language and the bookkeeping around it.
 >   and K5 conflated the raw queries with the report's exclusions (`owl:Nothing`, inconsistency).
 > - **Project owner: accepted, 2026-09-30** (PR #8; spec approval recorded as AD 465af4c0).
 >   `--profile el++` exits 3 until slice 6 wires the rung in.
+> - **K6 (sharing) added 2026-10-01** for slice 5, at the owner's direction after slice 4's
+>   feasibility checkpoint. **Adversarial review (Codex, 2026-10-01): no counterexample** to K6.1–K6.3
+>   or the ⊥ detection; it checked rules (18) and (29) against fact (a), the rule (25) inner induction
+>   and its use of earlier `self` facts, misclassification of safety through W's merged seeds (only
+>   ever conservative), and seeding `Q` rather than every class name. One finding, fixed in the text:
+>   fact (b) held only for fresh witnesses, not a role assertion's individual witness. Owner
+>   acceptance pending; no code depends on K6 until then.
 
 **Sources.** [Krö10] Markus Krötzsch, *Efficient Inferencing for the Description Logic Underlying
 OWL EL*, Technical Report 3005, Institute AIFB, KIT, 2010 (the long version of *Efficient
@@ -1453,9 +1460,10 @@ translated ontology:
 3. The least fixpoint is monotone and idempotent, and `I(KB) ⊆ G ⊆ closure(I(KB) ∪ {inst(q, q)})`.
    So `closure(G ∪ {inst(q, q)}) = closure(I(KB) ∪ {inst(q, q)})`.
 
-So HOWL computes `G` once, then runs each `q` from `G ∪ {inst(q, q)}`, storing only the facts not
-already in `G`. It keeps that run's answers (below) and discards the rest. Runs for names the report
-never reads — fresh names, witnesses — are not made, because no output reads them.
+K2 alone would compute `G` once, then run each `q` from `G ∪ {inst(q, q)}`, storing only the facts
+not already in `G`. HOWL runs a `q` that way only when K6 says it must: a class whose existential
+cone reaches no nominal is answered from one shared saturation instead (K6). Runs for names the
+report never reads — fresh names, witnesses — are not made, because no output reads them.
 
 **K3 — rule (4) as a flag; inconsistency.**
 - Rule (4) is `bot(z) ∧ inst(u, z) ∧ inst(x, z′) ∧ cls(y) → inst(x, y)`. Under `q`, once some element
@@ -1485,9 +1493,9 @@ accepted subset `O′ ⊆ O_¬`, every axiom of which `O` entails (K0, and
 
 **K5 — what the report reads.** Two layers, kept apart as [§6.7](#67-output--classification) keeps
 them for `el`. The **raw queries**, for class names `A` and `B`, are:
-- `unsat(A)`, K3's flag for `A`'s run;
+- `unsat(A)`, K3's flag for `A`'s run, read through K6 when `A` is safe;
 - `holds(A, B)` iff `unsat(A)` or `inst(A, B)` holds in `A`'s run (`inst_sc(A, B, A)`, Theorem 2's
-  output);
+  output), read from W when `A` is safe (K6);
 - `inconsistent` iff `unsat(owl:Thing)`.
 
 The **report** is then extracted exactly as `el`'s is, from [§6.2](#62-data-model)'s three reportable
@@ -1503,29 +1511,135 @@ rungs print the same report except for the `profile` and `rounds` lines. Capped 
 claim: the two calculi spend their rounds differently, so a cap that lets `el` derive `A ⊑ B` in its
 first round can stop `el++` in phase G before `A`'s run starts. Both are still sound (K4, L9).
 
+**K6 — one shared saturation, and runs only where nominals reach.** K2 shares only `G`, so every
+class re-derives the existential cone it reaches (measured below: EL-GALEN, ~3.8M facts per class
+for a third of its classes). [Krö10] Theorem 3 drops the assumption parameter altogether for
+nominal-free ontologies: one closure, with each class name an element seeded `inst(A, A)`, decides
+every subsumption. Its proof shows why — a fact about an element holds under every assumption that
+reaches it, unless nominals intervene. K6 takes that construction for the part of any `el++`
+ontology that nominals cannot reach, and keeps K2's per-class runs for the rest.
+
+*Definitions.* Let `P⁻` be Fig. 3's rules without (4) (K3 handles (4)). For a set `S` of seeds,
+`C(S)` is the least set of facts containing `I(KB) ∪ S` and closed under `P⁻`. Then
+`G = C(∅)`, `R_q = C({inst(q, q)})` (q's run, K2, without rule (4)), and
+- **`W = C({inst(A, A) | A ∈ Q})`**, where `Q` is the set of classes the report asks about, `owl:Thing`
+  included. W is K2's run for every class at once, which is wrong in general (two classes assumed
+  non-empty together can be merged through a nominal) and right on the safe part below.
+- `cone_F(x)`: the elements reachable from `x` by `triple` facts in `F`, `x` included.
+- `x` is **tainted** if it is an individual or `inst(x, {a}) ∈ W` for some `a`; `x` is **safe** if
+  no element of `cone_W(x)` is tainted. A successor of a safe element is safe.
+- `W_S`: the facts of W whose subject (first argument) is safe.
+- `ran(v)` is §5.2's: every `D` with `v ⊑* S` and `S ⊑ ⊤ × D`. K1 states the gate's condition on the
+  normal form: `ran(T) ⊆ ran(S)` for every `R ∘ S ⊑ T`.
+
+*Two facts used throughout.* (a) A class element occurs in `C(S)` only if its seed is in `S`: no
+rule concludes a fact about a class element except about one already present, and nothing has a
+class element as a `triple`'s object except rule (18)'s `triple(x, w, x)`, whose object already
+occurs. (b) A **fresh** witness `w` — the auxiliary constant of an `A ⊑ ∃R.B` axiom — first occurs
+in any `C(S)` through rule (9) or (10) on a premise `inst(x, A)` with `supEx(A, R, B, w)`: every other
+rule's conclusion mentions only elements its premises mention, except (27)–(29), whose new elements
+are individuals. Both rules then fire, so `inst(w, B) ∈ C(S)` and some `triple(x, R, w) ∈ C(S)`
+whenever `w` occurs in `C(S)`. (A role assertion's witness is the individual itself, introduced by
+rule (1); individuals are tainted, so K6 never needs (b) for them.)
+
+*K6.1 — a safe element's facts are the same in every run.* For any seeds `S` ⊆ W's seeds and any
+safe `x` occurring in `C(S)`: every fact of W about `x` is in `C(S)`.
+
+*Proof*, by induction on the stage `n` at which W's naive evaluation derives a fact `f` about a safe
+`x` occurring in `C(S)`. The cases are W's rule applications:
+- Seeds: `x` is a class element, so (a) puts its seed in `S`. Rule (1): `x` would be an individual,
+  which is tainted.
+- Rules whose premises are about `x` itself, or about a successor `y` through a premise
+  `triple(x, v, y)` — (2), (3), (5)–(9), (11)–(18), (23), (24), (26). Every premise is derived before
+  stage `n` and is about `x` or `y`; `triple(x, v, y)` is in `C(S)` by induction, so `y` occurs in
+  `C(S)`, and `y` is safe. So every premise is in `C(S)`, which is closed.
+- Rule (10), `f = inst(w, B)`: by (b), since `w` occurs in `C(S)`.
+- Rule (25), `f = inst(x, z₂)` from `triple(y, t, x)` with `y` arbitrary. Claim: for every
+  `triple(y, t, x) ∈ W` derived before stage `n` and every `z₂ ∈ ran(t)`, `inst(x, z₂) ∈ C(S)`. By
+  induction on that triple's derivation. (9): `t` is the role of the axiom whose witness is `x`; by
+  (b), `C(S)` has `triple(x′, t, x)`, so by (13) and (25) it has `inst(x, z₂)` for all of `ran(t)`.
+  (13), from `triple(y, t₀, x)` with `t₀ ⊑ t`: `ran(t) ⊆ ran(t₀)`. (15) and (16), from
+  `triple(·, v′, x)` with `· ∘ v′ ⊑ t`: `ran(t) ⊆ ran(v′)` by the gate. (17) and (18), from
+  `self(x, v′)` with `· ∘ v′ ⊑ t`: `ran(t) ⊆ ran(v′)`, and `self(x, v′)` is a fact of W about `x`
+  derived earlier, so in `C(S)` by the outer induction; (14) and (26) then give `inst(x, z₂)`.
+  (29)'s object is an individual, so not `x`. This is [Krö10] Theorem 3's inner induction for rule
+  (25), restricted to safe elements.
+- Rules (27)–(29): their conclusion is about an individual (27), about an element holding a nominal
+  (28), or a `triple` into an individual (29). None of these is safe.
+
+*K6.2 — a safe class is answered from W.* For a safe class `q`, `R_q = G ∪ W|cone_W(q)`, where
+`W|cone_W(q)` is W's facts about elements of `cone_W(q)`.
+- `⊇`: `G ⊆ R_q` by monotonicity. `q` occurs in `R_q`; along any W-path from `q`, K6.1 puts each
+  `triple` in `R_q`, so every element of `cone_W(q)` occurs in `R_q`, and K6.1 puts its W-facts in
+  `R_q`.
+- `⊆`: `Y = G ∪ W|cone_W(q)` contains `R_q`'s seeds (`inst(q, q)` and rule (1)'s facts) and is
+  closed under `P⁻`, so `R_q ⊆ Y`. Take a rule application whose premises are in `Y`. If they are
+  all in `G`, so is the conclusion. Otherwise some premise is a W-fact about a cone element `s`.
+  - If the conclusion's subject `c` is in the cone, every premise is in W, so the conclusion is a
+    W-fact about a cone element (for (10) and (25), the conclusion's subject is a successor of a
+    cone element, so in the cone too).
+  - If `c` is not in the cone, `s` is a successor of `c` reached through a premise
+    `triple(c, v, s)`, which is about `c` and so in `G`. Then `s` occurs in `G`, and K6.1 with
+    `S = ∅` puts all of `s`'s W-facts in `G`: every premise is in `G` after all.
+  - (27)–(29) have no premise about a cone element: a cone element holds no nominal, an individual
+    is not in the cone, and a `triple` from a cone element into a nominal-holder would put it in the
+    cone.
+
+So for a safe `q`: `holds(q, B)` iff `unsat(q)` or `inst(q, B) ∈ W` (a class element is never in `G`),
+and by K3 `unsat(q)` iff `G` holds `⊥` somewhere or some element of `cone_W(q)` holds `⊥` in W.
+
+*K6.3 — an unsafe class runs over `G ∪ W_S`.* For an unsafe `q`, let `T = C(G ∪ W_S ∪ {inst(q, q)})`.
+Then `T = R_q ∪ W_S`.
+- `⊇` is monotonicity.
+- `⊆`: `Z = R_q ∪ W_S` is closed. A conclusion about a safe element has its premises in W, so it is
+  in `W_S`. A conclusion about an unsafe `c` has every premise in `R_q`: one about `c` is not in `W_S`;
+  one about a successor `s` is reached through `triple(c, v, s) ∈ R_q`, so `s` occurs in `R_q` and
+  K6.1 applies if `s` is safe. (10) concluding about an unsafe `w`, and (25) about an unsafe `x′`,
+  cannot have a safe premise subject, whose cone would contain the unsafe element. (27)–(29)'s
+  premises are about tainted elements or about elements with a `triple` into one.
+
+So the engine runs `q` from `G ∪ W_S ∪ {inst(q, q)}` and stores exactly `R_q`'s facts outside the
+base. `q`'s answers are read from the run. `⊥` under `q` (K3) is held by an element of `R_q`: an
+unsafe one, whose fact is in `G` or committed by the run, or a safe one, whose W-fact is in the base.
+Every element of `R_q` is reached by `triple`s from a seed, and the seeds (`q`, the individuals) are
+unsafe, so a safe one lies in `cone_W(s)` for the first safe `s` on its path, entered by a `triple`
+that is in `G` or committed by the run. So: `unsat(q)` iff `G` holds `⊥`, or the run commits a fact
+`inst(u, owl:Nothing)`, or it commits a `triple(x, v, s)` with `s` safe and some element of
+`cone_W(s)` holding `⊥` in W. A `triple` of `G` into such an `s` puts that `⊥` in `G` by K6.1.
+
+*Inconsistency* stays `unsat(owl:Thing)` (K3), read through K6.2 or K6.3 as `owl:Thing` is safe or
+not.
+
+*What K6 does not claim.* No answer is read from W for an unsafe class: W's facts about tainted
+elements can merge classes that are only jointly assumed non-empty (`q₁ ⊑ {a}` and `q₂ ⊑ {a}` give
+`inst(q₂, q₁)` in W, but `q₂ ⊑ q₁` does not follow). Safety is computed on the complete W; a W cut
+short by the cap decides nothing (below).
+
 **Rounds and the cap.** A round is one semi-naive step of all rules over the previous round's new
-facts. Phase G runs first; phase Q then runs each `q` from `G`.
-- `rounds` = `rounds(G)` + the most rounds any single `q` took.
-- `--max-iterations n` bounds that same sum: phase Q's runs get `n − rounds(G)` each, and none if G
-  was capped. Any run stopped by the bound makes the termination `resource-limit`.
+facts. Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` over `G ∪ W_S`.
+- `rounds` = `rounds(G)` + `rounds(W)` + the most rounds any single unsafe `q` took.
+- `--max-iterations n` bounds that same sum: W gets what G leaves, and phase Q's runs get what G and
+  W leave. A phase stopped by the bound makes the termination `resource-limit`.
+- **A capped W answers nothing.** Safety is a property of the complete W (K6), so when W is cut short
+  no class is answered from it and phase Q does not run; the report carries `G`'s findings only
+  (inconsistency if `G` holds `⊥`), which are sound (K4).
 - A run stopped by `unsat(q)` counts as finished, not capped: its answers are complete (K3).
 - Runs are independent, so the report is the same at every worker count
   ([§6.8](#68-determinism-binding)).
 
-**Cost, stated plainly.** Every `q` re-derives the witnesses reachable from it, because Ksc shares
-nothing between assumptions except `G`. The total work is roughly the number of classes times the
-size of a class's existential cone. `el`'s per-concept contexts avoid this, and so does ELK. Sharing
-witness contexts between assumptions where no nominal or `⊥` reaches them is the known optimisation;
-[Krö10] Theorem 3's construction is where its proof would start. It needs that proof before it is
-used. `el` stays the default ([§5.1](#51-profiles-are-selectable)).
+**Cost, stated plainly.** With K6, an ontology without nominals is one saturation, as in `el` and
+ELK: every class is safe. Only classes whose existential cone reaches an individual or a nominal
+pay a run of their own, and each such run re-derives only what is not safe (K6.3). Rule (13) is
+still materialised, so a deep role hierarchy multiplies `triple` facts in W once, not per class.
 
-**Measured (slice 4's single-threaded prototype, `src/kscsat.slop`; arm64, this repo's corpus).**
+**Measured before K6 (slice 4's single-threaded prototype, `src/kscsat.slop`, K2 only; arm64, this
+repo's corpus).**
 - OBI, el++ projection: all 5,241 classes in 1.6 s, a mean of 178 facts per class run.
 - GO: 0.6 ms per class on a 1-in-20 sample, about 31 s projected for its 51,988 classes.
 - EL-GALEN: 1.8 s per class on 11 sampled classes, about 11.5 h projected, 7.9 GB peak. The cost is
   bimodal: a class needs under 400 facts, or about 3.8M (594k `inst`, 3.2M `triple`) when its
-  existential cone reaches the anatomy part. Every such class re-derives that cone, which is exactly
-  what sharing witness contexts would remove.
+  existential cone reaches the anatomy part. Every such class re-derives that cone, which is what K6
+  removes.
 
 **What is not claimed.**
 - Instance retrieval is not in the report, although Kinst decides it (Theorem 1).
@@ -2784,7 +2898,7 @@ row below sits on one side of that line.
 | **Range-elimination preservation** — the *listed query classes* survive the rewrite, which is **not** conservative ([§6.3](#63-normalization)) | Published proof **+ differential testing** | **No** — model-theoretic |
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
 | **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | One loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
-| **`el++` translation and sharing** — K0–K5: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction | [Krö10] Theorems 1–2 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
+| **`el++` translation and sharing** — K0–K6: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, and the shared saturation for safe classes | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
 | **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK; for v1, Kazakov's Horn-SHIQ calculus with chain elimination) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
