@@ -9,7 +9,7 @@
     Registry new-registry fresh-id fresh-role-id mark-neg mark-pos
     neg-defined pos-defined fresh-count fresh-role-count
     flatten-and concept-key node-key role-key prefix-text
-    prefix-role-text render-role-name role-at-n)
+    prefix-role-text render-role-name role-at-n node-at)
 
   ;; ============================================================
   ;; The fresh-name registry
@@ -177,8 +177,31 @@
           (string-concat arena (role-key arena r)
             (string-concat arena " "
               (string-concat arena (concept-key arena (deref f)) ")")))))
+      ;; el++ (§5.4). A one-individual nominal keys as its individual,
+      ;; so {a}, rc-name(individual a) and the filler of ∃R.{a} share one
+      ;; key, as they share one meaning; hasValue keys as that ∃R.{a}.
+      ((rc-oneof ns)
+        (if (== (list-len ns) 1)
+          (node-key arena (node-at ns 0))
+          (string-concat arena "!" (render-concept arena c))))
+      ((rc-has-value r a)
+        (string-concat arena "some("
+          (string-concat arena (role-key arena r)
+            (string-concat arena " " (string-concat arena (node-key arena a) ")")))))
+      ((rc-has-self r)
+        (string-concat arena "self(" (string-concat arena (role-key arena r) ")")))
       ;; UNREACHABLE BY THE GATE. "!" begins no other form.
       (_ (string-concat arena "!" (render-concept arena c)))))
+
+  (fn node-at ((xs (List Node)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List Node) Int) -> Node))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new Node class-node (record-new IRI (value ""))))))
 
   (fn node-key ((arena Arena) (n Node))
     (@intent "A node's key: its IRI bracketed, tagged by kind")

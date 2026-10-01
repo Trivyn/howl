@@ -1425,6 +1425,10 @@ L2 already justifies for `el`:
   the normal form.
 - `⊤` and `⊥` become the names `owl:Thing` and `owl:Nothing`, with `top(owl:Thing)` and
   `bot(owl:Nothing)` — OWL's own `⊤ ⊑ owl:Thing` and `owl:Nothing ⊑ ⊥`.
+- **Definition 1 is a type in HOWL**, not a check: every position it reserves for a class name
+  takes a name that cannot be an individual, only `subClass` and a role assertion take a nominal,
+  and a witness is a fresh id (`KName`, `KTerm`, `KscAxiom` in `src/types.slop`). An axiom
+  outside the normal form cannot be built, so the type checker enforces it at every construction.
 - **An erratum in [Krö10] Fig. 2.** It prints `R(a, b) ↦ subEx(a, R, b, b)`. `subEx` is ternary
   and encodes `∃R.A ⊑ C`; the four-place predicate is `supEx`, which encodes `A ⊑ ∃R.B` with its
   witness. So `R(a, b) ↦ supEx(a, R, b, b)`: "`a ⊑ ∃R.b`, witnessed by `b`". Rules (9) and (10)

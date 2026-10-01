@@ -52,6 +52,8 @@
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
   (import select (profile-name parse-profile))
+  (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
+  (import types (KscAxiom))
 
   ;; ============================================================
   ;; Fixture builders
@@ -2073,6 +2075,152 @@
              (== (cast Int (list-len (. gr omissions))) 0)))))
 
   ;; ============================================================
+  ;; el++'s normal form ([Krö10] Definition 1; SPEC §5.4 K0, K1)
+  ;; ============================================================
+
+  (fn ksc-form-of-ttl ((arena Arena) (ttl String))
+    (@intent "Gate an inline document under el++ and render its normal form, one fact per line")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (match (gate-ttl-in arena (string-concat arena (rung-prefix) ttl) 'profile-el-plus-plus)
+      ((none) "<did not gate>")
+      ((some gr)
+        (let ((no (normalize-ksc arena (. gr accepted)))
+              (mut out ""))
+          (do
+            (for-each (ax (. no axioms))
+              (set! out (string-concat arena out
+                          (string-concat arena (render-ksc-axiom arena ax) "\n"))))
+            out)))))
+
+  (fn ksc-form-is ((arena Arena) (label String) (ttl String) (want String))
+    (@intent "Does this document normalise to exactly these facts? Prints what it got when not")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((got (ksc-form-of-ttl arena ttl)))
+      (if (== (string-cmp got want) 0)
+        true
+        (do
+          (println (string-concat arena (string-concat arena "  [ksc] " label) ":"))
+          (print got)
+          false))))
+
+  (fn test-ksc-normal-form-rows ((arena Arena))
+    (@intent "Each of §5.4's translation rows normalises to exactly its Definition 1 facts")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
+      (do
+        (when (not (ksc-form-is arena "hasValue on the right"
+                     ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] ."
+                     "subClass(_:0, {<http://example.org/t#a>})
+supEx(<http://example.org/t#C>, <http://example.org/t#r>, _:0, _:1)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "hasValue on the left"
+                     "[ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] rdfs:subClassOf :C ."
+                     "subClass({<http://example.org/t#a>}, _:1)
+subEx(<http://example.org/t#r>, _:1, _:0)
+subClass(_:0, <http://example.org/t#C>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "nominal on the left"
+                     "[ a owl:Class ; owl:oneOf ( :a ) ] rdfs:subClassOf :C ."
+                     "subClass({<http://example.org/t#a>}, <http://example.org/t#C>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "nominal on the right"
+                     ":C rdfs:subClassOf [ a owl:Class ; owl:oneOf ( :a ) ] ."
+                     "subClass(<http://example.org/t#C>, {<http://example.org/t#a>})
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "Self on the right"
+                     ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] ."
+                     "supSelf(<http://example.org/t#C>, <http://example.org/t#r>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "Self on the left"
+                     "[ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] rdfs:subClassOf :C ."
+                     "subSelf(<http://example.org/t#r>, _:0)
+subClass(_:0, <http://example.org/t#C>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "reflexive role"
+                     ":r a owl:ReflexiveProperty ."
+                     "supSelf(<http://www.w3.org/2002/07/owl#Thing>, _:r0)
+subRole(_:r0, <http://example.org/t#r>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "sameAs"
+                     ":a owl:sameAs :b ."
+                     "subClass({<http://example.org/t#a>}, {<http://example.org/t#b>})
+subClass({<http://example.org/t#b>}, {<http://example.org/t#a>})
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "differentFrom"
+                     ":a owl:differentFrom :b ."
+                     "subClass({<http://example.org/t#a>}, _:0)
+subClass({<http://example.org/t#b>}, _:1)
+subConj(_:0, _:1, <http://www.w3.org/2002/07/owl#Nothing>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "negative assertion"
+                     "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ."
+                     "subClass({<http://example.org/t#a>}, _:0)
+subClass({<http://example.org/t#b>}, _:2)
+subEx(<http://example.org/t#r>, _:2, _:1)
+subConj(_:0, _:1, <http://www.w3.org/2002/07/owl#Nothing>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "range"
+                     ":r rdfs:range :C ."
+                     "supProd(<http://example.org/t#r>, ⊤, <http://example.org/t#C>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "domain"
+                     ":r rdfs:domain :C ."
+                     "subEx(<http://example.org/t#r>, <http://www.w3.org/2002/07/owl#Thing>, _:0)
+subClass(_:0, <http://example.org/t#C>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "class assertion"
+                     ":a a :C ."
+                     "subClass({<http://example.org/t#a>}, <http://example.org/t#C>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "complex class assertion"
+                     ":a a [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] ."
+                     "subClass({<http://example.org/t#a>}, _:0)
+supEx(_:0, <http://example.org/t#r>, <http://example.org/t#C>, _:1)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "role assertion"
+                     ":a :r :b ."
+                     "supEx({<http://example.org/t#a>}, <http://example.org/t#r>, {<http://example.org/t#b>}, {<http://example.org/t#b>})
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "three-step chain"
+                     ":t owl:propertyChainAxiom ( :r :s :r ) ."
+                     "subRChain(<http://example.org/t#r>, <http://example.org/t#s>, _:r0)
+subRChain(_:r0, <http://example.org/t#r>, <http://example.org/t#t>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "empty role"
+                     ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom owl:Thing ] ."
+                     "supEx(<http://example.org/t#C>, <http://www.w3.org/2002/07/owl#bottomObjectProperty>, <http://www.w3.org/2002/07/owl#Thing>, _:0)
+subEx(<http://www.w3.org/2002/07/owl#bottomObjectProperty>, <http://www.w3.org/2002/07/owl#Thing>, <http://www.w3.org/2002/07/owl#Nothing>)
+"))
+          (set! ok false))
+        (when (not (ksc-form-is arena "conjunction with a nominal"
+                     "[ a owl:Class ; owl:intersectionOf ( :C [ a owl:Class ; owl:oneOf ( :a ) ] :D ) ] rdfs:subClassOf owl:Nothing ."
+                     "subClass({<http://example.org/t#a>}, _:1)
+subConj(<http://example.org/t#C>, _:1, _:0)
+subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
+"))
+          (set! ok false))
+        ok)))
+
+  ;; ============================================================
   ;; Equality, inequality and negative assertions decode whole
   ;; (el++ slice 1; SPEC §5.4)
   ;; ============================================================
@@ -3201,6 +3349,12 @@
     (@intent "Parse, stage 0, decode, gate — the front end as far as it goes")
     (@spec ((Arena String) -> (Option GateResult)))
     (@alloc arena)
+    (gate-fixture-in arena path 'profile-el))
+
+  (fn gate-fixture-in ((arena Arena) (path String) (p Profile))
+    (@intent "Parse, stage 0, decode, gate under a rung")
+    (@spec ((Arena String Profile) -> (Option GateResult)))
+    (@alloc arena)
     (match (parse-ttl-file arena path)
       ((error _) (none))
       ((ok g)
@@ -3211,7 +3365,7 @@
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions) 'profile-el)))))))))
+                        (. s0 omissions) p)))))))))
 
   (fn count-variant-chain ((axs (List RawAxiom)))
     (@intent "How many property-chain axioms survived the gate")
@@ -4097,6 +4251,10 @@
 
           (let ((r (test-top-role-tautology-is-dropped arena)))
             (print-test-result "gate: under el++, an inclusion into the universal role is dropped" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-normal-form-rows arena)))
+            (print-test-result "kscnormal: each translation row gives exactly its Definition 1 facts" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))

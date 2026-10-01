@@ -11,6 +11,9 @@ typedef struct types_Node types_Node;
 typedef struct types_RoleId types_RoleId;
 typedef struct types_Concept types_Concept;
 typedef struct types_NormAxiom types_NormAxiom;
+typedef struct types_KName types_KName;
+typedef struct types_KTerm types_KTerm;
+typedef struct types_KscAxiom types_KscAxiom;
 typedef struct types_Derived types_Derived;
 typedef struct types_Addressed types_Addressed;
 typedef struct types_LogicalEdge types_LogicalEdge;
@@ -163,6 +166,115 @@ typedef struct types_NormAxiom types_NormAxiom;
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+typedef enum {
+    types_KName_k_class,
+    types_KName_k_fresh
+} types_KName_tag;
+
+struct types_KName {
+    types_KName_tag tag;
+    union {
+        rdf_IRI k_class;
+        int64_t k_fresh;
+    } data;
+};
+typedef struct types_KName types_KName;
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
+typedef enum {
+    types_KTerm_k_name,
+    types_KTerm_k_nominal
+} types_KTerm_tag;
+
+struct types_KTerm {
+    types_KTerm_tag tag;
+    union {
+        types_KName k_name;
+        rdf_IRI k_nominal;
+    } data;
+};
+typedef struct types_KTerm types_KTerm;
+
+#ifndef SLOP_OPTION_TYPES_KTERM_DEFINED
+#define SLOP_OPTION_TYPES_KTERM_DEFINED
+SLOP_OPTION_DEFINE(types_KTerm, slop_option_types_KTerm)
+#endif
+
+typedef enum {
+    types_KscAxiom_k_sub,
+    types_KscAxiom_k_and,
+    types_KscAxiom_k_some_lhs,
+    types_KscAxiom_k_some_rhs,
+    types_KscAxiom_k_self_lhs,
+    types_KscAxiom_k_self_rhs,
+    types_KscAxiom_k_role,
+    types_KscAxiom_k_chain,
+    types_KscAxiom_k_range,
+    types_KscAxiom_k_role_assert
+} types_KscAxiom_tag;
+
+struct types_KscAxiom {
+    types_KscAxiom_tag tag;
+    union {
+        struct {
+            types_KTerm f0;
+            types_KTerm f1;
+        } k_sub;
+        struct {
+            types_KName f0;
+            types_KName f1;
+            types_KName f2;
+        } k_and;
+        struct {
+            types_RoleId f0;
+            types_KName f1;
+            types_KName f2;
+        } k_some_lhs;
+        struct {
+            types_KName f0;
+            types_RoleId f1;
+            types_KName f2;
+            int64_t f3;
+        } k_some_rhs;
+        struct {
+            types_RoleId f0;
+            types_KName f1;
+        } k_self_lhs;
+        struct {
+            types_KName f0;
+            types_RoleId f1;
+        } k_self_rhs;
+        struct {
+            types_RoleId f0;
+            types_RoleId f1;
+        } k_role;
+        struct {
+            types_RoleId f0;
+            types_RoleId f1;
+            types_RoleId f2;
+        } k_chain;
+        struct {
+            types_RoleId f0;
+            types_KName f1;
+        } k_range;
+        struct {
+            rdf_IRI f0;
+            types_RoleId f1;
+            rdf_IRI f2;
+        } k_role_assert;
+    } data;
+};
+typedef struct types_KscAxiom types_KscAxiom;
+
+#ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
 #endif
 
 typedef enum {
@@ -680,6 +792,21 @@ SLOP_OPTION_DEFINE(types_Concept, slop_option_types_Concept)
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KTERM_DEFINED
+#define SLOP_OPTION_TYPES_KTERM_DEFINED
+SLOP_OPTION_DEFINE(types_KTerm, slop_option_types_KTerm)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DERIVED_DEFINED

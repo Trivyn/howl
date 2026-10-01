@@ -21,6 +21,7 @@
     ;; expressions and normal form
     Concept
     NormAxiom
+    KName KTerm KscAxiom
     ;; saturation
     Derived
     Addressed
@@ -179,6 +180,48 @@
     (sub-some-lhs RoleId Node Node)       ; ∃r.B ⊑ A
     (sub-role     RoleId RoleId)          ; r ⊑ s
     (role-chain   RoleId RoleId RoleId))) ; r ∘ s ⊑ t
+
+  ;; ============================================================
+  ;; el++ normal form — [Krö10] Definition 1, read as Fig. 2's EDB facts
+  ;; (SPEC §5.4 K1)
+  ;;
+  ;; DEFINITION 1 IS ENFORCED BY THE TYPES, not checked after the fact.
+  ;; Its only constraints are which positions may hold a nominal and that
+  ;; a supEx witness is a fresh constant. So every position Definition 1
+  ;; reserves for a class name (its A, B, C, D ∈ NC) takes a `KName`,
+  ;; which cannot be an individual; only subClass takes a `KTerm`, which
+  ;; can be the nominal {a}; a role assertion takes two individuals; and
+  ;; a witness is a fresh id. An axiom outside the normal form cannot be
+  ;; constructed, so the type checker discharges "in normal form" at
+  ;; every place an axiom is built — the verifier could not: it checks
+  ;; each function alone and does not check a callee's @pre at a call.
+  ;;
+  ;; ⊤ and ⊥ are the class names owl:Thing and owl:Nothing, with
+  ;; top(owl:Thing) and bot(owl:Nothing) supplied by the engine, so
+  ;; `⊤ ⊑ C`, `A ⊑ ⊥`, `C(a)`, `{a} ⊑ C`, `A ⊑ {c}` and `{a} ⊑ {c}` are
+  ;; all `k-sub`. No role conjunction and no product on the left: OWL has
+  ;; no syntax that reaches them here (§5.4), so neither has a variant.
+  ;; ============================================================
+
+  (type KName (union
+    (k-class IRI)            ; a class name of the input, or owl:Thing / owl:Nothing
+    (k-fresh (Int 0 ..))))   ; a definitional name the normaliser minted
+
+  (type KTerm (union
+    (k-name    KName)        ; A
+    (k-nominal IRI)))        ; {a}
+
+  (type KscAxiom (union
+    (k-sub          KTerm KTerm)                   ; subClass   A ⊑ C, C(a), {a} ⊑ C, A ⊑ {c}, {a} ⊑ {c}
+    (k-and          KName KName KName)             ; subConj    A ⊓ B ⊑ C
+    (k-some-lhs     RoleId KName KName)            ; subEx      ∃R.A ⊑ C
+    (k-some-rhs     KName RoleId KName (Int 0 ..)) ; supEx      A ⊑ ∃R.B, with its fresh witness
+    (k-self-lhs     RoleId KName)                  ; subSelf    ∃R.Self ⊑ C
+    (k-self-rhs     KName RoleId)                  ; supSelf    A ⊑ ∃R.Self
+    (k-role         RoleId RoleId)                 ; subRole    R ⊑ T
+    (k-chain        RoleId RoleId RoleId)          ; subRChain  R ∘ S ⊑ T
+    (k-range        RoleId KName)                  ; supProd    R ⊑ ⊤ × D
+    (k-role-assert  IRI RoleId IRI)))              ; R(a, b) ↦ supEx(a, R, b, b) — §5.4's Fig. 2 erratum
 
   ;; ============================================================
   ;; Saturation state — the DL analogue of GROWL's Delta
