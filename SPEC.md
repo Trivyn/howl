@@ -1051,7 +1051,7 @@ proved here because no citation covers it. The ABox enters as nominals (L1) and 
 >   nothing under [BBL08]'s condition, to L0's fit with L1–L9, or to `expand-negation`. It found two
 >   places where the independent census disagreed with the gate: `rdf:type` in its structural key
 >   (fixed, with a test), and a complement node shared by a positive and a negative use, where the
->   census is deliberately stricter (documented). **Project owner: pending.**
+>   census is deliberately stricter (documented). **Project owner: accepted, 2026-09-30.**
 > - **Revised 2026-09-30 (L1, L5, L8):** the accepted text applied [BBL05] Lemma 3 to a CBox with
 >   nominals, whose completeness [KKS12] refutes. The theorem is unchanged; the route now runs the
 >   calculus on the nominal-free `T_H′` and recovers the nominals by a canonical model (L8), using
@@ -1103,8 +1103,8 @@ O  ─L0→  O_¬  (positive ¬E rewritten to ⊥ GCIs)  ─L1→  T_ν  (ABox a
 and concepts `C`, `P`, `E`:
 
 1. `(P ⊓ ¬E)^I = P^I ∖ E^I`, so `C^I ⊆ (P ⊓ ¬E)^I` iff `C^I ⊆ P^I` and `C^I ∩ E^I = ∅`, that is
-   `(C ⊓ E)^I = ∅`. Several `¬Eᵢ` conjuncts give one such conjunct each; with no `P` the first half
-   is `C^I ⊆ Δ^I`, which always holds, so it is dropped.
+   `(C ⊓ E)^I = ∅`. Several `¬Eᵢ` conjuncts give one such conjunct each. With no `P`, the
+   condition `C ⊑ P` becomes `C^I ⊆ Δ^I`, which always holds, so it is dropped.
 2. `domain(r) ⊑ D` says `(∃r.⊤)^I ⊆ D^I`: case 1 with `C = ∃r.⊤`.
 3. `range(r) ⊑ D` says every `r`-successor is in `D^I`. For `D = P ⊓ ¬E` that is: every
    `r`-successor is in `P^I` (`range(r) ⊑ P`), and none is in `E^I`, which is `(∃r.E)^I = ∅`.
