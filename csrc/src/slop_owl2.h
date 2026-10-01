@@ -272,7 +272,7 @@ struct owl2_RawAxiom {
         slop_list_types_RoleId ra_disjoint_properties;
         slop_list_types_Node ra_same_individual;
         slop_list_types_Node ra_different_individuals;
-        types_InputRef ra_negative_assertion;
+        owl2_RawEdge ra_negative_assertion;
         types_InputRef ra_disjoint_union;
         types_InputRef ra_has_key;
         types_InputRef ra_inverse_expression;

@@ -23,8 +23,8 @@ w3c outside-v0 New-Feature-Keys-004 DataAxiom HasKey
 w3c outside-v0 New-Feature-Keys-005 DataAxiom HasKey
 w3c outside-v0 New-Feature-Keys-006 DataAxiom FunctionalObjectProperty HasKey
 w3c outside-v0 New-Feature-Keys-007 ClassAssertion DataAxiom HasKey
-w3c outside-v0 New-Feature-NegativeDataPropertyAssertion-001 DataAxiom NegativeAssertion ReservedVocabulary
-w3c outside-v0 New-Feature-NegativeObjectPropertyAssertion-001 NegativeAssertion ReservedVocabulary
+w3c outside-v0 New-Feature-NegativeDataPropertyAssertion-001 DataAxiom
+w3c outside-v0 New-Feature-NegativeObjectPropertyAssertion-001 NegativeObjectPropertyAssertion
 w3c ok New-Feature-ObjectPropertyChain-001
 w3c ok New-Feature-ObjectPropertyChain-BJP-003
 w3c ok New-Feature-ObjectPropertyChain-BJP-004

@@ -1133,8 +1133,8 @@ slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_negative_assertion:
         {
-            __auto_type ref = _mv_216.data.ra_negative_assertion;
-            return owl2_wrap(arena, SLOP_STR("NegativeAssertion"), owl2_render_input_ref(ref));
+            __auto_type e = _mv_216.data.ra_negative_assertion;
+            return owl2_wrap(arena, SLOP_STR("NegativeObjectPropertyAssertion"), owl2_join2(arena, owl2_render_role(e.role), owl2_join2(arena, owl2_render_node(e.from), owl2_render_node(e.to))));
         }
         case owl2_RawAxiom_ra_disjoint_union:
         {
@@ -1441,8 +1441,8 @@ owl2_RawAxiom owl2_copy_raw_axiom(slop_arena* arena, owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_negative_assertion:
         {
-            __auto_type ref = _mv_219.data.ra_negative_assertion;
-            return ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_negative_assertion, .data.ra_negative_assertion = types_copy_input_ref(arena, ref) });
+            __auto_type e = _mv_219.data.ra_negative_assertion;
+            return ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_negative_assertion, .data.ra_negative_assertion = ((owl2_RawEdge){.role = types_copy_role(arena, e.role), .from = types_copy_node(arena, e.from), .to = types_copy_node(arena, e.to)}) });
         }
         case owl2_RawAxiom_ra_disjoint_union:
         {
