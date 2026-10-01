@@ -8,15 +8,15 @@ slop_option_types_Profile select_parse_profile(slop_string s);
 
 types_Profile select_select_profile(types_ProfileSelection selection) {
     types_Profile _retval = {0};
-    __auto_type _mv_580 = selection;
-    switch (_mv_580.tag) {
+    __auto_type _mv_596 = selection;
+    switch (_mv_596.tag) {
         case types_ProfileSelection_slop_auto:
         {
             return types_Profile_profile_el;
         }
         case types_ProfileSelection_explicit:
         {
-            __auto_type p = _mv_580.data.explicit;
+            __auto_type p = _mv_596.data.explicit;
             return p;
         }
     }
@@ -27,14 +27,14 @@ types_Profile select_select_profile(types_ProfileSelection selection) {
 
 uint8_t select_profile_implemented(types_Profile p) {
     uint8_t _retval = {0};
-    __auto_type _mv_581 = p;
-    if (_mv_581 == types_Profile_profile_el) {
+    __auto_type _mv_597 = p;
+    if (_mv_597 == types_Profile_profile_el) {
         return 1;
-    } else if (_mv_581 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_597 == types_Profile_profile_el_plus_plus) {
         return 0;
-    } else if (_mv_581 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_597 == types_Profile_profile_horn_sriq) {
         return 0;
-    } else if (_mv_581 == types_Profile_profile_sriq) {
+    } else if (_mv_597 == types_Profile_profile_sriq) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -43,14 +43,14 @@ uint8_t select_profile_implemented(types_Profile p) {
 }
 
 slop_string select_profile_name(types_Profile p) {
-    __auto_type _mv_582 = p;
-    if (_mv_582 == types_Profile_profile_el) {
+    __auto_type _mv_598 = p;
+    if (_mv_598 == types_Profile_profile_el) {
         return SLOP_STR("el");
-    } else if (_mv_582 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_598 == types_Profile_profile_el_plus_plus) {
         return SLOP_STR("el++");
-    } else if (_mv_582 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_598 == types_Profile_profile_horn_sriq) {
         return SLOP_STR("horn-sriq");
-    } else if (_mv_582 == types_Profile_profile_sriq) {
+    } else if (_mv_598 == types_Profile_profile_sriq) {
         return SLOP_STR("sriq");
     }
     SLOP_UNREACHABLE();
