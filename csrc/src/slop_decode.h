@@ -182,7 +182,8 @@ SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 typedef enum {
     decode_IndividualTerm_named_individual,
     decode_IndividualTerm_literal_individual,
-    decode_IndividualTerm_anonymous_individual
+    decode_IndividualTerm_anonymous_individual,
+    decode_IndividualTerm_reserved_individual
 } decode_IndividualTerm_tag;
 
 struct decode_IndividualTerm {
@@ -201,7 +202,8 @@ SLOP_OPTION_DEFINE(decode_IndividualTerm, slop_option_decode_IndividualTerm)
 typedef enum {
     decode_NodeList_all_named,
     decode_NodeList_has_literal,
-    decode_NodeList_has_anonymous
+    decode_NodeList_has_anonymous,
+    decode_NodeList_has_reserved
 } decode_NodeList_tag;
 
 struct decode_NodeList {

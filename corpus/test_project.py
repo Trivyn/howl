@@ -197,5 +197,66 @@ class NegationTest(unittest.TestCase):
             " :s rdfs:range :C .")), 1)
 
 
+class ElPlusPlusTest(unittest.TestCase):
+    """SPEC.md §5.4's language, as the census implements it independently:
+    the same rows as src/test.slop's two-rung gate table."""
+    DECL = """:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+"""
+    # (label, document, out under el, out under el++)
+    ROWS = [
+        ("hasValue", ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .", True, False),
+        ("oneOf of one", ":C owl:equivalentClass [ a owl:Class ; owl:oneOf ( :a ) ] .", True, False),
+        ("hasSelf, simple role", ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .", True, False),
+        ("reflexive role", ":r a owl:ReflexiveProperty .", True, False),
+        ("sameAs", ":a owl:sameAs :b .", True, False),
+        ("differentFrom", ":a owl:differentFrom :b .", True, False),
+        ("AllDifferent", "[] a owl:AllDifferent ; owl:members ( :a :b ) .", True, False),
+        ("negative assertion", "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; "
+                               "owl:assertionProperty :r ; owl:targetIndividual :b .", True, False),
+        ("empty role", ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; "
+                       "owl:someValuesFrom owl:Thing ] .", True, False),
+        ("inclusion into the universal role", ":r rdfs:subPropertyOf owl:topObjectProperty .", True, False),
+        ("chain into the universal role", "owl:topObjectProperty owl:propertyChainAxiom ( :r :s ) .", True, False),
+        ("oneOf of two", ":C owl:equivalentClass [ a owl:Class ; owl:oneOf ( :a :b ) ] .", True, True),
+        ("hasSelf, transitive role", ":t a owl:TransitiveProperty . :C rdfs:subClassOf "
+                                     "[ a owl:Restriction ; owl:onProperty :t ; owl:hasSelf true ] .", True, True),
+        ("hasSelf, role above a transitive one", ":t a owl:TransitiveProperty . :t rdfs:subPropertyOf :s . "
+                                                 ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .", True, True),
+        ("hasSelf, role above a chain", ":s owl:propertyChainAxiom ( :r :r ) . :C rdfs:subClassOf "
+                                        "[ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .", True, True),
+        ("universal role in a restriction", ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:topObjectProperty ; "
+                                            "owl:someValuesFrom :D ] .", True, True),
+        ("universal role below another", "owl:topObjectProperty rdfs:subPropertyOf :r .", True, True),
+        ("oneOf of a reserved IRI", ":C rdfs:subClassOf [ a owl:Class ; owl:oneOf ( owl:Thing ) ] .", True, True),
+        ("hasValue on a reserved IRI", ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue owl:Thing ] .", True, True),
+        ("AllDifferent with a reserved IRI", "[] a owl:AllDifferent ; owl:members ( :a owl:Thing ) .", True, True),
+        ("sameAs an XSD IRI", "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> . :a owl:sameAs xsd:string .", True, True),
+        ("universal role into itself", "owl:topObjectProperty rdfs:subPropertyOf owl:topObjectProperty .", True, False),
+        ("functional role", ":r a owl:FunctionalProperty .", True, True),
+        ("hasValue, anonymous", ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue [] ] .", True, True),
+        ("sameAs, anonymous", ":a owl:sameAs [] .", True, True),
+        ("universal role as a chain step", ":s owl:propertyChainAxiom ( :r owl:topObjectProperty ) .", True, True),
+        ("empty role as a chain step", ":s owl:propertyChainAxiom ( :r owl:bottomObjectProperty ) .", True, False),
+        ("negative data assertion", ":d a owl:DatatypeProperty . [] a owl:NegativePropertyAssertion ; "
+                                    "owl:sourceIndividual :a ; owl:assertionProperty :d ; owl:targetValue \"x\" .", True, True),
+    ]
+
+    def out(self, text, profile):
+        _, _, out, _, _ = census.census(None, graph=graph(self.DECL + text), profile=profile)
+        return sum(out.values()) > 0
+
+    def test_each_construct_under_both_rungs(self):
+        for label, text, el_out, elpp_out in self.ROWS:
+            with self.subTest(label):
+                self.assertEqual(self.out(text, "el"), el_out, "el")
+                self.assertEqual(self.out(text, "el++"), elpp_out, "el++")
+
+    def test_unknown_profile_is_refused(self):
+        with self.assertRaises(ValueError):
+            census.signature(graph(""), "sroiq")
+
+
 if __name__ == "__main__":
     unittest.main()

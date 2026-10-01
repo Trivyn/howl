@@ -316,18 +316,20 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
 }
 #endif
 
-owl2_Disposition owl2_disposition(owl2_RawAxiom ax);
+owl2_Disposition owl2_disposition(types_Profile p, owl2_RawAxiom ax);
 owl2_Signature owl2_make_signature(slop_arena* arena);
 uint8_t owl2_signature_has_class(owl2_Signature sig, rdf_IRI i);
 uint8_t owl2_signature_has_object_property(owl2_Signature sig, rdf_IRI i);
 uint8_t owl2_signature_has_annotation_property(owl2_Signature sig, rdf_IRI i);
 uint8_t owl2_signature_has_data_property(owl2_Signature sig, rdf_IRI i);
 int64_t owl2_signature_size(slop_arena* arena, owl2_Signature sig);
-uint8_t owl2_role_in_profile(types_RoleId r);
-uint8_t owl2_roles_in_profile(slop_list_types_RoleId rs);
-uint8_t owl2_concepts_in_profile(slop_list_owl2_RawConcept cs);
-uint8_t owl2_concept_in_profile(owl2_RawConcept c);
-uint8_t owl2_axiom_in_profile(owl2_RawAxiom ax);
+uint8_t owl2_is_el_plus_plus(types_Profile p);
+owl2_Disposition owl2_when_el_plus_plus(types_Profile p);
+uint8_t owl2_role_in_profile(types_Profile p, types_RoleId r);
+uint8_t owl2_roles_in_profile(types_Profile p, slop_list_types_RoleId rs);
+uint8_t owl2_concepts_in_profile(types_Profile p, slop_list_owl2_RawConcept cs);
+uint8_t owl2_concept_in_profile(types_Profile p, owl2_RawConcept c);
+uint8_t owl2_axiom_in_profile(types_Profile p, owl2_RawAxiom ax);
 int64_t owl2_concept_tag_rank(owl2_RawConcept c);
 int64_t owl2_concept_list_cmp(slop_list_owl2_RawConcept a, slop_list_owl2_RawConcept b);
 owl2_RawConcept owl2_concept_at(slop_list_owl2_RawConcept xs, int64_t i);

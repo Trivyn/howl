@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_rdf.h"
+#include "slop_vocab.h"
 #include "slop_types.h"
 #include "slop_owl2.h"
 #include "slop_canon.h"
@@ -163,15 +164,22 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
 uint8_t gate_has_negated_conjunct(owl2_RawConcept c);
 slop_list_owl2_RawConcept gate_conjuncts(slop_arena* arena, owl2_RawConcept c);
 gate_NegSplit gate_negation_split(slop_arena* arena, owl2_RawConcept c);
-uint8_t gate_split_rewritable(gate_NegSplit s);
+uint8_t gate_split_rewritable(types_Profile p, gate_NegSplit s);
 owl2_RawConcept gate_conjunction(slop_list_owl2_RawConcept cs);
 owl2_RawConcept gate_with_conjunct(slop_arena* arena, owl2_RawConcept c, owl2_RawConcept e);
 owl2_RawAxiom gate_empty_axiom(slop_arena* arena, owl2_RawConcept c);
-slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, types_Profile p, slop_list_owl2_RawAxiom axs);
+uint8_t gate_is_top_role(types_RoleId r);
+uint8_t gate_into_top_role(owl2_RawAxiom ax);
+slop_list_owl2_RawAxiom gate_drop_top_role_tautologies(slop_arena* arena, types_Profile p, slop_list_owl2_RawAxiom axs);
+uint8_t gate_role_listed(slop_list_types_RoleId rs, types_RoleId r);
+slop_list_types_RoleId gate_non_simple_roles(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+uint8_t gate_concept_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawConcept c);
+uint8_t gate_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawAxiom ax);
 owl2_RawConcept* gate_box_c(slop_arena* arena, owl2_RawConcept c);
 uint8_t gate_is_rbox_axiom(owl2_RawAxiom ax);
 uint8_t gate_axiom_range_ok(slop_list_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles, owl2_RawAxiom ax);
-gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, owl2_Signature sig, slop_list_types_Omission carried);
+gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, owl2_Signature sig, slop_list_types_Omission carried, types_Profile p);
 slop_list_owl2_RawAxiom gate_sort_axioms(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 slop_list_string gate_axiom_texts(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 owl2_RawAxiom gate_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i);

@@ -47,7 +47,7 @@
                  OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY))
   (import canon (string-cmp node-cmp role-cmp sort-range))
   (import types (Node RoleId EntityKind InputRef AxiomRef Omission MissingDeclaration
-                 copy-iri copy-node copy-role copy-input-ref))
+                 copy-iri copy-node copy-role copy-input-ref Profile))
 
   (export
     CardKind PropCharacteristic
@@ -55,6 +55,7 @@
     RawAxiom Disposition
     Signature
     disposition concept-in-profile concepts-in-profile axiom-in-profile role-in-profile
+    is-el-plus-plus
     concept-tag-rank concept-cmp concept-at sort-concepts
     render-concept render-axiom render-role render-omission
     copy-concept copy-raw-axiom copy-axioms copy-signature
@@ -192,10 +193,13 @@
   ;; and returns false inconclusive on every real ontology. Neither
   ;; announces itself, which is why the table is the authority and a
   ;; construct absent from it is a spec bug rather than a judgement call.
-  (fn disposition ((ax RawAxiom))
-    (@intent "The §5.2 disposition of a decoded axiom — total by construction")
-    (@spec ((RawAxiom) -> Disposition))
+  (fn disposition ((p Profile) (ax RawAxiom))
+    (@intent "The §5.2/§5.4 disposition of a decoded axiom under a rung — total by construction")
+    (@spec ((Profile RawAxiom) -> Disposition))
     (@pure)
+    ;; Consumed and inert answers are the same under every rung: they are
+    ;; about what an axiom IS, not what a calculus can reason about. So
+    ;; stage 1, which only needs those two, asks under `el`.
     (match ax
       ((ra-sub-class-of _ _)            'd-in-profile)
       ((ra-equivalent-classes _)        'd-in-profile)
@@ -214,11 +218,11 @@
       ((ra-annotation)                  'd-inert)
 
       ((ra-inverse-properties _ _)      'd-out-of-profile)
-      ((ra-property-characteristic _ _) 'd-out-of-profile)
+      ((ra-property-characteristic _ _) (when-el-plus-plus p))
       ((ra-disjoint-properties _)       'd-out-of-profile)
-      ((ra-same-individual _)           'd-out-of-profile)
-      ((ra-different-individuals _)     'd-out-of-profile)
-      ((ra-negative-assertion _)        'd-out-of-profile)
+      ((ra-same-individual _)           (when-el-plus-plus p))
+      ((ra-different-individuals _)     (when-el-plus-plus p))
+      ((ra-negative-assertion _)        (when-el-plus-plus p))
       ((ra-disjoint-union _)            'd-out-of-profile)
       ((ra-has-key _)                   'd-out-of-profile)
       ((ra-inverse-expression _)        'd-out-of-profile)
@@ -310,9 +314,36 @@
   ;; built. The gate combines them.
   ;; ============================================================
 
-  (fn role-in-profile ((r RoleId))
-    (@intent "Is this role an ordinary one, rather than an OWL built-in?")
-    (@spec ((RoleId) -> Bool))
+  ;; ============================================================
+  ;; The rungs' languages (§5.2 for `el`, §5.4 for `el++`)
+  ;;
+  ;; `el++` adds nominals, Self, reflexive roles, equality, inequality,
+  ;; negative assertions and the empty role. A rung that is not built
+  ;; (`horn-sriq`, `sriq`) never reaches the gate — prepare refuses it
+  ;; first — and is answered as `el`, which omits more, never less.
+  ;; ============================================================
+
+  (fn is-el-plus-plus ((p Profile))
+    (@intent "Is this the el++ rung?")
+    (@spec ((Profile) -> Bool))
+    (@pure)
+    (@post {$result == (p == 'profile-el-plus-plus)})
+    (match p
+      ('profile-el           false)
+      ('profile-el-plus-plus true)
+      ('profile-horn-sriq    false)
+      ('profile-sriq         false)))
+
+  (fn when-el-plus-plus ((p Profile))
+    (@intent "In profile under el++, out of profile under every other rung")
+    (@spec ((Profile) -> Disposition))
+    (@pure)
+    (@post {(== $result 'd-in-profile) == (p == 'profile-el-plus-plus)})
+    (if (is-el-plus-plus p) 'd-in-profile 'd-out-of-profile))
+
+  (fn role-in-profile ((p Profile) (r RoleId))
+    (@intent "Is this role inside the rung — an ordinary one, or a built-in the rung implements?")
+    (@spec ((Profile RoleId) -> Bool))
     (@pure)
     ;; THE FALSE PASS THIS CLOSES IS A MISSED UNSATISFIABILITY, which
     ;; is the one direction that makes a reasoner dangerous rather than
@@ -326,37 +357,44 @@
     ;; Checked at the ROLE, not at the axiom shape, so a built-in is
     ;; caught wherever it occurs — in a restriction, a subproperty
     ;; axiom, a chain, a domain, or an edge assertion.
+    ;;
+    ;; `el++` implements the empty role (§5.4 K0: `∃N.⊤ ⊑ ⊥`), so it is
+    ;; in that rung. The universal role never is, here: its one accepted
+    ;; position, `R ⊑ owl:topObjectProperty`, is a tautology the gate
+    ;; drops before any role is asked about (`drop-top-role-tautologies`).
     (match r
       ((fresh-role _) true)
       ((named-role i)
-        (and (!= (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0)
-             (!= (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0)
-             (!= (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)
-             (!= (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)))))
+        (cond
+          ((== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0) (is-el-plus-plus p))
+          ((== (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0)    false)
+          ((== (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)      false)
+          ((== (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)   false)
+          (else true)))))
 
-  (fn roles-in-profile ((rs (List RoleId)))
+  (fn roles-in-profile ((p Profile) (rs (List RoleId)))
     (@intent "Is every role in this list an ordinary one?")
-    (@spec (((List RoleId)) -> Bool))
+    (@spec ((Profile (List RoleId)) -> Bool))
     (@pure)
     (let ((mut ok true))
       (do
         (for-each (r rs)
-          (when (not (role-in-profile r)) (set! ok false)))
+          (when (not (role-in-profile p r)) (set! ok false)))
         ok)))
 
-  (fn concepts-in-profile ((cs (List RawConcept)))
+  (fn concepts-in-profile ((p Profile) (cs (List RawConcept)))
     (@intent "Is every concept in this list within the fragment?")
-    (@spec (((List RawConcept)) -> Bool))
+    (@spec ((Profile (List RawConcept)) -> Bool))
     (@pure)
     (let ((mut ok true))
       (do
         (for-each (c cs)
-          (when (not (concept-in-profile c)) (set! ok false)))
+          (when (not (concept-in-profile p c)) (set! ok false)))
         ok)))
 
-  (fn concept-in-profile ((c RawConcept))
-    (@intent "Is this class expression inside ELH⊥R+?")
-    (@spec ((RawConcept) -> Bool))
+  (fn concept-in-profile ((p Profile) (c RawConcept))
+    (@intent "Is this class expression inside the rung's language?")
+    (@spec ((Profile RawConcept) -> Bool))
     (@pure)
     ;; No catch-all: a new RawConcept variant must be given an answer
     ;; here, and -Werror=switch makes forgetting a build error. The
@@ -366,58 +404,66 @@
       ((rc-name _)        true)
       ((rc-thing)         true)
       ((rc-nothing)       true)
-      ((rc-and cs)        (concepts-in-profile cs))
-      ((rc-some r f)      (and (role-in-profile r) (concept-in-profile (deref f))))
+      ((rc-and cs)        (concepts-in-profile p cs))
+      ((rc-some r f)      (and (role-in-profile p r) (concept-in-profile p (deref f))))
       ((rc-or _)          false)
       ;; ¬E is never a concept of the fragment. Where it is a superclass,
       ;; domain or range (or a conjunct of one), the gate rewrites the
       ;; AXIOM into ⊥ GCIs before asking (gate.slop, expand-negation).
       ((rc-not _)         false)
       ((rc-all _ _)       false)
-      ((rc-oneof _)       false)
-      ((rc-has-value _ _) false)
-      ((rc-has-self _)    false)
+      ;; el++ (§5.4): a nominal of ONE individual — more is a disjunction —
+      ;; a value restriction, and Self. Whether Self's role is simple is a
+      ;; whole-RBox question, so the gate asks it (`self-roles-simple`).
+      ((rc-oneof ns)       (and (is-el-plus-plus p) (== (list-len ns) 1)))
+      ((rc-has-value r _)  (and (is-el-plus-plus p) (role-in-profile p r)))
+      ((rc-has-self r)     (and (is-el-plus-plus p) (role-in-profile p r)))
       ((rc-card _ _ _)    false)
       ((rc-qcard _ _ _ _) false)
       ((rc-data _)        false)
       ((rc-anon _)        false)))
 
-  (fn axiom-in-profile ((ax RawAxiom))
-    (@intent "In-profile FORM whose operands are also in the fragment")
-    (@spec ((RawAxiom) -> Bool))
+  (fn axiom-in-profile ((p Profile) (ax RawAxiom))
+    (@intent "In-profile FORM whose operands are also in the rung's language")
+    (@spec ((Profile RawAxiom) -> Bool))
     (@pure)
-    (if (!= (disposition ax) 'd-in-profile)
+    (if (!= (disposition p ax) 'd-in-profile)
       false
       ;; Every variant named, no catch-all. A catch-all would mean a
       ;; future concept-carrying axiom form silently skips the operand
       ;; check — the exact gap this function exists to close.
       (match ax
         ((ra-sub-class-of l r)
-          (and (concept-in-profile (deref l)) (concept-in-profile (deref r))))
-        ((ra-equivalent-classes cs)      (concepts-in-profile cs))
-        ((ra-disjoint-classes cs)        (concepts-in-profile cs))
+          (and (concept-in-profile p (deref l)) (concept-in-profile p (deref r))))
+        ((ra-equivalent-classes cs)      (concepts-in-profile p cs))
+        ((ra-disjoint-classes cs)        (concepts-in-profile p cs))
         ((ra-object-property-domain r c)
-          (and (role-in-profile r) (concept-in-profile (deref c))))
+          (and (role-in-profile p r) (concept-in-profile p (deref c))))
         ((ra-object-property-range r c)
-          (and (role-in-profile r) (concept-in-profile (deref c))))
-        ((ra-class-assertion ca)         (concept-in-profile (deref (. ca concept))))
-        ((ra-sub-object-property a b)    (and (role-in-profile a) (role-in-profile b)))
+          (and (role-in-profile p r) (concept-in-profile p (deref c))))
+        ((ra-class-assertion ca)         (concept-in-profile p (deref (. ca concept))))
+        ((ra-sub-object-property a b)    (and (role-in-profile p a) (role-in-profile p b)))
         ((ra-property-chain ch)
-          (and (roles-in-profile (. ch steps)) (role-in-profile (. ch super))))
-        ((ra-equivalent-properties rs)   (roles-in-profile rs))
-        ((ra-transitive-property r)      (role-in-profile r))
-        ((ra-object-property-assertion e) (role-in-profile (. e role)))
+          (and (roles-in-profile p (. ch steps)) (role-in-profile p (. ch super))))
+        ((ra-equivalent-properties rs)   (roles-in-profile p rs))
+        ((ra-transitive-property r)      (role-in-profile p r))
+        ((ra-object-property-assertion e) (role-in-profile p (. e role)))
+        ;; el++ only (the disposition is out of profile under every other
+        ;; rung, so the guard above has already answered for them):
+        ;; reflexivity is the one characteristic in OWL 2 EL; at least two
+        ;; individuals make an equality or inequality an axiom at all.
+        ((ra-property-characteristic c r)
+          (and (== c 'prop-reflexive) (role-in-profile p r)))
+        ((ra-same-individual ns)         (>= (list-len ns) 2))
+        ((ra-different-individuals ns)   (>= (list-len ns) 2))
+        ((ra-negative-assertion e)       (role-in-profile p (. e role)))
         ;; The remainder are not d-in-profile, so the guard above has
         ;; already returned. They are named anyway so that the switch
         ;; stays total and a disposition change cannot slip past.
         ((ra-declaration _)              false)
         ((ra-annotation)                 false)
         ((ra-inverse-properties _ _)     false)
-        ((ra-property-characteristic _ _) false)
         ((ra-disjoint-properties _)      false)
-        ((ra-same-individual _)          false)
-        ((ra-different-individuals _)    false)
-        ((ra-negative-assertion _)       false)
         ((ra-disjoint-union _)           false)
         ((ra-has-key _)                  false)
         ((ra-inverse-expression _)       false)

@@ -1078,7 +1078,8 @@
     ;; output - it mints `fresh-node i` for i < fresh-count, which would
     ;; collide with renamed ids - and then everything saturation will see
     ;; is renamed through one table.
-    (let ((gr    (gate-axioms scratch (. d axioms) (. d signature) (. d omissions)))
+    ;; This is `el`'s pipeline (§5.2): its gate runs under `el`.
+    (let ((gr    (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el))
           (no    (normalize-accepted scratch (. gr accepted)))
           (names (empty-names arena))
           (sig   (rename-nodes arena names (signature-nodes scratch (. gr signature) no)))
