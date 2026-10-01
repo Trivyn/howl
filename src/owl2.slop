@@ -160,7 +160,7 @@
     (ra-disjoint-properties   (List RoleId))
     (ra-same-individual       (List Node))
     (ra-different-individuals (List Node))
-    (ra-negative-assertion    InputRef)
+    (ra-negative-assertion    RawEdge)      ; ¬r(a, b): source, property, target
     (ra-disjoint-union        InputRef)
     (ra-has-key               InputRef)
     (ra-inverse-expression    InputRef)   ; ObjectInverseOf as an operand — v1
@@ -759,7 +759,10 @@
         (wrap arena "DisjointObjectProperties" (render-role-list arena rs)))
       ((ra-same-individual ns)       (wrap arena "SameIndividual" (render-node-list arena ns)))
       ((ra-different-individuals ns) (wrap arena "DifferentIndividuals" (render-node-list arena ns)))
-      ((ra-negative-assertion ref)   (wrap arena "NegativeAssertion" (render-input-ref ref)))
+      ((ra-negative-assertion e)
+        (wrap arena "NegativeObjectPropertyAssertion"
+          (join2 arena (render-role (. e role))
+            (join2 arena (render-node (. e from)) (render-node (. e to))))))
       ((ra-disjoint-union ref)       (wrap arena "DisjointUnion" (render-input-ref ref)))
       ((ra-has-key ref)              (wrap arena "HasKey" (render-input-ref ref)))
       ((ra-inverse-expression ref)   (wrap arena "ObjectInverseOf" (render-input-ref ref)))
@@ -896,7 +899,11 @@
         (union-new RawAxiom ra-same-individual (copy-nodes arena ns)))
       ((ra-different-individuals ns)
         (union-new RawAxiom ra-different-individuals (copy-nodes arena ns)))
-      ((ra-negative-assertion ref)   (union-new RawAxiom ra-negative-assertion (copy-input-ref arena ref)))
+      ((ra-negative-assertion e)
+        (union-new RawAxiom ra-negative-assertion
+          (record-new RawEdge (role (copy-role arena (. e role)))
+                              (from (copy-node arena (. e from)))
+                              (to   (copy-node arena (. e to))))))
       ((ra-disjoint-union ref)       (union-new RawAxiom ra-disjoint-union (copy-input-ref arena ref)))
       ((ra-has-key ref)              (union-new RawAxiom ra-has-key (copy-input-ref arena ref)))
       ((ra-inverse-expression ref)   (union-new RawAxiom ra-inverse-expression (copy-input-ref arena ref)))

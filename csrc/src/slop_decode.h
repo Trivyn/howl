@@ -15,6 +15,8 @@
 typedef struct decode_ListFault decode_ListFault;
 typedef struct decode_Stage0 decode_Stage0;
 typedef struct decode_Rebuilt decode_Rebuilt;
+typedef struct decode_IndividualTerm decode_IndividualTerm;
+typedef struct decode_NodeList decode_NodeList;
 typedef struct decode_Stage1 decode_Stage1;
 
 typedef enum {
@@ -177,6 +179,44 @@ typedef struct decode_Rebuilt decode_Rebuilt;
 SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 #endif
 
+typedef enum {
+    decode_IndividualTerm_named_individual,
+    decode_IndividualTerm_literal_individual,
+    decode_IndividualTerm_anonymous_individual
+} decode_IndividualTerm_tag;
+
+struct decode_IndividualTerm {
+    decode_IndividualTerm_tag tag;
+    union {
+        rdf_IRI named_individual;
+    } data;
+};
+typedef struct decode_IndividualTerm decode_IndividualTerm;
+
+#ifndef SLOP_OPTION_DECODE_INDIVIDUALTERM_DEFINED
+#define SLOP_OPTION_DECODE_INDIVIDUALTERM_DEFINED
+SLOP_OPTION_DEFINE(decode_IndividualTerm, slop_option_decode_IndividualTerm)
+#endif
+
+typedef enum {
+    decode_NodeList_all_named,
+    decode_NodeList_has_literal,
+    decode_NodeList_has_anonymous
+} decode_NodeList_tag;
+
+struct decode_NodeList {
+    decode_NodeList_tag tag;
+    union {
+        slop_list_types_Node all_named;
+    } data;
+};
+typedef struct decode_NodeList decode_NodeList;
+
+#ifndef SLOP_OPTION_DECODE_NODELIST_DEFINED
+#define SLOP_OPTION_DECODE_NODELIST_DEFINED
+SLOP_OPTION_DEFINE(decode_NodeList, slop_option_decode_NodeList)
+#endif
+
 struct decode_Stage1 {
     slop_list_owl2_RawAxiom axioms;
     owl2_Signature signature;
@@ -323,9 +363,9 @@ typedef struct { bool is_ok; union { types_RoleId ok; slop_string err; } data; }
 typedef struct { bool is_ok; union { int64_t ok; slop_string err; } data; } slop_result_int_string;
 #endif
 
-#ifndef SLOP_RESULT_LIST_TYPES_NODE_STRING_DEFINED
-#define SLOP_RESULT_LIST_TYPES_NODE_STRING_DEFINED
-typedef struct { bool is_ok; union { slop_list_types_Node ok; slop_string err; } data; } slop_result_list_types_Node_string;
+#ifndef SLOP_RESULT_DECODE_NODELIST_STRING_DEFINED
+#define SLOP_RESULT_DECODE_NODELIST_STRING_DEFINED
+typedef struct { bool is_ok; union { decode_NodeList ok; slop_string err; } data; } slop_result_decode_NodeList_string;
 #endif
 
 #ifndef SLOP_RESULT_LIST_OWL2_RAWCONCEPT_STRING_DEFINED
@@ -386,7 +426,8 @@ uint8_t decode_restriction_on_inverse(slop_arena* arena, termstore_TermStore g, 
 uint8_t decode_list_has_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term head);
 uint8_t decode_property_axiom_on_inverse(slop_arena* arena, termstore_TermStore g, slop_string pv, rdf_Triple t);
 slop_result_int_string decode_literal_count(rdf_Term t);
-slop_result_list_types_Node_string decode_decode_node_list(slop_arena* arena, termstore_TermStore g, rdf_Term head);
+decode_IndividualTerm decode_individual_term(rdf_Term tm);
+slop_result_decode_NodeList_string decode_decode_node_list(slop_arena* arena, termstore_TermStore g, rdf_Term head);
 slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* arena, termstore_TermStore g, rdf_Term head, int64_t fuel);
 slop_result_owl2_RawConcept_string decode_decode_quantified(slop_arena* arena, termstore_TermStore g, rdf_Term b, slop_string filler_pred, uint8_t universal, int64_t fuel);
 slop_result_owl2_RawConcept_string decode_decode_cardinality(slop_arena* arena, termstore_TermStore g, rdf_Term b, owl2_CardKind kind, slop_string count_pred, uint8_t qualified, int64_t fuel);
@@ -408,6 +449,8 @@ slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, 
 slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
 slop_option_rdf_Term decode_members_head(slop_arena* arena, termstore_TermStore g, rdf_Term s);
 slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstore_TermStore g, rdf_Triple t, rdf_IRI obj);
+slop_result_owl2_RawAxiom_string decode_decode_individual_pair(slop_arena* arena, rdf_Triple t, uint8_t same);
+slop_result_owl2_RawAxiom_string decode_decode_negative_assertion(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
 slop_result_owl2_RawAxiom_string decode_decode_class_assertion(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
 uint8_t decode_is_reserved_iri(slop_string v);
 int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj);
@@ -416,6 +459,9 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, te
 termstore_TermStore decode_decode_store(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_list_string decode_queried_predicates(slop_arena* arena);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+slop_map* decode_negative_assertion_nodes(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+slop_map* decode_negative_assertion_parts(slop_arena* arena, termstore_TermStore dict);
+uint8_t decode_negative_assertion_part(termstore_IdTriple it, slop_map* nodes, slop_map* parts);
 slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature sig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 
 #define decode_CONCEPT_FUEL (64)
@@ -460,9 +506,19 @@ SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
 SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 #endif
 
+#ifndef SLOP_OPTION_DECODE_INDIVIDUALTERM_DEFINED
+#define SLOP_OPTION_DECODE_INDIVIDUALTERM_DEFINED
+SLOP_OPTION_DEFINE(decode_IndividualTerm, slop_option_decode_IndividualTerm)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_NODELIST_DEFINED
+#define SLOP_OPTION_DECODE_NODELIST_DEFINED
+SLOP_OPTION_DEFINE(decode_NodeList, slop_option_decode_NodeList)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED

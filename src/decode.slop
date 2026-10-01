@@ -118,7 +118,8 @@
                  OWL_INVERSE_FUNCTIONAL_PROPERTY OWL_SYMMETRIC_PROPERTY
                  OWL_ASYMMETRIC_PROPERTY OWL_REFLEXIVE_PROPERTY
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
-                 OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF))
+                 OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF
+                 OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE))
   (import owl2 (RawConcept CardKind Signature make-signature
                 RawAxiom RawChain RawEdge RawClassAssertion
                 RawDeclaration PropCharacteristic Disposition disposition
@@ -819,23 +820,52 @@
       ((term-blank _)  (error "cardinality is a blank node, not a literal"))
       ((term-triple _) (error "cardinality is a triple term, not a literal"))))
 
+  ;; WHAT STANDS IN AN INDIVIDUAL POSITION. A blank node is an anonymous
+  ;; individual: well-formed OWL 2, excluded by OWL 2 EL (Individual :=
+  ;; NamedIndividual). A literal is data. Neither faults the document, and
+  ;; neither may be dropped: each is an omission, labelled for what it is.
+  (type IndividualTerm (union
+    (named-individual IRI)
+    (literal-individual)
+    (anonymous-individual)))
+
+  (fn individual-term ((tm Term))
+    (@intent "Classify a term in an individual position")
+    (@spec ((Term) -> IndividualTerm))
+    (@pure)
+    (match tm
+      ((term-iri i)     (union-new IndividualTerm named-individual i))
+      ((term-literal _) (union-new IndividualTerm literal-individual))
+      (_                (union-new IndividualTerm anonymous-individual))))
+
+  (type NodeList (union
+    (all-named (List Node))
+    (has-literal)
+    (has-anonymous)))
+
   (fn decode-node-list ((arena Arena) (g TermStore) (head Term))
-    (@intent "An RDF collection of individuals, for owl:oneOf")
-    (@spec ((Arena TermStore Term) -> (Result (List Node) String)))
+    (@intent "An RDF collection of individuals: all named, or the first kind that is not")
+    (@spec ((Arena TermStore Term) -> (Result NodeList String)))
     (@alloc arena)
+    ;; Only a malformed collection is an error. An unnamed member used to
+    ;; fault the whole document, for owl:oneOf and owl:AllDifferent alike.
+    ;; A literal member is reported ahead of a blank one.
     (match (rdf-list-checked arena g head)
       ((error lf) (error (list-fault-message lf)))
       ((ok terms)
         (let ((mut out (list-new arena Node))
-              (mut fault (Option String) (none)))
+              (mut literal false)
+              (mut anonymous false))
           (do
             (for-each (tm terms)
-              (match (term-iri-value tm)
-                ((some i) (list-push out (union-new Node individual-node i)))
-                ((none)   (set! fault (some "owl:oneOf member is not a named individual")))))
-            (match fault
-              ((some m) (error m))
-              ((none)   (ok out))))))))
+              (match (individual-term tm)
+                ((named-individual i)   (list-push out (union-new Node individual-node i)))
+                ((literal-individual)   (set! literal true))
+                ((anonymous-individual) (set! anonymous true))))
+            (cond
+              (literal   (ok (union-new NodeList has-literal)))
+              (anonymous (ok (union-new NodeList has-anonymous)))
+              (else      (ok (union-new NodeList all-named out)))))))))
 
   (fn decode-concept-list ((arena Arena) (g TermStore) (head Term) (fuel Int))
     (@intent "An RDF collection of class expressions")
@@ -931,7 +961,18 @@
           ((ok head)
             (match (decode-node-list arena g head)
               ((error m) (error m))
-              ((ok ns)   (ok (union-new RawConcept rc-oneof ns)))))))
+              ((ok nl)
+                (match nl
+                  ((all-named ns) (ok (union-new RawConcept rc-oneof ns)))
+                  ;; literals enumerate a data range: DataOneOf
+                  ((has-literal)
+                    (ok (union-new RawConcept rc-data
+                          (union-new InputRef rdf-fragment
+                            "owl:oneOf with a literal (DataOneOf)"))))
+                  ((has-anonymous)
+                    (ok (union-new RawConcept rc-anon
+                          (union-new InputRef rdf-fragment
+                            "owl:oneOf with an anonymous individual"))))))))))
 
       ((has-pred arena g b OWL_COMPLEMENT_OF)
         (match (obj-of arena g b OWL_COMPLEMENT_OF)
@@ -954,15 +995,21 @@
             (match (obj-of arena g b OWL_HAS_VALUE)
               ((error _) (error "owl:hasValue is absent or ambiguous"))
               ((ok vt)
-                (match (term-iri-value vt)
-                  ((some i) (ok (union-new RawConcept rc-has-value r
-                                  (union-new Node individual-node i))))
+                (match vt
+                  ((term-iri i) (ok (union-new RawConcept rc-has-value r
+                                      (union-new Node individual-node i))))
+                  ;; A literal value is DataHasValue — data, not a nominal.
+                  ;; Labelled an anonymous individual before, which
+                  ;; misnamed the omission.
+                  ((term-literal _) (ok (union-new RawConcept rc-data
+                                          (union-new InputRef rdf-fragment
+                                            "owl:hasValue with a literal (DataHasValue)"))))
                   ;; An anonymous individual: well-formed, and excluded by
                   ;; OWL 2 EL (Individual := NamedIndividual). Represented,
                   ;; so the enclosing axiom is omitted rather than faulted.
-                  ((none)   (ok (union-new RawConcept rc-anon
-                                  (union-new InputRef rdf-fragment
-                                    "owl:hasValue on an anonymous individual"))))))))))
+                  (_ (ok (union-new RawConcept rc-anon
+                           (union-new InputRef rdf-fragment
+                             "owl:hasValue on an anonymous individual"))))))))))
 
       ((has-pred arena g b OWL_HAS_SELF)
         (match (decode-role arena g b)
@@ -1376,7 +1423,11 @@
             ((some head)
               (match (decode-node-list arena g head)
                 ((error m) (error m))
-                ((ok ns)   (ok (union-new RawAxiom ra-different-individuals ns)))))))
+                ((ok nl)
+                  (match nl
+                    ((all-named ns)  (ok (union-new RawAxiom ra-different-individuals ns)))
+                    ((has-literal)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+                    ((has-anonymous) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))))))
         ((== (string-cmp ov OWL_ALL_DISJOINT_CLASSES) 0)
           (match (members-head arena g (. t subject))
             ((none) (error "owl:AllDisjointClasses without owl:members"))
@@ -1403,7 +1454,7 @@
                   ((error m) (error m))
                   ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs))))))))
         ((== (string-cmp ov OWL_NEGATIVE_PROPERTY_ASSERTION) 0)
-          (ok (union-new RawAxiom ra-negative-assertion (frag arena t))))
+          (decode-negative-assertion arena g t))
         ;; SWRL is out of profile at every rung and never to be
         ;; implemented (unrestricted SWRL is undecidable), but it is
         ;; RECOGNIZED: RO carries 25 rules, two of which derive
@@ -1416,6 +1467,94 @@
         ;; tagging is PER OPERAND — the same IRI would be a class in
         ;; the object position and an individual in the subject one.
         (else (decode-class-assertion arena g t)))))
+
+  (fn decode-individual-pair ((arena Arena) (t Triple) (same Bool))
+    (@intent "`a owl:sameAs b` / `a owl:differentFrom b`, over two named individuals")
+    (@spec ((Arena Triple Bool) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; BOTH OPERANDS OR AN OMISSION — NEVER ONE. A blank-node operand used
+    ;; to be dropped from the list, leaving a one-member axiom. Under `el`
+    ;; that was omitted anyway; under `el++`, where equality is in profile,
+    ;; it would be an under-constrained axiom accepted silently, and so a
+    ;; false coherent. An anonymous operand is an anonymous individual
+    ;; (OWL 2 EL excludes them), and a reserved IRI is reserved vocabulary,
+    ;; as for every other assertion.
+    (match (individual-term (. t subject))
+      ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+      ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+      ((named-individual a)
+        (match (individual-term (. t object))
+          ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+          ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+          ((named-individual b)
+            (if (or (is-reserved-iri (. a value)) (is-reserved-iri (. b value)))
+              (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+              (let ((mut ns (list-new arena Node)))
+                (do
+                  (list-push ns (union-new Node individual-node a))
+                  (list-push ns (union-new Node individual-node b))
+                  (if same
+                    (ok (union-new RawAxiom ra-same-individual ns))
+                    (ok (union-new RawAxiom ra-different-individuals ns)))))))))))
+
+  (fn decode-negative-assertion ((arena Arena) (g TermStore) (t Triple))
+    (@intent "`_:x a owl:NegativePropertyAssertion` as ¬r(a, b), read from its node")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; READ AS A WHOLE, from the node the type triple names. Its parts
+    ;; (sourceIndividual, assertionProperty, targetIndividual/targetValue)
+    ;; are structural predicates, so they are not decoded again at top
+    ;; level — before, each became its own reserved-vocabulary omission
+    ;; and the assertion itself was an opaque fragment.
+    ;;
+    ;; - a literal target (owl:targetValue) is the DATA form, a data axiom;
+    ;; - an inverse property expression is an inverse-expression omission;
+    ;; - an anonymous source or target is an anonymous individual;
+    ;; - a missing part is malformed input, as OWL 2's mapping requires
+    ;;   exactly one of each.
+    ;; EVERY PART IS VALIDATED BEFORE THE ASSERTION IS CLASSIFIED: exactly
+    ;; one property, one source, and exactly one target — an individual
+    ;; or a value, never both. Classifying on owl:targetValue first let a
+    ;; node with nothing else, or with both targets, pass as a data axiom.
+    (let ((x (. t subject)))
+      (match (obj-of arena g x OWL_ASSERTION_PROPERTY)
+        ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:assertionProperty"))
+        ((ok pt)
+          (match (obj-of arena g x OWL_SOURCE_INDIVIDUAL)
+            ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:sourceIndividual"))
+            ((ok st)
+              (cond
+                ((and (has-pred arena g x OWL_TARGET_VALUE) (has-pred arena g x OWL_TARGET_INDIVIDUAL))
+                  (error "owl:NegativePropertyAssertion with both owl:targetIndividual and owl:targetValue"))
+                ((has-pred arena g x OWL_TARGET_VALUE)
+                  (match (obj-of arena g x OWL_TARGET_VALUE)
+                    ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetValue"))
+                    ((ok _)    (ok (union-new RawAxiom ra-data-axiom (frag arena t))))))
+                (else
+                (match (obj-of arena g x OWL_TARGET_INDIVIDUAL)
+                  ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetIndividual"))
+                  ((ok tt)
+                    (match (role-of-term pt)
+                      ((none)
+                        (if (inverse-expression-term arena g pt)
+                          (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
+                          (error "owl:assertionProperty is not a property")))
+                      ((some r)
+                        (match (individual-term st)
+                          ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+                          ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+                          ((named-individual a)
+                            (match (individual-term tt)
+                              ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+                              ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+                              ((named-individual b)
+                                (if (or (is-reserved-iri (. a value)) (is-reserved-iri (. b value)))
+                                  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+                                  (ok (union-new RawAxiom ra-negative-assertion
+                                        (record-new RawEdge
+                                          (role r)
+                                          (from (union-new Node individual-node a))
+                                          (to   (union-new Node individual-node b))))))))))))))))))))))
 
   (fn decode-class-assertion ((arena Arena) (g TermStore) (t Triple))
     (@intent "`a rdf:type C` as ClassAssertion(C, a), for a named or an anonymous C")
@@ -1642,26 +1781,10 @@
                                   r (box-concept arena c))))))))))
 
             ((== (string-cmp pv OWL_SAME_AS) 0)
-              (let ((mut ns (list-new arena Node)))
-                (do
-                  (match (term-iri-value (. t subject))
-                    ((some i) (list-push ns (union-new Node individual-node i)))
-                    ((none)   (do)))
-                  (match (term-iri-value (. t object))
-                    ((some i) (list-push ns (union-new Node individual-node i)))
-                    ((none)   (do)))
-                  (ok (union-new RawAxiom ra-same-individual ns)))))
+              (decode-individual-pair arena t true))
 
             ((== (string-cmp pv OWL_DIFFERENT_FROM) 0)
-              (let ((mut ns (list-new arena Node)))
-                (do
-                  (match (term-iri-value (. t subject))
-                    ((some i) (list-push ns (union-new Node individual-node i)))
-                    ((none)   (do)))
-                  (match (term-iri-value (. t object))
-                    ((some i) (list-push ns (union-new Node individual-node i)))
-                    ((none)   (do)))
-                  (ok (union-new RawAxiom ra-different-individuals ns)))))
+              (decode-individual-pair arena t false))
 
             ((== (string-cmp pv OWL_DISJOINT_UNION_OF) 0)
               (ok (union-new RawAxiom ra-disjoint-union (frag arena t))))
@@ -1787,6 +1910,10 @@
         (list-push ps OWL_ON_CLASS)
         (list-push ps OWL_MEMBERS)
         (list-push ps OWL_DISTINCT_MEMBERS)
+        (list-push ps OWL_SOURCE_INDIVIDUAL)
+        (list-push ps OWL_ASSERTION_PROPERTY)
+        (list-push ps OWL_TARGET_INDIVIDUAL)
+        (list-push ps OWL_TARGET_VALUE)
         ps)))
 
   (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)))
@@ -1803,9 +1930,12 @@
         ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the
         ;; decoded axioms. The count is what shows they were recognized
         ;; as inert, rather than lost or misfiled out of profile.
+        (let ((npa-nodes (negative-assertion-nodes arena dict triples))
+              (npa-parts (negative-assertion-parts arena dict)))
         (for-each (it triples)
           (let ((t (triple-of dict it)))
-            (when (not (structural-triple t))
+            (when (and (not (structural-triple t))
+                       (not (negative-assertion-part it npa-nodes npa-parts)))
               (match (decode-axiom arena ig sig t)
                 ((error m) (set! fault (some m)))
                 ((ok ax)
@@ -1813,10 +1943,49 @@
                     ('d-inert          (set! inert (+ inert 1)))
                     ('d-consumed       (list-push out ax))
                     ('d-in-profile     (list-push out ax))
-                    ('d-out-of-profile (list-push out ax))))))))
+                    ('d-out-of-profile (list-push out ax)))))))))
         (match fault
           ((some m) (error (union-new Fault input-error m)))
           ((none)   (ok (record-new Stage1 (axioms out) (signature sig) (inert inert))))))))
+
+  ;; A NegativePropertyAssertion's parts (owl:sourceIndividual,
+  ;; owl:assertionProperty, owl:targetIndividual, owl:targetValue) are read
+  ;; through its type triple, so they are skipped at top level — but ONLY
+  ;; on a node actually typed owl:NegativePropertyAssertion. Skipping the
+  ;; predicates everywhere made `:a owl:sourceIndividual :b .` vanish with
+  ;; no axiom, omission or error: a silent drop.
+
+  (fn negative-assertion-nodes ((arena Arena) (dict TermStore) (triples (List IdTriple)))
+    (@intent "The ids of the subjects typed owl:NegativePropertyAssertion")
+    (@spec ((Arena TermStore (List IdTriple)) -> (Set Int)))
+    (@alloc arena)
+    (let ((npa (vocab-id arena dict OWL_NEGATIVE_PROPERTY_ASSERTION))
+          (type-pred (. dict rdf-type))
+          (mut out (set-new arena Int)))
+      (do
+        (when (>= npa 0)
+          (for-each (it triples)
+            (when (and (== (. it p) type-pred) (== (. it o) npa))
+              (set-put out (. it s)))))
+        out)))
+
+  (fn negative-assertion-parts ((arena Arena) (dict TermStore))
+    (@intent "The ids of the four part predicates a negative assertion's node carries")
+    (@spec ((Arena TermStore) -> (Set Int)))
+    (@alloc arena)
+    (let ((mut out (set-new arena Int)))
+      (do
+        (for-each (iri (list String OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY
+                             OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE))
+          (let ((id (vocab-id arena dict iri)))
+            (when (>= id 0) (set-put out id))))
+        out)))
+
+  (fn negative-assertion-part ((it IdTriple) (nodes (Set Int)) (parts (Set Int)))
+    (@intent "Is this a part triple of a node typed owl:NegativePropertyAssertion?")
+    (@spec ((IdTriple (Set Int) (Set Int)) -> Bool))
+    (@pure)
+    (and (set-has parts (. it p)) (set-has nodes (. it s))))
 
   (fn declaration-conflict ((arena Arena) (sig Signature) (dict TermStore) (triples (List IdTriple)))
     (@intent "An IRI declared under two mutually exclusive kinds")

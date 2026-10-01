@@ -1341,8 +1341,8 @@ translation from OWL into [Krö10]'s language and the bookkeeping around it.
 >   each fixed in the text: the `el`/`el++` report equality failed under a cap (now claimed for
 >   complete runs only); a run stopped on `⊥` is complete for its answers but not its facts (K3);
 >   and K5 conflated the raw queries with the report's exclusions (`owl:Nothing`, inconsistency).
-> - **Project owner: pending.** No `el++` code lands before acceptance; `--profile el++` exits 3
->   until then.
+> - **Project owner: accepted, 2026-09-30** (PR #8; spec approval recorded as AD 465af4c0).
+>   `--profile el++` exits 3 until slice 6 wires the rung in.
 
 **Sources.** [Krö10] Markus Krötzsch, *Efficient Inferencing for the Description Logic Underlying
 OWL EL*, Technical Report 3005, Institute AIFB, KIT, 2010 (the long version of *Efficient

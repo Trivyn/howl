@@ -30,7 +30,7 @@
                   decode-axioms decode-axioms-with decode-store Stage1))
   (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity))
   (import normalize (NormOutput normalize-accepted))
-  (import owl2 (RawConcept Signature signature-has-class
+  (import owl2 (RawConcept Signature signature-has-class render-omission
                 signature-has-object-property signature-has-annotation-property
                 RawAxiom Disposition disposition axiom-in-profile render-axiom))
   (import ttl (parse-ttl-file parse-ttl-string))
@@ -1959,6 +1959,128 @@
         ok)))
 
   ;; ============================================================
+  ;; Equality, inequality and negative assertions decode whole
+  ;; (el++ slice 1; SPEC §5.4)
+  ;; ============================================================
+
+  (fn omissions-of-ttl ((arena Arena) (ttl String))
+    (@intent "Gate an inline Turtle document; its omissions' renderings, one per line")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (match (gate-ttl arena ttl)
+      ((none) "<did not gate>")
+      ((some gr)
+        (let ((mut out ""))
+          (do
+            (for-each (o (. gr omissions))
+              (set! out (string-concat arena out
+                          (string-concat arena (render-omission arena o) "\n"))))
+            out)))))
+
+  (fn omits-exactly ((arena Arena) (label String) (ttl String) (want String))
+    (@intent "Does the gate omit exactly these renderings? Prints what it got when not")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((got (omissions-of-ttl arena (string-concat arena (eq-prefix) ttl))))
+      (if (== (string-cmp got want) 0)
+        true
+        (do
+          (println (string-concat arena (string-concat arena "  [decode] " label) ": omitted"))
+          (println got)
+          false))))
+
+  (fn eq-prefix ()
+    (@intent "The shared prefix block for the equality-decode tests")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n:r a owl:ObjectProperty .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n")
+
+  (fn test-equality-never-drops-an-operand ((arena Arena))
+    (@intent "sameAs/differentFrom with a blank operand is an anonymous individual, not a one-member axiom")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A one-member SameIndividual is under-constrained: once el++ accepts
+    ;; equality it would be accepted and mean nothing, a false coherent.
+    (and
+      (omits-exactly arena "sameAs, both named" ":a owl:sameAs :b ."
+        "SameIndividual(http://example.org/t#a http://example.org/t#b)\n")
+      (omits-exactly arena "sameAs, blank object" ":a owl:sameAs [] ."
+        "AnonymousIndividual(<http://example.org/t#a> <http://www.w3.org/2002/07/owl#sameAs> _:b0 .)\n")
+      (omits-exactly arena "differentFrom, blank subject" "[] owl:differentFrom :b ."
+        "AnonymousIndividual(_:b0 <http://www.w3.org/2002/07/owl#differentFrom> <http://example.org/t#b> .)\n")
+      (omits-exactly arena "sameAs, reserved IRI" ":a owl:sameAs owl:Nothing ."
+        "ReservedVocabulary(<http://example.org/t#a> <http://www.w3.org/2002/07/owl#sameAs> <http://www.w3.org/2002/07/owl#Nothing> .)\n")
+      ;; a literal is data, not an anonymous individual
+      (omits-exactly arena "sameAs, literal" ":a owl:sameAs \"x\" ."
+        "DataAxiom(<http://example.org/t#a> <http://www.w3.org/2002/07/owl#sameAs> \"x\" .)\n")
+      (omits-exactly arena "AllDifferent, literal member" "[] a owl:AllDifferent ; owl:members ( :a \"x\" ) ."
+        "DataAxiom(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AllDifferent> .)\n")))
+
+  (fn test-anonymous-members-are-omissions-not-faults ((arena Arena))
+    (@intent "An anonymous member of AllDifferent or oneOf is an omission; the document still decodes")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Both used to be input-errors that faulted the whole document, for a
+    ;; construct that is well-formed OWL 2 and merely outside OWL 2 EL.
+    ;; The omission TEXT is pinned, not just counted: dropping the
+    ;; anonymous member instead leaves a one-member DifferentIndividuals
+    ;; or oneOf, which `el` omits too — so a count cannot tell the two
+    ;; apart — but which `el++` would accept and reason with.
+    (let ((pre (eq-prefix)))
+      (and
+        (decodes-ok arena (string-concat arena pre "[] a owl:AllDifferent ; owl:members ( :a [] ) ."))
+        (omits-exactly arena "AllDifferent, anonymous member"
+          "[] a owl:AllDifferent ; owl:members ( :a [] ) ."
+          "AnonymousIndividual(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AllDifferent> .)\n")
+        (decodes-ok arena (string-concat arena pre
+          ":C a owl:Class . :C owl:equivalentClass [ a owl:Class ; owl:oneOf ( :a [] ) ] ."))
+        (omits-exactly arena "oneOf, anonymous member"
+          ":C a owl:Class . :C owl:equivalentClass [ a owl:Class ; owl:oneOf ( :a [] ) ] ."
+          "SubClassOf(AnonymousClass(owl:oneOf with an anonymous individual) http://example.org/t#C)\nSubClassOf(http://example.org/t#C AnonymousClass(owl:oneOf with an anonymous individual))\n"))))
+
+  (fn test-negative-assertion-decodes-whole ((arena Arena))
+    (@intent "NegativePropertyAssertion is read as ¬r(a, b) from its node, its parts consumed")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Before, the type triple was an opaque fragment and each part a
+    ;; separate reserved-vocabulary omission: four lines for one axiom.
+    (let ((pre (eq-prefix)))
+      (and
+        (omits-exactly arena "object form"
+          "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ."
+          "NegativeObjectPropertyAssertion(http://example.org/t#r http://example.org/t#a http://example.org/t#b)\n")
+        ;; the DATA form is a data axiom, not a nominal
+        (== (gate-omissions-of-ttl arena (string-concat arena pre
+              ":d a owl:DatatypeProperty . [] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :d ; owl:targetValue \"x\" .")) 1)
+        ;; an anonymous target is an anonymous individual
+        (== (gate-omissions-of-ttl arena (string-concat arena pre
+              "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual [] .")) 1)
+        ;; a missing part is malformed input
+        (not (decodes-ok arena (string-concat arena pre
+               "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r .")))
+        ;; EVERY PART IS VALIDATED FIRST: a target value alone is not a
+        ;; data axiom, both targets are not one, two sources are not one
+        (not (decodes-ok arena (string-concat arena pre
+               "[] a owl:NegativePropertyAssertion ; owl:targetValue \"x\" .")))
+        (not (decodes-ok arena (string-concat arena pre
+               "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ; owl:targetValue \"x\" .")))
+        (not (decodes-ok arena (string-concat arena pre
+               "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a , :b ; owl:assertionProperty :r ; owl:targetIndividual :b .")))
+        ;; A PART PREDICATE ON ANY OTHER SUBJECT IS NOT CONSUMED: it is
+        ;; reported, never silently skipped
+        (omits-exactly arena "stray part predicate"
+          ":a owl:sourceIndividual :b ."
+          "ReservedVocabulary(<http://example.org/t#a> <http://www.w3.org/2002/07/owl#sourceIndividual> <http://example.org/t#b> .)\n"))))
+
+  (fn test-literal-has-value-is-data ((arena Arena))
+    (@intent "owl:hasValue with a literal is DataHasValue, not an anonymous individual")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (omits-exactly arena "literal hasValue"
+      ":C a owl:Class . :d a owl:DatatypeProperty . :C owl:equivalentClass [ a owl:Restriction ; owl:onProperty :d ; owl:hasValue \"x\" ] ."
+      "SubClassOf(DataRange(owl:hasValue with a literal (DataHasValue)) http://example.org/t#C)\nSubClassOf(http://example.org/t#C DataRange(owl:hasValue with a literal (DataHasValue)))\n"))
+
+  ;; ============================================================
   ;; Negation in positive positions (§5.2's rewrite; SPEC §5.3 L0)
   ;; ============================================================
 
@@ -3837,6 +3959,22 @@
 
           (let ((r (test-range-composition-table arena)))
             (print-test-result "range: all 12 rows of §5.2's verdict table" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-equality-never-drops-an-operand arena)))
+            (print-test-result "decode: sameAs/differentFrom never drop an operand" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-anonymous-members-are-omissions-not-faults arena)))
+            (print-test-result "decode: an anonymous AllDifferent/oneOf member is an omission" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-negative-assertion-decodes-whole arena)))
+            (print-test-result "decode: a negative assertion is read whole, its parts consumed" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-literal-has-value-is-data arena)))
+            (print-test-result "decode: a literal hasValue is data" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))
