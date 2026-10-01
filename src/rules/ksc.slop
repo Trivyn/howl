@@ -20,6 +20,10 @@
 ;;             §5.4 K2 needs: a conclusion names only constants already in
 ;;             the run, so per-class runs share nothing but G.
 ;;
+;; Rules (1) and (3) and the seed (*) have a body that always matches, so
+;; they carry `complete` (they always fire) and `head`; `sound` has
+;; nothing to rule out.
+;;
 ;; Soundness alone is satisfied by a rule that never fires, which is why
 ;; completeness is stated separately and both are proved. Every one is
 ;; seen to fail under a mutation of its body (the PR records them).
@@ -128,8 +132,10 @@
     (@intent "[Krö10] (1): nom(x) → inst(x, x)")
     (@spec ((IRI) -> Concl))
     (@pure)
-    ;; nom(a) is the type: `a` is an individual. Always fires.
-    (@property sound (== (. $result fires) true))
+    ;; nom(a) is the type: `a` is an individual. The body always matches,
+    ;; so there is nothing for `sound` to rule out: completeness is that it
+    ;; always fires.
+    (@property complete (== (. $result fires) true))
     (@property head
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (ind-elem a)) (== cy (nominal-term a))))
@@ -140,7 +146,7 @@
     (@intent "[Krö10] Theorem 2's (*): cls(q) → inst(q, q, q), q's run's seed")
     (@spec ((KName) -> Concl))
     (@pure)
-    (@property sound (== (. $result fires) true))
+    (@property complete (== (. $result fires) true))
     (@property head
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx (class-elem q)) (== cy (name-term q))))
@@ -176,7 +182,7 @@
     (@intent "[Krö10] (3): top(z) ∧ inst(x, z′) → inst(x, z), z = owl:Thing")
     (@spec ((KElem KTerm) -> Concl))
     (@pure)
-    (@property sound (== (. $result fires) true))
+    (@property complete (== (. $result fires) true))
     (@property head
       (match (. $result fact)
         ((f-inst cx cy) (and (== cx x) (== cy (thing-term))))

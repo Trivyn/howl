@@ -322,14 +322,15 @@ explicit request to exactly itself, `profile-implemented` admits only `el`, and 
 selects `el`; each was seen to fail under a mutation. Among the verified, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
 (nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of
-its rule's body. `el++`'s rules (`src/rules/ksc.slop`) go further: 27 per-instance functions for
-[Krö10] Fig. 3 each prove `sound`, `complete` and `head` (the conclusion is the rule's head over the
-premises' own terms), rule (4)'s ⊥ flag proves its `@post`, and the one join combinator proves its
+its rule's body. `el++`'s rules (`src/rules/ksc.slop`) go further: 26 per-instance functions for
+[Krö10] Fig. 3 and Theorem 2's seed (*) each prove `complete` (fires whenever the body matches) and
+`head` (the conclusion is the rule's head over the premises' own terms), the 24 that can decline to
+fire also prove `sound` (fires only when the body matches), rule (4)'s ⊥ flag proves its `@post`, and the one join combinator proves its
 soundness through a checked `@loop-invariant`. 109 mutants were each killed by exactly the contract
 they target. The combinator's completeness is owed to the prover, not claimed (the last row of the
 table below); the engine-against-reference differential holds it meanwhile. `make example` runs
-**17 executable examples**: 6 per rule, 2 on the el++ ⊥ flag, 7 on the canonical sort, and 2 on
-context coverage (the W3C DisjointClasses-002 case). Two guarantees the external conformance suites
+**22 executable examples**: 6 per rule, 2 on the el++ ⊥ flag, 7 on the canonical sort, 2 on
+context coverage (the W3C DisjointClasses-002 case) and 5 in the decoder. Two guarantees the external conformance suites
 exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
 - context coverage in `signature-nodes`, which is loops;
 - "a class assertion is never set aside" in `decode-class-assertion`, which is blocked by
