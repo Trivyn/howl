@@ -1515,9 +1515,9 @@
     (let ((mut n 0))
       (do
         (for-each (a axs)
-          (match (disposition a)
+          (match (disposition 'profile-el a)
             ('d-out-of-profile (set! n (+ n 1)))
-            ('d-in-profile     (when (not (axiom-in-profile a)) (set! n (+ n 1))))
+            ('d-in-profile     (when (not (axiom-in-profile 'profile-el a)) (set! n (+ n 1))))
             ('d-inert          (do))
             ('d-consumed       (do))))
         n)))
@@ -1529,7 +1529,7 @@
     (let ((mut n 0))
       (do
         (for-each (a axs)
-          (when (== (disposition a) want) (set! n (+ n 1))))
+          (when (== (disposition 'profile-el a) want) (set! n (+ n 1))))
         n)))
 
   (fn decode-fixture ((arena Arena) (path String))
@@ -1735,7 +1735,7 @@
               ((error _) -1)
               ((ok s1)
                 (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
-                                         (. s0 omissions)) accepted))))))))))
+                                         (. s0 omissions) 'profile-el) accepted))))))))))
 
   (fn test-reserved-iri-as-individual-is-out-of-profile ((arena Arena))
     (@intent "owl:Nothing used as a named individual is REPORTED, not consumed")
@@ -1835,8 +1835,14 @@
              ":x a owl:Class . :x a owl:NamedIndividual .")))))
 
   (fn gate-ttl ((arena Arena) (ttl String))
-    (@intent "Parse, stage 0, decode and gate an inline Turtle document")
+    (@intent "Parse, stage 0, decode and gate an inline Turtle document under el")
     (@spec ((Arena String) -> (Option GateResult)))
+    (@alloc arena)
+    (gate-ttl-in arena ttl 'profile-el))
+
+  (fn gate-ttl-in ((arena Arena) (ttl String) (p Profile))
+    (@intent "Parse, stage 0, decode and gate an inline Turtle document under a rung")
+    (@spec ((Arena String Profile) -> (Option GateResult)))
     (@alloc arena)
     (match (parse-ttl-string arena ttl)
       ((error _) (none))
@@ -1848,7 +1854,7 @@
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions))))))))))
+                        (. s0 omissions) p)))))))))
 
   (fn gate-omissions-of-ttl ((arena Arena) (ttl String))
     (@intent "Gate an inline Turtle document and count its omissions")
@@ -1957,6 +1963,114 @@
                     ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range [ owl:intersectionOf ( :Agent [ owl:complementOf [ owl:unionOf ( :Agent :Person ) ] ] ) ] . :s rdfs:range :Agent .")) 2)
           (do (println "  [range] row 12 should omit the range AND the chain") (set! ok false)))
         ok)))
+
+  ;; ============================================================
+  ;; The el++ gate (§5.4): each construct under both rungs
+  ;; ============================================================
+
+  (fn rung-prefix ()
+    (@intent "The shared prefix block for the two-rung gate table")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .\n:C a owl:Class . :D a owl:Class .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n")
+
+  (fn omissions-under ((arena Arena) (ttl String) (p Profile))
+    (@intent "Omissions of an inline document gated under a rung, or -1 if it did not gate")
+    (@spec ((Arena String Profile) -> Int))
+    (@alloc arena)
+    (match (gate-ttl-in arena ttl p)
+      ((none)    -1)
+      ((some gr) (cast Int (list-len (. gr omissions))))))
+
+  (fn rungs-omit ((arena Arena) (label String) (ttl String) (el-want Int) (elpp-want Int))
+    (@intent "Does the gate omit exactly this many axioms under el and under el++?")
+    (@spec ((Arena String String Int Int) -> Bool))
+    (@alloc arena)
+    (let ((doc (string-concat arena (rung-prefix) ttl)))
+      (let ((el (omissions-under arena doc 'profile-el))
+            (pp (omissions-under arena doc 'profile-el-plus-plus)))
+        (if (and (== el el-want) (== pp elpp-want))
+          true
+          (do
+            (println (string-concat arena "  [rungs] " label))
+            (print "    el omitted ") (println (int-to-string arena el))
+            (print "    el++ omitted ") (println (int-to-string arena pp))
+            false)))))
+
+  (fn test-el-plus-plus-gate-table ((arena Arena))
+    (@intent "Each el++ construct is omitted under el and accepted under el++, or omitted by both")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE TWO HALVES OF THE GATE, PER CONSTRUCT. The el++ column says what
+    ;; §5.4 admits; the el column says el is unchanged by it. Self's rows
+    ;; are the simple-role condition: a role that is transitive, above a
+    ;; transitive one, or the super-role of a chain is not simple.
+    (and
+      (rungs-omit arena "hasValue"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] ." 1 0)
+      (rungs-omit arena "oneOf of one"
+        ":C owl:equivalentClass [ a owl:Class ; owl:oneOf ( :a ) ] ." 2 0)
+      (rungs-omit arena "hasSelf, simple role"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] ." 1 0)
+      (rungs-omit arena "reflexive role"
+        ":r a owl:ReflexiveProperty ." 1 0)
+      (rungs-omit arena "sameAs"
+        ":a owl:sameAs :b ." 1 0)
+      (rungs-omit arena "differentFrom"
+        ":a owl:differentFrom :b ." 1 0)
+      (rungs-omit arena "AllDifferent"
+        "[] a owl:AllDifferent ; owl:members ( :a :b ) ." 1 0)
+      (rungs-omit arena "negative assertion"
+        "[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ." 1 0)
+      (rungs-omit arena "empty role"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom owl:Thing ] ." 1 0)
+      (rungs-omit arena "inclusion into the universal role"
+        ":r rdfs:subPropertyOf owl:topObjectProperty ." 1 0)
+      (rungs-omit arena "chain into the universal role"
+        "owl:topObjectProperty owl:propertyChainAxiom ( :r :s ) ." 1 0)
+      (rungs-omit arena "oneOf of two"
+        ":C owl:equivalentClass [ a owl:Class ; owl:oneOf ( :a :b ) ] ." 2 2)
+      (rungs-omit arena "hasSelf, transitive role"
+        ":t a owl:TransitiveProperty . :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:hasSelf true ] ." 1 1)
+      (rungs-omit arena "hasSelf, role above a transitive one"
+        ":t a owl:TransitiveProperty . :t rdfs:subPropertyOf :s . :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] ." 1 1)
+      (rungs-omit arena "hasSelf, role above a chain"
+        ":s owl:propertyChainAxiom ( :r :r ) . :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] ." 1 1)
+      (rungs-omit arena "universal role in a restriction"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:topObjectProperty ; owl:someValuesFrom :D ] ." 1 1)
+      (rungs-omit arena "universal role below another"
+        ":t rdfs:subPropertyOf :r . owl:topObjectProperty rdfs:subPropertyOf :r ." 1 1)
+      (rungs-omit arena "universal role as a chain step"
+        ":s owl:propertyChainAxiom ( :r owl:topObjectProperty ) ." 1 1)
+      (rungs-omit arena "empty role as a chain step"
+        ":s owl:propertyChainAxiom ( :r owl:bottomObjectProperty ) ." 1 0)
+      (rungs-omit arena "oneOf of a reserved IRI"
+        ":C rdfs:subClassOf [ a owl:Class ; owl:oneOf ( owl:Thing ) ] ." 1 1)
+      (rungs-omit arena "hasValue on a reserved IRI"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue owl:Thing ] ." 1 1)
+      (rungs-omit arena "AllDifferent with a reserved IRI"
+        "[] a owl:AllDifferent ; owl:members ( :a owl:Thing ) ." 1 1)
+      (rungs-omit arena "sameAs an XSD IRI"
+        "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> . :a owl:sameAs xsd:string ." 1 1)
+      (rungs-omit arena "universal role into itself"
+        "owl:topObjectProperty rdfs:subPropertyOf owl:topObjectProperty ." 1 0)
+      (rungs-omit arena "functional role"
+        ":r a owl:FunctionalProperty ." 1 1)
+      (rungs-omit arena "hasValue, anonymous"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue [] ] ." 1 1)))
+
+  (fn test-top-role-tautology-is-dropped ((arena Arena))
+    (@intent "Under el++, R ⊑ owl:topObjectProperty is neither accepted nor omitted")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A tautology is not a gap (K0), and it must not reach the
+    ;; calculus either: owl:topObjectProperty is never a role el++ has.
+    (match (gate-ttl-in arena (string-concat arena (rung-prefix)
+             ":r rdfs:subPropertyOf owl:topObjectProperty .") 'profile-el-plus-plus)
+      ((none) false)
+      ((some gr)
+        (and (== (cast Int (list-len (. gr accepted))) 0)
+             (== (cast Int (list-len (. gr omissions))) 0)))))
 
   ;; ============================================================
   ;; Equality, inequality and negative assertions decode whole
@@ -2525,7 +2639,7 @@
             ((none) (set! ok false))
             ((some gr)
               (let ((again (gate-axioms arena (. gr accepted) (. gr signature)
-                             (list-new arena Omission))))
+                             (list-new arena Omission) 'profile-el)))
                 (when (not (same-rendering arena (. gr accepted) (. again accepted)))
                   (do (print "  [idempotence] regating changed ") (println p)
                       (set! ok false)))))))
@@ -2611,7 +2725,7 @@
           ((error _) (none))
           ((ok s1)
             (some (normalize-accepted arena
-                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions))
+                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions) 'profile-el)
                        accepted))))))))
 
   (fn same-normal-form ((a NormOutput) (b NormOutput))
@@ -3097,7 +3211,7 @@
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions))))))))))
+                        (. s0 omissions) 'profile-el)))))))))
 
   (fn count-variant-chain ((axs (List RawAxiom)))
     (@intent "How many property-chain axioms survived the gate")
@@ -3975,6 +4089,14 @@
 
           (let ((r (test-literal-has-value-is-data arena)))
             (print-test-result "decode: a literal hasValue is data" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-el-plus-plus-gate-table arena)))
+            (print-test-result "gate: el++ admits its constructs, el omits them (two-rung table)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-top-role-tautology-is-dropped arena)))
+            (print-test-result "gate: under el++, an inclusion into the universal role is dropped" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))

@@ -243,16 +243,93 @@ def inadmissible_chains(g, sig=None):
             continue
         if len(steps) < 2 or not all(isinstance(x, URIRef) for x in steps) or not isinstance(t, URIRef):
             bad[(t, head)] = "ObjectPropertyChain (malformed: fewer than two named roles)"
+        # Built-in roles in a chain, which HOWL's gate checks at the role:
+        # under el both are out; under el++ the empty role is in, and a
+        # chain INTO the universal role is a tautology, dropped before here
+        # (classify_triple), so only the universal role as a step is out.
+        elif any(x in BUILTIN_ROLES for x in steps + [t]) and (
+                sig.get("profile", "el") == "el" or OWL.topObjectProperty in steps):
+            bad[(t, head)] = "built-in role (top/bottomObjectProperty)"
         elif not imposed(t) <= imposed(steps[-1]):
             bad[(t, head)] = "ObjectPropertyChain (range/composition condition)"
     return bad
 
 
-def signature(g):
-    """Declared entity sets, needed to disposition a triple in context."""
+PROFILES = ("el", "el++")
+
+
+def signature(g, profile="el"):
+    """Declared entity sets, needed to disposition a triple in context, for
+    one rung: `el` (SPEC.md §5.2) or `el++` (§5.4)."""
+    if profile not in PROFILES:
+        raise ValueError(f"unknown profile {profile!r}; expected one of {PROFILES}")
     sig = _base_signature(g)
+    sig["profile"] = profile
+    if profile == "el++":
+        sig.update(_el_plus_plus_signature(g))
     sig["inadmissible_chains"] = inadmissible_chains(g, sig)
     return sig
+
+
+def _non_simple_roles(g):
+    """OWL 2 Structural Specification §11.1, over the told RBox: a role is
+    composite if it is a built-in, the super-role of a property chain, or
+    transitive; non-simple if composite or it has a non-simple sub-role
+    (owl:equivalentProperty read both ways). SPEC.md §5.4 admits
+    ObjectHasSelf only on a simple role."""
+    out = set(BUILTIN_ROLES)
+    out |= set(g.subjects(OWL.propertyChainAxiom, None))
+    out |= set(g.subjects(RDF.type, OWL.TransitiveProperty))
+    up = {}
+    for a, b in g.subject_objects(RDFS.subPropertyOf):
+        up.setdefault(a, set()).add(b)
+    for a, b in g.subject_objects(OWL.equivalentProperty):
+        up.setdefault(a, set()).add(b)
+        up.setdefault(b, set()).add(a)
+    todo = list(out)
+    while todo:
+        x = todo.pop()
+        for y in up.get(x, ()):
+            if y not in out:
+                out.add(y)
+                todo.append(y)
+    return out
+
+
+RESERVED_NS = (str(OWL), str(RDF), str(RDFS), str(SWRL), "http://www.w3.org/2001/XMLSchema#")
+
+
+def _named(t):
+    """A named individual: an IRI outside the reserved namespaces — the same
+    five as HOWL's is-reserved-iri (OWL, RDF, RDFS, SWRL, XSD)."""
+    return isinstance(t, URIRef) and not str(t).startswith(RESERVED_NS)
+
+
+def _el_plus_plus_signature(g):
+    """What SPEC.md §5.4 adds, read off the graph: which nodes are a
+    one-individual oneOf, a Self on a simple role, an all-named AllDifferent,
+    and an object-form NegativePropertyAssertion."""
+    nonsimple = _non_simple_roles(g)
+    one_of = {s for s, h in g.subject_objects(OWL.oneOf)
+              if len(members := list(Collection(g, h))) == 1 and _named(members[0])}
+    self_simple = {s for s in g.subjects(OWL.hasSelf, None)
+                   if (r := g.value(s, OWL.onProperty)) is not None
+                   and isinstance(r, URIRef) and r not in nonsimple}
+    all_different = {s for s in g.subjects(RDF.type, OWL.AllDifferent)
+                     if (ms := [m for h in list(g.objects(s, OWL.members)) + list(g.objects(s, OWL.distinctMembers))
+                                for m in Collection(g, h)])
+                     and len(ms) >= 2 and all(_named(m) for m in ms)}
+    npa = set()
+    for x in g.subjects(RDF.type, OWL.NegativePropertyAssertion):
+        src = list(g.objects(x, OWL.sourceIndividual))
+        prop = list(g.objects(x, OWL.assertionProperty))
+        tgt = list(g.objects(x, OWL.targetIndividual))
+        if (len(src) == len(prop) == len(tgt) == 1 and not list(g.objects(x, OWL.targetValue))
+                and _named(src[0]) and _named(tgt[0]) and isinstance(prop[0], URIRef)
+                and prop[0] != OWL.topObjectProperty):
+            npa.add(x)
+    return {"one_of_single": one_of, "self_simple": self_simple,
+            "all_different_named": all_different, "npa_object": npa}
 
 
 def _base_signature(g):
@@ -282,8 +359,42 @@ def _base_signature(g):
     }
 
 
+def _classify_el_plus_plus(sig, s, p, o):
+    """SPEC.md §5.4's additions to the table, or None when §5.2 decides.
+    Checked BEFORE §5.2's rules, because they move triples out of OUT."""
+    if p == OWL.onProperty and o == OWL.bottomObjectProperty:
+        return IN, "built-in role (bottomObjectProperty)"
+    if p in (RDFS.subPropertyOf, OWL.equivalentProperty) and OWL.bottomObjectProperty in (s, o) \
+            and OWL.topObjectProperty not in (s, o):
+        return IN, "built-in role (bottomObjectProperty)"
+    # Inclusions into the universal role are tautologies, dropped (§5.4 K0).
+    if p == RDFS.subPropertyOf and o == OWL.topObjectProperty:
+        return INERT, "inclusion into owl:topObjectProperty (tautology)"
+    if p == OWL.propertyChainAxiom and s == OWL.topObjectProperty:
+        return INERT, "inclusion into owl:topObjectProperty (tautology)"
+    if p == OWL.hasValue and isinstance(o, URIRef) and s not in sig["data_restrictions"]:
+        return (IN, "ObjectHasValue") if _named(o) else None
+    if p == OWL.oneOf and s in sig["one_of_single"]:
+        return IN, "ObjectOneOf (one individual)"
+    if p == OWL.hasSelf and s in sig["self_simple"]:
+        return IN, "ObjectHasSelf (simple role)"
+    if p == RDF.type and o == OWL.ReflexiveProperty and isinstance(s, URIRef) and s not in BUILTIN_ROLES:
+        return IN, "ReflexiveObjectProperty"
+    if p in (OWL.sameAs, OWL.differentFrom) and _named(s) and _named(o):
+        return IN, "SameIndividual" if p == OWL.sameAs else "DifferentIndividuals"
+    if p == RDF.type and o == OWL.AllDifferent and s in sig["all_different_named"]:
+        return IN, "DifferentIndividuals"
+    if p == RDF.type and o == OWL.NegativePropertyAssertion and s in sig["npa_object"]:
+        return IN, "NegativeObjectPropertyAssertion"
+    return None
+
+
 def classify_triple(sig, s, p, o):
     """(bucket, construct) for one triple. THE disposition table, in code."""
+    if sig.get("profile") == "el++":
+        decided = _classify_el_plus_plus(sig, s, p, o)
+        if decided is not None:
+            return decided
     # Built-in roles first: they appear as the OBJECT of owl:onProperty, so a
     # predicate scan would never see them.
     if p == OWL.onProperty and o in BUILTIN_ROLES:
@@ -368,11 +479,11 @@ def out_of_profile_seeds(g, sig=None):
             yield (s, p, o), construct
 
 
-def census(path, fmt=None, graph=None):
+def census(path, fmt=None, graph=None, profile="el"):
     g = graph if graph is not None else Graph()
     if graph is None:
         g.parse(path, format=fmt)
-    sig = signature(g)
+    sig = signature(g, profile)
     buckets = {IN: Counter(), OUT: Counter(), INERT: Counter(), CONSUMED: Counter()}
     for s, p, o in g:
         bucket, construct = classify_triple(sig, s, p, o)
@@ -380,12 +491,12 @@ def census(path, fmt=None, graph=None):
     return g, buckets[IN], buckets[OUT], buckets[INERT], buckets[CONSUMED]
 
 
-def report(path, fmt=None):
-    g, in_v0, out, inert, consumed = census(path, fmt)
+def report(path, fmt=None, profile="el"):
+    g, in_v0, out, inert, consumed = census(path, fmt, profile=profile)
     total = sum(in_v0.values()) + sum(out.values())
     print(f"\n{'='*72}\n{path}\n{'='*72}")
     print(f"  triples: {len(g):,}   logical axioms (approx): {total:,}")
-    print(f"\n  IN v0            {sum(in_v0.values()):>8,}")
+    print(f"\n  IN {'v0' if profile == 'el' else profile:<13} {sum(in_v0.values()):>8,}")
     for k, v in in_v0.most_common():
         print(f"      {k:<52}{v:>8,}")
     print(f"\n  OUT-OF-PROFILE   {sum(out.values()):>8,}", end="")
@@ -401,14 +512,18 @@ def report(path, fmt=None):
 
 
 if __name__ == "__main__":
+    args = sys.argv[1:]
+    profile = "el"
+    if args[:1] == ["--profile"]:
+        profile, args = args[1], args[2:]
     results = []
-    for p in sys.argv[1:]:
+    for p in args:
         try:
-            results.append((p, *report(p)))
+            results.append((p, *report(p, profile=profile)))
         except Exception as e:
             print(f"\n!! {p}: {type(e).__name__}: {e}")
     if len(results) > 1:
-        print(f"\n{'='*72}\nSUMMARY — v0 fitness\n{'='*72}")
+        print(f"\n{'='*72}\nSUMMARY — {'v0' if profile == 'el' else profile} fitness\n{'='*72}")
         for p, o, t in results:
             print(f"  {p.split('/')[-1]:<44}"
                   f"{'CLEAN' if o == 0 else f'needs projection ({o:,} axioms)'}")

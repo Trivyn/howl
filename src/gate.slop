@@ -35,10 +35,11 @@
   (@doc "Sugar expansion and the §5.2 three-category gate (M0)")
 
   (import rdf (IRI))
+  (import vocab (OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY))
   (import types (Omission Fault InputRef AxiomRef Node RoleId EntityKind
-                 MissingDeclaration))
+                 MissingDeclaration Profile))
   (import owl2 (RawAxiom RawConcept RawChain Signature
-                disposition axiom-in-profile
+                disposition axiom-in-profile is-el-plus-plus
                 concept-in-profile concepts-in-profile role-in-profile
                 concept-cmp sort-concepts concept-at
                 render-axiom render-role
@@ -49,7 +50,8 @@
   (export
     GateResult RboxVerdict
     axiom-input-ref
-    expand-sugar expand-negation
+    expand-sugar expand-negation drop-top-role-tautologies
+    non-simple-roles self-roles-simple
     gate-axioms
     collect-rbox-roles role-idx
     told-closure check-regularity
@@ -238,13 +240,13 @@
             (_          (list-push pos x))))
         (record-new NegSplit (pos pos) (neg neg)))))
 
-  (fn split-rewritable ((s NegSplit))
-    (@intent "Is there a negation, with every piece inside the fragment?")
-    (@spec ((NegSplit) -> Bool))
+  (fn split-rewritable ((p Profile) (s NegSplit))
+    (@intent "Is there a negation, with every piece inside the rung's language?")
+    (@spec ((Profile NegSplit) -> Bool))
     (@pure)
     (and (> (list-len (. s neg)) 0)
-         (concepts-in-profile (. s pos))
-         (concepts-in-profile (. s neg))))
+         (concepts-in-profile p (. s pos))
+         (concepts-in-profile p (. s neg))))
 
   (fn conjunction ((cs (List RawConcept)))
     (@intent "The conjunction of a non-empty list: its one member, or an rc-and")
@@ -271,9 +273,9 @@
     (union-new RawAxiom ra-sub-class-of
       (box-c arena c) (box-c arena (union-new RawConcept rc-nothing))))
 
-  (fn expand-negation ((arena Arena) (axs (List RawAxiom)))
+  (fn expand-negation ((arena Arena) (p Profile) (axs (List RawAxiom)))
     (@intent "Rewrite ¬E in a superclass, domain or range into ⊥ GCIs (§5.2)")
-    (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
+    (@spec ((Arena Profile (List RawAxiom)) -> (List RawAxiom)))
     (@alloc arena)
     ;; One local list, as in expand-sugar and for its reason.
     (let ((mut out (list-new arena RawAxiom)))
@@ -285,7 +287,7 @@
               (if (not (has-negated-conjunct (deref r)))
                 (list-push out ax)
                 (let ((s (negation-split arena (deref r))))
-                  (if (not (and (concept-in-profile (deref l)) (split-rewritable s)))
+                  (if (not (and (concept-in-profile p (deref l)) (split-rewritable p s)))
                     (list-push out ax)
                     (do
                       (when (> (list-len (. s pos)) 0)
@@ -300,7 +302,7 @@
               (if (not (has-negated-conjunct (deref c)))
                 (list-push out ax)
                 (let ((s (negation-split arena (deref c))))
-                  (if (not (and (role-in-profile r) (split-rewritable s)))
+                  (if (not (and (role-in-profile p r) (split-rewritable p s)))
                     (list-push out ax)
                     (let ((some-r (union-new RawConcept rc-some r
                                     (box-c arena (union-new RawConcept rc-thing)))))
@@ -317,7 +319,7 @@
               (if (not (has-negated-conjunct (deref c)))
                 (list-push out ax)
                 (let ((s (negation-split arena (deref c))))
-                  (if (not (and (role-in-profile r) (split-rewritable s)))
+                  (if (not (and (role-in-profile p r) (split-rewritable p s)))
                     (list-push out ax)
                     (do
                       (when (> (list-len (. s pos)) 0)
@@ -329,6 +331,120 @@
 
             (_ (list-push out ax))))
         out)))
+
+  ;; ============================================================
+  ;; el++'s whole-RBox conditions (§5.4)
+  ;; ============================================================
+
+  (fn is-top-role ((r RoleId))
+    (@intent "Is this owl:topObjectProperty?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    (match r
+      ((named-role i) (== (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0))
+      ((fresh-role _) false)))
+
+  (fn into-top-role ((ax RawAxiom))
+    (@intent "Is this an inclusion whose super-role is owl:topObjectProperty?")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (match ax
+      ((ra-sub-object-property _ sup) (is-top-role sup))
+      ((ra-property-chain ch)         (is-top-role (. ch super)))
+      (_ false)))
+
+  (fn drop-top-role-tautologies ((arena Arena) (p Profile) (axs (List RawAxiom)))
+    (@intent "Under el++, drop inclusions into the universal role: they hold in every interpretation")
+    (@spec ((Arena Profile (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    ;; §5.4 K0: the Direct Semantics fixes U to Δ × Δ, so `R ⊑ U` and
+    ;; every chain into U are tautologies, and dropping them removes
+    ;; nothing. They are neither accepted nor omitted: a tautology is not
+    ;; a gap. Every other use of U stays out of profile (role-in-profile).
+    ;; Under every other rung nothing is dropped, so `el` is unchanged.
+    (if (not (is-el-plus-plus p))
+      axs
+      (let ((mut out (list-new arena RawAxiom)))
+        (do
+          (for-each (ax axs)
+            (when (not (into-top-role ax)) (list-push out ax)))
+          out))))
+
+  (fn role-listed ((rs (List RoleId)) (r RoleId))
+    (@intent "Is r in this list?")
+    (@spec (((List RoleId) RoleId) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do
+        (for-each (x rs) (when (== (role-cmp x r) 0) (set! found true)))
+        found)))
+
+  (fn non-simple-roles ((arena Arena) (axs (List RawAxiom)))
+    (@intent "The roles OWL 2 §11.1 calls non-simple, over the expanded RBox")
+    (@spec ((Arena (List RawAxiom)) -> (List RoleId)))
+    (@alloc arena)
+    ;; A role is COMPOSITE if it is the super-role of a chain — which
+    ;; includes transitivity, already expanded to `r ∘ r ⊑ r` — and
+    ;; NON-SIMPLE if it is composite or has a non-simple sub-role. The
+    ;; built-in roles count as composite (§11.1); owl:bottomObjectProperty
+    ;; is the one that reaches here. Closed upward through the told
+    ;; inclusions, equivalences included (expand-sugar made them pairs),
+    ;; to a fixpoint: one pass per added role at most.
+    (let ((mut out (list-new arena RoleId))
+          (mut changed true))
+      (do
+        (list-push out (union-new RoleId named-role
+                         (record-new IRI (value OWL_BOTTOM_OBJECT_PROPERTY))))
+        (for-each (ax axs)
+          (match ax
+            ((ra-property-chain ch)
+              (when (not (role-listed out (. ch super))) (list-push out (. ch super))))
+            (_ (do))))
+        (while changed
+          (do
+            (set! changed false)
+            (for-each (ax axs)
+              (match ax
+                ((ra-sub-object-property a b)
+                  (when (and (role-listed out a) (not (role-listed out b)))
+                    (do (list-push out b) (set! changed true))))
+                (_ (do))))))
+        out)))
+
+  (fn concept-self-roles-simple ((nonsimple (List RoleId)) (c RawConcept))
+    (@intent "Is every ∃R.Self inside this concept on a simple role?")
+    (@spec (((List RoleId) RawConcept) -> Bool))
+    (@pure)
+    (match c
+      ((rc-has-self r) (not (role-listed nonsimple r)))
+      ((rc-and cs)
+        (let ((mut ok true))
+          (do
+            (for-each (x cs) (when (not (concept-self-roles-simple nonsimple x)) (set! ok false)))
+            ok)))
+      ((rc-some _ f)   (concept-self-roles-simple nonsimple (deref f)))
+      (_ true)))
+
+  (fn self-roles-simple ((nonsimple (List RoleId)) (ax RawAxiom))
+    (@intent "Is every ObjectHasSelf this axiom uses on a simple role?")
+    (@spec (((List RoleId) RawAxiom) -> Bool))
+    (@pure)
+    ;; Only the class-expression positions can hold Self. An empty
+    ;; `nonsimple` list — every rung but el++ — makes this true, which is
+    ;; right: Self is out of profile there by `concept-in-profile`.
+    (match ax
+      ((ra-sub-class-of l r)
+        (and (concept-self-roles-simple nonsimple (deref l))
+             (concept-self-roles-simple nonsimple (deref r))))
+      ((ra-disjoint-classes cs)
+        (let ((mut ok true))
+          (do
+            (for-each (x cs) (when (not (concept-self-roles-simple nonsimple x)) (set! ok false)))
+            ok)))
+      ((ra-object-property-domain _ c) (concept-self-roles-simple nonsimple (deref c)))
+      ((ra-object-property-range _ c)  (concept-self-roles-simple nonsimple (deref c)))
+      ((ra-class-assertion ca)         (concept-self-roles-simple nonsimple (deref (. ca concept))))
+      (_ true)))
 
   (fn box-c ((arena Arena) (c RawConcept))
     (@intent "Heap-box a concept for a union variant that carries a pointer")
@@ -361,9 +477,9 @@
       (_ true)))
 
   (fn gate-axioms ((arena Arena) (axs (List RawAxiom)) (sig Signature)
-                   (carried (List Omission)))
-    (@intent "Split decoded axioms into accepted and omitted, per §5.2")
-    (@spec ((Arena (List RawAxiom) Signature (List Omission)) -> GateResult))
+                   (carried (List Omission)) (p Profile))
+    (@intent "Split decoded axioms into accepted and omitted, per the rung's language (§5.2, §5.4)")
+    (@spec ((Arena (List RawAxiom) Signature (List Omission) Profile) -> GateResult))
     (@alloc arena)
     ;; `carried` holds omissions raised before the gate — unresolved
     ;; imports from stage 0. They ride through rather than being
@@ -372,7 +488,11 @@
     ;; Negation is rewritten AFTER sugar, so an equivalence's halves are
     ;; judged one by one, and BEFORE everything else, so every gate
     ;; condition below judges the rewritten theory.
-    (let ((expanded (expand-negation arena (expand-sugar arena axs)))
+    ;;
+    ;; Under el++, inclusions into owl:topObjectProperty are tautologies
+    ;; and are dropped first (§5.4 K0), so no RBox condition sees them.
+    (let ((expanded (drop-top-role-tautologies arena p
+                      (expand-negation arena p (expand-sugar arena axs))))
           (mut accepted (list-new arena RawAxiom))
           (mut omitted  (list-new arena Omission)))
       (do
@@ -394,9 +514,14 @@
               ;; per-axiom check — it had been recomputed for each.
               (rroles (collect-rbox-roles arena expanded))
               (told   (told-closure arena expanded rroles (cast Int (list-len rroles))))
-              (ranges (collect-ranges arena expanded rroles)))
+              (ranges (collect-ranges arena expanded rroles))
+              ;; Self is only ever in el++, so only el++ pays for the
+              ;; simple-role closure.
+              (nonsimple (if (is-el-plus-plus p)
+                           (non-simple-roles arena expanded)
+                           (list-new arena RoleId))))
           (for-each (ax expanded)
-          (match (disposition ax)
+          (match (disposition p ax)
             ;; Consumed: read into the signature already, yields no
             ;; axiom. NOT an omission — dropping it from coverage is
             ;; what keeps a declared-but-unused class from looking like
@@ -408,8 +533,11 @@
             ;; useless rather than merely incomplete.
             ('d-inert    (do))
             ('d-in-profile
-              (if (and (axiom-in-profile ax)
+              (if (and (axiom-in-profile p ax)
                        (not (and rbox-bad (is-rbox-axiom ax)))
+                       ;; Self only on a simple role (§5.4): per axiom,
+                       ;; like the range condition.
+                       (self-roles-simple nonsimple ax)
                        ;; A range-condition violation is PER-AXIOM:
                        ;; the offending RIA is its own witness, so it
                        ;; is omitted alone rather than collapsing the
@@ -945,6 +1073,8 @@
                   (do (for-each (st (. ch steps)) (list-push roles st))
                       (list-push roles (. ch super))))
                 ((ra-object-property-assertion e) (list-push roles (. e role)))
+                ((ra-negative-assertion e)        (list-push roles (. e role)))
+                ((ra-property-characteristic _ rl) (list-push roles rl))
                 (_ (do)))
               (for-each (i classes)
                 (list-push out (record-new EntityRef

@@ -822,26 +822,33 @@
 
   ;; WHAT STANDS IN AN INDIVIDUAL POSITION. A blank node is an anonymous
   ;; individual: well-formed OWL 2, excluded by OWL 2 EL (Individual :=
-  ;; NamedIndividual). A literal is data. Neither faults the document, and
-  ;; neither may be dropped: each is an omission, labelled for what it is.
+  ;; NamedIndividual). A literal is data. A reserved IRI (`owl:Thing`,
+  ;; `xsd:string`, ...) is reserved vocabulary, which OWL 2 forbids as an
+  ;; individual. None faults the document, and none may be dropped or
+  ;; read as an ordinary individual: each is an omission, labelled for
+  ;; what it is.
   (type IndividualTerm (union
     (named-individual IRI)
     (literal-individual)
-    (anonymous-individual)))
+    (anonymous-individual)
+    (reserved-individual)))
 
   (fn individual-term ((tm Term))
     (@intent "Classify a term in an individual position")
     (@spec ((Term) -> IndividualTerm))
     (@pure)
     (match tm
-      ((term-iri i)     (union-new IndividualTerm named-individual i))
+      ((term-iri i)     (if (is-reserved-iri (. i value))
+                          (union-new IndividualTerm reserved-individual)
+                          (union-new IndividualTerm named-individual i)))
       ((term-literal _) (union-new IndividualTerm literal-individual))
       (_                (union-new IndividualTerm anonymous-individual))))
 
   (type NodeList (union
     (all-named (List Node))
     (has-literal)
-    (has-anonymous)))
+    (has-anonymous)
+    (has-reserved)))
 
   (fn decode-node-list ((arena Arena) (g TermStore) (head Term))
     (@intent "An RDF collection of individuals: all named, or the first kind that is not")
@@ -849,22 +856,26 @@
     (@alloc arena)
     ;; Only a malformed collection is an error. An unnamed member used to
     ;; fault the whole document, for owl:oneOf and owl:AllDifferent alike.
-    ;; A literal member is reported ahead of a blank one.
+    ;; A literal member is reported ahead of a blank one, and a blank one
+    ;; ahead of a reserved IRI.
     (match (rdf-list-checked arena g head)
       ((error lf) (error (list-fault-message lf)))
       ((ok terms)
         (let ((mut out (list-new arena Node))
               (mut literal false)
-              (mut anonymous false))
+              (mut anonymous false)
+              (mut reserved false))
           (do
             (for-each (tm terms)
               (match (individual-term tm)
                 ((named-individual i)   (list-push out (union-new Node individual-node i)))
                 ((literal-individual)   (set! literal true))
-                ((anonymous-individual) (set! anonymous true))))
+                ((anonymous-individual) (set! anonymous true))
+                ((reserved-individual)  (set! reserved true))))
             (cond
               (literal   (ok (union-new NodeList has-literal)))
               (anonymous (ok (union-new NodeList has-anonymous)))
+              (reserved  (ok (union-new NodeList has-reserved)))
               (else      (ok (union-new NodeList all-named out)))))))))
 
   (fn decode-concept-list ((arena Arena) (g TermStore) (head Term) (fuel Int))
@@ -972,7 +983,11 @@
                   ((has-anonymous)
                     (ok (union-new RawConcept rc-anon
                           (union-new InputRef rdf-fragment
-                            "owl:oneOf with an anonymous individual"))))))))))
+                            "owl:oneOf with an anonymous individual"))))
+                  ((has-reserved)
+                    (ok (union-new RawConcept rc-anon
+                          (union-new InputRef rdf-fragment
+                            "owl:oneOf with a reserved IRI as an individual"))))))))))
 
       ((has-pred arena g b OWL_COMPLEMENT_OF)
         (match (obj-of arena g b OWL_COMPLEMENT_OF)
@@ -995,21 +1010,24 @@
             (match (obj-of arena g b OWL_HAS_VALUE)
               ((error _) (error "owl:hasValue is absent or ambiguous"))
               ((ok vt)
-                (match vt
-                  ((term-iri i) (ok (union-new RawConcept rc-has-value r
-                                      (union-new Node individual-node i))))
+                (match (individual-term vt)
+                  ((named-individual i) (ok (union-new RawConcept rc-has-value r
+                                              (union-new Node individual-node i))))
                   ;; A literal value is DataHasValue — data, not a nominal.
                   ;; Labelled an anonymous individual before, which
                   ;; misnamed the omission.
-                  ((term-literal _) (ok (union-new RawConcept rc-data
-                                          (union-new InputRef rdf-fragment
-                                            "owl:hasValue with a literal (DataHasValue)"))))
+                  ((literal-individual) (ok (union-new RawConcept rc-data
+                                              (union-new InputRef rdf-fragment
+                                                "owl:hasValue with a literal (DataHasValue)"))))
                   ;; An anonymous individual: well-formed, and excluded by
                   ;; OWL 2 EL (Individual := NamedIndividual). Represented,
                   ;; so the enclosing axiom is omitted rather than faulted.
-                  (_ (ok (union-new RawConcept rc-anon
-                           (union-new InputRef rdf-fragment
-                             "owl:hasValue on an anonymous individual"))))))))))
+                  ((anonymous-individual) (ok (union-new RawConcept rc-anon
+                                                (union-new InputRef rdf-fragment
+                                                  "owl:hasValue on an anonymous individual"))))
+                  ((reserved-individual) (ok (union-new RawConcept rc-anon
+                                               (union-new InputRef rdf-fragment
+                                                 "owl:hasValue on a reserved IRI as an individual"))))))))))
 
       ((has-pred arena g b OWL_HAS_SELF)
         (match (decode-role arena g b)
@@ -1427,7 +1445,8 @@
                   (match nl
                     ((all-named ns)  (ok (union-new RawAxiom ra-different-individuals ns)))
                     ((has-literal)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                    ((has-anonymous) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))))))
+                    ((has-anonymous) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+                    ((has-reserved)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))))))))
         ((== (string-cmp ov OWL_ALL_DISJOINT_CLASSES) 0)
           (match (members-head arena g (. t subject))
             ((none) (error "owl:AllDisjointClasses without owl:members"))
@@ -1482,20 +1501,20 @@
     (match (individual-term (. t subject))
       ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
       ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+      ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
       ((named-individual a)
         (match (individual-term (. t object))
           ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
           ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+          ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
           ((named-individual b)
-            (if (or (is-reserved-iri (. a value)) (is-reserved-iri (. b value)))
-              (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
-              (let ((mut ns (list-new arena Node)))
-                (do
-                  (list-push ns (union-new Node individual-node a))
-                  (list-push ns (union-new Node individual-node b))
-                  (if same
-                    (ok (union-new RawAxiom ra-same-individual ns))
-                    (ok (union-new RawAxiom ra-different-individuals ns)))))))))))
+            (let ((mut ns (list-new arena Node)))
+              (do
+                (list-push ns (union-new Node individual-node a))
+                (list-push ns (union-new Node individual-node b))
+                (if same
+                  (ok (union-new RawAxiom ra-same-individual ns))
+                  (ok (union-new RawAxiom ra-different-individuals ns))))))))))
 
   (fn decode-negative-assertion ((arena Arena) (g TermStore) (t Triple))
     (@intent "`_:x a owl:NegativePropertyAssertion` as ¬r(a, b), read from its node")
@@ -1543,18 +1562,18 @@
                         (match (individual-term st)
                           ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                           ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+                          ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
                           ((named-individual a)
                             (match (individual-term tt)
                               ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                               ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+                              ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
                               ((named-individual b)
-                                (if (or (is-reserved-iri (. a value)) (is-reserved-iri (. b value)))
-                                  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
-                                  (ok (union-new RawAxiom ra-negative-assertion
-                                        (record-new RawEdge
-                                          (role r)
-                                          (from (union-new Node individual-node a))
-                                          (to   (union-new Node individual-node b))))))))))))))))))))))
+                                (ok (union-new RawAxiom ra-negative-assertion
+                                      (record-new RawEdge
+                                        (role r)
+                                        (from (union-new Node individual-node a))
+                                        (to   (union-new Node individual-node b)))))))))))))))))))))
 
   (fn decode-class-assertion ((arena Arena) (g TermStore) (t Triple))
     (@intent "`a rdf:type C` as ClassAssertion(C, a), for a named or an anonymous C")
@@ -1939,7 +1958,7 @@
               (match (decode-axiom arena ig sig t)
                 ((error m) (set! fault (some m)))
                 ((ok ax)
-                  (match (disposition ax)
+                  (match (disposition 'profile-el ax)
                     ('d-inert          (set! inert (+ inert 1)))
                     ('d-consumed       (list-push out ax))
                     ('d-in-profile     (list-push out ax))
