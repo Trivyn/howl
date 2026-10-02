@@ -57,7 +57,7 @@
   (import canon (sort-iris))
 
   (export
-    FactList RoleFacts KStore RunResult ClassAnswer KscResult
+    FactList RoleFacts KStore Base RunResult ClassAnswer KscResult
     new-store run-ksc ksc-classify input-classes answer-subsumers answer-holds store-holds is-bottom-fact)
 
   (type FactList (record
@@ -73,7 +73,18 @@
     (holders (Map KElem FactList))
     (outs    (Map KElem RoleFacts))
     (ins     (Map KElem RoleFacts))
-    (ins-all (Map KElem FactList))))
+    (ins-all (Map KElem FactList))
+    (noms-at (Set KElem))            ; the elements holding a nominal: K6's taint
+    (bots    (Set KElem))))          ; the elements holding owl:Nothing
+
+  ;; K6: what a class's run reads besides its own facts. G whole; W only
+  ;; where the facts' subject is safe - W's facts about an unsafe element
+  ;; may merge class assumptions and are never read.
+  (type Base (record
+    (g        KStore)
+    (w        KStore)
+    (unsafe   (Set KElem))           ; every element whose W-cone holds a tainted one
+    (botreach (Set KElem))))         ; every element whose W-cone holds owl:Nothing
 
   (type RunResult (record
     (store  KStore)
@@ -84,6 +95,7 @@
   ;; One class's answers, copied out of its run's arena.
   (type ClassAnswer (record
     (cls        KName)
+    (shared     Bool)                ; answered from W (K6.2), not a run of its own
     (unsat      Bool)
     (subsumers  (List KName))
     (rounds     Int)
@@ -93,6 +105,9 @@
     (inconsistent Bool)
     (g-rounds     Int)
     (g-facts      Int)
+    (w-rounds     Int)
+    (w-facts      Int)
+    (unsafe-count Int)               ; classes that needed a run of their own
     (answers      (List ClassAnswer))))
 
   ;; ============================================================
@@ -110,7 +125,9 @@
       (holders (map-new arena KElem FactList))
       (outs    (map-new arena KElem RoleFacts))
       (ins     (map-new arena KElem RoleFacts))
-      (ins-all (map-new arena KElem FactList))))
+      (ins-all (map-new arena KElem FactList))
+      (noms-at (set-new arena KElem))
+      (bots    (set-new arena KElem))))
 
   (fn fl-push ((arena Arena) (m (Map KElem FactList)) (k KElem) (f KFact))
     (@intent "Append f to the list filed under k")
@@ -141,18 +158,37 @@
         (map-put (. rf by-role) v (record-new FactList (items items)))
         true)))
 
-  (fn store-holds ((st KStore) (base (Option KStore)) (f KFact))
-    (@intent "Is f in this run, or in the base it runs over?")
-    (@spec ((KStore (Option KStore) KFact) -> Bool))
+  (fn fact-subject ((f KFact))
+    (@intent "The element a fact is about: its first argument")
+    (@spec ((KFact) -> KElem))
+    (@pure)
+    (match f
+      ((f-inst x _)     x)
+      ((f-triple x _ _) x)
+      ((f-self x _)     x)))
+
+  (fn is-safe ((b Base) (x KElem))
+    (@intent "K6: is x safe - does nothing x's W-cone reaches hold a nominal or is an individual?")
+    (@spec ((Base KElem) -> Bool))
+    (not (set-has (. b unsafe) x)))
+
+  (fn store-holds ((st KStore) (base (Option Base)) (f KFact))
+    (@intent "Is f in this run, or in the base it runs over (G, and W where f's subject is safe)?")
+    (@spec ((KStore (Option Base) KFact) -> Bool))
     (if (set-has (. st seen) f)
       true
       (match base
-        ((some b) (set-has (. b seen) f))
-        ((none)   false))))
+        ((some b)
+          (if (set-has (. (. b g) seen) f)
+            true
+            (if (is-safe b (fact-subject f))
+              (set-has (. (. b w) seen) f)
+              false)))
+        ((none) false))))
 
-  (fn commit ((arena Arena) (st KStore) (base (Option KStore)) (f KFact))
+  (fn commit ((arena Arena) (st KStore) (base (Option Base)) (f KFact))
     (@intent "Store f if it is new to the run and its base; true iff it was")
-    (@spec ((Arena KStore (Option KStore) KFact) -> Bool))
+    (@spec ((Arena KStore (Option Base) KFact) -> Bool))
     (@alloc arena)
     (if (store-holds st base f)
       false
@@ -162,8 +198,10 @@
           ((f-inst x y)
             (do
               (fl-push arena (. st insts) x f)
+              (when (ksc-4 x y) (set-put (. st bots) x))
               (when (is-nominal y)
                 (do
+                  (set-put (. st noms-at) x)
                   (fl-push arena (. st noms) x f)
                   (fl-push arena (. st holders) (term-elem y) f)))))
           ((f-triple x v x1)
@@ -192,8 +230,16 @@
                    ((none)   (list-new arena KFact))))
       ((none)    (list-new arena KFact))))
 
-  ;; The partner lists of a run over a base: the base's, then the run's.
-  ;; Each is a snapshot; the base is never written during a q-run.
+  ;; The partner lists of a run over a base: G's, W's where its facts'
+  ;; subject is safe (K6.3), then the run's. Each is a snapshot; the base
+  ;; is never written during a class's run.
+  ;;
+  ;; insts, noms and outs are filed under their facts' subject, so W's list
+  ;; is read whole when the key is safe and not at all otherwise. holders,
+  ;; ins and ins-all are filed under another element: every predecessor
+  ;; of an unsafe element is unsafe (its cone contains the taint), so W's
+  ;; list is skipped for an unsafe key and filtered fact by fact for a
+  ;; safe one.
 
   (type Field (enum fd-insts fd-noms fd-holders fd-ins-all))
 
@@ -206,27 +252,63 @@
       ('fd-holders (. st holders))
       ('fd-ins-all (. st ins-all))))
 
-  (fn partners ((arena Arena) (st KStore) (base (Option KStore)) (fd Field) (k KElem))
-    (@intent "Every stored fact under k in one field, base first")
-    (@spec ((Arena KStore (Option KStore) Field KElem) -> (List (List KFact))))
+  (fn keyed-by-subject ((fd Field))
+    (@intent "Are a Field's lists filed under their facts' own subject?")
+    (@spec ((Field) -> Bool))
+    (@pure)
+    (match fd
+      ('fd-insts   true)
+      ('fd-noms    true)
+      ('fd-holders false)
+      ('fd-ins-all false)))
+
+  (fn safe-facts ((arena Arena) (b Base) (xs (List KFact)))
+    (@intent "The facts of a W list whose subject is safe")
+    (@spec ((Arena Base (List KFact)) -> (List KFact)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KFact)))
+      (do
+        (for-each (f xs)
+          (when (is-safe b (fact-subject f)) (list-push out f)))
+        out)))
+
+  (fn w-items ((arena Arena) (b Base) (by-subject Bool) (k KElem) (xs (List KFact)))
+    (@intent "The part of W's list under k that a class's run may read")
+    (@spec ((Arena Base Bool KElem (List KFact)) -> (List KFact)))
+    (@alloc arena)
+    (if (is-safe b k)
+      (if by-subject xs (safe-facts arena b xs))
+      (list-new arena KFact)))
+
+  (fn partners ((arena Arena) (st KStore) (base (Option Base)) (fd Field) (k KElem))
+    (@intent "Every stored fact under k in one field: G, W's safe part, then the run")
+    (@spec ((Arena KStore (Option Base) Field KElem) -> (List (List KFact))))
     (@alloc arena)
     (let ((mut out (list-new arena (List KFact))))
       (do
         (match base
-          ((some b) (list-push out (fl-items arena (field-map b fd) k)))
-          ((none)   (do)))
+          ((some b)
+            (do
+              (list-push out (fl-items arena (field-map (. b g) fd) k))
+              (list-push out (w-items arena b (keyed-by-subject fd) k
+                               (fl-items arena (field-map (. b w) fd) k)))))
+          ((none) (do)))
         (list-push out (fl-items arena (field-map st fd) k))
         out)))
 
-  (fn role-partners ((arena Arena) (st KStore) (base (Option KStore)) (outward Bool) (k KElem) (v RoleId))
-    (@intent "Every stored triple out of (or into) k under v, base first")
-    (@spec ((Arena KStore (Option KStore) Bool KElem RoleId) -> (List (List KFact))))
+  (fn role-partners ((arena Arena) (st KStore) (base (Option Base)) (outward Bool) (k KElem) (v RoleId))
+    (@intent "Every stored triple out of (or into) k under v: G, W's safe part, then the run")
+    (@spec ((Arena KStore (Option Base) Bool KElem RoleId) -> (List (List KFact))))
     (@alloc arena)
     (let ((mut out (list-new arena (List KFact))))
       (do
         (match base
-          ((some b) (list-push out (rf-items arena (if outward (. b outs) (. b ins)) k v)))
-          ((none)   (do)))
+          ((some b)
+            (do
+              (list-push out (rf-items arena (if outward (. (. b g) outs) (. (. b g) ins)) k v))
+              (list-push out (w-items arena b outward k
+                               (rf-items arena (if outward (. (. b w) outs) (. (. b w) ins)) k v)))))
+          ((none) (do)))
         (list-push out (rf-items arena (if outward (. st outs) (. st ins)) k v))
         out)))
 
@@ -251,9 +333,9 @@
   ;; the semi-naive obligation §6.4 states for el.
   ;; ============================================================
 
-  (fn derive ((arena Arena) (idx KscIndex) (st KStore) (base (Option KStore)) (f KFact))
+  (fn derive ((arena Arena) (idx KscIndex) (st KStore) (base (Option Base)) (f KFact))
     (@intent "Every conclusion of every rule instance with f as one premise")
-    (@spec ((Arena KscIndex KStore (Option KStore) KFact) -> (List KFact)))
+    (@spec ((Arena KscIndex KStore (Option Base) KFact) -> (List KFact)))
     (@alloc arena)
     (let ((mut out (list-new arena KFact)))
       (do
@@ -420,11 +502,30 @@
 
   ;; ============================================================
   ;; The driver: semi-naive rounds to fixpoint, or to unsat
+  ;;
+  ;; K3: committing inst(u, owl:Nothing) sets `unsat`, and a run that is
+  ;; asking about one class stops there. Phase W is not such a run: it
+  ;; computes rule (4)-free facts for every class at once, so it records
+  ;; where ⊥ arises (`bots`) and runs on. K6.3: a class's run over a base
+  ;; also learns ⊥ when it commits a triple into a safe element whose
+  ;; W-cone holds ⊥ - those facts are in the base, never committed.
   ;; ============================================================
 
-  (fn run-ksc ((arena Arena) (idx KscIndex) (base (Option KStore)) (seeds (List KFact)))
-    (@intent "Saturate from seeds over a base; stop at the fixpoint or when ⊥ arises")
-    (@spec ((Arena KscIndex (Option KStore) (List KFact)) -> RunResult))
+  (fn reaches-bottom ((base (Option Base)) (f KFact))
+    (@intent "K6.3: is f a triple into a safe element whose W-cone holds owl:Nothing?")
+    (@spec (((Option Base) KFact) -> Bool))
+    (match base
+      ((some b)
+        (match f
+          ((f-triple _ _ s)
+            (if (is-safe b s) (set-has (. b botreach) s) false))
+          ((f-inst _ _) false)
+          ((f-self _ _) false)))
+      ((none) false)))
+
+  (fn run-ksc ((arena Arena) (idx KscIndex) (base (Option Base)) (seeds (List KFact)) (stop-at-bottom Bool))
+    (@intent "Saturate from seeds over a base; stop at the fixpoint, or when ⊥ arises if asked to")
+    (@spec ((Arena KscIndex (Option Base) (List KFact) Bool) -> RunResult))
     (@alloc arena)
     (let ((st (new-store arena))
           (mut delta (list-new arena KFact))
@@ -437,41 +538,45 @@
             (do
               (list-push delta s)
               (set! facts (+ facts 1))
-              (when (is-bottom-fact s) (set! unsat true)))))
+              (when (is-bottom-fact s) (set! unsat true))
+              (when (reaches-bottom base s) (set! unsat true)))))
         (while (> (list-len delta) 0)
           (let ((mut next (list-new arena KFact)))
             (do
               (for-each (f delta)
-                (when (not unsat)
+                (when (not (if stop-at-bottom unsat false))
                   (for-each (c (derive arena idx st base f))
                     (when (commit arena st base c)
                       (do
                         (list-push next c)
                         (set! facts (+ facts 1))
-                        (when (is-bottom-fact c) (set! unsat true)))))))
+                        (when (is-bottom-fact c) (set! unsat true))
+                        (when (reaches-bottom base c) (set! unsat true)))))))
               (set! rounds (+ rounds 1))
-              (if unsat
+              (if (if stop-at-bottom unsat false)
                 (set! delta (list-new arena KFact))
                 (set! delta next)))))
         (record-new RunResult (store st) (rounds rounds) (unsat unsat) (facts facts)))))
 
   ;; ============================================================
-  ;; Classification: phase G, then one run per class over G
+  ;; Classification: phase G, phase W, then a run for each unsafe class
+  ;; (SPEC §5.4 K2, K6)
   ;; ============================================================
 
   (fn answer-subsumers ((arena Arena) (st KStore) (q KName))
-    (@intent "The class names q's run puts its test individual in: inst(q, B)")
+    (@intent "The class names a store puts q's test individual in: inst(q, B)")
     (@spec ((Arena KStore KName) -> (List KName)))
     (@alloc arena)
-    ;; A class element is never in G (K2 point 2), so the run's own store
-    ;; holds every inst fact about q.
+    ;; A class element is never in G (K2 point 2): for a safe q this store
+    ;; is W (K6.2), for an unsafe one it is q's run, which holds every inst
+    ;; fact about q (K6.3: none is in the base).
     (let ((mut out (list-new arena KName)))
       (do
         (for-each (f (fl-items arena (. st insts) (class-elem q)))
           (match f
             ((f-inst _ y)
               (match y
-                ((k-name n)    (list-push out n))
+                ((k-name n)    (list-push out (copy-kname arena n)))
                 ((k-nominal _) (do))))
             ((f-triple _ _ _) (do))
             ((f-self _ _)     (do))))
@@ -485,54 +590,122 @@
       ((k-class i) (union-new KName k-class (copy-iri arena i)))
       ((k-fresh k) (union-new KName k-fresh k))))
 
-  (fn class-run ((arena Arena) (idx KscIndex) (g RunResult) (q KName))
-    (@intent "q's run over G, in a scratch arena; its answers copied into arena")
-    (@spec ((Arena KscIndex RunResult KName) -> ClassAnswer))
+  (fn backward-closure ((arena Arena) (w KStore) (start (List KElem)))
+    (@intent "Every element of W whose triples reach one of start, start included")
+    (@spec ((Arena KStore (List KElem)) -> (Set KElem)))
+    (@alloc arena)
+    ;; Walks W's incoming triples (ins-all) from each start element; an
+    ;; element is queued once, so the walk ends on cycles.
+    (let ((out (set-new arena KElem))
+          (mut work (list-new arena KElem))
+          (mut i 0))
+      (do
+        (for-each (x start)
+          (when (not (set-has out x))
+            (do (set-put out x) (list-push work x))))
+        (while (< i (cast Int (list-len work)))
+          (do
+            (match (list-get work i)
+              ((some x)
+                (for-each (f (fl-items arena (. w ins-all) x))
+                  (let ((p (fact-subject f)))
+                    (when (not (set-has out p))
+                      (do (set-put out p) (list-push work p))))))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        out)))
+
+  (fn class-run ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (q KName))
+    (@intent "An unsafe class's run over G ∪ W_S, in a scratch arena; its answers copied into arena")
+    (@spec ((Arena KscIndex Base Bool KName) -> ClassAnswer))
     (@alloc arena)
     (let ((scratch (arena-new 1048576))
           (qseeds (list-new scratch KFact)))
       (do
         (list-push qseeds (. (ksc-q q) fact))
-        (let ((r (run-ksc scratch idx (some (. g store)) qseeds))
-              (mut subs (list-new arena KName)))
+        (let ((r (run-ksc scratch idx (some base) qseeds true))
+              (ans (record-new ClassAnswer
+                     (cls       q)
+                     (shared    false)
+                     (unsat     (if g-unsat true (. r unsat)))
+                     (subsumers (answer-subsumers arena (. r store) q))
+                     (rounds    (. r rounds))
+                     (facts     (. r facts)))))
           (do
-            (for-each (n (answer-subsumers scratch (. r store) q))
-              (list-push subs (copy-kname arena n)))
-            (let ((ans (record-new ClassAnswer
-                         (cls       q)
-                         (unsat     (if (. g unsat) true (. r unsat)))
-                         (subsumers subs)
-                         (rounds    (. r rounds))
-                         (facts     (. r facts)))))
-              (do
-                (arena-free scratch)
-                ans)))))))
+            (arena-free scratch)
+            ans)))))
+
+  (fn shared-answer ((arena Arena) (base Base) (g-unsat Bool) (q KName))
+    (@intent "K6.2: a safe class's answers, read from W")
+    (@spec ((Arena Base Bool KName) -> ClassAnswer))
+    (@alloc arena)
+    ;; unsat(q) iff G holds ⊥, or some element of q's W-cone holds ⊥.
+    (record-new ClassAnswer
+      (cls       q)
+      (shared    true)
+      (unsat     (if g-unsat true (set-has (. base botreach) (class-elem q))))
+      (subsumers (answer-subsumers arena (. base w) q))
+      (rounds    0)
+      (facts     0)))
+
+  (fn class-answer ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (q KName))
+    (@intent "q's answers: from W if q is safe (K6.2), from a run of its own if not (K6.3)")
+    (@spec ((Arena KscIndex Base Bool KName) -> ClassAnswer))
+    (@alloc arena)
+    (if (is-safe base (class-elem q))
+      (shared-answer arena base g-unsat q)
+      (class-run arena idx base g-unsat q)))
 
   (fn ksc-classify ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)))
-    (@intent "Run phase G, then each class's run over G; keep each class's answers")
+    (@intent "Phase G, phase W, then a run for each unsafe class; keep each class's answers")
     (@spec ((Arena (List KscAxiom) (List KName)) -> KscResult))
     (@alloc arena)
-    ;; K3: the ontology is inconsistent iff unsat(owl:Thing), so the
-    ;; owl:Thing run is always made, listed or not. A ⊥ in G flags every
-    ;; run; with no individuals, G is empty and only this run can see
-    ;; ⊤ ⊑ ⊥.
+    ;; K3: the ontology is inconsistent iff unsat(owl:Thing), so owl:Thing
+    ;; is always seeded in W and always answered, listed or not. A ⊥ in G
+    ;; flags every class; with no individuals, G is empty and only
+    ;; owl:Thing's answer can see ⊤ ⊑ ⊥.
     (let ((idx (build-ksc-index arena axioms))
-          (mut seeds (list-new arena KFact))
-          (mut answers (list-new arena ClassAnswer)))
+          (thing (union-new KName k-class (record-new IRI (value OWL_THING))))
+          (mut gseeds (list-new arena KFact))
+          (mut wseeds (list-new arena KFact))
+          (mut tainted (list-new arena KElem))
+          (mut answers (list-new arena ClassAnswer))
+          (mut unsafe-count 0))
       (do
         (for-each (a (. idx individuals))
-          (list-push seeds (. (ksc-1 a) fact)))
-        (let ((g (run-ksc arena idx (none) seeds))
-              (thing (class-run arena idx g
-                       (union-new KName k-class (record-new IRI (value OWL_THING))))))
           (do
-            (for-each (q classes)
-              (list-push answers (class-run arena idx g q)))
-            (record-new KscResult
-              (inconsistent (. thing unsat))
-              (g-rounds     (. g rounds))
-              (g-facts      (. g facts))
-              (answers      answers)))))))
+            (list-push gseeds (. (ksc-1 a) fact))
+            (list-push wseeds (. (ksc-1 a) fact))
+            (list-push tainted (ind-elem a))))
+        (list-push wseeds (. (ksc-q thing) fact))
+        (for-each (q classes)
+          (list-push wseeds (. (ksc-q q) fact)))
+        (let ((g (run-ksc arena idx (none) gseeds true))
+              (w (run-ksc arena idx (none) wseeds false)))
+          (do
+            (for-each (x (set-elements (. (. w store) noms-at)))
+              (list-push tainted x))
+            (let ((base (record-new Base
+                          (g        (. g store))
+                          (w        (. w store))
+                          (unsafe   (backward-closure arena (. w store) tainted))
+                          (botreach (backward-closure arena (. w store)
+                                      (set-elements (. (. w store) bots))))))
+                  (thing-answer (class-answer arena idx base (. g unsat) thing)))
+              (do
+                (for-each (q classes)
+                  (let ((a (class-answer arena idx base (. g unsat) q)))
+                    (do
+                      (when (not (. a shared)) (set! unsafe-count (+ unsafe-count 1)))
+                      (list-push answers a))))
+                (record-new KscResult
+                  (inconsistent (. thing-answer unsat))
+                  (g-rounds     (. g rounds))
+                  (g-facts      (. g facts))
+                  (w-rounds     (. w rounds))
+                  (w-facts      (. w facts))
+                  (unsafe-count unsafe-count)
+                  (answers      answers)))))))))
 
   (fn answer-holds ((a ClassAnswer) (b KName))
     (@intent "K5's holds(A, B): unsat(A), or inst(A, B) in A's run")
