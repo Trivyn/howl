@@ -37,9 +37,10 @@ howl: refused (--strict), no report — 1 omitted
 **Profiles.** `--profile` selects the calculus, one rung per named logic
 ([SPEC §5](./SPEC.md#5-fragment-roadmap)): `el` (ELH⊥R+ with domain/range and an ABox, plus `¬` in a
 superclass, domain or range, which it rewrites into ⊥ axioms — built, and the default on every
-surface), `el++` (the OWL 2 EL object fragment), `horn-sriq` (Horn-SRIQ) and
+surface), `el++` (the OWL 2 EL object fragment — built), `horn-sriq` (Horn-SRIQ) and
 `sriq` (the SRIQ object fragment), or `auto` for the cheapest built rung that contains the whole
-ontology. A rung that is not built yet exits 3; it is never quietly run as `el`. The report's second
+ontology (else the one omitting the fewest axioms, ties to `el`). A rung that is not built yet
+exits 3; it is never quietly run as `el`. The report's second
 line names the profile that ran. The Rust crate exposes the same choice as `Config::selection`.
 
 `classify` no longer refuses. It still returns a `Fault` rather than a report when the front end
@@ -147,7 +148,8 @@ its W3C syntax. The two are not the same list — OWL 2 EL adds `ObjectHasSelf`,
 properties, which the EL++ papers do not define. [§5.2](./SPEC.md#52-the-exact-v0-language) is the
 authority for what HOWL does with each.
 
-**done** — reasoned over, and tested. **not yet** — recognized and enumerated out-of-profile, so a
+**done** — reasoned over, and tested; **done (`el++`)** — under `--profile el++` (or `auto`), while
+`el` enumerates it as omitted. **not yet** — recognized and enumerated out-of-profile, so a
 document using it reports *inconclusive*, never *coherent*. **non-goal** — excluded by
 [§14](./SPEC.md#14-non-goals).
 
@@ -157,9 +159,9 @@ document using it reports *inconclusive*, never *coherent*. **non-goal** — exc
 | `owl:Thing`, `owl:Nothing` (⊤, ⊥) | ✓ | ✓ | **done** | |
 | `ObjectIntersectionOf` (C ⊓ D) | ✓ | ✓ | **done** | |
 | `ObjectSomeValuesFrom` (∃r.C) | ✓ | ✓ | **done** | |
-| `ObjectOneOf`, one individual ({a}) | ✓ | ✓ | not yet | nominal propagation (CEL's CR6), which reaches across contexts and so gives up [§6.6](./SPEC.md#66-parallelism-context-based)'s context independence; [§15 Q3](./SPEC.md#15-open-questions) closed it for the first consumer |
-| `ObjectHasValue` (∃r.{a}) | ✓ | ✓ | not yet | lands with nominals |
-| `ObjectHasSelf` (∃r.Self) | | ✓ | not yet | completion rules for self-loops, and a completeness citation beyond the EL++ papers |
+| `ObjectOneOf`, one individual ({a}) | ✓ | ✓ | **done (`el++`)** | Ksc's nominal rules (27)-(29) ([SPEC §5.4](./SPEC.md#54-the-el-calculus)); classes no nominal reaches share one saturation (K6) |
+| `ObjectHasValue` (∃r.{a}) | ✓ | ✓ | **done (`el++`)** | ∃r.{a}, through the nominals |
+| `ObjectHasSelf` (∃r.Self) | | ✓ | **done (`el++`)** | Ksc's Self rules, on simple roles; complete by [Krö10] Theorem 2 |
 | ***TBox axioms*** | | | | |
 | `SubClassOf` (C ⊑ D) | ✓ | ✓ | **done** | |
 | `EquivalentClasses` | ✓ | ✓ | **done** | desugared to GCIs around the canonically least operand |
@@ -171,14 +173,14 @@ document using it reports *inconclusive*, never *coherent*. **non-goal** — exc
 | `TransitiveObjectProperty` | ✓ | ✓ | **done** | desugared to r ∘ r ⊑ r |
 | `ObjectPropertyDomain` | ✓ | ✓ | **done** | ∃r.⊤ ⊑ C |
 | `ObjectPropertyRange` | ✓ | ✓ | **done** | eliminated through fresh X<sub>r,D</sub> (2008); the range/chain condition is gated |
-| `ReflexiveObjectProperty` (ε ⊑ r) | ✓ | ✓ | not yet | an r-self-edge in every context, and its interaction with chains |
-| `owl:topObjectProperty`, `owl:bottomObjectProperty` | | ✓ | not yet | built-in role semantics; the universal role reaches across contexts, as nominals do |
+| `ReflexiveObjectProperty` (ε ⊑ r) | ✓ | ✓ | **done (`el++`)** | ⊤ ⊑ ∃S.Self with S ⊑ r, for a fresh simple S ([SPEC §5.4](./SPEC.md#54-the-el-calculus) K0) |
+| `owl:topObjectProperty`, `owl:bottomObjectProperty` | | ✓ | **done (`el++`)** | the empty role as ∃N.⊤ ⊑ ⊥; the universal role as a super-role only, elsewhere still omitted |
 | ***Assertions*** | | | | |
 | `ClassAssertion` (C(a)) | ✓ | ✓ | **done**† | individual(a) ⊑ C |
 | `ObjectPropertyAssertion` (r(a,b)) | ✓ | ✓ | **done**† | direct edges, plus range seeds on the target |
-| `SameIndividual`, `DifferentIndividuals` | via {a} | ✓ | not yet | equality: {a} ⊑ {b}, {a} ⊓ {b} ⊑ ⊥ — lands with nominals |
-| `NegativeObjectPropertyAssertion` | via {a} | ✓ | not yet | {a} ⊓ ∃r.{b} ⊑ ⊥ — lands with nominals |
-| `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality — lands after nominals |
+| `SameIndividual`, `DifferentIndividuals` | via {a} | ✓ | **done (`el++`)** | equality: {a} ⊑ {b}, {a} ⊓ {b} ⊑ ⊥ |
+| `NegativeObjectPropertyAssertion` | via {a} | ✓ | **done (`el++`)** | {a} ⊓ ∃r.{b} ⊑ ⊥ |
+| `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality; outside `el++` too |
 | ***Concrete domains*** | | | | |
 | `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
 
@@ -188,17 +190,15 @@ its range-restriction extension, with the ABox's nominals discharged by a canoni
 (the published completeness for nominals fails, KKS12), plus the steps specific to HOWL's direct-edge
 encoding. `make abox-fuzz` checks the code against it: 400 generated ontologies with ABoxes, every one matching HermiT.
 
-**14 of 23 rows done.** Every open EL++ row traces to one of three things: **nominals** (four rows),
-**reflexive roles** (one), and **concrete domains** (the non-goal). OWL 2 EL adds three more:
-`ObjectHasSelf`, the built-in properties, and `HasKey`. All but concrete domains, `HasKey` and
-`owl:topObjectProperty` outside a super-role position close with the `el++` profile. It is specified
-on Krötzsch's Ksc calculus, the one published proof that covers nominals together with ⊥, role
-chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)), and is being built in slices.
+**21 of 23 rows done**, 14 under `el` and 7 more under `el++`. What stays open is `HasKey` and
+concrete domains (the non-goal), and `owl:topObjectProperty` outside a super-role position. The
+`el++` profile is built on Krötzsch's Ksc calculus, the one published proof that covers nominals
+together with ⊥, role chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)).
 Its engine shares one saturation across every class no nominal reaches (§5.4 K6), and reads role
 inclusions through the told hierarchy instead of copying each edge to every super-role (K7), so a
 nominal-free ontology costs about what it costs `el`: GO reasons in 0.86 s and EL-GALEN in 3.75 s on
 one thread. It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
-GO at 0.62 GB, against 0.57 GB. It is selectable once slice 6 wires it in.
+GO at 0.62 GB, against 0.57 GB. Select it with `--profile el++`, or let `auto` choose it.
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 
@@ -318,13 +318,15 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **79 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **80 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
 on, is proved. The profile seam's contracts are among the verified: `select-profile` resolves an
-explicit request to exactly itself, `profile-implemented` admits only `el`, and `default-config`
-selects `el`; each was seen to fail under a mutation. Among the verified, the five loop-free completion
+explicit request to exactly itself and leaves `auto` to the ontology, `profile-implemented` admits
+`el` and `el++` only, `choose-auto` proves `auto`'s three cases (`el` when it omits nothing, else the
+rung omitting fewer, ties to `el`), and `default-config` selects `el`; each was seen to fail under a
+mutation. Among the verified, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
 (nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of
 its rule's body. `el++`'s rules (`src/rules/ksc.slop`) go further: 26 per-instance functions for
@@ -336,9 +338,9 @@ partner's firing head is returned — through checked `@loop-invariant`s, comple
 `(list-visited ps)`. 112 mutants: 111 refuted, each by exactly the contract it targets (one needs
 `make verify`'s 120 s timeout), and one unknown, never verified. The per-rule cases are `@example`s
 beside the contracts. `make example` runs
-**72 executable examples**: 6 per rule, 52 on el++'s rules (each rule firing and not, and the ⊥
-flag), 7 on the canonical sort, 2 on context coverage (the W3C DisjointClasses-002 case) and 5 in
-the decoder. Two guarantees the external conformance suites
+**76 executable examples**: 6 per rule, 52 on el++'s rules (each rule firing and not, and the ⊥
+flag), 7 on the canonical sort, 2 on context coverage (the W3C DisjointClasses-002 case), 5 in
+the decoder and 4 on `auto`'s rule. Two guarantees the external conformance suites
 exposed are true but **owed** as contracts ([SPEC §7](./SPEC.md#7-verification--contracts)):
 - context coverage in `signature-nodes`, which is loops;
 - "a class assertion is never set aside" in `decode-class-assertion`, which is blocked by

@@ -1,0 +1,16 @@
+howl-report 2
+profile el
+verdict inconclusive
+termination fixpoint
+rounds 1
+inconsistent false
+omitted 1
+omission SubClassOf(http://example.org/t#C ObjectSomeValuesFrom(http://www.w3.org/2002/07/owl#bottomObjectProperty http://example.org/t#D))
+unsatisfiable 0
+subsumptions 5
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#D http://example.org/t#D
+sub http://example.org/t#D http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

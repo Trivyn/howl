@@ -11,7 +11,8 @@
 SLOP_OPTION_DEFINE(types_Profile, slop_option_types_Profile)
 #endif
 
-types_Profile select_select_profile(types_ProfileSelection selection);
+slop_option_types_Profile select_select_profile(types_ProfileSelection selection);
+types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus);
 uint8_t select_profile_implemented(types_Profile p);
 slop_string select_profile_name(types_Profile p);
 slop_option_types_Profile select_parse_profile(slop_string s);

@@ -1,8 +1,7 @@
-# EVERY fixture here must be ENUMERATED on the out-of-profile path, never
-# silently dropped and never merely counted -- a dropped axiom is an incoherence
-# the reasoner subsequently cannot see. Each yields non-empty coverage.omitted,
-# so the verdict is INCONCLUSIVE (exit 2), never coherent.
-# #
+# Outside el (§5.2), inside el++ (§5.4). Under el every axiom here is
+# ENUMERATED as omitted, so the verdict is INCONCLUSIVE (exit 2), never coherent;
+# under el++ they are decided.
+#
 # SameIndividual, DifferentIndividuals, NegativeObjectPropertyAssertion.
 
 @prefix :     <http://example.org/t#> .

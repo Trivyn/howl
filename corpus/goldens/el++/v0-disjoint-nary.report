@@ -1,0 +1,17 @@
+howl-report 2
+profile el++
+verdict coherent
+termination fixpoint
+rounds 2
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 7
+sub http://example.org/t#C1 http://example.org/t#C1
+sub http://example.org/t#C1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C2 http://example.org/t#C2
+sub http://example.org/t#C2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C3 http://example.org/t#C3
+sub http://example.org/t#C3 http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

@@ -1,0 +1,21 @@
+# Outside el (§5.2), inside el++ (§5.4). Under el the axiom is ENUMERATED as
+# omitted, so the verdict is INCONCLUSIVE (exit 2), never coherent; under el++ it
+# is decided: A is unsatisfiable.
+#
+# owl:bottomObjectProperty: el's CR1-CR7 have no built-in role semantics.
+# Treated as an ordinary role, CR3 builds an edge for A ⊑ ∃bottomObjectProperty.⊤
+# and A is reported SATISFIABLE: a missed unsatisfiability, i.e. a FALSE PASS.
+# Hence out of el's profile, not ignored. el++ reads it as the empty role.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix swrl: <http://www.w3.org/2003/11/swrl#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class .
+:A rdfs:subClassOf [ a owl:Restriction ;
+                     owl:onProperty owl:bottomObjectProperty ;
+                     owl:someValuesFrom owl:Thing ] .

@@ -1,0 +1,19 @@
+howl-report 2
+profile el
+verdict inconclusive
+termination fixpoint
+rounds 5
+inconsistent false
+omitted 1
+omission ReflexiveObjectProperty(http://example.org/t#r)
+unsatisfiable 0
+subsumptions 8
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#D http://example.org/t#D
+sub http://example.org/t#D http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#X http://example.org/t#D
+sub http://example.org/t#X http://example.org/t#X
+sub http://example.org/t#X http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 2

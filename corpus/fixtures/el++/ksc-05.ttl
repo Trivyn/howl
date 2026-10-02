@@ -1,0 +1,15 @@
+# el++ engine fixture 5 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 5. Reflexive and transitive: ∃r.C ⊑ D with r reflexive ⊨ C ⊑ D; X ⊑ ∃r.∃r.C ⊨ X ⊑ D.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:X a owl:Class .
+:r a owl:ReflexiveProperty , owl:TransitiveProperty .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] rdfs:subClassOf :D .
+:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] ] .

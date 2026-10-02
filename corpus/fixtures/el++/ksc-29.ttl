@@ -1,0 +1,21 @@
+# el++ engine fixture 29 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 29. A nominal's class arriving late: Q ⊑ {a} at once, A1(a),
+# A1 ⊑ A2, A2 ⊑ B ⊨ Q ⊑ B; and through a witness: C ⊑ ∃r.{a},
+# ∃r.B ⊑ E ⊨ C ⊑ E. ({a} ⊑ A1 is a GCI, so every member of {a}
+# derives B itself; fixture 31 is the case only (28) reaches.)
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:Q a owl:Class . :A1 a owl:Class . :A2 a owl:Class . :B a owl:Class . :E a owl:Class .
+:a a :A1 .
+:A1 rdfs:subClassOf :A2 .
+:A2 rdfs:subClassOf :B .
+:Q rdfs:subClassOf [ owl:oneOf ( :a ) ] .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :E .

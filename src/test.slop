@@ -1446,9 +1446,9 @@
         (list-push ps "corpus/fixtures/out-of-profile/complement.ttl")
         (list-push ps "corpus/fixtures/out-of-profile/union.ttl")
         (list-push ps "corpus/fixtures/out-of-profile/nominals.ttl")
-        (list-push ps "corpus/fixtures/out-of-profile/has-self.ttl")
+        (list-push ps "corpus/fixtures/el++/has-self.ttl")
         (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
-        (list-push ps "corpus/fixtures/out-of-profile/equality.ttl")
+        (list-push ps "corpus/fixtures/el++/equality.ttl")
         (list-push ps "corpus/fixtures/out-of-profile/allvalues.ttl")
         (list-push ps "corpus/fixtures/out-of-profile/datatypes.ttl")
         (list-push ps "corpus/fixtures/hazards/annotation-heavy.ttl")
@@ -1669,13 +1669,13 @@
         (list-push paths "corpus/fixtures/out-of-profile/allvalues.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/nominals.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/cardinality.ttl")
-        (list-push paths "corpus/fixtures/out-of-profile/has-self.ttl")
+        (list-push paths "corpus/fixtures/el++/has-self.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/inverse.ttl")
-        (list-push paths "corpus/fixtures/out-of-profile/equality.ttl")
+        (list-push paths "corpus/fixtures/el++/equality.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/property-characteristics.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/haskey-disjointunion.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/swrl-rule.ttl")
-        (list-push paths "corpus/fixtures/out-of-profile/builtin-roles.ttl")
+        (list-push paths "corpus/fixtures/el++/builtin-roles.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/anonymous-individual.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/datatypes.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
@@ -2150,11 +2150,11 @@
     (axioms  (List KscAxiom))
     (classes (List KName))))
 
-  (fn ksc-fixture ((arena Arena) (ttl String))
-    (@intent "Gate an inline document under el++, nothing omitted, and normalise it")
+  (fn ksc-fixture ((arena Arena) (path String))
+    (@intent "Gate a fixture file under el++, nothing omitted, and normalise it")
     (@spec ((Arena String) -> (Option KscFixture)))
     (@alloc arena)
-    (match (gate-ttl-in arena (string-concat arena (rung-prefix) ttl) 'profile-el-plus-plus)
+    (match (gate-fixture-in arena path 'profile-el-plus-plus)
       ((none) (none))
       ((some gr)
         (if (> (list-len (. gr omissions)) 0)
@@ -2238,109 +2238,48 @@
     (@intent "How many el++ fixtures there are")
     (@spec (() -> Int))
     (@pure)
-    32)
+    33)
 
   (fn ksc-fixture-at ((i Int))
-    (@intent "el++ fixture i: §5.4's constructs, alone and combined, as an inline Turtle body")
+    (@intent "el++ fixture i: §5.4's constructs, alone and combined, as a file under corpus/fixtures/el++")
     (@spec ((Int) -> String))
     (@pure)
-    ;; Appended to rung-prefix: :r :s :t are roles, :C :D classes, :a :b
-    ;; individuals.
+    ;; Each file's header says what it tests and what follows. The files
+    ;; are the one copy: the oracle differential reads them too.
     (match i
-      ;; 0. The litmus, nominal-free.
-      (0 ":Person a owl:Class . :Parent a owl:Class . :Mother a owl:Class .\n:Parent owl:equivalentClass [ owl:intersectionOf ( :Person [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Person ] ) ] .\n:Mother rdfs:subClassOf :Person , [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Person ] .\n")
-      ;; 1. [KKS12] Example 5: A ⊑ ∃r.(B ⊓ {a}), A ⊑ ∃s.{a}, ∃s.B ⊑ B ⊨ A ⊑ B.
-      (1 ":A a owl:Class . :B a owl:Class .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B [ owl:oneOf ( :a ) ] ) ] ] .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] rdfs:subClassOf :B .\n")
-      ;; 2. ⊤ ⊑ ⊥ with no individuals: inconsistent through the owl:Thing run only.
-      (2 ":C rdfs:subClassOf :D .\nowl:Thing rdfs:subClassOf owl:Nothing .\n")
-      ;; 3. K3's example: ⊥ arises at the nominal a under Q, not at Q.
-      (3 ":Q a owl:Class . :A a owl:Class . :B a owl:Class .\n:Q rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :A [ owl:oneOf ( :a ) ] ) ] ] .\n:a a :B .\n[ owl:intersectionOf ( :A :B ) ] rdfs:subClassOf owl:Nothing .\n")
-      ;; 4. Self with a chain: C ⊑ ∃r.Self, C ⊑ ∃s.D, r ∘ s ⊑ t, ∃t.D ⊑ E ⊨ C ⊑ E.
-      (4 ":E a owl:Class .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] , [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] .\n:t owl:propertyChainAxiom ( :r :s ) .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 5. Reflexive and transitive: ∃r.C ⊑ D with r reflexive ⊨ C ⊑ D; X ⊑ ∃r.∃r.C ⊨ X ⊑ D.
-      (5 ":X a owl:Class .\n:r a owl:ReflexiveProperty , owl:TransitiveProperty .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] rdfs:subClassOf :D .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] ] .\n")
-      ;; 6. Equality: C(a), a = b, Q ⊑ {b} ⊨ Q ⊑ C.
-      (6 ":Q a owl:Class .\n:a a :C .\n:a owl:sameAs :b .\n:Q rdfs:subClassOf [ owl:oneOf ( :b ) ] .\n")
-      ;; 7. Equality and inequality together: inconsistent.
-      (7 ":a owl:sameAs :b .\n:a owl:differentFrom :b .\n")
-      ;; 8. A negative assertion against its assertion: inconsistent.
-      (8 ":a :r :b .\n[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ] .\n")
-      ;; 9. hasValue on the right meets an assertion: C ⊑ ∃r.{a}, D(a), ∃r.D ⊑ E ⊨ C ⊑ E.
-      (9 ":E a owl:Class .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n:a a :D .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 10. A range, native: range(r) = D, C ⊑ ∃r.⊤, ∃r.D ⊑ E ⊨ C ⊑ E.
-      (10 ":E a owl:Class .\n:r rdfs:range :D .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Thing ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 11. The empty role: C ⊑ ∃owl:bottomObjectProperty.D makes C unsatisfiable, nothing else.
-      (11 ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom :D ] .\n")
-      ;; 12. A role assertion through a nominal: r(a, b), D(b), Q ⊑ {a}, ∃r.D ⊑ E ⊨ Q ⊑ E.
-      (12 ":Q a owl:Class . :E a owl:Class .\n:a :r :b .\n:b a :D .\n:Q rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 13. Self on the left: C ⊑ ∃r.Self, ∃r.Self ⊑ D, a role hierarchy r ⊑ s, ∃s.Self ⊑ E.
-      (13 ":E a owl:Class .\n:r rdfs:subPropertyOf :s .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] rdfs:subClassOf :D .\n[ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] rdfs:subClassOf :E .\n")
-      ;; 14. A nominal's class reaches every class equal to it: {a} ⊑ C, D ⊑ {a} ⊨ D ⊑ C,
-      ;;     and a chain through a witness that is a: Q ⊑ ∃r.{a}, C ⊑ ∃s.D, r ∘ s ⊑ t, ∃t.D ⊑ E.
-      (14 ":Q a owl:Class . :E a owl:Class .\n[ owl:oneOf ( :a ) ] rdfs:subClassOf :C .\n:D rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:Q rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] .\n:t owl:propertyChainAxiom ( :r :s ) .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 15. K6: a witness shared by a safe class S and an unsafe one U (U reaches {a}).
-      (15 ":S a owl:Class . :U a owl:Class . :X a owl:Class . :B a owl:Class . :E a owl:Class .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf :D .\n:S rdfs:subClassOf :X . :U rdfs:subClassOf :X .\n:U rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 16. K6.3: ⊥ reaches an unsafe class only through a safe witness.
-      (16 ":S a owl:Class . :U a owl:Class . :X a owl:Class . :B a owl:Class .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf owl:Nothing .\n:S rdfs:subClassOf :X . :U rdfs:subClassOf :X .\n:U rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n")
-      ;; 17. K6: a nominal two hops down makes both classes above it unsafe.
-      (17 ":S a owl:Class . :T a owl:Class . :E a owl:Class .\n:S rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .\n:T rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n:a a :D .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] ] rdfs:subClassOf :E .\n")
-      ;; 18. K6: owl:Thing unsafe through ⊤ ⊑ ∃r.{a}; every class then reaches a.
-      (18 ":E a owl:Class .\nowl:Thing rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n:a a :D .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 19. K6's counterexample: W assumes Q1 and Q2 non-empty together, so it
-      ;;     merges them through {a}; neither follows from the ontology.
-      (19 ":Q1 a owl:Class . :Q2 a owl:Class .\n:Q1 rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:Q2 rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
-      ;; 20. The same merge through witnesses: Q1 ⊑ ∃r.(B ⊓ {a}) makes a a B
-      ;;     only when Q1 is non-empty, so Q2 ⊑ ∃s.{a}, ∃s.B ⊑ E gives Q2 ⋢ E.
-      (20 ":Q1 a owl:Class . :Q2 a owl:Class . :B a owl:Class . :E a owl:Class .\n:Q1 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B [ owl:oneOf ( :a ) ] ) ] ] .\n:Q2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
-      ;; 21. K7: chain legs stored under sub-roles, each arriving first in turn.
-      ;;     r1 ⊑ r, s1 ⊑ s, r ∘ s ⊑ t, t ⊑ t2, ∃t2.D ⊑ E. C's first leg arrives
-      ;;     first; C2's (three subsumptions down) arrives after X's second leg.
-      (21 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :t2 a owl:ObjectProperty . :X a owl:Class . :C2 a owl:Class . :A1 a owl:Class . :A2 a owl:Class . :E a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s . :t rdfs:subPropertyOf :t2 .\n:t owl:propertyChainAxiom ( :r :s ) .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:someValuesFrom :D ] .\n:C2 rdfs:subClassOf :A1 . :A1 rdfs:subClassOf :A2 . :A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .\n[ a owl:Restriction ; owl:onProperty :t2 ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
-      ;; 22. K7: Self on a sub-role through (2) and (14), feeding a range and a chain.
-      ;;     r1(a, a), r1 ⊑ r, range(r) = D, ∃r.Self ⊑ F, s(a, b), B(b), r ∘ s ⊑ t,
-      ;;     ∃t.B ⊑ E, Q ⊑ {a} ⊨ Q ⊑ D, F, E.
-      (22 ":r1 a owl:ObjectProperty . :B a owl:Class . :Q a owl:Class . :E a owl:Class . :F a owl:Class . :D a owl:Class .\n:r1 rdfs:subPropertyOf :r .\n:r rdfs:range :D .\n:a :r1 :a .\n:a :s :b .\n:b a :B .\n:t owl:propertyChainAxiom ( :r :s ) .\n:Q rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] rdfs:subClassOf :F .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
-      ;; 23. K7: (29) re-points a triple whose role has super-roles: C ⊑ ∃r1.B,
-      ;;     B ⊑ {a}, r1 ⊑ r, s(a, b), F(b), r ∘ s ⊑ t, ∃t.F ⊑ E ⊨ C ⊑ E.
-      (23 ":r1 a owl:ObjectProperty . :B a owl:Class . :F a owl:Class . :C a owl:Class . :E a owl:Class .\n:r1 rdfs:subPropertyOf :r .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:a :s :b .\n:b a :F .\n:t owl:propertyChainAxiom ( :r :s ) .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :F ] rdfs:subClassOf :E .\n")
-      ;; 24. K7: a range on a super-role reaches a sub-role's witness, and only
-      ;;     upwards: r1 ⊑ r, range(r) = D, C ⊑ ∃r1.⊤, C2 ⊑ ∃r.⊤, ∃r1.D ⊑ E,
-      ;;     ∃r.D ⊑ E2 ⊨ C ⊑ E, C ⊑ E2, C2 ⊑ E2; C2 ⋢ E.
-      (24 ":r1 a owl:ObjectProperty . :C a owl:Class . :C2 a owl:Class . :E a owl:Class . :E2 a owl:Class .\n:r1 rdfs:subPropertyOf :r .\n:r rdfs:range :D .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom owl:Thing ] .\n:C2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Thing ] .\n[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E2 .\n")
-      ;; 25. K7: a role cycle from equivalent properties: r ≡ s, s ⊑ u,
-      ;;     C ⊑ ∃r.D, D2 ⊑ ∃s.D, ∃s.D ⊑ E, ∃u.D ⊑ F, ∃r.D ⊑ G
-      ;;     ⊨ C ⊑ E, F, G; D2 ⊑ E, F, G.
-      (25 ":u a owl:ObjectProperty . :C a owl:Class . :D2 a owl:Class . :E a owl:Class . :F a owl:Class . :G a owl:Class .\n:r owl:equivalentProperty :s .\n:s rdfs:subPropertyOf :u .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] .\n:D2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :u ; owl:someValuesFrom :D ] rdfs:subClassOf :F .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :G .\n")
-      ;; 26. K7 at K6's boundary: fixture 15 with every role a sub-role. The
-      ;;     nominal reaches U through s1 ⊑ s, so U is unsafe and S is not:
-      ;;     S ⊑ E, U ⊑ E, U ⊑ G (F(a), ∃s.F ⊑ G); S ⋢ G.
-      (26 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :F a owl:Class . :S a owl:Class . :U a owl:Class . :X a owl:Class . :B a owl:Class . :E a owl:Class . :G a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf :D .\n:S rdfs:subClassOf :X . :U rdfs:subClassOf :X .\n:U rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:hasValue :a ] .\n:a a :F .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :F ] rdfs:subClassOf :G .\n")
-      ;; 27. K7: transitivity over sub-role legs, and nothing downwards: r
-      ;;     transitive, r1 ⊑ r, C ⊑ ∃r1.X, X ⊑ ∃r1.Y, ∃r.Y ⊑ E, ∃r1.Y ⊑ F
-      ;;     ⊨ C ⊑ E, X ⊑ E, X ⊑ F; C ⋢ F (C reaches Y by r, not by r1).
-      (27 ":r1 a owl:ObjectProperty . :C a owl:Class . :X a owl:Class . :Y a owl:Class . :E a owl:Class . :F a owl:Class .\n:r a owl:TransitiveProperty .\n:r1 rdfs:subPropertyOf :r .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Y ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] rdfs:subClassOf :F .\n")
-      ;; 28. K7: a Self fact arriving after a chain leg stored under a sub-role
-      ;;     (rules (16) and (17)). r1 ⊑ r, s1 ⊑ s, r ∘ s ⊑ t. C ⊑ ∃s1.D and,
-      ;;     two subsumptions later, ∃r.Self; C3 ⊑ ∃r1.Y and Y, two later, ∃s.Self.
-      ;;     ∃t.D ⊑ E, ∃t.Y ⊑ E3 ⊨ C ⊑ E, C3 ⊑ E3; A2 ⋢ E.
-      (28 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :A1 a owl:Class . :A2 a owl:Class . :C3 a owl:Class . :Y a owl:Class . :B1 a owl:Class . :B2 a owl:Class . :E a owl:Class . :E3 a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s .\n:t owl:propertyChainAxiom ( :r :s ) .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:someValuesFrom :D ] , :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .\n:C3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .\n:Y rdfs:subClassOf :B1 .\n:B1 rdfs:subClassOf :B2 .\n:B2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :Y ] rdfs:subClassOf :E3 .\n")
-      ;; 29. A nominal's class arriving late: Q ⊑ {a} at once, A1(a),
-      ;;     A1 ⊑ A2, A2 ⊑ B ⊨ Q ⊑ B; and through a witness: C ⊑ ∃r.{a},
-      ;;     ∃r.B ⊑ E ⊨ C ⊑ E. ({a} ⊑ A1 is a GCI, so every member of {a}
-      ;;     derives B itself; fixture 31 is the case only (28) reaches.)
-      (29 ":Q a owl:Class . :A1 a owl:Class . :A2 a owl:Class . :B a owl:Class . :E a owl:Class .\n:a a :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf :B .\n:Q rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
-      ;; 30. A one-way membership b ∈ {a} meeting a's late class: A1(a),
-      ;;     A1 ⊑ A2, A2 ⊑ B, C(b), B ⊓ C ⊑ ⊥ ⊨ inconsistent.
-      (30 ":A1 a owl:Class . :A2 a owl:Class . :B a owl:Class .\n:b a [ owl:oneOf ( :a ) ] .\n:a a :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf :B .\n:b a :C .\n[ owl:intersectionOf ( :B :C ) ] rdfs:subClassOf owl:Nothing .\n")
-      ;; 31. Rule (28) through holders, irreplaceably. Every member of {a}
-      ;;     derives a's own classes itself ({a} ⊑ A is a GCI), so (28) is
-      ;;     needed only for a class that reaches a from another member by
-      ;;     (27). Witness w2 of c holds {a} at round 3 (C(c), C ⊑ ∃r.D,
-      ;;     D ⊑ {a}); witness w1 of e holds Z at round 2 and {a} only at
-      ;;     round 4 (E(e), E ⊑ ∃s.F0, F0 ⊑ Z, F0 ⊑ F1, F1 ⊑ {a}). Z reaches
-      ;;     a by (27) after w2's {a} was processed, so inst(w2, Z) is in G
-      ;;     only through (28) over holders(a); the stored-G test compares it.
-      (31 ":E a owl:Class . :F0 a owl:Class . :F1 a owl:Class . :Z a owl:Class .\n:c a owl:NamedIndividual , :C .\n:e a owl:NamedIndividual , :E .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] .\n:D rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:E rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :F0 ] .\n:F0 rdfs:subClassOf :Z , :F1 .\n:F1 rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
+      (0 "corpus/fixtures/el++/ksc-00.ttl")
+      (1 "corpus/fixtures/el++/ksc-01.ttl")
+      (2 "corpus/fixtures/el++/ksc-02.ttl")
+      (3 "corpus/fixtures/el++/ksc-03.ttl")
+      (4 "corpus/fixtures/el++/ksc-04.ttl")
+      (5 "corpus/fixtures/el++/ksc-05.ttl")
+      (6 "corpus/fixtures/el++/ksc-06.ttl")
+      (7 "corpus/fixtures/el++/ksc-07.ttl")
+      (8 "corpus/fixtures/el++/ksc-08.ttl")
+      (9 "corpus/fixtures/el++/ksc-09.ttl")
+      (10 "corpus/fixtures/el++/ksc-10.ttl")
+      (11 "corpus/fixtures/el++/ksc-11.ttl")
+      (12 "corpus/fixtures/el++/ksc-12.ttl")
+      (13 "corpus/fixtures/el++/ksc-13.ttl")
+      (14 "corpus/fixtures/el++/ksc-14.ttl")
+      (15 "corpus/fixtures/el++/ksc-15.ttl")
+      (16 "corpus/fixtures/el++/ksc-16.ttl")
+      (17 "corpus/fixtures/el++/ksc-17.ttl")
+      (18 "corpus/fixtures/el++/ksc-18.ttl")
+      (19 "corpus/fixtures/el++/ksc-19.ttl")
+      (20 "corpus/fixtures/el++/ksc-20.ttl")
+      (21 "corpus/fixtures/el++/ksc-21.ttl")
+      (22 "corpus/fixtures/el++/ksc-22.ttl")
+      (23 "corpus/fixtures/el++/ksc-23.ttl")
+      (24 "corpus/fixtures/el++/ksc-24.ttl")
+      (25 "corpus/fixtures/el++/ksc-25.ttl")
+      (26 "corpus/fixtures/el++/ksc-26.ttl")
+      (27 "corpus/fixtures/el++/ksc-27.ttl")
+      (28 "corpus/fixtures/el++/ksc-28.ttl")
+      (29 "corpus/fixtures/el++/ksc-29.ttl")
+      (30 "corpus/fixtures/el++/ksc-30.ttl")
+      (31 "corpus/fixtures/el++/ksc-31.ttl")
+      (32 "corpus/fixtures/el++/ksc-32.ttl")
       (_ "")))
 
   (fn test-ksc-engine-matches-reference ((arena Arena))
@@ -2827,7 +2766,7 @@
     (@alloc arena)
     ;; owl:Nothing ⊑ {a} makes owl:Nothing unsafe; its run's seed is
     ;; inst(owl:Nothing, owl:Nothing), which raises the flag at once.
-    (match (ksc-fixture arena ":C rdfs:subClassOf :D .\nowl:Nothing rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
+    (match (ksc-fixture arena (ksc-fixture-at 32))
       ((none) false)
       ((some fx)
         (let ((r  (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
@@ -3944,56 +3883,69 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
                   ((input-error _) -1)
                   ((unavailable _) -1)))))))))
 
-  (fn profile-run ((arena Arena) (selection ProfileSelection))
-    (@intent "Classify the litmus under a selection: the profile that ran, or the one refused as unavailable")
-    (@spec ((Arena ProfileSelection) -> (Result Profile Profile)))
+  ;; What a run under a selection did: ran under a rung, was refused as
+  ;; unavailable naming one, or failed some other way (no test expects
+  ;; that, so it fails whichever test asked).
+  (type RunAs (union
+    (ran     Profile)
+    (refused Profile)
+    (failed)))
+
+  (fn profile-run ((arena Arena) (path String) (selection ProfileSelection))
+    (@intent "Classify a fixture under a selection: the rung that ran, or the one refused as unavailable")
+    (@spec ((Arena String ProfileSelection) -> RunAs))
     (@alloc arena)
-    ;; ok p: an Outcome, and it says p ran. error p: refused as
-    ;; unavailable, naming p. Any other fault is an error on el++, which
-    ;; no test below expects, so it fails whichever test asked.
     (let ((mut cfg (default-config)))
       (do
         (set! cfg selection selection)
-        (match (parse-ttl-file arena "corpus/fixtures/v0/litmus.ttl")
-          ((error _) (error 'profile-el-plus-plus))
+        (match (parse-ttl-file arena path)
+          ((error _) (union-new RunAs failed))
           ((ok g)
             (match (classify arena (. g triples) (list-new arena IRI) cfg)
-              ((ok o) (ok (. o profile)))
+              ((ok o) (union-new RunAs ran (. o profile)))
               ((error f)
                 (match f
-                  ((unavailable p) (error p))
-                  ((refused _)     (error 'profile-el-plus-plus))
-                  ((cancelled)     (error 'profile-el-plus-plus))
-                  ((input-error _) (error 'profile-el-plus-plus))))))))))
+                  ((unavailable p) (union-new RunAs refused p))
+                  ((refused _)     (union-new RunAs failed))
+                  ((cancelled)     (union-new RunAs failed))
+                  ((input-error _) (union-new RunAs failed))))))))))
 
-  (fn ran-as ((r (Result Profile Profile)) (want Profile))
+  (fn ran-as ((r RunAs) (want Profile))
     (@intent "Whether a profile-run ran, under want")
-    (@spec (((Result Profile Profile) Profile) -> Bool))
+    (@spec ((RunAs Profile) -> Bool))
     (@pure)
-    (match r ((ok p) (== p want)) ((error _) false)))
+    (match r ((ran p) (== p want)) ((refused _) false) ((failed) false)))
 
-  (fn refused-as ((r (Result Profile Profile)) (want Profile))
+  (fn refused-as ((r RunAs) (want Profile))
     (@intent "Whether a profile-run was refused as unavailable, naming want")
-    (@spec (((Result Profile Profile) Profile) -> Bool))
+    (@spec ((RunAs Profile) -> Bool))
     (@pure)
-    (match r ((ok _) false) ((error p) (== p want))))
+    (match r ((ran _) false) ((refused p) (== p want)) ((failed) false)))
 
   (fn test-profile-selection ((arena Arena))
-    (@intent "§5.1: the default and auto run el; el runs el; every unbuilt rung is refused, by name")
+    (@intent "§5.1: the default runs el; el and el++ run as asked; unbuilt rungs are refused by name; auto picks by membership, then fewest omissions, ties to el")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; The refusal is the point: a library that ran `el` for an explicit
     ;; `sriq` would classify a smaller theory than asked for and report it
-    ;; as complete under the wrong name.
-    (and (ran-as (profile-run arena (. (default-config) selection)) 'profile-el)
-         (ran-as (profile-run arena (union-new ProfileSelection auto)) 'profile-el)
-         (ran-as (profile-run arena (union-new ProfileSelection explicit 'profile-el)) 'profile-el)
-         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-el-plus-plus))
-                     'profile-el-plus-plus)
-         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-horn-sriq))
-                     'profile-horn-sriq)
-         (refused-as (profile-run arena (union-new ProfileSelection explicit 'profile-sriq))
-                     'profile-sriq)))
+    ;; as complete under the wrong name. auto's cases, with each rung's
+    ;; out-of-profile count: litmus 0/0 → el (el first); has-self 1/0 →
+    ;; el++ (the one containing it); union 1/1 → el (tie); nominals 2/1 →
+    ;; el++ (fewer omitted).
+    (let ((litmus "corpus/fixtures/v0/litmus.ttl")
+          (auto (union-new ProfileSelection auto)))
+      (and (ran-as (profile-run arena litmus (. (default-config) selection)) 'profile-el)
+           (ran-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-el)) 'profile-el)
+           (ran-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-el-plus-plus))
+                   'profile-el-plus-plus)
+           (refused-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-horn-sriq))
+                       'profile-horn-sriq)
+           (refused-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-sriq))
+                       'profile-sriq)
+           (ran-as (profile-run arena litmus auto) 'profile-el)
+           (ran-as (profile-run arena "corpus/fixtures/el++/has-self.ttl" auto) 'profile-el-plus-plus)
+           (ran-as (profile-run arena "corpus/fixtures/out-of-profile/union.ttl" auto) 'profile-el)
+           (ran-as (profile-run arena "corpus/fixtures/out-of-profile/nominals.ttl" auto) 'profile-el-plus-plus))))
 
   (fn test-profile-names-round-trip ((arena Arena))
     (@intent "Every rung's name parses back to the rung, and nothing else parses")
@@ -4285,13 +4237,13 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
         (list-push paths "corpus/fixtures/out-of-profile/allvalues.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/nominals.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/cardinality.ttl")
-        (list-push paths "corpus/fixtures/out-of-profile/has-self.ttl")
+        (list-push paths "corpus/fixtures/el++/has-self.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/inverse.ttl")
-        (list-push paths "corpus/fixtures/out-of-profile/equality.ttl")
+        (list-push paths "corpus/fixtures/el++/equality.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/property-characteristics.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/haskey-disjointunion.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/swrl-rule.ttl")
-        (list-push paths "corpus/fixtures/out-of-profile/builtin-roles.ttl")
+        (list-push paths "corpus/fixtures/el++/builtin-roles.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/anonymous-individual.ttl")
         (list-push paths "corpus/fixtures/out-of-profile/datatypes.ttl")
         (for-each (p paths)
@@ -5162,7 +5114,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-profile-selection arena)))
-            (print-test-result "§5.1: default and auto run el; unbuilt rungs are refused by name" r)
+            (print-test-result "§5.1: el and el++ run as asked, unbuilt rungs refused by name, auto by membership then fewest omissions" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-profile-names-round-trip arena)))

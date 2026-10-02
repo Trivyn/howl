@@ -236,7 +236,8 @@
       (println "")
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
       (println "  --profile P  the calculus: el (default), el++, horn-sriq, sriq, or auto;")
-      (println "               only el is implemented, and any other rung exits 3")
+      (println "               el and el++ are implemented, and horn-sriq and sriq exit 3;")
+      (println "               auto runs el, or el++ when it omits fewer axioms")
       (println "  --strict   refuse to run past any omission (exit 2, no report)")
       (println "  --report   print the canonical report instead of the summary")
       (println "  --timings  print phase durations and peak memory on stderr (never part of a report)")
@@ -598,7 +599,7 @@
                             ((cancelled)       (println "howl: cancelled"))
                             ((unavailable p)
                               (do (print "howl: profile ") (print (profile-name p))
-                                  (println " is not implemented yet (implemented: el)")))
+                                  (println " is not implemented yet (implemented: el, el++)")))
                             ;; §9: the refused omissions are listed, and there
                             ;; is NO report body — no counts a reader could
                             ;; mistake for a partial result.

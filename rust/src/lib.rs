@@ -55,7 +55,7 @@ impl fmt::Display for Fault {
             Fault::Cancelled => write!(f, "cancelled"),
             Fault::InputError(m) => write!(f, "input error: {m}"),
             Fault::ProfileUnavailable(p) => {
-                write!(f, "profile {} is not implemented yet (implemented: el)", p.name())
+                write!(f, "profile {} is not implemented yet (implemented: el, el++)", p.name())
             }
         }
     }
@@ -86,10 +86,14 @@ pub enum Verdict {
 /// A rung of the profile ladder (SPEC §5.1): each is complete for
 /// exactly the logic it names, and no wider label.
 ///
+/// "Built" is the engine (the C library and the `howl` CLI). This crate
+/// does not bind `classify` yet ([`Reasoner::classify`] returns
+/// [`Fault::NotImplemented`]), so from Rust no profile runs today.
+///
 /// | Profile | Logic | Worst case | Built |
 /// |---|---|---|---|
 /// | [`El`](Profile::El) | ELH⊥R+ + domain/range + ABox | PTIME | yes |
-/// | [`ElPlusPlus`](Profile::ElPlusPlus) | the OWL 2 EL object fragment | PTIME | no |
+/// | [`ElPlusPlus`](Profile::ElPlusPlus) | the OWL 2 EL object fragment | PTIME | yes |
 /// | [`HornSriq`](Profile::HornSriq) | Horn-SRIQ | ExpTime | no |
 /// | [`Sriq`](Profile::Sriq) | SRIQ object fragment (non-Horn) | 2ExpTime | no |
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -293,7 +297,7 @@ mod tests {
     #[test]
     fn unavailable_names_the_profile() {
         let f = Fault::ProfileUnavailable(Profile::HornSriq);
-        assert_eq!(f.to_string(), "profile horn-sriq is not implemented yet (implemented: el)");
+        assert_eq!(f.to_string(), "profile horn-sriq is not implemented yet (implemented: el, el++)");
     }
 
     /// The stub must not be able to express a pass. This is the same

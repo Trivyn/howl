@@ -1,0 +1,19 @@
+# el++ engine fixture 30 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 30. A one-way membership b ∈ {a} meeting a's late class: A1(a),
+# A1 ⊑ A2, A2 ⊑ B, C(b), B ⊓ C ⊑ ⊥ ⊨ inconsistent.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:A1 a owl:Class . :A2 a owl:Class . :B a owl:Class .
+:b a [ owl:oneOf ( :a ) ] .
+:a a :A1 .
+:A1 rdfs:subClassOf :A2 .
+:A2 rdfs:subClassOf :B .
+:b a :C .
+[ owl:intersectionOf ( :B :C ) ] rdfs:subClassOf owl:Nothing .

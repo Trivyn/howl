@@ -107,7 +107,7 @@ golden-asan: $(BIN)
 	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
 	  $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl-asan
 	ASAN_OPTIONS=detect_leaks=0:exitcode=99 $(MAKE) --no-print-directory golden \
-	  HOWL=./$(BIN)/howl-asan GOLDEN_CORPUS="ro-2025-12-17 obi-2026-07-27"
+	  HOWL=./$(BIN)/howl-asan GOLDEN_CORPUS="ro-2025-12-17 obi-2026-07-27" GOLDEN_ELPP_CORPUS="ro-2025-12-17 obi-2026-07-27"
 
 # THE ROUND-JOIN RUNS ON WORKER THREADS (M1 slice 5), and ThreadSanitizer is
 # what shows the join shares nothing mutable: workers read the frozen store
@@ -191,6 +191,7 @@ example:
 	slop test src/canon.slop
 	slop test src/normalize.slop
 	slop test src/decode.slop
+	slop test src/select.slop
 
 # SPEC.md §12's acceptance criteria, as exit codes. These are the contract a
 # consumer actually observes, and they are checked here rather than only
@@ -238,7 +239,16 @@ acceptance: cli
 	check corpus/fixtures/v0/litmus.ttl 0 --profile el; \
 	check corpus/fixtures/v0/litmus.ttl 0 --profile auto; \
 	check corpus/fixtures/out-of-profile/union.ttl 2 --profile el; \
-	check corpus/fixtures/v0/litmus.ttl 3 --profile el++; \
+	check corpus/fixtures/v0/litmus.ttl 0 --profile el++; \
+	check corpus/fixtures/el++/has-self.ttl 2; \
+	check corpus/fixtures/el++/has-self.ttl 0 --profile el++; \
+	check corpus/fixtures/el++/has-self.ttl 0 --profile el++ --strict; \
+	check corpus/fixtures/el++/has-self.ttl 0 --profile auto; \
+	check corpus/fixtures/el++/builtin-roles.ttl 1 --profile el++; \
+	check corpus/fixtures/el++/equality.ttl 0 --profile el++; \
+	check corpus/fixtures/el++/ksc-07.ttl 1 --profile el++; \
+	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile auto; \
+	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile el++ --strict; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile horn-sriq; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile sriq; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile sroiq; \
@@ -292,7 +302,14 @@ corpus-acceptance: cli
 # also walks the committed reports and fails on any whose source is gone.
 # `golden-update` is for deliberate changes only.
 GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl \
-                              corpus/fixtures/probes/*.ttl)
+                              corpus/fixtures/probes/*.ttl corpus/fixtures/el++/*.ttl)
+# THE el++ RUNS, `howl validate F --profile el++ --report`, pinned in
+# corpus/goldens/el++/: every el++ fixture and every v0 fixture (which el++
+# contains), and the corpus by report hash. Their source of truth for
+# correctness is the engine-vs-reference differential (make test) and the
+# oracle differential; these pin that nothing changes unnoticed.
+GOLDEN_ELPP_FIXTURES := $(wildcard corpus/fixtures/el++/*.ttl corpus/fixtures/v0/*.ttl)
+GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
 # IMPORT RUNS, `howl validate DOC.ttl -I IMPORT.ttl --report`, one per
 # DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
 # an attested import - its blank nodes standardized apart from the root's -
@@ -313,10 +330,32 @@ golden: cli
 	@fail=0; \
 	for g in corpus/goldens/fixtures/*.report; do \
 	  n=$$(basename $$g .report); src=""; \
-	  for d in out-of-profile hazards v0 probes; do \
+	  for d in out-of-profile hazards v0 probes el++; do \
 	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
 	  done; \
 	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
+	done; \
+	for g in corpus/goldens/el++/*.report; do \
+	  n=$$(basename $$g .report); src=""; \
+	  for d in v0 el++; do \
+	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
+	  done; \
+	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
+	done; \
+	for f in $(GOLDEN_ELPP_FIXTURES); do \
+	  g=corpus/goldens/el++/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
+	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --profile el++ --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) ;; *) echo "  NOT A REPORT $$f (el++)"; fail=1; continue;; esac; \
+	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL $$f (el++) differs from $$g"; fail=1; fi; \
+	done; \
+	for c in $(GOLDEN_ELPP_CORPUS); do \
+	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/el++/$$c.sha256; \
+	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --profile el++ --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) ;; *) echo "  NOT A REPORT $$f (el++)"; fail=1; continue;; esac; \
+	  h=$$(printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1); \
+	  if [ "$$h" = "$$(cat $$g)" ]; then echo "  ok   $$c (el++)"; else echo "  FAIL $$c (el++) report hash $$h"; fail=1; fi; \
 	done; \
 	for f in $(GOLDEN_FIXTURES); do \
 	  g=corpus/goldens/fixtures/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
@@ -365,6 +404,22 @@ golden-update: cli
 	    printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1 > corpus/goldens/$$c.sha256; \
 	    echo "  -> corpus/goldens/$$c.sha256";; \
 	    *) echo "  NOT A REPORT $$f -- golden not written"; fail=1;; esac; \
+	done; \
+	mkdir -p corpus/goldens/el++; \
+	for f in $(GOLDEN_ELPP_FIXTURES); do \
+	  g=corpus/goldens/el++/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
+	  out=$$({ $(HOWL) validate $$f --profile el++ --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > $$g;; \
+	    *) echo "  NOT A REPORT $$f (el++) -- golden not written"; fail=1;; esac; \
+	done; \
+	for c in $(GOLDEN_ELPP_CORPUS); do \
+	  f=corpus/vendor/$$c.ttl; \
+	  if [ ! -f "$$f" ]; then echo "  skip $$c (no $$f)"; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --profile el++ --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) \
+	    printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1 > corpus/goldens/el++/$$c.sha256; \
+	    echo "  -> corpus/goldens/el++/$$c.sha256";; \
+	    *) echo "  NOT A REPORT $$f (el++) -- golden not written"; fail=1;; esac; \
 	done; \
 	[ "$$fail" -eq 0 ]
 

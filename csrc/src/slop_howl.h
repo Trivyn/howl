@@ -57,6 +57,12 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
+#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
@@ -80,6 +86,11 @@ SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 struct howl_ElWork {
@@ -158,6 +169,8 @@ slop_result_normalize_Decoded_types_Fault howl_decode_from(slop_arena* arena, te
 slop_result_normalize_Decoded_types_Fault howl_own_decoded(slop_arena* arena, slop_result_normalize_Decoded_types_Fault r);
 slop_result_normalize_Decoded_types_Fault howl_decode_owned(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config);
+int64_t howl_out_of_profile_count(slop_list_types_Omission oms);
+types_Profile howl_auto_profile(normalize_Decoded d);
 slop_result_howl_Prepared_types_Fault howl_prepare_in_profile(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
 uint8_t howl_strict_refuses(types_ReasonerConfig config, types_Coverage cov);
 slop_result_howl_Prepared_types_Fault howl_prepare_el(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
@@ -210,6 +223,11 @@ SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 
