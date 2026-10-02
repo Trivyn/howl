@@ -1,9 +1,23 @@
 #!/usr/bin/env python3
 """The differential harness: capability probes, then HOWL against its oracles (SPEC.md §10 item 1).
 
-    python3 corpus/differential.py probes [--update]
-    python3 corpus/differential.py fixtures
-    python3 corpus/differential.py corpus [--update] [--also] [--timeout SECONDS]
+    python3 corpus/differential.py [--profile P] probes [--update]
+    python3 corpus/differential.py [--profile P] fixtures
+    python3 corpus/differential.py [--profile P] corpus [--update] [--also] [--timeout SECONDS]
+    python3 corpus/differential.py rungs
+
+--profile el (the default) or el++ selects HOWL's rung, the census used for
+routing, and the records. Under el++:
+  - `probes` runs corpus/fixtures/probes-el++/ (one probe per construct SPEC
+    §5.4 adds) and records corpus/oracle-capabilities-el++.txt;
+  - `fixtures` adds corpus/fixtures/el++/ and probes-el++/, and ELK gates only
+    for constructs BOTH capability records show it passing;
+  - `corpus` diffs the el++ projections (corpus/vendor/NAME.el++.ttl, from
+    `make materialize-el++`) and records corpus/corpus-differential-el++.txt.
+
+`rungs` runs every materialized v0 projection under el AND el++ and requires
+the two reports to be identical but for their `profile` and `rounds` lines:
+el ⊂ el++, so on el's language the rungs must agree class for class (§5.4 K5).
 
 `probes` runs corpus/fixtures/probes/ — one small ontology per v0 construct,
 each carrying `# construct:` and `# expect:` / `# expect-not:` lines — through
@@ -52,9 +66,11 @@ ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
 # ELK's tripwire: a construct it is known to reject with a warning. If ELK
 # processes it silently, the warning capture is dead (oracle/…/Main.java).
 TRIPWIRE = os.path.join(ROOT, "corpus", "fixtures", "out-of-profile", "allvalues.ttl")
+PROFILE = "el"
 CAPABILITIES = os.path.join(HERE, "oracle-capabilities.txt")
 OUT = os.path.join(ROOT, "build", "differential")
 FIXTURE_DIRS = ("v0", "hazards", "probes")
+PROBE_DIR = "probes"
 REASONERS = ("hermit", "elk")
 RANGE = "ObjectPropertyRange"
 OWL = "http://www.w3.org/2002/07/owl#"
@@ -83,13 +99,14 @@ def fixtures(*dirs):
 
 # -- running the reasoners -----------------------------------------------------
 
-def run_howl(files):
+def run_howl(files, profile=None):
     """{name: report path}. Every file must yield a report, whatever its verdict."""
-    out = os.path.join(OUT, "howl")
+    profile = profile or PROFILE
+    out = os.path.join(OUT, "howl" if profile == PROFILE else f"howl-{profile}")
     os.makedirs(out, exist_ok=True)
     reports = {}
     for f in files:
-        p = subprocess.run([HOWL, "validate", f, "--report"], capture_output=True, text=True)
+        p = subprocess.run([HOWL, "validate", f, "--report", "--profile", profile], capture_output=True, text=True)
         if not p.stdout.startswith("howl-report 2\n"):
             raise HarnessError(f"howl gave no report for {rel(f)} (exit {p.returncode}): {p.stderr.strip()}")
         path = os.path.join(out, name_of(f) + ".report")
@@ -117,6 +134,30 @@ def run_howl(files):
 #    No logical content is lost, but the unparsed-triple refusal is not
 #    weakened to admit it.
 PAIRWISE_LISTS = ("members", "distinctMembers", "disjointUnionOf")
+
+
+# HERMIT'S OWN FAULTS: input the OWL API loads faithfully but HermiT cannot
+# reason over. Not a blind spot of the shared parser — ELK still runs and
+# gates where it is capable — but HermiT's answer is absent, so it cannot
+# gate; HOWL's answer on such a fixture is pinned by its own tests and
+# golden. Each entry names where HermiT fails (HOWL_ORACLE_TRACE=1).
+#
+# 1. owl:Thing ⊑ owl:Nothing. HermiT's normalization simplifies the
+#    inclusion to an empty ObjectUnionOf, which the OWL API refuses
+#    (ExpressionManager.java:454, "operands cannot be null or empty"); seen on
+#    W3C WebOnt-Thing-003 and el++/ksc-02.
+def hermit_faults(files):
+    """{name: why} for the files HermiT itself cannot reason over."""
+    from rdflib import Graph, URIRef
+    from rdflib.namespace import RDFS
+    thing, nothing = URIRef(OWL + "Thing"), URIRef(OWL + "Nothing")
+    out = {}
+    for f in files:
+        g = Graph()
+        g.parse(f, format="turtle")
+        if (thing, RDFS.subClassOf, nothing) in g:
+            out[name_of(f)] = "HermiT fault: owl:Thing ⊑ owl:Nothing normalizes to an empty union"
+    return out
 
 
 def _shape(g, t, seen=()):
@@ -270,6 +311,15 @@ CONSTRUCT_LINES = {
     "ObjectComplementOf (positive position)": r"owl:complementOf",
     "ClassAssertion": r"^:\w+ a :",
     "ObjectPropertyAssertion": r"^:\w+ :\w+ :\w+ \.",
+    # SPEC §5.4's additions, for corpus/fixtures/probes-el++/.
+    "ObjectHasValue": r"owl:hasValue",
+    "ObjectOneOf (one individual)": r"owl:oneOf",
+    "ObjectHasSelf (simple role)": r"owl:hasSelf",
+    "ReflexiveObjectProperty": r"owl:ReflexiveProperty",
+    "SameIndividual": r"owl:sameAs",
+    "DifferentIndividuals": r"owl:differentFrom|owl:AllDifferent",
+    "NegativeObjectPropertyAssertion": r"owl:NegativePropertyAssertion",
+    "built-in role (bottomObjectProperty)": r"owl:bottomObjectProperty",
 }
 
 
@@ -283,7 +333,7 @@ def without_construct(f, construct):
     kept = [l for l in lines if l.startswith(("#", "@")) or not re.search(pattern, l)]
     if len(kept) == len(lines):
         raise HarnessError(f"{rel(f)}: no line states {construct!r}, so load-bearing cannot be checked")
-    out = os.path.join(OUT, "mutants", "probes", os.path.basename(f))
+    out = os.path.join(OUT, "mutants", PROBE_DIR, os.path.basename(f))
     os.makedirs(os.path.dirname(out), exist_ok=True)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write("\n".join(kept))
@@ -297,7 +347,7 @@ def missed(report, exps):
 
 def cmd_probes(update):
     import census  # needs rdflib; imported here so `fixtures`' parse errors surface first
-    files = fixtures("probes")
+    files = fixtures(PROBE_DIR)
     exps = {name_of(f): expectations(f) for f in files}
     failed = False
     lossy = lossy_for_oracles(files)
@@ -307,7 +357,7 @@ def cmd_probes(update):
                            + "; ".join(f"{n} ({why})" for n, why in sorted(lossy.items())))
 
     for f in files:
-        _, in_v0, out_of_profile, _, _ = census.census(f)
+        _, in_v0, out_of_profile, _, _ = census.census(f, profile=PROFILE)
         if out_of_profile:
             print(f"FAIL census: {rel(f)} is out of profile: {dict(out_of_profile)}")
             failed = True
@@ -398,18 +448,23 @@ def cmd_probes(update):
 # -- fixture differential --------------------------------------------------
 
 def elk_capable():
-    """Constructs ELK passes EVERY probe for. A construct with no probe is not capable."""
+    """Constructs ELK passes EVERY probe for. A construct with no probe is not capable.
+    Under el++ both records count: el's constructs are el++'s too."""
     passes, fails = set(), set()
-    try:
-        with open(CAPABILITIES, encoding="utf-8") as fh:
-            for line in fh:
-                if line.startswith("#") or not line.strip():
-                    continue
-                reasoner, verdict, _probe, construct = line.rstrip("\n").split(" ", 3)
-                if reasoner == "elk":
-                    (passes if verdict == "pass" else fails).add(construct)
-    except FileNotFoundError:
-        raise HarnessError(f"{rel(CAPABILITIES)} is missing: run `make probes-update` first")
+    records = [os.path.join(HERE, "oracle-capabilities.txt")]
+    if PROFILE != "el":
+        records.append(CAPABILITIES)
+    for record in records:
+        try:
+            with open(record, encoding="utf-8") as fh:
+                for line in fh:
+                    if line.startswith("#") or not line.strip():
+                        continue
+                    reasoner, verdict, _probe, construct = line.rstrip("\n").split(" ", 3)
+                    if reasoner == "elk":
+                        (passes if verdict == "pass" else fails).add(construct)
+        except FileNotFoundError:
+            raise HarnessError(f"{rel(record)} is missing: run `make probes-update` first")
     return passes - fails
 
 
@@ -424,6 +479,20 @@ def elk_gates(constructs, capable):
 
 
 CORPUS_RECORD = os.path.join(HERE, "corpus-differential.txt")
+
+
+def set_profile(p):
+    """Point the harness at one rung: HOWL's flag, the census, the records, the fixtures."""
+    global PROFILE, CAPABILITIES, CORPUS_RECORD, OUT, FIXTURE_DIRS, PROBE_DIR
+    if p not in ("el", "el++"):
+        raise HarnessError(f"unknown profile {p} (el or el++)")
+    PROFILE = p
+    if p != "el":
+        CAPABILITIES = os.path.join(HERE, f"oracle-capabilities-{p}.txt")
+        CORPUS_RECORD = os.path.join(HERE, f"corpus-differential-{p}.txt")
+        OUT = os.path.join(ROOT, "build", f"differential-{p}")
+        FIXTURE_DIRS = ("v0", "hazards", "probes", p, f"probes-{p}")
+        PROBE_DIR = f"probes-{p}"
 
 
 def oracle_entailments_sha(path):
@@ -450,18 +519,18 @@ def cmd_corpus(update, also, timeout):
     plan, failed = [], False
     for e in entries:
         stem = f"{e['name']}-{e['version']}"
-        path = project.materialized_path(e)
+        path = project.materialized_path(e, PROFILE)
         if not os.path.exists(path):
-            raise HarnessError(f"{rel(path)} is missing: run `make materialize`")
+            raise HarnessError(f"{rel(path)} is missing: run `make materialize{'' if PROFILE == 'el' else '-' + PROFILE}`")
         # ONE PARSE per entry, shared by the projection check, census's
         # construct routing and the OWL API blind-spot scan.
         g = Graph()
         g.parse(path, format="turtle")
         # The SAME check as `project-verify`: ground triples, blank-node
         # structure and count against the pinned removal list, census 0 out.
-        with open(os.path.join(HERE, "projections", stem + ".removals"), encoding="utf-8") as fh:
+        with open(project.removals_path(e, PROFILE), encoding="utf-8") as fh:
             pins = project.pinned_header(fh.read())
-        errors = project.check_graph(g, pins, path)
+        errors = project.check_graph(g, pins, path, PROFILE)
         if errors:
             print(f"  FAIL {stem:<24} the materialized file is not its projection: {'; '.join(errors)} "
                   f"(run `make materialize`)")
@@ -469,7 +538,7 @@ def cmd_corpus(update, also, timeout):
             continue
         ground = pins["ground_sha"]
         bnode_sha = pins["bnode_sha"]
-        _, in_v0, _, _, _ = census.census(path, graph=g)
+        _, in_v0, _, _, _ = census.census(path, graph=g, profile=PROFILE)
         spots = owlapi_blind_spots(g)
         gates_elk, why = elk_gates(set(in_v0), capable)
         routed = "elk" if gates_elk else "hermit"
@@ -521,10 +590,17 @@ def cmd_corpus(update, also, timeout):
         failed |= row_failed
         print(f"  {'FAIL' if row_failed else 'ok  '} {stem:<24} " + "   ".join(cells))
 
-    header = ("# The corpus differential (corpus/differential.py corpus): each materialized\n"
-              "# v0 projection, HOWL against its ROUTED oracle, every ordered pair of named\n"
-              "# classes. Generated by `make diff-corpus-update`; never edited by hand. The\n"
-              "# oracle hash covers its entailment lines only, not the JVM-bearing header.\n")
+    if PROFILE == "el":
+        header = ("# The corpus differential (corpus/differential.py corpus): each materialized\n"
+                  "# v0 projection, HOWL against its ROUTED oracle, every ordered pair of named\n"
+                  "# classes. Generated by `make diff-corpus-update`; never edited by hand. The\n"
+                  "# oracle hash covers its entailment lines only, not the JVM-bearing header.\n")
+    else:
+        header = (f"# The {PROFILE} corpus differential (corpus/differential.py --profile {PROFILE}\n"
+                  f"# corpus): each materialized {PROFILE} projection, HOWL under {PROFILE} against its\n"
+                  "# ROUTED oracle, every ordered pair of named classes. Generated by\n"
+                  "# `make diff-corpus-update`; never edited by hand. The oracle hash covers its\n"
+                  "# entailment lines only, not the JVM-bearing header.\n")
     text = header + "".join(l + "\n" for l in lines)
     if update:
         if failed:
@@ -564,18 +640,30 @@ def cmd_fixtures():
 
     capable = elk_capable()
     lossy = lossy_for_oracles(comparable)
-    oracle = {r: run_oracle(r, [f for f in comparable if name_of(f) not in lossy]) for r in REASONERS}
+    faults = hermit_faults(comparable)
+    oracle = {r: run_oracle(r, [f for f in comparable if name_of(f) not in lossy
+                                and not (r == "hermit" and name_of(f) in faults)]) for r in REASONERS}
     failed = malformed
     for f in comparable:
         n = name_of(f)
-        _, in_v0, _, _, _ = census.census(f)
+        _, in_v0, _, _, _ = census.census(f, profile=PROFILE)
         constructs = set(in_v0)
         gates_elk, why = elk_gates(constructs, capable)
         cells, row_failed = [], False
         if n in lossy:
             print(f"  ok   {n:<44} oracles n/a (OWL API blind spot: {lossy[n]})")
             continue
+        if n in faults and not gates_elk:
+            # Neither oracle can gate it: HermiT faults and ELK is not
+            # capable. That certifies nothing, so it fails rather than pass
+            # unchecked; such a fixture needs another oracle or no fault.
+            print(f"  FAIL {n:<44} no gating oracle ({faults[n]}; ELK not capable: {why})")
+            failed = True
+            continue
         for r in REASONERS:
+            if r == "hermit" and n in faults:
+                cells.append(f"hermit n/a ({faults[n]})")
+                continue
             gates = r == "hermit" or gates_elk
             reports, failures = oracle[r]
             if n in failures:
@@ -599,12 +687,47 @@ def cmd_fixtures():
     return 1 if failed else 0
 
 
+def strip_rung(path):
+    """A report without the two lines that name the rung or count its rounds."""
+    with open(path, encoding="utf-8") as fh:
+        return [l for l in fh.read().splitlines() if not l.startswith(("profile ", "rounds "))]
+
+
+def cmd_rungs():
+    """el and el++ on every materialized v0 projection: identical reports, profile and rounds aside."""
+    vendor = os.path.join(HERE, "vendor")
+    files = sorted(os.path.join(vendor, f) for f in os.listdir(vendor) if f.endswith(".v0.ttl"))
+    if not files:
+        raise HarnessError("no materialized corpus under corpus/vendor/ (run make materialize)")
+    el, elpp = run_howl(files, "el"), run_howl(files, "el++")
+    failed = False
+    for f in files:
+        n = name_of(f)
+        a, b = strip_rung(el[n]), strip_rung(elpp[n])
+        same = a == b
+        failed |= not same
+        detail = "" if same else f"  ({sum(1 for x, y in zip(a, b) if x != y) + abs(len(a) - len(b))} lines differ)"
+        print(f"  {'ok  ' if same else 'FAIL'} {os.path.basename(f):<34} el and el++ "
+              f"{'agree' if same else 'DISAGREE'}{detail}")
+    print(f"  rungs: {len(files)} projections: {'EL AND EL++ AGREE' if not failed else 'RUNGS DISAGREE'}")
+    return 1 if failed else 0
+
+
 def main(argv):
     try:
+        argv = list(argv)
+        if "--profile" in argv:
+            i = argv.index("--profile")
+            if i + 1 >= len(argv):
+                raise HarnessError("--profile needs a value")
+            set_profile(argv[i + 1])
+            del argv[i:i + 2]
         if argv[1:] in (["probes"], ["probes", "--update"]):
             return cmd_probes(update=len(argv) == 3)
         if argv[1:] == ["fixtures"]:
             return cmd_fixtures()
+        if argv[1:] == ["rungs"]:
+            return cmd_rungs()
         if argv[1:2] == ["corpus"]:
             opts = argv[2:]
             timeout = None

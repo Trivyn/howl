@@ -216,6 +216,9 @@ public final class Main {
                 failed++;
                 WarningRecorder.drain();
                 System.out.println("FAIL " + f + ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                // HOWL_ORACLE_TRACE: where an oracle failed, for telling a
+                // reasoner's own fault from this program's.
+                if (System.getenv("HOWL_ORACLE_TRACE") != null) e.printStackTrace(System.out);
             }
         }
         if (tripwire != null) fireTripwire(reasoner, tripwire, "after");

@@ -44,7 +44,7 @@ SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan golden-asan crate-vendor crate-build crate-test crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
-        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-check abox-fuzz
+        materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-el++ bench-check abox-fuzz
 
 PLATFORM ?= unknown
 
@@ -129,9 +129,11 @@ test-tsan: $(BIN)
 # ~20 s a run).
 determinism: cli
 	python3 corpus/determinism.py
+	python3 corpus/determinism.py --profile el++
 
 determinism-corpus: cli
 	python3 corpus/determinism.py --corpus
+	python3 corpus/determinism.py --corpus --profile el++
 
 clean:
 	rm -rf $(BIN) dist
@@ -157,10 +159,18 @@ bench: oracle
 	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/bench/howl
 	HOWL=$(BIN)/bench/howl BENCH_CFLAGS='$(RELEASE_CFLAGS)' python3 bench/bench.py run
 
+# The el++ rung on its projections (bench/results-el++.txt): informational,
+# every entry timed and reported, none gated.
+bench-el++: oracle
+	@mkdir -p $(BIN)/bench
+	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/bench/howl
+	HOWL=$(BIN)/bench/howl BENCH_CFLAGS='$(RELEASE_CFLAGS)' python3 bench/bench.py --profile el++ run
+
 # Cheap: results.txt still names the certified reports, and its verdicts follow.
 bench-check:
 	python3 -m unittest bench/test_bench.py
 	python3 bench/bench.py check
+	@if [ -f bench/results-el++.txt ]; then python3 bench/bench.py --profile el++ check; fi
 
 # --- SLOP toolchain targets (require slop on PATH) ---
 
@@ -434,17 +444,22 @@ golden-update: cli
 oracle:
 	cd oracle && ./gradlew --quiet assemble
 
+# Both rungs' probes: corpus/fixtures/probes/ under el, probes-el++/ under el++
+# (SPEC §5.4's constructs), each with its own capability record.
 probes: cli oracle
 	python3 corpus/differential.py probes
+	python3 corpus/differential.py --profile el++ probes
 
 probes-update: cli oracle
 	python3 corpus/differential.py probes --update
+	python3 corpus/differential.py --profile el++ probes --update
 
 # The comparator's self-tests run first: a clean diff is evidence only from a
 # comparator known to speak up when the two sides differ.
 diff-fixtures: cli oracle
 	python3 -m unittest -q corpus/test_entdiff.py
 	python3 corpus/differential.py fixtures
+	python3 corpus/differential.py --profile el++ fixtures
 
 # THE ABOX REDUCTION, CHECKED AGAINST HERMIT OVER GENERATED INPUT (SPEC.md
 # §5.3). The proof is about the calculus; this checks the code against it,
@@ -455,6 +470,7 @@ diff-fixtures: cli oracle
 abox-fuzz: cli oracle
 	python3 corpus/abox_fuzz.py
 	python3 corpus/abox_fuzz.py --negation
+	python3 corpus/abox_fuzz.py --elpp
 
 # EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
 # W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's
@@ -469,9 +485,11 @@ conformance-fetch:
 conformance: cli oracle
 	python3 -m unittest -q corpus/test_conformance.py
 	python3 corpus/conformance.py run
+	python3 corpus/conformance.py --profile el++ run
 
 conformance-update: cli oracle
 	python3 corpus/conformance.py run --update
+	python3 corpus/conformance.py --profile el++ run --update
 
 # THE CORPUS DIFFERENTIAL (M1 acceptance (b)): each materialized projection,
 # HOWL against its ROUTED oracle — ELK for GO and EL-GALEN, HermiT for the
@@ -479,9 +497,12 @@ conformance-update: cli oracle
 # only, like project-verify: the corpus is 135 MB with mixed licences.
 diff-corpus: cli oracle
 	python3 corpus/differential.py corpus
+	python3 corpus/differential.py rungs
+	python3 corpus/differential.py --profile el++ corpus
 
 diff-corpus-update: cli oracle
 	python3 corpus/differential.py corpus --update
+	python3 corpus/differential.py --profile el++ corpus --update
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.
@@ -500,10 +521,12 @@ census:
 # number and every differential diff taken against it.
 project: corpus
 	python3 corpus/project.py
+	python3 corpus/project.py --profile el++
 
 project-verify:
 	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --verify
+	python3 corpus/project.py --profile el++ --verify
 
 # THE PROJECTED ONTOLOGIES ITSELF, as Turtle under corpus/vendor/ (not
 # committed): the one input HOWL and the oracles share in the corpus
@@ -512,6 +535,7 @@ project-verify:
 materialize: corpus
 	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --materialize
+	python3 corpus/project.py --profile el++ --materialize
 
 dist:
 	rm -rf dist

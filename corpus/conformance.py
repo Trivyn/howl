@@ -2,7 +2,10 @@
 """External conformance tests: fixed expected answers that neither HOWL nor this project wrote.
 
     python3 corpus/conformance.py fetch            # download and sha256-verify the pinned sources
-    python3 corpus/conformance.py run [--update]   # run HOWL against them
+    python3 corpus/conformance.py run [--update] [--profile P]   # run HOWL against them
+
+--profile el (the default) or el++ is passed to HOWL and to the census; each
+profile has its own record (conformance-status.txt, conformance-status-el++.txt).
 
 The capability probes (corpus/fixtures/probes/) carry expectations written for
 HOWL, and the differential compares HOWL with oracles run live. These are the
@@ -21,11 +24,11 @@ pins both suites.
        corpus/entdiff.py — every ordered pair, bottom-compressed, as the
        differential does.
 
-A test whose premise HOWL does not reason over completely (anything omitted) is
-`outside-v0`: not a failure, and not a pass. Each test's outcome is recorded in
-corpus/conformance-status.txt, and a run whose outcomes differ from the record
-FAILS — so a HOWL change that starts omitting a v0 test shows up instead of
-quietly shrinking what is checked. A mismatch is never recorded: it fails the
+A test whose premise HOWL does not reason over completely under the profile
+(anything omitted) is `outside-<profile>`: not a failure, and not a pass. Each
+test's outcome is recorded in the profile's record, and a run whose outcomes
+differ from the record FAILS — so a HOWL change that starts omitting a test
+shows up instead of quietly shrinking what is checked. A mismatch is never recorded: it fails the
 run, and `--update` refuses to write while anything fails.
 
 Exit 0 when every comparable test agrees and the record is unchanged, 1 on any
@@ -47,9 +50,10 @@ import entdiff  # noqa: E402
 HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "howl"))
 ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
 PINS = os.path.join(HERE, "conformance.sha256")
+PROFILE = "el"
 STATUS = os.path.join(HERE, "conformance-status.txt")
 VENDOR = os.path.join(HERE, "vendor", "conformance")
-OUT = os.path.join(ROOT, "build", "conformance")
+OUT = os.path.join(ROOT, "build", "conformance", PROFILE)
 
 OWL = "http://www.w3.org/2002/07/owl#"
 THING, NOTHING = OWL + "Thing", OWL + "Nothing"
@@ -129,7 +133,7 @@ def howl_report(ttl, out_dir):
     HOWL omission of something it should have read — for review.
     """
     import census
-    p = subprocess.run([HOWL, "validate", ttl, "--report"], capture_output=True, text=True)
+    p = subprocess.run([HOWL, "validate", ttl, "--report", "--profile", PROFILE], capture_output=True, text=True)
     if not p.stdout.startswith("howl-report 2\n"):
         raise HarnessError(f"howl gave no report for {ttl} (exit {p.returncode}): {p.stderr.strip()}")
     path = os.path.join(out_dir, os.path.splitext(os.path.basename(ttl))[0] + ".report")
@@ -146,7 +150,7 @@ def howl_report(ttl, out_dir):
         raise HarnessError(f"malformed HOWL report: {e}")
     kinds = sorted({line.split(" ", 1)[1].split("(", 1)[0]
                     for line in p.stdout.splitlines() if line.startswith("omission ")})
-    _, _, out_of_profile, _, _ = census.census(ttl)
+    _, _, out_of_profile, _, _ = census.census(ttl, profile=PROFILE)
     return path, " ".join(kinds + ([] if out_of_profile else ["census-clean"]))
 
 
@@ -233,7 +237,7 @@ def run_w3c():
             continue
         report, outside = howl_report(ttl, out_dir)
         if outside is not None:
-            results.append((name, "outside-v0", outside))
+            results.append((name, f"outside-{PROFILE}", outside))
             continue
         got = entdiff.parse(report).inconsistent
         if got == expect:
@@ -291,7 +295,7 @@ def run_w3c_entailment():
             notentailed = conclusion_axioms(str(c)) if c is not None else [("no-rdfxml-conclusion", None)]
         report, outside = howl_report(ttl, out_dir)
         if outside is not None:
-            results.append((name, "outside-v0", outside))
+            results.append((name, f"outside-{PROFILE}", outside))
             continue
         results.append((name, *check_axioms(entdiff.parse(report), entailed, notentailed)))
     return results
@@ -514,7 +518,7 @@ def run_elk():
             continue
         report, outside = howl_report(converted[name], out_dir)
         if outside is not None:
-            results.append((name, "outside-v0", outside))
+            results.append((name, f"outside-{PROFILE}", outside))
             continue
         expected = os.path.join(out_dir, "expected", name + ".report")
         with open(expected, "w", encoding="utf-8") as fh:
@@ -583,7 +587,7 @@ def run_elk_entailment():
             continue
         report, outside = howl_report(converted[name], out_dir)
         if outside is not None:
-            results.append((name, "outside-v0", outside))
+            results.append((name, f"outside-{PROFILE}", outside))
             continue
         base = os.path.splitext(f)[0]
         entailed = read_fss(base + ".entailed") if os.path.exists(base + ".entailed") else []
@@ -605,8 +609,9 @@ def cmd_run(update):
     header = ("# Outcome of each external conformance test (corpus/conformance.py).\n"
               "# Generated by `make conformance-update`; never edited by hand.\n"
               "# A mismatch is never recorded here: it fails the run.\n"
-              "# outside-v0 lines carry HOWL's omission kinds, and `census-clean` when\n"
-              "# corpus/census.py finds nothing out of profile: review those by hand.\n"
+              f"# Profile: {PROFILE}. outside-{PROFILE} lines carry HOWL's omission kinds, and\n"
+              "# `census-clean` when corpus/census.py finds nothing out of profile: review\n"
+              "# those by hand.\n"
               "# not-expressible: the expected answer is an axiom HOWL's report does not\n"
               "# state (an individual's type, a property axiom, a complex expression).\n"
               "# oracle-lossy: the input repeats an operand OWL 2 reads pairwise, which the\n"
@@ -633,18 +638,35 @@ def cmd_run(update):
         for s, _, status, _ in results:
             if s == suite:
                 counts[status] += 1
-        print(f"  {suite}: ok {counts['ok']}, outside-v0 {counts['outside-v0']}, "
+        print(f"  {PROFILE} {suite}: ok {counts['ok']}, outside-{PROFILE} {counts[f'outside-{PROFILE}']}, "
               f"not-expressible {counts['not-expressible']}, oracle-lossy {counts['oracle-lossy']}, "
               f"FAIL {counts['FAIL']}")
     return 1 if failed else 0
 
 
+def set_profile(p):
+    """Point the run at one profile: HOWL's flag, the census, the record, the build directory."""
+    global PROFILE, STATUS, OUT
+    if p not in ("el", "el++"):
+        raise HarnessError(f"unknown profile {p} (el or el++)")
+    PROFILE = p
+    STATUS = os.path.join(HERE, "conformance-status.txt" if p == "el" else f"conformance-status-{p}.txt")
+    OUT = os.path.join(ROOT, "build", "conformance", p)
+
+
 def main(argv):
     try:
-        if argv[1:] == ["fetch"]:
+        args = argv[1:]
+        if "--profile" in args:
+            i = args.index("--profile")
+            if i + 1 >= len(args):
+                raise HarnessError("--profile needs a value")
+            set_profile(args[i + 1])
+            args = args[:i] + args[i + 2:]
+        if args == ["fetch"]:
             return cmd_fetch()
-        if argv[1:] in (["run"], ["run", "--update"]):
-            return cmd_run(update=len(argv) == 3)
+        if args in (["run"], ["run", "--update"]):
+            return cmd_run(update=len(args) == 2)
         print(__doc__.split("\n\n")[1], file=sys.stderr)
         return 3
     except HarnessError as e:

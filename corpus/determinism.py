@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """M1 (e): the canonical report is byte-identical at every worker count, capped runs included.
 
-    python3 corpus/determinism.py [--repeat N]            # every committed fixture
-    python3 corpus/determinism.py --corpus [--repeat N]   # the materialized corpus projections
+    python3 corpus/determinism.py [--profile P] [--repeat N]            # every committed fixture
+    python3 corpus/determinism.py [--profile P] --corpus [--repeat N]   # the materialized corpus projections
+                                                                      # (NAME.v0.ttl, or NAME.el++.ttl under el++)
+
+--profile el (the default) or el++ is passed to every run.
 
 For each input, R is read from a default run's `rounds` line. Then for every
 cap in {0, 1, R/2, R-1, R, 10000} and every worker count W in {1, 2, 4, 8},
@@ -17,7 +20,14 @@ this gate is for, and it refuses to pass if none of them ever bites (a gate
 whose caps never cut a run has checked only complete runs, SPEC §6.8).
 
 Only caps 1..R-1 count as "cut short": cap 0 runs no round at all, so it never
-exercises the parallel join. Each W > 1 run is repeated (--repeat, default 2),
+exercises the parallel join.
+
+UNDER el++ A RUN HAS THREE PHASES (SPEC §5.4): G, W, then one run per unsafe
+class, in parallel, and R = rounds(G) + rounds(W) + the longest class run. The
+report does not say where one phase ends, so on the fixtures EVERY cap from 0
+to R is run, which cuts each phase at each of its rounds by construction. The
+corpus keeps the cap set above (on OBI, R = 35 with G = 9 and W = 17, so caps
+1, R/2 and R-1 land in G, W and phase Q). Each W > 1 run is repeated (--repeat, default 2),
 since an intermittent scheduling divergence could pass a single comparison.
 
 Exit 0 when every input agrees at every cap and some cap bit; 1 otherwise.
@@ -38,20 +48,24 @@ UNCAPPED = 10000
 def inputs(corpus):
     if corpus:
         vendor = os.path.join(HERE, "vendor")
-        files = sorted(os.path.join(vendor, f) for f in os.listdir(vendor) if f.endswith(".v0.ttl"))
+        suffix = ".v0.ttl" if PROFILE == "el" else f".{PROFILE}.ttl"
+        files = sorted(os.path.join(vendor, f) for f in os.listdir(vendor) if f.endswith(suffix))
         if not files:
-            sys.exit("no materialized corpus under corpus/vendor/ (run make materialize)")
+            sys.exit(f"no materialized {PROFILE} corpus under corpus/vendor/ (run make materialize)")
         return files
     out = []
-    for d in ("v0", "hazards", "probes", "out-of-profile", "el++"):
+    for d in ("v0", "hazards", "probes", "out-of-profile", "el++", "probes-el++"):
         base = os.path.join(HERE, "fixtures", d)
         out += sorted(os.path.join(base, f) for f in os.listdir(base) if f.endswith(".ttl"))
     return out
 
 
+PROFILE = "el"
+
+
 def run(path, cap, workers):
     p = subprocess.run([HOWL, "validate", path, "--report", "--max-iterations", str(cap),
-                        "--workers", str(workers)], capture_output=True)
+                        "--workers", str(workers), "--profile", PROFILE], capture_output=True)
     if not p.stdout.startswith(b"howl-report 2\n"):
         sys.exit(f"howl gave no report for {path} (cap {cap}, W {workers}): {p.stderr.decode().strip()}")
     return p.stdout, p.returncode
@@ -63,6 +77,11 @@ def binary_sha():
 
 
 def main(argv):
+    global PROFILE
+    if "--profile" in argv:
+        PROFILE = argv[argv.index("--profile") + 1]
+        if PROFILE not in ("el", "el++"):
+            sys.exit(f"unknown profile {PROFILE} (el or el++)")
     corpus = "--corpus" in argv
     repeat = int(argv[argv.index("--repeat") + 1]) if "--repeat" in argv else 2
     failed, bit, checked = False, 0, 0
@@ -75,7 +94,10 @@ def main(argv):
         rel = os.path.relpath(path, ROOT)
         base, _ = run(path, UNCAPPED, 1)
         rounds = int(re.search(rb"^rounds (\d+)$", base, re.M).group(1))
-        caps = sorted({0, 1, rounds // 2, max(rounds - 1, 0), rounds, UNCAPPED})
+        if PROFILE == "el++" and not corpus:
+            caps = sorted(set(range(0, rounds + 1)) | {UNCAPPED})
+        else:
+            caps = sorted({0, 1, rounds // 2, max(rounds - 1, 0), rounds, UNCAPPED})
         bad = []
         for cap in caps:
             ref = run(path, cap, 1)
@@ -98,7 +120,7 @@ def main(argv):
     if bit == 0:
         print("  FAIL no cap below R ever cut a run short: only complete runs were compared")
         failed = True
-    print(f"  {checked} worker-count comparisons, {bit} capped runs that bit: "
+    print(f"  {PROFILE}: {checked} worker-count comparisons, {bit} capped runs that bit: "
           f"{'IDENTICAL AT EVERY WORKER COUNT' if not failed else 'DETERMINISM FAILED'}")
     return 1 if failed else 0
 
