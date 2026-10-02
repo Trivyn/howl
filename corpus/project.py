@@ -24,6 +24,13 @@ Usage:
     python3 corpus/project.py --verify ...     re-derive and compare, exit 1 on drift
     python3 corpus/project.py --materialize .. write corpus/vendor/<name>.v0.ttl, the
                                                projected ontology itself (not committed)
+    ... --profile el++                         the same for el++ (SPEC §5.4): removals in
+                                               corpus/projections/el++/, the file
+                                               corpus/vendor/<name>.el++.ttl
+
+The MANIFEST's figures (in_v0, out_of_profile, projection_removes) are el's and
+are checked only under el; an el++ projection is pinned by its removal list,
+whose header states its own counts.
 
 THE MATERIALIZED FILE IS PINNED BY CONTENT, NOT BYTES. It is written as Turtle
 by rdflib, whose output is not byte-stable (blank-node nesting and order vary),
@@ -48,7 +55,17 @@ except ModuleNotFoundError:
     import tomli as tomllib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+PROFILE = "el"
 PROJ = os.path.join(HERE, "projections")
+
+
+def set_profile(p):
+    """Project for one rung: el (the default, corpus/projections/) or el++."""
+    global PROFILE, PROJ
+    if p not in ("el", "el++"):
+        sys.exit(f"unknown profile {p} (el or el++)")
+    PROFILE = p
+    PROJ = os.path.join(HERE, "projections") if p == "el" else os.path.join(HERE, "projections", p)
 
 
 def sha256_file(path):
@@ -171,7 +188,7 @@ def project(name, version, src_path, expect_sha):
 
     g = Graph()
     g.parse(src_path, format="turtle" if src_path.endswith(".ttl") else None)
-    sig = signature(g)
+    sig = signature(g, PROFILE)
 
     # DETERMINISM. Graph iteration order depends on blank-node labelling, which
     # differs between parses, so grouping seeds in iteration order produced a
@@ -195,7 +212,7 @@ def project(name, version, src_path, expect_sha):
     for t in g:
         if t not in dropped:
             kept.add(t)
-    sig["inadmissible_chains"] = inadmissible_chains(kept)
+    sig["inadmissible_chains"] = inadmissible_chains(kept, signature(kept, PROFILE) if PROFILE != "el" else None)
 
     seeds = []
     n_in = 0
@@ -271,7 +288,7 @@ def project(name, version, src_path, expect_sha):
 
     body = "\n".join(sorted(line for line, _ in groups))
     header = (
-        f"# HOWL v0 projection — REMOVAL LIST\n"
+        f"# HOWL {'v0' if PROFILE == 'el' else PROFILE} projection — REMOVAL LIST\n"
         f"#\n"
         f"# projected theory == pinned source MINUS the axioms below.\n"
         f"#\n"
@@ -359,9 +376,10 @@ def pinned_header(removals_text):
             "bnode_sha": field("projected_bnode_sha256")}
 
 
-def check_graph(g, pins, path):
+def check_graph(g, pins, path, profile=None):
     """Errors if the parsed graph `g` is not the pinned projected theory: ground
     triples, blank-node structure and count, and census 0 out of profile."""
+    profile = profile or PROFILE
     triples = list(g)
     sha, bnodes = ground_digest(triples)
     errors = []
@@ -372,14 +390,21 @@ def check_graph(g, pins, path):
     bsha = bnode_digest(triples)
     if bsha != pins["bnode_sha"]:
         errors.append(f"blank-node structure {bsha[:12]}… is not the projection's {str(pins['bnode_sha'])[:12]}…")
-    _, _, out, _, _ = census(path, graph=g)
+    _, _, out, _, _ = census(path, graph=g, profile=profile)
     if out:
         errors.append(f"census finds {sum(out.values()):,} out-of-profile triples: {dict(out.most_common(5))}")
     return errors
 
 
-def materialized_path(e):
-    return os.path.join(HERE, "vendor", f"{e['name']}-{e['version']}.v0.ttl")
+def materialized_path(e, profile=None):
+    profile = profile or PROFILE
+    return os.path.join(HERE, "vendor", f"{e['name']}-{e['version']}.{'v0' if profile == 'el' else profile}.ttl")
+
+
+def removals_path(e, profile=None):
+    profile = profile or PROFILE
+    base = os.path.join(HERE, "projections") if profile == "el" else os.path.join(HERE, "projections", profile)
+    return os.path.join(base, f"{e['name']}-{e['version']}.removals")
 
 
 def check_materialized(e, r):
@@ -404,9 +429,14 @@ def materialize(e, r):
 
 
 def main():
-    verify = "--verify" in sys.argv
-    materializing = "--materialize" in sys.argv
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    argv = sys.argv[1:]
+    if "--profile" in argv:
+        i = argv.index("--profile")
+        set_profile(argv[i + 1] if i + 1 < len(argv) else "")
+        argv = argv[:i] + argv[i + 2:]
+    verify = "--verify" in argv
+    materializing = "--materialize" in argv
+    args = [a for a in argv if not a.startswith("--")]
     spec = tomllib.load(open(os.path.join(HERE, "MANIFEST.toml"), "rb"))
     entries = [e for e in spec["ontology"] if not args or e["name"] in args]
     os.makedirs(PROJ, exist_ok=True)
@@ -457,11 +487,12 @@ def main():
                 failed = True
             # THE MANIFEST'S FIGURES ARE CLAIMS TOO. Nothing checked them, and
             # RO's in_v0/out_of_profile sat two off the census for a slice.
-            claimed = {"in_v0": e["in_v0"], "out_of_profile": e["out_of_profile"],
+            # They are el's; an el++ projection's own header pins its counts.
+            claimed = {} if PROFILE != "el" else {"in_v0": e["in_v0"], "out_of_profile": e["out_of_profile"],
                        "removed axioms": e["projection_removes"]["axioms"],
                        "removed triples": e["projection_removes"]["triples"],
                        "in_v0_swept_in": e["projection_removes"]["in_v0_swept_in"]}
-            actual = {"in_v0": n_in, "out_of_profile": n_out, "removed axioms": n_ax,
+            actual = {} if PROFILE != "el" else {"in_v0": n_in, "out_of_profile": n_out, "removed axioms": n_ax,
                       "removed triples": n_tr, "in_v0_swept_in": coll}
             for k in claimed:
                 if claimed[k] != actual[k]:

@@ -1,0 +1,17 @@
+# PROBE has-value. A ⊑ ∃r.{a}, B(a) and ∃r.B ⊑ C entail A ⊑ C.
+# construct: ObjectHasValue
+# expect: sub :A :C
+# expect-not: sub :C :A
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:r a owl:ObjectProperty .
+:a a owl:NamedIndividual .
+:a a :B .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :C .

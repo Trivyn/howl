@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A randomized ABox differential: HOWL against HermiT (SPEC.md §5.3, M1 (f)).
 
-    python3 corpus/abox_fuzz.py [--seeds FIRST:LAST] [--update]
+    python3 corpus/abox_fuzz.py [--seeds FIRST:LAST] [--update] [--negation | --elpp]
 
 §5.3 proves the direct-edge ABox encoding sound and complete for the calculus.
 This checks the CODE against that argument, over ontologies nobody wrote by
@@ -27,6 +27,13 @@ domain or range filler that is ¬E or P ⊓ ¬E, and GCIs C ⊑ ¬E or C ⊑ P �
 negative range is not a range after that rewrite, so it is kept out of the
 range/composition closure; only its positive part P takes part. The two modes
 are recorded on separate lines, so each run checks its own.
+
+With --elpp the ontologies are el++'s (SPEC.md §5.4) and HOWL runs under
+`--profile el++`: besides the above, class expressions may be ∃r.{a}, {a} or
+∃r.Self (on a SIMPLE role only — no chain or transitive role below it, OWL 2's
+global restriction, which the gate enforces), roles may be reflexive, and the
+ABox gains sameAs, differentFrom, AllDifferent and negative property
+assertions. It is recorded on its own line too.
 
 The outcome is written to corpus/abox-fuzz.txt with --update (a deliberate
 act, as `make probes-update`); without it the run must reproduce the recorded
@@ -59,9 +66,11 @@ PREFIXES = """@prefix :     <http://example.org/fuzz#> .
 class Gen:
     """One ontology's worth of Turtle, from one seed."""
 
-    def __init__(self, seed, negation=False):
+    def __init__(self, seed, negation=False, elpp=False):
         self.rng = random.Random(seed)
         self.negation = negation
+        self.elpp = elpp
+        self.simple = []                                  # roles Self may use (rbox fills it)
         self.lines = []
         self.nc = self.rng.randint(4, 7)
         self.nr = self.rng.randint(2, 4)
@@ -77,8 +86,24 @@ class Gen:
         r, c = self.rng.choice(self.roles), self.concept(depth - 1)
         return f"[ a owl:Restriction ; owl:onProperty {r} ; owl:someValuesFrom {c} ]"
 
+    def ind(self):
+        return self.rng.choice(self.inds)
+
+    def elpp_concept(self):
+        """One of el++'s additions: ∃r.{a}, {a}, or ∃r.Self on a simple role."""
+        k = self.rng.random()
+        if k < 0.4:
+            return (f"[ a owl:Restriction ; owl:onProperty {self.rng.choice(self.roles)} ; "
+                    f"owl:hasValue {self.ind()} ]")
+        if k < 0.75 or not self.simple:
+            return f"[ a owl:Class ; owl:oneOf ( {self.ind()} ) ]"
+        return f"[ a owl:Restriction ; owl:onProperty {self.rng.choice(self.simple)} ; owl:hasSelf true ]"
+
     def concept(self, depth=1):
-        """A v0 class expression: a name, or at depth ∃r.C / C ⊓ D."""
+        """A class expression: a name, or at depth ∃r.C / C ⊓ D, and under --elpp
+        sometimes one of el++'s additions."""
+        if self.elpp and self.rng.random() < 0.12:
+            return self.elpp_concept()
         if depth <= 0 or self.rng.random() < 0.5:
             return self.cls()
         if self.rng.random() < 0.6:
@@ -136,6 +161,15 @@ class Gen:
                     if not up[s] <= up[r]:
                         up[r] |= up[s]
                         changed = True
+        # SIMPLE roles: none has a chain head or a transitive role below it
+        # (OWL 2's global restriction on Self). A transitive role is r ∘ r ⊑ r.
+        heads = {t for _, t in chains} | {r for r in self.roles
+                                          if f"{r} a owl:TransitiveProperty ." in self.lines}
+        self.simple = [r for r in self.roles if not any(r in up[h] for h in heads)]
+        if self.elpp:
+            for r in self.roles:
+                if self.rng.random() < 0.15:
+                    self.lines.append(f"{r} a owl:ReflexiveProperty .")
         ranges = {r: set() for r in self.roles}
         for r in self.roles:
             if self.rng.random() < 0.4:
@@ -183,6 +217,24 @@ class Gen:
             a = self.rng.choice(self.inds)
             b = hub if self.rng.random() < 0.5 else self.rng.choice(self.inds)
             self.lines.append(f"{a} {self.rng.choice(self.roles)} {b} .")
+        if self.elpp:
+            # Equality and its negations: sameAs and differentFrom pairs, an
+            # AllDifferent, and negative property assertions.
+            # Rates kept low: each is an easy contradiction, and an
+            # inconsistent ontology compares trivially.
+            for _ in range(self.rng.choice((0, 0, 0, 1))):
+                a, b = self.rng.sample(self.inds, 2)
+                self.lines.append(f"{a} owl:sameAs {b} .")
+            for _ in range(self.rng.choice((0, 0, 1))):
+                a, b = self.rng.sample(self.inds, 2)
+                self.lines.append(f"{a} owl:differentFrom {b} .")
+            if len(self.inds) >= 3 and self.rng.random() < 0.15:
+                ms = " ".join(self.rng.sample(self.inds, 3))
+                self.lines.append(f"[] a owl:AllDifferent ; owl:distinctMembers ( {ms} ) .")
+            for _ in range(self.rng.choice((0, 0, 0, 1))):
+                a, b = self.ind(), self.ind()
+                self.lines.append(f"[] a owl:NegativePropertyAssertion ; owl:sourceIndividual {a} ; "
+                                  f"owl:assertionProperty {self.rng.choice(self.roles)} ; owl:targetIndividual {b} .")
 
     def turtle(self, seed):
         decl = [f"<http://example.org/fuzz/{seed}> a owl:Ontology ."]
@@ -195,7 +247,7 @@ class Gen:
         return PREFIXES + "\n" + "\n".join(decl + self.lines) + "\n"
 
 
-def generate(seeds, negation):
+def generate(seeds, negation, elpp=False):
     os.makedirs(os.path.join(OUT, "input"), exist_ok=True)
     for stale in os.listdir(os.path.join(OUT, "input")):
         os.remove(os.path.join(OUT, "input", stale))
@@ -203,17 +255,17 @@ def generate(seeds, negation):
     for seed in range(seeds[0], seeds[1] + 1):
         path = os.path.join(OUT, "input", f"seed{seed:04d}.ttl")
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write(Gen(seed, negation).turtle(seed))
+            fh.write(Gen(seed, negation, elpp).turtle(seed))
         files.append(path)
     return files
 
 
-def run_howl(files):
+def run_howl(files, profile="el"):
     out = os.path.join(OUT, "howl")
     os.makedirs(out, exist_ok=True)
     reports = {}
     for f in files:
-        p = subprocess.run([HOWL, "validate", f, "--report"], capture_output=True, text=True)
+        p = subprocess.run([HOWL, "validate", f, "--report", "--profile", profile], capture_output=True, text=True)
         path = os.path.join(out, os.path.basename(f)[:-4] + ".report")
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(p.stdout)
@@ -242,15 +294,17 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", default=f"{DEFAULT_SEEDS[0]}:{DEFAULT_SEEDS[1]}")
     ap.add_argument("--update", action="store_true")
-    ap.add_argument("--negation", action="store_true")
+    mode_arg = ap.add_mutually_exclusive_group()
+    mode_arg.add_argument("--negation", action="store_true")
+    mode_arg.add_argument("--elpp", action="store_true")
     args = ap.parse_args(argv[1:])
     first, last = (int(x) for x in args.seeds.split(":"))
     for tool in (HOWL, ORACLE):
         if not os.path.exists(tool):
             print(f"  cannot run: {tool} is missing (make cli oracle)")
             return 3
-    files = generate((first, last), args.negation)
-    howl = run_howl(files)
+    files = generate((first, last), args.negation, args.elpp)
+    howl = run_howl(files, "el++" if args.elpp else "el")
     try:
         hermit = run_hermit(files)
     except RuntimeError as e:
@@ -278,22 +332,31 @@ def main(argv):
         counts["clean"] += 1
         if h.inconsistent:
             counts["inconsistent"] += 1
-    mode = "negation " if args.negation else ""
+    mode = "negation " if args.negation else "el++ " if args.elpp else ""
     line = (f"{mode}seeds {first}:{last} ontologies {last - first + 1} clean {counts['clean']} "
             f"of-which-inconsistent {counts['inconsistent']} failed {counts['failed']}")
     print(f"  {line}")
     # One line per mode; each run checks, or rewrites, only its own.
+    modes = ("", "negation ", "el++ ")
+
+    def mode_of(l):
+        return next((m for m in modes[1:] if l.startswith(m)), "")
     recorded = []
     if os.path.exists(RECORD):
         recorded = [l.strip() for l in open(RECORD, encoding="utf-8") if not l.startswith("#") and l.strip()]
-    mine = [l for l in recorded if l.startswith("negation ") == args.negation]
+    mine = [l for l in recorded if mode_of(l) == mode]
     if args.update:
-        others = [l for l in recorded if l.startswith("negation ") != args.negation]
+        others = [l for l in recorded if mode_of(l) != mode]
         with open(RECORD, "w", encoding="utf-8") as fh:
             fh.write("# corpus/abox_fuzz.py outcome (make abox-fuzz). Regenerate with --update.\n")
-            for l in sorted(others + [line], key=lambda l: l.startswith("negation ")):
+            for l in sorted(others + [line], key=lambda l: modes.index(mode_of(l))):
                 fh.write(l + "\n")
-    elif mine and mine[0] != line and f"{mode}seeds {first}:{last} " in mine[0]:
+    elif not mine:
+        # A mode with no recorded line has nothing to reproduce, so a run of
+        # it would pass on any counts: refuse rather than pass unrecorded.
+        print(f"  NOT RECORDED: corpus/abox-fuzz.txt has no `{mode}seeds` line (record it with --update)")
+        return 1
+    elif mine[0] != line and f"{mode}seeds {first}:{last} " in mine[0]:
         print(f"  DRIFT from corpus/abox-fuzz.txt: recorded `{mine[0]}`")
         return 1
     return 0 if counts["failed"] == 0 else 1

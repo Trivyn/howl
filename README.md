@@ -196,9 +196,30 @@ concrete domains (the non-goal), and `owl:topObjectProperty` outside a super-rol
 together with ⊥, role chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)).
 Its engine shares one saturation across every class no nominal reaches (§5.4 K6), and reads role
 inclusions through the told hierarchy instead of copying each edge to every super-role (K7), so a
-nominal-free ontology costs about what it costs `el`: GO reasons in 0.86 s and EL-GALEN in 3.75 s on
-one thread. It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
+nominal-free ontology costs a small multiple of what it costs `el`: on one thread GO reasons in
+0.86 s and EL-GALEN in 3.75 s, about 1.5× and 2× `el`. `el` joins each round on worker threads
+and `el++`'s shared saturation (phase W) does not yet, so at four workers the gap widens (EL-GALEN
+4.8 s against `el`'s 0.82 s). It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
 GO at 0.62 GB, against 0.57 GB. Select it with `--profile el++`, or let `auto` choose it.
+
+**`el++`'s evidence**, each a `make` target that runs both rungs:
+- **Probes:** 9 capability probes, one or more per construct it adds. Each is
+  load-bearing: deleting the construct loses the entailment for both HOWL and HermiT. HOWL and
+  HermiT pass all 9; ELK passes 3 (`hasValue`, `Self` on the right, reflexive roles), so it gates
+  nothing that uses nominals, equality or `Self` on the left.
+- **Fixtures:** all 121 that `el++` takes whole, its own included, are diff-clean
+  against HermiT, and against ELK where it is probed capable. HermiT cannot reason over
+  `owl:Thing ⊑ owl:Nothing` (its normalization builds an empty union), so that fixture is ELK's.
+- **Conformance:** 105 W3C and ELK tests are checkable under `el++` (81 under `el`), none failing.
+- **Corpus:** the `el++` projections of RO, OBI (keeping its 146 `hasValue` axioms), GO and
+  EL-GALEN are diff-clean against their routed oracle over every class pair. On the v0
+  projections, `el` and `el++` give identical reports.
+- **Fuzzing:** 400 generated ontologies with nominals, `Self`, reflexive roles, equality,
+  inequality and negative assertions match HermiT (211 of them inconsistent).
+- **Determinism:** reports are byte-identical at every worker count for every round cap from 0 to
+  R, which cuts each of phase G, phase W and phase Q.
+- **Bench** (`make bench-el++`, informational, W = 4): OBI 0.05× and RO 0.10× HermiT; GO 2.3× and
+  EL-GALEN 15× ELK (`el`: 0.84× and 2.9×). The EL-GALEN gap is phase W running on one thread.
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 
@@ -274,6 +295,13 @@ make conformance         # HOWL against their expected answers
 make materialize         # the projected corpus ontologies (after ./corpus/fetch.sh; EL-GALEN needs make oracle)
 make diff-corpus         # each against its routed oracle; the record is corpus/corpus-differential.txt
 ```
+
+Every one of these also runs the `el++` rung, on its own inputs and records: `probes` over
+`corpus/fixtures/probes-el++/`, `diff-fixtures` adding `corpus/fixtures/el++/`, `conformance` into
+`corpus/conformance-status-el++.txt`, `materialize` and `diff-corpus` over the `el++` projections
+(`corpus/projections/el++/`, recorded in `corpus/corpus-differential-el++.txt`), plus
+`differential.py rungs` (`el` and `el++` must agree on every v0 projection), `abox-fuzz --elpp`,
+`determinism --profile el++` and `make bench-el++` (`bench/results-el++.txt`, informational).
 
 Working on the SLOP sources needs the toolchain:
 

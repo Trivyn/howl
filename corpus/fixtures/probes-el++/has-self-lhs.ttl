@@ -1,0 +1,15 @@
+# PROBE has-self-lhs. A ⊑ ∃r.Self and ∃r.Self ⊑ B entail A ⊑ B: Self on the LEFT of an inclusion, which an engine supporting Self only on the right misses.
+# construct: ObjectHasSelf (simple role)
+# expect: sub :A :B
+# expect-not: sub :B :A
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:r a owl:ObjectProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] rdfs:subClassOf :B .
