@@ -76,11 +76,11 @@ slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature
 rdf_Term decode_term_at(slop_list_rdf_Term xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_406 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_rdf_Term _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_406.has_value) {
-        __auto_type v = _mv_406.value;
+    __auto_type _mv_521 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_rdf_Term _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_521.has_value) {
+        __auto_type v = _mv_521.value;
         return v;
-    } else if (!_mv_406.has_value) {
+    } else if (!_mv_521.has_value) {
         return ((rdf_Term){ .tag = rdf_Term_term_blank, .data.term_blank = ((rdf_BlankNode){.id = 0}) });
     }
     SLOP_UNREACHABLE();
@@ -91,11 +91,11 @@ rdf_Triple decode_triple_at(slop_list_rdf_Triple xs, int64_t i) {
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
     {
         __auto_type blank = ((rdf_Term){ .tag = rdf_Term_term_blank, .data.term_blank = ((rdf_BlankNode){.id = 0}) });
-        __auto_type _mv_407 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_rdf_Triple _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-        if (_mv_407.has_value) {
-            __auto_type v = _mv_407.value;
+        __auto_type _mv_522 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_rdf_Triple _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+        if (_mv_522.has_value) {
+            __auto_type v = _mv_522.value;
             return v;
-        } else if (!_mv_407.has_value) {
+        } else if (!_mv_522.has_value) {
             return ((rdf_Triple){.subject = blank, .predicate = blank, .object = blank});
         }
         SLOP_UNREACHABLE();
@@ -110,11 +110,11 @@ slop_result_rdf_Term_decode_LookupFault decode_one_object(slop_arena* arena, ter
     {
         __auto_type n = termstore_store_object_count(g, subj, pred);
         if (n == 1) {
-            __auto_type _mv_408 = termstore_store_sole_object(g, subj, pred);
-            if (_mv_408.has_value) {
-                __auto_type o = _mv_408.value;
+            __auto_type _mv_523 = termstore_store_sole_object(g, subj, pred);
+            if (_mv_523.has_value) {
+                __auto_type o = _mv_523.value;
                 return ((slop_result_rdf_Term_decode_LookupFault){ .is_ok = true, .data.ok = o });
-            } else if (!_mv_408.has_value) {
+            } else if (!_mv_523.has_value) {
                 return ((slop_result_rdf_Term_decode_LookupFault){ .is_ok = false, .data.err = decode_LookupFault_lookup_missing });
             }
             SLOP_UNREACHABLE();
@@ -168,11 +168,11 @@ slop_result_list_rdf_Term_decode_ListFault decode_rdf_list_checked(slop_arena* a
                 }
             }
         }
-        __auto_type _mv_411 = fault;
-        if (_mv_411.has_value) {
-            __auto_type f = _mv_411.value;
+        __auto_type _mv_526 = fault;
+        if (_mv_526.has_value) {
+            __auto_type f = _mv_526.value;
             return ((slop_result_list_rdf_Term_decode_ListFault){ .is_ok = false, .data.err = f });
-        } else if (!_mv_411.has_value) {
+        } else if (!_mv_526.has_value) {
             return ((slop_result_list_rdf_Term_decode_ListFault){ .is_ok = true, .data.ok = out });
         }
         SLOP_UNREACHABLE();
@@ -180,26 +180,26 @@ slop_result_list_rdf_Term_decode_ListFault decode_rdf_list_checked(slop_arena* a
 }
 
 slop_option_rdf_IRI decode_term_iri_value(rdf_Term t) {
-    __auto_type _mv_412 = t;
-    switch (_mv_412.tag) {
+    __auto_type _mv_527 = t;
+    switch (_mv_527.tag) {
         case rdf_Term_term_iri:
         {
-            __auto_type i = _mv_412.data.term_iri;
+            __auto_type i = _mv_527.data.term_iri;
             return (slop_option_rdf_IRI){.has_value = 1, .value = i};
         }
         case rdf_Term_term_blank:
         {
-            __auto_type _ = _mv_412.data.term_blank;
+            __auto_type _ = _mv_527.data.term_blank;
             return (slop_option_rdf_IRI){.has_value = false};
         }
         case rdf_Term_term_literal:
         {
-            __auto_type _ = _mv_412.data.term_literal;
+            __auto_type _ = _mv_527.data.term_literal;
             return (slop_option_rdf_IRI){.has_value = false};
         }
         case rdf_Term_term_triple:
         {
-            __auto_type _ = _mv_412.data.term_triple;
+            __auto_type _ = _mv_527.data.term_triple;
             return (slop_option_rdf_IRI){.has_value = false};
         }
     }
@@ -231,13 +231,13 @@ slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, termstore_Encoded do
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
                 if (it.p == imports_id) {
-                    __auto_type _mv_413 = decode_term_iri_value(termstore_term_of(doc.dict, it.o));
-                    if (_mv_413.has_value) {
-                        __auto_type i = _mv_413.value;
+                    __auto_type _mv_528 = decode_term_iri_value(termstore_term_of(doc.dict, it.o));
+                    if (_mv_528.has_value) {
+                        __auto_type i = _mv_528.value;
                         if (!(decode_iri_in_list(out, i))) {
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
-                    } else if (!_mv_413.has_value) {
+                    } else if (!_mv_528.has_value) {
                     }
                 }
             }
@@ -247,11 +247,11 @@ slop_list_rdf_IRI decode_collect_imports(slop_arena* arena, termstore_Encoded do
 }
 
 int64_t decode_vocab_id(slop_arena* arena, termstore_TermStore dict, slop_string iri) {
-    __auto_type _mv_414 = termstore_lookup_term(dict, rdf_make_iri(arena, iri));
-    if (_mv_414.has_value) {
-        __auto_type i = _mv_414.value;
+    __auto_type _mv_529 = termstore_lookup_term(dict, rdf_make_iri(arena, iri));
+    if (_mv_529.has_value) {
+        __auto_type i = _mv_529.value;
         return i;
-    } else if (!_mv_414.has_value) {
+    } else if (!_mv_529.has_value) {
         return -1;
     }
     SLOP_UNREACHABLE();
@@ -274,11 +274,11 @@ slop_list_types_Omission decode_unresolved_imports(slop_arena* arena, slop_list_
 }
 
 uint8_t decode_typed_as(rdf_Triple t, slop_string type_iri) {
-    __auto_type _mv_415 = decode_term_iri_value(t.predicate);
-    if (!_mv_415.has_value) {
+    __auto_type _mv_530 = decode_term_iri_value(t.predicate);
+    if (!_mv_530.has_value) {
         return 0;
-    } else if (_mv_415.has_value) {
-        __auto_type p = _mv_415.value;
+    } else if (_mv_530.has_value) {
+        __auto_type p = _mv_530.value;
         return ((canon_string_cmp(p.value, vocab_RDF_TYPE) == 0) && ({ __auto_type _mv = decode_term_iri_value(t.object); _mv.has_value ? ({ __auto_type o = _mv.value; (canon_string_cmp(o.value, type_iri) == 0); }) : (0); }));
     }
     SLOP_UNREACHABLE();
@@ -365,17 +365,17 @@ rdf_Triple decode_ex_hdr(slop_string p, slop_string o) {
 }
 
 uint8_t decode_header_consumable(rdf_Triple t) {
-    __auto_type _mv_418 = decode_term_iri_value(t.predicate);
-    if (!_mv_418.has_value) {
+    __auto_type _mv_533 = decode_term_iri_value(t.predicate);
+    if (!_mv_533.has_value) {
         return 0;
-    } else if (_mv_418.has_value) {
-        __auto_type p = _mv_418.value;
+    } else if (_mv_533.has_value) {
+        __auto_type p = _mv_533.value;
         if (canon_string_cmp(p.value, vocab_RDF_TYPE) == 0) {
-            __auto_type _mv_419 = decode_term_iri_value(t.object);
-            if (!_mv_419.has_value) {
+            __auto_type _mv_534 = decode_term_iri_value(t.object);
+            if (!_mv_534.has_value) {
                 return 0;
-            } else if (_mv_419.has_value) {
-                __auto_type o = _mv_419.value;
+            } else if (_mv_534.has_value) {
+                __auto_type o = _mv_534.value;
                 if (canon_string_cmp(o.value, vocab_OWL_ONTOLOGY) == 0) {
                     return 1;
                 } else if (canon_string_cmp(o.value, vocab_OWL_AXIOM) == 0) {
@@ -455,11 +455,11 @@ termstore_TermStore decode_annotated_store(slop_arena* arena, termstore_Encoded 
 }
 
 int64_t decode_term_id(termstore_TermStore st, rdf_Term t) {
-    __auto_type _mv_423 = termstore_lookup_term(st, t);
-    if (_mv_423.has_value) {
-        __auto_type i = _mv_423.value;
+    __auto_type _mv_538 = termstore_lookup_term(st, t);
+    if (_mv_538.has_value) {
+        __auto_type i = _mv_538.value;
         return i;
-    } else if (!_mv_423.has_value) {
+    } else if (!_mv_538.has_value) {
         return -1;
     }
     SLOP_UNREACHABLE();
@@ -478,24 +478,24 @@ decode_Rebuilt decode_rebuild_candidates(slop_arena* arena, termstore_TermStore 
                 __auto_type ai = _coll.data[_i];
                 {
                     __auto_type a = termstore_term_of(st, ai);
-                    __auto_type _mv_424 = decode_one_object(arena, st, a, src_pred);
-                    if (!_mv_424.is_ok) {
-                        __auto_type _ = _mv_424.data.err;
+                    __auto_type _mv_539 = decode_one_object(arena, st, a, src_pred);
+                    if (!_mv_539.is_ok) {
+                        __auto_type _ = _mv_539.data.err;
                         fault = (slop_option_string){.has_value = 1, .value = SLOP_STR("owl:Axiom node without a usable owl:annotatedSource")};
-                    } else if (_mv_424.is_ok) {
-                        __auto_type subj = _mv_424.data.ok;
-                        __auto_type _mv_425 = decode_one_object(arena, st, a, prop_pred);
-                        if (!_mv_425.is_ok) {
-                            __auto_type _ = _mv_425.data.err;
+                    } else if (_mv_539.is_ok) {
+                        __auto_type subj = _mv_539.data.ok;
+                        __auto_type _mv_540 = decode_one_object(arena, st, a, prop_pred);
+                        if (!_mv_540.is_ok) {
+                            __auto_type _ = _mv_540.data.err;
                             fault = (slop_option_string){.has_value = 1, .value = SLOP_STR("owl:Axiom node without a usable owl:annotatedProperty")};
-                        } else if (_mv_425.is_ok) {
-                            __auto_type pred = _mv_425.data.ok;
-                            __auto_type _mv_426 = decode_one_object(arena, st, a, tgt_pred);
-                            if (!_mv_426.is_ok) {
-                                __auto_type _ = _mv_426.data.err;
+                        } else if (_mv_540.is_ok) {
+                            __auto_type pred = _mv_540.data.ok;
+                            __auto_type _mv_541 = decode_one_object(arena, st, a, tgt_pred);
+                            if (!_mv_541.is_ok) {
+                                __auto_type _ = _mv_541.data.err;
                                 fault = (slop_option_string){.has_value = 1, .value = SLOP_STR("owl:Axiom node without a usable owl:annotatedTarget")};
-                            } else if (_mv_426.is_ok) {
-                                __auto_type obj = _mv_426.data.ok;
+                            } else if (_mv_541.is_ok) {
+                                __auto_type obj = _mv_541.data.ok;
                                 ({ __auto_type _lst_p = &(out); __auto_type _item = (((termstore_IdTriple){.s = decode_term_id(st, subj), .p = decode_term_id(st, pred), .o = decode_term_id(st, obj)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
@@ -571,19 +571,19 @@ slop_result_decode_Stage0_types_Fault decode_stage0_scan(slop_arena* arena, slop
             __auto_type _coll = ont_subjs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type o = _coll.data[_i];
-                __auto_type _mv_432 = decode_term_iri_value(termstore_term_of(dict, o));
-                if (_mv_432.has_value) {
-                    __auto_type i = _mv_432.value;
+                __auto_type _mv_547 = decode_term_iri_value(termstore_term_of(dict, o));
+                if (_mv_547.has_value) {
+                    __auto_type i = _mv_547.value;
                     ont = (slop_option_rdf_IRI){.has_value = 1, .value = i};
-                } else if (!_mv_432.has_value) {
+                } else if (!_mv_547.has_value) {
                 }
             }
         }
-        __auto_type _mv_433 = fault;
-        if (_mv_433.has_value) {
-            __auto_type msg = _mv_433.value;
+        __auto_type _mv_548 = fault;
+        if (_mv_548.has_value) {
+            __auto_type msg = _mv_548.value;
             return ((slop_result_decode_Stage0_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_input_error, .data.input_error = msg }) });
-        } else if (!_mv_433.has_value) {
+        } else if (!_mv_548.has_value) {
             return ((slop_result_decode_Stage0_types_Fault){ .is_ok = true, .data.ok = ((decode_Stage0){.dict = dict, .triples = out, .imports_declared = declared, .omissions = decode_unresolved_imports(arena, declared, imports_resolved), .ontology_iri = ont}) });
         }
         SLOP_UNREACHABLE();
@@ -599,21 +599,21 @@ owl2_RawConcept* decode_box_concept(slop_arena* arena, owl2_RawConcept c) {
 }
 
 slop_string decode_list_fault_message(decode_ListFault f) {
-    __auto_type _mv_434 = f;
-    switch (_mv_434.tag) {
+    __auto_type _mv_549 = f;
+    switch (_mv_549.tag) {
         case decode_ListFault_list_truncated:
         {
-            __auto_type m = _mv_434.data.list_truncated;
+            __auto_type m = _mv_549.data.list_truncated;
             return m;
         }
         case decode_ListFault_list_branching:
         {
-            __auto_type m = _mv_434.data.list_branching;
+            __auto_type m = _mv_549.data.list_branching;
             return m;
         }
         case decode_ListFault_list_cyclic:
         {
-            __auto_type m = _mv_434.data.list_cyclic;
+            __auto_type m = _mv_549.data.list_cyclic;
             return m;
         }
     }
@@ -629,17 +629,17 @@ slop_result_rdf_Term_decode_LookupFault decode_obj_of(slop_arena* arena, termsto
 }
 
 slop_result_types_RoleId_string decode_decode_role(slop_arena* arena, termstore_TermStore g, rdf_Term b) {
-    __auto_type _mv_435 = decode_obj_of(arena, g, b, vocab_OWL_ON_PROPERTY);
-    if (!_mv_435.is_ok) {
-        __auto_type _ = _mv_435.data.err;
+    __auto_type _mv_550 = decode_obj_of(arena, g, b, vocab_OWL_ON_PROPERTY);
+    if (!_mv_550.is_ok) {
+        __auto_type _ = _mv_550.data.err;
         return ((slop_result_types_RoleId_string){ .is_ok = false, .data.err = SLOP_STR("restriction without exactly one owl:onProperty") });
-    } else if (_mv_435.is_ok) {
-        __auto_type pt = _mv_435.data.ok;
-        __auto_type _mv_436 = decode_term_iri_value(pt);
-        if (_mv_436.has_value) {
-            __auto_type i = _mv_436.value;
+    } else if (_mv_550.is_ok) {
+        __auto_type pt = _mv_550.data.ok;
+        __auto_type _mv_551 = decode_term_iri_value(pt);
+        if (_mv_551.has_value) {
+            __auto_type i = _mv_551.value;
             return ((slop_result_types_RoleId_string){ .is_ok = true, .data.ok = ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i }) });
-        } else if (!_mv_436.has_value) {
+        } else if (!_mv_551.has_value) {
             return ((slop_result_types_RoleId_string){ .is_ok = false, .data.err = SLOP_STR("owl:onProperty is a blank node that is not an inverse property expression") });
         }
         SLOP_UNREACHABLE();
@@ -648,24 +648,24 @@ slop_result_types_RoleId_string decode_decode_role(slop_arena* arena, termstore_
 }
 
 uint8_t decode_inverse_expression_term(slop_arena* arena, termstore_TermStore g, rdf_Term t) {
-    __auto_type _mv_437 = t;
-    switch (_mv_437.tag) {
+    __auto_type _mv_552 = t;
+    switch (_mv_552.tag) {
         case rdf_Term_term_blank:
         {
-            __auto_type _ = _mv_437.data.term_blank;
-            __auto_type _mv_438 = decode_obj_of(arena, g, t, vocab_OWL_INVERSE_OF);
-            if (_mv_438.is_ok) {
-                __auto_type pt = _mv_438.data.ok;
-                __auto_type _mv_439 = decode_term_iri_value(pt);
-                if (_mv_439.has_value) {
-                    __auto_type _ = _mv_439.value;
+            __auto_type _ = _mv_552.data.term_blank;
+            __auto_type _mv_553 = decode_obj_of(arena, g, t, vocab_OWL_INVERSE_OF);
+            if (_mv_553.is_ok) {
+                __auto_type pt = _mv_553.data.ok;
+                __auto_type _mv_554 = decode_term_iri_value(pt);
+                if (_mv_554.has_value) {
+                    __auto_type _ = _mv_554.value;
                     return 1;
-                } else if (!_mv_439.has_value) {
+                } else if (!_mv_554.has_value) {
                     return 0;
                 }
                 SLOP_UNREACHABLE();
-            } else if (!_mv_438.is_ok) {
-                __auto_type _ = _mv_438.data.err;
+            } else if (!_mv_553.is_ok) {
+                __auto_type _ = _mv_553.data.err;
                 return 0;
             }
             SLOP_UNREACHABLE();
@@ -677,24 +677,24 @@ uint8_t decode_inverse_expression_term(slop_arena* arena, termstore_TermStore g,
 }
 
 uint8_t decode_restriction_on_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term b) {
-    __auto_type _mv_440 = decode_obj_of(arena, g, b, vocab_OWL_ON_PROPERTY);
-    if (_mv_440.is_ok) {
-        __auto_type pt = _mv_440.data.ok;
+    __auto_type _mv_555 = decode_obj_of(arena, g, b, vocab_OWL_ON_PROPERTY);
+    if (_mv_555.is_ok) {
+        __auto_type pt = _mv_555.data.ok;
         return decode_inverse_expression_term(arena, g, pt);
-    } else if (!_mv_440.is_ok) {
-        __auto_type _ = _mv_440.data.err;
+    } else if (!_mv_555.is_ok) {
+        __auto_type _ = _mv_555.data.err;
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 uint8_t decode_list_has_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term head) {
-    __auto_type _mv_441 = decode_rdf_list_checked(arena, g, head);
-    if (!_mv_441.is_ok) {
-        __auto_type _ = _mv_441.data.err;
+    __auto_type _mv_556 = decode_rdf_list_checked(arena, g, head);
+    if (!_mv_556.is_ok) {
+        __auto_type _ = _mv_556.data.err;
         return 0;
-    } else if (_mv_441.is_ok) {
-        __auto_type terms = _mv_441.data.ok;
+    } else if (_mv_556.is_ok) {
+        __auto_type terms = _mv_556.data.ok;
         {
             __auto_type found = 0;
             {
@@ -727,38 +727,38 @@ uint8_t decode_property_axiom_on_inverse(slop_arena* arena, termstore_TermStore 
 }
 
 slop_result_int_string decode_literal_count(rdf_Term t) {
-    __auto_type _mv_442 = t;
-    switch (_mv_442.tag) {
+    __auto_type _mv_557 = t;
+    switch (_mv_557.tag) {
         case rdf_Term_term_literal:
         {
-            __auto_type l = _mv_442.data.term_literal;
-            __auto_type _mv_443 = strlib_parse_int(l.value);
-            if (_mv_443.is_ok) {
-                __auto_type v = _mv_443.data.ok;
+            __auto_type l = _mv_557.data.term_literal;
+            __auto_type _mv_558 = strlib_parse_int(l.value);
+            if (_mv_558.is_ok) {
+                __auto_type v = _mv_558.data.ok;
                 if (((int64_t)(v)) < 0) {
                     return ((slop_result_int_string){ .is_ok = false, .data.err = SLOP_STR("cardinality literal is negative") });
                 } else {
                     return ((slop_result_int_string){ .is_ok = true, .data.ok = ((int64_t)(v)) });
                 }
-            } else if (!_mv_443.is_ok) {
-                __auto_type _ = _mv_443.data.err;
+            } else if (!_mv_558.is_ok) {
+                __auto_type _ = _mv_558.data.err;
                 return ((slop_result_int_string){ .is_ok = false, .data.err = SLOP_STR("cardinality is not an integer literal") });
             }
             SLOP_UNREACHABLE();
         }
         case rdf_Term_term_iri:
         {
-            __auto_type _ = _mv_442.data.term_iri;
+            __auto_type _ = _mv_557.data.term_iri;
             return ((slop_result_int_string){ .is_ok = false, .data.err = SLOP_STR("cardinality is an IRI, not a literal") });
         }
         case rdf_Term_term_blank:
         {
-            __auto_type _ = _mv_442.data.term_blank;
+            __auto_type _ = _mv_557.data.term_blank;
             return ((slop_result_int_string){ .is_ok = false, .data.err = SLOP_STR("cardinality is a blank node, not a literal") });
         }
         case rdf_Term_term_triple:
         {
-            __auto_type _ = _mv_442.data.term_triple;
+            __auto_type _ = _mv_557.data.term_triple;
             return ((slop_result_int_string){ .is_ok = false, .data.err = SLOP_STR("cardinality is a triple term, not a literal") });
         }
     }
@@ -766,11 +766,11 @@ slop_result_int_string decode_literal_count(rdf_Term t) {
 }
 
 decode_IndividualTerm decode_individual_term(rdf_Term tm) {
-    __auto_type _mv_444 = tm;
-    switch (_mv_444.tag) {
+    __auto_type _mv_559 = tm;
+    switch (_mv_559.tag) {
         case rdf_Term_term_iri:
         {
-            __auto_type i = _mv_444.data.term_iri;
+            __auto_type i = _mv_559.data.term_iri;
             if (decode_is_reserved_iri(i.value)) {
                 return ((decode_IndividualTerm){ .tag = decode_IndividualTerm_reserved_individual });
             } else {
@@ -779,7 +779,7 @@ decode_IndividualTerm decode_individual_term(rdf_Term tm) {
         }
         case rdf_Term_term_literal:
         {
-            __auto_type _ = _mv_444.data.term_literal;
+            __auto_type _ = _mv_559.data.term_literal;
             return ((decode_IndividualTerm){ .tag = decode_IndividualTerm_literal_individual });
         }
         default: {
@@ -789,12 +789,12 @@ decode_IndividualTerm decode_individual_term(rdf_Term tm) {
 }
 
 slop_result_decode_NodeList_string decode_decode_node_list(slop_arena* arena, termstore_TermStore g, rdf_Term head) {
-    __auto_type _mv_445 = decode_rdf_list_checked(arena, g, head);
-    if (!_mv_445.is_ok) {
-        __auto_type lf = _mv_445.data.err;
+    __auto_type _mv_560 = decode_rdf_list_checked(arena, g, head);
+    if (!_mv_560.is_ok) {
+        __auto_type lf = _mv_560.data.err;
         return ((slop_result_decode_NodeList_string){ .is_ok = false, .data.err = decode_list_fault_message(lf) });
-    } else if (_mv_445.is_ok) {
-        __auto_type terms = _mv_445.data.ok;
+    } else if (_mv_560.is_ok) {
+        __auto_type terms = _mv_560.data.ok;
         {
             __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
             __auto_type literal = 0;
@@ -804,11 +804,11 @@ slop_result_decode_NodeList_string decode_decode_node_list(slop_arena* arena, te
                 __auto_type _coll = terms;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type tm = _coll.data[_i];
-                    __auto_type _mv_446 = decode_individual_term(tm);
-                    switch (_mv_446.tag) {
+                    __auto_type _mv_561 = decode_individual_term(tm);
+                    switch (_mv_561.tag) {
                         case decode_IndividualTerm_named_individual:
                         {
-                            __auto_type i = _mv_446.data.named_individual;
+                            __auto_type i = _mv_561.data.named_individual;
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_Node){ .tag = types_Node_individual_node, .data.individual_node = i })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             break;
                         }
@@ -845,12 +845,12 @@ slop_result_decode_NodeList_string decode_decode_node_list(slop_arena* arena, te
 }
 
 slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* arena, termstore_TermStore g, rdf_Term head, int64_t fuel) {
-    __auto_type _mv_447 = decode_rdf_list_checked(arena, g, head);
-    if (!_mv_447.is_ok) {
-        __auto_type lf = _mv_447.data.err;
+    __auto_type _mv_562 = decode_rdf_list_checked(arena, g, head);
+    if (!_mv_562.is_ok) {
+        __auto_type lf = _mv_562.data.err;
         return ((slop_result_list_owl2_RawConcept_string){ .is_ok = false, .data.err = decode_list_fault_message(lf) });
-    } else if (_mv_447.is_ok) {
-        __auto_type terms = _mv_447.data.ok;
+    } else if (_mv_562.is_ok) {
+        __auto_type terms = _mv_562.data.ok;
         {
             __auto_type out = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
             slop_option_string fault = (slop_option_string){.has_value = false};
@@ -858,21 +858,21 @@ slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* a
                 __auto_type _coll = terms;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type tm = _coll.data[_i];
-                    __auto_type _mv_448 = decode_decode_concept(arena, g, tm, (fuel - 1));
-                    if (!_mv_448.is_ok) {
-                        __auto_type m = _mv_448.data.err;
+                    __auto_type _mv_563 = decode_decode_concept(arena, g, tm, (fuel - 1));
+                    if (!_mv_563.is_ok) {
+                        __auto_type m = _mv_563.data.err;
                         fault = (slop_option_string){.has_value = 1, .value = m};
-                    } else if (_mv_448.is_ok) {
-                        __auto_type c = _mv_448.data.ok;
+                    } else if (_mv_563.is_ok) {
+                        __auto_type c = _mv_563.data.ok;
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
-            __auto_type _mv_449 = fault;
-            if (_mv_449.has_value) {
-                __auto_type m = _mv_449.value;
+            __auto_type _mv_564 = fault;
+            if (_mv_564.has_value) {
+                __auto_type m = _mv_564.value;
                 return ((slop_result_list_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (!_mv_449.has_value) {
+            } else if (!_mv_564.has_value) {
                 return ((slop_result_list_owl2_RawConcept_string){ .is_ok = true, .data.ok = out });
             }
             SLOP_UNREACHABLE();
@@ -882,24 +882,24 @@ slop_result_list_owl2_RawConcept_string decode_decode_concept_list(slop_arena* a
 }
 
 slop_result_owl2_RawConcept_string decode_decode_quantified(slop_arena* arena, termstore_TermStore g, rdf_Term b, slop_string filler_pred, uint8_t universal, int64_t fuel) {
-    __auto_type _mv_450 = decode_decode_role(arena, g, b);
-    if (!_mv_450.is_ok) {
-        __auto_type m = _mv_450.data.err;
+    __auto_type _mv_565 = decode_decode_role(arena, g, b);
+    if (!_mv_565.is_ok) {
+        __auto_type m = _mv_565.data.err;
         return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_450.is_ok) {
-        __auto_type r = _mv_450.data.ok;
-        __auto_type _mv_451 = decode_obj_of(arena, g, b, filler_pred);
-        if (!_mv_451.is_ok) {
-            __auto_type _ = _mv_451.data.err;
+    } else if (_mv_565.is_ok) {
+        __auto_type r = _mv_565.data.ok;
+        __auto_type _mv_566 = decode_obj_of(arena, g, b, filler_pred);
+        if (!_mv_566.is_ok) {
+            __auto_type _ = _mv_566.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("quantified restriction without exactly one filler") });
-        } else if (_mv_451.is_ok) {
-            __auto_type ft = _mv_451.data.ok;
-            __auto_type _mv_452 = decode_decode_concept(arena, g, ft, (fuel - 1));
-            if (!_mv_452.is_ok) {
-                __auto_type m = _mv_452.data.err;
+        } else if (_mv_566.is_ok) {
+            __auto_type ft = _mv_566.data.ok;
+            __auto_type _mv_567 = decode_decode_concept(arena, g, ft, (fuel - 1));
+            if (!_mv_567.is_ok) {
+                __auto_type m = _mv_567.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (_mv_452.is_ok) {
-                __auto_type c = _mv_452.data.ok;
+            } else if (_mv_567.is_ok) {
+                __auto_type c = _mv_567.data.ok;
                 if (universal) {
                     return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_all, .data.rc_all = { .f0 = r, .f1 = decode_box_concept(arena, c) } }) });
                 } else {
@@ -914,39 +914,39 @@ slop_result_owl2_RawConcept_string decode_decode_quantified(slop_arena* arena, t
 }
 
 slop_result_owl2_RawConcept_string decode_decode_cardinality(slop_arena* arena, termstore_TermStore g, rdf_Term b, owl2_CardKind kind, slop_string count_pred, uint8_t qualified, int64_t fuel) {
-    __auto_type _mv_453 = decode_decode_role(arena, g, b);
-    if (!_mv_453.is_ok) {
-        __auto_type m = _mv_453.data.err;
+    __auto_type _mv_568 = decode_decode_role(arena, g, b);
+    if (!_mv_568.is_ok) {
+        __auto_type m = _mv_568.data.err;
         return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_453.is_ok) {
-        __auto_type r = _mv_453.data.ok;
-        __auto_type _mv_454 = decode_obj_of(arena, g, b, count_pred);
-        if (!_mv_454.is_ok) {
-            __auto_type _ = _mv_454.data.err;
+    } else if (_mv_568.is_ok) {
+        __auto_type r = _mv_568.data.ok;
+        __auto_type _mv_569 = decode_obj_of(arena, g, b, count_pred);
+        if (!_mv_569.is_ok) {
+            __auto_type _ = _mv_569.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("cardinality restriction without exactly one count") });
-        } else if (_mv_454.is_ok) {
-            __auto_type ct = _mv_454.data.ok;
-            __auto_type _mv_455 = decode_literal_count(ct);
-            if (!_mv_455.is_ok) {
-                __auto_type m = _mv_455.data.err;
+        } else if (_mv_569.is_ok) {
+            __auto_type ct = _mv_569.data.ok;
+            __auto_type _mv_570 = decode_literal_count(ct);
+            if (!_mv_570.is_ok) {
+                __auto_type m = _mv_570.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (_mv_455.is_ok) {
-                __auto_type n = _mv_455.data.ok;
+            } else if (_mv_570.is_ok) {
+                __auto_type n = _mv_570.data.ok;
                 if (!(qualified)) {
                     return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_card, .data.rc_card = { .f0 = kind, .f1 = r, .f2 = n } }) });
                 } else {
-                    __auto_type _mv_456 = decode_obj_of(arena, g, b, vocab_OWL_ON_CLASS);
-                    if (!_mv_456.is_ok) {
-                        __auto_type _ = _mv_456.data.err;
+                    __auto_type _mv_571 = decode_obj_of(arena, g, b, vocab_OWL_ON_CLASS);
+                    if (!_mv_571.is_ok) {
+                        __auto_type _ = _mv_571.data.err;
                         return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("qualified cardinality without exactly one owl:onClass") });
-                    } else if (_mv_456.is_ok) {
-                        __auto_type qt = _mv_456.data.ok;
-                        __auto_type _mv_457 = decode_decode_concept(arena, g, qt, (fuel - 1));
-                        if (!_mv_457.is_ok) {
-                            __auto_type m = _mv_457.data.err;
+                    } else if (_mv_571.is_ok) {
+                        __auto_type qt = _mv_571.data.ok;
+                        __auto_type _mv_572 = decode_decode_concept(arena, g, qt, (fuel - 1));
+                        if (!_mv_572.is_ok) {
+                            __auto_type m = _mv_572.data.err;
                             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-                        } else if (_mv_457.is_ok) {
-                            __auto_type qc = _mv_457.data.ok;
+                        } else if (_mv_572.is_ok) {
+                            __auto_type qc = _mv_572.data.ok;
                             return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_qcard, .data.rc_qcard = { .f0 = kind, .f1 = r, .f2 = n, .f3 = decode_box_concept(arena, qc) } }) });
                         }
                         SLOP_UNREACHABLE();
@@ -965,59 +965,59 @@ slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, termsto
     if (decode_restriction_on_inverse(arena, g, b)) {
         return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_anon, .data.rc_anon = ((types_InputRef){ .tag = types_InputRef_rdf_fragment, .data.rdf_fragment = SLOP_STR("restriction on an ObjectInverseOf property") }) }) });
     } else if (decode_has_pred(arena, g, b, vocab_OWL_INTERSECTION_OF)) {
-        __auto_type _mv_458 = decode_obj_of(arena, g, b, vocab_OWL_INTERSECTION_OF);
-        if (!_mv_458.is_ok) {
-            __auto_type _ = _mv_458.data.err;
+        __auto_type _mv_573 = decode_obj_of(arena, g, b, vocab_OWL_INTERSECTION_OF);
+        if (!_mv_573.is_ok) {
+            __auto_type _ = _mv_573.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("owl:intersectionOf is absent or ambiguous") });
-        } else if (_mv_458.is_ok) {
-            __auto_type head = _mv_458.data.ok;
-            __auto_type _mv_459 = decode_decode_concept_list(arena, g, head, fuel);
-            if (!_mv_459.is_ok) {
-                __auto_type m = _mv_459.data.err;
+        } else if (_mv_573.is_ok) {
+            __auto_type head = _mv_573.data.ok;
+            __auto_type _mv_574 = decode_decode_concept_list(arena, g, head, fuel);
+            if (!_mv_574.is_ok) {
+                __auto_type m = _mv_574.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (_mv_459.is_ok) {
-                __auto_type cs = _mv_459.data.ok;
+            } else if (_mv_574.is_ok) {
+                __auto_type cs = _mv_574.data.ok;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_and, .data.rc_and = cs }) });
             }
             SLOP_UNREACHABLE();
         }
         SLOP_UNREACHABLE();
     } else if (decode_has_pred(arena, g, b, vocab_OWL_UNION_OF)) {
-        __auto_type _mv_460 = decode_obj_of(arena, g, b, vocab_OWL_UNION_OF);
-        if (!_mv_460.is_ok) {
-            __auto_type _ = _mv_460.data.err;
+        __auto_type _mv_575 = decode_obj_of(arena, g, b, vocab_OWL_UNION_OF);
+        if (!_mv_575.is_ok) {
+            __auto_type _ = _mv_575.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("owl:unionOf is absent or ambiguous") });
-        } else if (_mv_460.is_ok) {
-            __auto_type head = _mv_460.data.ok;
-            __auto_type _mv_461 = decode_decode_concept_list(arena, g, head, fuel);
-            if (!_mv_461.is_ok) {
-                __auto_type m = _mv_461.data.err;
+        } else if (_mv_575.is_ok) {
+            __auto_type head = _mv_575.data.ok;
+            __auto_type _mv_576 = decode_decode_concept_list(arena, g, head, fuel);
+            if (!_mv_576.is_ok) {
+                __auto_type m = _mv_576.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (_mv_461.is_ok) {
-                __auto_type cs = _mv_461.data.ok;
+            } else if (_mv_576.is_ok) {
+                __auto_type cs = _mv_576.data.ok;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_or, .data.rc_or = cs }) });
             }
             SLOP_UNREACHABLE();
         }
         SLOP_UNREACHABLE();
     } else if (decode_has_pred(arena, g, b, vocab_OWL_ONE_OF)) {
-        __auto_type _mv_462 = decode_obj_of(arena, g, b, vocab_OWL_ONE_OF);
-        if (!_mv_462.is_ok) {
-            __auto_type _ = _mv_462.data.err;
+        __auto_type _mv_577 = decode_obj_of(arena, g, b, vocab_OWL_ONE_OF);
+        if (!_mv_577.is_ok) {
+            __auto_type _ = _mv_577.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("owl:oneOf is absent or ambiguous") });
-        } else if (_mv_462.is_ok) {
-            __auto_type head = _mv_462.data.ok;
-            __auto_type _mv_463 = decode_decode_node_list(arena, g, head);
-            if (!_mv_463.is_ok) {
-                __auto_type m = _mv_463.data.err;
+        } else if (_mv_577.is_ok) {
+            __auto_type head = _mv_577.data.ok;
+            __auto_type _mv_578 = decode_decode_node_list(arena, g, head);
+            if (!_mv_578.is_ok) {
+                __auto_type m = _mv_578.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (_mv_463.is_ok) {
-                __auto_type nl = _mv_463.data.ok;
-                __auto_type _mv_464 = nl;
-                switch (_mv_464.tag) {
+            } else if (_mv_578.is_ok) {
+                __auto_type nl = _mv_578.data.ok;
+                __auto_type _mv_579 = nl;
+                switch (_mv_579.tag) {
                     case decode_NodeList_all_named:
                     {
-                        __auto_type ns = _mv_464.data.all_named;
+                        __auto_type ns = _mv_579.data.all_named;
                         return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_oneof, .data.rc_oneof = ns }) });
                     }
                     case decode_NodeList_has_literal:
@@ -1039,18 +1039,18 @@ slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, termsto
         }
         SLOP_UNREACHABLE();
     } else if (decode_has_pred(arena, g, b, vocab_OWL_COMPLEMENT_OF)) {
-        __auto_type _mv_465 = decode_obj_of(arena, g, b, vocab_OWL_COMPLEMENT_OF);
-        if (!_mv_465.is_ok) {
-            __auto_type _ = _mv_465.data.err;
+        __auto_type _mv_580 = decode_obj_of(arena, g, b, vocab_OWL_COMPLEMENT_OF);
+        if (!_mv_580.is_ok) {
+            __auto_type _ = _mv_580.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("owl:complementOf is absent or ambiguous") });
-        } else if (_mv_465.is_ok) {
-            __auto_type ct = _mv_465.data.ok;
-            __auto_type _mv_466 = decode_decode_concept(arena, g, ct, (fuel - 1));
-            if (!_mv_466.is_ok) {
-                __auto_type m = _mv_466.data.err;
+        } else if (_mv_580.is_ok) {
+            __auto_type ct = _mv_580.data.ok;
+            __auto_type _mv_581 = decode_decode_concept(arena, g, ct, (fuel - 1));
+            if (!_mv_581.is_ok) {
+                __auto_type m = _mv_581.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-            } else if (_mv_466.is_ok) {
-                __auto_type c = _mv_466.data.ok;
+            } else if (_mv_581.is_ok) {
+                __auto_type c = _mv_581.data.ok;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_not, .data.rc_not = decode_box_concept(arena, c) }) });
             }
             SLOP_UNREACHABLE();
@@ -1061,23 +1061,23 @@ slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, termsto
     } else if (decode_has_pred(arena, g, b, vocab_OWL_ALL_VALUES_FROM)) {
         return decode_decode_quantified(arena, g, b, vocab_OWL_ALL_VALUES_FROM, 1, fuel);
     } else if (decode_has_pred(arena, g, b, vocab_OWL_HAS_VALUE)) {
-        __auto_type _mv_467 = decode_decode_role(arena, g, b);
-        if (!_mv_467.is_ok) {
-            __auto_type m = _mv_467.data.err;
+        __auto_type _mv_582 = decode_decode_role(arena, g, b);
+        if (!_mv_582.is_ok) {
+            __auto_type m = _mv_582.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-        } else if (_mv_467.is_ok) {
-            __auto_type r = _mv_467.data.ok;
-            __auto_type _mv_468 = decode_obj_of(arena, g, b, vocab_OWL_HAS_VALUE);
-            if (!_mv_468.is_ok) {
-                __auto_type _ = _mv_468.data.err;
+        } else if (_mv_582.is_ok) {
+            __auto_type r = _mv_582.data.ok;
+            __auto_type _mv_583 = decode_obj_of(arena, g, b, vocab_OWL_HAS_VALUE);
+            if (!_mv_583.is_ok) {
+                __auto_type _ = _mv_583.data.err;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("owl:hasValue is absent or ambiguous") });
-            } else if (_mv_468.is_ok) {
-                __auto_type vt = _mv_468.data.ok;
-                __auto_type _mv_469 = decode_individual_term(vt);
-                switch (_mv_469.tag) {
+            } else if (_mv_583.is_ok) {
+                __auto_type vt = _mv_583.data.ok;
+                __auto_type _mv_584 = decode_individual_term(vt);
+                switch (_mv_584.tag) {
                     case decode_IndividualTerm_named_individual:
                     {
-                        __auto_type i = _mv_469.data.named_individual;
+                        __auto_type i = _mv_584.data.named_individual;
                         return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_has_value, .data.rc_has_value = { .f0 = r, .f1 = ((types_Node){ .tag = types_Node_individual_node, .data.individual_node = i }) } }) });
                     }
                     case decode_IndividualTerm_literal_individual:
@@ -1099,12 +1099,12 @@ slop_result_owl2_RawConcept_string decode_decode_anon(slop_arena* arena, termsto
         }
         SLOP_UNREACHABLE();
     } else if (decode_has_pred(arena, g, b, vocab_OWL_HAS_SELF)) {
-        __auto_type _mv_470 = decode_decode_role(arena, g, b);
-        if (!_mv_470.is_ok) {
-            __auto_type m = _mv_470.data.err;
+        __auto_type _mv_585 = decode_decode_role(arena, g, b);
+        if (!_mv_585.is_ok) {
+            __auto_type m = _mv_585.data.err;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-        } else if (_mv_470.is_ok) {
-            __auto_type r = _mv_470.data.ok;
+        } else if (_mv_585.is_ok) {
+            __auto_type r = _mv_585.data.ok;
             return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_has_self, .data.rc_has_self = r }) });
         }
         SLOP_UNREACHABLE();
@@ -1129,11 +1129,11 @@ slop_result_owl2_RawConcept_string decode_decode_concept(slop_arena* arena, term
     if (fuel <= 0) {
         return ((slop_result_owl2_RawConcept_string){ .is_ok = false, .data.err = SLOP_STR("class expression nests past the fuel bound — a blank-node cycle") });
     } else {
-        __auto_type _mv_471 = t;
-        switch (_mv_471.tag) {
+        __auto_type _mv_586 = t;
+        switch (_mv_586.tag) {
             case rdf_Term_term_iri:
             {
-                __auto_type i = _mv_471.data.term_iri;
+                __auto_type i = _mv_586.data.term_iri;
                 if (canon_string_cmp(i.value, vocab_OWL_THING) == 0) {
                     return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_thing }) });
                 } else if (canon_string_cmp(i.value, vocab_OWL_NOTHING) == 0) {
@@ -1144,17 +1144,17 @@ slop_result_owl2_RawConcept_string decode_decode_concept(slop_arena* arena, term
             }
             case rdf_Term_term_literal:
             {
-                __auto_type _ = _mv_471.data.term_literal;
+                __auto_type _ = _mv_586.data.term_literal;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_data, .data.rc_data = ((types_InputRef){ .tag = types_InputRef_rdf_fragment, .data.rdf_fragment = SLOP_STR("literal in a class position") }) }) });
             }
             case rdf_Term_term_triple:
             {
-                __auto_type _ = _mv_471.data.term_triple;
+                __auto_type _ = _mv_586.data.term_triple;
                 return ((slop_result_owl2_RawConcept_string){ .is_ok = true, .data.ok = ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_anon, .data.rc_anon = ((types_InputRef){ .tag = types_InputRef_rdf_fragment, .data.rdf_fragment = SLOP_STR("RDF-star triple term in a class position") }) }) });
             }
             case rdf_Term_term_blank:
             {
-                __auto_type _ = _mv_471.data.term_blank;
+                __auto_type _ = _mv_586.data.term_blank;
                 return decode_decode_anon(arena, g, t, fuel);
             }
         }
@@ -1187,21 +1187,21 @@ uint8_t decode_declare_entity(slop_arena* arena, owl2_Signature sig, rdf_IRI ent
 }
 
 uint8_t decode_add_builtins(slop_arena* arena, owl2_Signature sig) {
-    ({ rdf_IRI _key_478 = (((rdf_IRI){.value = vocab_OWL_THING})); slop_map_put(arena, sig.classes, &_key_478, NULL, 0); });
-    ({ rdf_IRI _key_479 = (((rdf_IRI){.value = vocab_OWL_NOTHING})); slop_map_put(arena, sig.classes, &_key_479, NULL, 0); });
-    ({ rdf_IRI _key_480 = (((rdf_IRI){.value = vocab_OWL_TOP_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_480, NULL, 0); });
-    ({ rdf_IRI _key_481 = (((rdf_IRI){.value = vocab_OWL_BOTTOM_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_481, NULL, 0); });
-    ({ rdf_IRI _key_482 = (((rdf_IRI){.value = vocab_OWL_TOP_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_482, NULL, 0); });
-    ({ rdf_IRI _key_483 = (((rdf_IRI){.value = vocab_OWL_BOTTOM_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_483, NULL, 0); });
-    ({ rdf_IRI _key_484 = (((rdf_IRI){.value = vocab_RDFS_LABEL})); slop_map_put(arena, sig.annot_props, &_key_484, NULL, 0); });
-    ({ rdf_IRI _key_485 = (((rdf_IRI){.value = vocab_RDFS_COMMENT})); slop_map_put(arena, sig.annot_props, &_key_485, NULL, 0); });
-    ({ rdf_IRI _key_486 = (((rdf_IRI){.value = vocab_RDFS_SEE_ALSO})); slop_map_put(arena, sig.annot_props, &_key_486, NULL, 0); });
-    ({ rdf_IRI _key_487 = (((rdf_IRI){.value = vocab_RDFS_IS_DEFINED_BY})); slop_map_put(arena, sig.annot_props, &_key_487, NULL, 0); });
-    ({ rdf_IRI _key_488 = (((rdf_IRI){.value = vocab_OWL_VERSION_INFO})); slop_map_put(arena, sig.annot_props, &_key_488, NULL, 0); });
-    ({ rdf_IRI _key_489 = (((rdf_IRI){.value = vocab_OWL_DEPRECATED})); slop_map_put(arena, sig.annot_props, &_key_489, NULL, 0); });
-    ({ rdf_IRI _key_490 = (((rdf_IRI){.value = vocab_OWL_PRIOR_VERSION})); slop_map_put(arena, sig.annot_props, &_key_490, NULL, 0); });
-    ({ rdf_IRI _key_491 = (((rdf_IRI){.value = vocab_OWL_BACKWARD_COMPATIBLE_WITH})); slop_map_put(arena, sig.annot_props, &_key_491, NULL, 0); });
-    ({ rdf_IRI _key_492 = (((rdf_IRI){.value = vocab_OWL_INCOMPATIBLE_WITH})); slop_map_put(arena, sig.annot_props, &_key_492, NULL, 0); });
+    ({ rdf_IRI _key_593 = (((rdf_IRI){.value = vocab_OWL_THING})); slop_map_put(arena, sig.classes, &_key_593, NULL, 0); });
+    ({ rdf_IRI _key_594 = (((rdf_IRI){.value = vocab_OWL_NOTHING})); slop_map_put(arena, sig.classes, &_key_594, NULL, 0); });
+    ({ rdf_IRI _key_595 = (((rdf_IRI){.value = vocab_OWL_TOP_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_595, NULL, 0); });
+    ({ rdf_IRI _key_596 = (((rdf_IRI){.value = vocab_OWL_BOTTOM_OBJECT_PROPERTY})); slop_map_put(arena, sig.obj_props, &_key_596, NULL, 0); });
+    ({ rdf_IRI _key_597 = (((rdf_IRI){.value = vocab_OWL_TOP_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_597, NULL, 0); });
+    ({ rdf_IRI _key_598 = (((rdf_IRI){.value = vocab_OWL_BOTTOM_DATA_PROPERTY})); slop_map_put(arena, sig.data_props, &_key_598, NULL, 0); });
+    ({ rdf_IRI _key_599 = (((rdf_IRI){.value = vocab_RDFS_LABEL})); slop_map_put(arena, sig.annot_props, &_key_599, NULL, 0); });
+    ({ rdf_IRI _key_600 = (((rdf_IRI){.value = vocab_RDFS_COMMENT})); slop_map_put(arena, sig.annot_props, &_key_600, NULL, 0); });
+    ({ rdf_IRI _key_601 = (((rdf_IRI){.value = vocab_RDFS_SEE_ALSO})); slop_map_put(arena, sig.annot_props, &_key_601, NULL, 0); });
+    ({ rdf_IRI _key_602 = (((rdf_IRI){.value = vocab_RDFS_IS_DEFINED_BY})); slop_map_put(arena, sig.annot_props, &_key_602, NULL, 0); });
+    ({ rdf_IRI _key_603 = (((rdf_IRI){.value = vocab_OWL_VERSION_INFO})); slop_map_put(arena, sig.annot_props, &_key_603, NULL, 0); });
+    ({ rdf_IRI _key_604 = (((rdf_IRI){.value = vocab_OWL_DEPRECATED})); slop_map_put(arena, sig.annot_props, &_key_604, NULL, 0); });
+    ({ rdf_IRI _key_605 = (((rdf_IRI){.value = vocab_OWL_PRIOR_VERSION})); slop_map_put(arena, sig.annot_props, &_key_605, NULL, 0); });
+    ({ rdf_IRI _key_606 = (((rdf_IRI){.value = vocab_OWL_BACKWARD_COMPATIBLE_WITH})); slop_map_put(arena, sig.annot_props, &_key_606, NULL, 0); });
+    ({ rdf_IRI _key_607 = (((rdf_IRI){.value = vocab_OWL_INCOMPATIBLE_WITH})); slop_map_put(arena, sig.annot_props, &_key_607, NULL, 0); });
     return 1;
 }
 
@@ -1215,17 +1215,17 @@ owl2_Signature decode_build_signature(slop_arena* arena, termstore_TermStore dic
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
                 if (it.p == type_pred) {
-                    __auto_type _mv_493 = decode_term_iri_value(termstore_term_of(dict, it.s));
-                    if (_mv_493.has_value) {
-                        __auto_type s = _mv_493.value;
-                        __auto_type _mv_494 = decode_term_iri_value(termstore_term_of(dict, it.o));
-                        if (_mv_494.has_value) {
-                            __auto_type o = _mv_494.value;
+                    __auto_type _mv_608 = decode_term_iri_value(termstore_term_of(dict, it.s));
+                    if (_mv_608.has_value) {
+                        __auto_type s = _mv_608.value;
+                        __auto_type _mv_609 = decode_term_iri_value(termstore_term_of(dict, it.o));
+                        if (_mv_609.has_value) {
+                            __auto_type o = _mv_609.value;
                             decode_declare_entity(arena, sig, s, o.value);
-                        } else if (!_mv_494.has_value) {
+                        } else if (!_mv_609.has_value) {
                             0;
                         }
-                    } else if (!_mv_493.has_value) {
+                    } else if (!_mv_608.has_value) {
                         0;
                     }
                 }
@@ -1236,26 +1236,26 @@ owl2_Signature decode_build_signature(slop_arena* arena, termstore_TermStore dic
 }
 
 slop_string decode_render_term(slop_arena* arena, rdf_Term t) {
-    __auto_type _mv_495 = t;
-    switch (_mv_495.tag) {
+    __auto_type _mv_610 = t;
+    switch (_mv_610.tag) {
         case rdf_Term_term_iri:
         {
-            __auto_type i = _mv_495.data.term_iri;
+            __auto_type i = _mv_610.data.term_iri;
             return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
         }
         case rdf_Term_term_blank:
         {
-            __auto_type b = _mv_495.data.term_blank;
+            __auto_type b = _mv_610.data.term_blank;
             return string_concat(arena, SLOP_STR("_:b"), int_to_string(arena, b.id));
         }
         case rdf_Term_term_literal:
         {
-            __auto_type l = _mv_495.data.term_literal;
+            __auto_type l = _mv_610.data.term_literal;
             return string_concat(arena, SLOP_STR("\""), string_concat(arena, l.value, SLOP_STR("\"")));
         }
         case rdf_Term_term_triple:
         {
-            __auto_type _ = _mv_495.data.term_triple;
+            __auto_type _ = _mv_610.data.term_triple;
             return SLOP_STR("<<embedded triple>>");
         }
     }
@@ -1271,11 +1271,11 @@ types_InputRef decode_frag(slop_arena* arena, rdf_Triple t) {
 }
 
 uint8_t decode_is_pred(rdf_Triple t, slop_string iri) {
-    __auto_type _mv_496 = decode_term_iri_value(t.predicate);
-    if (_mv_496.has_value) {
-        __auto_type i = _mv_496.value;
+    __auto_type _mv_611 = decode_term_iri_value(t.predicate);
+    if (_mv_611.has_value) {
+        __auto_type i = _mv_611.value;
         return (canon_string_cmp(i.value, iri) == 0);
-    } else if (!_mv_496.has_value) {
+    } else if (!_mv_611.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -1340,11 +1340,11 @@ uint8_t decode_structural_triple(rdf_Triple t) {
         if (!(decode_is_pred(t, vocab_RDF_TYPE))) {
             return (decode_is_pred(t, vocab_OWL_INVERSE_OF) && ({ __auto_type _mv = t.subject; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_blank: { __auto_type _ = _mv.data.term_blank; _mr = 1; break; } case rdf_Term_term_iri: { __auto_type _ = _mv.data.term_iri; _mr = 0; break; } case rdf_Term_term_literal: { __auto_type _ = _mv.data.term_literal; _mr = 0; break; } case rdf_Term_term_triple: { __auto_type _ = _mv.data.term_triple; _mr = 0; break; }  } _mr; }));
         } else {
-            __auto_type _mv_497 = decode_term_iri_value(t.object);
-            if (_mv_497.has_value) {
-                __auto_type o = _mv_497.value;
+            __auto_type _mv_612 = decode_term_iri_value(t.object);
+            if (_mv_612.has_value) {
+                __auto_type o = _mv_612.value;
                 return (({ __auto_type _mv = t.subject; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_blank: { __auto_type _ = _mv.data.term_blank; _mr = 1; break; } case rdf_Term_term_iri: { __auto_type _ = _mv.data.term_iri; _mr = 0; break; } case rdf_Term_term_literal: { __auto_type _ = _mv.data.term_literal; _mr = 0; break; } case rdf_Term_term_triple: { __auto_type _ = _mv.data.term_triple; _mr = 0; break; }  } _mr; }) && ((canon_string_cmp(o.value, vocab_OWL_CLASS) == 0) || (canon_string_cmp(o.value, vocab_OWL_RESTRICTION) == 0)));
-            } else if (!_mv_497.has_value) {
+            } else if (!_mv_612.has_value) {
                 return 0;
             }
             SLOP_UNREACHABLE();
@@ -1389,23 +1389,23 @@ slop_option_owl2_PropCharacteristic decode_characteristic_of(slop_string type_ir
 }
 
 slop_option_types_RoleId decode_role_of_term(rdf_Term t) {
-    __auto_type _mv_498 = decode_term_iri_value(t);
-    if (_mv_498.has_value) {
-        __auto_type i = _mv_498.value;
+    __auto_type _mv_613 = decode_term_iri_value(t);
+    if (_mv_613.has_value) {
+        __auto_type i = _mv_613.value;
         return (slop_option_types_RoleId){.has_value = 1, .value = ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i })};
-    } else if (!_mv_498.has_value) {
+    } else if (!_mv_613.has_value) {
         return (slop_option_types_RoleId){.has_value = false};
     }
     SLOP_UNREACHABLE();
 }
 
 slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, termstore_TermStore g, rdf_Term head) {
-    __auto_type _mv_499 = decode_rdf_list_checked(arena, g, head);
-    if (!_mv_499.is_ok) {
-        __auto_type lf = _mv_499.data.err;
+    __auto_type _mv_614 = decode_rdf_list_checked(arena, g, head);
+    if (!_mv_614.is_ok) {
+        __auto_type lf = _mv_614.data.err;
         return ((slop_result_list_types_RoleId_string){ .is_ok = false, .data.err = decode_list_fault_message(lf) });
-    } else if (_mv_499.is_ok) {
-        __auto_type terms = _mv_499.data.ok;
+    } else if (_mv_614.is_ok) {
+        __auto_type terms = _mv_614.data.ok;
         {
             __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
             slop_option_string fault = (slop_option_string){.has_value = false};
@@ -1413,20 +1413,20 @@ slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, 
                 __auto_type _coll = terms;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type tm = _coll.data[_i];
-                    __auto_type _mv_500 = decode_role_of_term(tm);
-                    if (_mv_500.has_value) {
-                        __auto_type r = _mv_500.value;
+                    __auto_type _mv_615 = decode_role_of_term(tm);
+                    if (_mv_615.has_value) {
+                        __auto_type r = _mv_615.value;
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    } else if (!_mv_500.has_value) {
+                    } else if (!_mv_615.has_value) {
                         fault = (slop_option_string){.has_value = 1, .value = SLOP_STR("property chain step is not a named property")};
                     }
                 }
             }
-            __auto_type _mv_501 = fault;
-            if (_mv_501.has_value) {
-                __auto_type m = _mv_501.value;
+            __auto_type _mv_616 = fault;
+            if (_mv_616.has_value) {
+                __auto_type m = _mv_616.value;
                 return ((slop_result_list_types_RoleId_string){ .is_ok = false, .data.err = m });
-            } else if (!_mv_501.has_value) {
+            } else if (!_mv_616.has_value) {
                 return ((slop_result_list_types_RoleId_string){ .is_ok = true, .data.ok = out });
             }
             SLOP_UNREACHABLE();
@@ -1436,18 +1436,18 @@ slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, 
 }
 
 slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena, termstore_TermStore g, rdf_Triple t) {
-    __auto_type _mv_502 = decode_decode_concept(arena, g, t.subject, decode_CONCEPT_FUEL);
-    if (!_mv_502.is_ok) {
-        __auto_type m = _mv_502.data.err;
+    __auto_type _mv_617 = decode_decode_concept(arena, g, t.subject, decode_CONCEPT_FUEL);
+    if (!_mv_617.is_ok) {
+        __auto_type m = _mv_617.data.err;
         return ((slop_result_list_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_502.is_ok) {
-        __auto_type lhs = _mv_502.data.ok;
-        __auto_type _mv_503 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
-        if (!_mv_503.is_ok) {
-            __auto_type m = _mv_503.data.err;
+    } else if (_mv_617.is_ok) {
+        __auto_type lhs = _mv_617.data.ok;
+        __auto_type _mv_618 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
+        if (!_mv_618.is_ok) {
+            __auto_type m = _mv_618.data.err;
             return ((slop_result_list_owl2_RawConcept_string){ .is_ok = false, .data.err = m });
-        } else if (_mv_503.is_ok) {
-            __auto_type rhs = _mv_503.data.ok;
+        } else if (_mv_618.is_ok) {
+            __auto_type rhs = _mv_618.data.ok;
             {
                 __auto_type out = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (lhs); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1461,18 +1461,18 @@ slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena
 }
 
 slop_option_rdf_Term decode_members_head(slop_arena* arena, termstore_TermStore g, rdf_Term s) {
-    __auto_type _mv_504 = decode_obj_of(arena, g, s, vocab_OWL_MEMBERS);
-    if (_mv_504.is_ok) {
-        __auto_type h = _mv_504.data.ok;
+    __auto_type _mv_619 = decode_obj_of(arena, g, s, vocab_OWL_MEMBERS);
+    if (_mv_619.is_ok) {
+        __auto_type h = _mv_619.data.ok;
         return (slop_option_rdf_Term){.has_value = 1, .value = h};
-    } else if (!_mv_504.is_ok) {
-        __auto_type _ = _mv_504.data.err;
-        __auto_type _mv_505 = decode_obj_of(arena, g, s, vocab_OWL_DISTINCT_MEMBERS);
-        if (_mv_505.is_ok) {
-            __auto_type h = _mv_505.data.ok;
+    } else if (!_mv_619.is_ok) {
+        __auto_type _ = _mv_619.data.err;
+        __auto_type _mv_620 = decode_obj_of(arena, g, s, vocab_OWL_DISTINCT_MEMBERS);
+        if (_mv_620.is_ok) {
+            __auto_type h = _mv_620.data.ok;
             return (slop_option_rdf_Term){.has_value = 1, .value = h};
-        } else if (!_mv_505.is_ok) {
-            __auto_type _ = _mv_505.data.err;
+        } else if (!_mv_620.is_ok) {
+            __auto_type _ = _mv_620.data.err;
             return (slop_option_rdf_Term){.has_value = false};
         }
         SLOP_UNREACHABLE();
@@ -1484,31 +1484,31 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
     {
         __auto_type ov = obj.value;
         if (({ __auto_type _mv = decode_entity_kind_of(ov); _mv.has_value ? ({ __auto_type _ = _mv.value; 1; }) : (0); })) {
-            __auto_type _mv_506 = decode_term_iri_value(t.subject);
-            if (_mv_506.has_value) {
-                __auto_type s = _mv_506.value;
-                __auto_type _mv_507 = decode_entity_kind_of(ov);
-                if (_mv_507.has_value) {
-                    __auto_type k = _mv_507.value;
+            __auto_type _mv_621 = decode_term_iri_value(t.subject);
+            if (_mv_621.has_value) {
+                __auto_type s = _mv_621.value;
+                __auto_type _mv_622 = decode_entity_kind_of(ov);
+                if (_mv_622.has_value) {
+                    __auto_type k = _mv_622.value;
                     if ((k == types_EntityKind_entity_individual) && decode_is_reserved_iri(s.value)) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_reserved_vocabulary, .data.ra_reserved_vocabulary = decode_frag(arena, t) }) });
                     } else {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_declaration, .data.ra_declaration = ((owl2_RawDeclaration){.kind = k, .entity = s}) }) });
                     }
-                } else if (!_mv_507.has_value) {
+                } else if (!_mv_622.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("unreachable: declaration type vanished") });
                 }
                 SLOP_UNREACHABLE();
-            } else if (!_mv_506.has_value) {
+            } else if (!_mv_621.has_value) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_anonymous_individual, .data.ra_anonymous_individual = decode_frag(arena, t) }) });
             }
             SLOP_UNREACHABLE();
         } else if (canon_string_cmp(ov, vocab_OWL_TRANSITIVE_PROPERTY) == 0) {
-            __auto_type _mv_508 = decode_role_of_term(t.subject);
-            if (_mv_508.has_value) {
-                __auto_type r = _mv_508.value;
+            __auto_type _mv_623 = decode_role_of_term(t.subject);
+            if (_mv_623.has_value) {
+                __auto_type r = _mv_623.value;
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_transitive_property, .data.ra_transitive_property = r }) });
-            } else if (!_mv_508.has_value) {
+            } else if (!_mv_623.has_value) {
                 if (decode_inverse_expression_term(arena, g, t.subject)) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inverse_expression, .data.ra_inverse_expression = decode_frag(arena, t) }) });
                 } else {
@@ -1517,18 +1517,18 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
             }
             SLOP_UNREACHABLE();
         } else if (({ __auto_type _mv = decode_characteristic_of(ov); _mv.has_value ? ({ __auto_type _ = _mv.value; 1; }) : (0); })) {
-            __auto_type _mv_509 = decode_role_of_term(t.subject);
-            if (_mv_509.has_value) {
-                __auto_type r = _mv_509.value;
-                __auto_type _mv_510 = decode_characteristic_of(ov);
-                if (_mv_510.has_value) {
-                    __auto_type c = _mv_510.value;
+            __auto_type _mv_624 = decode_role_of_term(t.subject);
+            if (_mv_624.has_value) {
+                __auto_type r = _mv_624.value;
+                __auto_type _mv_625 = decode_characteristic_of(ov);
+                if (_mv_625.has_value) {
+                    __auto_type c = _mv_625.value;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_property_characteristic, .data.ra_property_characteristic = { .f0 = c, .f1 = r } }) });
-                } else if (!_mv_510.has_value) {
+                } else if (!_mv_625.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("unreachable: characteristic vanished") });
                 }
                 SLOP_UNREACHABLE();
-            } else if (!_mv_509.has_value) {
+            } else if (!_mv_624.has_value) {
                 if (decode_inverse_expression_term(arena, g, t.subject)) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inverse_expression, .data.ra_inverse_expression = decode_frag(arena, t) }) });
                 } else {
@@ -1537,22 +1537,22 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
             }
             SLOP_UNREACHABLE();
         } else if (canon_string_cmp(ov, vocab_OWL_ALL_DIFFERENT) == 0) {
-            __auto_type _mv_511 = decode_members_head(arena, g, t.subject);
-            if (!_mv_511.has_value) {
+            __auto_type _mv_626 = decode_members_head(arena, g, t.subject);
+            if (!_mv_626.has_value) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:AllDifferent without owl:members or owl:distinctMembers") });
-            } else if (_mv_511.has_value) {
-                __auto_type head = _mv_511.value;
-                __auto_type _mv_512 = decode_decode_node_list(arena, g, head);
-                if (!_mv_512.is_ok) {
-                    __auto_type m = _mv_512.data.err;
+            } else if (_mv_626.has_value) {
+                __auto_type head = _mv_626.value;
+                __auto_type _mv_627 = decode_decode_node_list(arena, g, head);
+                if (!_mv_627.is_ok) {
+                    __auto_type m = _mv_627.data.err;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                } else if (_mv_512.is_ok) {
-                    __auto_type nl = _mv_512.data.ok;
-                    __auto_type _mv_513 = nl;
-                    switch (_mv_513.tag) {
+                } else if (_mv_627.is_ok) {
+                    __auto_type nl = _mv_627.data.ok;
+                    __auto_type _mv_628 = nl;
+                    switch (_mv_628.tag) {
                         case decode_NodeList_all_named:
                         {
-                            __auto_type ns = _mv_513.data.all_named;
+                            __auto_type ns = _mv_628.data.all_named;
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_different_individuals, .data.ra_different_individuals = ns }) });
                         }
                         case decode_NodeList_has_literal:
@@ -1574,17 +1574,17 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
             }
             SLOP_UNREACHABLE();
         } else if (canon_string_cmp(ov, vocab_OWL_ALL_DISJOINT_CLASSES) == 0) {
-            __auto_type _mv_514 = decode_members_head(arena, g, t.subject);
-            if (!_mv_514.has_value) {
+            __auto_type _mv_629 = decode_members_head(arena, g, t.subject);
+            if (!_mv_629.has_value) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:AllDisjointClasses without owl:members") });
-            } else if (_mv_514.has_value) {
-                __auto_type head = _mv_514.value;
-                __auto_type _mv_515 = decode_decode_concept_list(arena, g, head, decode_CONCEPT_FUEL);
-                if (!_mv_515.is_ok) {
-                    __auto_type m = _mv_515.data.err;
+            } else if (_mv_629.has_value) {
+                __auto_type head = _mv_629.value;
+                __auto_type _mv_630 = decode_decode_concept_list(arena, g, head, decode_CONCEPT_FUEL);
+                if (!_mv_630.is_ok) {
+                    __auto_type m = _mv_630.data.err;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                } else if (_mv_515.is_ok) {
-                    __auto_type cs = _mv_515.data.ok;
+                } else if (_mv_630.is_ok) {
+                    __auto_type cs = _mv_630.data.ok;
                     if (((int64_t)((cs).len)) < 2) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_unrecognized, .data.ra_unrecognized = decode_frag(arena, t) }) });
                     } else {
@@ -1595,20 +1595,20 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
             }
             SLOP_UNREACHABLE();
         } else if (canon_string_cmp(ov, vocab_OWL_ALL_DISJOINT_PROPERTIES) == 0) {
-            __auto_type _mv_516 = decode_members_head(arena, g, t.subject);
-            if (!_mv_516.has_value) {
+            __auto_type _mv_631 = decode_members_head(arena, g, t.subject);
+            if (!_mv_631.has_value) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:AllDisjointProperties without owl:members") });
-            } else if (_mv_516.has_value) {
-                __auto_type head = _mv_516.value;
+            } else if (_mv_631.has_value) {
+                __auto_type head = _mv_631.value;
                 if (decode_list_has_inverse(arena, g, head)) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inverse_expression, .data.ra_inverse_expression = decode_frag(arena, t) }) });
                 } else {
-                    __auto_type _mv_517 = decode_decode_role_list(arena, g, head);
-                    if (!_mv_517.is_ok) {
-                        __auto_type m = _mv_517.data.err;
+                    __auto_type _mv_632 = decode_decode_role_list(arena, g, head);
+                    if (!_mv_632.is_ok) {
+                        __auto_type m = _mv_632.data.err;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                    } else if (_mv_517.is_ok) {
-                        __auto_type rs = _mv_517.data.ok;
+                    } else if (_mv_632.is_ok) {
+                        __auto_type rs = _mv_632.data.ok;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_properties, .data.ra_disjoint_properties = rs }) });
                     }
                     SLOP_UNREACHABLE();
@@ -1626,8 +1626,8 @@ slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstor
 }
 
 slop_result_owl2_RawAxiom_string decode_decode_individual_pair(slop_arena* arena, rdf_Triple t, uint8_t same) {
-    __auto_type _mv_518 = decode_individual_term(t.subject);
-    switch (_mv_518.tag) {
+    __auto_type _mv_633 = decode_individual_term(t.subject);
+    switch (_mv_633.tag) {
         case decode_IndividualTerm_literal_individual:
         {
             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
@@ -1642,9 +1642,9 @@ slop_result_owl2_RawAxiom_string decode_decode_individual_pair(slop_arena* arena
         }
         case decode_IndividualTerm_named_individual:
         {
-            __auto_type a = _mv_518.data.named_individual;
-            __auto_type _mv_519 = decode_individual_term(t.object);
-            switch (_mv_519.tag) {
+            __auto_type a = _mv_633.data.named_individual;
+            __auto_type _mv_634 = decode_individual_term(t.object);
+            switch (_mv_634.tag) {
                 case decode_IndividualTerm_literal_individual:
                 {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
@@ -1659,7 +1659,7 @@ slop_result_owl2_RawAxiom_string decode_decode_individual_pair(slop_arena* arena
                 }
                 case decode_IndividualTerm_named_individual:
                 {
-                    __auto_type b = _mv_519.data.named_individual;
+                    __auto_type b = _mv_634.data.named_individual;
                     {
                         __auto_type ns = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
                         ({ __auto_type _lst_p = &(ns); __auto_type _item = (((types_Node){ .tag = types_Node_individual_node, .data.individual_node = a })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1681,48 +1681,48 @@ slop_result_owl2_RawAxiom_string decode_decode_individual_pair(slop_arena* arena
 slop_result_owl2_RawAxiom_string decode_decode_negative_assertion(slop_arena* arena, termstore_TermStore g, rdf_Triple t) {
     {
         __auto_type x = t.subject;
-        __auto_type _mv_520 = decode_obj_of(arena, g, x, vocab_OWL_ASSERTION_PROPERTY);
-        if (!_mv_520.is_ok) {
-            __auto_type _ = _mv_520.data.err;
+        __auto_type _mv_635 = decode_obj_of(arena, g, x, vocab_OWL_ASSERTION_PROPERTY);
+        if (!_mv_635.is_ok) {
+            __auto_type _ = _mv_635.data.err;
             return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:NegativePropertyAssertion without exactly one owl:assertionProperty") });
-        } else if (_mv_520.is_ok) {
-            __auto_type pt = _mv_520.data.ok;
-            __auto_type _mv_521 = decode_obj_of(arena, g, x, vocab_OWL_SOURCE_INDIVIDUAL);
-            if (!_mv_521.is_ok) {
-                __auto_type _ = _mv_521.data.err;
+        } else if (_mv_635.is_ok) {
+            __auto_type pt = _mv_635.data.ok;
+            __auto_type _mv_636 = decode_obj_of(arena, g, x, vocab_OWL_SOURCE_INDIVIDUAL);
+            if (!_mv_636.is_ok) {
+                __auto_type _ = _mv_636.data.err;
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:NegativePropertyAssertion without exactly one owl:sourceIndividual") });
-            } else if (_mv_521.is_ok) {
-                __auto_type st = _mv_521.data.ok;
+            } else if (_mv_636.is_ok) {
+                __auto_type st = _mv_636.data.ok;
                 if (decode_has_pred(arena, g, x, vocab_OWL_TARGET_VALUE) && decode_has_pred(arena, g, x, vocab_OWL_TARGET_INDIVIDUAL)) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:NegativePropertyAssertion with both owl:targetIndividual and owl:targetValue") });
                 } else if (decode_has_pred(arena, g, x, vocab_OWL_TARGET_VALUE)) {
-                    __auto_type _mv_522 = decode_obj_of(arena, g, x, vocab_OWL_TARGET_VALUE);
-                    if (!_mv_522.is_ok) {
-                        __auto_type _ = _mv_522.data.err;
+                    __auto_type _mv_637 = decode_obj_of(arena, g, x, vocab_OWL_TARGET_VALUE);
+                    if (!_mv_637.is_ok) {
+                        __auto_type _ = _mv_637.data.err;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:NegativePropertyAssertion without exactly one owl:targetValue") });
-                    } else if (_mv_522.is_ok) {
-                        __auto_type _ = _mv_522.data.ok;
+                    } else if (_mv_637.is_ok) {
+                        __auto_type _ = _mv_637.data.ok;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
                     }
                     SLOP_UNREACHABLE();
                 } else {
-                    __auto_type _mv_523 = decode_obj_of(arena, g, x, vocab_OWL_TARGET_INDIVIDUAL);
-                    if (!_mv_523.is_ok) {
-                        __auto_type _ = _mv_523.data.err;
+                    __auto_type _mv_638 = decode_obj_of(arena, g, x, vocab_OWL_TARGET_INDIVIDUAL);
+                    if (!_mv_638.is_ok) {
+                        __auto_type _ = _mv_638.data.err;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:NegativePropertyAssertion without exactly one owl:targetIndividual") });
-                    } else if (_mv_523.is_ok) {
-                        __auto_type tt = _mv_523.data.ok;
-                        __auto_type _mv_524 = decode_role_of_term(pt);
-                        if (!_mv_524.has_value) {
+                    } else if (_mv_638.is_ok) {
+                        __auto_type tt = _mv_638.data.ok;
+                        __auto_type _mv_639 = decode_role_of_term(pt);
+                        if (!_mv_639.has_value) {
                             if (decode_inverse_expression_term(arena, g, pt)) {
                                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inverse_expression, .data.ra_inverse_expression = decode_frag(arena, t) }) });
                             } else {
                                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:assertionProperty is not a property") });
                             }
-                        } else if (_mv_524.has_value) {
-                            __auto_type r = _mv_524.value;
-                            __auto_type _mv_525 = decode_individual_term(st);
-                            switch (_mv_525.tag) {
+                        } else if (_mv_639.has_value) {
+                            __auto_type r = _mv_639.value;
+                            __auto_type _mv_640 = decode_individual_term(st);
+                            switch (_mv_640.tag) {
                                 case decode_IndividualTerm_literal_individual:
                                 {
                                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
@@ -1737,9 +1737,9 @@ slop_result_owl2_RawAxiom_string decode_decode_negative_assertion(slop_arena* ar
                                 }
                                 case decode_IndividualTerm_named_individual:
                                 {
-                                    __auto_type a = _mv_525.data.named_individual;
-                                    __auto_type _mv_526 = decode_individual_term(tt);
-                                    switch (_mv_526.tag) {
+                                    __auto_type a = _mv_640.data.named_individual;
+                                    __auto_type _mv_641 = decode_individual_term(tt);
+                                    switch (_mv_641.tag) {
                                         case decode_IndividualTerm_literal_individual:
                                         {
                                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
@@ -1754,7 +1754,7 @@ slop_result_owl2_RawAxiom_string decode_decode_negative_assertion(slop_arena* ar
                                         }
                                         case decode_IndividualTerm_named_individual:
                                         {
-                                            __auto_type b = _mv_526.data.named_individual;
+                                            __auto_type b = _mv_641.data.named_individual;
                                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_negative_assertion, .data.ra_negative_assertion = ((owl2_RawEdge){.role = r, .from = ((types_Node){ .tag = types_Node_individual_node, .data.individual_node = a }), .to = ((types_Node){ .tag = types_Node_individual_node, .data.individual_node = b })}) }) });
                                         }
                                     }
@@ -1775,21 +1775,21 @@ slop_result_owl2_RawAxiom_string decode_decode_negative_assertion(slop_arena* ar
 }
 
 slop_result_owl2_RawAxiom_string decode_decode_class_assertion(slop_arena* arena, termstore_TermStore g, rdf_Triple t) {
-    __auto_type _mv_527 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
-    if (!_mv_527.is_ok) {
-        __auto_type m = _mv_527.data.err;
+    __auto_type _mv_642 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
+    if (!_mv_642.is_ok) {
+        __auto_type m = _mv_642.data.err;
         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_527.is_ok) {
-        __auto_type c = _mv_527.data.ok;
-        __auto_type _mv_528 = decode_term_iri_value(t.subject);
-        if (_mv_528.has_value) {
-            __auto_type s = _mv_528.value;
+    } else if (_mv_642.is_ok) {
+        __auto_type c = _mv_642.data.ok;
+        __auto_type _mv_643 = decode_term_iri_value(t.subject);
+        if (_mv_643.has_value) {
+            __auto_type s = _mv_643.value;
             if (decode_is_reserved_iri(s.value)) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_reserved_vocabulary, .data.ra_reserved_vocabulary = decode_frag(arena, t) }) });
             } else {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_class_assertion, .data.ra_class_assertion = ((owl2_RawClassAssertion){.concept = decode_box_concept(arena, c), .subject = ((types_Node){ .tag = types_Node_individual_node, .data.individual_node = s })}) }) });
             }
-        } else if (!_mv_528.has_value) {
+        } else if (!_mv_643.has_value) {
             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_anonymous_individual, .data.ra_anonymous_individual = decode_frag(arena, t) }) });
         }
         SLOP_UNREACHABLE();
@@ -1802,11 +1802,11 @@ uint8_t decode_is_reserved_iri(slop_string v) {
 }
 
 int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj) {
-    __auto_type _mv_529 = decode_term_iri_value(subj);
-    if (!_mv_529.has_value) {
+    __auto_type _mv_644 = decode_term_iri_value(subj);
+    if (!_mv_644.has_value) {
         return 0;
-    } else if (_mv_529.has_value) {
-        __auto_type i = _mv_529.value;
+    } else if (_mv_644.has_value) {
+        __auto_type i = _mv_644.value;
         if (owl2_signature_has_annotation_property(sig, i)) {
             return 1;
         } else if (owl2_signature_has_data_property(sig, i)) {
@@ -1819,24 +1819,24 @@ int64_t decode_property_axiom_kind(owl2_Signature sig, rdf_Term subj) {
 }
 
 slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstore_TermStore g, owl2_Signature sig, rdf_Triple t) {
-    __auto_type _mv_530 = decode_term_iri_value(t.predicate);
-    if (!_mv_530.has_value) {
+    __auto_type _mv_645 = decode_term_iri_value(t.predicate);
+    if (!_mv_645.has_value) {
         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_unrecognized, .data.ra_unrecognized = decode_frag(arena, t) }) });
-    } else if (_mv_530.has_value) {
-        __auto_type p = _mv_530.value;
+    } else if (_mv_645.has_value) {
+        __auto_type p = _mv_645.value;
         {
             __auto_type pv = p.value;
             if (canon_string_cmp(pv, vocab_RDF_TYPE) == 0) {
-                __auto_type _mv_531 = t.object;
-                switch (_mv_531.tag) {
+                __auto_type _mv_646 = t.object;
+                switch (_mv_646.tag) {
                     case rdf_Term_term_iri:
                     {
-                        __auto_type o = _mv_531.data.term_iri;
+                        __auto_type o = _mv_646.data.term_iri;
                         return decode_decode_typed(arena, g, t, o);
                     }
                     case rdf_Term_term_blank:
                     {
-                        __auto_type _ = _mv_531.data.term_blank;
+                        __auto_type _ = _mv_646.data.term_blank;
                         return decode_decode_class_assertion(arena, g, t);
                     }
                     default: {
@@ -1846,55 +1846,55 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
             } else if (decode_property_axiom_on_inverse(arena, g, pv, t)) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inverse_expression, .data.ra_inverse_expression = decode_frag(arena, t) }) });
             } else if (canon_string_cmp(pv, vocab_RDFS_SUBCLASS_OF) == 0) {
-                __auto_type _mv_532 = decode_decode_concept(arena, g, t.subject, decode_CONCEPT_FUEL);
-                if (!_mv_532.is_ok) {
-                    __auto_type m = _mv_532.data.err;
+                __auto_type _mv_647 = decode_decode_concept(arena, g, t.subject, decode_CONCEPT_FUEL);
+                if (!_mv_647.is_ok) {
+                    __auto_type m = _mv_647.data.err;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                } else if (_mv_532.is_ok) {
-                    __auto_type lhs = _mv_532.data.ok;
-                    __auto_type _mv_533 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
-                    if (!_mv_533.is_ok) {
-                        __auto_type m = _mv_533.data.err;
+                } else if (_mv_647.is_ok) {
+                    __auto_type lhs = _mv_647.data.ok;
+                    __auto_type _mv_648 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
+                    if (!_mv_648.is_ok) {
+                        __auto_type m = _mv_648.data.err;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                    } else if (_mv_533.is_ok) {
-                        __auto_type rhs = _mv_533.data.ok;
+                    } else if (_mv_648.is_ok) {
+                        __auto_type rhs = _mv_648.data.ok;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_sub_class_of, .data.ra_sub_class_of = { .f0 = decode_box_concept(arena, lhs), .f1 = decode_box_concept(arena, rhs) } }) });
                     }
                     SLOP_UNREACHABLE();
                 }
                 SLOP_UNREACHABLE();
             } else if (canon_string_cmp(pv, vocab_OWL_EQUIVALENT_CLASS) == 0) {
-                __auto_type _mv_534 = decode_binary_concepts(arena, g, t);
-                if (!_mv_534.is_ok) {
-                    __auto_type m = _mv_534.data.err;
+                __auto_type _mv_649 = decode_binary_concepts(arena, g, t);
+                if (!_mv_649.is_ok) {
+                    __auto_type m = _mv_649.data.err;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                } else if (_mv_534.is_ok) {
-                    __auto_type cs = _mv_534.data.ok;
+                } else if (_mv_649.is_ok) {
+                    __auto_type cs = _mv_649.data.ok;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_equivalent_classes, .data.ra_equivalent_classes = cs }) });
                 }
                 SLOP_UNREACHABLE();
             } else if (canon_string_cmp(pv, vocab_OWL_DISJOINT_WITH) == 0) {
-                __auto_type _mv_535 = decode_binary_concepts(arena, g, t);
-                if (!_mv_535.is_ok) {
-                    __auto_type m = _mv_535.data.err;
+                __auto_type _mv_650 = decode_binary_concepts(arena, g, t);
+                if (!_mv_650.is_ok) {
+                    __auto_type m = _mv_650.data.err;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                } else if (_mv_535.is_ok) {
-                    __auto_type cs = _mv_535.data.ok;
+                } else if (_mv_650.is_ok) {
+                    __auto_type cs = _mv_650.data.ok;
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_disjoint_classes, .data.ra_disjoint_classes = cs }) });
                 }
                 SLOP_UNREACHABLE();
             } else if (canon_string_cmp(pv, vocab_OWL_PROPERTY_CHAIN_AXIOM) == 0) {
-                __auto_type _mv_536 = decode_role_of_term(t.subject);
-                if (!_mv_536.has_value) {
+                __auto_type _mv_651 = decode_role_of_term(t.subject);
+                if (!_mv_651.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:propertyChainAxiom on a non-IRI subject") });
-                } else if (_mv_536.has_value) {
-                    __auto_type super = _mv_536.value;
-                    __auto_type _mv_537 = decode_decode_role_list(arena, g, t.object);
-                    if (!_mv_537.is_ok) {
-                        __auto_type m = _mv_537.data.err;
+                } else if (_mv_651.has_value) {
+                    __auto_type super = _mv_651.value;
+                    __auto_type _mv_652 = decode_decode_role_list(arena, g, t.object);
+                    if (!_mv_652.is_ok) {
+                        __auto_type m = _mv_652.data.err;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                    } else if (_mv_537.is_ok) {
-                        __auto_type steps = _mv_537.data.ok;
+                    } else if (_mv_652.is_ok) {
+                        __auto_type steps = _mv_652.data.ok;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_property_chain, .data.ra_property_chain = ((owl2_RawChain){.steps = steps, .super = super}) }) });
                     }
                     SLOP_UNREACHABLE();
@@ -1906,16 +1906,16 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 } else if (decode_property_axiom_kind(sig, t.subject) == 2) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
                 } else {
-                    __auto_type _mv_538 = decode_role_of_term(t.subject);
-                    if (!_mv_538.has_value) {
+                    __auto_type _mv_653 = decode_role_of_term(t.subject);
+                    if (!_mv_653.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("rdfs:subPropertyOf on a non-IRI subject") });
-                    } else if (_mv_538.has_value) {
-                        __auto_type sub = _mv_538.value;
-                        __auto_type _mv_539 = decode_role_of_term(t.object);
-                        if (!_mv_539.has_value) {
+                    } else if (_mv_653.has_value) {
+                        __auto_type sub = _mv_653.value;
+                        __auto_type _mv_654 = decode_role_of_term(t.object);
+                        if (!_mv_654.has_value) {
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("rdfs:subPropertyOf with a non-IRI object") });
-                        } else if (_mv_539.has_value) {
-                            __auto_type sup = _mv_539.value;
+                        } else if (_mv_654.has_value) {
+                            __auto_type sup = _mv_654.value;
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_sub_object_property, .data.ra_sub_object_property = { .f0 = sub, .f1 = sup } }) });
                         }
                         SLOP_UNREACHABLE();
@@ -1923,16 +1923,16 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                     SLOP_UNREACHABLE();
                 }
             } else if (canon_string_cmp(pv, vocab_OWL_EQUIVALENT_PROPERTY) == 0) {
-                __auto_type _mv_540 = decode_role_of_term(t.subject);
-                if (!_mv_540.has_value) {
+                __auto_type _mv_655 = decode_role_of_term(t.subject);
+                if (!_mv_655.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:equivalentProperty on a non-IRI subject") });
-                } else if (_mv_540.has_value) {
-                    __auto_type a = _mv_540.value;
-                    __auto_type _mv_541 = decode_role_of_term(t.object);
-                    if (!_mv_541.has_value) {
+                } else if (_mv_655.has_value) {
+                    __auto_type a = _mv_655.value;
+                    __auto_type _mv_656 = decode_role_of_term(t.object);
+                    if (!_mv_656.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:equivalentProperty with a non-IRI object") });
-                    } else if (_mv_541.has_value) {
-                        __auto_type b = _mv_541.value;
+                    } else if (_mv_656.has_value) {
+                        __auto_type b = _mv_656.value;
                         {
                             __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1944,16 +1944,16 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 }
                 SLOP_UNREACHABLE();
             } else if (canon_string_cmp(pv, vocab_OWL_PROPERTY_DISJOINT_WITH) == 0) {
-                __auto_type _mv_542 = decode_role_of_term(t.subject);
-                if (!_mv_542.has_value) {
+                __auto_type _mv_657 = decode_role_of_term(t.subject);
+                if (!_mv_657.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:propertyDisjointWith on a non-IRI subject") });
-                } else if (_mv_542.has_value) {
-                    __auto_type a = _mv_542.value;
-                    __auto_type _mv_543 = decode_role_of_term(t.object);
-                    if (!_mv_543.has_value) {
+                } else if (_mv_657.has_value) {
+                    __auto_type a = _mv_657.value;
+                    __auto_type _mv_658 = decode_role_of_term(t.object);
+                    if (!_mv_658.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:propertyDisjointWith with a non-IRI object") });
-                    } else if (_mv_543.has_value) {
-                        __auto_type b = _mv_543.value;
+                    } else if (_mv_658.has_value) {
+                        __auto_type b = _mv_658.value;
                         {
                             __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1965,16 +1965,16 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 }
                 SLOP_UNREACHABLE();
             } else if (canon_string_cmp(pv, vocab_OWL_INVERSE_OF) == 0) {
-                __auto_type _mv_544 = decode_role_of_term(t.subject);
-                if (!_mv_544.has_value) {
+                __auto_type _mv_659 = decode_role_of_term(t.subject);
+                if (!_mv_659.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:inverseOf on a non-IRI subject") });
-                } else if (_mv_544.has_value) {
-                    __auto_type a = _mv_544.value;
-                    __auto_type _mv_545 = decode_role_of_term(t.object);
-                    if (!_mv_545.has_value) {
+                } else if (_mv_659.has_value) {
+                    __auto_type a = _mv_659.value;
+                    __auto_type _mv_660 = decode_role_of_term(t.object);
+                    if (!_mv_660.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("owl:inverseOf with a non-IRI object") });
-                    } else if (_mv_545.has_value) {
-                        __auto_type b = _mv_545.value;
+                    } else if (_mv_660.has_value) {
+                        __auto_type b = _mv_660.value;
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inverse_properties, .data.ra_inverse_properties = { .f0 = a, .f1 = b } }) });
                     }
                     SLOP_UNREACHABLE();
@@ -1986,17 +1986,17 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 } else if (decode_property_axiom_kind(sig, t.subject) == 2) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
                 } else {
-                    __auto_type _mv_546 = decode_role_of_term(t.subject);
-                    if (!_mv_546.has_value) {
+                    __auto_type _mv_661 = decode_role_of_term(t.subject);
+                    if (!_mv_661.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("rdfs:domain on a non-IRI subject") });
-                    } else if (_mv_546.has_value) {
-                        __auto_type r = _mv_546.value;
-                        __auto_type _mv_547 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
-                        if (!_mv_547.is_ok) {
-                            __auto_type m = _mv_547.data.err;
+                    } else if (_mv_661.has_value) {
+                        __auto_type r = _mv_661.value;
+                        __auto_type _mv_662 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
+                        if (!_mv_662.is_ok) {
+                            __auto_type m = _mv_662.data.err;
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                        } else if (_mv_547.is_ok) {
-                            __auto_type c = _mv_547.data.ok;
+                        } else if (_mv_662.is_ok) {
+                            __auto_type c = _mv_662.data.ok;
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_object_property_domain, .data.ra_object_property_domain = { .f0 = r, .f1 = decode_box_concept(arena, c) } }) });
                         }
                         SLOP_UNREACHABLE();
@@ -2009,17 +2009,17 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
                 } else if (decode_property_axiom_kind(sig, t.subject) == 2) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_data_axiom, .data.ra_data_axiom = decode_frag(arena, t) }) });
                 } else {
-                    __auto_type _mv_548 = decode_role_of_term(t.subject);
-                    if (!_mv_548.has_value) {
+                    __auto_type _mv_663 = decode_role_of_term(t.subject);
+                    if (!_mv_663.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("rdfs:range on a non-IRI subject") });
-                    } else if (_mv_548.has_value) {
-                        __auto_type r = _mv_548.value;
-                        __auto_type _mv_549 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
-                        if (!_mv_549.is_ok) {
-                            __auto_type m = _mv_549.data.err;
+                    } else if (_mv_663.has_value) {
+                        __auto_type r = _mv_663.value;
+                        __auto_type _mv_664 = decode_decode_concept(arena, g, t.object, decode_CONCEPT_FUEL);
+                        if (!_mv_664.is_ok) {
+                            __auto_type m = _mv_664.data.err;
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = m });
-                        } else if (_mv_549.is_ok) {
-                            __auto_type c = _mv_549.data.ok;
+                        } else if (_mv_664.is_ok) {
+                            __auto_type c = _mv_664.data.ok;
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_object_property_range, .data.ra_object_property_range = { .f0 = r, .f1 = decode_box_concept(arena, c) } }) });
                         }
                         SLOP_UNREACHABLE();
@@ -2037,21 +2037,21 @@ slop_result_owl2_RawAxiom_string decode_decode_axiom(slop_arena* arena, termstor
             } else if (owl2_signature_has_annotation_property(sig, p)) {
                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_annotation }) });
             } else if (owl2_signature_has_object_property(sig, p)) {
-                __auto_type _mv_550 = decode_role_of_term(t.predicate);
-                if (!_mv_550.has_value) {
+                __auto_type _mv_665 = decode_role_of_term(t.predicate);
+                if (!_mv_665.has_value) {
                     return ((slop_result_owl2_RawAxiom_string){ .is_ok = false, .data.err = SLOP_STR("unreachable: declared object property is not an IRI") });
-                } else if (_mv_550.has_value) {
-                    __auto_type r = _mv_550.value;
-                    __auto_type _mv_551 = decode_term_iri_value(t.subject);
-                    if (!_mv_551.has_value) {
+                } else if (_mv_665.has_value) {
+                    __auto_type r = _mv_665.value;
+                    __auto_type _mv_666 = decode_term_iri_value(t.subject);
+                    if (!_mv_666.has_value) {
                         return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_anonymous_individual, .data.ra_anonymous_individual = decode_frag(arena, t) }) });
-                    } else if (_mv_551.has_value) {
-                        __auto_type sfrom = _mv_551.value;
-                        __auto_type _mv_552 = decode_term_iri_value(t.object);
-                        if (!_mv_552.has_value) {
+                    } else if (_mv_666.has_value) {
+                        __auto_type sfrom = _mv_666.value;
+                        __auto_type _mv_667 = decode_term_iri_value(t.object);
+                        if (!_mv_667.has_value) {
                             return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_anonymous_individual, .data.ra_anonymous_individual = decode_frag(arena, t) }) });
-                        } else if (_mv_552.has_value) {
-                            __auto_type sto = _mv_552.value;
+                        } else if (_mv_667.has_value) {
+                            __auto_type sto = _mv_667.value;
                             if (decode_is_reserved_iri(sfrom.value) || decode_is_reserved_iri(sto.value)) {
                                 return ((slop_result_owl2_RawAxiom_string){ .is_ok = true, .data.ok = ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_reserved_vocabulary, .data.ra_reserved_vocabulary = decode_frag(arena, t) }) });
                             } else {
@@ -2162,20 +2162,20 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* aren
                     {
                         __auto_type t = termstore_triple_of(dict, it);
                         if (!(decode_structural_triple(t)) && !(decode_negative_assertion_part(it, npa_nodes, npa_parts))) {
-                            __auto_type _mv_555 = decode_decode_axiom(arena, ig, sig, t);
-                            if (!_mv_555.is_ok) {
-                                __auto_type m = _mv_555.data.err;
+                            __auto_type _mv_670 = decode_decode_axiom(arena, ig, sig, t);
+                            if (!_mv_670.is_ok) {
+                                __auto_type m = _mv_670.data.err;
                                 fault = (slop_option_string){.has_value = 1, .value = m};
-                            } else if (_mv_555.is_ok) {
-                                __auto_type ax = _mv_555.data.ok;
-                                __auto_type _mv_556 = owl2_disposition(types_Profile_profile_el, ax);
-                                if (_mv_556 == owl2_Disposition_d_inert) {
+                            } else if (_mv_670.is_ok) {
+                                __auto_type ax = _mv_670.data.ok;
+                                __auto_type _mv_671 = owl2_disposition(types_Profile_profile_el, ax);
+                                if (_mv_671 == owl2_Disposition_d_inert) {
                                     inert = (inert + 1);
-                                } else if (_mv_556 == owl2_Disposition_d_consumed) {
+                                } else if (_mv_671 == owl2_Disposition_d_consumed) {
                                     ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                } else if (_mv_556 == owl2_Disposition_d_in_profile) {
+                                } else if (_mv_671 == owl2_Disposition_d_in_profile) {
                                     ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                } else if (_mv_556 == owl2_Disposition_d_out_of_profile) {
+                                } else if (_mv_671 == owl2_Disposition_d_out_of_profile) {
                                     ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
@@ -2184,11 +2184,11 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* aren
                 }
             }
         }
-        __auto_type _mv_557 = fault;
-        if (_mv_557.has_value) {
-            __auto_type m = _mv_557.value;
+        __auto_type _mv_672 = fault;
+        if (_mv_672.has_value) {
+            __auto_type m = _mv_672.value;
             return ((slop_result_decode_Stage1_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_input_error, .data.input_error = m }) });
-        } else if (!_mv_557.has_value) {
+        } else if (!_mv_672.has_value) {
             return ((slop_result_decode_Stage1_types_Fault){ .is_ok = true, .data.ok = ((decode_Stage1){.axioms = out, .signature = sig, .inert = inert}) });
         }
         SLOP_UNREACHABLE();
@@ -2247,16 +2247,16 @@ slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
                 if (it.p == type_pred) {
-                    __auto_type _mv_562 = decode_term_iri_value(termstore_term_of(dict, it.s));
-                    if (_mv_562.has_value) {
-                        __auto_type e = _mv_562.value;
+                    __auto_type _mv_677 = decode_term_iri_value(termstore_term_of(dict, it.s));
+                    if (_mv_677.has_value) {
+                        __auto_type e = _mv_677.value;
                         {
                             __auto_type np = (((owl2_signature_has_object_property(sig, e)) ? 1 : 0) + (((owl2_signature_has_data_property(sig, e)) ? 1 : 0) + ((owl2_signature_has_annotation_property(sig, e)) ? 1 : 0)));
                             if (np > 1) {
                                 bad = (slop_option_string){.has_value = 1, .value = string_concat(arena, SLOP_STR("IRI declared under two disjoint property kinds: "), e.value)};
                             }
                         }
-                    } else if (!_mv_562.has_value) {
+                    } else if (!_mv_677.has_value) {
                     }
                 }
             }

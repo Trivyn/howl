@@ -37,7 +37,7 @@
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
-                 Omission Coverage Termination SubPair Findings Outcome Fault
+                 Omission Coverage Termination SubPair Findings Outcome Evidence Fault
                  ReasonerConfig Profile ProfileSelection
                  default-config emit-edge make-context make-queue
                  Names empty-names intern-node intern-role renamed-node original-node original-role
@@ -47,14 +47,15 @@
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
-  (import howl (Verdict verdict classify Prepared prepare reason))
+  (import howl (Verdict verdict classify Prepared ElWork prepare reason decode-owned prepare-in-profile))
   (import el (apply-el-rules apply-el-rules-reference))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
+  (import strlib (starts-with))
   (import select (profile-name parse-profile))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
-  (import types (KscAxiom KName kname-eq))
-  (import kscsat (KscResult ClassAnswer ksc-classify answer-holds input-classes))
+  (import types (KscAxiom KName KscResult ClassAnswer kname-eq))
+  (import kscsat (ksc-classify answer-holds input-classes))
   (import ksc (reference-closure reference-answer))
 
   ;; ============================================================
@@ -71,6 +72,29 @@
       (active       (set-new arena Node))
       (active-count 0)
       (iteration    0)))
+
+  ;; ============================================================
+  ;; el's evidence, out of the generalized Outcome and Prepared
+  ;; ============================================================
+
+  (fn outcome-saturation ((arena Arena) (o Outcome))
+    (@intent "An el Outcome's saturation; an empty one for any other calculus")
+    (@spec ((Arena Outcome) -> Saturation))
+    (@alloc arena)
+    (match (. o evidence)
+      ((el-evidence sat) sat)
+      ((ksc-evidence _)  (empty-saturation arena))))
+
+  (fn prepared-el-work ((arena Arena) (p Prepared))
+    (@intent "An el Prepared's work; an empty one for any other calculus")
+    (@spec ((Arena Prepared) -> ElWork))
+    (@alloc arena)
+    (match (. p work)
+      ((el-work w)  w)
+      ((ksc-work _) (record-new ElWork
+                      (axioms     (list-new arena NormAxiom))
+                      (index      (build-rule-index arena (list-new arena NormAxiom)))
+                      (saturation (empty-saturation arena))))))
 
   (fn make-findings ((arena Arena) (inconsistent Bool) (unsat-count Int))
     (@intent "Findings with a controllable inconsistency flag and unsatisfiable-set size")
@@ -104,7 +128,8 @@
                          (union-new Termination fixpoint)
                          (union-new Termination resource-limit 1000)))
           (findings    (make-findings arena inconsistent unsat-count))
-          (saturation  (empty-saturation arena))
+          (evidence    (union-new Evidence el-evidence (empty-saturation arena)))
+          (rounds      0)
           (names       (empty-names arena))))))
 
   (fn verdict-eq ((a Verdict) (b Verdict))
@@ -429,7 +454,7 @@
         ((none) false)
         ((some o)
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
-               (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent) mother parent)
+               (entails-sub (outcome-saturation arena o) (. o names) (. (. o findings) inconsistent) mother parent)
                (match (verdict o) ('verdict-coherent true) (_ false)))))))
 
   (fn test-role-hierarchy-carries-edges ((arena Arena))
@@ -443,9 +468,9 @@
       ((none) false)
       ((some o)
         (let ((inc (. (. o findings) inconsistent)))
-          (and (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#A")
+          (and (entails-sub (outcome-saturation arena o) (. o names) inc (cls "http://example.org/t#A")
                             (cls "http://example.org/t#C"))
-               (not (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#E")
+               (not (entails-sub (outcome-saturation arena o) (. o names) inc (cls "http://example.org/t#E")
                                  (cls "http://example.org/t#F"))))))))
 
   (fn test-role-closure-deep ((arena Arena))
@@ -461,7 +486,7 @@
       ((none) false)
       ((some o)
         (let ((inc (. (. o findings) inconsistent))
-              (sat (. o saturation))
+              (sat (outcome-saturation arena o))
               (nm  (. o names)))
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
                (entails-sub sat nm inc (cls "http://example.org/t#A1") (cls "http://example.org/t#C1"))
@@ -488,9 +513,9 @@
       ((some o)
         (let ((inc (. (. o findings) inconsistent)))
           (and (== (cast Int (list-len (. (. o coverage) omitted))) 0)
-               (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#X")
+               (entails-sub (outcome-saturation arena o) (. o names) inc (cls "http://example.org/t#X")
                             (cls "http://example.org/t#E3"))
-               (entails-sub (. o saturation) (. o names) inc (cls "http://example.org/t#X2")
+               (entails-sub (outcome-saturation arena o) (. o names) inc (cls "http://example.org/t#X2")
                             (cls "http://example.org/t#H2")))))))
 
   (fn test-unattested-import-is-inconclusive ((arena Arena))
@@ -519,7 +544,7 @@
       (match (classify-fixture arena "corpus/fixtures/hazards/declared-unused-class.ttl")
         ((none) false)
         ((some o)
-          (and (entails-sub (. o saturation) (. o names) (. (. o findings) inconsistent)
+          (and (entails-sub (outcome-saturation arena o) (. o names) (. (. o findings) inconsistent)
                  unused (node-top))
                (match (verdict o) ('verdict-coherent true) (_ false)))))))
 
@@ -676,7 +701,7 @@
     (match (classify-fixture arena path)
       ((none) false)
       ((some o)
-        (let ((sat   (. o saturation))
+        (let ((sat   (outcome-saturation arena o))
               (names (. o names))
               (f     (. o findings))
               (mut ok    true)
@@ -2152,7 +2177,7 @@
     (match (ksc-fixture arena ttl)
       ((none) (do (println (string-concat arena "  [ksc differential] did not gate whole: " label)) false))
       ((some fx)
-        (let ((res (ksc-classify arena (. fx axioms) (. fx classes)))
+        (let ((res (ksc-classify arena (. fx axioms) (. fx classes) (default-config)))
               (nothing (union-new KName k-class (record-new IRI (value OWL_NOTHING))))
               (thing   (union-new KName k-class (record-new IRI (value OWL_THING))))
               (mut ok true))
@@ -2187,7 +2212,7 @@
     (match (ksc-fixture arena ttl)
       ((none) -1)
       ((some fx)
-        (let ((res (ksc-classify arena (. fx axioms) (. fx classes)))
+        (let ((res (ksc-classify arena (. fx axioms) (. fx classes) (default-config)))
               (an (union-new KName k-class (record-new IRI (value a))))
               (bn (union-new KName k-class (record-new IRI (value b))))
               (mut out 0))
@@ -2204,13 +2229,13 @@
     (@alloc arena)
     (match (ksc-fixture arena ttl)
       ((none) -1)
-      ((some fx) (if (. (ksc-classify arena (. fx axioms) (. fx classes)) inconsistent) 1 0))))
+      ((some fx) (if (. (ksc-classify arena (. fx axioms) (. fx classes) (default-config)) inconsistent) 1 0))))
 
   (fn ksc-fixture-count ()
     (@intent "How many el++ fixtures there are")
     (@spec (() -> Int))
     (@pure)
-    15)
+    21)
 
   (fn ksc-fixture-at ((i Int))
     (@intent "el++ fixture i: §5.4's constructs, alone and combined, as an inline Turtle body")
@@ -2250,6 +2275,20 @@
       ;; 14. A nominal's class reaches every class equal to it: {a} ⊑ C, D ⊑ {a} ⊨ D ⊑ C,
       ;;     and a chain through a witness that is a: Q ⊑ ∃r.{a}, C ⊑ ∃s.D, r ∘ s ⊑ t, ∃t.D ⊑ E.
       (14 ":Q a owl:Class . :E a owl:Class .\n[ owl:oneOf ( :a ) ] rdfs:subClassOf :C .\n:D rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:Q rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] .\n:t owl:propertyChainAxiom ( :r :s ) .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
+      ;; 15. K6: a witness shared by a safe class S and an unsafe one U (U reaches {a}).
+      (15 ":S a owl:Class . :U a owl:Class . :X a owl:Class . :B a owl:Class . :E a owl:Class .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf :D .\n:S rdfs:subClassOf :X . :U rdfs:subClassOf :X .\n:U rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
+      ;; 16. K6.3: ⊥ reaches an unsafe class only through a safe witness.
+      (16 ":S a owl:Class . :U a owl:Class . :X a owl:Class . :B a owl:Class .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf owl:Nothing .\n:S rdfs:subClassOf :X . :U rdfs:subClassOf :X .\n:U rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n")
+      ;; 17. K6: a nominal two hops down makes both classes above it unsafe.
+      (17 ":S a owl:Class . :T a owl:Class . :E a owl:Class .\n:S rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .\n:T rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n:a a :D .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] ] rdfs:subClassOf :E .\n")
+      ;; 18. K6: owl:Thing unsafe through ⊤ ⊑ ∃r.{a}; every class then reaches a.
+      (18 ":E a owl:Class .\nowl:Thing rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n:a a :D .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
+      ;; 19. K6's counterexample: W assumes Q1 and Q2 non-empty together, so it
+      ;;     merges them through {a}; neither follows from the ontology.
+      (19 ":Q1 a owl:Class . :Q2 a owl:Class .\n:Q1 rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:Q2 rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
+      ;; 20. The same merge through witnesses: Q1 ⊑ ∃r.(B ⊓ {a}) makes a a B
+      ;;     only when Q1 is non-empty, so Q2 ⊑ ∃s.{a}, ∃s.B ⊑ E gives Q2 ⋢ E.
+      (20 ":Q1 a owl:Class . :Q2 a owl:Class . :B a owl:Class . :E a owl:Class .\n:Q1 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B [ owl:oneOf ( :a ) ] ) ] ] .\n:Q2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
       (_ "")))
 
   (fn test-ksc-engine-matches-reference ((arena Arena))
@@ -2317,7 +2356,202 @@
           (do (println "  [ksc] chain through a nominal witness: Q ⊑ E") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 14) "http://example.org/t#C" "http://example.org/t#E") 0))
           (do (println "  [ksc] nominal: C ⋢ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 15) "http://example.org/t#S" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6 shared witness: S ⊑ E (S safe)") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 15) "http://example.org/t#U" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6 shared witness: U ⊑ E (U unsafe)") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 16) "http://example.org/t#U" "http://www.w3.org/2002/07/owl#Nothing") 1))
+          (do (println "  [ksc] K6.3: U unsatisfiable through a safe witness") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 16) "http://example.org/t#S" "http://www.w3.org/2002/07/owl#Nothing") 1))
+          (do (println "  [ksc] K6.2: S unsatisfiable through its cone") (set! ok false)))
+        (when (not (== (ksc-inconsistent arena (ksc-fixture-at 16)) 0))
+          (do (println "  [ksc] K6 fixture 16 is consistent") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 17) "http://example.org/t#S" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6: a nominal two hops down: S ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 17) "http://example.org/t#T" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6: a nominal two hops down: T ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 18) "http://www.w3.org/2002/07/owl#Thing" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6: ⊤ ⊑ ∃r.{a} makes owl:Thing ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 18) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6: ⊤ ⊑ ∃r.{a} makes C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 19) "http://example.org/t#Q2" "http://example.org/t#Q1") 0))
+          (do (println "  [ksc] K6 does not merge: Q2 ⋢ Q1") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 19) "http://example.org/t#Q1" "http://example.org/t#Q2") 0))
+          (do (println "  [ksc] K6 does not merge: Q1 ⋢ Q2") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 20) "http://example.org/t#Q2" "http://example.org/t#E") 0))
+          (do (println "  [ksc] K6 does not merge through witnesses: Q2 ⋢ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 20) "http://example.org/t#Q1" "http://example.org/t#B") 0))
+          (do (println "  [ksc] fixture 20: Q1 ⋢ B") (set! ok false)))
         ok)))
+
+  ;; ============================================================
+  ;; el against el++ (SPEC §5.4 K5): on input inside el, complete runs of
+  ;; the two rungs print the same report except for `profile` and
+  ;; `rounds`. Both calculi are complete for the same theory there, so a
+  ;; difference is a defect in one of them, or in K6.
+  ;; ============================================================
+
+  (fn classify-fixture-in ((arena Arena) (path String) (profile Profile))
+    (@intent "The whole pipeline under a named rung, implemented or not")
+    (@spec ((Arena String Profile) -> (Option Outcome)))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) (none))
+      ((ok g)
+        (match (decode-owned arena (. g triples) (list-new arena IRI))
+          ((error _) (none))
+          ((ok d)
+            (match (prepare-in-profile arena d (default-config) profile)
+              ((error _) (none))
+              ((ok p)
+                (match (reason arena p (default-config))
+                  ((error _) (none))
+                  ((ok o)    (some o))))))))))
+
+  (fn rung-neutral-lines ((arena Arena) (o Outcome))
+    (@intent "A report's lines without the two that name the rung's own accounting")
+    (@spec ((Arena Outcome) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (for-each (l (report-lines arena o))
+          (when (not (starts-with l "profile "))
+            (when (not (starts-with l "rounds "))
+              (list-push out l))))
+        out)))
+
+  (fn rungs-agree-on ((arena Arena) (path String))
+    (@intent "Do el and el++ print the same report for this fixture, profile and rounds aside?")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (classify-fixture-in arena path 'profile-el)
+      ((none) (do (println (string-concat arena "  [el vs el++] el did not run: " path)) false))
+      ((some a)
+        (match (classify-fixture-in arena path 'profile-el-plus-plus)
+          ((none) (do (println (string-concat arena "  [el vs el++] el++ did not run: " path)) false))
+          ((some b)
+            (if (same-lines (rung-neutral-lines arena a) (rung-neutral-lines arena b))
+              true
+              (do
+                (println (string-concat arena "  [el vs el++] reports differ: " path))
+                (for-each (l (rung-neutral-lines arena a)) (println (string-concat arena "    el   " l)))
+                (for-each (l (rung-neutral-lines arena b)) (println (string-concat arena "    el++ " l)))
+                false)))))))
+
+  (fn test-el-and-el-plus-plus-agree ((arena Arena))
+    (@intent "On every el fixture, el and el++ report the same findings (K5)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/abox-assertions.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-binary.ttl")
+        (list-push ps "corpus/fixtures/v0/disjoint-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/domain.ttl")
+        (list-push ps "corpus/fixtures/v0/equivalent-classes.ttl")
+        (list-push ps "corpus/fixtures/v0/equivalent-properties.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-lhs.ttl")
+        (list-push ps "corpus/fixtures/v0/exists-rhs.ttl")
+        (list-push ps "corpus/fixtures/v0/intersection.ttl")
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-chain.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-domain-range.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-superclass.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain.ttl")
+        (list-push ps "corpus/fixtures/v0/range.ttl")
+        (list-push ps "corpus/fixtures/v0/subclass-atomic.ttl")
+        (list-push ps "corpus/fixtures/v0/subproperty.ttl")
+        (list-push ps "corpus/fixtures/v0/top-bottom.ttl")
+        (list-push ps "corpus/fixtures/v0/transitive.ttl")
+        (for-each (p ps) (when (not (rungs-agree-on arena p)) (set! ok false)))
+        ok)))
+
+  ;; ============================================================
+  ;; el++'s engine: worker count and the cap (SPEC §5.4 "Rounds and the
+  ;; cap", §6.8)
+  ;; ============================================================
+
+  (fn ksc-config ((workers Int) (cap Int))
+    (@intent "A config with a chosen worker count and round budget")
+    (@spec ((Int Int) -> ReasonerConfig))
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg worker-count (cast (Int 1 .. 64) workers))
+        (set! cfg max-iterations (cast (Int 0 .. 10000) cap))
+        cfg)))
+
+  (fn answers-equal ((a KscResult) (b KscResult))
+    (@intent "Do two el++ results say the same: inconsistency, termination and every answer, in order?")
+    (@spec ((KscResult KscResult) -> Bool))
+    (if (not (== (. a inconsistent) (. b inconsistent)))
+      false
+      (if (not (== (list-len (. a answers)) (list-len (. b answers))))
+        false
+        (let ((mut ok true)
+              (mut i 0))
+          (do
+            (for-each (x (. a answers))
+              (do
+                (match (list-get (. b answers) i)
+                  ((some y)
+                    (do
+                      (when (not (kname-eq (. x cls) (. y cls))) (set! ok false))
+                      (when (not (== (. x unsat) (. y unsat))) (set! ok false))
+                      (when (not (== (list-len (. x subsumers)) (list-len (. y subsumers)))) (set! ok false))
+                      (let ((mut j 0))
+                        (for-each (n (. x subsumers))
+                          (do
+                            (match (list-get (. y subsumers) j)
+                              ((some m) (when (not (kname-eq n m)) (set! ok false)))
+                              ((none)   (set! ok false)))
+                            (set! j (+ j 1)))))))
+                  ((none) (set! ok false)))
+                (set! i (+ i 1))))
+            ok)))))
+
+  (fn test-ksc-workers-agree ((arena Arena))
+    (@intent "el++ answers every fixture the same at W = 1 and W = 4 (§6.8)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (while (< i (ksc-fixture-count))
+          (do
+            (match (ksc-fixture arena (ksc-fixture-at i))
+              ((some fx)
+                (let ((one  (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+                      (four (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 4 1000))))
+                  (when (not (answers-equal one four))
+                    (do (println (string-concat arena "  [ksc workers] W=1 and W=4 differ on fixture "
+                                   (int-to-string arena i)))
+                        (set! ok false)))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn test-ksc-cap ((arena Arena))
+    (@intent "A cap that cuts a phase gives resource-limit and only sound answers (§5.4)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Fixture 0 (the litmus) has no individuals: G is empty at 0 rounds and
+    ;; W needs several, so a cap of 1 cuts W and answers nothing. Fixture 16
+    ;; has an unsafe class whose run needs rounds after G and W.
+    (match (ksc-fixture arena (ksc-fixture-at 0))
+      ((none) false)
+      ((some fx)
+        (let ((full   (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+              (capped (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1)))
+              (zero   (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 0))))
+          (and (match (. full termination) ((fixpoint) true) ((resource-limit _) false))
+               (match (. capped termination) ((fixpoint) false) ((resource-limit _) true))
+               (== (list-len (. capped answers)) 0)
+               (not (. capped inconsistent))
+               (match (. zero termination) ((fixpoint) false) ((resource-limit _) true))
+               (<= (. capped rounds) 1)
+               (> (list-len (. full answers)) 0))))))
 
   (fn test-ksc-normal-form-rows ((arena Arena))
     (@intent "Each of §5.4's translation rows normalises to exactly its Definition 1 facts")
@@ -3272,15 +3506,15 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
         (match (prepare arena (. g triples) (list-new arena IRI) (default-config))
           ((error _) false)
           ((ok p)
-            (let ((idx (. p index))
-                  (axioms (. p axioms)))
+            (let ((idx (. (prepared-el-work arena p) index))
+                  (axioms (. (prepared-el-work arena p) axioms)))
               (match (reason arena p (default-config))
                 ((error _) false)
                 ((ok o)
                   (let ((mut ok true)
                         (mut facts 0))
                     (do
-                      (for-each ((n ctx) (. (. o saturation) contexts))
+                      (for-each ((n ctx) (. (outcome-saturation arena o) contexts))
                         (do
                           (for-each (b (. ctx subsumers))
                             (do
@@ -4477,6 +4711,18 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-entailments arena)))
             (print-test-result "ksc: §5.4's constructs reason as the Direct Semantics says" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-el-and-el-plus-plus-agree arena)))
+            (print-test-result "K5: el and el++ report the same on every el fixture" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-workers-agree arena)))
+            (print-test-result "ksc: every fixture answers the same at W = 1 and W = 4" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-cap arena)))
+            (print-test-result "ksc: a cap that cuts phase W answers nothing and says resource-limit" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))

@@ -31,6 +31,9 @@ typedef struct types_Coverage types_Coverage;
 typedef struct types_Termination types_Termination;
 typedef struct types_SubPair types_SubPair;
 typedef struct types_Findings types_Findings;
+typedef struct types_ClassAnswer types_ClassAnswer;
+typedef struct types_KscResult types_KscResult;
+typedef struct types_Evidence types_Evidence;
 typedef struct types_Outcome types_Outcome;
 typedef struct types_Fault types_Fault;
 typedef struct types_ProfileSelection types_ProfileSelection;
@@ -187,6 +190,12 @@ typedef struct types_KName types_KName;
 #ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
 #define SLOP_OPTION_TYPES_KNAME_DEFINED
 SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
+#ifndef SLOP_LIST_TYPES_KNAME_DEFINED
+#define SLOP_LIST_TYPES_KNAME_DEFINED
+#define SLOP_LIST_TYPES_KNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_KName, slop_list_types_KName)
 #endif
 
 typedef enum {
@@ -570,6 +579,65 @@ typedef struct types_Findings types_Findings;
 SLOP_OPTION_DEFINE(types_Findings, slop_option_types_Findings)
 #endif
 
+struct types_ClassAnswer {
+    types_KName cls;
+    uint8_t shared;
+    uint8_t unsat;
+    slop_list_types_KName subsumers;
+    uint8_t complete;
+    int64_t rounds;
+    int64_t facts;
+};
+typedef struct types_ClassAnswer types_ClassAnswer;
+
+#ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+#define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
+#endif
+
+#ifndef SLOP_LIST_TYPES_CLASSANSWER_DEFINED
+#define SLOP_LIST_TYPES_CLASSANSWER_DEFINED
+#define SLOP_LIST_TYPES_CLASSANSWER_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_ClassAnswer, slop_list_types_ClassAnswer)
+#endif
+
+struct types_KscResult {
+    uint8_t inconsistent;
+    types_Termination termination;
+    int64_t rounds;
+    int64_t g_rounds;
+    int64_t g_facts;
+    int64_t w_rounds;
+    int64_t w_facts;
+    int64_t unsafe_count;
+    slop_list_types_ClassAnswer answers;
+};
+typedef struct types_KscResult types_KscResult;
+
+#ifndef SLOP_OPTION_TYPES_KSCRESULT_DEFINED
+#define SLOP_OPTION_TYPES_KSCRESULT_DEFINED
+SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
+#endif
+
+typedef enum {
+    types_Evidence_el_evidence,
+    types_Evidence_ksc_evidence
+} types_Evidence_tag;
+
+struct types_Evidence {
+    types_Evidence_tag tag;
+    union {
+        types_Saturation el_evidence;
+        types_KscResult ksc_evidence;
+    } data;
+};
+typedef struct types_Evidence types_Evidence;
+
+#ifndef SLOP_OPTION_TYPES_EVIDENCE_DEFINED
+#define SLOP_OPTION_TYPES_EVIDENCE_DEFINED
+SLOP_OPTION_DEFINE(types_Evidence, slop_option_types_Evidence)
+#endif
+
 typedef enum {
     types_Fault_cancelled,
     types_Fault_input_error,
@@ -644,7 +712,8 @@ struct types_Outcome {
     types_Coverage coverage;
     types_Termination termination;
     types_Findings findings;
-    types_Saturation saturation;
+    types_Evidence evidence;
+    int64_t rounds;
     types_Names names;
 };
 typedef struct types_Outcome types_Outcome;
@@ -967,6 +1036,21 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #ifndef SLOP_OPTION_TYPES_FINDINGS_DEFINED
 #define SLOP_OPTION_TYPES_FINDINGS_DEFINED
 SLOP_OPTION_DEFINE(types_Findings, slop_option_types_Findings)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+#define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KSCRESULT_DEFINED
+#define SLOP_OPTION_TYPES_KSCRESULT_DEFINED
+SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_EVIDENCE_DEFINED
+#define SLOP_OPTION_TYPES_EVIDENCE_DEFINED
+SLOP_OPTION_DEFINE(types_Evidence, slop_option_types_Evidence)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED

@@ -39,6 +39,11 @@ uint8_t classify_is_bottom_iri(rdf_IRI iri);
 slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Saturation sat, types_Names names);
 slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Saturation sat, types_Names names);
 types_Findings classify_extract_findings(slop_arena* arena, types_Saturation sat, types_Names names);
+slop_list_rdf_IRI classify_ksc_unsatisfiable(slop_arena* arena, types_KscResult r);
+slop_list_types_SubPair classify_ksc_taxonomy(slop_arena* arena, types_KscResult r);
+types_Findings classify_extract_ksc_findings(slop_arena* arena, types_KscResult r);
+uint8_t classify_ksc_answer_holds(types_ClassAnswer a, types_KName b);
+uint8_t classify_ksc_entails_sub(types_KscResult r, types_KName a, types_KName b);
 
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED

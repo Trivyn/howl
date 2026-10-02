@@ -44,20 +44,23 @@
 
   (import rdf (IRI))
   (import vocab (OWL_THING OWL_NOTHING))
-  (import types (RoleId KName KTerm KElem KFact KscAxiom
+  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig
                  role-eq kname-eq kterm-eq kelem-eq
                  name-term nominal-term ind-elem class-elem copy-iri))
   (import ksc (Concl JoinRule is-name is-nominal is-individual term-elem
                ksc-1 ksc-q ksc-2 ksc-3 ksc-4 ksc-5 ksc-6 ksc-7 ksc-8
                ksc-9 ksc-9-assert ksc-10 ksc-10-assert ksc-11 ksc-12 ksc-13 ksc-14
                ksc-15 ksc-16 ksc-17 ksc-18 ksc-23 ksc-24 ksc-25 ksc-26
-               join))
+               ksc-join))
   (import kscpremise (KList KscIndex build-ksc-index term-bucket role-bucket))
   (import owl2 (Signature))
   (import canon (sort-iris))
+  (import saturate (reuse-arena))
+  (import thread (spawn join))
+  (import kscnormal (copy-kname))
 
   (export
-    FactList RoleFacts KStore Base RunResult ClassAnswer KscResult
+    FactList RoleFacts KStore Base RunResult
     new-store run-ksc ksc-classify input-classes answer-subsumers answer-holds store-holds is-bottom-fact)
 
   (type FactList (record
@@ -90,25 +93,8 @@
     (store  KStore)
     (rounds Int)
     (unsat  Bool)
+    (capped Bool)                    ; the budget ran out with facts still to process
     (facts  Int)))
-
-  ;; One class's answers, copied out of its run's arena.
-  (type ClassAnswer (record
-    (cls        KName)
-    (shared     Bool)                ; answered from W (K6.2), not a run of its own
-    (unsat      Bool)
-    (subsumers  (List KName))
-    (rounds     Int)
-    (facts      Int)))
-
-  (type KscResult (record
-    (inconsistent Bool)
-    (g-rounds     Int)
-    (g-facts      Int)
-    (w-rounds     Int)
-    (w-facts      Int)
-    (unsafe-count Int)               ; classes that needed a run of their own
-    (answers      (List ClassAnswer))))
 
   ;; ============================================================
   ;; The store
@@ -362,7 +348,7 @@
                       ((k-some-lhs v a z)
                         (do
                           (for-each (ps (role-partners arena st base false x v))
-                            (for-each (g (join arena 'j7-inst f ps ax)) (list-push out g)))
+                            (for-each (g (ksc-join arena 'j7-inst f ps ax)) (list-push out g)))
                           (when (store-holds st base (union-new KFact f-self x v))
                             (let ((c (ksc-8 v a z x v x y)))
                               (when (. c fires) (list-push out (. c fact)))))))
@@ -387,16 +373,16 @@
                   (when (is-nominal y)
                     (do
                       (for-each (ps (partners arena st base 'fd-insts x))
-                        (for-each (g (join arena 'j27-nom f ps noax)) (list-push out g)))
+                        (for-each (g (ksc-join arena 'j27-nom f ps noax)) (list-push out g)))
                       (for-each (ps (partners arena st base 'fd-insts (term-elem y)))
-                        (for-each (g (join arena 'j28-nom f ps noax)) (list-push out g)))
+                        (for-each (g (ksc-join arena 'j28-nom f ps noax)) (list-push out g)))
                       (for-each (ps (partners arena st base 'fd-ins-all x))
-                        (for-each (g (join arena 'j29-nom f ps noax)) (list-push out g)))))
+                        (for-each (g (ksc-join arena 'j29-nom f ps noax)) (list-push out g)))))
                   (for-each (ps (partners arena st base 'fd-noms x))
-                    (for-each (g (join arena 'j27-other f ps noax)) (list-push out g)))
+                    (for-each (g (ksc-join arena 'j27-other f ps noax)) (list-push out g)))
                   (when (is-individual x)
                     (for-each (ps (partners arena st base 'fd-holders x))
-                      (for-each (g (join arena 'j28-ind f ps noax)) (list-push out g))))))))
+                      (for-each (g (ksc-join arena 'j28-ind f ps noax)) (list-push out g))))))))
           ((f-triple x v x1)
             (do
               (let ((c (ksc-2 x v x1))) (when (. c fires) (list-push out (. c fact))))
@@ -416,7 +402,7 @@
                           (when (role-eq u v)
                             (do
                               (for-each (ps (role-partners arena st base true x1 v2))
-                                (for-each (g (join arena 'j15-first f ps ax)) (list-push out g)))
+                                (for-each (g (ksc-join arena 'j15-first f ps ax)) (list-push out g)))
                               (when (store-holds st base (union-new KFact f-self x1 v2))
                                 (let ((c (ksc-17 u v2 w x v x1 x1 v2)))
                                   (when (. c fires) (list-push out (. c fact)))))))
@@ -424,7 +410,7 @@
                           (when (role-eq v2 v)
                             (do
                               (for-each (ps (role-partners arena st base false x u))
-                                (for-each (g (join arena 'j15-second f ps ax)) (list-push out g)))
+                                (for-each (g (ksc-join arena 'j15-second f ps ax)) (list-push out g)))
                               (when (store-holds st base (union-new KFact f-self x u))
                                 (let ((c (ksc-16 u v2 w x u x v x1)))
                                   (when (. c fires) (list-push out (. c fact)))))))))
@@ -441,7 +427,7 @@
                 ((none) (do)))
               (let ((noax (union-new KscAxiom k-role (ksc-dummy-role) (ksc-dummy-role))))
                 (for-each (ps (partners arena st base 'fd-noms x1))
-                  (for-each (g (join arena 'j29-triple f ps noax)) (list-push out g))))))
+                  (for-each (g (ksc-join arena 'j29-triple f ps noax)) (list-push out g))))))
           ((f-self x v)
             (match (role-bucket idx v)
               ((some bucket)
@@ -461,7 +447,7 @@
                         (when (role-eq u v)
                           (do
                             (for-each (ps (role-partners arena st base true x v2))
-                              (for-each (g (join arena 'j16-self f ps ax)) (list-push out g)))
+                              (for-each (g (ksc-join arena 'j16-self f ps ax)) (list-push out g)))
                             (when (store-holds st base (union-new KFact f-self x v2))
                               (let ((c (ksc-18 u v2 w x v x v2)))
                                 (when (. c fires) (list-push out (. c fact)))))))
@@ -469,7 +455,7 @@
                         (when (role-eq v2 v)
                           (do
                             (for-each (ps (role-partners arena st base false x u))
-                              (for-each (g (join arena 'j17-self f ps ax)) (list-push out g)))
+                              (for-each (g (ksc-join arena 'j17-self f ps ax)) (list-push out g)))
                             (when (store-holds st base (union-new KFact f-self x u))
                               (let ((c (ksc-18 u v2 w x u x v)))
                                 (when (. c fires) (list-push out (. c fact)))))))))
@@ -523,16 +509,26 @@
           ((f-self _ _) false)))
       ((none) false)))
 
-  (fn run-ksc ((arena Arena) (idx KscIndex) (base (Option Base)) (seeds (List KFact)) (stop-at-bottom Bool))
-    (@intent "Saturate from seeds over a base; stop at the fixpoint, or when ⊥ arises if asked to")
-    (@spec ((Arena KscIndex (Option Base) (List KFact) Bool) -> RunResult))
+  (fn run-ksc ((arena Arena) (idx KscIndex) (base (Option Base)) (seeds (List KFact))
+                (stop-at-bottom Bool) (budget Int))
+    (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
+    (@spec ((Arena KscIndex (Option Base) (List KFact) Bool Int) -> RunResult))
     (@alloc arena)
+    ;; THREE ARENAS. The store lives in `arena`. Each round's delta lives in
+    ;; an arena of its own, freed when the next round's delta is built. And
+    ;; everything `derive` allocates - its conclusion list, the partner
+    ;; snapshots, the join results - goes in `ra`, emptied after each fact:
+    ;; `commit` copies a conclusion's value into the store, so nothing in
+    ;; `ra` outlives the fact that produced it (el's per-context rule arena).
     (let ((st (new-store arena))
+          (ra (arena-new 1048576))
+          (mut da (arena-new 1048576))
           (mut delta (list-new arena KFact))
           (mut unsat false)
           (mut rounds 0)
           (mut facts 0))
       (do
+        (set! delta (list-new da KFact))
         (for-each (s seeds)
           (when (commit arena st base s)
             (do
@@ -540,23 +536,33 @@
               (set! facts (+ facts 1))
               (when (is-bottom-fact s) (set! unsat true))
               (when (reaches-bottom base s) (set! unsat true)))))
-        (while (> (list-len delta) 0)
-          (let ((mut next (list-new arena KFact)))
+        ;; Each pass of this loop is one round (§5.4 "Rounds and the cap").
+        (while (if (> (list-len delta) 0) (< rounds budget) false)
+          (let ((na (arena-new 1048576))
+                (mut next (list-new na KFact)))
             (do
               (for-each (f delta)
                 (when (not (if stop-at-bottom unsat false))
-                  (for-each (c (derive arena idx st base f))
-                    (when (commit arena st base c)
-                      (do
-                        (list-push next c)
-                        (set! facts (+ facts 1))
-                        (when (is-bottom-fact c) (set! unsat true))
-                        (when (reaches-bottom base c) (set! unsat true)))))))
+                  (do
+                    (for-each (c (derive ra idx st base f))
+                      (when (commit arena st base c)
+                        (do
+                          (list-push next c)
+                          (set! facts (+ facts 1))
+                          (when (is-bottom-fact c) (set! unsat true))
+                          (when (reaches-bottom base c) (set! unsat true)))))
+                    (reuse-arena ra))))
               (set! rounds (+ rounds 1))
+              (arena-free da)
+              (set! da na)
               (if (if stop-at-bottom unsat false)
-                (set! delta (list-new arena KFact))
+                (set! delta (list-new da KFact))
                 (set! delta next)))))
-        (record-new RunResult (store st) (rounds rounds) (unsat unsat) (facts facts)))))
+        (let ((capped (> (list-len delta) 0)))
+          (do
+            (arena-free da)
+            (arena-free ra)
+            (record-new RunResult (store st) (rounds rounds) (unsat unsat) (capped capped) (facts facts)))))))
 
   ;; ============================================================
   ;; Classification: phase G, phase W, then a run for each unsafe class
@@ -581,14 +587,6 @@
             ((f-triple _ _ _) (do))
             ((f-self _ _)     (do))))
         out)))
-
-  (fn copy-kname ((arena Arena) (n KName))
-    (@intent "A KName that owns its IRI string")
-    (@spec ((Arena KName) -> KName))
-    (@alloc arena)
-    (match n
-      ((k-class i) (union-new KName k-class (copy-iri arena i)))
-      ((k-fresh k) (union-new KName k-fresh k))))
 
   (fn backward-closure ((arena Arena) (w KStore) (start (List KElem)))
     (@intent "Every element of W whose triples reach one of start, start included")
@@ -615,20 +613,22 @@
             (set! i (+ i 1))))
         out)))
 
-  (fn class-run ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (q KName))
+  (fn class-run ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (budget Int) (q KName))
     (@intent "An unsafe class's run over G ∪ W_S, in a scratch arena; its answers copied into arena")
-    (@spec ((Arena KscIndex Base Bool KName) -> ClassAnswer))
+    (@spec ((Arena KscIndex Base Bool Int KName) -> ClassAnswer))
     (@alloc arena)
     (let ((scratch (arena-new 1048576))
           (qseeds (list-new scratch KFact)))
       (do
         (list-push qseeds (. (ksc-q q) fact))
-        (let ((r (run-ksc scratch idx (some base) qseeds true))
+        (let ((r (run-ksc scratch idx (some base) qseeds true budget))
               (ans (record-new ClassAnswer
                      (cls       q)
                      (shared    false)
                      (unsat     (if g-unsat true (. r unsat)))
                      (subsumers (answer-subsumers arena (. r store) q))
+                     ;; A run stopped by ⊥ is finished (K3), not capped.
+                     (complete  (if (. r unsat) true (not (. r capped))))
                      (rounds    (. r rounds))
                      (facts     (. r facts)))))
           (do
@@ -645,32 +645,38 @@
       (shared    true)
       (unsat     (if g-unsat true (set-has (. base botreach) (class-elem q))))
       (subsumers (answer-subsumers arena (. base w) q))
+      (complete  true)
       (rounds    0)
       (facts     0)))
 
-  (fn class-answer ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (q KName))
+  (fn class-answer ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (budget Int) (q KName))
     (@intent "q's answers: from W if q is safe (K6.2), from a run of its own if not (K6.3)")
-    (@spec ((Arena KscIndex Base Bool KName) -> ClassAnswer))
+    (@spec ((Arena KscIndex Base Bool Int KName) -> ClassAnswer))
     (@alloc arena)
     (if (is-safe base (class-elem q))
       (shared-answer arena base g-unsat q)
-      (class-run arena idx base g-unsat q)))
+      (class-run arena idx base g-unsat budget q)))
 
-  (fn ksc-classify ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)))
+  (fn ksc-classify ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (config ReasonerConfig))
     (@intent "Phase G, phase W, then a run for each unsafe class; keep each class's answers")
-    (@spec ((Arena (List KscAxiom) (List KName)) -> KscResult))
+    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> KscResult))
     (@alloc arena)
     ;; K3: the ontology is inconsistent iff unsat(owl:Thing), so owl:Thing
     ;; is always seeded in W and always answered, listed or not. A ⊥ in G
-    ;; flags every class; with no individuals, G is empty and only
-    ;; owl:Thing's answer can see ⊤ ⊑ ⊥.
+    ;; flags every class, so then nothing else runs; with no individuals,
+    ;; G is empty and only owl:Thing's answer can see ⊤ ⊑ ⊥.
+    ;;
+    ;; THE CAP (§5.4 "Rounds and the cap"): `max-iterations` bounds
+    ;; rounds(G) + rounds(W) + the most rounds any unsafe class takes. G
+    ;; gets all of it, W what G leaves, each class run what G and W leave.
+    ;; A capped G or W answers no class (K6: safety is a property of the
+    ;; complete W); the findings are then G's alone.
     (let ((idx (build-ksc-index arena axioms))
           (thing (union-new KName k-class (record-new IRI (value OWL_THING))))
+          (n (. config max-iterations))
           (mut gseeds (list-new arena KFact))
           (mut wseeds (list-new arena KFact))
-          (mut tainted (list-new arena KElem))
-          (mut answers (list-new arena ClassAnswer))
-          (mut unsafe-count 0))
+          (mut tainted (list-new arena KElem)))
       (do
         (for-each (a (. idx individuals))
           (do
@@ -680,32 +686,198 @@
         (list-push wseeds (. (ksc-q thing) fact))
         (for-each (q classes)
           (list-push wseeds (. (ksc-q q) fact)))
-        (let ((g (run-ksc arena idx (none) gseeds true))
-              (w (run-ksc arena idx (none) wseeds false)))
+        (let ((g (run-ksc arena idx (none) gseeds true n)))
+          (if (. g unsat)
+            (g-only arena g true)
+            (if (. g capped)
+              (g-only arena g false)
+              (let ((w (run-ksc arena idx (none) wseeds false (- n (. g rounds)))))
+                (if (. w capped)
+                  (record-new KscResult
+                    (inconsistent false)
+                    (termination  (union-new Termination resource-limit n))
+                    (rounds       (+ (. g rounds) (. w rounds)))
+                    (g-rounds     (. g rounds))
+                    (g-facts      (. g facts))
+                    (w-rounds     (. w rounds))
+                    (w-facts      (. w facts))
+                    (unsafe-count 0)
+                    (answers      (list-new arena ClassAnswer)))
+                  (classify-over-w arena idx g w tainted thing classes
+                    (- n (+ (. g rounds) (. w rounds)))
+                    (cast Int (. config worker-count)))))))))))
+
+  (fn g-only ((arena Arena) (g RunResult) (inconsistent Bool))
+    (@intent "The result when G decides alone: inconsistent, or capped before W could run")
+    (@spec ((Arena RunResult Bool) -> KscResult))
+    (@alloc arena)
+    ;; A ⊥ in G: every class is unsat and the ontology inconsistent (K3), so
+    ;; the findings are complete without W. A capped G: nothing is answered.
+    (record-new KscResult
+      (inconsistent inconsistent)
+      (termination  (if inconsistent
+                      (union-new Termination fixpoint)
+                      (union-new Termination resource-limit (. g rounds))))
+      (rounds       (. g rounds))
+      (g-rounds     (. g rounds))
+      (g-facts      (. g facts))
+      (w-rounds     0)
+      (w-facts      0)
+      (unsafe-count 0)
+      (answers      (list-new arena ClassAnswer))))
+
+  (fn copy-answer ((arena Arena) (a ClassAnswer))
+    (@intent "A class's answer, copied into arena with its strings")
+    (@spec ((Arena ClassAnswer) -> ClassAnswer))
+    (@alloc arena)
+    (let ((mut subs (list-new arena KName)))
+      (do
+        (for-each (n (. a subsumers)) (list-push subs (copy-kname arena n)))
+        (record-new ClassAnswer
+          (cls       (copy-kname arena (. a cls)))
+          (shared    (. a shared))
+          (unsat     (. a unsat))
+          (subsumers subs)
+          (complete  (. a complete))
+          (rounds    (. a rounds))
+          (facts     (. a facts))))))
+
+  (fn run-chunk ((wa Arena) (idx KscIndex) (base Base) (budget Int)
+                 (classes (List KName)) (todo (List Int)) (out (Map Int ClassAnswer)))
+    (@intent "One worker's share of phase Q: the runs of the unsafe classes it was handed")
+    (@spec ((Arena KscIndex Base Int (List KName) (List Int) (Map Int ClassAnswer)) -> Int))
+    (@alloc wa)
+    ;; Returns an Int because a spawned function is called through
+    ;; `int64_t(*)(void*)`. Everything it allocates is in `wa` or in each
+    ;; run's own scratch arena; it only READS the base, which nothing
+    ;; writes once phase W is done.
+    (do
+      (for-each (i todo)
+        (match (list-get classes i)
+          ((some q) (map-put out i (class-run wa idx base false budget q)))
+          ((none)   (do))))
+      0))
+
+  (fn index-chunk ((arena Arena) (xs (List Int)) (lo Int) (hi Int))
+    (@intent "The elements of xs at positions lo up to (not including) hi")
+    (@spec ((Arena (List Int) Int Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int))
+          (mut j lo))
+      (do
+        (while (< j hi)
           (do
-            (for-each (x (set-elements (. (. w store) noms-at)))
-              (list-push tainted x))
-            (let ((base (record-new Base
-                          (g        (. g store))
-                          (w        (. w store))
-                          (unsafe   (backward-closure arena (. w store) tainted))
-                          (botreach (backward-closure arena (. w store)
-                                      (set-elements (. (. w store) bots))))))
-                  (thing-answer (class-answer arena idx base (. g unsat) thing)))
+            (match (list-get xs j)
+              ((some x) (list-push out x))
+              ((none)   (do)))
+            (set! j (+ j 1))))
+        out)))
+
+  (fn worker-count-for ((workers Int) (jobs Int))
+    (@intent "How many workers phase Q uses: at least one, at most one per job")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (if (< workers 1) 1 (if (> workers jobs) (if (> jobs 0) jobs 1) workers)))
+
+  (fn classify-over-w ((arena Arena) (idx KscIndex) (g RunResult) (w RunResult) (tainted (List KElem))
+                       (thing KName) (classes (List KName)) (budget Int) (workers Int))
+    (@intent "With G and W complete: mark safety and ⊥-reach, then answer every class (K6)")
+    (@spec ((Arena KscIndex RunResult RunResult (List KElem) KName (List KName) Int Int) -> KscResult))
+    (@alloc arena)
+    ;; PHASE Q IN PARALLEL. A safe class is answered from W here, inline:
+    ;; it is a lookup. The unsafe ones are split into contiguous chunks of
+    ;; the canonical class order, each run by one thread into an arena of
+    ;; its own, and the answers are copied back in class order. Every run
+    ;; is a deterministic set computation over a base no one writes, so
+    ;; the report is the same at every worker count (§6.8).
+    (let ((mut taint (list-new arena KElem))
+          (mut answers (list-new arena ClassAnswer))
+          (mut complete true))
+      (do
+        (for-each (x tainted) (list-push taint x))
+        (for-each (x (set-elements (. (. w store) noms-at)))
+          (list-push taint x))
+        (let ((base (record-new Base
+                      (g        (. g store))
+                      (w        (. w store))
+                      (unsafe   (backward-closure arena (. w store) taint))
+                      (botreach (backward-closure arena (. w store)
+                                  (set-elements (. (. w store) bots))))))
+              (thing-answer (class-answer arena idx base false budget thing))
+              (shared (map-new arena Int ClassAnswer))
+              (mut todo (list-new arena Int))
+              (mut i 0))
+          (do
+            (when (not (. thing-answer complete)) (set! complete false))
+            (for-each (q classes)
               (do
-                (for-each (q classes)
-                  (let ((a (class-answer arena idx base (. g unsat) q)))
+                (if (is-safe base (class-elem q))
+                  (map-put shared i (shared-answer arena base false q))
+                  (list-push todo i))
+                (set! i (+ i 1))))
+            (let ((jobs (cast Int (list-len todo)))
+                  (nw (worker-count-for workers (cast Int (list-len todo))))
+                  (per (/ (+ (cast Int (list-len todo)) (- (worker-count-for workers (cast Int (list-len todo))) 1))
+                          (worker-count-for workers (cast Int (list-len todo)))))
+                  (mut was (list-new arena Arena))
+                  (mut outs (list-new arena (Map Int ClassAnswer)))
+                  (mut threads (list-new arena (Ptr (Thread Int))))
+                  (mut k 0))
+              (do
+                (while (< k nw)
+                  (let ((wa (arena-new 1048576))
+                        (out (map-new wa Int ClassAnswer))
+                        (chunk (index-chunk wa todo (* k per) (* (+ k 1) per))))
                     (do
-                      (when (not (. a shared)) (set! unsafe-count (+ unsafe-count 1)))
-                      (list-push answers a))))
-                (record-new KscResult
-                  (inconsistent (. thing-answer unsat))
-                  (g-rounds     (. g rounds))
-                  (g-facts      (. g facts))
-                  (w-rounds     (. w rounds))
-                  (w-facts      (. w facts))
-                  (unsafe-count unsafe-count)
-                  (answers      answers)))))))))
+                      (list-push was wa)
+                      (list-push outs out)
+                      ;; `wa`, `out` and `chunk` are IMMUTABLE bindings,
+                      ;; captured by value (slop#193).
+                      (if (<= nw 1)
+                        (do (run-chunk wa idx base budget classes chunk out) (do))
+                        (list-push threads
+                          (spawn arena (fn () (run-chunk wa idx base budget classes chunk out)))))
+                      (set! k (+ k 1)))))
+                (for-each (t threads) (join t))
+                (set! i 0)
+                (for-each (q classes)
+                  (do
+                    (match (map-get shared i)
+                      ((some a) (list-push answers a))
+                      ((none)
+                        (for-each (out outs)
+                          (match (map-get out i)
+                            ((some a)
+                              (do
+                                (when (not (. a complete)) (set! complete false))
+                                (list-push answers (copy-answer arena a))))
+                            ((none) (do))))))
+                    (set! i (+ i 1))))
+                (for-each (wa was) (arena-free wa))
+                (let ((qrounds (if (> (. thing-answer rounds) (max-rounds answers))
+                                 (. thing-answer rounds)
+                                 (max-rounds answers)))
+                      (total (+ (. g rounds) (+ (. w rounds) qrounds))))
+                  (record-new KscResult
+                    (inconsistent (. thing-answer unsat))
+                    (termination  (if complete
+                                    (union-new Termination fixpoint)
+                                    (union-new Termination resource-limit total)))
+                    (rounds       total)
+                    (g-rounds     (. g rounds))
+                    (g-facts      (. g facts))
+                    (w-rounds     (. w rounds))
+                    (w-facts      (. w facts))
+                    (unsafe-count jobs)
+                    (answers      answers))))))))))
+
+  (fn max-rounds ((answers (List ClassAnswer)))
+    (@intent "The most rounds any single class's run took")
+    (@spec (((List ClassAnswer)) -> Int))
+    (let ((mut m 0))
+      (do
+        (for-each (a answers) (when (> (. a rounds) m) (set! m (. a rounds))))
+        m)))
 
   (fn answer-holds ((a ClassAnswer) (b KName))
     (@intent "K5's holds(A, B): unsat(A), or inst(A, B) in A's run")

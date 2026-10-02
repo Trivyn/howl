@@ -11,8 +11,14 @@
 #include "slop_select.h"
 #include "slop_saturate.h"
 #include "slop_classify.h"
+#include "slop_gate.h"
+#include "slop_kscnormal.h"
+#include "slop_kscsat.h"
 #include "slop_premise.h"
 
+typedef struct howl_ElWork howl_ElWork;
+typedef struct howl_KscWork howl_KscWork;
+typedef struct howl_Work howl_Work;
 typedef struct howl_Prepared howl_Prepared;
 
 typedef enum {
@@ -25,6 +31,18 @@ typedef enum {
 #define SLOP_LIST_TYPES_NORMAXIOM_DEFINED
 #define SLOP_LIST_TYPES_NORMAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_NormAxiom, slop_list_types_NormAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
+#define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
+#define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_KscAxiom, slop_list_types_KscAxiom)
+#endif
+
+#ifndef SLOP_LIST_TYPES_KNAME_DEFINED
+#define SLOP_LIST_TYPES_KNAME_DEFINED
+#define SLOP_LIST_TYPES_KNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_KName, slop_list_types_KName)
 #endif
 
 #ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
@@ -44,6 +62,16 @@ SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
 #ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
 #define SLOP_OPTION_RDF_TRIPLE_DEFINED
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
@@ -54,11 +82,51 @@ SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
-struct howl_Prepared {
-    types_Profile profile;
+struct howl_ElWork {
     slop_list_types_NormAxiom axioms;
     premise_RuleIndex index;
     types_Saturation saturation;
+};
+typedef struct howl_ElWork howl_ElWork;
+
+#ifndef SLOP_OPTION_HOWL_ELWORK_DEFINED
+#define SLOP_OPTION_HOWL_ELWORK_DEFINED
+SLOP_OPTION_DEFINE(howl_ElWork, slop_option_howl_ElWork)
+#endif
+
+struct howl_KscWork {
+    slop_list_types_KscAxiom axioms;
+    slop_list_types_KName classes;
+};
+typedef struct howl_KscWork howl_KscWork;
+
+#ifndef SLOP_OPTION_HOWL_KSCWORK_DEFINED
+#define SLOP_OPTION_HOWL_KSCWORK_DEFINED
+SLOP_OPTION_DEFINE(howl_KscWork, slop_option_howl_KscWork)
+#endif
+
+typedef enum {
+    howl_Work_el_work,
+    howl_Work_ksc_work
+} howl_Work_tag;
+
+struct howl_Work {
+    howl_Work_tag tag;
+    union {
+        howl_ElWork el_work;
+        howl_KscWork ksc_work;
+    } data;
+};
+typedef struct howl_Work howl_Work;
+
+#ifndef SLOP_OPTION_HOWL_WORK_DEFINED
+#define SLOP_OPTION_HOWL_WORK_DEFINED
+SLOP_OPTION_DEFINE(howl_Work, slop_option_howl_Work)
+#endif
+
+struct howl_Prepared {
+    types_Profile profile;
+    howl_Work work;
     types_Coverage coverage;
     types_Names names;
 };
@@ -91,6 +159,10 @@ slop_result_normalize_Decoded_types_Fault howl_own_decoded(slop_arena* arena, sl
 slop_result_normalize_Decoded_types_Fault howl_decode_owned(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config);
 slop_result_howl_Prepared_types_Fault howl_prepare_in_profile(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
+uint8_t howl_strict_refuses(types_ReasonerConfig config, types_Coverage cov);
+slop_result_howl_Prepared_types_Fault howl_prepare_el(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
+slop_result_howl_Prepared_types_Fault howl_prepare_ksc(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
+slop_list_types_KName howl_copy_knames(slop_arena* arena, slop_list_types_KName ns);
 slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
@@ -98,6 +170,31 @@ slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_NormAxiom, slop_option_types_NormAxiom)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_ELWORK_DEFINED
+#define SLOP_OPTION_HOWL_ELWORK_DEFINED
+SLOP_OPTION_DEFINE(howl_ElWork, slop_option_howl_ElWork)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+#define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
+SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_KSCWORK_DEFINED
+#define SLOP_OPTION_HOWL_KSCWORK_DEFINED
+SLOP_OPTION_DEFINE(howl_KscWork, slop_option_howl_KscWork)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_WORK_DEFINED
+#define SLOP_OPTION_HOWL_WORK_DEFINED
+SLOP_OPTION_DEFINE(howl_Work, slop_option_howl_Work)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_PREPARED_DEFINED

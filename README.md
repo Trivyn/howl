@@ -375,7 +375,7 @@ rows below were re-probed on each bump rather than assumed from release notes.
 | A callee's `@post` on a **`let`-bound** result, callee in another module included (`copy-decoded`) | — |
 | A counted `while` with `@loop-invariant {(list-len out) == i}` — a pushed list's length, across a non-pure call in the body (`copy-axioms`) | — |
 | **`@example` — genuinely executes** (0.2.1) | — |
-| **Completeness of a `for-each`**, via `(list-visited xs)` in its `@loop-invariant` ([#247](https://github.com/slop-lang/slop/pull/247); el++'s `join`) | `(list-visited xs)` over a LOCAL list — not followed yet; the source must be a parameter |
+| **Completeness of a `for-each`**, via `(list-visited xs)` in its `@loop-invariant` ([#247](https://github.com/slop-lang/slop/pull/247); el++'s `ksc-join`) | `(list-visited xs)` over a LOCAL list — not followed yet; the source must be a parameter |
 | A field projected from a pure call's record result, `(. (f q) fires)`, in a body, an invariant and a post alike ([#251](https://github.com/slop-lang/slop/pull/251)) | — |
 | A single-payload `union-new`'s payload ([#249](https://github.com/slop-lang/slop/pull/249)), and a bare `Bool` field as a filter test ([#246](https://github.com/slop-lang/slop/pull/246)) | — |
 | `@example :eq f` on a record result ([#252](https://github.com/slop-lang/slop/pull/252)) | — |

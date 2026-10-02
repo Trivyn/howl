@@ -19,13 +19,17 @@
                  EdgePair
                  SubPair Findings Outcome Fault Names
                  Profile ProfileSelection ReasonerConfig
-                 default-config emit-edge make-context copy-fault
+                 KName KscAxiom Evidence KscResult
+                 default-config emit-edge make-context copy-fault copy-omissions empty-names
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded))
   (import select (select-profile profile-implemented))
   (import saturate (RoundResult saturate))
-  (import classify (extract-findings entails-sub))
+  (import classify (extract-findings entails-sub extract-ksc-findings))
+  (import gate (gate-axioms))
+  (import kscnormal (normalize-ksc copy-ksc-axioms copy-kname))
+  (import kscsat (ksc-classify input-classes))
   (import premise (RuleIndex build-rule-index))
 
   (export
@@ -61,7 +65,8 @@
     decode
     decode-from
     own-decoded
-    Prepared
+    Prepared Work ElWork KscWork
+    decode-owned prepare-in-profile
     prepare-decoded
     prepare
     reason
@@ -195,13 +200,28 @@
   ;; it there), so excluding HOWL's index would compare unlike boundaries.
   ;; `decode_ms` (triples to axioms) is outside it, as the OWL API's
   ;; RDF-to-axiom mapping is outside ELK's, and is reported beside it.
-  (type Prepared (record
-    (profile    Profile)      ; resolved from the selection before the gate ran
+  ;; WHAT EACH CALCULUS NEEDS, as a union: el's renamed axioms, premise
+  ;; index and initialized saturation; el++'s normal form (§5.4 K1) and
+  ;; the classes the report asks about. Profile, coverage and names are
+  ;; common; el++ renames nothing, so its `names` is empty.
+  (type ElWork (record
     (axioms     (List NormAxiom))
     (index      RuleIndex)
-    (saturation Saturation)
+    (saturation Saturation)))
+
+  (type KscWork (record
+    (axioms  (List KscAxiom))
+    (classes (List KName))))
+
+  (type Work (union
+    (el-work  ElWork)
+    (ksc-work KscWork)))
+
+  (type Prepared (record
+    (profile    Profile)      ; resolved from the selection before the gate ran
+    (work       Work)
     (coverage   Coverage)
-    (names      Names)))      ; axioms, index and saturation are renamed (types.slop)
+    (names      Names)))      ; el's axioms, index and saturation are renamed (types.slop)
 
   (fn decode ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
     (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
@@ -270,8 +290,24 @@
     (@intent "prepare-decoded once the profile is resolved and implemented")
     (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
     (@alloc arena)
-    ;; Only `el` reaches here today (profile-implemented), so the gate,
-    ;; normalizer and rules below are §5.2's. A second rung dispatches here.
+    ;; el++ has its own gate verdicts and normal form (§5.4); every other
+    ;; implemented rung is el's (§5.2). horn-sriq and sriq never get here:
+    ;; profile-implemented refuses them first.
+    (match profile
+      ('profile-el-plus-plus (prepare-ksc arena d config profile))
+      ('profile-el           (prepare-el arena d config profile))
+      ('profile-horn-sriq    (prepare-el arena d config profile))
+      ('profile-sriq         (prepare-el arena d config profile))))
+
+  (fn strict-refuses ((config ReasonerConfig) (cov Coverage))
+    (@intent "--strict refuses a run with any omission")
+    (@spec ((ReasonerConfig Coverage) -> Bool))
+    (if (. config strict-profile) (> (list-len (. cov omitted)) 0) false))
+
+  (fn prepare-el ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
+    (@intent "el's front-end second half: gate, normalize, rename, initialize, index")
+    (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
+    (@alloc arena)
     ;;
     ;; --strict REFUSES AFTER THE GATE, BEFORE SATURATION. The omissions
     ;; are exactly what the caller asked not to run past, so `refused`
@@ -284,19 +320,55 @@
     ;; caller's and is not freed here.
     (let ((scratch (arena-new 16777216))
           (nr      (normalize-decoded arena scratch d))
-          (res     (if (and (. config strict-profile)
-                            (> (list-len (. (. nr coverage) omitted)) 0))
+          (res     (if (strict-refuses config (. nr coverage))
                      (error (union-new Fault refused (. (. nr coverage) omitted)))
                      (ok (record-new Prepared
                            (profile    profile)
-                           (axioms     (. nr axioms))
-                           (index      (build-rule-index arena (. nr axioms)))
-                           (saturation (. nr saturation))
+                           (work       (union-new Work el-work
+                                         (record-new ElWork
+                                           (axioms     (. nr axioms))
+                                           (index      (build-rule-index arena (. nr axioms)))
+                                           (saturation (. nr saturation)))))
                            (coverage   (. nr coverage))
                            (names      (. nr names)))))))
       (do
         (arena-free scratch)
         res)))
+
+  (fn prepare-ksc ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
+    (@intent "el++'s front-end second half: gate under el++, normalize into Definition 1 (§5.4)")
+    (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; As prepare-el: the gate and normalizer run in a scratch arena, and
+    ;; what the Prepared keeps - the normal form, the queried classes, the
+    ;; omissions - is copied into `arena` with its strings.
+    (let ((scratch (arena-new 16777216))
+          (gr      (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el-plus-plus))
+          (cov     (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))))
+          (res     (if (strict-refuses config cov)
+                     (error (union-new Fault refused (. cov omitted)))
+                     (ok (record-new Prepared
+                           (profile  profile)
+                           (work     (union-new Work ksc-work
+                                       (record-new KscWork
+                                         (axioms  (copy-ksc-axioms arena
+                                                    (. (normalize-ksc scratch (. gr accepted)) axioms)))
+                                         (classes (copy-knames arena
+                                                    (input-classes scratch (. gr signature)))))))
+                           (coverage cov)
+                           (names    (empty-names arena)))))))
+      (do
+        (arena-free scratch)
+        res)))
+
+  (fn copy-knames ((arena Arena) (ns (List KName)))
+    (@intent "Class names that own their strings")
+    (@spec ((Arena (List KName)) -> (List KName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KName)))
+      (do
+        (for-each (n ns) (list-push out (copy-kname arena n)))
+        out)))
 
   (fn prepare ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "The front end: header, decode, gate, normalize, initialize — and --strict's refusal")
@@ -319,22 +391,35 @@
         res)))
 
   (fn reason ((arena Arena) (p Prepared) (config ReasonerConfig))
-    (@intent "Saturate a prepared theory and extract its findings")
+    (@intent "Run a prepared theory's calculus and extract its findings")
     (@spec ((Arena Prepared ReasonerConfig) -> (Result Outcome Fault)))
     (@alloc arena)
     ;; Coverage travels from the gate UNCHANGED. It is what makes a run
     ;; with omissions report `inconclusive` rather than `coherent`, so
     ;; nothing downstream may quietly empty it.
-    (match (saturate arena (. p saturation) (. p index) config)
-      ((error f) (error f))
-      ((ok rr)
-        (ok (record-new Outcome
-              (profile     (. p profile))
-              (coverage    (. p coverage))
-              (termination (. rr termination))
-              (findings    (extract-findings arena (. rr saturation) (. p names)))
-              (saturation  (. rr saturation))
-              (names       (. p names)))))))
+    (match (. p work)
+      ((el-work w)
+        (match (saturate arena (. w saturation) (. w index) config)
+          ((error f) (error f))
+          ((ok rr)
+            (ok (record-new Outcome
+                  (profile     (. p profile))
+                  (coverage    (. p coverage))
+                  (termination (. rr termination))
+                  (findings    (extract-findings arena (. rr saturation) (. p names)))
+                  (evidence    (union-new Evidence el-evidence (. rr saturation)))
+                  (rounds      (. (. rr saturation) iteration))
+                  (names       (. p names)))))))
+      ((ksc-work w)
+        (let ((r (ksc-classify arena (. w axioms) (. w classes) config)))
+          (ok (record-new Outcome
+                (profile     (. p profile))
+                (coverage    (. p coverage))
+                (termination (. r termination))
+                (findings    (extract-ksc-findings arena r))
+                (evidence    (union-new Evidence ksc-evidence r))
+                (rounds      (. r rounds))
+                (names       (. p names))))))))
 
   (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")

@@ -69,13 +69,15 @@
 
   (import rdf (IRI))
   (import vocab (OWL_NOTHING))
-  (import types (Node SubPair Findings Saturation Context Names
-                 node-top node-bottom node-eq renamed-node original-node))
+  (import types (Node SubPair Findings Saturation Context Names KName KscResult ClassAnswer
+                 node-top node-bottom node-eq kname-eq renamed-node original-node))
   (import canon (sort-iris sort-sub-pairs))
 
   (export
     extract-findings
+    extract-ksc-findings
     entails-sub
+    ksc-entails-sub
     context-has-bottom
     detect-inconsistent)
 
@@ -325,4 +327,85 @@
                          (list-new arena SubPair)
                          (collect-taxonomy arena sat names)))
         (imports-seen  (list-new arena IRI)))))
+
+  ;; ============================================================
+  ;; el++'s extraction (SPEC §5.4 K5): the same three sets, read from the
+  ;; per-class answers instead of S(·). An answer's `unsat` stands for
+  ;; ⊥ ∈ S(A) and its subsumers for S(A)'s class nodes, so the lists are
+  ;; built as el's are: owl:Nothing excluded, an unsatisfiable class
+  ;; compressed to (C, ⊥), both empty under inconsistency, sorted.
+  ;; ============================================================
+
+  (fn ksc-unsatisfiable ((arena Arena) (r KscResult))
+    (@intent "Input classes other than owl:Nothing whose answer is unsat")
+    (@spec ((Arena KscResult) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut unsat (list-new arena IRI)))
+      (do
+        (for-each (a (. r answers))
+          (match (. a cls)
+            ((k-class iri)
+              (when (not (is-bottom-iri iri))
+                (when (. a unsat) (list-push unsat iri))))
+            ((k-fresh _) (do))))
+        (sort-iris arena unsat))))
+
+  (fn ksc-taxonomy ((arena Arena) (r KscResult))
+    (@intent "The subsumption hierarchy from the answers, bottom-compressed")
+    (@spec ((Arena KscResult) -> (List SubPair)))
+    (@alloc arena)
+    (let ((mut subs (list-new arena SubPair))
+          (bottom (node-bottom)))
+      (do
+        (for-each (a (. r answers))
+          (match (. a cls)
+            ((k-class iri)
+              (when (not (is-bottom-iri iri))
+                (let ((n (union-new Node class-node iri)))
+                  (if (. a unsat)
+                    (list-push subs (record-new SubPair (sub n) (super bottom)))
+                    (for-each (b (. a subsumers))
+                      (match b
+                        ((k-class biri)
+                          (list-push subs (record-new SubPair (sub n)
+                                            (super (union-new Node class-node biri)))))
+                        ((k-fresh _) (do))))))))
+            ((k-fresh _) (do))))
+        (sort-sub-pairs arena subs))))
+
+  (fn extract-ksc-findings ((arena Arena) (r KscResult))
+    (@intent "el++'s findings: inconsistency, unsatisfiable classes and the taxonomy (K5)")
+    (@spec ((Arena KscResult) -> Findings))
+    (@alloc arena)
+    ;; One record-new with the emptiness decided per field, for
+    ;; extract-findings' reasons; `inconsistent` bound once.
+    (let ((inconsistent (. r inconsistent)))
+      (record-new Findings
+        (inconsistent  inconsistent)
+        (unsatisfiable (if inconsistent (list-new arena IRI) (ksc-unsatisfiable arena r)))
+        (subsumptions  (if inconsistent (list-new arena SubPair) (ksc-taxonomy arena r)))
+        (imports-seen  (list-new arena IRI)))))
+
+  (fn ksc-answer-holds ((a ClassAnswer) (b KName))
+    (@intent "K5's holds(A, B) on one answer: unsat(A), or B among A's subsumers")
+    (@spec ((ClassAnswer KName) -> Bool))
+    (if (. a unsat)
+      true
+      (let ((mut found false))
+        (do
+          (for-each (n (. a subsumers)) (when (kname-eq n b) (set! found true)))
+          found))))
+
+  (fn ksc-entails-sub ((r KscResult) (a KName) (b KName))
+    (@intent "el++'s subsumption PROBE: inconsistent, or unsat(A), or holds(A, B) (K5)")
+    (@spec ((KscResult KName KName) -> Bool))
+    (@post (implies {(. r inconsistent) == true} {$result == true}))
+    (if (. r inconsistent)
+      true
+      (let ((mut found false))
+        (do
+          (for-each (x (. r answers))
+            (when (kname-eq (. x cls) a)
+              (when (ksc-answer-holds x b) (set! found true))))
+          found))))
 )

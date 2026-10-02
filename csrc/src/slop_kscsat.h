@@ -11,14 +11,15 @@
 #include "slop_kscpremise.h"
 #include "slop_owl2.h"
 #include "slop_canon.h"
+#include "slop_saturate.h"
+#include "slop_thread.h"
+#include "slop_kscnormal.h"
 
 typedef struct kscsat_FactList kscsat_FactList;
 typedef struct kscsat_RoleFacts kscsat_RoleFacts;
 typedef struct kscsat_KStore kscsat_KStore;
 typedef struct kscsat_Base kscsat_Base;
 typedef struct kscsat_RunResult kscsat_RunResult;
-typedef struct kscsat_ClassAnswer kscsat_ClassAnswer;
-typedef struct kscsat_KscResult kscsat_KscResult;
 
 typedef enum {
     kscsat_Field_fd_insts,
@@ -68,6 +69,12 @@ SLOP_LIST_DEFINE(types_KName, slop_list_types_KName)
 SLOP_LIST_DEFINE(types_KscAxiom, slop_list_types_KscAxiom)
 #endif
 
+#ifndef SLOP_LIST_TYPES_CLASSANSWER_DEFINED
+#define SLOP_LIST_TYPES_CLASSANSWER_DEFINED
+#define SLOP_LIST_TYPES_CLASSANSWER_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_ClassAnswer, slop_list_types_ClassAnswer)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KFACT_DEFINED
 #define SLOP_OPTION_TYPES_KFACT_DEFINED
 SLOP_OPTION_DEFINE(types_KFact, slop_option_types_KFact)
@@ -91,6 +98,11 @@ SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+#define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
 #endif
 
 struct kscsat_FactList {
@@ -148,6 +160,7 @@ struct kscsat_RunResult {
     kscsat_KStore store;
     int64_t rounds;
     uint8_t unsat;
+    uint8_t capped;
     int64_t facts;
 };
 typedef struct kscsat_RunResult kscsat_RunResult;
@@ -155,43 +168,6 @@ typedef struct kscsat_RunResult kscsat_RunResult;
 #ifndef SLOP_OPTION_KSCSAT_RUNRESULT_DEFINED
 #define SLOP_OPTION_KSCSAT_RUNRESULT_DEFINED
 SLOP_OPTION_DEFINE(kscsat_RunResult, slop_option_kscsat_RunResult)
-#endif
-
-struct kscsat_ClassAnswer {
-    types_KName cls;
-    uint8_t shared;
-    uint8_t unsat;
-    slop_list_types_KName subsumers;
-    int64_t rounds;
-    int64_t facts;
-};
-typedef struct kscsat_ClassAnswer kscsat_ClassAnswer;
-
-#ifndef SLOP_OPTION_KSCSAT_CLASSANSWER_DEFINED
-#define SLOP_OPTION_KSCSAT_CLASSANSWER_DEFINED
-SLOP_OPTION_DEFINE(kscsat_ClassAnswer, slop_option_kscsat_ClassAnswer)
-#endif
-
-#ifndef SLOP_LIST_KSCSAT_CLASSANSWER_DEFINED
-#define SLOP_LIST_KSCSAT_CLASSANSWER_DEFINED
-#define SLOP_LIST_KSCSAT_CLASSANSWER_IMPL_DEFINED
-SLOP_LIST_DEFINE(kscsat_ClassAnswer, slop_list_kscsat_ClassAnswer)
-#endif
-
-struct kscsat_KscResult {
-    uint8_t inconsistent;
-    int64_t g_rounds;
-    int64_t g_facts;
-    int64_t w_rounds;
-    int64_t w_facts;
-    int64_t unsafe_count;
-    slop_list_kscsat_ClassAnswer answers;
-};
-typedef struct kscsat_KscResult kscsat_KscResult;
-
-#ifndef SLOP_OPTION_KSCSAT_KSCRESULT_DEFINED
-#define SLOP_OPTION_KSCSAT_KSCRESULT_DEFINED
-SLOP_OPTION_DEFINE(kscsat_KscResult, slop_option_kscsat_KscResult)
 #endif
 
 
@@ -908,15 +884,21 @@ slop_list_types_KFact kscsat_derive(slop_arena* arena, kscpremise_KscIndex idx, 
 types_RoleId kscsat_ksc_dummy_role(void);
 uint8_t kscsat_is_bottom_fact(types_KFact f);
 uint8_t kscsat_reaches_bottom(slop_option_kscsat_Base base, types_KFact f);
-kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom);
+kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom, int64_t budget);
 slop_list_types_KName kscsat_answer_subsumers(slop_arena* arena, kscsat_KStore st, types_KName q);
-types_KName kscsat_copy_kname(slop_arena* arena, types_KName n);
 slop_map* kscsat_backward_closure(slop_arena* arena, kscsat_KStore w, slop_list_types_KElem start);
-kscsat_ClassAnswer kscsat_class_run(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, types_KName q);
-kscsat_ClassAnswer kscsat_shared_answer(slop_arena* arena, kscsat_Base base, uint8_t g_unsat, types_KName q);
-kscsat_ClassAnswer kscsat_class_answer(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, types_KName q);
-kscsat_KscResult kscsat_ksc_classify(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes);
-uint8_t kscsat_answer_holds(kscsat_ClassAnswer a, types_KName b);
+types_ClassAnswer kscsat_class_run(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, int64_t budget, types_KName q);
+types_ClassAnswer kscsat_shared_answer(slop_arena* arena, kscsat_Base base, uint8_t g_unsat, types_KName q);
+types_ClassAnswer kscsat_class_answer(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, int64_t budget, types_KName q);
+types_KscResult kscsat_ksc_classify(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
+types_KscResult kscsat_g_only(slop_arena* arena, kscsat_RunResult g, uint8_t inconsistent);
+types_ClassAnswer kscsat_copy_answer(slop_arena* arena, types_ClassAnswer a);
+int64_t kscsat_run_chunk(slop_arena* wa, kscpremise_KscIndex idx, kscsat_Base base, int64_t budget, slop_list_types_KName classes, slop_list_int todo, slop_map* out);
+slop_list_int kscsat_index_chunk(slop_arena* arena, slop_list_int xs, int64_t lo, int64_t hi);
+int64_t kscsat_worker_count_for(int64_t workers, int64_t jobs);
+types_KscResult kscsat_classify_over_w(slop_arena* arena, kscpremise_KscIndex idx, kscsat_RunResult g, kscsat_RunResult w, slop_list_types_KElem tainted, types_KName thing, slop_list_types_KName classes, int64_t budget, int64_t workers);
+int64_t kscsat_max_rounds(slop_list_types_ClassAnswer answers);
+uint8_t kscsat_answer_holds(types_ClassAnswer a, types_KName b);
 slop_list_types_KName kscsat_input_classes(slop_arena* arena, owl2_Signature sig);
 
 #ifndef SLOP_OPTION_TYPES_KFACT_DEFINED
@@ -959,24 +941,14 @@ SLOP_OPTION_DEFINE(kscsat_Base, slop_option_kscsat_Base)
 SLOP_OPTION_DEFINE(kscsat_RunResult, slop_option_kscsat_RunResult)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
-#define SLOP_OPTION_TYPES_KNAME_DEFINED
-SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
-#endif
-
-#ifndef SLOP_OPTION_KSCSAT_CLASSANSWER_DEFINED
-#define SLOP_OPTION_KSCSAT_CLASSANSWER_DEFINED
-SLOP_OPTION_DEFINE(kscsat_ClassAnswer, slop_option_kscsat_ClassAnswer)
-#endif
-
-#ifndef SLOP_OPTION_KSCSAT_KSCRESULT_DEFINED
-#define SLOP_OPTION_KSCSAT_KSCRESULT_DEFINED
-SLOP_OPTION_DEFINE(kscsat_KscResult, slop_option_kscsat_KscResult)
-#endif
-
 #ifndef SLOP_OPTION_LIST_TYPES_KFACT_DEFINED
 #define SLOP_OPTION_LIST_TYPES_KFACT_DEFINED
 SLOP_OPTION_DEFINE(slop_list_types_KFact, slop_option_list_types_KFact)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
+#define SLOP_OPTION_TYPES_KNAME_DEFINED
+SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -984,9 +956,47 @@ SLOP_OPTION_DEFINE(slop_list_types_KFact, slop_option_list_types_KFact)
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+#define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
+#ifndef SLOP_OPTION_MAP_PTR_DEFINED
+#define SLOP_OPTION_MAP_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
+#ifndef SLOP_OPTION_THREAD_INT_PTR_DEFINED
+#define SLOP_OPTION_THREAD_INT_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_thread_int*, slop_option_thread_int_ptr)
+#endif
+
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
+#endif
+
+#ifndef SLOP_LIST_MAP_PTR_DEFINED
+#define SLOP_LIST_MAP_PTR_DEFINED
+#define SLOP_LIST_MAP_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_map*, slop_list_map_ptr)
+#endif
+
+#ifndef SLOP_LIST_THREAD_INT_PTR_DEFINED
+#define SLOP_LIST_THREAD_INT_PTR_DEFINED
+#define SLOP_LIST_THREAD_INT_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_thread_int*, slop_list_thread_int_ptr)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED

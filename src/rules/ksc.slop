@@ -46,7 +46,7 @@
 ;; THE JOINS ARE NOT HERE EITHER. A rule whose stored partner is a SET of
 ;; facts - (7) on an arriving inst, (15)-(17) on a stored leg, (27)-(29) -
 ;; is still a per-instance function here, applied by ONE join combinator
-;; (`join`, below) that walks a list snapshot of the partners.
+;; (`ksc-join`, below) that walks a list snapshot of the partners.
 ;; ============================================================
 
 (module ksc
@@ -66,7 +66,7 @@
     ksc-9 ksc-9-assert ksc-10 ksc-10-assert
     ksc-11 ksc-12 ksc-13 ksc-14 ksc-15 ksc-16 ksc-17 ksc-18
     ksc-23 ksc-24 ksc-25 ksc-26 ksc-27 ksc-28 ksc-29
-    join-instance join-conclusion join join-trigger-fails
+    join-instance join-conclusion ksc-join join-trigger-fails
     reference-closure reference-answer)
 
   ;; A rule instance's conclusion: the head, and whether the body matched.
@@ -763,7 +763,7 @@
   ;; `join-instance` only unpacks the two facts into the rule's premises,
   ;; in the rule's order, and calls the per-instance function, whose
   ;; contracts say what fires. `join-conclusion` is its Option view, with a
-  ;; proved @post linking the two. `join` walks the snapshot, and proves:
+  ;; proved @post linking the two. `ksc-join` walks the snapshot, and proves:
   ;;
   ;;   sound     every fact returned is the head of a firing instance with
   ;;             some partner in the snapshot
@@ -897,7 +897,7 @@
     (@pure)
     ;; The combinator's invariants are stated over this Option rather than
     ;; over the Concl's fields. Both forms prove on the real code, but over
-    ;; the Option the solver REFUTES a broken `join` (dropping, adding or
+    ;; the Option the solver REFUTES a broken `ksc-join` (dropping, adding or
     ;; inventing conclusions: "loop invariant not preserved"), while over
     ;; the fields it only times out - and a contract should be seen to fail.
     ;; The @post below links the two; its own mutants (swapping some and
@@ -911,7 +911,7 @@
     (let ((c (join-instance tag t p ax)))
       (if (. c fires) (some (. c fact)) (none))))
 
-  (fn join ((arena Arena) (tag JoinRule) (t KFact) (ps (List KFact)) (ax KscAxiom))
+  (fn ksc-join ((arena Arena) (tag JoinRule) (t KFact) (ps (List KFact)) (ax KscAxiom))
     (@intent "Apply one joined rule to an arrived fact and every stored partner in a snapshot")
     (@spec ((Arena JoinRule KFact (List KFact) KscAxiom) -> (List KFact)))
     (@alloc arena)
