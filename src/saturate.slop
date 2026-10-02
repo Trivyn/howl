@@ -116,7 +116,8 @@
     queue-of
     deliver-seed
     store-has-sub
-    store-has-succ)
+    store-has-succ
+    reuse-arena)
 
   ;; The driver returns termination alongside the state, never a bare
   ;; Saturation (§6.5): a capped run and a coherent ontology are

@@ -28,7 +28,7 @@
 
   (import rdf (IRI))
   (import vocab (OWL_BOTTOM_OBJECT_PROPERTY OWL_THING OWL_NOTHING))
-  (import types (Node RoleId KName KTerm KscAxiom role-eq))
+  (import types (Node RoleId KName KTerm KscAxiom role-eq copy-iri copy-role))
   (import owl2 (RawAxiom RawConcept RawChain concept-at))
   (import naming (Registry new-registry fresh-id fresh-role-id mark-neg mark-pos
                   neg-defined pos-defined fresh-count fresh-role-count
@@ -36,7 +36,7 @@
                   prefix-role-text role-at-n node-at))
 
   (export
-    KscOutput normalize-ksc render-ksc-axiom)
+    KscOutput normalize-ksc render-ksc-axiom copy-ksc-axioms copy-kname)
 
   (type KscOutput (record
     (axioms           (List KscAxiom))
@@ -650,4 +650,52 @@
     (@spec ((Arena String String String String String) -> String))
     (@alloc arena)
     (fact3 arena name x y (string-concat arena z (string-concat arena ", " w))))
+
+  ;; ============================================================
+  ;; Ownership: a Prepared owns its strings (howl.slop), and the decoded
+  ;; document they point into is freed when `prepare` returns. So the
+  ;; normal form is copied into the caller's arena, every IRI with it.
+  ;; ============================================================
+
+  (fn copy-kname ((arena Arena) (n KName))
+    (@intent "A KName that owns its IRI string")
+    (@spec ((Arena KName) -> KName))
+    (@alloc arena)
+    (match n
+      ((k-class i) (union-new KName k-class (copy-iri arena i)))
+      ((k-fresh k) (union-new KName k-fresh k))))
+
+  (fn copy-kterm ((arena Arena) (t KTerm))
+    (@intent "A KTerm that owns its IRI string")
+    (@spec ((Arena KTerm) -> KTerm))
+    (@alloc arena)
+    (match t
+      ((k-name n)    (union-new KTerm k-name (copy-kname arena n)))
+      ((k-nominal a) (union-new KTerm k-nominal (copy-iri arena a)))))
+
+  (fn copy-ksc-axiom ((arena Arena) (ax KscAxiom))
+    (@intent "A normal-form axiom that owns every string it holds")
+    (@spec ((Arena KscAxiom) -> KscAxiom))
+    (@alloc arena)
+    ;; No catch-all arm: a new variant fails the build until it is copied.
+    (match ax
+      ((k-sub a b)          (union-new KscAxiom k-sub (copy-kterm arena a) (copy-kterm arena b)))
+      ((k-and a b c)        (union-new KscAxiom k-and (copy-kname arena a) (copy-kname arena b) (copy-kname arena c)))
+      ((k-some-lhs r a c)   (union-new KscAxiom k-some-lhs (copy-role arena r) (copy-kname arena a) (copy-kname arena c)))
+      ((k-some-rhs a r b w) (union-new KscAxiom k-some-rhs (copy-kname arena a) (copy-role arena r) (copy-kname arena b) w))
+      ((k-self-lhs r c)     (union-new KscAxiom k-self-lhs (copy-role arena r) (copy-kname arena c)))
+      ((k-self-rhs a r)     (union-new KscAxiom k-self-rhs (copy-kname arena a) (copy-role arena r)))
+      ((k-role r t)         (union-new KscAxiom k-role (copy-role arena r) (copy-role arena t)))
+      ((k-chain r s t)      (union-new KscAxiom k-chain (copy-role arena r) (copy-role arena s) (copy-role arena t)))
+      ((k-range r d)        (union-new KscAxiom k-range (copy-role arena r) (copy-kname arena d)))
+      ((k-role-assert a r b) (union-new KscAxiom k-role-assert (copy-iri arena a) (copy-role arena r) (copy-iri arena b)))))
+
+  (fn copy-ksc-axioms ((arena Arena) (axs (List KscAxiom)))
+    (@intent "The normal form, copied into arena")
+    (@spec ((Arena (List KscAxiom)) -> (List KscAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KscAxiom)))
+      (do
+        (for-each (ax axs) (list-push out (copy-ksc-axiom arena ax)))
+        out)))
 )

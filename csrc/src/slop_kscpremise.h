@@ -8,6 +8,7 @@
 #include "slop_types.h"
 
 typedef struct kscpremise_KList kscpremise_KList;
+typedef struct kscpremise_KPartners kscpremise_KPartners;
 typedef struct kscpremise_KscIndex kscpremise_KscIndex;
 
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
@@ -64,9 +65,22 @@ typedef struct kscpremise_KList kscpremise_KList;
 SLOP_OPTION_DEFINE(kscpremise_KList, slop_option_kscpremise_KList)
 #endif
 
+struct kscpremise_KPartners {
+    slop_map* by_other;
+    int64_t count;
+};
+typedef struct kscpremise_KPartners kscpremise_KPartners;
+
+#ifndef SLOP_OPTION_KSCPREMISE_KPARTNERS_DEFINED
+#define SLOP_OPTION_KSCPREMISE_KPARTNERS_DEFINED
+SLOP_OPTION_DEFINE(kscpremise_KPartners, slop_option_kscpremise_KPartners)
+#endif
+
 struct kscpremise_KscIndex {
     slop_map* on_term;
     slop_map* on_role;
+    slop_map* and_pairs;
+    slop_map* ex_by_role;
     slop_list_rdf_IRI individuals;
 };
 typedef struct kscpremise_KscIndex kscpremise_KscIndex;
@@ -221,6 +235,8 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
 #endif
 
 kscpremise_KList kscpremise_k_pushed(slop_arena* arena, slop_option_kscpremise_KList found, types_KscAxiom ax);
+uint8_t kscpremise_k_partnered(slop_arena* arena, slop_map* m, types_KTerm key, types_KTerm other, types_KscAxiom ax);
+uint8_t kscpremise_r_partnered(slop_arena* arena, slop_map* m, types_RoleId key, types_KTerm other, types_KscAxiom ax);
 uint8_t kscpremise_file_term(slop_arena* arena, slop_map* m, types_KTerm y, types_KscAxiom ax);
 uint8_t kscpremise_file_role(slop_arena* arena, slop_map* m, types_RoleId v, types_KscAxiom ax);
 uint8_t kscpremise_first_mention(slop_arena* arena, slop_map* seen, rdf_IRI a);
@@ -228,6 +244,8 @@ slop_option_rdf_IRI kscpremise_term_individual(types_KTerm t);
 kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_types_KscAxiom axioms);
 slop_option_kscpremise_KList kscpremise_term_bucket(kscpremise_KscIndex idx, types_KTerm y);
 slop_option_kscpremise_KList kscpremise_role_bucket(kscpremise_KscIndex idx, types_RoleId v);
+slop_option_kscpremise_KPartners kscpremise_and_partners(kscpremise_KscIndex idx, types_KTerm y);
+slop_option_kscpremise_KPartners kscpremise_ex_partners(kscpremise_KscIndex idx, types_RoleId v);
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -242,6 +260,11 @@ SLOP_OPTION_DEFINE(kscpremise_KList, slop_option_kscpremise_KList)
 #ifndef SLOP_OPTION_TYPES_KTERM_DEFINED
 #define SLOP_OPTION_TYPES_KTERM_DEFINED
 SLOP_OPTION_DEFINE(types_KTerm, slop_option_types_KTerm)
+#endif
+
+#ifndef SLOP_OPTION_KSCPREMISE_KPARTNERS_DEFINED
+#define SLOP_OPTION_KSCPREMISE_KPARTNERS_DEFINED
+SLOP_OPTION_DEFINE(kscpremise_KPartners, slop_option_kscpremise_KPartners)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED

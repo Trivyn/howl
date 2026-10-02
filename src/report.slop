@@ -88,7 +88,7 @@
         (list-push out (keyed arena "profile" (profile-name (. o profile))))
         (list-push out (verdict-line o))
         (list-push out (termination-line (. o termination)))
-        (list-push out (keyed arena "rounds" (int-to-string arena (. (. o saturation) iteration))))
+        (list-push out (keyed arena "rounds" (int-to-string arena (. o rounds))))
         (list-push out (if (. f inconsistent) "inconsistent true" "inconsistent false"))
         (list-push out (keyed arena "omitted" (int-to-string arena (cast Int (list-len omitted)))))
         (for-each (om omitted)

@@ -42,6 +42,7 @@
     SubPair
     Findings
     Outcome
+    Evidence ClassAnswer KscResult
     Fault
     Names
     ;; configuration
@@ -469,13 +470,43 @@
                                     ; field the consumer must remember to read is not
                                     ; a safety mechanism (§8.4)
 
+  ;; el++'s evidence (kscsat.slop, SPEC §5.4 K5/K6): one answer per class
+  ;; the report asks about, copied out of whichever store answered it.
+  (type ClassAnswer (record
+    (cls        KName)
+    (shared     Bool)                ; answered from W (K6.2), not a run of its own
+    (unsat      Bool)
+    (subsumers  (List KName))
+    (complete   Bool)                ; false if the cap stopped this class's run
+    (rounds     Int)
+    (facts      Int)))
+
+  (type KscResult (record
+    (inconsistent Bool)
+    (termination  Termination)       ; resource-limit if the cap stopped a phase
+    (rounds       Int)               ; rounds(G) + rounds(W) + the most any unsafe class took
+    (g-rounds     Int)
+    (g-facts      Int)
+    (w-rounds     Int)
+    (w-facts      Int)
+    (unsafe-count Int)               ; classes that needed a run of their own
+    (answers      (List ClassAnswer))))
+
+  ;; What a run leaves behind, by calculus: el's saturation, or el++'s
+  ;; per-class answers. Findings are extracted from it; the report reads
+  ;; nothing else from it but `rounds`, which the Outcome carries itself.
+  (type Evidence (union
+    (el-evidence  Saturation)
+    (ksc-evidence KscResult)))
+
   (type Outcome (record
     (profile     Profile)      ; the calculus that ran (§5.1); the report states it
     (coverage    Coverage)
     (termination Termination)
     (findings    Findings)     ; what WAS derived — always present, always meaningful
-    (saturation  Saturation)   ; always present; PARTIAL unless the run was complete
-    (names       Names)))      ; the saturation's nodes are RENAMED: map back through this
+    (evidence    Evidence)     ; always present; PARTIAL unless the run was complete
+    (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4)
+    (names       Names)))      ; el's saturation nodes are RENAMED: map back through this
 
   ;; The error path. Distinct from an Outcome: these produce no result
   ;; to report on.

@@ -118,6 +118,10 @@ slop_string kscnormal_render_ksc_axiom(slop_arena* arena, types_KscAxiom ax);
 slop_string kscnormal_fact2(slop_arena* arena, slop_string name, slop_string x, slop_string y);
 slop_string kscnormal_fact3(slop_arena* arena, slop_string name, slop_string x, slop_string y, slop_string z);
 slop_string kscnormal_fact4(slop_arena* arena, slop_string name, slop_string x, slop_string y, slop_string z, slop_string w);
+types_KName kscnormal_copy_kname(slop_arena* arena, types_KName n);
+types_KTerm kscnormal_copy_kterm(slop_arena* arena, types_KTerm t);
+types_KscAxiom kscnormal_copy_ksc_axiom(slop_arena* arena, types_KscAxiom ax);
+slop_list_types_KscAxiom kscnormal_copy_ksc_axioms(slop_arena* arena, slop_list_types_KscAxiom axs);
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED

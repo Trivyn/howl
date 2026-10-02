@@ -194,6 +194,9 @@ encoding. `make abox-fuzz` checks the code against it: 400 generated ontologies 
 `owl:topObjectProperty` outside a super-role position close with the `el++` profile. It is specified
 on Krötzsch's Ksc calculus, the one published proof that covers nominals together with ⊥, role
 chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)), and is being built in slices.
+Its engine shares one saturation across every class no nominal reaches (§5.4 K6), so a nominal-free
+ontology costs about what it costs `el`: GO reasons in 1.2 s and EL-GALEN in 8.7 s on one thread,
+though EL-GALEN's 10.3 GB peak is still the open cost. It is selectable once slice 6 wires it in.
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 
@@ -313,7 +316,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **73 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **79 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
@@ -375,10 +378,11 @@ rows below were re-probed on each bump rather than assumed from release notes.
 | A callee's `@post` on a **`let`-bound** result, callee in another module included (`copy-decoded`) | — |
 | A counted `while` with `@loop-invariant {(list-len out) == i}` — a pushed list's length, across a non-pure call in the body (`copy-axioms`) | — |
 | **`@example` — genuinely executes** (0.2.1) | — |
-| **Completeness of a `for-each`**, via `(list-visited xs)` in its `@loop-invariant` ([#247](https://github.com/slop-lang/slop/pull/247); el++'s `join`) | `(list-visited xs)` over a LOCAL list — not followed yet; the source must be a parameter |
+| **Completeness of a `for-each`**, via `(list-visited xs)` in its `@loop-invariant` ([#247](https://github.com/slop-lang/slop/pull/247); el++'s `ksc-join`) | `(list-visited xs)` over a LOCAL list — not followed yet; the source must be a parameter |
 | A field projected from a pure call's record result, `(. (f q) fires)`, in a body, an invariant and a post alike ([#251](https://github.com/slop-lang/slop/pull/251)) | — |
 | A single-payload `union-new`'s payload ([#249](https://github.com/slop-lang/slop/pull/249)), and a bare `Bool` field as a filter test ([#246](https://github.com/slop-lang/slop/pull/246)) | — |
 | `@example :eq f` on a record result ([#252](https://github.com/slop-lang/slop/pull/252)) | — |
+| A loop-invariant proof about a counter, read back as the function's `Int` result | The same counter read back through a **`record-new` built after the loop** — the record's field is not linked to the loop's final value, so `(. $result rounds) <= budget` fails on a counterexample (el++'s `run-ksc` budget, owed) |
 
 Four consequences worth knowing before writing a contract:
 

@@ -8,8 +8,8 @@ slop_option_types_Profile select_parse_profile(slop_string s);
 
 types_Profile select_select_profile(types_ProfileSelection selection) {
     types_Profile _retval = {0};
-    __auto_type _mv_611 = selection;
-    switch (_mv_611.tag) {
+    __auto_type _mv_833 = selection;
+    switch (_mv_833.tag) {
         case types_ProfileSelection_slop_auto:
         {
             _retval = types_Profile_profile_el;
@@ -17,7 +17,7 @@ types_Profile select_select_profile(types_ProfileSelection selection) {
         }
         case types_ProfileSelection_explicit:
         {
-            __auto_type p = _mv_611.data.explicit;
+            __auto_type p = _mv_833.data.explicit;
             _retval = p;
             goto _slop_post;
         }
@@ -30,17 +30,17 @@ types_Profile select_select_profile(types_ProfileSelection selection) {
 
 uint8_t select_profile_implemented(types_Profile p) {
     uint8_t _retval = {0};
-    __auto_type _mv_612 = p;
-    if (_mv_612 == types_Profile_profile_el) {
+    __auto_type _mv_834 = p;
+    if (_mv_834 == types_Profile_profile_el) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_612 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_834 == types_Profile_profile_el_plus_plus) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_612 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_834 == types_Profile_profile_horn_sriq) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_612 == types_Profile_profile_sriq) {
+    } else if (_mv_834 == types_Profile_profile_sriq) {
         _retval = 0;
         goto _slop_post;
     }
@@ -51,14 +51,14 @@ uint8_t select_profile_implemented(types_Profile p) {
 }
 
 slop_string select_profile_name(types_Profile p) {
-    __auto_type _mv_613 = p;
-    if (_mv_613 == types_Profile_profile_el) {
+    __auto_type _mv_835 = p;
+    if (_mv_835 == types_Profile_profile_el) {
         return SLOP_STR("el");
-    } else if (_mv_613 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_835 == types_Profile_profile_el_plus_plus) {
         return SLOP_STR("el++");
-    } else if (_mv_613 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_835 == types_Profile_profile_horn_sriq) {
         return SLOP_STR("horn-sriq");
-    } else if (_mv_613 == types_Profile_profile_sriq) {
+    } else if (_mv_835 == types_Profile_profile_sriq) {
         return SLOP_STR("sriq");
     }
     SLOP_UNREACHABLE();

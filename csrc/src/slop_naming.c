@@ -29,11 +29,11 @@ naming_Registry* naming_new_registry(slop_arena* arena) {
 }
 
 int64_t naming_fresh_id(slop_arena* arena, naming_Registry* p, slop_string text) {
-    __auto_type _mv_316 = ({ void* _ptr = slop_map_get((*p).fresh_index, &(text)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
-    if (_mv_316.has_value) {
-        __auto_type id = _mv_316.value;
+    __auto_type _mv_173 = ({ void* _ptr = slop_map_get((*p).fresh_index, &(text)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
+    if (_mv_173.has_value) {
+        __auto_type id = _mv_173.value;
         return id;
-    } else if (!_mv_316.has_value) {
+    } else if (!_mv_173.has_value) {
         {
             __auto_type s = (*p);
             __auto_type id = ((int64_t)(((int64_t)(((*p).fresh).len))));
@@ -47,11 +47,11 @@ int64_t naming_fresh_id(slop_arena* arena, naming_Registry* p, slop_string text)
 }
 
 int64_t naming_fresh_role_id(slop_arena* arena, naming_Registry* p, slop_string text) {
-    __auto_type _mv_319 = ({ void* _ptr = slop_map_get((*p).fresh_role_index, &(text)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
-    if (_mv_319.has_value) {
-        __auto_type id = _mv_319.value;
+    __auto_type _mv_176 = ({ void* _ptr = slop_map_get((*p).fresh_role_index, &(text)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
+    if (_mv_176.has_value) {
+        __auto_type id = _mv_176.value;
         return id;
-    } else if (!_mv_319.has_value) {
+    } else if (!_mv_176.has_value) {
         {
             __auto_type s = (*p);
             __auto_type id = ((int64_t)(((int64_t)(((*p).fresh_roles).len))));
@@ -93,11 +93,11 @@ int64_t naming_fresh_role_count(naming_Registry* p) {
 slop_list_owl2_RawConcept naming_flatten_and(slop_arena* arena, owl2_RawConcept c, slop_list_owl2_RawConcept acc) {
     {
         __auto_type out = acc;
-        __auto_type _mv_325 = c;
-        switch (_mv_325.tag) {
+        __auto_type _mv_182 = c;
+        switch (_mv_182.tag) {
             case owl2_RawConcept_rc_and:
             {
-                __auto_type cs = _mv_325.data.rc_and;
+                __auto_type cs = _mv_182.data.rc_and;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -121,8 +121,8 @@ slop_list_owl2_RawConcept naming_flatten_and(slop_arena* arena, owl2_RawConcept 
 }
 
 slop_string naming_concept_key(slop_arena* arena, owl2_RawConcept c) {
-    __auto_type _mv_326 = c;
-    switch (_mv_326.tag) {
+    __auto_type _mv_183 = c;
+    switch (_mv_183.tag) {
         case owl2_RawConcept_rc_thing:
         {
             return SLOP_STR("⊤");
@@ -133,12 +133,12 @@ slop_string naming_concept_key(slop_arena* arena, owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_name:
         {
-            __auto_type n = _mv_326.data.rc_name;
+            __auto_type n = _mv_183.data.rc_name;
             return naming_node_key(arena, n);
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_326.data.rc_and;
+            __auto_type cs = _mv_183.data.rc_and;
             {
                 __auto_type out = SLOP_STR("and(");
                 __auto_type first = 1;
@@ -158,13 +158,13 @@ slop_string naming_concept_key(slop_arena* arena, owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_some:
         {
-            __auto_type r = _mv_326.data.rc_some.f0;
-            __auto_type f = _mv_326.data.rc_some.f1;
+            __auto_type r = _mv_183.data.rc_some.f0;
+            __auto_type f = _mv_183.data.rc_some.f1;
             return string_concat(arena, SLOP_STR("some("), string_concat(arena, naming_role_key(arena, r), string_concat(arena, SLOP_STR(" "), string_concat(arena, naming_concept_key(arena, (*f)), SLOP_STR(")")))));
         }
         case owl2_RawConcept_rc_oneof:
         {
-            __auto_type ns = _mv_326.data.rc_oneof;
+            __auto_type ns = _mv_183.data.rc_oneof;
             if (((int64_t)((ns).len)) == 1) {
                 return naming_node_key(arena, naming_node_at(ns, 0));
             } else {
@@ -173,13 +173,13 @@ slop_string naming_concept_key(slop_arena* arena, owl2_RawConcept c) {
         }
         case owl2_RawConcept_rc_has_value:
         {
-            __auto_type r = _mv_326.data.rc_has_value.f0;
-            __auto_type a = _mv_326.data.rc_has_value.f1;
+            __auto_type r = _mv_183.data.rc_has_value.f0;
+            __auto_type a = _mv_183.data.rc_has_value.f1;
             return string_concat(arena, SLOP_STR("some("), string_concat(arena, naming_role_key(arena, r), string_concat(arena, SLOP_STR(" "), string_concat(arena, naming_node_key(arena, a), SLOP_STR(")")))));
         }
         case owl2_RawConcept_rc_has_self:
         {
-            __auto_type r = _mv_326.data.rc_has_self;
+            __auto_type r = _mv_183.data.rc_has_self;
             return string_concat(arena, SLOP_STR("self("), string_concat(arena, naming_role_key(arena, r), SLOP_STR(")")));
         }
         default: {
@@ -191,32 +191,32 @@ slop_string naming_concept_key(slop_arena* arena, owl2_RawConcept c) {
 types_Node naming_node_at(slop_list_types_Node xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_327 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Node _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_327.has_value) {
-        __auto_type v = _mv_327.value;
+    __auto_type _mv_184 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Node _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_184.has_value) {
+        __auto_type v = _mv_184.value;
         return v;
-    } else if (!_mv_327.has_value) {
+    } else if (!_mv_184.has_value) {
         return ((types_Node){ .tag = types_Node_class_node, .data.class_node = ((rdf_IRI){.value = SLOP_STR("")}) });
     }
     SLOP_UNREACHABLE();
 }
 
 slop_string naming_node_key(slop_arena* arena, types_Node n) {
-    __auto_type _mv_328 = n;
-    switch (_mv_328.tag) {
+    __auto_type _mv_185 = n;
+    switch (_mv_185.tag) {
         case types_Node_class_node:
         {
-            __auto_type i = _mv_328.data.class_node;
+            __auto_type i = _mv_185.data.class_node;
             return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
         }
         case types_Node_individual_node:
         {
-            __auto_type i = _mv_328.data.individual_node;
+            __auto_type i = _mv_185.data.individual_node;
             return string_concat(arena, SLOP_STR("{<"), string_concat(arena, i.value, SLOP_STR(">}")));
         }
         case types_Node_fresh_node:
         {
-            __auto_type k = _mv_328.data.fresh_node;
+            __auto_type k = _mv_185.data.fresh_node;
             return string_concat(arena, SLOP_STR("_:"), int_to_string(arena, k));
         }
     }
@@ -224,16 +224,16 @@ slop_string naming_node_key(slop_arena* arena, types_Node n) {
 }
 
 slop_string naming_role_key(slop_arena* arena, types_RoleId r) {
-    __auto_type _mv_329 = r;
-    switch (_mv_329.tag) {
+    __auto_type _mv_186 = r;
+    switch (_mv_186.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_329.data.named_role;
+            __auto_type i = _mv_186.data.named_role;
             return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type k = _mv_329.data.fresh_role;
+            __auto_type k = _mv_186.data.fresh_role;
             return string_concat(arena, SLOP_STR("_:r"), int_to_string(arena, k));
         }
     }
@@ -255,11 +255,11 @@ slop_string naming_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept conj
 types_RoleId naming_role_at_n(slop_list_types_RoleId xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_330 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_330.has_value) {
-        __auto_type v = _mv_330.value;
+    __auto_type _mv_187 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_187.has_value) {
+        __auto_type v = _mv_187.value;
         return v;
-    } else if (!_mv_330.has_value) {
+    } else if (!_mv_187.has_value) {
         return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = 0 });
     }
     SLOP_UNREACHABLE();
@@ -278,16 +278,16 @@ slop_string naming_prefix_role_text(slop_arena* arena, slop_list_types_RoleId st
 }
 
 slop_string naming_render_role_name(types_RoleId r) {
-    __auto_type _mv_331 = r;
-    switch (_mv_331.tag) {
+    __auto_type _mv_188 = r;
+    switch (_mv_188.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_331.data.named_role;
+            __auto_type i = _mv_188.data.named_role;
             return i.value;
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_331.data.fresh_role;
+            __auto_type _ = _mv_188.data.fresh_role;
             return SLOP_STR("_:fresh");
         }
     }

@@ -20,6 +20,7 @@
 #include "slop_el.h"
 #include "slop_premise.h"
 #include "slop_report.h"
+#include "slop_strlib.h"
 #include "slop_select.h"
 #include "slop_kscnormal.h"
 #include "slop_kscsat.h"
@@ -225,6 +226,8 @@ typedef struct { bool is_ok; union { types_Profile ok; types_Profile err; } data
 #endif
 
 types_Saturation test_empty_saturation(slop_arena* arena);
+types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
+howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
 types_Findings test_make_findings(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count);
 types_Outcome test_make_outcome(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count, int64_t omitted_count, uint8_t reached_fixpoint);
 uint8_t test_verdict_eq(howl_Verdict a, howl_Verdict b);
@@ -339,6 +342,17 @@ int64_t test_ksc_fixture_count(void);
 slop_string test_ksc_fixture_at(int64_t i);
 uint8_t test_test_ksc_engine_matches_reference(slop_arena* arena);
 uint8_t test_test_ksc_entailments(slop_arena* arena);
+slop_option_types_Outcome test_classify_fixture_in(slop_arena* arena, slop_string path, types_Profile profile);
+slop_list_string test_rung_neutral_lines(slop_arena* arena, types_Outcome o);
+uint8_t test_rungs_agree_on(slop_arena* arena, slop_string path);
+uint8_t test_test_el_and_el_plus_plus_agree(slop_arena* arena);
+types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap);
+uint8_t test_answers_equal(types_KscResult a, types_KscResult b);
+uint8_t test_test_ksc_workers_agree(slop_arena* arena);
+uint8_t test_test_ksc_seed_unsat_counts_no_round(slop_arena* arena);
+int64_t test_nothing_run_rounds(types_KscResult r);
+int64_t test_max_run_rounds(types_KscResult r);
+uint8_t test_test_ksc_cap(slop_arena* arena);
 uint8_t test_test_ksc_normal_form_rows(slop_arena* arena);
 slop_string test_omissions_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_omits_exactly(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
