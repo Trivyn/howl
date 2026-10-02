@@ -1328,9 +1328,14 @@ SROEL(⊓,×). The other candidates do not cover it:
 - [BBL05]'s completion rules are incomplete with nominals ([KKS12] Example 5,
   [§5.3](#53-the-abox-reduction-is-sound-and-complete)).
 
-HOWL implements Ksc as published, with one change of representation that needs no new proof
-(K2, sharing by monotonicity) and one that needs a paragraph (K3). Everything else here is the
-translation from OWL into [Krö10]'s language and the bookkeeping around it.
+HOWL implements Ksc as published, with four changes of representation:
+- **K2, sharing by monotonicity**, which needs no new proof;
+- **K3, rule (4) as a flag**, which needs a paragraph;
+- **K6, one shared saturation** for classes no nominal reaches, after [Krö10] Theorem 3;
+- **K7, role inclusions read through the told closure** instead of rule (13) materialised.
+
+Everything else here is the translation from OWL into [Krö10]'s language and the bookkeeping
+around it.
 
 > **Review status.** Written 2026-09-30.
 > - **Adversarial review (Codex, 2026-09-30): signed off.** It found no counterexample to K0's
@@ -1343,6 +1348,14 @@ translation from OWL into [Krö10]'s language and the bookkeeping around it.
 >   and K5 conflated the raw queries with the report's exclusions (`owl:Nothing`, inconsistency).
 > - **Project owner: accepted, 2026-09-30** (PR #8; spec approval recorded as AD 465af4c0).
 >   `--profile el++` exits 3 until slice 6 wires the rung in.
+> - **K7 (role inclusions read through the told closure) and cancellation added 2026-10-02** for
+>   slice 6's memory work. **Adversarial review (Codex, 2026-10-02): no counterexample** to K7's
+>   closure claim, checked through rules (2) and (29) at the stored role, both legs of (15), the
+>   triple legs of (16)–(17), role cycles, fresh roles, reflexive roles, the empty role and role
+>   assertions; K6's cones and safety depend only on triple endpoints. Three findings, each fixed in
+>   the text: the report-equality claim holds for complete runs only; §5.4's introduction and the
+>   §7 rows now name K6 and K7; and the gate gained an independent oracle (HermiT on conformance) and
+>   targeted fixtures for what K7 changes. Owner acceptance pending; no code depends on K7 until then.
 > - **K6 (sharing) added 2026-10-01** for slice 5, at the owner's direction after slice 4's
 >   feasibility checkpoint. **Adversarial review (Codex, 2026-10-01): no counterexample** to K6.1–K6.3
 >   or the ⊥ detection; it checked rules (18) and (29) against fact (a), the rule (25) inner induction
@@ -1445,7 +1458,8 @@ L2 already justifies for `el`:
 parameter of Theorem 2's Psc. Rules (19)–(22) are not implemented. Their EDB predicates,
 `subRConj` and `subProd`, are empty for every ontology K0 produces, because OWL has no role
 conjunction here and the only product on the left would be `U`'s definition, which K0 drops. A rule
-with an empty body predicate never fires, so leaving it out changes no closure.
+with an empty body predicate never fires, so leaving it out changes no closure. Rule (13) is not
+materialised: the engine reads role inclusions through the told closure (K7).
 
 **K2 — sharing by monotonicity.** For every class name `q` that the report asks about, Ksc's facts
 under `q` are exactly `closure(G ∪ {inst(q, q)})`, where `G` is the closure of Kinst over the
@@ -1615,6 +1629,77 @@ elements can merge classes that are only jointly assumed non-empty (`q₁ ⊑ {a
 `inst(q₂, q₁)` in W, but `q₂ ⊑ q₁` does not follow). Safety is computed on the complete W; a W cut
 short by the cap decides nothing (below).
 
+**K7 — role inclusions are read through the told closure.** Rule (13),
+`subRole(v, w) ∧ triple(x, v, x′) → triple(x, w, x′)`, copies every triple up the role hierarchy;
+on EL-GALEN, with 958 role inclusions, those copies are most of W (measured below). `el` stopped
+materialising the same rule in M1 6b ([§5.3](#53-the-abox-reduction-is-sound-and-complete)'s L6), and
+`el++` follows it.
+
+*The representation.* Let `sub*`/`sup*` be the reflexive-transitive closure of the told `subRole`
+axioms and its inverse. The engine applies every rule but (13), and stores each `triple` under the
+role it was derived with. A rule premise `triple(x, v, y)` is read as **`triple*(x, v, y)`: some
+`triple(x, e, y)` is stored with `e ∈ sub*(v)`**. Concretely, in the dispatcher:
+- an arriving `triple(x, e, y)` is offered to the axioms of every `v ∈ sup*(e)` that the rule reads
+  (`subEx` for (7), `subRChain` for (15)–(17) by either leg, `supProd` for (23)–(26)), with `v` as
+  the triple's role;
+- a stored leg is walked under every `e′ ∈ sub*(v)` of the role the axiom names, with the axiom
+  rewritten to name `e′`, so each per-instance rule function still sees one concrete role and its
+  proved contracts apply unchanged;
+- rules (2) and (29), whose conclusion copies the premise's role instead of naming an axiom's, are
+  applied to the stored role only; their conclusions are themselves read through, and rule (14)
+  (kept materialised: `self` facts are few) gives (2)'s `self` its super-roles.
+
+*Claim.* For every seed set, the facts the engine stores — `inst` and `self` as stored, and
+`triple*` for triples — are exactly Psc's closure with rule (13).
+- **Every stored fact is in Psc's closure.** Each engine rule application is a Psc application on
+  `triple(x, v, y)`, which Psc has from the stored `triple(x, e, y)` by rule (13) applied along
+  `e ⊑* v`. Each rule (2) or (29) application on a stored role is literally Psc's.
+- **Psc's closure is covered.** Let `D` be the stored facts, plus `triple(x, v, y)` for every
+  stored `triple(x, e, y)` and `v ∈ sup*(e)`. `D` contains the seeds and is closed under Psc's
+  rules. Rule (13) maps `triple(x, v, y) ∈ D` (via `e ⊑* v`) and `v ⊑ w` to `triple(x, w, y)`,
+  which is in `D` because `e ⊑* w`. Every other rule's triple premises, read in `D`, are
+  `triple*`-reads the engine makes. Its conclusion is stored, or is a `triple` read through `D`'s
+  own definition. For (2), `self(x, v)` for `v ⊒* e` comes from (2) on `e` and then (14). For (29),
+  `triple(z, u, a)` for `u ⊒* e` is read through from the stored `triple(z, e, a)`.
+
+So Psc's closure is `D`, the least fixpoint containing the seeds and closed under the rules.
+
+*What depends on it.* K2–K6 are stated over Psc's closure, so they hold of the engine as stored.
+K6's cones and safety depend only on which elements a `triple` joins, and `triple*` joins the same
+pairs as the materialised closure. The literal reference evaluator keeps rule (13), so the
+engine-against-reference differential checks K7 on every fixture. The `rounds` figure can drop
+where a hierarchy is in play: a super-role consequence no longer waits a round per level, as for
+`el`. **On complete runs** every other report line is unchanged. A capped run carries no such
+claim: K7 can reach a consequence rounds earlier than rule (13) would (`A ⊑ ∃r.B`, `r ⊑ s`,
+`∃s.B ⊑ C` gives `C` from the stored `r` triple without waiting for its `s` copy), so a cap between
+the two can leave one engine capped where the other is complete. Both are sound (K4).
+
+*The gate K7 must pass before it ships* (owner's condition: K7 must not break `el++`
+conformance). Three checks, because no one of them is enough alone.
+- **Against the published rules.** The literal reference evaluator keeps rule (13), and the engine
+  must answer every class as it does on every `el++` fixture. That includes new fixtures for what
+  K7 changes:
+  - a chain whose legs are stored under sub-roles of the axiom's roles, with each premise arriving
+    first in turn;
+  - Self on a sub-role, through (2) and (14), feeding a chain and a range;
+  - (29) re-pointing a triple whose role has super-roles;
+  - ranges on a super-role;
+  - a role cycle from equivalent properties;
+  - K6's safe-base boundary reached through a sub-role.
+- **Against an independent oracle.** Every W3C OWL 2 and ELK conformance ontology inside `el++` (no
+  omission under the `el++` gate) gives its stated result, checked against HermiT where the suite
+  states none.
+- **Against the engine before K7.** `main` before K7 and the engine with it give identical per-class
+  answers — every `unsat(A)`, every `holds(A, B)`, inconsistency — on those conformance ontologies,
+  every `el` and `el++` fixture, OBI, GO and EL-GALEN.
+
+A single difference anywhere withholds K7: it is then a bug in the implementation or in this
+lemma, and is resolved before anything ships.
+
+**Cancellation.** `cancel-ptr` is checked at every round boundary of every phase, and between the
+runs of phase Q. A cancelled run yields `Fault::cancelled` and no Outcome, as for `el`
+([§6.8](#68-determinism-binding)): a cancelled partial state is timing-dependent.
+
 **Rounds and the cap.** A round is one semi-naive step of all rules over the previous round's new
 facts. Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` over `G ∪ W_S`.
 - `rounds` = `rounds(G)` + `rounds(W)` + the most rounds any single unsafe `q` took.
@@ -1629,8 +1714,9 @@ facts. Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` 
 
 **Cost, stated plainly.** With K6, an ontology without nominals is one saturation, as in `el` and
 ELK: every class is safe. Only classes whose existential cone reaches an individual or a nominal
-pay a run of their own, and each such run re-derives only what is not safe (K6.3). Rule (13) is
-still materialised, so a deep role hierarchy multiplies `triple` facts in W once, not per class.
+pay a run of their own, and each such run re-derives only what is not safe (K6.3). Before K7, rule
+(13) was materialised, so a deep role hierarchy multiplied `triple` facts in W, once rather than per
+class; K7 stores each triple once.
 
 **Measured before K6 (slice 4's single-threaded prototype, `src/kscsat.slop`, K2 only; arm64, this
 repo's corpus).**
@@ -2908,8 +2994,8 @@ row below sits on one side of that line.
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
 | **Range-elimination preservation** — the *listed query classes* survive the rewrite, which is **not** conservative ([§6.3](#63-normalization)) | Published proof **+ differential testing** | **No** — model-theoretic |
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
-| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | One loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
-| **`el++` translation and sharing** — K0–K6: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, and the shared saturation for safe classes | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
+| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract. Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
+| **`el++` translation and sharing** — K0–K7: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, the shared saturation for safe classes, and role inclusions read through the told closure (rule (13) is the dispatcher's `sup*`/`sub*` reads, not a rule function, so its coverage is held by the reference differential, not a per-rule contract) | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
 | **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK; for v1, Kazakov's Horn-SHIQ calculus with chain elimination) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
