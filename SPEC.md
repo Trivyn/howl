@@ -1697,9 +1697,29 @@ conformance). Three checks, because no one of them is enough alone.
 A single difference anywhere withholds K7: it is then a bug in the implementation or in this
 lemma, and is resolved before anything ships.
 
+*The gate's result (2026-10-02, slice 6's engine): no difference anywhere.*
+- **Against the published rules.** The reference differential agrees on all 29 `el++` fixtures, 8 of
+  them (21–28) new for K7, and every pinned entailment holds, the non-entailments included.
+- **Against an independent oracle.** 115 conformance ontologies are inside `el++` whole. All give the
+  suite's stated result (105 `ok`, none failing). HermiT agrees with 113 of them entailment for
+  entailment; it cannot load the other two (`New-Feature-AnnotationAnnotations-001`,
+  `WebOnt-Thing-003`), whose stated results HOWL meets.
+- **Against the engine before K7.** Identical, `rounds` aside, on all 146 conformance reports, all 98
+  corpus fixtures, and every class's answers on OBI (5,241), GO (51,988) and EL-GALEN (23,138).
+
+Each part of the read-through was seen to fail under a mutation, each caught by the reference
+differential or a pinned entailment:
+- dropping `sup*` for an arriving triple;
+- dropping `sub*` at each of the five stored-leg walks (rule (7) from `inst`, both legs of (15), and
+  (16) and (17) from `self`);
+- closing the hierarchy downward;
+- reading `e ⊑* v` as `e = v`.
+
 **Cancellation.** `cancel-ptr` is checked at every round boundary of every phase, and between the
 runs of phase Q. A cancelled run yields `Fault::cancelled` and no Outcome, as for `el`
-([§6.8](#68-determinism-binding)): a cancelled partial state is timing-dependent.
+([§6.8](#68-determinism-binding)): a cancelled partial state is timing-dependent. As in `el`, the
+flag is read before the cap, so a run with work pending is cancelled even with no round left to
+spend.
 
 **Rounds and the cap.** A round is one semi-naive step of all rules over the previous round's new
 facts. Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` over `G ∪ W_S`.
@@ -1728,17 +1748,23 @@ repo's corpus).**
   existential cone reaches the anatomy part. Every such class re-derives that cone, which is what K6
   removes.
 
-**Measured with K6 (slice 5's engine; G and W single-threaded, phase Q parallel; classes and roles
+**Measured with K7 (slice 6's engine; G and W single-threaded, phase Q parallel; classes and roles
 renamed to dense ids; same machine; times are reasoning only, without parse and decode).**
-- OBI: 0.16 s for all 5,241 classes; 156 are unsafe and run on their own.
-- GO: 1.2 s; every class is safe, so it is one saturation of 1.1M facts.
-- EL-GALEN: 8.7 s; every class is safe; W holds 10.3M facts (8.4M `triple`, 2.0M `inst`) at a
-  10.3 GB peak. Memory is the open cost: each fact is stored by value in the dedup set and its
-  indexes, and rule (13) materialises every `triple` under each super-role, so EL-GALEN's deep role
-  hierarchy multiplies W's triples. `el` holds the same ontology in under 1 GB by reading the
-  hierarchy through its closure; doing the same here needs its own argument.
-- Every class's answers equal the K2-only engine's on OBI and GO.
+- OBI: 0.15 s for all 5,241 classes; 156 are unsafe and run on their own.
+- GO: 1.0 s (1.2 s before K7); every class is safe, so it is one saturation, of 1.07M facts.
+- EL-GALEN: 4.2 s (8.7 s before K7); every class is safe. W holds 3.3M facts where rule (13) made it
+  10.3M, in 27 rounds where it took 32.
+- **Memory is the open cost.** Peak resident memory for `howl validate --profile el++ --workers 1`,
+  against `el` on the same input:
 
+  | | `el` | `el++`, K6 only | `el++` with K7 |
+  |---|---|---|---|
+  | GO | 0.59 GB | — | 1.30 GB |
+  | EL-GALEN | 0.46 GB | 11.6 GB | 3.24 GB |
+
+  What remains is representation: each fact is stored by value (96 bytes) in the dedup set and again
+  in two indexes, and arena-grown lists keep their old buffers. On EL-GALEN, W's dedup set takes
+  about 0.45 GB and its `inst`, out-edge and in-edge lists about 1.3 GB with growth.
 **What is not claimed.**
 - Instance retrieval is not in the report, although Kinst decides it (Theorem 1).
 - Datatypes, keys, anonymous individuals, multi-member `ObjectOneOf` and `owl:topObjectProperty`
@@ -2995,7 +3021,7 @@ row below sits on one side of that line.
 | **Definitional normalization conservativity** — fresh-name introduction is a conservative extension | Published proof **+ differential testing** | **No** — model-theoretic |
 | **Range-elimination preservation** — the *listed query classes* survive the rewrite, which is **not** conservative ([§6.3](#63-normalization)) | Published proof **+ differential testing** | **No** — model-theoretic |
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
-| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract. Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
+| **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract; each part of the read-through was seen to fail under a mutation, caught by that differential or a pinned entailment ([§5.4](#54-the-el-calculus), K7's gate). Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
 | **`el++` translation and sharing** — K0–K7: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, the shared saturation for safe classes, and role inclusions read through the told closure (rule (13) is the dispatcher's `sup*`/`sub*` reads, not a rule function, so its coverage is held by the reference differential, not a per-rule contract) | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
 | **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK; for v1, Kazakov's Horn-SHIQ calculus with chain elimination) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
