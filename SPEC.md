@@ -1355,7 +1355,8 @@ around it.
 >   assertions; K6's cones and safety depend only on triple endpoints. Three findings, each fixed in
 >   the text: the report-equality claim holds for complete runs only; §5.4's introduction and the
 >   §7 rows now name K6 and K7; and the gate gained an independent oracle (HermiT on conformance) and
->   targeted fixtures for what K7 changes. Owner acceptance pending; no code depends on K7 until then.
+>   targeted fixtures for what K7 changes. **Project owner: accepted, 2026-10-02** (PR #16), on
+>   the condition that K7 passes its conformance gate before it ships.
 > - **K6 (sharing) added 2026-10-01** for slice 5, at the owner's direction after slice 4's
 >   feasibility checkpoint. **Adversarial review (Codex, 2026-10-01): no counterexample** to K6.1–K6.3
 >   or the ⊥ detection; it checked rules (18) and (29) against fact (a), the rule (25) inner induction
