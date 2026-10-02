@@ -9,6 +9,8 @@
 
 typedef struct kscpremise_KList kscpremise_KList;
 typedef struct kscpremise_KPartners kscpremise_KPartners;
+typedef struct kscpremise_RoleList kscpremise_RoleList;
+typedef struct kscpremise_RolePair kscpremise_RolePair;
 typedef struct kscpremise_KscIndex kscpremise_KscIndex;
 
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
@@ -76,7 +78,37 @@ typedef struct kscpremise_KPartners kscpremise_KPartners;
 SLOP_OPTION_DEFINE(kscpremise_KPartners, slop_option_kscpremise_KPartners)
 #endif
 
+struct kscpremise_RoleList {
+    slop_list_types_RoleId items;
+};
+typedef struct kscpremise_RoleList kscpremise_RoleList;
+
+#ifndef SLOP_OPTION_KSCPREMISE_ROLELIST_DEFINED
+#define SLOP_OPTION_KSCPREMISE_ROLELIST_DEFINED
+SLOP_OPTION_DEFINE(kscpremise_RoleList, slop_option_kscpremise_RoleList)
+#endif
+
+struct kscpremise_RolePair {
+    types_RoleId sub;
+    types_RoleId sup;
+};
+typedef struct kscpremise_RolePair kscpremise_RolePair;
+
+#ifndef SLOP_OPTION_KSCPREMISE_ROLEPAIR_DEFINED
+#define SLOP_OPTION_KSCPREMISE_ROLEPAIR_DEFINED
+SLOP_OPTION_DEFINE(kscpremise_RolePair, slop_option_kscpremise_RolePair)
+#endif
+
+#ifndef SLOP_LIST_KSCPREMISE_ROLEPAIR_DEFINED
+#define SLOP_LIST_KSCPREMISE_ROLEPAIR_DEFINED
+#define SLOP_LIST_KSCPREMISE_ROLEPAIR_IMPL_DEFINED
+SLOP_LIST_DEFINE(kscpremise_RolePair, slop_list_kscpremise_RolePair)
+#endif
+
 struct kscpremise_KscIndex {
+    slop_map* sups;
+    slop_map* subs;
+    slop_map* below;
     slop_map* on_term;
     slop_map* on_role;
     slop_map* and_pairs;
@@ -217,6 +249,107 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
 }
 #endif
 
+#ifndef KSCPREMISE_ROLEPAIR_HASH_EQ_DEFINED
+#define KSCPREMISE_ROLEPAIR_HASH_EQ_DEFINED
+#ifndef TYPES_ROLEID_HASH_EQ_DEFINED
+#define TYPES_ROLEID_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_RoleId(const void* key) {
+    const types_RoleId* _k = (const types_RoleId*)key;
+    switch (_k->tag) {
+        case types_RoleId_named_role:
+            return slop_hash_rdf_IRI(&_k->data.named_role);
+        case types_RoleId_fresh_role:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
+    const types_RoleId* _a = (const types_RoleId*)a;
+    const types_RoleId* _b = (const types_RoleId*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_RoleId_named_role:
+            return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
+        case types_RoleId_fresh_role:
+            return _a->data.fresh_role == _b->data.fresh_role;
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_ROLEID_HASH_EQ_DEFINED
+#define TYPES_ROLEID_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_RoleId(const void* key) {
+    const types_RoleId* _k = (const types_RoleId*)key;
+    switch (_k->tag) {
+        case types_RoleId_named_role:
+            return slop_hash_rdf_IRI(&_k->data.named_role);
+        case types_RoleId_fresh_role:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
+    const types_RoleId* _a = (const types_RoleId*)a;
+    const types_RoleId* _b = (const types_RoleId*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_RoleId_named_role:
+            return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
+        case types_RoleId_fresh_role:
+            return _a->data.fresh_role == _b->data.fresh_role;
+    }
+    return false;
+}
+#endif
+static inline uint64_t slop_hash_kscpremise_RolePair(const void* key) {
+    const kscpremise_RolePair* _k = (const kscpremise_RolePair*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_types_RoleId(&_k->sub); hash *= 1099511628211ULL;
+    hash ^= slop_hash_types_RoleId(&_k->sup); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_kscpremise_RolePair(const void* a, const void* b) {
+    const kscpremise_RolePair* _a = (const kscpremise_RolePair*)a;
+    const kscpremise_RolePair* _b = (const kscpremise_RolePair*)b;
+    return true
+        && (slop_eq_types_RoleId(&_a->sub, &_b->sub))
+        && (slop_eq_types_RoleId(&_a->sup, &_b->sup))
+    ;
+}
+#endif
+
 #ifndef RDF_IRI_HASH_EQ_DEFINED
 #define RDF_IRI_HASH_EQ_DEFINED
 static inline uint64_t slop_hash_rdf_IRI(const void* key) {
@@ -246,6 +379,11 @@ slop_option_kscpremise_KList kscpremise_term_bucket(kscpremise_KscIndex idx, typ
 slop_option_kscpremise_KList kscpremise_role_bucket(kscpremise_KscIndex idx, types_RoleId v);
 slop_option_kscpremise_KPartners kscpremise_and_partners(kscpremise_KscIndex idx, types_KTerm y);
 slop_option_kscpremise_KPartners kscpremise_ex_partners(kscpremise_KscIndex idx, types_RoleId v);
+kscpremise_RoleList kscpremise_role_pushed(slop_arena* arena, slop_option_kscpremise_RoleList found, types_RoleId r);
+kscpremise_RoleList kscpremise_role_walk(slop_arena* arena, slop_map* edges, types_RoleId r);
+slop_list_types_RoleId kscpremise_role_sups(slop_arena* arena, kscpremise_KscIndex idx, types_RoleId e);
+slop_list_types_RoleId kscpremise_role_subs(slop_arena* arena, kscpremise_KscIndex idx, types_RoleId v);
+uint8_t kscpremise_role_under(kscpremise_KscIndex idx, types_RoleId e, types_RoleId v);
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -270,6 +408,16 @@ SLOP_OPTION_DEFINE(kscpremise_KPartners, slop_option_kscpremise_KPartners)
 #ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
 #define SLOP_OPTION_TYPES_ROLEID_DEFINED
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
+#endif
+
+#ifndef SLOP_OPTION_KSCPREMISE_ROLELIST_DEFINED
+#define SLOP_OPTION_KSCPREMISE_ROLELIST_DEFINED
+SLOP_OPTION_DEFINE(kscpremise_RoleList, slop_option_kscpremise_RoleList)
+#endif
+
+#ifndef SLOP_OPTION_KSCPREMISE_ROLEPAIR_DEFINED
+#define SLOP_OPTION_KSCPREMISE_ROLEPAIR_DEFINED
+SLOP_OPTION_DEFINE(kscpremise_RolePair, slop_option_kscpremise_RolePair)
 #endif
 
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED

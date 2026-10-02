@@ -54,7 +54,7 @@
 
   (import rdf (IRI))
   (import vocab (OWL_THING OWL_NOTHING))
-  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig
+  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig Fault
                  role-eq kname-eq kterm-eq kelem-eq
                  name-term nominal-term ind-elem class-elem copy-iri))
   (import ksc (Concl JoinRule is-name is-nominal is-individual term-elem
@@ -62,7 +62,8 @@
                ksc-9 ksc-9-assert ksc-10 ksc-10-assert ksc-11 ksc-12 ksc-13 ksc-14
                ksc-15 ksc-16 ksc-17 ksc-18 ksc-23 ksc-24 ksc-25 ksc-26
                ksc-join))
-  (import kscpremise (KList KPartners KscIndex build-ksc-index term-bucket role-bucket and-partners ex-partners))
+  (import kscpremise (KList KPartners KscIndex build-ksc-index term-bucket role-bucket and-partners ex-partners
+                      role-sups role-subs role-under))
   (import owl2 (Signature))
   (import canon (sort-iris))
   (import saturate (reuse-arena))
@@ -104,6 +105,7 @@
     (rounds Int)
     (unsat  Bool)
     (capped Bool)                    ; the budget ran out with facts still to process
+    (cancelled Bool)                 ; cancel-ptr was seen at a round boundary (§5.4)
     (facts  Int)))
 
   ;; ============================================================
@@ -316,20 +318,52 @@
         (for-each (l (ins-lists arena (. st ins) k)) (list-push out l))
         out)))
 
-  (fn role-partners ((arena Arena) (st KStore) (base (Option Base)) (outward Bool) (k KElem) (v RoleId))
-    (@intent "Every stored triple out of (or into) k under v: G, W's safe part, then the run")
-    (@spec ((Arena KStore (Option Base) Bool KElem RoleId) -> (List (List KFact))))
+  ;; K7 (SPEC §5.4): the stored legs a premise triple(k, v, ·) (or
+  ;; triple(·, v, k)) reads, each list with the role e ∈ sub*(v) it is
+  ;; stored under, so the join can name e. The walk takes the smaller
+  ;; side, as the partner maps do: the roles stored at k, kept when
+  ;; under v, or sub*(v), looked up at k.
+  (type RoleLegs (record
+    (role  RoleId)
+    (facts (List KFact))))
+
+  (fn legs-at ((arena Arena) (idx KscIndex) (m (Map KElem RoleFacts)) (k KElem) (v RoleId))
+    (@intent "One store's lists of triples at k under every role in sub*(v), each with its role")
+    (@spec ((Arena KscIndex (Map KElem RoleFacts) KElem RoleId) -> (List RoleLegs)))
     (@alloc arena)
-    (let ((mut out (list-new arena (List KFact))))
+    (let ((mut out (list-new arena RoleLegs)))
+      (do
+        (match (map-get m k)
+          ((some rf)
+            (let ((subs (role-subs arena idx v)))
+              (if (<= (map-len (. rf by-role)) (list-len subs))
+                (for-each ((e fl) (. rf by-role))
+                  (when (role-under idx e v)
+                    (list-push out (record-new RoleLegs (role e) (facts (. fl items))))))
+                (for-each (e subs)
+                  (match (map-get (. rf by-role) e)
+                    ((some fl) (list-push out (record-new RoleLegs (role e) (facts (. fl items)))))
+                    ((none)    (do)))))))
+          ((none) (do)))
+        out)))
+
+  (fn role-legs ((arena Arena) (idx KscIndex) (st KStore) (base (Option Base)) (outward Bool) (k KElem) (v RoleId))
+    (@intent "Every stored triple out of (or into) k under sub*(v), by stored role: G, W's safe part, then the run")
+    (@spec ((Arena KscIndex KStore (Option Base) Bool KElem RoleId) -> (List RoleLegs)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RoleLegs)))
       (do
         (match base
           ((some b)
             (do
-              (list-push out (rf-items arena (if outward (. (. b g) outs) (. (. b g) ins)) k v))
-              (list-push out (w-items arena b outward k
-                               (rf-items arena (if outward (. (. b w) outs) (. (. b w) ins)) k v)))))
+              (for-each (lg (legs-at arena idx (if outward (. (. b g) outs) (. (. b g) ins)) k v))
+                (list-push out lg))
+              (for-each (lg (legs-at arena idx (if outward (. (. b w) outs) (. (. b w) ins)) k v))
+                (list-push out (record-new RoleLegs (role (. lg role))
+                                 (facts (w-items arena b outward k (. lg facts))))))))
           ((none) (do)))
-        (list-push out (rf-items arena (if outward (. st outs) (. st ins)) k v))
+        (for-each (lg (legs-at arena idx (if outward (. st outs) (. st ins)) k v))
+          (list-push out lg))
         out)))
 
   ;; ============================================================
@@ -405,8 +439,11 @@
                       ((k-and _ _ _) (do))   ; filed in and-pairs, below
                       ((k-some-lhs v a z)
                         (do
-                          (for-each (ps (role-partners arena st base false x v))
-                            (for-each (g (ksc-join arena 'j7-inst f ps ax)) (list-push out g)))
+                          ;; K7: the triples into x under every e ∈ sub*(v),
+                          ;; with the axiom rewritten to name e.
+                          (for-each (lg (role-legs arena idx st base false x v))
+                            (let ((axe (union-new KscAxiom k-some-lhs (. lg role) a z)))
+                              (for-each (g (ksc-join arena 'j7-inst f (. lg facts) axe)) (list-push out g))))
                           (when (store-holds st base (union-new KFact f-self x v))
                             (let ((c (ksc-8 v a z x v x y)))
                               (when (. c fires) (list-push out (. c fact)))))))
@@ -468,65 +505,75 @@
                   (when (is-individual x)
                     (for-each (ps (partners arena st base 'fd-holders x))
                       (for-each (g (ksc-join arena 'j28-ind f ps noax)) (list-push out g))))))))
-          ((f-triple x v x1)
+          ((f-triple x e x1)
             (do
-              (let ((c (ksc-2 x v x1))) (when (. c fires) (list-push out (. c fact))))
-              (match (role-bucket idx v)
-                ((some bucket)
-                  (for-each (ax (. bucket items))
-                    (match ax
-                      ((k-some-lhs _ _ _) (do))   ; filed in ex-by-role, below
-                      ((k-role v2 w)
-                        (let ((c (ksc-13 v2 w x v x1))) (when (. c fires) (list-push out (. c fact)))))
-                      ((k-chain u v2 w)
-                        (do
-                          ;; f as the first leg, triple(x, u, x′).
-                          (when (role-eq u v)
-                            (do
-                              (for-each (ps (role-partners arena st base true x1 v2))
-                                (for-each (g (ksc-join arena 'j15-first f ps ax)) (list-push out g)))
-                              (when (store-holds st base (union-new KFact f-self x1 v2))
-                                (let ((c (ksc-17 u v2 w x v x1 x1 v2)))
-                                  (when (. c fires) (list-push out (. c fact)))))))
-                          ;; f as the second leg, triple(x′, v, x″).
-                          (when (role-eq v2 v)
-                            (do
-                              (for-each (ps (role-partners arena st base false x u))
-                                (for-each (g (ksc-join arena 'j15-second f ps ax)) (list-push out g)))
-                              (when (store-holds st base (union-new KFact f-self x u))
-                                (let ((c (ksc-16 u v2 w x u x v x1)))
-                                  (when (. c fires) (list-push out (. c fact)))))))))
-                      ((k-range v2 d)
-                        (do
-                          (let ((c (ksc-23 v2 d x v x1))) (when (. c fires) (list-push out (. c fact))))
-                          (let ((c (ksc-25 v2 d x v x1))) (when (. c fires) (list-push out (. c fact))))))
-                      ((k-sub _ _)            (do))
-                      ((k-and _ _ _)          (do))
-                      ((k-some-rhs _ _ _ _)   (do))
-                      ((k-self-lhs _ _)       (do))
-                      ((k-self-rhs _ _)       (do))
-                      ((k-role-assert _ _ _)  (do)))))
-                ((none) (do)))
-              ;; (7) on the triple, through ex-by-role: the ∃v.A ⊑ C whose
-              ;; filler A the successor x1 already holds.
-              (match (ex-partners idx v)
-                ((some p)
-                  (for-each (m (partner-matches arena st base x1 p))
-                    (for-each (ax (. (. m axioms) items))
-                      (match ax
-                        ((k-some-lhs v2 a z)
-                          (let ((c (ksc-7 v2 a z x v x1 x1 (. m other))))
-                            (when (. c fires) (list-push out (. c fact)))))
-                        ((k-sub _ _)            (do))
-                        ((k-and _ _ _)          (do))
-                        ((k-some-rhs _ _ _ _)   (do))
-                        ((k-self-lhs _ _)       (do))
-                        ((k-self-rhs _ _)       (do))
-                        ((k-role _ _)           (do))
-                        ((k-chain _ _ _)        (do))
-                        ((k-range _ _)          (do))
-                        ((k-role-assert _ _ _)  (do))))))
-                ((none) (do)))
+              ;; K7: the triple is stored under e and read under every
+              ;; v ∈ sup*(e). Rule (2) and rule (29) copy the stored role,
+              ;; so they apply at e alone; every rule that names a role in
+              ;; an axiom is offered the read-through instance
+              ;; triple(x, v, x1), and a stored leg is walked under each
+              ;; e′ ∈ sub*(v) with the axiom rewritten to name e′.
+              (let ((c (ksc-2 x e x1))) (when (. c fires) (list-push out (. c fact))))
+              (for-each (v (role-sups arena idx e))
+                (let ((fv (union-new KFact f-triple x v x1)))
+                  (do
+                    (match (role-bucket idx v)
+                      ((some bucket)
+                        (for-each (ax (. bucket items))
+                          (match ax
+                            ((k-some-lhs _ _ _) (do))   ; filed in ex-by-role, below
+                            ((k-role _ _)       (do))   ; (13) is the read-through itself (K7)
+                            ((k-chain u v2 w)
+                              (do
+                                ;; fv as the first leg, triple(x, u, x′).
+                                (when (role-eq u v)
+                                  (do
+                                    (for-each (lg (role-legs arena idx st base true x1 v2))
+                                      (let ((ax2 (union-new KscAxiom k-chain u (. lg role) w)))
+                                        (for-each (g (ksc-join arena 'j15-first fv (. lg facts) ax2)) (list-push out g))))
+                                    (when (store-holds st base (union-new KFact f-self x1 v2))
+                                      (let ((c (ksc-17 u v2 w x v x1 x1 v2)))
+                                        (when (. c fires) (list-push out (. c fact)))))))
+                                ;; fv as the second leg, triple(x′, v, x″).
+                                (when (role-eq v2 v)
+                                  (do
+                                    (for-each (lg (role-legs arena idx st base false x u))
+                                      (let ((ax1 (union-new KscAxiom k-chain (. lg role) v2 w)))
+                                        (for-each (g (ksc-join arena 'j15-second fv (. lg facts) ax1)) (list-push out g))))
+                                    (when (store-holds st base (union-new KFact f-self x u))
+                                      (let ((c (ksc-16 u v2 w x u x v x1)))
+                                        (when (. c fires) (list-push out (. c fact)))))))))
+                            ((k-range v2 d)
+                              (do
+                                (let ((c (ksc-23 v2 d x v x1))) (when (. c fires) (list-push out (. c fact))))
+                                (let ((c (ksc-25 v2 d x v x1))) (when (. c fires) (list-push out (. c fact))))))
+                            ((k-sub _ _)            (do))
+                            ((k-and _ _ _)          (do))
+                            ((k-some-rhs _ _ _ _)   (do))
+                            ((k-self-lhs _ _)       (do))
+                            ((k-self-rhs _ _)       (do))
+                            ((k-role-assert _ _ _)  (do)))))
+                      ((none) (do)))
+                    ;; (7) on the triple, through ex-by-role: the ∃v.A ⊑ C whose
+                    ;; filler A the successor x1 already holds.
+                    (match (ex-partners idx v)
+                      ((some p)
+                        (for-each (m (partner-matches arena st base x1 p))
+                          (for-each (ax (. (. m axioms) items))
+                            (match ax
+                              ((k-some-lhs v2 a z)
+                                (let ((c (ksc-7 v2 a z x v x1 x1 (. m other))))
+                                  (when (. c fires) (list-push out (. c fact)))))
+                              ((k-sub _ _)            (do))
+                              ((k-and _ _ _)          (do))
+                              ((k-some-rhs _ _ _ _)   (do))
+                              ((k-self-lhs _ _)       (do))
+                              ((k-self-rhs _ _)       (do))
+                              ((k-role _ _)           (do))
+                              ((k-chain _ _ _)        (do))
+                              ((k-range _ _)          (do))
+                              ((k-role-assert _ _ _)  (do))))))
+                      ((none) (do))))))
               (let ((noax (union-new KscAxiom k-role (ksc-dummy-role) (ksc-dummy-role))))
                 (for-each (ps (partners arena st base 'fd-noms x1))
                   (for-each (g (ksc-join arena 'j29-triple f ps noax)) (list-push out g))))))
@@ -546,16 +593,18 @@
                         ;; f as self(x, u).
                         (when (role-eq u v)
                           (do
-                            (for-each (ps (role-partners arena st base true x v2))
-                              (for-each (g (ksc-join arena 'j16-self f ps ax)) (list-push out g)))
+                            (for-each (lg (role-legs arena idx st base true x v2))
+                              (let ((ax2 (union-new KscAxiom k-chain u (. lg role) w)))
+                                (for-each (g (ksc-join arena 'j16-self f (. lg facts) ax2)) (list-push out g))))
                             (when (store-holds st base (union-new KFact f-self x v2))
                               (let ((c (ksc-18 u v2 w x v x v2)))
                                 (when (. c fires) (list-push out (. c fact)))))))
                         ;; f as self(x′, v).
                         (when (role-eq v2 v)
                           (do
-                            (for-each (ps (role-partners arena st base false x u))
-                              (for-each (g (ksc-join arena 'j17-self f ps ax)) (list-push out g)))
+                            (for-each (lg (role-legs arena idx st base false x u))
+                              (let ((ax1 (union-new KscAxiom k-chain (. lg role) v2 w)))
+                                (for-each (g (ksc-join arena 'j17-self f (. lg facts) ax1)) (list-push out g))))
                             (when (store-holds st base (union-new KFact f-self x u))
                               (let ((c (ksc-18 u v2 w x u x v)))
                                 (when (. c fires) (list-push out (. c fact)))))))))
@@ -677,9 +726,9 @@
         (record-new RoundOut (next next) (added added) (unsat unsat)))))
 
   (fn run-ksc ((arena Arena) (idx KscIndex) (base (Option Base)) (seeds (List KFact))
-                (stop-at-bottom Bool) (budget Int))
+                (stop-at-bottom Bool) (budget Int) (cancel I64))
     (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
-    (@spec ((Arena KscIndex (Option Base) (List KFact) Bool Int) -> RunResult))
+    (@spec ((Arena KscIndex (Option Base) (List KFact) Bool Int I64) -> RunResult))
     (@alloc arena)
     ;; THE CAP: a run never takes more rounds than it was given (§5.4
     ;; "Rounds and the cap"): `going` admits a round only while
@@ -699,31 +748,43 @@
           (mut unsat (. seeded unsat))
           (mut facts (. seeded added))
           (mut rounds 0)
-          (mut going (if (> (list-len (. seeded next)) 0) (> budget 0) false)))
+          (mut cancelled false)
+          (mut going (> (list-len (. seeded next)) 0)))
       (do
         ;; A run flagged by its seeds is finished before its first round
         ;; (K3): no round is counted and nothing is left to process.
         (when (if stop-at-bottom unsat false)
           (do (set! delta (list-new da KFact)) (set! going false)))
-        ;; Each pass is one round (§5.4 "Rounds and the cap"). `going` is the
-        ;; loop's test, recomputed where a round ends, so the invariant can
-        ;; tie it to the budget: a round starts only with one left to spend.
+        ;; Each pass is one round boundary (§5.4 "Rounds and the cap"):
+        ;; while work is pending, cancel-ptr is read first, then the cap,
+        ;; and only then does a round run, so a round starts only with one
+        ;; left to spend.
+        ;;
+        ;; CANCELLATION (§5.4, as el's §6.8): a run that sees cancel-ptr
+        ;; stops there and says so, ahead of the cap, as el's loop tests it
+        ;; before its budget; its caller turns that into Fault::cancelled,
+        ;; never a result.
         (while going
-          (let ((na (arena-new 1048576))
-                (ro (ksc-round arena na ra idx st base delta stop-at-bottom unsat)))
-            (do
-              (set! rounds (+ rounds 1))
-              (set! facts (+ facts (. ro added)))
-              (set! unsat (. ro unsat))
-              (arena-free da)
-              (set! da na)
-              (set! delta (if (if stop-at-bottom unsat false) (list-new da KFact) (. ro next)))
-              (set! going (if (> (list-len delta) 0) (< rounds budget) false)))))
+          (do
+            (c-inline "if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { cancelled = 1; }")
+            (if (if cancelled true (>= rounds budget))
+              (set! going false)
+              (let ((na (arena-new 1048576))
+                    (ro (ksc-round arena na ra idx st base delta stop-at-bottom unsat)))
+                (do
+                  (set! rounds (+ rounds 1))
+                  (set! facts (+ facts (. ro added)))
+                  (set! unsat (. ro unsat))
+                  (arena-free da)
+                  (set! da na)
+                  (set! delta (if (if stop-at-bottom unsat false) (list-new da KFact) (. ro next)))
+                  (set! going (> (list-len delta) 0)))))))
         (let ((capped (> (list-len delta) 0)))
           (do
             (arena-free da)
             (arena-free ra)
-            (record-new RunResult (store st) (rounds rounds) (unsat unsat) (capped capped) (facts facts)))))))
+            (record-new RunResult (store st) (rounds rounds) (unsat unsat) (capped capped)
+              (cancelled cancelled) (facts facts)))))))
 
   (fn seed-run ((arena Arena) (st KStore) (base (Option Base)) (seeds (List KFact)))
     (@intent "Commit a run's seeds; the first delta")
@@ -795,15 +856,15 @@
             (set! i (+ i 1))))
         out)))
 
-  (fn class-run ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (budget Int) (q KName))
-    (@intent "An unsafe class's run over G ∪ W_S, in a scratch arena; its answers copied into arena")
-    (@spec ((Arena KscIndex Base Bool Int KName) -> ClassAnswer))
+  (fn class-run ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (budget Int) (cancel I64) (q KName))
+    (@intent "An unsafe class's run over G ∪ W_S, in a scratch arena; its answers copied into arena, none if cancelled")
+    (@spec ((Arena KscIndex Base Bool Int I64 KName) -> (Option ClassAnswer)))
     (@alloc arena)
     (let ((scratch (arena-new 1048576))
           (qseeds (list-new scratch KFact)))
       (do
         (list-push qseeds (. (ksc-q q) fact))
-        (let ((r (run-ksc scratch idx (some base) qseeds true budget))
+        (let ((r (run-ksc scratch idx (some base) qseeds true budget cancel))
               (ans (record-new ClassAnswer
                      (cls       q)
                      (shared    false)
@@ -815,7 +876,7 @@
                      (facts     (. r facts)))))
           (do
             (arena-free scratch)
-            ans)))))
+            (if (. r cancelled) (none) (some ans)))))))
 
   (fn shared-answer ((arena Arena) (base Base) (g-unsat Bool) (q KName))
     (@intent "K6.2: a safe class's answers, read from W")
@@ -834,17 +895,17 @@
       (rounds    0)
       (facts     0)))
 
-  (fn class-answer ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (budget Int) (q KName))
-    (@intent "q's answers: from W if q is safe (K6.2), from a run of its own if not (K6.3)")
-    (@spec ((Arena KscIndex Base Bool Int KName) -> ClassAnswer))
+  (fn class-answer ((arena Arena) (idx KscIndex) (base Base) (g-unsat Bool) (budget Int) (cancel I64) (q KName))
+    (@intent "q's answers: from W if q is safe (K6.2), from a run of its own if not (K6.3); none if cancelled")
+    (@spec ((Arena KscIndex Base Bool Int I64 KName) -> (Option ClassAnswer)))
     (@alloc arena)
     (if (is-safe base (class-elem q))
-      (shared-answer arena base g-unsat q)
-      (class-run arena idx base g-unsat budget q)))
+      (some (shared-answer arena base g-unsat q))
+      (class-run arena idx base g-unsat budget cancel q)))
 
   (fn classify-renamed ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (config ReasonerConfig))
     (@intent "Phase G, phase W, then a run for each unsafe class, over engine names")
-    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> KscResult))
+    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> (Result KscResult Fault)))
     (@alloc arena)
     ;; K3: the ontology is inconsistent iff unsat(owl:Thing), so owl:Thing
     ;; is always seeded in W and always answered, listed or not. A ⊥ in G
@@ -871,14 +932,18 @@
         (list-push wseeds (. (ksc-q thing) fact))
         (for-each (q classes)
           (list-push wseeds (. (ksc-q q) fact)))
-        (let ((g (run-ksc arena idx (none) gseeds true n)))
+        (let ((g (run-ksc arena idx (none) gseeds true n (. config cancel-ptr))))
+          (if (. g cancelled)
+            (error (union-new Fault cancelled))
           (if (. g unsat)
-            (g-only arena g true)
+            (ok (g-only arena g true))
             (if (. g capped)
-              (g-only arena g false)
-              (let ((w (run-ksc arena idx (none) wseeds false (- n (. g rounds)))))
+              (ok (g-only arena g false))
+              (let ((w (run-ksc arena idx (none) wseeds false (- n (. g rounds)) (. config cancel-ptr))))
+                (if (. w cancelled)
+                  (error (union-new Fault cancelled))
                 (if (. w capped)
-                  (record-new KscResult
+                  (ok (record-new KscResult
                     (inconsistent false)
                     (termination  (union-new Termination resource-limit n))
                     (rounds       (+ (. g rounds) (. w rounds)))
@@ -887,23 +952,30 @@
                     (w-rounds     (. w rounds))
                     (w-facts      (. w facts))
                     (unsafe-count 0)
-                    (answers      (list-new arena ClassAnswer)))
+                    (answers      (list-new arena ClassAnswer))))
                   (classify-over-w arena idx g w tainted thing classes
                     (- n (+ (. g rounds) (. w rounds)))
-                    (cast Int (. config worker-count)))))))))))
+                    (cast Int (. config worker-count)) (. config cancel-ptr))))))))))))
 
   (fn ksc-classify ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (config ReasonerConfig))
     (@intent "Classify an el++ normal form: rename to engine ids, run G, W and phase Q, map the answers back")
-    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> KscResult))
+    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> (Result KscResult Fault)))
     (@alloc arena)
     ;; THE ENGINE BOUNDARY (kscnames.slop): classes and roles enter as
     ;; dense ids, so no fact the engine stores or finds hashes an IRI
     ;; string but owl:Thing's, owl:Nothing's and an individual's. The
     ;; answers leave under the input's names.
-    (let ((nm (build-ksc-names arena axioms classes))
-          (r  (classify-renamed arena (rename-ksc-axioms arena nm axioms)
-                (rename-classes arena nm classes) config))
-          (mut answers (list-new arena ClassAnswer)))
+    (let ((nm (build-ksc-names arena axioms classes)))
+      (match (classify-renamed arena (rename-ksc-axioms arena nm axioms)
+               (rename-classes arena nm classes) config)
+        ((error f) (error f))
+        ((ok r)    (ok (unrename-result arena nm r))))))
+
+  (fn unrename-result ((arena Arena) (nm KscNames) (r KscResult))
+    (@intent "A result with every answer's names mapped back to the input's")
+    (@spec ((Arena KscNames KscResult) -> KscResult))
+    (@alloc arena)
+    (let ((mut answers (list-new arena ClassAnswer)))
       (do
         (for-each (a (. r answers)) (list-push answers (unrename-answer arena nm a)))
         (record-new KscResult
@@ -952,21 +1024,30 @@
           (rounds    (. a rounds))
           (facts     (. a facts))))))
 
-  (fn run-chunk ((wa Arena) (idx KscIndex) (base Base) (budget Int)
+  (fn run-chunk ((wa Arena) (idx KscIndex) (base Base) (budget Int) (cancel I64)
                  (classes (List KName)) (todo (List Int)) (out (Map Int ClassAnswer)))
-    (@intent "One worker's share of phase Q: the runs of the unsafe classes it was handed")
-    (@spec ((Arena KscIndex Base Int (List KName) (List Int) (Map Int ClassAnswer)) -> Int))
+    (@intent "One worker's share of phase Q: the runs of the unsafe classes it was handed; 1 if cancelled, else 0")
+    (@spec ((Arena KscIndex Base Int I64 (List KName) (List Int) (Map Int ClassAnswer)) -> Int))
     (@alloc wa)
     ;; Returns an Int because a spawned function is called through
-    ;; `int64_t(*)(void*)`. Everything it allocates is in `wa` or in each
-    ;; run's own scratch arena; it only READS the base, which nothing
-    ;; writes once phase W is done.
-    (do
-      (for-each (i todo)
-        (match (list-get classes i)
-          ((some q) (map-put out i (class-run wa idx base false budget q)))
-          ((none)   (do))))
-      0))
+    ;; `int64_t(*)(void*)`: 1 when cancel-ptr stopped the chunk, between
+    ;; runs or inside one (run-ksc reads it at its round boundaries).
+    ;; Everything it allocates is in `wa` or in each run's own scratch
+    ;; arena; it only READS the base, which nothing writes once phase W
+    ;; is done.
+    (let ((mut cancelled false))
+      (do
+        (for-each (i todo)
+          (do
+            (c-inline "if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { cancelled = 1; }")
+            (when (not cancelled)
+              (match (list-get classes i)
+                ((some q)
+                  (match (class-run wa idx base false budget cancel q)
+                    ((some a) (map-put out i a))
+                    ((none)   (set! cancelled true))))
+                ((none) (do))))))
+        (if cancelled 1 0))))
 
   (fn index-chunk ((arena Arena) (xs (List Int)) (lo Int) (hi Int))
     (@intent "The elements of xs at positions lo up to (not including) hi")
@@ -993,9 +1074,9 @@
     (if (< workers 1) 1 (if (> workers jobs) (if (> jobs 0) jobs 1) workers)))
 
   (fn classify-over-w ((arena Arena) (idx KscIndex) (g RunResult) (w RunResult) (tainted (List KElem))
-                       (thing KName) (classes (List KName)) (budget Int) (workers Int))
-    (@intent "With G and W complete: mark safety and ⊥-reach, then answer every class (K6)")
-    (@spec ((Arena KscIndex RunResult RunResult (List KElem) KName (List KName) Int Int) -> KscResult))
+                       (thing KName) (classes (List KName)) (budget Int) (workers Int) (cancel I64))
+    (@intent "With G and W complete: mark safety and ⊥-reach, then answer every class (K6); a Fault if cancelled")
+    (@spec ((Arena KscIndex RunResult RunResult (List KElem) KName (List KName) Int Int I64) -> (Result KscResult Fault)))
     (@alloc arena)
     ;; PHASE Q IN PARALLEL. A safe class is answered from W here, inline:
     ;; it is a lookup. The unsafe ones are split into contiguous chunks of
@@ -1005,7 +1086,8 @@
     ;; the report is the same at every worker count (§6.8).
     (let ((mut taint (list-new arena KElem))
           (mut answers (list-new arena ClassAnswer))
-          (mut complete true))
+          (mut complete true)
+          (mut cancelled 0))
       (do
         (for-each (x tainted) (list-push taint x))
         (for-each (x (set-elements (. (. w store) noms-at)))
@@ -1016,10 +1098,13 @@
                       (unsafe   (backward-closure arena (. w store) taint))
                       (botreach (backward-closure arena (. w store)
                                   (set-elements (. (. w store) bots))))))
-              (thing-answer (class-answer arena idx base false budget thing))
+              (thing-run (class-answer arena idx base false budget cancel thing))
               (shared (map-new arena Int ClassAnswer))
               (mut todo (list-new arena Int))
               (mut i 0))
+          (match thing-run
+            ((none) (error (union-new Fault cancelled)))
+            ((some thing-answer)
           (do
             (when (not (. thing-answer complete)) (set! complete false))
             (for-each (q classes)
@@ -1047,11 +1132,11 @@
                       ;; `wa`, `out` and `chunk` are IMMUTABLE bindings,
                       ;; captured by value (slop#193).
                       (if (<= nw 1)
-                        (do (run-chunk wa idx base budget classes chunk out) (do))
+                        (set! cancelled (+ cancelled (run-chunk wa idx base budget cancel classes chunk out)))
                         (list-push threads
-                          (spawn arena (fn () (run-chunk wa idx base budget classes chunk out)))))
+                          (spawn arena (fn () (run-chunk wa idx base budget cancel classes chunk out)))))
                       (set! k (+ k 1)))))
-                (for-each (t threads) (join t))
+                (for-each (t threads) (set! cancelled (+ cancelled (join t))))
                 (set! i 0)
                 (for-each (q classes)
                   (do
@@ -1066,12 +1151,17 @@
                                 (list-push answers (copy-answer arena a))))
                             ((none) (do))))))
                     (set! i (+ i 1))))
+                (if (> cancelled 0)
+                  (do
+                    (for-each (wa was) (arena-free wa))
+                    (error (union-new Fault cancelled)))
+                (do
                 (for-each (wa was) (arena-free wa))
                 (let ((qrounds (if (> (. thing-answer rounds) (max-rounds answers))
                                  (. thing-answer rounds)
                                  (max-rounds answers)))
                       (total (+ (. g rounds) (+ (. w rounds) qrounds))))
-                  (record-new KscResult
+                  (ok (record-new KscResult
                     (inconsistent (. thing-answer unsat))
                     (termination  (if complete
                                     (union-new Termination fixpoint)
@@ -1082,7 +1172,7 @@
                     (w-rounds     (. w rounds))
                     (w-facts      (. w facts))
                     (unsafe-count jobs)
-                    (answers      answers))))))))))
+                    (answers      answers)))))))))))))))
 
   (fn max-rounds ((answers (List ClassAnswer)))
     (@intent "The most rounds any single class's run took")

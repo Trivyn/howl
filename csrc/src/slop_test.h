@@ -346,6 +346,10 @@ slop_option_types_Outcome test_classify_fixture_in(slop_arena* arena, slop_strin
 slop_list_string test_rung_neutral_lines(slop_arena* arena, types_Outcome o);
 uint8_t test_rungs_agree_on(slop_arena* arena, slop_string path);
 uint8_t test_test_el_and_el_plus_plus_agree(slop_arena* arena);
+types_KscResult test_ksc_run(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
+int64_t test_cancel_flag_set(void);
+uint8_t test_test_ksc_cancelled(slop_arena* arena);
+uint8_t test_cancelled_under(slop_arena* arena, types_ReasonerConfig base_cfg);
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap);
 uint8_t test_answers_equal(types_KscResult a, types_KscResult b);
 uint8_t test_test_ksc_workers_agree(slop_arena* arena);
@@ -543,6 +547,11 @@ SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+#define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
+SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
+#endif
+
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
@@ -571,6 +580,12 @@ SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
 #define SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
 SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
+#endif
+
+#ifndef SLOP_LIST_TYPES_CLASSANSWER_DEFINED
+#define SLOP_LIST_TYPES_CLASSANSWER_DEFINED
+#define SLOP_LIST_TYPES_CLASSANSWER_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_ClassAnswer, slop_list_types_ClassAnswer)
 #endif
 
 #ifndef SLOP_LIST_U8_DEFINED

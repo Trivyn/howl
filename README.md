@@ -194,9 +194,11 @@ encoding. `make abox-fuzz` checks the code against it: 400 generated ontologies 
 `owl:topObjectProperty` outside a super-role position close with the `el++` profile. It is specified
 on Krötzsch's Ksc calculus, the one published proof that covers nominals together with ⊥, role
 chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)), and is being built in slices.
-Its engine shares one saturation across every class no nominal reaches (§5.4 K6), so a nominal-free
-ontology costs about what it costs `el`: GO reasons in 1.2 s and EL-GALEN in 8.7 s on one thread,
-though EL-GALEN's 10.3 GB peak is still the open cost. It is selectable once slice 6 wires it in.
+Its engine shares one saturation across every class no nominal reaches (§5.4 K6), and reads role
+inclusions through the told hierarchy instead of copying each edge to every super-role (K7), so a
+nominal-free ontology costs about what it costs `el`: GO reasons in 1.0 s and EL-GALEN in 4.2 s on
+one thread. Memory is still the open cost: EL-GALEN peaks at 3.2 GB, against `el`'s 0.46 GB. It is
+selectable once slice 6 wires it in.
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 

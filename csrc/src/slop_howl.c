@@ -48,12 +48,12 @@ slop_result_normalize_Decoded_types_Fault howl_decode_from(slop_arena* arena, te
 }
 
 slop_result_normalize_Decoded_types_Fault howl_own_decoded(slop_arena* arena, slop_result_normalize_Decoded_types_Fault r) {
-    __auto_type _mv_865 = r;
-    if (_mv_865.is_ok) {
-        __auto_type d = _mv_865.data.ok;
+    __auto_type _mv_897 = r;
+    if (_mv_897.is_ok) {
+        __auto_type d = _mv_897.data.ok;
         return ((slop_result_normalize_Decoded_types_Fault){ .is_ok = true, .data.ok = normalize_copy_decoded(arena, d) });
-    } else if (!_mv_865.is_ok) {
-        __auto_type f = _mv_865.data.err;
+    } else if (!_mv_897.is_ok) {
+        __auto_type f = _mv_897.data.err;
         return ((slop_result_normalize_Decoded_types_Fault){ .is_ok = false, .data.err = types_copy_fault(arena, f) });
     }
     SLOP_UNREACHABLE();
@@ -80,14 +80,14 @@ slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, no
 }
 
 slop_result_howl_Prepared_types_Fault howl_prepare_in_profile(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile) {
-    __auto_type _mv_866 = profile;
-    if (_mv_866 == types_Profile_profile_el_plus_plus) {
+    __auto_type _mv_898 = profile;
+    if (_mv_898 == types_Profile_profile_el_plus_plus) {
         return howl_prepare_ksc(arena, d, config, profile);
-    } else if (_mv_866 == types_Profile_profile_el) {
+    } else if (_mv_898 == types_Profile_profile_el) {
         return howl_prepare_el(arena, d, config, profile);
-    } else if (_mv_866 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_898 == types_Profile_profile_horn_sriq) {
         return howl_prepare_el(arena, d, config, profile);
-    } else if (_mv_866 == types_Profile_profile_sriq) {
+    } else if (_mv_898 == types_Profile_profile_sriq) {
         return howl_prepare_el(arena, d, config, profile);
     }
     SLOP_UNREACHABLE();
@@ -146,40 +146,45 @@ slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_
 }
 
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config) {
-    __auto_type _mv_867 = p.work;
-    switch (_mv_867.tag) {
+    __auto_type _mv_899 = p.work;
+    switch (_mv_899.tag) {
         case howl_Work_el_work:
         {
-            __auto_type w = _mv_867.data.el_work;
-            __auto_type _mv_868 = saturate_saturate(arena, w.saturation, w.index, config);
-            if (!_mv_868.is_ok) {
-                __auto_type f = _mv_868.data.err;
+            __auto_type w = _mv_899.data.el_work;
+            __auto_type _mv_900 = saturate_saturate(arena, w.saturation, w.index, config);
+            if (!_mv_900.is_ok) {
+                __auto_type f = _mv_900.data.err;
                 return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-            } else if (_mv_868.is_ok) {
-                __auto_type rr = _mv_868.data.ok;
+            } else if (_mv_900.is_ok) {
+                __auto_type rr = _mv_900.data.ok;
                 return ((slop_result_types_Outcome_types_Fault){ .is_ok = true, .data.ok = ((types_Outcome){.profile = p.profile, .coverage = p.coverage, .termination = rr.termination, .findings = classify_extract_findings(arena, rr.saturation, p.names), .evidence = ((types_Evidence){ .tag = types_Evidence_el_evidence, .data.el_evidence = rr.saturation }), .rounds = rr.saturation.iteration, .names = p.names}) });
             }
             SLOP_UNREACHABLE();
         }
         case howl_Work_ksc_work:
         {
-            __auto_type w = _mv_867.data.ksc_work;
-            {
-                __auto_type r = kscsat_ksc_classify(arena, w.axioms, w.classes, config);
+            __auto_type w = _mv_899.data.ksc_work;
+            __auto_type _mv_901 = kscsat_ksc_classify(arena, w.axioms, w.classes, config);
+            if (!_mv_901.is_ok) {
+                __auto_type f = _mv_901.data.err;
+                return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
+            } else if (_mv_901.is_ok) {
+                __auto_type r = _mv_901.data.ok;
                 return ((slop_result_types_Outcome_types_Fault){ .is_ok = true, .data.ok = ((types_Outcome){.profile = p.profile, .coverage = p.coverage, .termination = r.termination, .findings = classify_extract_ksc_findings(arena, r), .evidence = ((types_Evidence){ .tag = types_Evidence_ksc_evidence, .data.ksc_evidence = r }), .rounds = r.rounds, .names = p.names}) });
             }
+            SLOP_UNREACHABLE();
         }
     }
     SLOP_UNREACHABLE();
 }
 
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
-    __auto_type _mv_869 = howl_prepare(arena, triples, imports_resolved, config);
-    if (!_mv_869.is_ok) {
-        __auto_type f = _mv_869.data.err;
+    __auto_type _mv_902 = howl_prepare(arena, triples, imports_resolved, config);
+    if (!_mv_902.is_ok) {
+        __auto_type f = _mv_902.data.err;
         return ((slop_result_types_Outcome_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_869.is_ok) {
-        __auto_type p = _mv_869.data.ok;
+    } else if (_mv_902.is_ok) {
+        __auto_type p = _mv_902.data.ok;
         return howl_reason(arena, p, config);
     }
     SLOP_UNREACHABLE();

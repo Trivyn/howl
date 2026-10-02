@@ -2177,7 +2177,7 @@
     (match (ksc-fixture arena ttl)
       ((none) (do (println (string-concat arena "  [ksc differential] did not gate whole: " label)) false))
       ((some fx)
-        (let ((res (ksc-classify arena (. fx axioms) (. fx classes) (default-config)))
+        (let ((res (ksc-run arena (. fx axioms) (. fx classes) (default-config)))
               (nothing (union-new KName k-class (record-new IRI (value OWL_NOTHING))))
               (thing   (union-new KName k-class (record-new IRI (value OWL_THING))))
               (mut ok true))
@@ -2212,7 +2212,7 @@
     (match (ksc-fixture arena ttl)
       ((none) -1)
       ((some fx)
-        (let ((res (ksc-classify arena (. fx axioms) (. fx classes) (default-config)))
+        (let ((res (ksc-run arena (. fx axioms) (. fx classes) (default-config)))
               (an (union-new KName k-class (record-new IRI (value a))))
               (bn (union-new KName k-class (record-new IRI (value b))))
               (mut out 0))
@@ -2229,13 +2229,13 @@
     (@alloc arena)
     (match (ksc-fixture arena ttl)
       ((none) -1)
-      ((some fx) (if (. (ksc-classify arena (. fx axioms) (. fx classes) (default-config)) inconsistent) 1 0))))
+      ((some fx) (if (. (ksc-run arena (. fx axioms) (. fx classes) (default-config)) inconsistent) 1 0))))
 
   (fn ksc-fixture-count ()
     (@intent "How many el++ fixtures there are")
     (@spec (() -> Int))
     (@pure)
-    21)
+    29)
 
   (fn ksc-fixture-at ((i Int))
     (@intent "el++ fixture i: §5.4's constructs, alone and combined, as an inline Turtle body")
@@ -2289,6 +2289,38 @@
       ;; 20. The same merge through witnesses: Q1 ⊑ ∃r.(B ⊓ {a}) makes a a B
       ;;     only when Q1 is non-empty, so Q2 ⊑ ∃s.{a}, ∃s.B ⊑ E gives Q2 ⋢ E.
       (20 ":Q1 a owl:Class . :Q2 a owl:Class . :B a owl:Class . :E a owl:Class .\n:Q1 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B [ owl:oneOf ( :a ) ] ) ] ] .\n:Q2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
+      ;; 21. K7: chain legs stored under sub-roles, each arriving first in turn.
+      ;;     r1 ⊑ r, s1 ⊑ s, r ∘ s ⊑ t, t ⊑ t2, ∃t2.D ⊑ E. C's first leg arrives
+      ;;     first; C2's (three subsumptions down) arrives after X's second leg.
+      (21 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :t2 a owl:ObjectProperty . :X a owl:Class . :C2 a owl:Class . :A1 a owl:Class . :A2 a owl:Class . :E a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s . :t rdfs:subPropertyOf :t2 .\n:t owl:propertyChainAxiom ( :r :s ) .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:someValuesFrom :D ] .\n:C2 rdfs:subClassOf :A1 . :A1 rdfs:subClassOf :A2 . :A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .\n[ a owl:Restriction ; owl:onProperty :t2 ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n")
+      ;; 22. K7: Self on a sub-role through (2) and (14), feeding a range and a chain.
+      ;;     r1(a, a), r1 ⊑ r, range(r) = D, ∃r.Self ⊑ F, s(a, b), B(b), r ∘ s ⊑ t,
+      ;;     ∃t.B ⊑ E, Q ⊑ {a} ⊨ Q ⊑ D, F, E.
+      (22 ":r1 a owl:ObjectProperty . :B a owl:Class . :Q a owl:Class . :E a owl:Class . :F a owl:Class . :D a owl:Class .\n:r1 rdfs:subPropertyOf :r .\n:r rdfs:range :D .\n:a :r1 :a .\n:a :s :b .\n:b a :B .\n:t owl:propertyChainAxiom ( :r :s ) .\n:Q rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] rdfs:subClassOf :F .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
+      ;; 23. K7: (29) re-points a triple whose role has super-roles: C ⊑ ∃r1.B,
+      ;;     B ⊑ {a}, r1 ⊑ r, s(a, b), F(b), r ∘ s ⊑ t, ∃t.F ⊑ E ⊨ C ⊑ E.
+      (23 ":r1 a owl:ObjectProperty . :B a owl:Class . :F a owl:Class . :C a owl:Class . :E a owl:Class .\n:r1 rdfs:subPropertyOf :r .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:a :s :b .\n:b a :F .\n:t owl:propertyChainAxiom ( :r :s ) .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :F ] rdfs:subClassOf :E .\n")
+      ;; 24. K7: a range on a super-role reaches a sub-role's witness, and only
+      ;;     upwards: r1 ⊑ r, range(r) = D, C ⊑ ∃r1.⊤, C2 ⊑ ∃r.⊤, ∃r1.D ⊑ E,
+      ;;     ∃r.D ⊑ E2 ⊨ C ⊑ E, C ⊑ E2, C2 ⊑ E2; C2 ⋢ E.
+      (24 ":r1 a owl:ObjectProperty . :C a owl:Class . :C2 a owl:Class . :E a owl:Class . :E2 a owl:Class .\n:r1 rdfs:subPropertyOf :r .\n:r rdfs:range :D .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom owl:Thing ] .\n:C2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Thing ] .\n[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E2 .\n")
+      ;; 25. K7: a role cycle from equivalent properties: r ≡ s, s ⊑ u,
+      ;;     C ⊑ ∃r.D, D2 ⊑ ∃s.D, ∃s.D ⊑ E, ∃u.D ⊑ F, ∃r.D ⊑ G
+      ;;     ⊨ C ⊑ E, F, G; D2 ⊑ E, F, G.
+      (25 ":u a owl:ObjectProperty . :C a owl:Class . :D2 a owl:Class . :E a owl:Class . :F a owl:Class . :G a owl:Class .\n:r owl:equivalentProperty :s .\n:s rdfs:subPropertyOf :u .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] .\n:D2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :u ; owl:someValuesFrom :D ] rdfs:subClassOf :F .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :G .\n")
+      ;; 26. K7 at K6's boundary: fixture 15 with every role a sub-role. The
+      ;;     nominal reaches U through s1 ⊑ s, so U is unsafe and S is not:
+      ;;     S ⊑ E, U ⊑ E, U ⊑ G (F(a), ∃s.F ⊑ G); S ⋢ G.
+      (26 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :F a owl:Class . :S a owl:Class . :U a owl:Class . :X a owl:Class . :B a owl:Class . :E a owl:Class . :G a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf :D .\n:S rdfs:subClassOf :X . :U rdfs:subClassOf :X .\n:U rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:hasValue :a ] .\n:a a :F .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :F ] rdfs:subClassOf :G .\n")
+      ;; 27. K7: transitivity over sub-role legs, and nothing downwards: r
+      ;;     transitive, r1 ⊑ r, C ⊑ ∃r1.X, X ⊑ ∃r1.Y, ∃r.Y ⊑ E, ∃r1.Y ⊑ F
+      ;;     ⊨ C ⊑ E, X ⊑ E, X ⊑ F; C ⋢ F (C reaches Y by r, not by r1).
+      (27 ":r1 a owl:ObjectProperty . :C a owl:Class . :X a owl:Class . :Y a owl:Class . :E a owl:Class . :F a owl:Class .\n:r a owl:TransitiveProperty .\n:r1 rdfs:subPropertyOf :r .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Y ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] rdfs:subClassOf :F .\n")
+      ;; 28. K7: a Self fact arriving after a chain leg stored under a sub-role
+      ;;     (rules (16) and (17)). r1 ⊑ r, s1 ⊑ s, r ∘ s ⊑ t. C ⊑ ∃s1.D and,
+      ;;     two subsumptions later, ∃r.Self; C3 ⊑ ∃r1.Y and Y, two later, ∃s.Self.
+      ;;     ∃t.D ⊑ E, ∃t.Y ⊑ E3 ⊨ C ⊑ E, C3 ⊑ E3; A2 ⋢ E.
+      (28 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :A1 a owl:Class . :A2 a owl:Class . :C3 a owl:Class . :Y a owl:Class . :B1 a owl:Class . :B2 a owl:Class . :E a owl:Class . :E3 a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s .\n:t owl:propertyChainAxiom ( :r :s ) .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:someValuesFrom :D ] , :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .\n:C3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .\n:Y rdfs:subClassOf :B1 .\n:B1 rdfs:subClassOf :B2 .\n:B2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :Y ] rdfs:subClassOf :E3 .\n")
       (_ "")))
 
   (fn test-ksc-engine-matches-reference ((arena Arena))
@@ -2350,6 +2382,62 @@
           (do (println "  [ksc] Self on the left: C ⊑ D") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 13) "http://example.org/t#C" "http://example.org/t#E") 1))
           (do (println "  [ksc] Self under a role hierarchy: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 21) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] chain legs under sub-roles, first leg first: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 21) "http://example.org/t#C2" "http://example.org/t#E") 1))
+          (do (println "  [ksc] chain legs under sub-roles, second leg first: C2 ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 21) "http://example.org/t#X" "http://example.org/t#E") 0))
+          (do (println "  [ksc] chain legs under sub-roles: X ⋢ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 22) "http://example.org/t#Q" "http://example.org/t#D") 1))
+          (do (println "  [ksc] Self on a sub-role reaches a super-role's range: Q ⊑ D") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 22) "http://example.org/t#Q" "http://example.org/t#F") 1))
+          (do (println "  [ksc] Self on a sub-role through (14): Q ⊑ F") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 22) "http://example.org/t#Q" "http://example.org/t#E") 1))
+          (do (println "  [ksc] Self on a sub-role feeds a chain: Q ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 23) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] (29) re-points a sub-role triple into a chain: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 24) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] a super-role's range at a sub-role witness: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 24) "http://example.org/t#C" "http://example.org/t#E2") 1))
+          (do (println "  [ksc] a sub-role triple read as its super-role: C ⊑ E2") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 24) "http://example.org/t#C2" "http://example.org/t#E2") 1))
+          (do (println "  [ksc] range on the role itself: C2 ⊑ E2") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 24) "http://example.org/t#C2" "http://example.org/t#E") 0))
+          (do (println "  [ksc] no read downwards: C2 ⋢ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 25) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] role cycle: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 25) "http://example.org/t#C" "http://example.org/t#F") 1))
+          (do (println "  [ksc] role cycle: C ⊑ F") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 25) "http://example.org/t#C" "http://example.org/t#G") 1))
+          (do (println "  [ksc] role cycle: C ⊑ G") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 25) "http://example.org/t#D2" "http://example.org/t#E") 1))
+          (do (println "  [ksc] role cycle: D2 ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 25) "http://example.org/t#D2" "http://example.org/t#F") 1))
+          (do (println "  [ksc] role cycle: D2 ⊑ F") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 25) "http://example.org/t#D2" "http://example.org/t#G") 1))
+          (do (println "  [ksc] role cycle: D2 ⊑ G") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 26) "http://example.org/t#S" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6 through sub-roles: S ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 26) "http://example.org/t#U" "http://example.org/t#E") 1))
+          (do (println "  [ksc] K6 through sub-roles: U ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 26) "http://example.org/t#U" "http://example.org/t#G") 1))
+          (do (println "  [ksc] K6 through sub-roles: U ⊑ G") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 26) "http://example.org/t#S" "http://example.org/t#G") 0))
+          (do (println "  [ksc] K6 through sub-roles: S ⋢ G") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 27) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] transitive over sub-role legs: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 27) "http://example.org/t#X" "http://example.org/t#E") 1))
+          (do (println "  [ksc] sub-role read up: X ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 27) "http://example.org/t#X" "http://example.org/t#F") 1))
+          (do (println "  [ksc] sub-role on its own: X ⊑ F") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 27) "http://example.org/t#C" "http://example.org/t#F") 0))
+          (do (println "  [ksc] no read downwards: C ⋢ F") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 28) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] Self after a sub-role leg, rule (16): C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 28) "http://example.org/t#C3" "http://example.org/t#E3") 1))
+          (do (println "  [ksc] Self after a sub-role leg, rule (17): C3 ⊑ E3") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 28) "http://example.org/t#A2" "http://example.org/t#E") 0))
+          (do (println "  [ksc] Self alone: A2 ⋢ E") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 14) "http://example.org/t#D" "http://example.org/t#C") 1))
           (do (println "  [ksc] nominal: D ⊑ C") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 14) "http://example.org/t#Q" "http://example.org/t#E") 1))
@@ -2473,6 +2561,63 @@
   ;; cap", §6.8)
   ;; ============================================================
 
+  (fn ksc-run ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (config ReasonerConfig))
+    (@intent "ksc-classify under a config that cannot cancel: its result (a Fault is reported and answers nothing)")
+    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> KscResult))
+    (@alloc arena)
+    (match (ksc-classify arena axioms classes config)
+      ((ok r) r)
+      ((error _)
+        (do
+          (println "  [ksc] ksc-classify returned a Fault under a config that cannot cancel")
+          (record-new KscResult
+            (inconsistent false)
+            (termination  (union-new Termination resource-limit 0))
+            (rounds       0)
+            (g-rounds     0)
+            (g-facts      0)
+            (w-rounds     0)
+            (w-facts      0)
+            (unsafe-count 0)
+            (answers      (list-new arena ClassAnswer)))))))
+
+  (fn cancel-flag-set ()
+    (@intent "The address of a cancel flag that is already set, as cancel-ptr")
+    (@spec (() -> I64))
+    (let ((mut p 0))
+      (do
+        (c-inline "static uint32_t howl_test_cancel_flag = 1; p = (int64_t)(uintptr_t)&howl_test_cancel_flag;")
+        (cast I64 p))))
+
+  (fn test-ksc-cancelled ((arena Arena))
+    (@intent "el++ honours cancel-ptr: a set flag gives Fault::cancelled and no result, whatever the cap (§5.4)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Cap 0 as well as the default: cancellation is read ahead of the cap,
+    ;; so a run with work pending and no round to spend is still cancelled.
+    (if (cancelled-under arena (default-config))
+      (cancelled-under arena (ksc-config 1 0))
+      false))
+
+  (fn cancelled-under ((arena Arena) (base-cfg ReasonerConfig))
+    (@intent "Does fixture 0, with a set cancel-ptr on this config, give Fault::cancelled?")
+    (@spec ((Arena ReasonerConfig) -> Bool))
+    (@alloc arena)
+    (let ((mut cfg base-cfg))
+      (do
+        (set! cfg cancel-ptr (cancel-flag-set))
+        (match (ksc-fixture arena (ksc-fixture-at 0))
+          ((none) false)
+          ((some fx)
+            (match (ksc-classify arena (. fx axioms) (. fx classes) cfg)
+              ((ok _) false)
+              ((error f)
+                (match f
+                  ((cancelled)     true)
+                  ((input-error _) false)
+                  ((refused _)     false)
+                  ((unavailable _) false)))))))))
+
   (fn ksc-config ((workers Int) (cap Int))
     (@intent "A config with a chosen worker count and round budget")
     (@spec ((Int Int) -> ReasonerConfig))
@@ -2522,8 +2667,8 @@
           (do
             (match (ksc-fixture arena (ksc-fixture-at i))
               ((some fx)
-                (let ((one  (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
-                      (four (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 4 1000))))
+                (let ((one  (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+                      (four (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 4 1000))))
                   (when (not (answers-equal one four))
                     (do (println (string-concat arena "  [ksc workers] W=1 and W=4 differ on fixture "
                                    (int-to-string arena i)))
@@ -2541,8 +2686,8 @@
     (match (ksc-fixture arena ":C rdfs:subClassOf :D .\nowl:Nothing rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
       ((none) false)
       ((some fx)
-        (let ((r  (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
-              (r0 (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000))))
+        (let ((r  (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+              (r0 (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000))))
           (and (match (. r termination) ((fixpoint) true) ((resource-limit _) false))
                (== (. r rounds) (+ (. r g-rounds) (+ (. r w-rounds) (max-run-rounds r))))
                (== (nothing-run-rounds r) 0)
@@ -2577,9 +2722,9 @@
     (match (ksc-fixture arena (ksc-fixture-at 0))
       ((none) false)
       ((some fx)
-        (let ((full   (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
-              (capped (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1)))
-              (zero   (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 0))))
+        (let ((full   (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+              (capped (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1)))
+              (zero   (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 0))))
           (and (match (. full termination) ((fixpoint) true) ((resource-limit _) false))
                (match (. capped termination) ((fixpoint) false) ((resource-limit _) true))
                (== (list-len (. capped answers)) 0)
@@ -4762,6 +4907,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-seed-unsat-counts-no-round arena)))
             (print-test-result "ksc: a run flagged by its seed counts no round" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-cancelled arena)))
+            (print-test-result "ksc: a set cancel-ptr gives Fault::cancelled, no result" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))

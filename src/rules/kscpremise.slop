@@ -51,7 +51,8 @@
   (import types (RoleId KName KTerm KscAxiom role-eq kname-eq kterm-eq name-term nominal-term))
 
   (export
-    KList KPartners KscIndex build-ksc-index term-bucket role-bucket and-partners ex-partners)
+    KList KPartners RoleList KscIndex build-ksc-index term-bucket role-bucket and-partners ex-partners
+    role-sups role-subs role-under)
 
   ;; A record around the list, for premise.slop's AxList reason: a Map of
   ;; records makes "read it, push, write it back" explicit.
@@ -66,7 +67,19 @@
     (by-other (Map KTerm KList))
     (count    Int)))
 
+  ;; A record around a role list, for KList's reason.
+  (type RoleList (record
+    (items (List RoleId))))
+
+  ;; e ⊑* v with e ≠ v, as one key of `below`.
+  (type RolePair (record
+    (sub RoleId)
+    (sup RoleId)))
+
   (type KscIndex (record
+    (sups        (Map RoleId RoleList))   ; K7: e → sup*(e), e itself included
+    (subs        (Map RoleId RoleList))   ; K7: v → sub*(v), v itself included
+    (below       (Set RolePair))          ; K7: every e ⊑* v with e ≠ v
     (on-term     (Map KTerm KList))
     (on-role     (Map RoleId KList))
     (and-pairs   (Map KTerm KPartners))   ; conjunct y → the other conjunct → subConj axioms
@@ -154,7 +167,12 @@
     ;; Filed in list order, so every bucket is in the normaliser's
     ;; canonical order; nothing depends on it, but it keeps the index a
     ;; function of the input.
-    (let ((on-term (map-new arena KTerm KList))
+    (let ((up      (map-new arena RoleId RoleList))
+          (down    (map-new arena RoleId RoleList))
+          (sups    (map-new arena RoleId RoleList))
+          (subs    (map-new arena RoleId RoleList))
+          (below   (set-new arena RolePair))
+          (on-term (map-new arena KTerm KList))
           (on-role (map-new arena RoleId KList))
           (and-pairs (map-new arena KTerm KPartners))
           (ex-by-role (map-new arena RoleId KPartners))
@@ -188,8 +206,12 @@
               (file-role arena on-role v ax))
             ((k-self-rhs a _)
               (file-term arena on-term (name-term a) ax))
-            ((k-role v _)
-              (file-role arena on-role v ax))
+            ((k-role v w)
+              (do
+                (file-role arena on-role v ax)
+                (let ((u (role-pushed arena (map-get up v) w))
+                      (d (role-pushed arena (map-get down w) v)))
+                  (do (map-put up v u) (map-put down w d)))))
             ((k-chain u v _)
               (do
                 (file-role arena on-role u ax)
@@ -202,7 +224,33 @@
                 (file-term arena on-term (nominal-term a) ax)
                 (when (first-mention arena seen a) (list-push nis a))
                 (when (first-mention arena seen b) (list-push nis b))))))
+        ;; K7's closure, over every role a subRole axiom names; any other
+        ;; role is its own closure (role-sups, role-subs).
+        (for-each (ax axioms)
+          (match ax
+            ((k-role v w)
+              (do
+                (when (not (map-has sups v)) (map-put sups v (role-walk arena up v)))
+                (when (not (map-has sups w)) (map-put sups w (role-walk arena up w)))
+                (when (not (map-has subs v)) (map-put subs v (role-walk arena down v)))
+                (when (not (map-has subs w)) (map-put subs w (role-walk arena down w)))))
+            ((k-sub _ _)            (do))
+            ((k-and _ _ _)          (do))
+            ((k-some-lhs _ _ _)     (do))
+            ((k-some-rhs _ _ _ _)   (do))
+            ((k-self-lhs _ _)       (do))
+            ((k-self-rhs _ _)       (do))
+            ((k-chain _ _ _)        (do))
+            ((k-range _ _)          (do))
+            ((k-role-assert _ _ _)  (do))))
+        (for-each ((v l) subs)
+          (for-each (e (. l items))
+            (when (not (role-eq e v))
+              (set-put below (record-new RolePair (sub e) (sup v))))))
         (record-new KscIndex
+          (sups        sups)
+          (subs        subs)
+          (below       below)
           (on-term     on-term)
           (on-role     on-role)
           (and-pairs   and-pairs)
@@ -232,4 +280,69 @@
     (@spec ((KscIndex RoleId) -> (Option KPartners)))
     (@pure)
     (map-get (. idx ex-by-role) v))
+
+  ;; ============================================================
+  ;; K7 (SPEC §5.4): the told role hierarchy, closed. A triple is stored
+  ;; under the role it was derived with and read under every role above
+  ;; it; `sups` and `subs` are those two directions of `⊑*`, each list
+  ;; holding the role itself first. A breadth-first walk with a visited
+  ;; set, because equivalent properties make the hierarchy cyclic
+  ;; (premise.slop's role-closure, for el's L6).
+  ;; ============================================================
+
+  (fn role-pushed ((arena Arena) (found (Option RoleList)) (r RoleId))
+    (@intent "The role list a lookup found, with one more role — or a new list")
+    (@spec ((Arena (Option RoleList) RoleId) -> RoleList))
+    (@alloc arena)
+    (let ((mut items (match found
+                       ((some l) (. l items))
+                       ((none)   (list-new arena RoleId)))))
+      (do
+        (list-push items r)
+        (record-new RoleList (items items)))))
+
+  (fn role-walk ((arena Arena) (edges (Map RoleId RoleList)) (r RoleId))
+    (@intent "r and every role reachable from it along edges, each once, r first")
+    (@spec ((Arena (Map RoleId RoleList) RoleId) -> RoleList))
+    (@alloc arena)
+    (let ((mut out (list-new arena RoleId))
+          (seen (set-new arena RoleId))
+          (mut i 0))
+      (do
+        (set-put seen r)
+        (list-push out r)
+        (while (< i (cast Int (list-len out)))
+          (do
+            (match (list-get out i)
+              ((some q)
+                (match (map-get edges q)
+                  ((some l)
+                    (for-each (s (. l items))
+                      (when (not (set-has seen s))
+                        (do (set-put seen s) (list-push out s)))))
+                  ((none) (do))))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        (record-new RoleList (items out)))))
+
+  (fn role-sups ((arena Arena) (idx KscIndex) (e RoleId))
+    (@intent "sup*(e): e and every role above it in the told hierarchy")
+    (@spec ((Arena KscIndex RoleId) -> (List RoleId)))
+    (@alloc arena)
+    (match (map-get (. idx sups) e)
+      ((some l) (. l items))
+      ((none)   (let ((mut out (list-new arena RoleId))) (do (list-push out e) out)))))
+
+  (fn role-subs ((arena Arena) (idx KscIndex) (v RoleId))
+    (@intent "sub*(v): v and every role below it in the told hierarchy")
+    (@spec ((Arena KscIndex RoleId) -> (List RoleId)))
+    (@alloc arena)
+    (match (map-get (. idx subs) v)
+      ((some l) (. l items))
+      ((none)   (let ((mut out (list-new arena RoleId))) (do (list-push out v) out)))))
+
+  (fn role-under ((idx KscIndex) (e RoleId) (v RoleId))
+    (@intent "e ∈ sub*(v): e is v or below it in the told hierarchy")
+    (@spec ((KscIndex RoleId RoleId) -> Bool))
+    (if (role-eq e v) true (set-has (. idx below) (record-new RolePair (sub e) (sup v)))))
 )
