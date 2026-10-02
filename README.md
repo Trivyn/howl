@@ -197,9 +197,8 @@ together with ⊥, role chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-e
 Its engine shares one saturation across every class no nominal reaches (§5.4 K6), and reads role
 inclusions through the told hierarchy instead of copying each edge to every super-role (K7), so a
 nominal-free ontology costs a small multiple of what it costs `el`: on one thread GO reasons in
-0.86 s and EL-GALEN in 3.75 s, about 1.5× and 2× `el`. `el` joins each round on worker threads
-and `el++`'s shared saturation (phase W) does not yet, so at four workers the gap widens (EL-GALEN
-4.8 s against `el`'s 0.82 s). It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
+0.86 s and EL-GALEN in 3.75 s, about 1.5× and 2× `el`. Its rounds are barriers, as `el`'s are, so
+phase W derives on every worker: at four, EL-GALEN takes 1.9 s (`el` 0.82 s) and GO 0.56 s. It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
 GO at 0.62 GB, against 0.57 GB. Select it with `--profile el++`, or let `auto` choose it.
 
 **`el++`'s evidence**, each a `make` target that runs both rungs:
@@ -218,8 +217,8 @@ GO at 0.62 GB, against 0.57 GB. Select it with `--profile el++`, or let `auto` c
   inequality and negative assertions match HermiT (211 of them inconsistent).
 - **Determinism:** reports are byte-identical at every worker count for every round cap from 0 to
   R, which cuts each of phase G, phase W and phase Q.
-- **Bench** (`make bench-el++`, informational, W = 4): OBI 0.05× and RO 0.10× HermiT; GO 2.3× and
-  EL-GALEN 15× ELK (`el`: 0.84× and 2.9×). The EL-GALEN gap is phase W running on one thread.
+- **Bench** (`make bench-el++`, informational, W = 4): OBI 0.03× and RO 0.08× HermiT; GO 1.1× and
+  EL-GALEN 6.0× ELK (`el`: 0.84× and 2.9×). Each round's commit is still serial.
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 
@@ -346,7 +345,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **80 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **81 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests

@@ -2667,7 +2667,7 @@
           true
           (do
             (for-each (a (. idx individuals)) (list-push seeds (. (ksc-1 a) fact)))
-            (let ((g (run-ksc arena idx ids (none) seeds false 10000 0))
+            (let ((g (run-ksc arena idx ids (none) seeds false 10000 0 1))
                   (engset (set-new arena KFact)))
               (do
                 (for-each (c (set-elements (. (. g store) seen)))
@@ -2740,9 +2740,13 @@
             ok)))))
 
   (fn test-ksc-workers-agree ((arena Arena))
-    (@intent "el++ answers every fixture the same at W = 1 and W = 4 (§6.8)")
+    (@intent "el++ answers every fixture the same at W = 1, 2, 4 and 8, at every round cap from 0 to R (§6.8)")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
+    ;; Rounds are barriers (kscsat.slop, ksc-round), so a run cut at any
+    ;; round must be the same at every worker count; R is the uncapped run's
+    ;; rounds. Every fixture's rounds have at least one fact per worker
+    ;; somewhere, so the parallel derive runs here, not only the serial one.
     (let ((mut ok true)
           (mut i 0))
       (do
@@ -2750,15 +2754,60 @@
           (do
             (match (ksc-fixture arena (ksc-fixture-at i))
               ((some fx)
-                (let ((one  (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
-                      (four (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 4 1000))))
-                  (when (not (answers-equal one four))
-                    (do (println (string-concat arena "  [ksc workers] W=1 and W=4 differ on fixture "
-                                   (int-to-string arena i)))
-                        (set! ok false)))))
+                (let ((full (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+                      (mut cap 0))
+                  (while (<= cap (+ (. full rounds) 1))
+                    (let ((one (ksc-run arena (. fx axioms) (. fx classes) (ksc-config 1 cap))))
+                      (do
+                        (for-each (w (workers-under-test arena))
+                          (when (not (same-run one (ksc-run arena (. fx axioms) (. fx classes) (ksc-config w cap))))
+                            (do (println (string-concat arena
+                                           (string-concat arena "  [ksc workers] fixture " (int-to-string arena i))
+                                           (string-concat arena " differs at W="
+                                             (string-concat arena (int-to-string arena w)
+                                               (string-concat arena ", cap " (int-to-string arena cap))))))
+                                (set! ok false))))
+                        (set! cap (+ cap 1)))))))
               ((none) (set! ok false)))
             (set! i (+ i 1))))
         ok)))
+
+  (fn same-run ((a KscResult) (b KscResult))
+    (@intent "Every field two el++ results carry agrees: answers, termination, every count, every answer's own")
+    (@spec ((KscResult KscResult) -> Bool))
+    (let ((mut ok (answers-equal a b))
+          (mut i 0))
+      (do
+        (when (not (== (. a rounds) (. b rounds))) (set! ok false))
+        (when (not (== (. a g-rounds) (. b g-rounds))) (set! ok false))
+        (when (not (== (. a g-facts) (. b g-facts))) (set! ok false))
+        (when (not (== (. a w-rounds) (. b w-rounds))) (set! ok false))
+        (when (not (== (. a w-facts) (. b w-facts))) (set! ok false))
+        (when (not (== (. a unsafe-count) (. b unsafe-count))) (set! ok false))
+        (when (not (match (. a termination)
+                     ((fixpoint) (match (. b termination) ((fixpoint) true) ((resource-limit _) false)))
+                     ((resource-limit x) (match (. b termination) ((fixpoint) false) ((resource-limit y) (== x y))))))
+          (set! ok false))
+        (for-each (x (. a answers))
+          (do
+            (match (list-get (. b answers) i)
+              ((some y)
+                (when (not (if (== (. x shared) (. y shared))
+                             (if (== (. x complete) (. y complete))
+                               (if (== (. x rounds) (. y rounds)) (== (. x facts) (. y facts)) false)
+                               false)
+                             false))
+                  (set! ok false)))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn workers-under-test ((arena Arena))
+    (@intent "The worker counts compared with W = 1")
+    (@spec ((Arena) -> (List Int)))
+    (@alloc arena)
+    (let ((mut ws (list-new arena Int)))
+      (do (list-push ws 2) (list-push ws 4) (list-push ws 8) ws)))
 
   (fn test-ksc-seed-unsat-counts-no-round ((arena Arena))
     (@intent "A class's run flagged by its seed adds no round and is not capped (Codex, slice 5b)")
@@ -4994,7 +5043,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-ksc-workers-agree arena)))
-            (print-test-result "ksc: every fixture answers the same at W = 1 and W = 4" r)
+            (print-test-result "ksc: every fixture answers the same at W = 1, 2, 4, 8 at every cap" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-ksc-cap arena)))

@@ -6,4 +6,4 @@
 ro-2025-12-17 source=a9f644d4a865747e ground=7ef01ecc3cbbd2e0 bnodes=9428f0b2943ca329 howl-report=7c91ef2a947c4d41 oracle=hermit oracle-entailments=2c1edea27d5f7aaf subsumptions=275 result=clean
 obi-2026-07-27 source=8874abcca971ee26 ground=db04e098e8ee9088 bnodes=07355fe6884c5584 howl-report=d612a21409a94cd5 oracle=hermit oracle-entailments=60c1860d9f55c70b subsumptions=38681 result=clean
 go-2026-07-26 source=653ce47cd7b02304 ground=6d0899a6f25eb0ac bnodes=a32a9ecd0f8d324a howl-report=0062347e87202a89 oracle=elk oracle-entailments=7075ace8b7be1f17 subsumptions=459329 result=clean
-el-galen-2011-04-12 source=4692482660fce56e ground=dff119179001d406 bnodes=9c1435bc452fcaaa howl-report=a52194b6187464a6 oracle=elk oracle-entailments=4caba0928a642c86 subsumptions=499983 result=clean
+el-galen-2011-04-12 source=4692482660fce56e ground=dff119179001d406 bnodes=9c1435bc452fcaaa howl-report=c1524f1b82e31714 oracle=elk oracle-entailments=4caba0928a642c86 subsumptions=499983 result=clean

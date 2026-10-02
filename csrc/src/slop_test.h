@@ -980,6 +980,8 @@ uint8_t test_test_ksc_g_matches_reference(slop_arena* arena);
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap);
 uint8_t test_answers_equal(types_KscResult a, types_KscResult b);
 uint8_t test_test_ksc_workers_agree(slop_arena* arena);
+uint8_t test_same_run(types_KscResult a, types_KscResult b);
+slop_list_int test_workers_under_test(slop_arena* arena);
 uint8_t test_test_ksc_seed_unsat_counts_no_round(slop_arena* arena);
 int64_t test_nothing_run_rounds(types_KscResult r);
 int64_t test_max_run_rounds(types_KscResult r);
