@@ -701,6 +701,10 @@
           (mut rounds 0)
           (mut going (if (> (list-len (. seeded next)) 0) (> budget 0) false)))
       (do
+        ;; A run flagged by its seeds is finished before its first round
+        ;; (K3): no round is counted and nothing is left to process.
+        (when (if stop-at-bottom unsat false)
+          (do (set! delta (list-new da KFact)) (set! going false)))
         ;; Each pass is one round (§5.4 "Rounds and the cap"). `going` is the
         ;; loop's test, recomputed where a round ends, so the invariant can
         ;; tie it to the budget: a round starts only with one left to spend.

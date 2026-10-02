@@ -1239,6 +1239,10 @@ kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, slop
         int64_t facts = seeded.added;
         int64_t rounds = 0;
         uint8_t going = (((((int64_t)((seeded.next).len)) > 0)) ? (budget > 0) : 0);
+        if ((stop_at_bottom) ? unsat : 0) {
+            delta = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0 });
+            going = 0;
+        }
         while (going) {
             {
                 __auto_type na = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; });

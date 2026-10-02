@@ -2532,6 +2532,41 @@
             (set! i (+ i 1))))
         ok)))
 
+  (fn test-ksc-seed-unsat-counts-no-round ((arena Arena))
+    (@intent "A class's run flagged by its seed adds no round and is not capped (Codex, slice 5b)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; owl:Nothing ⊑ {a} makes owl:Nothing unsafe; its run's seed is
+    ;; inst(owl:Nothing, owl:Nothing), which raises the flag at once.
+    (match (ksc-fixture arena ":C rdfs:subClassOf :D .\nowl:Nothing rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
+      ((none) false)
+      ((some fx)
+        (let ((r  (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000)))
+              (r0 (ksc-classify arena (. fx axioms) (. fx classes) (ksc-config 1 1000))))
+          (and (match (. r termination) ((fixpoint) true) ((resource-limit _) false))
+               (== (. r rounds) (+ (. r g-rounds) (+ (. r w-rounds) (max-run-rounds r))))
+               (== (nothing-run-rounds r) 0)
+               (not (. r0 inconsistent)))))))
+
+  (fn nothing-run-rounds ((r KscResult))
+    (@intent "The rounds owl:Nothing's own run took, or -1 if it had no answer")
+    (@spec ((KscResult) -> Int))
+    (let ((nothing (union-new KName k-class (record-new IRI (value OWL_NOTHING))))
+          (mut out -1))
+      (do
+        (for-each (a (. r answers))
+          (when (kname-eq (. a cls) nothing)
+            (when (not (. a shared)) (set! out (. a rounds)))))
+        out)))
+
+  (fn max-run-rounds ((r KscResult))
+    (@intent "The most rounds any class's own run took")
+    (@spec ((KscResult) -> Int))
+    (let ((mut m 0))
+      (do
+        (for-each (a (. r answers)) (when (> (. a rounds) m) (set! m (. a rounds))))
+        m)))
+
   (fn test-ksc-cap ((arena Arena))
     (@intent "A cap that cuts a phase gives resource-limit and only sound answers (§5.4)")
     (@spec ((Arena) -> Bool))
@@ -4723,6 +4758,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-cap arena)))
             (print-test-result "ksc: a cap that cuts phase W answers nothing and says resource-limit" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-seed-unsat-counts-no-round arena)))
+            (print-test-result "ksc: a run flagged by its seed counts no round" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))
