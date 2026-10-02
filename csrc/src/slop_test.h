@@ -25,6 +25,9 @@
 #include "slop_kscnormal.h"
 #include "slop_kscsat.h"
 #include "slop_ksc.h"
+#include "slop_kscids.h"
+#include "slop_kscpremise.h"
+#include "slop_kscnames.h"
 
 typedef struct test_KscFixture test_KscFixture;
 
@@ -67,6 +70,12 @@ SLOP_LIST_DEFINE(types_KscAxiom, slop_list_types_KscAxiom)
 #define SLOP_LIST_TYPES_KNAME_DEFINED
 #define SLOP_LIST_TYPES_KNAME_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_KName, slop_list_types_KName)
+#endif
+
+#ifndef SLOP_LIST_TYPES_KFACT_DEFINED
+#define SLOP_LIST_TYPES_KFACT_DEFINED
+#define SLOP_LIST_TYPES_KFACT_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_KFact, slop_list_types_KFact)
 #endif
 
 #ifndef SLOP_LIST_TYPES_ADDRESSED_DEFINED
@@ -118,6 +127,11 @@ SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
 #ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
 #define SLOP_OPTION_TYPES_KNAME_DEFINED
 SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_KFACT_DEFINED
+#define SLOP_OPTION_TYPES_KFACT_DEFINED
+SLOP_OPTION_DEFINE(types_KFact, slop_option_types_KFact)
 #endif
 
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
@@ -208,6 +222,598 @@ static inline bool slop_eq_types_Node(const void* a, const void* b) {
     }
     return false;
 }
+#endif
+
+#ifndef TYPES_KFACT_HASH_EQ_DEFINED
+#define TYPES_KFACT_HASH_EQ_DEFINED
+#ifndef TYPES_KELEM_HASH_EQ_DEFINED
+#define TYPES_KELEM_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+#ifndef TYPES_KNAME_HASH_EQ_DEFINED
+#define TYPES_KNAME_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_KName(const void* key) {
+    const types_KName* _k = (const types_KName*)key;
+    switch (_k->tag) {
+        case types_KName_k_class:
+            return slop_hash_rdf_IRI(&_k->data.k_class);
+        case types_KName_k_fresh:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.k_fresh });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KName(const void* a, const void* b) {
+    const types_KName* _a = (const types_KName*)a;
+    const types_KName* _b = (const types_KName*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KName_k_class:
+            return slop_eq_rdf_IRI(&_a->data.k_class, &_b->data.k_class);
+        case types_KName_k_fresh:
+            return _a->data.k_fresh == _b->data.k_fresh;
+    }
+    return false;
+}
+#endif
+static inline uint64_t slop_hash_types_KElem(const void* key) {
+    const types_KElem* _k = (const types_KElem*)key;
+    switch (_k->tag) {
+        case types_KElem_e_ind:
+            return slop_hash_rdf_IRI(&_k->data.e_ind);
+        case types_KElem_e_aux:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.e_aux });
+        case types_KElem_e_class:
+            return slop_hash_types_KName(&_k->data.e_class);
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KElem(const void* a, const void* b) {
+    const types_KElem* _a = (const types_KElem*)a;
+    const types_KElem* _b = (const types_KElem*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KElem_e_ind:
+            return slop_eq_rdf_IRI(&_a->data.e_ind, &_b->data.e_ind);
+        case types_KElem_e_aux:
+            return _a->data.e_aux == _b->data.e_aux;
+        case types_KElem_e_class:
+            return slop_eq_types_KName(&_a->data.e_class, &_b->data.e_class);
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_KTERM_HASH_EQ_DEFINED
+#define TYPES_KTERM_HASH_EQ_DEFINED
+#ifndef TYPES_KNAME_HASH_EQ_DEFINED
+#define TYPES_KNAME_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_KName(const void* key) {
+    const types_KName* _k = (const types_KName*)key;
+    switch (_k->tag) {
+        case types_KName_k_class:
+            return slop_hash_rdf_IRI(&_k->data.k_class);
+        case types_KName_k_fresh:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.k_fresh });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KName(const void* a, const void* b) {
+    const types_KName* _a = (const types_KName*)a;
+    const types_KName* _b = (const types_KName*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KName_k_class:
+            return slop_eq_rdf_IRI(&_a->data.k_class, &_b->data.k_class);
+        case types_KName_k_fresh:
+            return _a->data.k_fresh == _b->data.k_fresh;
+    }
+    return false;
+}
+#endif
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_KTerm(const void* key) {
+    const types_KTerm* _k = (const types_KTerm*)key;
+    switch (_k->tag) {
+        case types_KTerm_k_name:
+            return slop_hash_types_KName(&_k->data.k_name);
+        case types_KTerm_k_nominal:
+            return slop_hash_rdf_IRI(&_k->data.k_nominal);
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KTerm(const void* a, const void* b) {
+    const types_KTerm* _a = (const types_KTerm*)a;
+    const types_KTerm* _b = (const types_KTerm*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KTerm_k_name:
+            return slop_eq_types_KName(&_a->data.k_name, &_b->data.k_name);
+        case types_KTerm_k_nominal:
+            return slop_eq_rdf_IRI(&_a->data.k_nominal, &_b->data.k_nominal);
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_KELEM_HASH_EQ_DEFINED
+#define TYPES_KELEM_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+#ifndef TYPES_KNAME_HASH_EQ_DEFINED
+#define TYPES_KNAME_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_KName(const void* key) {
+    const types_KName* _k = (const types_KName*)key;
+    switch (_k->tag) {
+        case types_KName_k_class:
+            return slop_hash_rdf_IRI(&_k->data.k_class);
+        case types_KName_k_fresh:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.k_fresh });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KName(const void* a, const void* b) {
+    const types_KName* _a = (const types_KName*)a;
+    const types_KName* _b = (const types_KName*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KName_k_class:
+            return slop_eq_rdf_IRI(&_a->data.k_class, &_b->data.k_class);
+        case types_KName_k_fresh:
+            return _a->data.k_fresh == _b->data.k_fresh;
+    }
+    return false;
+}
+#endif
+static inline uint64_t slop_hash_types_KElem(const void* key) {
+    const types_KElem* _k = (const types_KElem*)key;
+    switch (_k->tag) {
+        case types_KElem_e_ind:
+            return slop_hash_rdf_IRI(&_k->data.e_ind);
+        case types_KElem_e_aux:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.e_aux });
+        case types_KElem_e_class:
+            return slop_hash_types_KName(&_k->data.e_class);
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KElem(const void* a, const void* b) {
+    const types_KElem* _a = (const types_KElem*)a;
+    const types_KElem* _b = (const types_KElem*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KElem_e_ind:
+            return slop_eq_rdf_IRI(&_a->data.e_ind, &_b->data.e_ind);
+        case types_KElem_e_aux:
+            return _a->data.e_aux == _b->data.e_aux;
+        case types_KElem_e_class:
+            return slop_eq_types_KName(&_a->data.e_class, &_b->data.e_class);
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_ROLEID_HASH_EQ_DEFINED
+#define TYPES_ROLEID_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_RoleId(const void* key) {
+    const types_RoleId* _k = (const types_RoleId*)key;
+    switch (_k->tag) {
+        case types_RoleId_named_role:
+            return slop_hash_rdf_IRI(&_k->data.named_role);
+        case types_RoleId_fresh_role:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
+    const types_RoleId* _a = (const types_RoleId*)a;
+    const types_RoleId* _b = (const types_RoleId*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_RoleId_named_role:
+            return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
+        case types_RoleId_fresh_role:
+            return _a->data.fresh_role == _b->data.fresh_role;
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_KELEM_HASH_EQ_DEFINED
+#define TYPES_KELEM_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+#ifndef TYPES_KNAME_HASH_EQ_DEFINED
+#define TYPES_KNAME_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_KName(const void* key) {
+    const types_KName* _k = (const types_KName*)key;
+    switch (_k->tag) {
+        case types_KName_k_class:
+            return slop_hash_rdf_IRI(&_k->data.k_class);
+        case types_KName_k_fresh:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.k_fresh });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KName(const void* a, const void* b) {
+    const types_KName* _a = (const types_KName*)a;
+    const types_KName* _b = (const types_KName*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KName_k_class:
+            return slop_eq_rdf_IRI(&_a->data.k_class, &_b->data.k_class);
+        case types_KName_k_fresh:
+            return _a->data.k_fresh == _b->data.k_fresh;
+    }
+    return false;
+}
+#endif
+static inline uint64_t slop_hash_types_KElem(const void* key) {
+    const types_KElem* _k = (const types_KElem*)key;
+    switch (_k->tag) {
+        case types_KElem_e_ind:
+            return slop_hash_rdf_IRI(&_k->data.e_ind);
+        case types_KElem_e_aux:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.e_aux });
+        case types_KElem_e_class:
+            return slop_hash_types_KName(&_k->data.e_class);
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KElem(const void* a, const void* b) {
+    const types_KElem* _a = (const types_KElem*)a;
+    const types_KElem* _b = (const types_KElem*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KElem_e_ind:
+            return slop_eq_rdf_IRI(&_a->data.e_ind, &_b->data.e_ind);
+        case types_KElem_e_aux:
+            return _a->data.e_aux == _b->data.e_aux;
+        case types_KElem_e_class:
+            return slop_eq_types_KName(&_a->data.e_class, &_b->data.e_class);
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_KELEM_HASH_EQ_DEFINED
+#define TYPES_KELEM_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+#ifndef TYPES_KNAME_HASH_EQ_DEFINED
+#define TYPES_KNAME_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_KName(const void* key) {
+    const types_KName* _k = (const types_KName*)key;
+    switch (_k->tag) {
+        case types_KName_k_class:
+            return slop_hash_rdf_IRI(&_k->data.k_class);
+        case types_KName_k_fresh:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.k_fresh });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KName(const void* a, const void* b) {
+    const types_KName* _a = (const types_KName*)a;
+    const types_KName* _b = (const types_KName*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KName_k_class:
+            return slop_eq_rdf_IRI(&_a->data.k_class, &_b->data.k_class);
+        case types_KName_k_fresh:
+            return _a->data.k_fresh == _b->data.k_fresh;
+    }
+    return false;
+}
+#endif
+static inline uint64_t slop_hash_types_KElem(const void* key) {
+    const types_KElem* _k = (const types_KElem*)key;
+    switch (_k->tag) {
+        case types_KElem_e_ind:
+            return slop_hash_rdf_IRI(&_k->data.e_ind);
+        case types_KElem_e_aux:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.e_aux });
+        case types_KElem_e_class:
+            return slop_hash_types_KName(&_k->data.e_class);
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KElem(const void* a, const void* b) {
+    const types_KElem* _a = (const types_KElem*)a;
+    const types_KElem* _b = (const types_KElem*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KElem_e_ind:
+            return slop_eq_rdf_IRI(&_a->data.e_ind, &_b->data.e_ind);
+        case types_KElem_e_aux:
+            return _a->data.e_aux == _b->data.e_aux;
+        case types_KElem_e_class:
+            return slop_eq_types_KName(&_a->data.e_class, &_b->data.e_class);
+    }
+    return false;
+}
+#endif
+#ifndef TYPES_ROLEID_HASH_EQ_DEFINED
+#define TYPES_ROLEID_HASH_EQ_DEFINED
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
+static inline uint64_t slop_hash_types_RoleId(const void* key) {
+    const types_RoleId* _k = (const types_RoleId*)key;
+    switch (_k->tag) {
+        case types_RoleId_named_role:
+            return slop_hash_rdf_IRI(&_k->data.named_role);
+        case types_RoleId_fresh_role:
+            return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+    }
+    return 0;
+}
+static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
+    const types_RoleId* _a = (const types_RoleId*)a;
+    const types_RoleId* _b = (const types_RoleId*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_RoleId_named_role:
+            return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
+        case types_RoleId_fresh_role:
+            return _a->data.fresh_role == _b->data.fresh_role;
+    }
+    return false;
+}
+#endif
+static inline uint64_t slop_hash_types_KFact(const void* key) {
+    const types_KFact* _k = (const types_KFact*)key;
+    switch (_k->tag) {
+        case types_KFact_f_inst:
+            {
+                uint64_t hash = 14695981039346656037ULL;
+                hash ^= slop_hash_types_KElem(&_k->data.f_inst.f0); hash *= 1099511628211ULL;
+                hash ^= slop_hash_types_KTerm(&_k->data.f_inst.f1); hash *= 1099511628211ULL;
+                return hash;
+            }
+        case types_KFact_f_triple:
+            {
+                uint64_t hash = 14695981039346656037ULL;
+                hash ^= slop_hash_types_KElem(&_k->data.f_triple.f0); hash *= 1099511628211ULL;
+                hash ^= slop_hash_types_RoleId(&_k->data.f_triple.f1); hash *= 1099511628211ULL;
+                hash ^= slop_hash_types_KElem(&_k->data.f_triple.f2); hash *= 1099511628211ULL;
+                return hash;
+            }
+        case types_KFact_f_self:
+            {
+                uint64_t hash = 14695981039346656037ULL;
+                hash ^= slop_hash_types_KElem(&_k->data.f_self.f0); hash *= 1099511628211ULL;
+                hash ^= slop_hash_types_RoleId(&_k->data.f_self.f1); hash *= 1099511628211ULL;
+                return hash;
+            }
+    }
+    return 0;
+}
+static inline bool slop_eq_types_KFact(const void* a, const void* b) {
+    const types_KFact* _a = (const types_KFact*)a;
+    const types_KFact* _b = (const types_KFact*)b;
+    if (_a->tag != _b->tag) return false;
+    switch (_a->tag) {
+        case types_KFact_f_inst:
+            return true
+                && slop_eq_types_KElem(&_a->data.f_inst.f0, &_b->data.f_inst.f0)
+                && slop_eq_types_KTerm(&_a->data.f_inst.f1, &_b->data.f_inst.f1)
+            ;
+        case types_KFact_f_triple:
+            return true
+                && slop_eq_types_KElem(&_a->data.f_triple.f0, &_b->data.f_triple.f0)
+                && slop_eq_types_RoleId(&_a->data.f_triple.f1, &_b->data.f_triple.f1)
+                && slop_eq_types_KElem(&_a->data.f_triple.f2, &_b->data.f_triple.f2)
+            ;
+        case types_KFact_f_self:
+            return true
+                && slop_eq_types_KElem(&_a->data.f_self.f0, &_b->data.f_self.f0)
+                && slop_eq_types_RoleId(&_a->data.f_self.f1, &_b->data.f_self.f1)
+            ;
+    }
+    return false;
+}
+#endif
+
+#ifndef KSCIDS_CFACT_HASH_EQ_DEFINED
+#define KSCIDS_CFACT_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_kscids_CFact(const void* key) {
+    const kscids_CFact* _k = (const kscids_CFact*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->kind }); hash *= 1099511628211ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->a }); hash *= 1099511628211ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->b }); hash *= 1099511628211ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->c }); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_kscids_CFact(const void* a, const void* b) {
+    const kscids_CFact* _a = (const kscids_CFact*)a;
+    const kscids_CFact* _b = (const kscids_CFact*)b;
+    return true
+        && (_a->kind == _b->kind)
+        && (_a->a == _b->a)
+        && (_a->b == _b->b)
+        && (_a->c == _b->c)
+    ;
+}
+#ifndef SLOP_LIST_KSCIDS_CFACT_DEFINED
+#define SLOP_LIST_KSCIDS_CFACT_DEFINED
+#define SLOP_LIST_KSCIDS_CFACT_IMPL_DEFINED
+SLOP_LIST_DEFINE(kscids_CFact, slop_list_kscids_CFact)
+#endif
 #endif
 
 #ifndef SLOP_RESULT_SATURATE_ROUNDRESULT_TYPES_FAULT_DEFINED
@@ -350,6 +956,11 @@ types_KscResult test_ksc_run(slop_arena* arena, slop_list_types_KscAxiom axioms,
 int64_t test_cancel_flag_set(void);
 uint8_t test_test_ksc_cancelled(slop_arena* arena);
 uint8_t test_cancelled_under(slop_arena* arena, types_ReasonerConfig base_cfg);
+uint8_t test_ids_round_trip(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes);
+uint8_t test_test_ksc_ids_round_trip(slop_arena* arena);
+uint8_t test_holds_under(kscpremise_KscIndex idx, slop_list_types_KFact fs, types_KElem x, types_RoleId v, types_KElem y);
+uint8_t test_g_matches_reference(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes);
+uint8_t test_test_ksc_g_matches_reference(slop_arena* arena);
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap);
 uint8_t test_answers_equal(types_KscResult a, types_KscResult b);
 uint8_t test_test_ksc_workers_agree(slop_arena* arena);
@@ -497,6 +1108,11 @@ SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
 SLOP_OPTION_DEFINE(test_KscFixture, slop_option_test_KscFixture)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_KFACT_DEFINED
+#define SLOP_OPTION_TYPES_KFACT_DEFINED
+SLOP_OPTION_DEFINE(types_KFact, slop_option_types_KFact)
+#endif
+
 #ifndef SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 #define SLOP_OPTION_NORMALIZE_NORMOUTPUT_DEFINED
 SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
@@ -550,6 +1166,11 @@ SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 #define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
+#endif
+
+#ifndef SLOP_OPTION_KSCIDS_CFACT_DEFINED
+#define SLOP_OPTION_KSCIDS_CFACT_DEFINED
+SLOP_OPTION_DEFINE(kscids_CFact, slop_option_kscids_CFact)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED

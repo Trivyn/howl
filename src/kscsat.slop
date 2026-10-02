@@ -70,26 +70,34 @@
   (import thread (spawn join))
   (import kscnormal (copy-kname))
   (import kscnames (KscNames build-ksc-names rename-ksc-axioms rename-classes unrename-answer))
+  (import kscids (KscIds CFact build-ksc-ids elem-id role-id id-elem id-term id-role encode-fact
+                  inst-kind triple-kind))
 
   (export
-    FactList RoleFacts KStore Base RunResult
+    IdList RoleIds KStore Base RunResult
     new-store run-ksc ksc-classify input-classes answer-subsumers answer-holds store-holds is-bottom-fact)
 
-  (type FactList (record
-    (items (List KFact))))
+  ;; THE STORE KEEPS IDS (kscids.slop). A fact is a 16-byte CFact in the
+  ;; dedup set, and an index entry is the one id its key does not give:
+  ;; the term of an inst, the other end of a triple. The rules, the deltas
+  ;; and ksc-join see KFact; `commit` and `store-holds` encode, and the
+  ;; partner readers below decode.
+  (type IdList (record
+    (items (List U32))))
 
-  (type RoleFacts (record
-    (by-role (Map RoleId FactList))))
+  (type RoleIds (record
+    (by-role (Map U32 IdList))))         ; a role id → the other ends under it
 
   (type KStore (record
-    (seen    (Set KFact))
-    (insts   (Map KElem FactList))
-    (noms    (Map KElem FactList))
-    (holders (Map KElem FactList))
-    (outs    (Map KElem RoleFacts))
-    (ins     (Map KElem RoleFacts))
-    (noms-at (Set KElem))            ; the elements holding a nominal: K6's taint
-    (bots    (Set KElem))))          ; the elements holding owl:Nothing
+    (ids     KscIds)                     ; shared by every store of one classification
+    (seen    (Set CFact))
+    (insts   (Map U32 IdList))           ; x → every y with inst(x, y)
+    (noms    (Map U32 IdList))           ; x → every nominal {a} with inst(x, {a})
+    (holders (Map U32 IdList))           ; a → every x with inst(x, {a})
+    (outs    (Map U32 RoleIds))          ; x → v → every x′ with triple(x, v, x′)
+    (ins     (Map U32 RoleIds))          ; x′ → v → every x with triple(x, v, x′)
+    (noms-at (Set KElem))                ; the elements holding a nominal: K6's taint
+    (bots    (Set KElem))))              ; the elements holding owl:Nothing
 
   ;; K6: what a class's run reads besides its own facts. G whole; W only
   ;; where the facts' subject is safe - W's facts about an unsafe element
@@ -112,48 +120,43 @@
   ;; The store
   ;; ============================================================
 
-  (fn new-store ((arena Arena))
-    (@intent "An empty fact store")
-    (@spec ((Arena) -> KStore))
+  (fn new-store ((arena Arena) (ids KscIds))
+    (@intent "An empty fact store over a classification's id tables")
+    (@spec ((Arena KscIds) -> KStore))
     (@alloc arena)
     (record-new KStore
-      (seen    (set-new arena KFact))
-      (insts   (map-new arena KElem FactList))
-      (noms    (map-new arena KElem FactList))
-      (holders (map-new arena KElem FactList))
-      (outs    (map-new arena KElem RoleFacts))
-      (ins     (map-new arena KElem RoleFacts))
+      (ids     ids)
+      (seen    (set-new arena CFact))
+      (insts   (map-new arena U32 IdList))
+      (noms    (map-new arena U32 IdList))
+      (holders (map-new arena U32 IdList))
+      (outs    (map-new arena U32 RoleIds))
+      (ins     (map-new arena U32 RoleIds))
       (noms-at (set-new arena KElem))
       (bots    (set-new arena KElem))))
 
-  (fn fl-push ((arena Arena) (m (Map KElem FactList)) (k KElem) (f KFact))
-    (@intent "Append f to the list filed under k")
-    (@spec ((Arena (Map KElem FactList) KElem KFact) -> Bool))
+  (fn il-push ((arena Arena) (m (Map U32 IdList)) (k U32) (i U32))
+    (@intent "Append id i to the list filed under k")
+    (@spec ((Arena (Map U32 IdList) U32 U32) -> Bool))
     (@alloc arena)
     ;; Read, push, write back: a List is a value, the Map holds the record.
     (let ((mut items (match (map-get m k)
                        ((some l) (. l items))
-                       ((none)   (list-new arena KFact)))))
+                       ((none)   (list-new arena U32)))))
       (do
-        (list-push items f)
-        (map-put m k (record-new FactList (items items)))
+        (list-push items i)
+        (map-put m k (record-new IdList (items items)))
         true)))
 
-  (fn rf-push ((arena Arena) (m (Map KElem RoleFacts)) (k KElem) (v RoleId) (f KFact))
-    (@intent "Append f to the list filed under k, then v")
-    (@spec ((Arena (Map KElem RoleFacts) KElem RoleId KFact) -> Bool))
+  (fn ri-push ((arena Arena) (m (Map U32 RoleIds)) (k U32) (v U32) (i U32))
+    (@intent "Append id i to the list filed under k, then role v")
+    (@spec ((Arena (Map U32 RoleIds) U32 U32 U32) -> Bool))
     (@alloc arena)
     (let ((rf (match (map-get m k)
                 ((some r) r)
-                ((none)   (let ((fresh (record-new RoleFacts (by-role (map-new arena RoleId FactList)))))
-                            (do (map-put m k fresh) fresh)))))
-          (mut items (match (map-get (. rf by-role) v)
-                       ((some l) (. l items))
-                       ((none)   (list-new arena KFact)))))
-      (do
-        (list-push items f)
-        (map-put (. rf by-role) v (record-new FactList (items items)))
-        true)))
+                ((none)   (let ((fresh (record-new RoleIds (by-role (map-new arena U32 IdList)))))
+                            (do (map-put m k fresh) fresh))))))
+      (il-push arena (. rf by-role) v i)))
 
   (fn fact-subject ((f KFact))
     (@intent "The element a fact is about: its first argument")
@@ -173,16 +176,17 @@
   (fn store-holds ((st KStore) (base (Option Base)) (f KFact))
     (@intent "Is f in this run, or in the base it runs over (G, and W where f's subject is safe)?")
     (@spec ((KStore (Option Base) KFact) -> Bool))
-    (if (set-has (. st seen) f)
-      true
-      (match base
-        ((some b)
-          (if (set-has (. (. b g) seen) f)
-            true
-            (if (is-safe b (fact-subject f))
-              (set-has (. (. b w) seen) f)
-              false)))
-        ((none) false))))
+    (let ((c (encode-fact (. st ids) f)))
+      (if (set-has (. st seen) c)
+        true
+        (match base
+          ((some b)
+            (if (set-has (. (. b g) seen) c)
+              true
+              (if (is-safe b (fact-subject f))
+                (set-has (. (. b w) seen) c)
+                false)))
+          ((none) false)))))
 
   (fn commit ((arena Arena) (st KStore) (base (Option Base)) (f KFact))
     (@intent "Store f if it is new to the run and its base; true iff it was")
@@ -190,42 +194,32 @@
     (@alloc arena)
     (if (store-holds st base f)
       false
-      (do
-        (set-put (. st seen) f)
-        (match f
-          ((f-inst x y)
-            (do
-              (fl-push arena (. st insts) x f)
-              (when (ksc-4 x y) (set-put (. st bots) x))
-              (when (is-nominal y)
-                (do
-                  (set-put (. st noms-at) x)
-                  (fl-push arena (. st noms) x f)
-                  (fl-push arena (. st holders) (term-elem y) f)))))
-          ((f-triple x v x1)
-            (do
-              (rf-push arena (. st outs) x v f)
-              (rf-push arena (. st ins) x1 v f)))
-          ((f-self _ _) (do)))
-        true)))
+      (let ((c (encode-fact (. st ids) f)))
+        (do
+          (set-put (. st seen) c)
+          (match f
+            ((f-inst x y)
+              (do
+                (il-push arena (. st insts) (. c a) (. c b))
+                (when (ksc-4 x y) (set-put (. st bots) x))
+                (when (is-nominal y)
+                  (do
+                    (set-put (. st noms-at) x)
+                    (il-push arena (. st noms) (. c a) (. c b))
+                    (il-push arena (. st holders) (elem-id (. st ids) (term-elem y)) (. c a))))))
+            ((f-triple _ _ _)
+              (do
+                (ri-push arena (. st outs) (. c a) (. c b) (. c c))
+                (ri-push arena (. st ins) (. c c) (. c b) (. c a))))
+            ((f-self _ _) (do)))
+          true))))
 
-  (fn fl-items ((arena Arena) (m (Map KElem FactList)) (k KElem))
-    (@intent "The list filed under k, empty if none")
-    (@spec ((Arena (Map KElem FactList) KElem) -> (List KFact)))
-    (@alloc arena)
+  (fn id-items ((m (Map U32 IdList)) (k U32))
+    (@intent "The ids filed under k, if any")
+    (@spec (((Map U32 IdList) U32) -> (Option (List U32))))
     (match (map-get m k)
-      ((some l) (. l items))
-      ((none)   (list-new arena KFact))))
-
-  (fn rf-items ((arena Arena) (m (Map KElem RoleFacts)) (k KElem) (v RoleId))
-    (@intent "The list filed under k, then v, empty if none")
-    (@spec ((Arena (Map KElem RoleFacts) KElem RoleId) -> (List KFact)))
-    (@alloc arena)
-    (match (map-get m k)
-      ((some rf) (match (map-get (. rf by-role) v)
-                   ((some l) (. l items))
-                   ((none)   (list-new arena KFact))))
-      ((none)    (list-new arena KFact))))
+      ((some l) (some (. l items)))
+      ((none)   (none))))
 
   ;; The partner lists of a run over a base: G's, W's where its facts'
   ;; subject is safe (K6.3), then the run's. Each is a snapshot; the base
@@ -242,7 +236,7 @@
 
   (fn field-map ((st KStore) (fd Field))
     (@intent "The element-keyed map a Field names")
-    (@spec ((KStore Field) -> (Map KElem FactList)))
+    (@spec ((KStore Field) -> (Map U32 IdList)))
     (match fd
       ('fd-insts   (. st insts))
       ('fd-noms    (. st noms))
@@ -256,6 +250,29 @@
       ('fd-insts   true)
       ('fd-noms    true)
       ('fd-holders false)))
+
+  (fn field-items ((arena Arena) (st KStore) (fd Field) (k KElem))
+    (@intent "The facts one store files under k in one field, decoded")
+    (@spec ((Arena KStore Field KElem) -> (List KFact)))
+    (@alloc arena)
+    ;; insts and noms hold the terms y of inst(k, y); holders, keyed by an
+    ;; individual a, hold the x of inst(x, {a}).
+    (let ((mut out (list-new arena KFact)))
+      (do
+        (match (id-items (field-map st fd) (elem-id (. st ids) k))
+          ((some is)
+            (if (keyed-by-subject fd)
+              (for-each (i is)
+                (list-push out (union-new KFact f-inst k (id-term (. st ids) i))))
+              (match k
+                ((e-ind a)
+                  (let ((y (nominal-term a)))
+                    (for-each (i is)
+                      (list-push out (union-new KFact f-inst (id-elem (. st ids) i) y)))))
+                ((e-aux _)   (do))
+                ((e-class _) (do)))))
+          ((none) (do)))
+        out)))
 
   (fn safe-facts ((arena Arena) (b Base) (xs (List KFact)))
     (@intent "The facts of a W list whose subject is safe")
@@ -284,22 +301,25 @@
         (match base
           ((some b)
             (do
-              (list-push out (fl-items arena (field-map (. b g) fd) k))
-              (list-push out (w-items arena b (keyed-by-subject fd) k
-                               (fl-items arena (field-map (. b w) fd) k)))))
+              (list-push out (field-items arena (. b g) fd k))
+              (when (is-safe b k)
+                (list-push out (w-items arena b (keyed-by-subject fd) k
+                                 (field-items arena (. b w) fd k))))))
           ((none) (do)))
-        (list-push out (fl-items arena (field-map st fd) k))
+        (list-push out (field-items arena st fd k))
         out)))
 
-  (fn ins-lists ((arena Arena) (m (Map KElem RoleFacts)) (k KElem))
-    (@intent "Every list of triples into k, one per role")
-    (@spec ((Arena (Map KElem RoleFacts) KElem) -> (List (List KFact))))
+  (fn leg-facts ((arena Arena) (ids KscIds) (outward Bool) (k KElem) (e U32) (is (List U32)))
+    (@intent "Triples at k under stored role e, decoded: out of k if outward, into k if not")
+    (@spec ((Arena KscIds Bool KElem U32 (List U32)) -> (List KFact)))
     (@alloc arena)
-    (let ((mut out (list-new arena (List KFact))))
+    (let ((mut out (list-new arena KFact))
+          (r (id-role ids e)))
       (do
-        (match (map-get m k)
-          ((some rf) (for-each ((v fl) (. rf by-role)) (list-push out (. fl items))))
-          ((none) (do)))
+        (for-each (i is)
+          (list-push out (if outward
+                           (union-new KFact f-triple k r (id-elem ids i))
+                           (union-new KFact f-triple (id-elem ids i) r k))))
         out)))
 
   (fn all-ins ((arena Arena) (st KStore) (base (Option Base)) (k KElem))
@@ -311,11 +331,14 @@
         (match base
           ((some b)
             (do
-              (for-each (l (ins-lists arena (. (. b g) ins) k)) (list-push out l))
-              (for-each (l (ins-lists arena (. (. b w) ins) k))
-                (list-push out (w-items arena b false k l)))))
+              (for-each (lg (legs-in-store arena (. b g) false k (none)))
+                (list-push out (. lg facts)))
+              (when (is-safe b k)
+                (for-each (lg (legs-in-store arena (. b w) false k (none)))
+                  (list-push out (w-items arena b false k (. lg facts)))))))
           ((none) (do)))
-        (for-each (l (ins-lists arena (. st ins) k)) (list-push out l))
+        (for-each (lg (legs-in-store arena st false k (none)))
+          (list-push out (. lg facts)))
         out)))
 
   ;; K7 (SPEC §5.4): the stored legs a premise triple(k, v, ·) (or
@@ -327,42 +350,68 @@
     (role  RoleId)
     (facts (List KFact))))
 
-  (fn legs-at ((arena Arena) (idx KscIndex) (m (Map KElem RoleFacts)) (k KElem) (v RoleId))
-    (@intent "One store's lists of triples at k under every role in sub*(v), each with its role")
-    (@spec ((Arena KscIndex (Map KElem RoleFacts) KElem RoleId) -> (List RoleLegs)))
+  ;; A role filter for legs-in-store: (some (v, sub*(v))) keeps the roles
+  ;; under v; none keeps every role.
+  (type Under (record
+    (idx KscIndex)
+    (v   RoleId)))
+
+  (fn side-map ((st KStore) (outward Bool))
+    (@intent "A store's out-edges if outward, its in-edges if not")
+    (@spec ((KStore Bool) -> (Map U32 RoleIds)))
+    (if outward (. st outs) (. st ins)))
+
+  (fn legs-in-store ((arena Arena) (st KStore) (outward Bool) (k KElem) (under (Option Under)))
+    (@intent "One store's triples at k by stored role, every role or those in sub*(v), decoded")
+    (@spec ((Arena KStore Bool KElem (Option Under)) -> (List RoleLegs)))
     (@alloc arena)
-    (let ((mut out (list-new arena RoleLegs)))
+    (let ((mut out (list-new arena RoleLegs))
+          (ids (. st ids)))
       (do
-        (match (map-get m k)
-          ((some rf)
-            (let ((subs (role-subs arena idx v)))
-              (if (<= (map-len (. rf by-role)) (list-len subs))
-                (for-each ((e fl) (. rf by-role))
-                  (when (role-under idx e v)
-                    (list-push out (record-new RoleLegs (role e) (facts (. fl items))))))
-                (for-each (e subs)
-                  (match (map-get (. rf by-role) e)
-                    ((some fl) (list-push out (record-new RoleLegs (role e) (facts (. fl items)))))
-                    ((none)    (do)))))))
-          ((none) (do)))
+        (let ((kid (elem-id ids k)))
+            (match (map-get (side-map st outward) kid)
+              ((some rf)
+                (match under
+                  ((none)
+                    (for-each ((e il) (. rf by-role))
+                      (list-push out (record-new RoleLegs (role (id-role ids e))
+                                       (facts (leg-facts arena ids outward k e (. il items)))))))
+                  ((some u)
+                    (let ((subs (role-subs arena (. u idx) (. u v))))
+                      (if (<= (map-len (. rf by-role)) (list-len subs))
+                        (for-each ((e il) (. rf by-role))
+                          (let ((r (id-role ids e)))
+                            (when (role-under (. u idx) r (. u v))
+                              (list-push out (record-new RoleLegs (role r)
+                                               (facts (leg-facts arena ids outward k e (. il items))))))))
+                        (for-each (r subs)
+                          (let ((e (role-id ids r)))
+                            (match (map-get (. rf by-role) e)
+                              ((some il)
+                                (list-push out (record-new RoleLegs (role r)
+                                                 (facts (leg-facts arena ids outward k e (. il items))))))
+                              ((none) (do))))))))))
+              ((none) (do))))
         out)))
 
   (fn role-legs ((arena Arena) (idx KscIndex) (st KStore) (base (Option Base)) (outward Bool) (k KElem) (v RoleId))
     (@intent "Every stored triple out of (or into) k under sub*(v), by stored role: G, W's safe part, then the run")
     (@spec ((Arena KscIndex KStore (Option Base) Bool KElem RoleId) -> (List RoleLegs)))
     (@alloc arena)
-    (let ((mut out (list-new arena RoleLegs)))
+    (let ((mut out (list-new arena RoleLegs))
+          (u (some (record-new Under (idx idx) (v v)))))
       (do
         (match base
           ((some b)
             (do
-              (for-each (lg (legs-at arena idx (if outward (. (. b g) outs) (. (. b g) ins)) k v))
+              (for-each (lg (legs-in-store arena (. b g) outward k u))
                 (list-push out lg))
-              (for-each (lg (legs-at arena idx (if outward (. (. b w) outs) (. (. b w) ins)) k v))
-                (list-push out (record-new RoleLegs (role (. lg role))
-                                 (facts (w-items arena b outward k (. lg facts))))))))
+              (when (is-safe b k)
+                (for-each (lg (legs-in-store arena (. b w) outward k u))
+                  (list-push out (record-new RoleLegs (role (. lg role))
+                                   (facts (w-items arena b outward k (. lg facts)))))))))
           ((none) (do)))
-        (for-each (lg (legs-at arena idx (if outward (. st outs) (. st ins)) k v))
+        (for-each (lg (legs-in-store arena st outward k u))
           (list-push out lg))
         out)))
 
@@ -393,14 +442,34 @@
     (other  KTerm)
     (axioms KList)))
 
+  (fn inst-id-lists ((arena Arena) (st KStore) (base (Option Base)) (x KElem))
+    (@intent "The term ids y of every stored inst(x, y): G, W where x is safe, then the run")
+    (@spec ((Arena KStore (Option Base) KElem) -> (List (List U32))))
+    (@alloc arena)
+    ;; insts is filed under the fact's subject, so W's list is read whole
+    ;; when x is safe and not at all otherwise (K6.3), as `partners` does.
+    (let ((mut out (list-new arena (List U32)))
+          (xi (elem-id (. st ids) x)))
+      (do
+        (match base
+          ((some b)
+            (do
+              (match (id-items (. (. b g) insts) xi) ((some l) (list-push out l)) ((none) (do)))
+              (when (is-safe b x)
+                (match (id-items (. (. b w) insts) xi) ((some l) (list-push out l)) ((none) (do))))))
+          ((none) (do)))
+        (match (id-items (. st insts) xi) ((some l) (list-push out l)) ((none) (do)))
+        out)))
+
   (fn partner-matches ((arena Arena) (st KStore) (base (Option Base)) (x KElem) (p KPartners))
     (@intent "The partner keys x holds, with their axioms: the smaller side of the intersection walked")
     (@spec ((Arena KStore (Option Base) KElem KPartners) -> (List Match)))
     (@alloc arena)
     ;; ELK's lazy intersection, as el's dispatcher does it (premise.slop):
     ;; when the bucket has fewer keys than x has classes, test each key
-    ;; for inst(x, key); otherwise walk x's classes and look each up.
-    (let ((lists (partners arena st base 'fd-insts x))
+    ;; for inst(x, key); otherwise walk x's classes and look each up. x's
+    ;; classes are read as term ids, so counting them decodes nothing.
+    (let ((lists (inst-id-lists arena st base x))
           (mut nx 0)
           (mut out (list-new arena Match)))
       (do
@@ -410,14 +479,11 @@
             (when (store-holds st base (union-new KFact f-inst x other))
               (list-push out (record-new Match (other other) (axioms axl)))))
           (for-each (l lists)
-            (for-each (g l)
-              (match g
-                ((f-inst _ z)
-                  (match (map-get (. p by-other) z)
-                    ((some axl) (list-push out (record-new Match (other z) (axioms axl))))
-                    ((none) (do))))
-                ((f-triple _ _ _) (do))
-                ((f-self _ _)     (do))))))
+            (for-each (i l)
+              (let ((z (id-term (. st ids) i)))
+                (match (map-get (. p by-other) z)
+                  ((some axl) (list-push out (record-new Match (other z) (axioms axl))))
+                  ((none) (do)))))))
         out)))
 
   (fn derive ((arena Arena) (idx KscIndex) (st KStore) (base (Option Base)) (f KFact))
@@ -699,6 +765,20 @@
     (added Int)
     (unsat Bool)))
 
+  ;; The next delta grows in `na`, not in the round's arena. An empty List
+  ;; names no arena: `list-push` grows it in the arena of the function
+  ;; that pushes, so pushing from ksc-round would put every round's delta,
+  ;; and every buffer its growth abandons, in the store's arena for good
+  ;; (on EL-GALEN, most of a gigabyte).
+  (fn delta-push ((na Arena) (l (List KFact)) (c KFact))
+    (@intent "l with c appended, any growth in na")
+    (@spec ((Arena (List KFact) KFact) -> (List KFact)))
+    (@alloc na)
+    (let ((mut out l))
+      (do
+        (list-push out c)
+        out)))
+
   (fn ksc-round ((arena Arena) (na Arena) (ra Arena) (idx KscIndex) (st KStore) (base (Option Base))
                  (delta (List KFact)) (stop-at-bottom Bool) (unsat0 Bool))
     (@intent "One semi-naive round: derive from every fact of the delta, commit what is new")
@@ -718,17 +798,17 @@
               (for-each (c (derive ra idx st base f))
                 (when (commit arena st base c)
                   (do
-                    (list-push next c)
+                    (set! next (delta-push na next c))
                     (set! added (+ added 1))
                     (when (is-bottom-fact c) (set! unsat true))
                     (when (reaches-bottom base c) (set! unsat true)))))
               (reuse-arena ra))))
         (record-new RoundOut (next next) (added added) (unsat unsat)))))
 
-  (fn run-ksc ((arena Arena) (idx KscIndex) (base (Option Base)) (seeds (List KFact))
+  (fn run-ksc ((arena Arena) (idx KscIndex) (ids KscIds) (base (Option Base)) (seeds (List KFact))
                 (stop-at-bottom Bool) (budget Int) (cancel I64))
     (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
-    (@spec ((Arena KscIndex (Option Base) (List KFact) Bool Int I64) -> RunResult))
+    (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64) -> RunResult))
     (@alloc arena)
     ;; THE CAP: a run never takes more rounds than it was given (§5.4
     ;; "Rounds and the cap"): `going` admits a round only while
@@ -740,7 +820,7 @@
     ;;
     ;; Each round's delta lives in an arena of its own, freed once the next
     ;; round's delta exists.
-    (let ((st (new-store arena))
+    (let ((st (new-store arena ids))
           (ra (arena-new 1048576))
           (seeded (seed-run arena st base seeds))
           (mut da (arena-new 1048576))
@@ -817,7 +897,7 @@
     ;; fact about q (K6.3: none is in the base).
     (let ((mut out (list-new arena KName)))
       (do
-        (for-each (f (fl-items arena (. st insts) (class-elem q)))
+        (for-each (f (field-items arena st 'fd-insts (class-elem q)))
           (match f
             ((f-inst _ y)
               (match y
@@ -831,26 +911,33 @@
     (@intent "Every element of W whose triples reach one of start, start included")
     (@spec ((Arena KStore (List KElem)) -> (Set KElem)))
     (@alloc arena)
-    ;; Walks W's incoming triples (ins, every role) from each start element; an
-    ;; element is queued once, so the walk ends on cycles.
+    ;; Walks W's incoming triples (ins, every role) from each start element,
+    ;; over ids; an element is queued once, so the walk ends on cycles.
     (let ((out (set-new arena KElem))
-          (mut work (list-new arena KElem))
+          (seen (set-new arena U32))
+          (ids (. w ids))
+          (mut work (list-new arena U32))
           (mut i 0))
       (do
         (for-each (x start)
-          (when (not (set-has out x))
-            (do (set-put out x) (list-push work x))))
+          (do
+            (set-put out x)
+            (let ((xi (elem-id ids x)))
+              (when (not (set-has seen xi))
+                (do (set-put seen xi) (list-push work xi))))))
         (while (< i (cast Int (list-len work)))
           (do
             (match (list-get work i)
-              ((some x)
-                (match (map-get (. w ins) x)
+              ((some xi)
+                (match (map-get (. w ins) xi)
                   ((some rf)
-                    (for-each ((v fl) (. rf by-role))
-                      (for-each (f (. fl items))
-                        (let ((p (fact-subject f)))
-                          (when (not (set-has out p))
-                            (do (set-put out p) (list-push work p)))))))
+                    (for-each ((v il) (. rf by-role))
+                      (for-each (pi (. il items))
+                        (when (not (set-has seen pi))
+                          (do
+                            (set-put seen pi)
+                            (set-put out (id-elem ids pi))
+                            (list-push work pi))))))
                   ((none) (do))))
               ((none) (do)))
             (set! i (+ i 1))))
@@ -864,7 +951,7 @@
           (qseeds (list-new scratch KFact)))
       (do
         (list-push qseeds (. (ksc-q q) fact))
-        (let ((r (run-ksc scratch idx (some base) qseeds true budget cancel))
+        (let ((r (run-ksc scratch idx (. (. base g) ids) (some base) qseeds true budget cancel))
               (ans (record-new ClassAnswer
                      (cls       q)
                      (shared    false)
@@ -918,6 +1005,7 @@
     ;; A capped G or W answers no class (K6: safety is a property of the
     ;; complete W); the findings are then G's alone.
     (let ((idx (build-ksc-index arena axioms))
+          (ids (build-ksc-ids arena axioms classes (. idx individuals)))
           (thing (union-new KName k-class (record-new IRI (value OWL_THING))))
           (n (. config max-iterations))
           (mut gseeds (list-new arena KFact))
@@ -932,14 +1020,14 @@
         (list-push wseeds (. (ksc-q thing) fact))
         (for-each (q classes)
           (list-push wseeds (. (ksc-q q) fact)))
-        (let ((g (run-ksc arena idx (none) gseeds true n (. config cancel-ptr))))
+        (let ((g (run-ksc arena idx ids (none) gseeds true n (. config cancel-ptr))))
           (if (. g cancelled)
             (error (union-new Fault cancelled))
           (if (. g unsat)
             (ok (g-only arena g true))
             (if (. g capped)
               (ok (g-only arena g false))
-              (let ((w (run-ksc arena idx (none) wseeds false (- n (. g rounds)) (. config cancel-ptr))))
+              (let ((w (run-ksc arena idx ids (none) wseeds false (- n (. g rounds)) (. config cancel-ptr))))
                 (if (. w cancelled)
                   (error (union-new Fault cancelled))
                 (if (. w capped)

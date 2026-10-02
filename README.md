@@ -196,9 +196,9 @@ on Krötzsch's Ksc calculus, the one published proof that covers nominals togeth
 chains, ranges and Self ([SPEC §5.4](./SPEC.md#54-the-el-calculus)), and is being built in slices.
 Its engine shares one saturation across every class no nominal reaches (§5.4 K6), and reads role
 inclusions through the told hierarchy instead of copying each edge to every super-role (K7), so a
-nominal-free ontology costs about what it costs `el`: GO reasons in 1.0 s and EL-GALEN in 4.2 s on
-one thread. Memory is still the open cost: EL-GALEN peaks at 3.2 GB, against `el`'s 0.46 GB. It is
-selectable once slice 6 wires it in.
+nominal-free ontology costs about what it costs `el`: GO reasons in 0.86 s and EL-GALEN in 3.75 s on
+one thread. It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
+GO at 0.62 GB, against 0.57 GB. It is selectable once slice 6 wires it in.
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 

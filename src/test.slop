@@ -54,9 +54,12 @@
   (import strlib (starts-with))
   (import select (profile-name parse-profile))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
-  (import types (KscAxiom KName KscResult ClassAnswer kname-eq))
-  (import kscsat (ksc-classify answer-holds input-classes))
-  (import ksc (reference-closure reference-answer))
+  (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq))
+  (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact))
+  (import ksc (reference-closure reference-answer ksc-1))
+  (import kscids (KscIds CFact build-ksc-ids encode-fact decode-fact))
+  (import kscpremise (KscIndex build-ksc-index role-under))
+  (import kscnames (build-ksc-names rename-ksc-axioms rename-classes))
 
   ;; ============================================================
   ;; Fixture builders
@@ -2235,7 +2238,7 @@
     (@intent "How many el++ fixtures there are")
     (@spec (() -> Int))
     (@pure)
-    29)
+    32)
 
   (fn ksc-fixture-at ((i Int))
     (@intent "el++ fixture i: §5.4's constructs, alone and combined, as an inline Turtle body")
@@ -2321,6 +2324,23 @@
       ;;     two subsumptions later, ∃r.Self; C3 ⊑ ∃r1.Y and Y, two later, ∃s.Self.
       ;;     ∃t.D ⊑ E, ∃t.Y ⊑ E3 ⊨ C ⊑ E, C3 ⊑ E3; A2 ⋢ E.
       (28 ":r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :A1 a owl:Class . :A2 a owl:Class . :C3 a owl:Class . :Y a owl:Class . :B1 a owl:Class . :B2 a owl:Class . :E a owl:Class . :E3 a owl:Class .\n:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s .\n:t owl:propertyChainAxiom ( :r :s ) .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:someValuesFrom :D ] , :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .\n:C3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .\n:Y rdfs:subClassOf :B1 .\n:B1 rdfs:subClassOf :B2 .\n:B2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .\n[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :Y ] rdfs:subClassOf :E3 .\n")
+      ;; 29. A nominal's class arriving late: Q ⊑ {a} at once, A1(a),
+      ;;     A1 ⊑ A2, A2 ⊑ B ⊨ Q ⊑ B; and through a witness: C ⊑ ∃r.{a},
+      ;;     ∃r.B ⊑ E ⊨ C ⊑ E. ({a} ⊑ A1 is a GCI, so every member of {a}
+      ;;     derives B itself; fixture 31 is the case only (28) reaches.)
+      (29 ":Q a owl:Class . :A1 a owl:Class . :A2 a owl:Class . :B a owl:Class . :E a owl:Class .\n:a a :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf :B .\n:Q rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :E .\n")
+      ;; 30. A one-way membership b ∈ {a} meeting a's late class: A1(a),
+      ;;     A1 ⊑ A2, A2 ⊑ B, C(b), B ⊓ C ⊑ ⊥ ⊨ inconsistent.
+      (30 ":A1 a owl:Class . :A2 a owl:Class . :B a owl:Class .\n:b a [ owl:oneOf ( :a ) ] .\n:a a :A1 .\n:A1 rdfs:subClassOf :A2 .\n:A2 rdfs:subClassOf :B .\n:b a :C .\n[ owl:intersectionOf ( :B :C ) ] rdfs:subClassOf owl:Nothing .\n")
+      ;; 31. Rule (28) through holders, irreplaceably. Every member of {a}
+      ;;     derives a's own classes itself ({a} ⊑ A is a GCI), so (28) is
+      ;;     needed only for a class that reaches a from another member by
+      ;;     (27). Witness w2 of c holds {a} at round 3 (C(c), C ⊑ ∃r.D,
+      ;;     D ⊑ {a}); witness w1 of e holds Z at round 2 and {a} only at
+      ;;     round 4 (E(e), E ⊑ ∃s.F0, F0 ⊑ Z, F0 ⊑ F1, F1 ⊑ {a}). Z reaches
+      ;;     a by (27) after w2's {a} was processed, so inst(w2, Z) is in G
+      ;;     only through (28) over holders(a); the stored-G test compares it.
+      (31 ":E a owl:Class . :F0 a owl:Class . :F1 a owl:Class . :Z a owl:Class .\n:c a owl:NamedIndividual , :C .\n:e a owl:NamedIndividual , :E .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] .\n:D rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n:E rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :F0 ] .\n:F0 rdfs:subClassOf :Z , :F1 .\n:F1 rdfs:subClassOf [ owl:oneOf ( :a ) ] .\n")
       (_ "")))
 
   (fn test-ksc-engine-matches-reference ((arena Arena))
@@ -2438,6 +2458,12 @@
           (do (println "  [ksc] Self after a sub-role leg, rule (17): C3 ⊑ E3") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 28) "http://example.org/t#A2" "http://example.org/t#E") 0))
           (do (println "  [ksc] Self alone: A2 ⋢ E") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 29) "http://example.org/t#Q" "http://example.org/t#B") 1))
+          (do (println "  [ksc] a nominal's late class reaches its holder: Q ⊑ B") (set! ok false)))
+        (when (not (== (ksc-holds arena (ksc-fixture-at 29) "http://example.org/t#C" "http://example.org/t#E") 1))
+          (do (println "  [ksc] a nominal's late class through a witness: C ⊑ E") (set! ok false)))
+        (when (not (== (ksc-inconsistent arena (ksc-fixture-at 30)) 1))
+          (do (println "  [ksc] a nominal's late class reaches a one-way member: inconsistent") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 14) "http://example.org/t#D" "http://example.org/t#C") 1))
           (do (println "  [ksc] nominal: D ⊑ C") (set! ok false)))
         (when (not (== (ksc-holds arena (ksc-fixture-at 14) "http://example.org/t#Q" "http://example.org/t#E") 1))
@@ -2617,6 +2643,124 @@
                   ((input-error _) false)
                   ((refused _)     false)
                   ((unavailable _) false)))))))))
+
+  (fn ids-round-trip ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)))
+    (@intent "Does every fact of every class's reference closure decode back from its store encoding, distinct facts staying distinct?")
+    (@spec ((Arena (List KscAxiom) (List KName)) -> Bool))
+    (@alloc arena)
+    (let ((ids (build-ksc-ids arena axioms classes (. (build-ksc-index arena axioms) individuals)))
+          (thing (union-new KName k-class (record-new IRI (value OWL_THING))))
+          (facts (set-new arena KFact))
+          (codes (set-new arena CFact))
+          (mut qs (list-new arena KName))
+          (mut ok true))
+      (do
+        (list-push qs thing)
+        (for-each (q classes) (list-push qs q))
+        (for-each (q qs)
+          (for-each (f (reference-closure arena axioms (some q) classes))
+            (let ((c (encode-fact ids f)))
+              (do
+                (when (not (kfact-eq (decode-fact ids c) f)) (set! ok false))
+                (set-put facts f)
+                (set-put codes c)))))
+        (if ok (== (set-len facts) (set-len codes)) false))))
+
+  (fn test-ksc-ids-round-trip ((arena Arena))
+    (@intent "The store's ids are a bijection on every fact Psc derives, on input names and on renamed ones")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Input names exercise the table (IRI classes, roles, individuals);
+    ;; renamed ones the arithmetic ids the engine actually stores.
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (while (< i (ksc-fixture-count))
+          (do
+            (match (ksc-fixture arena (ksc-fixture-at i))
+              ((some fx)
+                (let ((nm (build-ksc-names arena (. fx axioms) (. fx classes))))
+                  (do
+                    (when (not (ids-round-trip arena (. fx axioms) (. fx classes)))
+                      (do (println (string-concat arena "  [ksc ids] input names, fixture " (int-to-string arena i)))
+                          (set! ok false)))
+                    (when (not (ids-round-trip arena (rename-ksc-axioms arena nm (. fx axioms))
+                                 (rename-classes arena nm (. fx classes))))
+                      (do (println (string-concat arena "  [ksc ids] renamed, fixture " (int-to-string arena i)))
+                          (set! ok false))))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn holds-under ((idx KscIndex) (fs (List KFact)) (x KElem) (v RoleId) (y KElem))
+    (@intent "Does fs hold triple(x, e, y) for some e in sub*(v): the K7 read of triple(x, v, y)?")
+    (@spec ((KscIndex (List KFact) KElem RoleId KElem) -> Bool))
+    (let ((mut found false))
+      (do
+        (for-each (f fs)
+          (match f
+            ((f-triple a e b)
+              (when (if (kelem-eq a x) (if (kelem-eq b y) (role-under idx e v) false) false)
+                (set! found true)))
+            ((f-inst _ _) (do))
+            ((f-self _ _) (do))))
+        found)))
+
+  (fn g-matches-reference ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)))
+    (@intent "Is the engine's G, decoded from its compact store, Psc's G read through K7?")
+    (@spec ((Arena (List KscAxiom) (List KName)) -> Bool))
+    (@alloc arena)
+    ;; Every engine fact is a reference fact (a triple under its stored
+    ;; role is one rule (13) also has), and every reference fact is read
+    ;; by the engine: inst and self as stored, a triple through sub*. A G
+    ;; that reaches ⊥ stops early by design (K3) and is not compared.
+    (let ((idx (build-ksc-index arena axioms))
+          (ids (build-ksc-ids arena axioms classes (. idx individuals)))
+          (ref (reference-closure arena axioms (none) classes))
+          (refset (set-new arena KFact))
+          (mut seeds (list-new arena KFact))
+          (mut eng (list-new arena KFact))
+          (mut bottom false)
+          (mut ok true))
+      (do
+        (for-each (f ref) (do (set-put refset f) (when (is-bottom-fact f) (set! bottom true))))
+        (if bottom
+          true
+          (do
+            (for-each (a (. idx individuals)) (list-push seeds (. (ksc-1 a) fact)))
+            (let ((g (run-ksc arena idx ids (none) seeds false 10000 0))
+                  (engset (set-new arena KFact)))
+              (do
+                (for-each (c (set-elements (. (. g store) seen)))
+                  (let ((f (decode-fact ids c)))
+                    (do
+                      (list-push eng f)
+                      (set-put engset f)
+                      (when (not (set-has refset f)) (set! ok false)))))
+                (for-each (f ref)
+                  (match f
+                    ((f-triple x v y) (when (not (holds-under idx eng x v y)) (set! ok false)))
+                    ((f-inst _ _)     (when (not (set-has engset f)) (set! ok false)))
+                    ((f-self _ _)     (when (not (set-has engset f)) (set! ok false)))))
+                ok)))))))
+
+  (fn test-ksc-g-matches-reference ((arena Arena))
+    (@intent "On every el++ fixture the engine's stored G is Psc's G, fact for fact through K7")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (while (< i (ksc-fixture-count))
+          (do
+            (match (ksc-fixture arena (ksc-fixture-at i))
+              ((some fx)
+                (when (not (g-matches-reference arena (. fx axioms) (. fx classes)))
+                  (do (println (string-concat arena "  [ksc G] differs from the reference, fixture " (int-to-string arena i)))
+                      (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
 
   (fn ksc-config ((workers Int) (cap Int))
     (@intent "A config with a chosen worker count and round budget")
@@ -4911,6 +5055,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-cancelled arena)))
             (print-test-result "ksc: a set cancel-ptr gives Fault::cancelled, no result" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-ids-round-trip arena)))
+            (print-test-result "ksc: the store's ids are a bijection on every derived fact" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-g-matches-reference arena)))
+            (print-test-result "ksc: the stored G is Psc's G, fact for fact through K7" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))

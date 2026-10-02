@@ -1,0 +1,321 @@
+;; ============================================================
+;; el++ store ids — elements, terms and roles as dense U32s
+;;
+;; The engine's store (kscsat.slop) holds every fact in a dedup set and
+;; again in its indexes. As KFact values that is 96 bytes a copy, and on
+;; EL-GALEN W's 3.3M facts made the store most of a 3.2 GB peak. So the
+;; store keeps a fact as a 16-byte CFact of ids, and an index entry as the
+;; one id the index key does not already give; the rules, the deltas and
+;; ksc-join still see KFact, encoded on the way into the store and decoded
+;; on the way out.
+;;
+;; MOST IDS ARE ARITHMETIC. The engine boundary (kscnames.slop) already
+;; renamed every class and role to an Int, and a witness is an Int, so an
+;; id is that Int and a tag, `n * k + tag`, computed both ways without a
+;; lookup:
+;; - element: e-aux w → 3w; e-class (k-fresh n) → 3n + 1; else 3i + 2;
+;; - term:    k-name (k-fresh n) → 2n;                  else 2i + 1;
+;; - role:    fresh-role n → 2n;                         else 2i + 1;
+;; where i indexes a small TABLE of what still carries an IRI: the
+;; individuals and their nominals, owl:Thing and owl:Nothing (always table
+;; entries 0 and 1, matched by string so the commonest term, ⊤, costs no
+;; probe), and any role the boundary left named.
+;;
+;; THE TABLE IS TOTAL AND FIXED BEFORE ANY RUN. Phase Q's runs read it
+;; from several threads, so nothing may be added during a run. Every
+;; IRI-carrying value a rule head can build is entered up front, from the
+;; constructors a head may use (src/rules/ksc.slop): ind-elem a and
+;; nominal-term a for every individual an axiom names (NI); owl:Thing's
+;; and owl:Nothing's term and class element; class-elem and name-term of
+;; any other IRI class name the axioms or the query mention; every named
+;; role an axiom names. A value outside it, or an Int too large for its
+;; scheme's id (over 1.43 billion for an element, 2.14 billion for a term
+;; or role), is a broken invariant, not an input: encoding stops the
+;; process with a message rather than lose a fact.
+;;
+;; Encoding is a bijection on what it covers, so a store holds the same
+;; facts as before: it changes no rule's applicability and no answer.
+;; ============================================================
+
+(module kscids
+  (@doc "el++ store ids: elements, terms and roles as dense U32s, and the 16-byte stored fact (SPEC §5.4)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_THING OWL_NOTHING))
+  (import types (RoleId KName KTerm KElem KFact KscAxiom
+                 name-term nominal-term ind-elem class-elem))
+
+  (export
+    KscIds CFact build-ksc-ids
+    elem-id role-id id-elem id-term id-role
+    encode-fact decode-fact
+    inst-kind triple-kind self-kind)
+
+  ;; The table: only what still carries an IRI.
+  (type KscIds (record
+    (elems   (Map KElem U32))
+    (elem-of (List KElem))
+    (terms   (Map KTerm U32))
+    (term-of (List KTerm))
+    (roles   (Map RoleId U32))
+    (role-of (List RoleId))))
+
+  ;; inst(x, y): kind 0, a = x, b = y.  triple(x, v, x′): kind 1, a = x,
+  ;; b = v, c = x′.  self(x, v): kind 2, a = x, b = v. An unused slot is 0.
+  (type CFact (record
+    (kind U8)
+    (a    U32)
+    (b    U32)
+    (c    U32)))
+
+  (fn inst-kind ()   (@intent "CFact kind of inst")   (@spec (() -> U8)) (@pure) (cast U8 0))
+  (fn triple-kind () (@intent "CFact kind of triple") (@spec (() -> U8)) (@pure) (cast U8 1))
+  (fn self-kind ()   (@intent "CFact kind of self")   (@spec (() -> U8)) (@pure) (cast U8 2))
+
+  ;; The largest n whose id n * k + tag fits a U32: each scheme has its
+  ;; own, 1,431,655,764 for an element and 2,147,483,646 or 2,147,483,647
+  ;; for a term or a role.
+  (fn max-n ((k Int) (tag Int))
+    (@intent "The largest Int an arithmetic id n * k + tag can carry")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (/ (- 4294967295 tag) k))
+
+  (fn is-thing ((i IRI))  (@intent "owl:Thing?")   (@spec ((IRI) -> Bool)) (@pure) (string-eq (. i value) OWL_THING))
+  (fn is-nothing ((i IRI)) (@intent "owl:Nothing?") (@spec ((IRI) -> Bool)) (@pure) (string-eq (. i value) OWL_NOTHING))
+
+  ;; ------------------------------------------------------------
+  ;; Building the table
+  ;; ------------------------------------------------------------
+
+  (fn elem-in-table ((e KElem))
+    (@intent "Does e carry an IRI, so its id comes from the table?")
+    (@spec ((KElem) -> Bool))
+    (@pure)
+    (match e
+      ((e-aux _)   false)
+      ((e-ind _)   true)
+      ((e-class n) (match n ((k-fresh _) false) ((k-class _) true)))))
+
+  (fn term-in-table ((t KTerm))
+    (@intent "Does t carry an IRI, so its id comes from the table?")
+    (@spec ((KTerm) -> Bool))
+    (@pure)
+    (match t
+      ((k-nominal _) true)
+      ((k-name n)    (match n ((k-fresh _) false) ((k-class _) true)))))
+
+  (fn role-in-table ((r RoleId))
+    (@intent "Does r carry an IRI, so its id comes from the table?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    (match r ((fresh-role _) false) ((named-role _) true)))
+
+  ;; Each `with-*` enters one value if it belongs in the table and is not
+  ;; there yet, and returns the table with its Lists as they now stand (a
+  ;; List pushed through a record copy keeps its new length only in the
+  ;; copy that pushed).
+  (fn with-elem ((arena Arena) (ids KscIds) (e KElem))
+    (@intent "The table with e entered, if e carries an IRI")
+    (@spec ((Arena KscIds KElem) -> KscIds))
+    (@alloc arena)
+    (if (if (elem-in-table e) (not (map-has (. ids elems) e)) false)
+      (let ((mut of (. ids elem-of)))
+        (do
+          (map-put (. ids elems) e (cast U32 (list-len of)))
+          (list-push of e)
+          (record-new KscIds (elems (. ids elems)) (elem-of of) (terms (. ids terms))
+            (term-of (. ids term-of)) (roles (. ids roles)) (role-of (. ids role-of)))))
+      ids))
+
+  (fn with-term ((arena Arena) (ids KscIds) (t KTerm))
+    (@intent "The table with t entered, if t carries an IRI")
+    (@spec ((Arena KscIds KTerm) -> KscIds))
+    (@alloc arena)
+    (if (if (term-in-table t) (not (map-has (. ids terms) t)) false)
+      (let ((mut of (. ids term-of)))
+        (do
+          (map-put (. ids terms) t (cast U32 (list-len of)))
+          (list-push of t)
+          (record-new KscIds (elems (. ids elems)) (elem-of (. ids elem-of)) (terms (. ids terms))
+            (term-of of) (roles (. ids roles)) (role-of (. ids role-of)))))
+      ids))
+
+  (fn with-role ((arena Arena) (ids KscIds) (r RoleId))
+    (@intent "The table with r entered, if r carries an IRI")
+    (@spec ((Arena KscIds RoleId) -> KscIds))
+    (@alloc arena)
+    (if (if (role-in-table r) (not (map-has (. ids roles) r)) false)
+      (let ((mut of (. ids role-of)))
+        (do
+          (map-put (. ids roles) r (cast U32 (list-len of)))
+          (list-push of r)
+          (record-new KscIds (elems (. ids elems)) (elem-of (. ids elem-of)) (terms (. ids terms))
+            (term-of (. ids term-of)) (roles (. ids roles)) (role-of of))))
+      ids))
+
+  (fn with-name ((arena Arena) (ids KscIds) (n KName))
+    (@intent "The table with a class name's term and class element entered")
+    (@spec ((Arena KscIds KName) -> KscIds))
+    (@alloc arena)
+    (with-elem arena (with-term arena ids (name-term n)) (class-elem n)))
+
+  (fn with-kterm ((arena Arena) (ids KscIds) (t KTerm))
+    (@intent "The table with an axiom's term entered: a name with its class element, or a nominal")
+    (@spec ((Arena KscIds KTerm) -> KscIds))
+    (@alloc arena)
+    (match t
+      ((k-name n)    (with-name arena ids n))
+      ((k-nominal _) (with-term arena ids t))))
+
+  (fn build-ksc-ids ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (individuals (List IRI)))
+    (@intent "The store's id table: every IRI-carrying element, term and role a rule head can build")
+    (@spec ((Arena (List KscAxiom) (List KName) (List IRI)) -> KscIds))
+    (@alloc arena)
+    ;; owl:Thing first and owl:Nothing second, in the term and the element
+    ;; table alike: the encoders find them there by string, not by probe.
+    (let ((mut ids (record-new KscIds
+                     (elems   (map-new arena KElem U32))
+                     (elem-of (list-new arena KElem))
+                     (terms   (map-new arena KTerm U32))
+                     (term-of (list-new arena KTerm))
+                     (roles   (map-new arena RoleId U32))
+                     (role-of (list-new arena RoleId)))))
+      (do
+        (set! ids (with-name arena ids (union-new KName k-class (record-new IRI (value OWL_THING)))))
+        (set! ids (with-name arena ids (union-new KName k-class (record-new IRI (value OWL_NOTHING)))))
+        (for-each (a individuals)
+          (do
+            (set! ids (with-term arena ids (nominal-term a)))
+            (set! ids (with-elem arena ids (ind-elem a)))))
+        (for-each (q classes) (set! ids (with-name arena ids q)))
+        (for-each (ax axioms)
+          (match ax
+            ((k-sub a b)            (do (set! ids (with-kterm arena ids a)) (set! ids (with-kterm arena ids b))))
+            ((k-and a b c)          (do (set! ids (with-name arena ids a)) (set! ids (with-name arena ids b))
+                                        (set! ids (with-name arena ids c))))
+            ((k-some-lhs r a c)     (do (set! ids (with-role arena ids r)) (set! ids (with-name arena ids a))
+                                        (set! ids (with-name arena ids c))))
+            ((k-some-rhs a r b _)   (do (set! ids (with-name arena ids a)) (set! ids (with-role arena ids r))
+                                        (set! ids (with-name arena ids b))))
+            ((k-self-lhs r c)       (do (set! ids (with-role arena ids r)) (set! ids (with-name arena ids c))))
+            ((k-self-rhs a r)       (do (set! ids (with-name arena ids a)) (set! ids (with-role arena ids r))))
+            ((k-role r s)           (do (set! ids (with-role arena ids r)) (set! ids (with-role arena ids s))))
+            ((k-chain r s t)        (do (set! ids (with-role arena ids r)) (set! ids (with-role arena ids s))
+                                        (set! ids (with-role arena ids t))))
+            ((k-range r d)          (do (set! ids (with-role arena ids r)) (set! ids (with-name arena ids d))))
+            ((k-role-assert _ r _)  (set! ids (with-role arena ids r)))))
+        ids)))
+
+  ;; ------------------------------------------------------------
+  ;; Encoding and decoding
+  ;; ------------------------------------------------------------
+
+  (fn outside ((what String))
+    (@intent "Stop: a value the ids cannot carry reached the store (a broken invariant)")
+    (@spec ((String) -> Bool))
+    (do
+      (c-inline "fprintf(stderr, \"howl: el++ store: %.*s outside the id space (kscids.slop)\\n\", (int)what.len, what.data); abort();")
+      false))
+
+  (fn arith ((n Int) (k Int) (tag Int))
+    (@intent "The id n * k + tag, or a stop if n is too large for one")
+    (@spec ((Int Int Int) -> U32))
+    (if (> n (max-n k tag))
+      (do (outside "an Int") (cast U32 0))
+      (cast U32 (+ (* n k) tag))))
+
+  (fn table-id ((found (Option U32)) (k Int) (tag Int) (what String))
+    (@intent "A table entry's id, i * k + tag; a stop if the value is not in the table")
+    (@spec (((Option U32) Int Int String) -> U32))
+    (match found
+      ((some i) (arith (cast Int i) k tag))
+      ((none)   (do (outside what) (cast U32 0)))))
+
+  (fn elem-id ((ids KscIds) (e KElem))
+    (@intent "e's id")
+    (@spec ((KscIds KElem) -> U32))
+    (match e
+      ((e-aux w) (arith w 3 0))
+      ((e-ind _) (table-id (map-get (. ids elems) e) 3 2 "an individual"))
+      ((e-class n)
+        (match n
+          ((k-fresh i) (arith i 3 1))
+          ((k-class c)
+            (if (is-thing c) (cast U32 2)
+              (if (is-nothing c) (cast U32 5)
+                (table-id (map-get (. ids elems) e) 3 2 "a class element"))))))))
+
+  (fn term-id ((ids KscIds) (t KTerm))
+    (@intent "t's id")
+    (@spec ((KscIds KTerm) -> U32))
+    (match t
+      ((k-nominal _) (table-id (map-get (. ids terms) t) 2 1 "a nominal"))
+      ((k-name n)
+        (match n
+          ((k-fresh i) (arith i 2 0))
+          ((k-class c)
+            (if (is-thing c) (cast U32 1)
+              (if (is-nothing c) (cast U32 3)
+                (table-id (map-get (. ids terms) t) 2 1 "a class name"))))))))
+
+  (fn role-id ((ids KscIds) (r RoleId))
+    (@intent "r's id")
+    (@spec ((KscIds RoleId) -> U32))
+    (match r
+      ((fresh-role i) (arith i 2 0))
+      ((named-role _) (table-id (map-get (. ids roles) r) 2 1 "a named role"))))
+
+  (fn id-elem ((ids KscIds) (i U32))
+    (@intent "The element an id stands for")
+    (@spec ((KscIds U32) -> KElem))
+    (let ((n (/ (cast Int i) 3))
+          (tag (- (cast Int i) (* (/ (cast Int i) 3) 3))))
+      (if (== tag 0)
+        (union-new KElem e-aux (cast (Int 0 ..) n))
+        (if (== tag 1)
+          (union-new KElem e-class (union-new KName k-fresh (cast (Int 0 ..) n)))
+          (match (list-get (. ids elem-of) n)
+            ((some e) e)
+            ((none)   (do (outside "an element id") (union-new KElem e-aux 0))))))))
+
+  (fn id-term ((ids KscIds) (i U32))
+    (@intent "The term an id stands for")
+    (@spec ((KscIds U32) -> KTerm))
+    (let ((n (/ (cast Int i) 2)))
+      (if (== (- (cast Int i) (* n 2)) 0)
+        (union-new KTerm k-name (union-new KName k-fresh (cast (Int 0 ..) n)))
+        (match (list-get (. ids term-of) n)
+          ((some t) t)
+          ((none)   (do (outside "a term id") (union-new KTerm k-name (union-new KName k-fresh 0))))))))
+
+  (fn id-role ((ids KscIds) (i U32))
+    (@intent "The role an id stands for")
+    (@spec ((KscIds U32) -> RoleId))
+    (let ((n (/ (cast Int i) 2)))
+      (if (== (- (cast Int i) (* n 2)) 0)
+        (union-new RoleId fresh-role (cast (Int 0 ..) n))
+        (match (list-get (. ids role-of) n)
+          ((some r) r)
+          ((none)   (do (outside "a role id") (union-new RoleId fresh-role 0)))))))
+
+  (fn encode-fact ((ids KscIds) (f KFact))
+    (@intent "A fact as the store keeps it")
+    (@spec ((KscIds KFact) -> CFact))
+    (match f
+      ((f-inst x y)
+        (record-new CFact (kind (inst-kind)) (a (elem-id ids x)) (b (term-id ids y)) (c (cast U32 0))))
+      ((f-triple x v x1)
+        (record-new CFact (kind (triple-kind)) (a (elem-id ids x)) (b (role-id ids v)) (c (elem-id ids x1))))
+      ((f-self x v)
+        (record-new CFact (kind (self-kind)) (a (elem-id ids x)) (b (role-id ids v)) (c (cast U32 0))))))
+
+  (fn decode-fact ((ids KscIds) (c CFact))
+    (@intent "The fact a stored CFact stands for")
+    (@spec ((KscIds CFact) -> KFact))
+    (if (== (. c kind) (inst-kind))
+      (union-new KFact f-inst (id-elem ids (. c a)) (id-term ids (. c b)))
+      (if (== (. c kind) (triple-kind))
+        (union-new KFact f-triple (id-elem ids (. c a)) (id-role ids (. c b)) (id-elem ids (. c c)))
+        (union-new KFact f-self (id-elem ids (. c a)) (id-role ids (. c b))))))
+)

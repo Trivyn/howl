@@ -1748,23 +1748,33 @@ repo's corpus).**
   existential cone reaches the anatomy part. Every such class re-derives that cone, which is what K6
   removes.
 
-**Measured with K7 (slice 6's engine; G and W single-threaded, phase Q parallel; classes and roles
-renamed to dense ids; same machine; times are reasoning only, without parse and decode).**
+**The store keeps ids.** The engine stores a fact as 16 bytes of dense ids (`src/kscids.slop`), and
+an index entry as the one id its key does not give. The ids are arithmetic over the Ints the engine
+boundary already renamed classes, roles and witnesses to, plus a table, fixed before any run, of
+what still carries an IRI: individuals, nominals, owl:Thing and owl:Nothing. The rules, the deltas
+and `ksc-join` still see whole facts, encoded on the way into the store and decoded on the way out.
+The encoding is a bijection on what it covers, like the renaming, so it needs no lemma. It is tested
+as one (every fact Psc derives on every fixture round-trips, distinct facts staying distinct), and
+the stored G is compared with Psc's G fact for fact, through K7.
+
+**Measured (slice 6's engine; G and W single-threaded, phase Q parallel; same machine; reasoning
+times are the median of three runs, without parse and decode).**
 - OBI: 0.15 s for all 5,241 classes; 156 are unsafe and run on their own.
-- GO: 1.0 s (1.2 s before K7); every class is safe, so it is one saturation, of 1.07M facts.
-- EL-GALEN: 4.2 s (8.7 s before K7); every class is safe. W holds 3.3M facts where rule (13) made it
-  10.3M, in 27 rounds where it took 32.
-- **Memory is the open cost.** Peak resident memory for `howl validate --profile el++ --workers 1`,
-  against `el` on the same input:
+- GO: 0.86 s; every class is safe, so it is one saturation, of 1.07M facts.
+- EL-GALEN: 3.75 s; every class is safe. W holds 3.3M facts where rule (13) made it 10.3M, in 27
+  rounds where it took 32.
+- **Peak resident memory**, `howl validate --profile el++ --workers 1`, against `el` on the same
+  input:
 
-  | | `el` | `el++`, K6 only | `el++` with K7 |
-  |---|---|---|---|
-  | GO | 0.59 GB | — | 1.30 GB |
-  | EL-GALEN | 0.46 GB | 11.6 GB | 3.24 GB |
+  | | `el` | `el++`, K6 only | with K7 | with the id store |
+  |---|---|---|---|---|
+  | OBI | 109 MB | — | — | 97 MB |
+  | GO | 565 MB | — | 1.30 GB | 622 MB |
+  | EL-GALEN | 440 MB | 11.6 GB | 3.24 GB | 807 MB |
 
-  What remains is representation: each fact is stored by value (96 bytes) in the dedup set and again
-  in two indexes, and arena-grown lists keep their old buffers. On EL-GALEN, W's dedup set takes
-  about 0.45 GB and its `inst`, out-edge and in-edge lists about 1.3 GB with growth.
+  Most of the step from 3.24 GB was a leak, not the encoding: each round's new delta grew in the
+  store's arena, which is never freed, rather than in its own, about 0.9 GB on EL-GALEN.
+
 **What is not claimed.**
 - Instance retrieval is not in the report, although Kinst decides it (Theorem 1).
 - Datatypes, keys, anonymous individuals, multi-member `ObjectOneOf` and `owl:topObjectProperty`
