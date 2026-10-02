@@ -9,27 +9,34 @@
 ;;
 ;;   on-term   y  →  the axioms with an inst(·, y) premise
 ;;     subClass(y, z)            (5)
-;;     subConj(y, ·, z) and subConj(·, y, z)        (6), filed under each
-;;                                                   conjunct, once if equal
 ;;     subEx(v, y, z)            (7) and (8), on the inst side
 ;;     supEx(y, v, z, x′)        (9) and (10); a role assertion v(a, b)
 ;;                               is filed under {a}
 ;;     supSelf(y, v)             (12)
 ;;
 ;;   on-role   v  →  the axioms with a triple(·, v, ·) or self(·, v) premise
-;;     subEx(v, y, z)            (7) and (8), on the triple and self side
 ;;     subSelf(v, z)             (11)
 ;;     subRole(v, w)             (13) and (14)
 ;;     subRChain(v, ·, w) and subRChain(·, v, w)    (15)-(18), filed under
 ;;                               each role, once if equal (transitivity)
 ;;     supProd(v, ⊤, D)          (23)-(26)
 ;;
+;; and two two-level maps for the joins whose stored side is a set of
+;; classes (premise.slop's Partners), so the dispatcher walks whichever of
+;; the bucket's keys and the element's classes is smaller:
+;;
+;;   and-pairs   y → z → subConj(y, z, ·) and subConj(z, y, ·)    (6), filed
+;;                                         under each conjunct, once if equal
+;;   ex-by-role  v → y → subEx(v, y, ·)    (7) on a triple, (8) on a self
+;;
 ;; WHY FILTERING LOSES NOTHING. The dispatcher (kscsat.slop) offers an
 ;; axiom from a bucket to the rules its variant names, and each rule's
 ;; own first test is the equality on the bucket's key, so an axiom filed
 ;; elsewhere is one the rule would have rejected. Where an axiom sits in
 ;; a bucket under one of two positions (subConj, subRChain), the
-;; dispatcher tries both positions and each rule decides.
+;; dispatcher tries both positions and each rule decides. A partner walk
+;; offers an axiom only when the element holds its other side, which the
+;; rule's own test then checks again.
 ;;
 ;; `individuals` is NI, for rule (1): every individual an axiom names, in
 ;; first-mention order, each once.
@@ -44,16 +51,26 @@
   (import types (RoleId KName KTerm KscAxiom role-eq kname-eq kterm-eq name-term nominal-term))
 
   (export
-    KList KscIndex build-ksc-index term-bucket role-bucket)
+    KList KPartners KscIndex build-ksc-index term-bucket role-bucket and-partners ex-partners)
 
   ;; A record around the list, for premise.slop's AxList reason: a Map of
   ;; records makes "read it, push, write it back" explicit.
   (type KList (record
     (items (List KscAxiom))))
 
+  ;; One side of a join, keyed by the term the OTHER side must hold
+  ;; (premise.slop's Partners, for el++). `count` is the number of keys,
+  ;; so the dispatcher can walk whichever side of the intersection is
+  ;; smaller - the stored facts or the bucket - at no cost to decide.
+  (type KPartners (record
+    (by-other (Map KTerm KList))
+    (count    Int)))
+
   (type KscIndex (record
     (on-term     (Map KTerm KList))
     (on-role     (Map RoleId KList))
+    (and-pairs   (Map KTerm KPartners))   ; conjunct y → the other conjunct → subConj axioms
+    (ex-by-role  (Map RoleId KPartners))  ; role v → the filler → subEx axioms
     (individuals (List IRI))))
 
   (fn k-pushed ((arena Arena) (found (Option KList)) (ax KscAxiom))
@@ -67,6 +84,38 @@
       (do
         (list-push items ax)
         (record-new KList (items items)))))
+
+  (fn k-partnered ((arena Arena) (m (Map KTerm KPartners)) (key KTerm) (other KTerm) (ax KscAxiom))
+    (@intent "File ax under key, then under the term its other side must hold")
+    (@spec ((Arena (Map KTerm KPartners) KTerm KTerm KscAxiom) -> Bool))
+    (@alloc arena)
+    (let ((p (match (map-get m key)
+               ((some q) q)
+               ((none)   (record-new KPartners (by-other (map-new arena KTerm KList)) (count 0)))))
+          (prior (map-get (. p by-other) other))
+          (l (k-pushed arena prior ax)))
+      (do
+        (map-put (. p by-other) other l)
+        (map-put m key (record-new KPartners
+                         (by-other (. p by-other))
+                         (count (match prior ((some _) (. p count)) ((none) (+ (. p count) 1))))))
+        true)))
+
+  (fn r-partnered ((arena Arena) (m (Map RoleId KPartners)) (key RoleId) (other KTerm) (ax KscAxiom))
+    (@intent "File ax under the role key, then under the filler its other side must hold")
+    (@spec ((Arena (Map RoleId KPartners) RoleId KTerm KscAxiom) -> Bool))
+    (@alloc arena)
+    (let ((p (match (map-get m key)
+               ((some q) q)
+               ((none)   (record-new KPartners (by-other (map-new arena KTerm KList)) (count 0)))))
+          (prior (map-get (. p by-other) other))
+          (l (k-pushed arena prior ax)))
+      (do
+        (map-put (. p by-other) other l)
+        (map-put m key (record-new KPartners
+                         (by-other (. p by-other))
+                         (count (match prior ((some _) (. p count)) ((none) (+ (. p count) 1))))))
+        true)))
 
   (fn file-term ((arena Arena) (m (Map KTerm KList)) (y KTerm) (ax KscAxiom))
     (@intent "File ax under the class term y")
@@ -107,6 +156,8 @@
     ;; function of the input.
     (let ((on-term (map-new arena KTerm KList))
           (on-role (map-new arena RoleId KList))
+          (and-pairs (map-new arena KTerm KPartners))
+          (ex-by-role (map-new arena RoleId KPartners))
           (seen    (set-new arena IRI))
           (mut nis (list-new arena IRI)))
       (do
@@ -117,15 +168,20 @@
                 (file-term arena on-term y ax)
                 (match (term-individual y) ((some a) (when (first-mention arena seen a) (list-push nis a))) ((none) (do)))
                 (match (term-individual z) ((some a) (when (first-mention arena seen a) (list-push nis a))) ((none) (do)))))
+            ;; subConj and subEx's triple/self side go to the two-level
+            ;; partner maps, not the flat buckets: a general class takes
+            ;; part in thousands of conjunctions, and a role heads
+            ;; thousands of ∃v.A ⊑ C (premise.slop: 77M rule calls for 131k
+            ;; conclusions on GO, before el split them the same way).
             ((k-and a b _)
               (do
-                (file-term arena on-term (name-term a) ax)
+                (k-partnered arena and-pairs (name-term a) (name-term b) ax)
                 (when (not (kname-eq a b))
-                  (file-term arena on-term (name-term b) ax))))
+                  (k-partnered arena and-pairs (name-term b) (name-term a) ax))))
             ((k-some-lhs v a _)
               (do
                 (file-term arena on-term (name-term a) ax)
-                (file-role arena on-role v ax)))
+                (r-partnered arena ex-by-role v (name-term a) ax)))
             ((k-some-rhs a _ _ _)
               (file-term arena on-term (name-term a) ax))
             ((k-self-lhs v _)
@@ -149,6 +205,8 @@
         (record-new KscIndex
           (on-term     on-term)
           (on-role     on-role)
+          (and-pairs   and-pairs)
+          (ex-by-role  ex-by-role)
           (individuals nis)))))
 
   (fn term-bucket ((idx KscIndex) (y KTerm))
@@ -162,4 +220,16 @@
     (@spec ((KscIndex RoleId) -> (Option KList)))
     (@pure)
     (map-get (. idx on-role) v))
+
+  (fn and-partners ((idx KscIndex) (y KTerm))
+    (@intent "The subConj axioms with y as one conjunct, keyed by the other")
+    (@spec ((KscIndex KTerm) -> (Option KPartners)))
+    (@pure)
+    (map-get (. idx and-pairs) y))
+
+  (fn ex-partners ((idx KscIndex) (v RoleId))
+    (@intent "The subEx axioms ∃v.A ⊑ C, keyed by their filler A")
+    (@spec ((KscIndex RoleId) -> (Option KPartners)))
+    (@pure)
+    (map-get (. idx ex-by-role) v))
 )

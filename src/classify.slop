@@ -377,6 +377,11 @@
     (@intent "el++'s findings: inconsistency, unsatisfiable classes and the taxonomy (K5)")
     (@spec ((Arena KscResult) -> Findings))
     (@alloc arena)
+    ;; The undefined-not-empty rule (§6.2), which extract-findings must
+    ;; leave owed: under inconsistency both lists are empty.
+    (@post {(. $result inconsistent) == (. r inconsistent)})
+    (@post (implies {(. $result inconsistent) == true} {(list-len (. $result unsatisfiable)) == 0}))
+    (@post (implies {(. $result inconsistent) == true} {(list-len (. $result subsumptions)) == 0}))
     ;; One record-new with the emptiness decided per field, for
     ;; extract-findings' reasons; `inconsistent` bound once.
     (let ((inconsistent (. r inconsistent)))

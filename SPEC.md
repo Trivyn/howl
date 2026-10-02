@@ -1641,6 +1641,17 @@ repo's corpus).**
   existential cone reaches the anatomy part. Every such class re-derives that cone, which is what K6
   removes.
 
+**Measured with K6 (slice 5's engine; G and W single-threaded, phase Q parallel; classes and roles
+renamed to dense ids; same machine; times are reasoning only, without parse and decode).**
+- OBI: 0.16 s for all 5,241 classes; 156 are unsafe and run on their own.
+- GO: 1.2 s; every class is safe, so it is one saturation of 1.1M facts.
+- EL-GALEN: 8.7 s; every class is safe; W holds 10.3M facts (8.4M `triple`, 2.0M `inst`) at a
+  10.3 GB peak. Memory is the open cost: each fact is stored by value in the dedup set and its
+  indexes, and rule (13) materialises every `triple` under each super-role, so EL-GALEN's deep role
+  hierarchy multiplies W's triples. `el` holds the same ontology in under 1 GB by reading the
+  hierarchy through its closure; doing the same here needs its own argument.
+- Every class's answers equal the K2-only engine's on OBI and GO.
+
 **What is not claimed.**
 - Instance retrieval is not in the report, although Kinst decides it (Theorem 1).
 - Datatypes, keys, anonymous individuals, multi-member `ObjectOneOf` and `owl:topObjectProperty`

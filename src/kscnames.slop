@@ -1,0 +1,242 @@
+;; ============================================================
+;; el++ saturation names — classes and roles as dense ids
+;;
+;; el's C2 (types.slop, "Saturation-local names"), for el++. A class or
+;; role named by an IRI hashes and compares as its whole string, and the
+;; engine does both for every fact it stores, finds or joins (SPEC §5.4's
+;; prototype spent most of its GO run hashing them). So every class name
+;; and named role ENTERING the engine is renamed once, here, to an id of
+;; the variant that already exists for normaliser-minted names
+;; (`k-fresh`, `fresh-role`), above every id the normaliser used; and the
+;; answers are mapped back on the way out.
+;;
+;; WHAT STAYS AN IRI:
+;; - owl:Thing and owl:Nothing. Rules (3), (4), (23) and (24) know them by
+;;   name (types.slop `thing-term`, `nothing-term`), so renaming them
+;;   would change what those rules match.
+;; - individuals, in `k-nominal` and `e-ind`: few, and the nominal rules
+;;   move them between the class and element positions by their IRI.
+;;
+;; Renaming is a bijection on the names it touches and leaves everything
+;; else alone, so it changes no fact's shape and no rule's applicability:
+;; the engine computes the renamed image of what it computed before.
+;; ============================================================
+
+(module kscnames
+  (@doc "el++ names: input classes and named roles as dense ids, and back (SPEC §5.4)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_THING OWL_NOTHING))
+  (import types (RoleId KName KTerm KscAxiom ClassAnswer copy-iri))
+
+  (export
+    KscNames build-ksc-names rename-ksc-axioms rename-classes unrename-answer)
+
+  (type KscNames (record
+    (classes    (Map IRI Int))       ; a class IRI → its id (class-base + its index)
+    (roles      (Map IRI Int))       ; a role IRI → its id (role-base + its index)
+    (back       (Map Int KName))     ; a renamed class id → the class name it stands for
+    (class-base Int)                 ; above every k-fresh id the normaliser minted
+    (role-base  Int)))               ; above every fresh-role id the normaliser minted
+
+  (fn kept-as-iri ((i IRI))
+    (@intent "owl:Thing and owl:Nothing keep their IRIs: rules know them by name")
+    (@spec ((IRI) -> Bool))
+    (@pure)
+    (if (string-eq (. i value) OWL_THING) true (string-eq (. i value) OWL_NOTHING)))
+
+  (fn max-fresh-name ((k KName) (m Int))
+    (@intent "m, raised past k if k is a fresh name")
+    (@spec ((KName Int) -> Int))
+    (@pure)
+    (match k
+      ((k-fresh n) (if (>= n m) (+ n 1) m))
+      ((k-class _) m)))
+
+  (fn max-fresh-term ((t KTerm) (m Int))
+    (@intent "m, raised past t's fresh name if it has one")
+    (@spec ((KTerm Int) -> Int))
+    (@pure)
+    (match t
+      ((k-name k)    (max-fresh-name k m))
+      ((k-nominal _) m)))
+
+  (fn max-fresh-role ((r RoleId) (m Int))
+    (@intent "m, raised past r if r is a fresh role")
+    (@spec ((RoleId Int) -> Int))
+    (@pure)
+    (match r
+      ((fresh-role n) (if (>= n m) (+ n 1) m))
+      ((named-role _) m)))
+
+  (fn note-class ((arena Arena) (nm KscNames) (k KName))
+    (@intent "Give a class IRI its id, unless it has one or keeps its IRI")
+    (@spec ((Arena KscNames KName) -> Bool))
+    (@alloc arena)
+    (match k
+      ((k-class i)
+        (if (kept-as-iri i)
+          false
+          (match (map-get (. nm classes) i)
+            ((some _) false)
+            ((none)
+              (let ((id (+ (. nm class-base) (cast Int (map-len (. nm classes))))))
+                (do
+                  (map-put (. nm classes) i id)
+                  (map-put (. nm back) id (union-new KName k-class (copy-iri arena i)))
+                  true))))))
+      ((k-fresh _) false)))
+
+  (fn note-role ((arena Arena) (nm KscNames) (r RoleId))
+    (@intent "Give a role IRI its id, unless it has one")
+    (@spec ((Arena KscNames RoleId) -> Bool))
+    (@alloc arena)
+    (match r
+      ((named-role i)
+        (match (map-get (. nm roles) i)
+          ((some _) false)
+          ((none)
+            (let ((id (+ (. nm role-base) (cast Int (map-len (. nm roles))))))
+              (do (map-put (. nm roles) i id) true)))))
+      ((fresh-role _) false)))
+
+  (fn note-term ((arena Arena) (nm KscNames) (t KTerm))
+    (@intent "note-class, for a term in a class position")
+    (@spec ((Arena KscNames KTerm) -> Bool))
+    (@alloc arena)
+    (match t
+      ((k-name k)    (note-class arena nm k))
+      ((k-nominal _) false)))
+
+  (fn build-ksc-names ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)))
+    (@intent "A name table for the classes and roles of a normal form and the queried classes")
+    (@spec ((Arena (List KscAxiom) (List KName)) -> KscNames))
+    (@alloc arena)
+    ;; Ids follow first occurrence in the canonical axiom order, then the
+    ;; queried classes, so the table is a function of the input.
+    (let ((mut fc 0)
+          (mut fr 0))
+      (do
+        (for-each (ax axioms)
+          (match ax
+            ((k-sub a b)          (set! fc (max-fresh-term b (max-fresh-term a fc))))
+            ((k-and a b c)        (set! fc (max-fresh-name c (max-fresh-name b (max-fresh-name a fc)))))
+            ((k-some-lhs r a c)   (do (set! fr (max-fresh-role r fr))
+                                      (set! fc (max-fresh-name c (max-fresh-name a fc)))))
+            ((k-some-rhs a r b _) (do (set! fr (max-fresh-role r fr))
+                                      (set! fc (max-fresh-name b (max-fresh-name a fc)))))
+            ((k-self-lhs r c)     (do (set! fr (max-fresh-role r fr)) (set! fc (max-fresh-name c fc))))
+            ((k-self-rhs a r)     (do (set! fr (max-fresh-role r fr)) (set! fc (max-fresh-name a fc))))
+            ((k-role r t)         (set! fr (max-fresh-role t (max-fresh-role r fr))))
+            ((k-chain r s t)      (set! fr (max-fresh-role t (max-fresh-role s (max-fresh-role r fr)))))
+            ((k-range r d)        (do (set! fr (max-fresh-role r fr)) (set! fc (max-fresh-name d fc))))
+            ((k-role-assert _ r _) (set! fr (max-fresh-role r fr)))))
+        (let ((nm (record-new KscNames
+                    (classes    (map-new arena IRI Int))
+                    (roles      (map-new arena IRI Int))
+                    (back       (map-new arena Int KName))
+                    (class-base fc)
+                    (role-base  fr))))
+          (do
+            (for-each (ax axioms)
+              (match ax
+                ((k-sub a b)          (do (note-term arena nm a) (note-term arena nm b)))
+                ((k-and a b c)        (do (note-class arena nm a) (note-class arena nm b) (note-class arena nm c)))
+                ((k-some-lhs r a c)   (do (note-role arena nm r) (note-class arena nm a) (note-class arena nm c)))
+                ((k-some-rhs a r b _) (do (note-class arena nm a) (note-role arena nm r) (note-class arena nm b)))
+                ((k-self-lhs r c)     (do (note-role arena nm r) (note-class arena nm c)))
+                ((k-self-rhs a r)     (do (note-class arena nm a) (note-role arena nm r)))
+                ((k-role r t)         (do (note-role arena nm r) (note-role arena nm t)))
+                ((k-chain r s t)      (do (note-role arena nm r) (note-role arena nm s) (note-role arena nm t)))
+                ((k-range r d)        (do (note-role arena nm r) (note-class arena nm d)))
+                ((k-role-assert _ r _) (note-role arena nm r))))
+            (for-each (q classes) (note-class arena nm q))
+            nm)))))
+
+  (fn rename-class ((nm KscNames) (k KName))
+    (@intent "A class name's engine id, or itself when it keeps its IRI or is fresh")
+    (@spec ((KscNames KName) -> KName))
+    (match k
+      ((k-class i)
+        (match (map-get (. nm classes) i)
+          ((some id) (union-new KName k-fresh (cast (Int 0 ..) id)))
+          ((none)    k)))
+      ((k-fresh _) k)))
+
+  (fn rename-term ((nm KscNames) (t KTerm))
+    (@intent "rename-class, for a term in a class position; a nominal keeps its IRI")
+    (@spec ((KscNames KTerm) -> KTerm))
+    (match t
+      ((k-name k)    (union-new KTerm k-name (rename-class nm k)))
+      ((k-nominal _) t)))
+
+  (fn rename-role ((nm KscNames) (r RoleId))
+    (@intent "A named role's engine id")
+    (@spec ((KscNames RoleId) -> RoleId))
+    (match r
+      ((named-role i)
+        (match (map-get (. nm roles) i)
+          ((some id) (union-new RoleId fresh-role (cast (Int 0 ..) id)))
+          ((none)    r)))
+      ((fresh-role _) r)))
+
+  (fn rename-axiom ((nm KscNames) (ax KscAxiom))
+    (@intent "A normal-form axiom with its classes and roles renamed")
+    (@spec ((KscNames KscAxiom) -> KscAxiom))
+    ;; No catch-all arm: a new variant fails the build until it is renamed.
+    (match ax
+      ((k-sub a b)          (union-new KscAxiom k-sub (rename-term nm a) (rename-term nm b)))
+      ((k-and a b c)        (union-new KscAxiom k-and (rename-class nm a) (rename-class nm b) (rename-class nm c)))
+      ((k-some-lhs r a c)   (union-new KscAxiom k-some-lhs (rename-role nm r) (rename-class nm a) (rename-class nm c)))
+      ((k-some-rhs a r b w) (union-new KscAxiom k-some-rhs (rename-class nm a) (rename-role nm r) (rename-class nm b) w))
+      ((k-self-lhs r c)     (union-new KscAxiom k-self-lhs (rename-role nm r) (rename-class nm c)))
+      ((k-self-rhs a r)     (union-new KscAxiom k-self-rhs (rename-class nm a) (rename-role nm r)))
+      ((k-role r t)         (union-new KscAxiom k-role (rename-role nm r) (rename-role nm t)))
+      ((k-chain r s t)      (union-new KscAxiom k-chain (rename-role nm r) (rename-role nm s) (rename-role nm t)))
+      ((k-range r d)        (union-new KscAxiom k-range (rename-role nm r) (rename-class nm d)))
+      ((k-role-assert a r b) (union-new KscAxiom k-role-assert a (rename-role nm r) b))))
+
+  (fn rename-ksc-axioms ((arena Arena) (nm KscNames) (axioms (List KscAxiom)))
+    (@intent "The normal form, renamed for the engine")
+    (@spec ((Arena KscNames (List KscAxiom)) -> (List KscAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KscAxiom)))
+      (do
+        (for-each (ax axioms) (list-push out (rename-axiom nm ax)))
+        out)))
+
+  (fn rename-classes ((arena Arena) (nm KscNames) (classes (List KName)))
+    (@intent "The queried classes, renamed for the engine")
+    (@spec ((Arena KscNames (List KName)) -> (List KName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KName)))
+      (do
+        (for-each (q classes) (list-push out (rename-class nm q)))
+        out)))
+
+  (fn unrename-class ((nm KscNames) (k KName))
+    (@intent "The class name an engine id stands for; a normaliser name or a kept IRI as is")
+    (@spec ((KscNames KName) -> KName))
+    (match k
+      ((k-fresh n)
+        (match (map-get (. nm back) n)
+          ((some orig) orig)
+          ((none)      k)))
+      ((k-class _) k)))
+
+  (fn unrename-answer ((arena Arena) (nm KscNames) (a ClassAnswer))
+    (@intent "A class's answer with its names mapped back to the input's")
+    (@spec ((Arena KscNames ClassAnswer) -> ClassAnswer))
+    (@alloc arena)
+    (let ((mut subs (list-new arena KName)))
+      (do
+        (for-each (n (. a subsumers)) (list-push subs (unrename-class nm n)))
+        (record-new ClassAnswer
+          (cls       (unrename-class nm (. a cls)))
+          (shared    (. a shared))
+          (unsat     (. a unsat))
+          (subsumers subs)
+          (complete  (. a complete))
+          (rounds    (. a rounds))
+          (facts     (. a facts))))))
+)
