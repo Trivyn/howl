@@ -1,0 +1,15 @@
+# el++ engine fixture 10 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 10. A range, native: range(r) = D, C ⊑ ∃r.⊤, ∃r.D ⊑ E ⊨ C ⊑ E.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:E a owl:Class .
+:r rdfs:range :D .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Thing ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E .

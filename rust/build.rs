@@ -11,7 +11,14 @@ fn main() {
     let rdf_inc = env::var("DEP_SLOP_RDF_INCLUDE").expect("slop-rdf-sys must be a dependency");
     let std_inc = env::var("DEP_SLOP_STD_INCLUDE").expect("slop-std-sys must be a dependency");
 
-    // Only HOWL's own modules.
+    // HOWL's own modules that the bound API reaches. NOT YET EVERY ONE:
+    // the decoder and the el++ engine (decode, gate, canon, owl2, naming,
+    // premise, report, termstore, ksc*) use OWL 2 reserved vocabulary
+    // (owl:Axiom, owl:annotatedSource, ...) that slop-rdf added in 73091e0
+    // and slop-rdf-sys v0.2.1 does not yet vendor, so they cannot link
+    // against it. They join this list with the slop-rdf-sys release that
+    // carries that slop-rdf, which is also what binding `classify`
+    // (lib.rs, NotImplemented until then) needs.
     let sources = [
         "slop_types.c",
         "slop_el.c",

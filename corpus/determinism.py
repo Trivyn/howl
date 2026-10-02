@@ -43,7 +43,7 @@ def inputs(corpus):
             sys.exit("no materialized corpus under corpus/vendor/ (run make materialize)")
         return files
     out = []
-    for d in ("v0", "hazards", "probes", "out-of-profile"):
+    for d in ("v0", "hazards", "probes", "out-of-profile", "el++"):
         base = os.path.join(HERE, "fixtures", d)
         out += sorted(os.path.join(base, f) for f in os.listdir(base) if f.endswith(".ttl"))
     return out

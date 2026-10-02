@@ -1,0 +1,26 @@
+# el++ engine fixture 31 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 31. Rule (28) through holders, irreplaceably. Every member of {a}
+# derives a's own classes itself ({a} ⊑ A is a GCI), so (28) is
+# needed only for a class that reaches a from another member by
+# (27). Witness w2 of c holds {a} at round 3 (C(c), C ⊑ ∃r.D,
+# D ⊑ {a}); witness w1 of e holds Z at round 2 and {a} only at
+# round 4 (E(e), E ⊑ ∃s.F0, F0 ⊑ Z, F0 ⊑ F1, F1 ⊑ {a}). Z reaches
+# a by (27) after w2's {a} was processed, so inst(w2, Z) is in G
+# only through (28) over holders(a); the stored-G test compares it.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:E a owl:Class . :F0 a owl:Class . :F1 a owl:Class . :Z a owl:Class .
+:c a owl:NamedIndividual , :C .
+:e a owl:NamedIndividual , :E .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] .
+:D rdfs:subClassOf [ owl:oneOf ( :a ) ] .
+:E rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :F0 ] .
+:F0 rdfs:subClassOf :Z , :F1 .
+:F1 rdfs:subClassOf [ owl:oneOf ( :a ) ] .

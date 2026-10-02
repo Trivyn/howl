@@ -24,7 +24,7 @@
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded))
-  (import select (select-profile profile-implemented))
+  (import select (select-profile choose-auto profile-implemented))
   (import saturate (RoundResult saturate))
   (import classify (extract-findings entails-sub extract-ksc-findings))
   (import gate (gate-axioms))
@@ -280,19 +280,58 @@
     ;; THE PROFILE IS RESOLVED FIRST (§5.1). An explicit request for a
     ;; rung that is not built is refused as `unavailable` before any
     ;; work: running `el` in its place would classify a smaller theory
-    ;; than was asked for and report it under the wrong name.
-    (let ((profile (select-profile (. config selection))))
-      (if (not (profile-implemented profile))
-        (error (union-new Fault unavailable profile))
-        (prepare-in-profile arena d config profile))))
+    ;; than was asked for and report it under the wrong name. `auto` is
+    ;; resolved from this ontology (auto-profile), and the Prepared
+    ;; carries the rung chosen, so the report names what ran.
+    (match (select-profile (. config selection))
+      ((some profile)
+        (if (not (profile-implemented profile))
+          (error (union-new Fault unavailable profile))
+          (prepare-in-profile arena d config profile)))
+      ((none)
+        (prepare-in-profile arena d config (auto-profile d)))))
+
+  (fn out-of-profile-count ((oms (List Omission)))
+    (@intent "How many omissions are axioms out of the rung's profile")
+    (@spec (((List Omission)) -> Int))
+    (@pure)
+    ;; Unresolved imports and missing declarations are the same under
+    ;; every rung, so they never decide between rungs.
+    (let ((mut n 0))
+      (do
+        (for-each (o oms)
+          (match o
+            ((out-of-profile _)      (set! n (+ n 1)))
+            ((unresolved-import _)   (do))
+            ((missing-declaration _) (do))))
+        n)))
+
+  (fn auto-profile ((d Decoded))
+    (@intent "§5.1's auto for this ontology: el if it omits nothing, else whichever of el and el++ omits fewer")
+    (@spec ((Decoded) -> Profile))
+    ;; The gates run in a scratch arena, freed here: only the counts are
+    ;; kept, and the chosen rung's own prepare gates again. el++ is gated
+    ;; only when el leaves something out.
+    (let ((scratch (arena-new 16777216))
+          (out-el  (out-of-profile-count
+                     (. (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el) omissions)))
+          (out-pp  (if (== out-el 0)
+                     0
+                     (out-of-profile-count
+                       (. (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el-plus-plus)
+                          omissions))))
+          (chosen  (choose-auto (cast (Int 0 ..) out-el) (cast (Int 0 ..) out-pp))))
+      (do
+        (arena-free scratch)
+        chosen)))
 
   (fn prepare-in-profile ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
     (@intent "prepare-decoded once the profile is resolved and implemented")
     (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
     (@alloc arena)
-    ;; el++ has its own gate verdicts and normal form (§5.4); every other
-    ;; implemented rung is el's (§5.2). horn-sriq and sriq never get here:
-    ;; profile-implemented refuses them first.
+    ;; el++ has its own gate verdicts and normal form (§5.4); el's are
+    ;; §5.2's. horn-sriq and sriq never get here: profile-implemented
+    ;; refuses them first.
     (match profile
       ('profile-el-plus-plus (prepare-ksc arena d config profile))
       ('profile-el           (prepare-el arena d config profile))

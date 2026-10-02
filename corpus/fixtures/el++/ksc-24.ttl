@@ -1,0 +1,20 @@
+# el++ engine fixture 24 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 24. K7: a range on a super-role reaches a sub-role's witness, and only
+# upwards: r1 ⊑ r, range(r) = D, C ⊑ ∃r1.⊤, C2 ⊑ ∃r.⊤, ∃r1.D ⊑ E,
+# ∃r.D ⊑ E2 ⊨ C ⊑ E, C ⊑ E2, C2 ⊑ E2; C2 ⋢ E.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:r1 a owl:ObjectProperty . :C a owl:Class . :C2 a owl:Class . :E a owl:Class . :E2 a owl:Class .
+:r1 rdfs:subPropertyOf :r .
+:r rdfs:range :D .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom owl:Thing ] .
+:C2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Thing ] .
+[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :D ] rdfs:subClassOf :E .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :E2 .

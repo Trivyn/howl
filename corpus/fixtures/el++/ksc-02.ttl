@@ -1,0 +1,13 @@
+# el++ engine fixture 2 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 2. ⊤ ⊑ ⊥ with no individuals: inconsistent through the owl:Thing run only.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:C rdfs:subClassOf :D .
+owl:Thing rdfs:subClassOf owl:Nothing .

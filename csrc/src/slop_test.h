@@ -30,6 +30,7 @@
 #include "slop_kscnames.h"
 
 typedef struct test_KscFixture test_KscFixture;
+typedef struct test_RunAs test_RunAs;
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -158,6 +159,26 @@ typedef struct test_KscFixture test_KscFixture;
 #ifndef SLOP_OPTION_TEST_KSCFIXTURE_DEFINED
 #define SLOP_OPTION_TEST_KSCFIXTURE_DEFINED
 SLOP_OPTION_DEFINE(test_KscFixture, slop_option_test_KscFixture)
+#endif
+
+typedef enum {
+    test_RunAs_ran,
+    test_RunAs_refused,
+    test_RunAs_failed
+} test_RunAs_tag;
+
+struct test_RunAs {
+    test_RunAs_tag tag;
+    union {
+        types_Profile ran;
+        types_Profile refused;
+    } data;
+};
+typedef struct test_RunAs test_RunAs;
+
+#ifndef SLOP_OPTION_TEST_RUNAS_DEFINED
+#define SLOP_OPTION_TEST_RUNAS_DEFINED
+SLOP_OPTION_DEFINE(test_RunAs, slop_option_test_RunAs)
 #endif
 
 
@@ -826,11 +847,6 @@ typedef struct { bool is_ok; union { saturate_RoundResult ok; types_Fault err; }
 typedef struct { bool is_ok; union { decode_Stage1 ok; types_Fault err; } data; } slop_result_decode_Stage1_types_Fault;
 #endif
 
-#ifndef SLOP_RESULT_TYPES_PROFILE_TYPES_PROFILE_DEFINED
-#define SLOP_RESULT_TYPES_PROFILE_TYPES_PROFILE_DEFINED
-typedef struct { bool is_ok; union { types_Profile ok; types_Profile err; } data; } slop_result_types_Profile_types_Profile;
-#endif
-
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
 howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
@@ -939,7 +955,7 @@ uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
 slop_string test_ksc_form_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_ksc_form_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
-slop_option_test_KscFixture test_ksc_fixture(slop_arena* arena, slop_string ttl);
+slop_option_test_KscFixture test_ksc_fixture(slop_arena* arena, slop_string path);
 slop_string test_kname_label(slop_arena* arena, types_KName n);
 uint8_t test_ksc_engine_matches_reference(slop_arena* arena, slop_string label, slop_string ttl);
 int64_t test_ksc_holds(slop_arena* arena, slop_string ttl, slop_string a, slop_string b);
@@ -1013,9 +1029,9 @@ uint8_t test_dispatch_agrees(slop_arena* arena, slop_string path);
 uint8_t test_test_indexed_dispatch_matches_reference(slop_arena* arena);
 uint8_t test_test_quoted_triple_header_subjects(slop_arena* arena);
 int64_t test_strict_outcome(slop_arena* arena, slop_string path);
-slop_result_types_Profile_types_Profile test_profile_run(slop_arena* arena, types_ProfileSelection selection);
-uint8_t test_ran_as(slop_result_types_Profile_types_Profile r, types_Profile want);
-uint8_t test_refused_as(slop_result_types_Profile_types_Profile r, types_Profile want);
+test_RunAs test_profile_run(slop_arena* arena, slop_string path, types_ProfileSelection selection);
+uint8_t test_ran_as(test_RunAs r, types_Profile want);
+uint8_t test_refused_as(test_RunAs r, types_Profile want);
 uint8_t test_test_profile_selection(slop_arena* arena);
 uint8_t test_test_profile_names_round_trip(slop_arena* arena);
 uint8_t test_name_round_trips(types_Profile p);
@@ -1121,6 +1137,11 @@ SLOP_OPTION_DEFINE(normalize_NormOutput, slop_option_normalize_NormOutput)
 #ifndef SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 #define SLOP_OPTION_TYPES_ADDRESSED_DEFINED
 SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
+#endif
+
+#ifndef SLOP_OPTION_TEST_RUNAS_DEFINED
+#define SLOP_OPTION_TEST_RUNAS_DEFINED
+SLOP_OPTION_DEFINE(test_RunAs, slop_option_test_RunAs)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED

@@ -4,7 +4,7 @@
 ;; THE LADDER. One rung per named logic, each complete for exactly
 ;; that logic and never registered under a wider label:
 ;;   el          ELH⊥R+ + domain/range + ABox (§5.2)    PTIME     implemented
-;;   el++        the OWL 2 EL object fragment            PTIME
+;;   el++        the OWL 2 EL object fragment (§5.4)     PTIME     implemented
 ;;   horn-sriq   Horn-SRIQ                               ExpTime
 ;;   sriq        the SRIQ object fragment (non-Horn)     2ExpTime
 ;; el ⊂ horn-sriq ⊂ sriq, and el ⊂ el++; el++ is incomparable with the
@@ -29,8 +29,12 @@
 ;; conforming implementations classify different sub-theories of the
 ;; same input and return different findings — both sound, neither
 ;; reproducible, and §6.8 violated ACROSS IMPLEMENTATIONS rather than
-;; across runs. With only `el` implemented, `auto` resolves to `el`;
-;; the membership test lands with the second rung.
+;; across runs. With `el` and `el++` implemented that is `choose-auto`:
+;; `el` when nothing is out of `el`'s profile, since it comes first and
+;; `el ⊂ el++`; otherwise the rung with fewer logical axioms out of
+;; profile, a tie going to `el`. `auto` therefore depends on the
+;; ontology, so `select-profile` leaves it unresolved and `prepare`
+;; resolves it from the two gates' counts (howl.slop, auto-profile).
 ;;
 ;; THE GATE TESTS MEMBERSHIP IN HOWL'S IMPLEMENTED LANGUAGE, NOT IN
 ;; OWL 2 EL. The two are not the same set, and testing the wrong one is
@@ -51,24 +55,41 @@
 
   (export
     select-profile
+    choose-auto
     profile-implemented
     profile-name
     parse-profile)
 
   (fn select-profile ((selection ProfileSelection))
-    (@intent "Resolve a ProfileSelection to the calculus it asks for")
-    (@spec ((ProfileSelection) -> Profile))
+    (@intent "The calculus an explicit request asks for; none for auto, which depends on the ontology")
+    (@spec ((ProfileSelection) -> (Option Profile)))
     (@pure)
     ;; An EXPLICIT request resolves to exactly itself; whether it can
     ;; run is `profile-implemented`'s question, asked separately so a
-    ;; refusal names what was asked for. `auto` resolves to the cheapest
-    ;; implemented calculus, which today is the only one.
+    ;; refusal names what was asked for. `auto` is resolved per ontology
+    ;; by `choose-auto`.
     (@post (match selection
-             ((auto)       {$result == 'profile-el})
-             ((explicit p) {$result == p})))
+             ((auto)       (match $result ((none) true) ((some _) false)))
+             ((explicit p) (match $result ((some q) {q == p}) ((none) false)))))
     (match selection
-      ((auto)       'profile-el)
-      ((explicit p) p)))
+      ((auto)       (none))
+      ((explicit p) (some p))))
+
+  (fn choose-auto ((out-of-el (Int 0 ..)) (out-of-el-plus-plus (Int 0 ..)))
+    (@intent "§5.1's auto rule over el and el++, from how many logical axioms each leaves out of profile")
+    (@spec (((Int 0 ..) (Int 0 ..)) -> Profile))
+    (@pure)
+    ;; The cheapest rung containing the whole ontology, else the one
+    ;; omitting the fewest logical axioms, ties by declaration order. `el`
+    ;; is first, so it wins whenever it omits nothing and on every tie.
+    (@post (implies {out-of-el == 0} {$result == 'profile-el}))
+    (@post (implies {out-of-el-plus-plus < out-of-el} {$result == 'profile-el-plus-plus}))
+    (@post (implies {out-of-el <= out-of-el-plus-plus} {$result == 'profile-el}))
+    (@example (0 0) -> 'profile-el)
+    (@example (2 0) -> 'profile-el-plus-plus)
+    (@example (2 1) -> 'profile-el-plus-plus)
+    (@example (1 1) -> 'profile-el)
+    (if (< out-of-el-plus-plus out-of-el) 'profile-el-plus-plus 'profile-el))
 
   (fn profile-implemented ((p Profile))
     (@intent "Whether a calculus for this rung is built")
@@ -76,10 +97,10 @@
     (@pure)
     ;; Pinned so that wiring a rung in is a deliberate, visible edit:
     ;; the postcondition and the match change together.
-    (@post {$result == (p == 'profile-el)})
+    (@post {$result == (or (p == 'profile-el) (p == 'profile-el-plus-plus))})
     (match p
       ('profile-el           true)
-      ('profile-el-plus-plus false)
+      ('profile-el-plus-plus true)
       ('profile-horn-sriq    false)
       ('profile-sriq         false)))
 

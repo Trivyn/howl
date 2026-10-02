@@ -192,7 +192,7 @@ v2.
 | Rung (`--profile`) | Logic | Worst case | Calculus it cites | Adds over `el` | Status |
 |---|---|---|---|---|---|
 | **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)); `¬` in a superclass, domain or range is taken by rewriting, so the logic is unchanged | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
-| **`el++`** | the **OWL 2 EL object fragment**: SROEL(⊓,×) without products on the left ([§5.4](#54-the-el-calculus)) | PTIME | [Krö10] Theorem 2 (Ksc); [§5.4](#54-the-el-calculus) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions, `owl:bottomObjectProperty`. Datatypes, keys, anonymous individuals and `owl:topObjectProperty` outside a super-role stay omissions | specified ([§5.4](#54-the-el-calculus)); not built |
+| **`el++`** | the **OWL 2 EL object fragment**: SROEL(⊓,×) without products on the left ([§5.4](#54-the-el-calculus)) | PTIME | [Krö10] Theorem 2 (Ksc); [§5.4](#54-the-el-calculus) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions, `owl:bottomObjectProperty`. Datatypes, keys, anonymous individuals and `owl:topObjectProperty` outside a super-role stay omissions | **implemented** ([§5.4](#54-the-el-calculus)) |
 | **`horn-sriq`** (v1) | **Horn-SRIQ** | ExpTime | [Kaz09] + chain elimination, or the Horn slice of [Bate+18] | inverses, functionality, `∀` on the right, symmetric/asymmetric/irreflexive roles, disjoint roles, Horn number restrictions | planned (M5) |
 | **`sriq`** (v2) | **SRIQ object fragment** (non-Horn) | 2ExpTime | [Bate+18] | disjunction, full negation, number restrictions | not scheduled |
 
@@ -263,7 +263,7 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
 ;; Each profile supplies its own normalization + rule set; the driver and I/O are shared.
 (enum Profile
   profile-el             ; ELH⊥R+ + domain/range + ABox, exactly §5.2, positive ¬ rewritten (implemented)
-  profile-el-plus-plus   ; the OWL 2 EL object fragment, §5.4 (specified, not built)
+  profile-el-plus-plus   ; the OWL 2 EL object fragment, §5.4 (implemented)
   profile-horn-sriq      ; Horn-SRIQ
   profile-sriq)          ; SRIQ object fragment, non-Horn (not OWL 2 DL: no datatypes, no nominals)
 
@@ -292,7 +292,11 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   pick the **cheapest implemented calculus complete for the ontology's actual constructs**. The
   gate tests membership in **HOWL's implemented language, not in OWL 2 EL**. The two are not the
   same set ([§5.2](#52-the-exact-v0-language)), and testing the wrong one is precisely how an
-  incomplete run gets reported as a complete one. With only `el` built, `auto` resolves to `el`.
+  incomplete run gets reported as a complete one. With `el` and `el++` built, `auto` runs `el` when
+  nothing is out of `el`'s profile (it comes first, and `el ⊂ el++`). Otherwise it gates under
+  `el++` as well and runs whichever leaves fewer logical axioms out of profile, a tie going to
+  `el` (`choose-auto`, `src/select.slop`, whose postconditions pin all three cases). Unresolved
+  imports and missing declarations are the same under every rung, so they never decide.
 - **The report states the resolved profile** (`profile el`, [§6.7](#67-output--classification)).
   A report is a function of (input, budget, profile). Its findings are complete for that rung's
   logic and no other.
@@ -301,9 +305,9 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   on, `auto` reaches a complete answer for ontologies wholly inside one rung. Nominals, datatypes,
   keys and punning stay outside it ([§14](#14-non-goals)), so those inputs remain partial runs
   under the rule below. Saying the top rung makes selection "total", as an earlier draft did,
-  would license treating its presence as a guaranteed complete fallback. **With only `el` built
-  there is no such rung:** an ontology outside [§5.2](#52-the-exact-v0-language) has nothing to
-  escalate to, and the run is inconclusive ([§6.2](#62-data-model)), never "coherent". Once
+  would license treating its presence as a guaranteed complete fallback. **With `el` and `el++`
+  built there is no such rung:** an ontology outside both has nothing to escalate to, and the run
+  is inconclusive ([§6.2](#62-data-model)), never "coherent". Once
   `horn-sriq` exists, an ontology using inverses or functionality and otherwise inside it must be
   run there **by `auto`**, not reported inconclusive. The default stays `el`.
 
@@ -1347,7 +1351,7 @@ around it.
 >   complete runs only); a run stopped on `⊥` is complete for its answers but not its facts (K3);
 >   and K5 conflated the raw queries with the report's exclusions (`owl:Nothing`, inconsistency).
 > - **Project owner: accepted, 2026-09-30** (PR #8; spec approval recorded as AD 465af4c0).
->   `--profile el++` exits 3 until slice 6 wires the rung in.
+>   `--profile el++` runs it since slice 6 (2026-10-02); it exited 3 until then.
 > - **K7 (role inclusions read through the told closure) and cancellation added 2026-10-02** for
 >   slice 6's memory work. **Adversarial review (Codex, 2026-10-02): no counterexample** to K7's
 >   closure claim, checked through rules (2) and (29) at the stored role, both legs of (15), the
@@ -3318,8 +3322,9 @@ howl explain     <ontology.ttl> --sub A B                          # justificati
 ```
 
 Global flags: `--profile el|el++|horn-sriq|sriq|auto` selects the calculus (default **`el`**;
-`auto` picks the cheapest built rung containing the ontology; [§5.1](#51-profiles-are-selectable)).
-A rung that is not built yet exits `3` with `howl: profile P is not implemented yet`
+`auto` picks the cheapest built rung containing the ontology, else the one omitting the fewest
+logical axioms; [§5.1](#51-profiles-are-selectable)). `el` and `el++` are built. A rung that is not
+built yet exits `3` with `howl: profile P is not implemented yet (implemented: el, el++)`
 (`Fault::unavailable`). The top rung is `sriq`, not `dl`, because it is the SRIQ *object
 fragment* and a flag named `dl` would promise OWL 2 DL ([§3.2](#32-terminology-discipline));
 `--strict` makes an out-of-profile construct refuse the run
@@ -3952,7 +3957,8 @@ flowchart TB
   buys instance-bearing verdicts and range coherence, not a clean pass on its own theory.
 - *(`el++` — specified in [§5.4](#54-the-el-calculus), built in slices: decode fixes, a
   profile-aware gate and census, the Ksc normaliser, the rules with their contracts (with a
-  single-threaded prototype engine and the literal reference evaluator), the engine, then wiring. The approximation mode — planned, with its own plan. v2 `sriq` — separate
+  single-threaded prototype engine and the literal reference evaluator), the engine, then wiring;
+  selectable as `--profile el++` and by `auto` since 2026-10-02.) The approximation mode — planned, with its own plan. v2 `sriq` — separate
   decision, not scheduled; SROIQ is not planned, [§5](#5-fragment-roadmap).)*
 
 ---

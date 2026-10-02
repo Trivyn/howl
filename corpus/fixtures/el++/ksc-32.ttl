@@ -1,0 +1,15 @@
+# el++ engine fixture 32 (src/test.slop: test-ksc-seed-unsat-counts-no-round).
+# owl:Nothing ⊑ {a} makes owl:Nothing unsafe; its run's seed is
+# inst(owl:Nothing, owl:Nothing), which raises K3's flag at once, so that run
+# counts no round and is not capped. The ontology stays consistent.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:C rdfs:subClassOf :D .
+owl:Nothing rdfs:subClassOf [ owl:oneOf ( :a ) ] .

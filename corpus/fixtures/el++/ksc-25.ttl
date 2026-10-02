@@ -1,0 +1,21 @@
+# el++ engine fixture 25 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 25. K7: a role cycle from equivalent properties: r ≡ s, s ⊑ u,
+# C ⊑ ∃r.D, D2 ⊑ ∃s.D, ∃s.D ⊑ E, ∃u.D ⊑ F, ∃r.D ⊑ G
+# ⊨ C ⊑ E, F, G; D2 ⊑ E, F, G.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:u a owl:ObjectProperty . :C a owl:Class . :D2 a owl:Class . :E a owl:Class . :F a owl:Class . :G a owl:Class .
+:r owl:equivalentProperty :s .
+:s rdfs:subPropertyOf :u .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] .
+:D2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] .
+[ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :D ] rdfs:subClassOf :E .
+[ a owl:Restriction ; owl:onProperty :u ; owl:someValuesFrom :D ] rdfs:subClassOf :F .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :D ] rdfs:subClassOf :G .

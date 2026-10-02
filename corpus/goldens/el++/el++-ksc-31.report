@@ -1,0 +1,32 @@
+howl-report 2
+profile el++
+verdict coherent
+termination fixpoint
+rounds 16
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 22
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#D http://example.org/t#D
+sub http://example.org/t#D http://example.org/t#F0
+sub http://example.org/t#D http://example.org/t#F1
+sub http://example.org/t#D http://example.org/t#Z
+sub http://example.org/t#D http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#E http://example.org/t#E
+sub http://example.org/t#E http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#F0 http://example.org/t#D
+sub http://example.org/t#F0 http://example.org/t#F0
+sub http://example.org/t#F0 http://example.org/t#F1
+sub http://example.org/t#F0 http://example.org/t#Z
+sub http://example.org/t#F0 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#F1 http://example.org/t#D
+sub http://example.org/t#F1 http://example.org/t#F0
+sub http://example.org/t#F1 http://example.org/t#F1
+sub http://example.org/t#F1 http://example.org/t#Z
+sub http://example.org/t#F1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Z http://example.org/t#Z
+sub http://example.org/t#Z http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

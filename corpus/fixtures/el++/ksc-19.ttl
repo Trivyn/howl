@@ -1,0 +1,15 @@
+# el++ engine fixture 19 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 19. K6's counterexample: W assumes Q1 and Q2 non-empty together, so it
+# merges them through {a}; neither follows from the ontology.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:Q1 a owl:Class . :Q2 a owl:Class .
+:Q1 rdfs:subClassOf [ owl:oneOf ( :a ) ] .
+:Q2 rdfs:subClassOf [ owl:oneOf ( :a ) ] .

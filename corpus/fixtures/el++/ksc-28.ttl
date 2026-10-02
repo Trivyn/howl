@@ -1,0 +1,26 @@
+# el++ engine fixture 28 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 28. K7: a Self fact arriving after a chain leg stored under a sub-role
+# (rules (16) and (17)). r1 ⊑ r, s1 ⊑ s, r ∘ s ⊑ t. C ⊑ ∃s1.D and,
+# two subsumptions later, ∃r.Self; C3 ⊑ ∃r1.Y and Y, two later, ∃s.Self.
+# ∃t.D ⊑ E, ∃t.Y ⊑ E3 ⊨ C ⊑ E, C3 ⊑ E3; A2 ⋢ E.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:r1 a owl:ObjectProperty . :s1 a owl:ObjectProperty . :A1 a owl:Class . :A2 a owl:Class . :C3 a owl:Class . :Y a owl:Class . :B1 a owl:Class . :B2 a owl:Class . :E a owl:Class . :E3 a owl:Class .
+:r1 rdfs:subPropertyOf :r . :s1 rdfs:subPropertyOf :s .
+:t owl:propertyChainAxiom ( :r :s ) .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s1 ; owl:someValuesFrom :D ] , :A1 .
+:A1 rdfs:subClassOf :A2 .
+:A2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .
+:C3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .
+:Y rdfs:subClassOf :B1 .
+:B1 rdfs:subClassOf :B2 .
+:B2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .
+[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :D ] rdfs:subClassOf :E .
+[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :Y ] rdfs:subClassOf :E3 .

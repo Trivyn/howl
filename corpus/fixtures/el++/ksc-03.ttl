@@ -1,0 +1,15 @@
+# el++ engine fixture 3 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 3. K3's example: ⊥ arises at the nominal a under Q, not at Q.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:Q a owl:Class . :A a owl:Class . :B a owl:Class .
+:Q rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :A [ owl:oneOf ( :a ) ] ) ] ] .
+:a a :B .
+[ owl:intersectionOf ( :A :B ) ] rdfs:subClassOf owl:Nothing .

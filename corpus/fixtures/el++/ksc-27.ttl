@@ -1,0 +1,20 @@
+# el++ engine fixture 27 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 27. K7: transitivity over sub-role legs, and nothing downwards: r
+# transitive, r1 ⊑ r, C ⊑ ∃r1.X, X ⊑ ∃r1.Y, ∃r.Y ⊑ E, ∃r1.Y ⊑ F
+# ⊨ C ⊑ E, X ⊑ E, X ⊑ F; C ⋢ F (C reaches Y by r, not by r1).
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:r1 a owl:ObjectProperty . :C a owl:Class . :X a owl:Class . :Y a owl:Class . :E a owl:Class . :F a owl:Class .
+:r a owl:TransitiveProperty .
+:r1 rdfs:subPropertyOf :r .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :X ] .
+:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :Y ] rdfs:subClassOf :E .
+[ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :Y ] rdfs:subClassOf :F .

@@ -1,0 +1,20 @@
+# el++ engine fixture 23 (src/test.slop: ksc-fixture-at, test-ksc-entailments).
+# 23. K7: (29) re-points a triple whose role has super-roles: C ⊑ ∃r1.B,
+# B ⊑ {a}, r1 ⊑ r, s(a, b), F(b), r ∘ s ⊑ t, ∃t.F ⊑ E ⊨ C ⊑ E.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:r1 a owl:ObjectProperty . :B a owl:Class . :F a owl:Class . :C a owl:Class . :E a owl:Class .
+:r1 rdfs:subPropertyOf :r .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r1 ; owl:someValuesFrom :B ] .
+:B rdfs:subClassOf [ owl:oneOf ( :a ) ] .
+:a :s :b .
+:b a :F .
+:t owl:propertyChainAxiom ( :r :s ) .
+[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :F ] rdfs:subClassOf :E .
