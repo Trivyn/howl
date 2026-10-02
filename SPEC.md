@@ -1348,8 +1348,8 @@ translation from OWL into [Krö10]'s language and the bookkeeping around it.
 >   or the ⊥ detection; it checked rules (18) and (29) against fact (a), the rule (25) inner induction
 >   and its use of earlier `self` facts, misclassification of safety through W's merged seeds (only
 >   ever conservative), and seeding `Q` rather than every class name. One finding, fixed in the text:
->   fact (b) held only for fresh witnesses, not a role assertion's individual witness. Owner
->   acceptance pending; no code depends on K6 until then.
+>   fact (b) held only for fresh witnesses, not a role assertion's individual witness.
+>   **Project owner: accepted, 2026-10-01** (PR #14; the calculus AD 5570d76e supersedes 42c907c9).
 
 **Sources.** [Krö10] Markus Krötzsch, *Efficient Inferencing for the Description Logic Underlying
 OWL EL*, Technical Report 3005, Institute AIFB, KIT, 2010 (the long version of *Efficient
