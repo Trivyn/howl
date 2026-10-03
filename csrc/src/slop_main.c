@@ -213,7 +213,7 @@ uint8_t main_all_digits(slop_string s) {
         uint8_t ok = (string_len(s) > 0);
         int64_t i = 0;
         while (ok && (i < string_len(s))) {
-            if (!(strlib_is_digit(strlib_char_at(s, i)))) {
+            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at main.slop:341:45"))))) {
                 ok = 0;
             }
             i = (i + 1);
@@ -294,7 +294,7 @@ int main(int argc, char** _c_argv) {
                     {
                         __auto_type front = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
                         __auto_type enc = termstore_new_encoded(front);
-                        __auto_type resolved = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
+                        __auto_type resolved = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                         __auto_type cfg = howl_default_config();
                         uint8_t failed = 0;
                         int64_t i = 3;
@@ -336,7 +336,7 @@ int main(int argc, char** _c_argv) {
                                                     failed = 1;
                                                 } else if (_mv_967.has_value) {
                                                     __auto_type o = _mv_967.value;
-                                                    ({ __auto_type _lst_p = &(resolved); __auto_type _item = (o); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                    ({ __auto_type _lst_p = &(resolved); __auto_type _item = (o); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                 }
                                             }
                                         }

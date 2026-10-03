@@ -855,9 +855,8 @@
   ;; Passing the dispatcher's result list to each rule so it can append
   ;; is the obvious way to write the dispatch below, and it cannot work:
   ;; a `(List T)` is a VALUE STRUCT, so the callee receives a copy whose
-  ;; `len` the caller never sees, and `list-push` also needs an `arena`
-  ;; the callee has no reason to take. The collection is therefore
-  ;; written out at each call site, against the dispatcher's own local.
+  ;; `len` the caller never sees. The collection is therefore written out
+  ;; at each call site, against the dispatcher's own local.
   ;;
   ;; The first attempt compiled to `use of undeclared identifier
   ;; 'arena'`, which is the lucky failure — had the helper taken an

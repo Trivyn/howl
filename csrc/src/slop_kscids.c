@@ -138,8 +138,8 @@ kscids_KscIds kscids_with_elem(slop_arena* arena, kscids_KscIds ids, types_KElem
     if ((kscids_elem_in_table(e)) ? !(slop_map_has(ids.elems, &(e))) : 0) {
         {
             __auto_type of = ids.elem_of;
-            ({ uint32_t _val = ((uint32_t)(((int64_t)((of).len)))); slop_map_put(arena, ids.elems, &(e), &_val, sizeof(_val)); });
-            ({ __auto_type _lst_p = &(of); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ uint32_t _val = ((uint32_t)(((int64_t)((of).len)))); slop_map_put(NULL, ids.elems, &(e), &_val, sizeof(_val)); });
+            ({ __auto_type _lst_p = &(of); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             return ((kscids_KscIds){.elems = ids.elems, .elem_of = of, .terms = ids.terms, .term_of = ids.term_of, .roles = ids.roles, .role_of = ids.role_of});
         }
     } else {
@@ -151,8 +151,8 @@ kscids_KscIds kscids_with_term(slop_arena* arena, kscids_KscIds ids, types_KTerm
     if ((kscids_term_in_table(t)) ? !(slop_map_has(ids.terms, &(t))) : 0) {
         {
             __auto_type of = ids.term_of;
-            ({ uint32_t _val = ((uint32_t)(((int64_t)((of).len)))); slop_map_put(arena, ids.terms, &(t), &_val, sizeof(_val)); });
-            ({ __auto_type _lst_p = &(of); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ uint32_t _val = ((uint32_t)(((int64_t)((of).len)))); slop_map_put(NULL, ids.terms, &(t), &_val, sizeof(_val)); });
+            ({ __auto_type _lst_p = &(of); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             return ((kscids_KscIds){.elems = ids.elems, .elem_of = ids.elem_of, .terms = ids.terms, .term_of = of, .roles = ids.roles, .role_of = ids.role_of});
         }
     } else {
@@ -164,8 +164,8 @@ kscids_KscIds kscids_with_role(slop_arena* arena, kscids_KscIds ids, types_RoleI
     if ((kscids_role_in_table(r)) ? !(slop_map_has(ids.roles, &(r))) : 0) {
         {
             __auto_type of = ids.role_of;
-            ({ uint32_t _val = ((uint32_t)(((int64_t)((of).len)))); slop_map_put(arena, ids.roles, &(r), &_val, sizeof(_val)); });
-            ({ __auto_type _lst_p = &(of); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ uint32_t _val = ((uint32_t)(((int64_t)((of).len)))); slop_map_put(NULL, ids.roles, &(r), &_val, sizeof(_val)); });
+            ({ __auto_type _lst_p = &(of); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             return ((kscids_KscIds){.elems = ids.elems, .elem_of = ids.elem_of, .terms = ids.terms, .term_of = ids.term_of, .roles = ids.roles, .role_of = of});
         }
     } else {
@@ -196,7 +196,7 @@ kscids_KscIds kscids_with_kterm(slop_arena* arena, kscids_KscIds ids, types_KTer
 
 kscids_KscIds kscids_build_ksc_ids(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, slop_list_rdf_IRI individuals) {
     {
-        __auto_type ids = ((kscids_KscIds){.elems = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KElem, slop_hash_types_KElem, slop_eq_types_KElem, SLOP_KEY_HASHED, uint32_t); slop_map_new_ptr(arena, 0, &_d); }), .elem_of = ((slop_list_types_KElem){ .data = NULL, .len = 0, .cap = 0 }), .terms = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KTerm, slop_hash_types_KTerm, slop_eq_types_KTerm, SLOP_KEY_HASHED, uint32_t); slop_map_new_ptr(arena, 0, &_d); }), .term_of = ((slop_list_types_KTerm){ .data = NULL, .len = 0, .cap = 0 }), .roles = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, uint32_t); slop_map_new_ptr(arena, 0, &_d); }), .role_of = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 })});
+        __auto_type ids = ((kscids_KscIds){.elems = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KElem, slop_hash_types_KElem, slop_eq_types_KElem, SLOP_KEY_HASHED, uint32_t); slop_map_new_ptr(arena, 0, &_d); }), .elem_of = ((slop_list_types_KElem){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .terms = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KTerm, slop_hash_types_KTerm, slop_eq_types_KTerm, SLOP_KEY_HASHED, uint32_t); slop_map_new_ptr(arena, 0, &_d); }), .term_of = ((slop_list_types_KTerm){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .roles = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, uint32_t); slop_map_new_ptr(arena, 0, &_d); }), .role_of = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
         ids = kscids_with_name(arena, ids, ((types_KName){ .tag = types_KName_k_class, .data.k_class = ((rdf_IRI){.value = vocab_OWL_THING}) }));
         ids = kscids_with_name(arena, ids, ((types_KName){ .tag = types_KName_k_class, .data.k_class = ((rdf_IRI){.value = vocab_OWL_NOTHING}) }));
         {
@@ -442,10 +442,10 @@ types_KElem kscids_id_elem(kscids_KscIds ids, uint32_t i) {
         __auto_type n = (((int64_t)(i)) / 3);
         __auto_type tag = (((int64_t)(i)) - ((((int64_t)(i)) / 3) * 3));
         if (tag == 0) {
-            return ((types_KElem){ .tag = types_KElem_e_aux, .data.e_aux = ((int64_t)(n)) });
+            return ((types_KElem){ .tag = types_KElem_e_aux, .data.e_aux = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at kscids.slop:275:49"))) });
         } else {
             if (tag == 1) {
-                return ((types_KElem){ .tag = types_KElem_e_class, .data.e_class = ((types_KName){ .tag = types_KName_k_fresh, .data.k_fresh = ((int64_t)(n)) }) });
+                return ((types_KElem){ .tag = types_KElem_e_class, .data.e_class = ((types_KName){ .tag = types_KName_k_fresh, .data.k_fresh = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at kscids.slop:277:78"))) }) });
             } else {
                 __auto_type _mv_356 = ({ __auto_type _lst = ids.elem_of; size_t _idx = (size_t)n; slop_option_types_KElem _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
                 if (_mv_356.has_value) {
@@ -465,7 +465,7 @@ types_KTerm kscids_id_term(kscids_KscIds ids, uint32_t i) {
     {
         __auto_type n = (((int64_t)(i)) / 2);
         if ((((int64_t)(i)) - (n * 2)) == 0) {
-            return ((types_KTerm){ .tag = types_KTerm_k_name, .data.k_name = ((types_KName){ .tag = types_KName_k_fresh, .data.k_fresh = ((int64_t)(n)) }) });
+            return ((types_KTerm){ .tag = types_KTerm_k_name, .data.k_name = ((types_KName){ .tag = types_KName_k_fresh, .data.k_fresh = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at kscids.slop:287:75"))) }) });
         } else {
             __auto_type _mv_357 = ({ __auto_type _lst = ids.term_of; size_t _idx = (size_t)n; slop_option_types_KTerm _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
             if (_mv_357.has_value) {
@@ -484,7 +484,7 @@ types_RoleId kscids_id_role(kscids_KscIds ids, uint32_t i) {
     {
         __auto_type n = (((int64_t)(i)) / 2);
         if ((((int64_t)(i)) - (n * 2)) == 0) {
-            return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = ((int64_t)(n)) });
+            return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at kscids.slop:297:55"))) });
         } else {
             __auto_type _mv_358 = ({ __auto_type _lst = ids.role_of; size_t _idx = (size_t)n; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
             if (_mv_358.has_value) {

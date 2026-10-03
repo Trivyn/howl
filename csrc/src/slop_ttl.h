@@ -30,8 +30,7 @@ typedef struct ttl_TtlParseContext ttl_TtlParseContext;
 typedef int64_t ttl_BlankNodeCounter;
 
 static inline ttl_BlankNodeCounter ttl_BlankNodeCounter_new(int64_t v) {
-SLOP_PRE(v >= 0, "ttl_BlankNodeCounter >= 0");
-return (ttl_BlankNodeCounter)v;
+return SLOP_RANGE(ttl_BlankNodeCounter, v, 1, 0, 0, 0, "BlankNodeCounter (Int 0 ..)");
 }
 
 #ifndef SLOP_LIST_RDF_TRIPLE_DEFINED

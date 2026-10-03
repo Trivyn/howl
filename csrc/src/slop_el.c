@@ -54,8 +54,8 @@ types_Context el_ex_ctx(slop_arena* arena) {
         __auto_type ctx = types_make_context(arena, el_ex_x());
         __auto_type b = el_ex_b();
         __auto_type c = el_ex_c();
-        ({ slop_map_put(arena, ctx.subsumers, &(b), NULL, 0); });
-        ({ slop_map_put(arena, ctx.subsumers, &(c), NULL, 0); });
+        ({ slop_map_put(NULL, ctx.subsumers, &(b), NULL, 0); });
+        ({ slop_map_put(NULL, ctx.subsumers, &(c), NULL, 0); });
         return ctx;
     }
 }
@@ -64,7 +64,7 @@ types_Context el_ex_ctx_bottom(slop_arena* arena) {
     {
         __auto_type ctx = types_make_context(arena, el_ex_x());
         __auto_type bot = types_node_bottom();
-        ({ slop_map_put(arena, ctx.subsumers, &(bot), NULL, 0); });
+        ({ slop_map_put(NULL, ctx.subsumers, &(bot), NULL, 0); });
         return ctx;
     }
 }
@@ -72,7 +72,7 @@ types_Context el_ex_ctx_bottom(slop_arena* arena) {
 slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_192 = ax;
         switch (_mv_192.tag) {
             case types_NormAxiom_sub_name:
@@ -80,7 +80,7 @@ slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context
                 __auto_type b2 = _mv_192.data.sub_name.f0;
                 __auto_type a = _mv_192.data.sub_name.f1;
                 if (types_node_eq(b, b2)) {
-                    ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = ctx.root, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = ctx.root, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
                 break;
             }
@@ -116,7 +116,7 @@ slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context
 slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_193 = ax;
         switch (_mv_193.tag) {
             case types_NormAxiom_sub_and:
@@ -138,7 +138,7 @@ slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx,
                         }
                     }
                     if (fire) {
-                        ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = ctx.root, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = ctx.root, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -175,7 +175,7 @@ slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx,
 slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_196 = ax;
         switch (_mv_196.tag) {
             case types_NormAxiom_sub_some_rhs:
@@ -186,8 +186,8 @@ slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context
                 if (types_node_eq(b, b2)) {
                     {
                         __auto_type pair = types_emit_edge(arena, ((types_LogicalEdge){.from = ctx.root, .role = r, .to = a}));
-                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.succ_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.pred_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.succ_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.pred_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -223,7 +223,7 @@ slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context
 
 slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_197 = ax;
         switch (_mv_197.tag) {
             case types_NormAxiom_sub_some_lhs:
@@ -240,7 +240,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Conte
                             for (size_t _i = 0; _i < _coll->len; _i++) {
                                 {
                                     types_Node x = *(types_Node*)slop_map_key_at(_coll, _i);
-                                    ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                         }
@@ -277,7 +277,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Conte
 slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_200 = ax;
         switch (_mv_200.tag) {
             case types_NormAxiom_sub_some_lhs:
@@ -287,7 +287,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Cont
                 __auto_type a = _mv_200.data.sub_some_lhs.f2;
                 if (types_role_eq(r, r2)) {
                     if (slop_map_has(ctx.subsumers, &(b))) {
-                        ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -323,7 +323,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Cont
 
 slop_list_types_Addressed el_cr_bottom_on_sub(slop_arena* arena, types_Context ctx, types_Node b) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type bottom = types_node_bottom();
         if (types_node_eq(b, bottom)) {
             {
@@ -337,7 +337,7 @@ slop_list_types_Addressed el_cr_bottom_on_sub(slop_arena* arena, types_Context c
                             for (size_t _i = 0; _i < _coll->len; _i++) {
                                 {
                                     types_Node x = *(types_Node*)slop_map_key_at(_coll, _i);
-                                    ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = bottom })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = bottom })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                         }
@@ -352,10 +352,10 @@ slop_list_types_Addressed el_cr_bottom_on_sub(slop_arena* arena, types_Context c
 slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context ctx, types_Node x) {
     slop_list_types_Addressed _retval = {0};
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type bottom = types_node_bottom();
         if (slop_map_has(ctx.subsumers, &(bottom))) {
-            ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = bottom })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = bottom })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         }
         _retval = result;
         goto _slop_post;
@@ -367,7 +367,7 @@ slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context 
 
 slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_203 = ax;
         switch (_mv_203.tag) {
             case types_NormAxiom_role_chain:
@@ -386,8 +386,8 @@ slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context c
                                     types_Node z = *(types_Node*)slop_map_key_at(_coll, _i);
                                     {
                                         __auto_type pair = types_emit_edge(arena, ((types_LogicalEdge){.from = x, .role = t, .to = z}));
-                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.succ_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.pred_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.succ_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.pred_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -424,7 +424,7 @@ slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context c
 
 slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context ctx, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
-        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_206 = ax;
         switch (_mv_206.tag) {
             case types_NormAxiom_role_chain:
@@ -443,8 +443,8 @@ slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context c
                                     types_Node x = *(types_Node*)slop_map_key_at(_coll, _i);
                                     {
                                         __auto_type pair = types_emit_edge(arena, ((types_LogicalEdge){.from = x, .role = t, .to = z}));
-                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.succ_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.pred_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.succ_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(result); __auto_type _item = (pair.pred_half); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -486,8 +486,8 @@ slop_list_types_RoleId el_sups_of(slop_arena* arena, premise_RoleClosure rc, typ
         return l.items;
     } else if (!_mv_210.has_value) {
         {
-            __auto_type one = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
-            ({ __auto_type _lst_p = &(one); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            __auto_type one = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+            ({ __auto_type _lst_p = &(one); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             return one;
         }
     }
@@ -496,7 +496,7 @@ slop_list_types_RoleId el_sups_of(slop_arena* arena, premise_RoleClosure rc, typ
 
 slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_Node b, types_NormAxiom ax) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_211 = ax;
         switch (_mv_211.tag) {
             case types_NormAxiom_sub_some_lhs:
@@ -517,7 +517,7 @@ slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context
                                     __auto_type _coll = el_cr_exists_lhs_on_sub(arena, ctx, b, via);
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -528,7 +528,7 @@ slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context
                         __auto_type _coll = el_cr_exists_lhs_on_sub(arena, ctx, b, ax);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type m = _coll.data[_i];
-                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                     }
                 }
@@ -561,7 +561,7 @@ slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context
 
 slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_214 = ax;
         switch (_mv_214.tag) {
             case types_NormAxiom_role_chain:
@@ -582,7 +582,7 @@ slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Contex
                                     __auto_type _coll = el_cr_chain_on_pred(arena, ctx, r, x, via);
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -593,7 +593,7 @@ slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Contex
                         __auto_type _coll = el_cr_chain_on_pred(arena, ctx, r, x, ax);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type m = _coll.data[_i];
-                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                     }
                 }
@@ -626,7 +626,7 @@ slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Contex
 
 slop_list_types_Addressed el_cr7_on_succ_through(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_217 = ax;
         switch (_mv_217.tag) {
             case types_NormAxiom_role_chain:
@@ -647,7 +647,7 @@ slop_list_types_Addressed el_cr7_on_succ_through(slop_arena* arena, types_Contex
                                     __auto_type _coll = el_cr_chain_on_succ(arena, ctx, s, z, via);
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -658,7 +658,7 @@ slop_list_types_Addressed el_cr7_on_succ_through(slop_arena* arena, types_Contex
                         __auto_type _coll = el_cr_chain_on_succ(arena, ctx, s, z, ax);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type m = _coll.data[_i];
-                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                     }
                 }
@@ -692,7 +692,7 @@ slop_list_types_Addressed el_cr7_on_succ_through(slop_arena* arena, types_Contex
 premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_NormAxiom axioms) {
     {
         __auto_type rc = ((premise_RoleClosure){.sups = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, premise_RoleList); slop_map_new_ptr(arena, 0, &_d); }), .subs = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, premise_RoleList); slop_map_new_ptr(arena, 0, &_d); })});
-        __auto_type roles = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type roles = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
         {
             __auto_type _coll = axioms;
@@ -703,8 +703,8 @@ premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_Nor
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type r = _coll.data[_i];
                         if (!(slop_map_has(seen, &(r)))) {
-                            ({ slop_map_put(arena, seen, &(r), NULL, 0); });
-                            ({ __auto_type _lst_p = &(roles); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ slop_map_put(NULL, seen, &(r), NULL, 0); });
+                            ({ __auto_type _lst_p = &(roles); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                     }
                 }
@@ -715,11 +715,11 @@ premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_Nor
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type r = _coll.data[_i];
                 {
-                    __auto_type up = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
+                    __auto_type up = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                     __auto_type have = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
                     uint8_t grew = 1;
-                    ({ slop_map_put(arena, have, &(r), NULL, 0); });
-                    ({ __auto_type _lst_p = &(up); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ slop_map_put(NULL, have, &(r), NULL, 0); });
+                    ({ __auto_type _lst_p = &(up); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     while (grew) {
                         grew = 0;
                         {
@@ -733,8 +733,8 @@ premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_Nor
                                         __auto_type a = _mv_223.data.sub_role.f0;
                                         __auto_type c = _mv_223.data.sub_role.f1;
                                         if (slop_map_has(have, &(a)) && !(slop_map_has(have, &(c)))) {
-                                            ({ slop_map_put(arena, have, &(c), NULL, 0); });
-                                            ({ __auto_type _lst_p = &(up); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                            ({ slop_map_put(NULL, have, &(c), NULL, 0); });
+                                            ({ __auto_type _lst_p = &(up); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                             grew = 1;
                                         }
                                         break;
@@ -765,7 +765,7 @@ premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_Nor
                     }
                     {
                         __auto_type l = ((premise_RoleList){.items = up});
-                        ({ premise_RoleList _val = l; slop_map_put(arena, rc.sups, &(r), &_val, sizeof(_val)); });
+                        ({ premise_RoleList _val = l; slop_map_put(NULL, rc.sups, &(r), &_val, sizeof(_val)); });
                     }
                 }
             }
@@ -799,7 +799,7 @@ uint8_t el_in_sups(premise_RoleClosure rc, types_RoleId e, types_RoleId r) {
 
 slop_list_types_Addressed el_ref_cr4_on_sub(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_Node b, types_NormAxiom ax) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_230 = ax;
         switch (_mv_230.tag) {
             case types_NormAxiom_sub_some_lhs:
@@ -818,7 +818,7 @@ slop_list_types_Addressed el_ref_cr4_on_sub(slop_arena* arena, types_Context ctx
                                     __auto_type _coll = el_cr_exists_lhs_on_sub(arena, ctx, b, ((types_NormAxiom){ .tag = types_NormAxiom_sub_some_lhs, .data.sub_some_lhs = { .f0 = e, .f1 = b2, .f2 = a } }));
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -854,7 +854,7 @@ slop_list_types_Addressed el_ref_cr4_on_sub(slop_arena* arena, types_Context ctx
 
 slop_list_types_Addressed el_ref_cr7_on_pred(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_231 = ax;
         switch (_mv_231.tag) {
             case types_NormAxiom_role_chain:
@@ -873,7 +873,7 @@ slop_list_types_Addressed el_ref_cr7_on_pred(slop_arena* arena, types_Context ct
                                     __auto_type _coll = el_cr_chain_on_pred(arena, ctx, r, x, ((types_NormAxiom){ .tag = types_NormAxiom_role_chain, .data.role_chain = { .f0 = r2, .f1 = e, .f2 = t } }));
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -909,7 +909,7 @@ slop_list_types_Addressed el_ref_cr7_on_pred(slop_arena* arena, types_Context ct
 
 slop_list_types_Addressed el_ref_cr7_on_succ(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_232 = ax;
         switch (_mv_232.tag) {
             case types_NormAxiom_role_chain:
@@ -928,7 +928,7 @@ slop_list_types_Addressed el_ref_cr7_on_succ(slop_arena* arena, types_Context ct
                                     __auto_type _coll = el_cr_chain_on_succ(arena, ctx, s, z, ((types_NormAxiom){ .tag = types_NormAxiom_role_chain, .data.role_chain = { .f0 = e, .f1 = s2, .f2 = t } }));
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -964,7 +964,7 @@ slop_list_types_Addressed el_ref_cr7_on_succ(slop_arena* arena, types_Context ct
 
 slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx, types_Derived incoming, premise_RuleIndex idx) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type _mv_233 = incoming;
         switch (_mv_233.tag) {
             case types_Derived_derived_sub:
@@ -981,7 +981,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                 __auto_type _coll = el_cr_sub_name_on_sub(arena, ctx, b, ax);
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
                                     __auto_type m = _coll.data[_i];
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                         }
@@ -1008,7 +1008,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                                     __auto_type _coll = el_cr_and_on_sub(arena, ctx, b, ax);
                                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                                         __auto_type m = _coll.data[_i];
-                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                     }
                                                 }
                                             }
@@ -1034,7 +1034,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                                     __auto_type _coll = el_cr_and_on_sub(arena, ctx, b, ax);
                                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                                         __auto_type m = _coll.data[_i];
-                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                     }
                                                 }
                                             }
@@ -1057,7 +1057,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                 __auto_type _coll = el_cr_some_rhs_on_sub(arena, ctx, b, ax);
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
                                     __auto_type m = _coll.data[_i];
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                         }
@@ -1075,7 +1075,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                 __auto_type _coll = el_cr4_on_sub_through(arena, ctx, idx.roles, b, ax);
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
                                     __auto_type m = _coll.data[_i];
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                         }
@@ -1086,7 +1086,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                     __auto_type _coll = el_cr_bottom_on_sub(arena, ctx, b);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type m = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -1119,7 +1119,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                                             __auto_type _coll = el_cr_exists_lhs_on_pred(arena, ctx, r, x, ax);
                                                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                                                 __auto_type m = _coll.data[_i];
-                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                             }
                                                         }
                                                     }
@@ -1145,7 +1145,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                                             __auto_type _coll = el_cr_exists_lhs_on_pred(arena, ctx, r, x, ax);
                                                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                                                 __auto_type m = _coll.data[_i];
-                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                             }
                                                         }
                                                     }
@@ -1168,7 +1168,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                         __auto_type _coll = el_cr7_on_pred_through(arena, ctx, idx.roles, r, x, ax);
                                         for (size_t _i = 0; _i < _coll.len; _i++) {
                                             __auto_type m = _coll.data[_i];
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                         }
                                     }
                                 }
@@ -1181,7 +1181,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                     __auto_type _coll = el_cr_bottom_on_pred(arena, ctx, x);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type m = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -1205,7 +1205,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                         __auto_type _coll = el_cr7_on_succ_through(arena, ctx, idx.roles, s, z, ax);
                                         for (size_t _i = 0; _i < _coll.len; _i++) {
                                             __auto_type m = _coll.data[_i];
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                         }
                                     }
                                 }
@@ -1223,7 +1223,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
 
 slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_Context ctx, types_Derived incoming, slop_list_types_NormAxiom axioms) {
     {
-        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type rc = el_role_closure_naive(arena, axioms);
         __auto_type _mv_254 = incoming;
         switch (_mv_254.tag) {
@@ -1238,28 +1238,28 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
                             __auto_type _coll = el_cr_sub_name_on_sub(arena, ctx, b, ax);
                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                 __auto_type m = _coll.data[_i];
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                         {
                             __auto_type _coll = el_cr_and_on_sub(arena, ctx, b, ax);
                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                 __auto_type m = _coll.data[_i];
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                         {
                             __auto_type _coll = el_cr_some_rhs_on_sub(arena, ctx, b, ax);
                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                 __auto_type m = _coll.data[_i];
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                         {
                             __auto_type _coll = el_ref_cr4_on_sub(arena, ctx, rc, b, ax);
                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                 __auto_type m = _coll.data[_i];
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                     }
@@ -1268,7 +1268,7 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
                     __auto_type _coll = el_cr_bottom_on_sub(arena, ctx, b);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type m = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -1289,14 +1289,14 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
                                     __auto_type _coll = el_cr_exists_lhs_on_pred(arena, ctx, r, x, ax);
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                                 {
                                     __auto_type _coll = el_ref_cr7_on_pred(arena, ctx, rc, r, x, ax);
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }
@@ -1307,7 +1307,7 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
                     __auto_type _coll = el_cr_bottom_on_pred(arena, ctx, x);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type m = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 break;
@@ -1328,7 +1328,7 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
                                     __auto_type _coll = el_ref_cr7_on_succ(arena, ctx, rc, s, z, ax);
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
                                         __auto_type m = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (m); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 }
                             }

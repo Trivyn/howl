@@ -102,31 +102,31 @@ common_ParseState common_skip_whitespace(slop_arena* arena, common_ParseState st
         uint8_t done = 0;
         while (!(done) && (offset < len)) {
             {
-                __auto_type c = strlib_char_at(input, offset);
+                __auto_type c = strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:174:33"));
                 if (c == 35) {
-                    while ((offset < len) && (strlib_char_at(input, offset) != 10)) {
-                        offset = (offset + 1);
-                        column = (column + 1);
+                    while ((offset < len) && (strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:178:63")) != 10)) {
+                        offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:180:34");
+                        column = SLOP_RANGE(int64_t, (column + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:181:34");
                     }
                     if (offset < len) {
-                        offset = (offset + 1);
-                        line = (line + 1);
+                        offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:184:34");
+                        line = SLOP_RANGE(int64_t, (line + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:185:32");
                         column = 1;
                     }
                 } else if (strlib_is_space(c)) {
-                    offset = (offset + 1);
+                    offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:189:30");
                     if (c == 10) {
-                        line = (line + 1);
+                        line = SLOP_RANGE(int64_t, (line + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:192:32");
                         column = 1;
                     } else {
-                        column = (column + 1);
+                        column = SLOP_RANGE(int64_t, (column + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:194:32");
                     }
                 } else {
                     done = 1;
                 }
             }
         }
-        _retval = common_state_with_position(state, offset, line, column);
+        _retval = common_state_with_position(state, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:196:34"), SLOP_RANGE(int64_t, line, 1, 0, 1, 0, "(Int 1 ..) at common.slop:196:41"), SLOP_RANGE(int64_t, column, 1, 0, 1, 0, "(Int 1 ..) at common.slop:196:46"));
         goto _slop_post;
     }
     _slop_post: ;
@@ -140,14 +140,14 @@ common_ParseState common_skip_line(slop_arena* arena, common_ParseState state) {
         __auto_type len = string_len(state.input);
         int64_t offset = state.offset;
         int64_t column = state.column;
-        while ((offset < len) && (strlib_char_at(input, offset) != 10)) {
-            offset = (offset + 1);
-            column = (column + 1);
+        while ((offset < len) && (strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:206:53")) != 10)) {
+            offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:208:24");
+            column = SLOP_RANGE(int64_t, (column + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:209:24");
         }
         if (offset < len) {
-            return common_state_with_position(state, (offset + 1), (state.line + 1), 1);
+            return common_state_with_position(state, SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:211:36"), (state.line + 1), 1);
         } else {
-            return common_state_with_position(state, offset, state.line, column);
+            return common_state_with_position(state, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:212:36"), state.line, SLOP_RANGE(int64_t, column, 1, 0, 1, 0, "(Int 1 ..) at common.slop:212:58"));
         }
     }
 }
@@ -172,19 +172,19 @@ common_ParseWhileResult common_parse_while(slop_arena* arena, common_ParseState 
         int64_t offset = state.offset;
         int64_t line = state.line;
         int64_t column = state.column;
-        while ((offset < len) && ((uint8_t(*)(void*, uint8_t))predicate.fn)(predicate.env, strlib_char_at(input, offset))) {
+        while ((offset < len) && ((uint8_t(*)(void*, uint8_t))predicate.fn)(predicate.env, strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:245:60")))) {
             {
-                __auto_type c = strlib_char_at(input, offset);
-                offset = (offset + 1);
+                __auto_type c = strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:246:33"));
+                offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:248:26");
                 if (c == 10) {
-                    line = (line + 1);
+                    line = SLOP_RANGE(int64_t, (line + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:251:28");
                     column = 1;
                 } else {
-                    column = (column + 1);
+                    column = SLOP_RANGE(int64_t, (column + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:253:28");
                 }
             }
         }
-        return ((common_ParseWhileResult){.result = strlib_substring(arena, input, start, (offset - start)), .state = common_state_with_position(state, offset, line, column)});
+        return ((common_ParseWhileResult){.result = strlib_substring(arena, input, SLOP_RANGE(int64_t, start, 1, 0, 0, 0, "(Int 0 ..) at common.slop:255:40"), SLOP_RANGE(int64_t, (offset - start), 1, 0, 0, 0, "(Int 0 ..) at common.slop:255:46")), .state = common_state_with_position(state, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:256:43"), SLOP_RANGE(int64_t, line, 1, 0, 1, 0, "(Int 1 ..) at common.slop:256:50"), SLOP_RANGE(int64_t, column, 1, 0, 1, 0, "(Int 1 ..) at common.slop:256:55"))});
     }
 }
 
@@ -196,32 +196,32 @@ slop_result_common_ParseWhileResult_common_ParseError common_parse_until(slop_ar
         int64_t offset = state.offset;
         int64_t line = state.line;
         int64_t column = state.column;
-        while ((offset < len) && (strlib_char_at(input, offset) != terminator)) {
+        while ((offset < len) && (strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:268:53")) != terminator)) {
             {
-                __auto_type c = strlib_char_at(input, offset);
-                offset = (offset + 1);
+                __auto_type c = strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:269:33"));
+                offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:271:26");
                 if (c == 10) {
-                    line = (line + 1);
+                    line = SLOP_RANGE(int64_t, (line + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:274:28");
                     column = 1;
                 } else {
-                    column = (column + 1);
+                    column = SLOP_RANGE(int64_t, (column + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:276:28");
                 }
             }
         }
         if (offset >= len) {
-            return ((slop_result_common_ParseWhileResult_common_ParseError){ .is_ok = false, .data.err = common_make_parse_error(arena, common_ParseErrorKind_unexpected_eof, SLOP_STR("Unexpected end of input"), ((common_Position){.line = line, .column = column, .offset = offset})) });
+            return ((slop_result_common_ParseWhileResult_common_ParseError){ .is_ok = false, .data.err = common_make_parse_error(arena, common_ParseErrorKind_unexpected_eof, SLOP_STR("Unexpected end of input"), ((common_Position){.line = SLOP_RANGE(int64_t, line, 1, 0, 1, 0, "(Int 1 ..) at common.slop:279:38"), .column = SLOP_RANGE(int64_t, column, 1, 0, 1, 0, "(Int 1 ..) at common.slop:279:52"), .offset = SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:279:68")})) });
         } else {
             {
                 __auto_type end = offset;
-                __auto_type c = strlib_char_at(input, offset);
-                offset = (offset + 1);
+                __auto_type c = strlib_char_at(input, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:281:33"));
+                offset = SLOP_RANGE(int64_t, (offset + 1), 1, 0, 0, 0, "(Int 0 ..) at common.slop:283:26");
                 if (c == 10) {
-                    line = (line + 1);
+                    line = SLOP_RANGE(int64_t, (line + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:286:28");
                     column = 1;
                 } else {
-                    column = (column + 1);
+                    column = SLOP_RANGE(int64_t, (column + 1), 1, 0, 1, 0, "(Int 1 ..) at common.slop:288:28");
                 }
-                return ((slop_result_common_ParseWhileResult_common_ParseError){ .is_ok = true, .data.ok = ((common_ParseWhileResult){.result = strlib_substring(arena, input, start, (end - start)), .state = common_state_with_position(state, offset, line, column)}) });
+                return ((slop_result_common_ParseWhileResult_common_ParseError){ .is_ok = true, .data.ok = ((common_ParseWhileResult){.result = strlib_substring(arena, input, SLOP_RANGE(int64_t, start, 1, 0, 0, 0, "(Int 0 ..) at common.slop:290:46"), SLOP_RANGE(int64_t, (end - start), 1, 0, 0, 0, "(Int 0 ..) at common.slop:290:52")), .state = common_state_with_position(state, SLOP_RANGE(int64_t, offset, 1, 0, 0, 0, "(Int 0 ..) at common.slop:291:49"), SLOP_RANGE(int64_t, line, 1, 0, 1, 0, "(Int 1 ..) at common.slop:291:56"), SLOP_RANGE(int64_t, column, 1, 0, 1, 0, "(Int 1 ..) at common.slop:291:61"))}) });
             }
         }
     }

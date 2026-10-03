@@ -129,12 +129,11 @@
   ;; registry and the emitted-axiom list are shared across every
   ;; branch. Each helper reads the record, mutates, and writes back.
   ;;
-  ;; Every mutator takes an Arena explicitly. That is not decoration:
-  ;; with no `arena` binding in scope, `list-push` into a record field
-  ;; lowers to `slop_arena_alloc(<base>.arena, …)` — it invents an
-  ;; `arena` member on the list's base type — and the failure surfaces
-  ;; in cc rather than as a checker error. With an arena in scope it
-  ;; lowers correctly. Upstream issue owed for the missing diagnostic.
+  ;; Every mutator takes an Arena explicitly, for the collections it
+  ;; creates. Growth needs none: since slop #278 a list grows in the arena
+  ;; it was made in. (Before #278 a `list-push` with no `arena` in scope
+  ;; lowered to C naming an undeclared member, and this parameter was what
+  ;; kept the pushes compiling.)
   ;; ============================================================
 
   ;; The fresh-name registry lives in `naming`, shared with el++'s
@@ -893,9 +892,9 @@
     ;; caller frees once this returns; everything in the result is built in
     ;; `arena`: the name table (which copies the strings it keeps), the
     ;; renamed axioms and signature, the saturation, and a copy of the
-    ;; omissions. A collection grows in the arena named `arena` at the site
-    ;; that pushes into it, so each survivor is built by a call that is
-    ;; handed `arena`, and each scratch structure by one handed `scratch`.
+    ;; omissions. A collection grows in the arena it was made in (slop
+    ;; #278), so each survivor is made in `arena` and each scratch structure
+    ;; in `scratch`.
     ;; ACCOUNTING, NOT "one normal form per axiom". Every accepted
     ;; logical axiom must be discharged by ONE of: the NormAxioms it
     ;; produced, the initial Derived facts it produced, or a named

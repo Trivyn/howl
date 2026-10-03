@@ -23,7 +23,7 @@ slop_string naming_render_role_name(types_RoleId r);
 naming_Registry* naming_new_registry(slop_arena* arena) {
     {
         __auto_type p = ((naming_Registry*)(({ __auto_type _alloc = (naming_Registry*)slop_arena_alloc(arena, sizeof(naming_Registry)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
-        (*p) = ((naming_Registry){.fresh = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_index = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .fresh_roles = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 }), .fresh_role_index = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .neg_done = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .pos_done = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); })});
+        (*p) = ((naming_Registry){.fresh = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .fresh_index = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .fresh_roles = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .fresh_role_index = ({ static const slop_map_desc _d = SLOP_MAP_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED, int64_t); slop_map_new_ptr(arena, 0, &_d); }), .neg_done = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .pos_done = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); })});
         return p;
     }
 }
@@ -32,15 +32,15 @@ int64_t naming_fresh_id(slop_arena* arena, naming_Registry* p, slop_string text)
     __auto_type _mv_173 = ({ void* _ptr = slop_map_get((*p).fresh_index, &(text)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
     if (_mv_173.has_value) {
         __auto_type id = _mv_173.value;
-        return id;
+        return ((int64_t)(id));
     } else if (!_mv_173.has_value) {
         {
             __auto_type s = (*p);
-            __auto_type id = ((int64_t)(((int64_t)(((*p).fresh).len))));
-            ({ __auto_type _lst_p = &(s.fresh); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ int64_t _val = id; slop_map_put(arena, s.fresh_index, &(text), &_val, sizeof(_val)); });
+            __auto_type id = ((int64_t)(SLOP_RANGE(int64_t, ((int64_t)(((*p).fresh).len)), 1, 0, 0, 0, "(Int 0 ..) at naming.slop:72:36")));
+            ({ __auto_type _lst_p = &(s.fresh); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ int64_t _val = SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at naming.slop:75:45"); slop_map_put(NULL, s.fresh_index, &(text), &_val, sizeof(_val)); });
             (*p) = s;
-            return id;
+            return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at naming.slop:77:13");
         }
     }
     SLOP_UNREACHABLE();
@@ -50,27 +50,27 @@ int64_t naming_fresh_role_id(slop_arena* arena, naming_Registry* p, slop_string 
     __auto_type _mv_176 = ({ void* _ptr = slop_map_get((*p).fresh_role_index, &(text)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
     if (_mv_176.has_value) {
         __auto_type id = _mv_176.value;
-        return id;
+        return ((int64_t)(id));
     } else if (!_mv_176.has_value) {
         {
             __auto_type s = (*p);
-            __auto_type id = ((int64_t)(((int64_t)(((*p).fresh_roles).len))));
-            ({ __auto_type _lst_p = &(s.fresh_roles); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ int64_t _val = id; slop_map_put(arena, s.fresh_role_index, &(text), &_val, sizeof(_val)); });
+            __auto_type id = ((int64_t)(SLOP_RANGE(int64_t, ((int64_t)(((*p).fresh_roles).len)), 1, 0, 0, 0, "(Int 0 ..) at naming.slop:87:36")));
+            ({ __auto_type _lst_p = &(s.fresh_roles); __auto_type _item = (text); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ int64_t _val = SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at naming.slop:90:50"); slop_map_put(NULL, s.fresh_role_index, &(text), &_val, sizeof(_val)); });
             (*p) = s;
-            return id;
+            return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at naming.slop:92:13");
         }
     }
     SLOP_UNREACHABLE();
 }
 
 uint8_t naming_mark_neg(slop_arena* arena, naming_Registry* p, slop_string text) {
-    ({ slop_map_put(arena, (*p).neg_done, &(text), NULL, 0); });
+    ({ slop_map_put(NULL, (*p).neg_done, &(text), NULL, 0); });
     return 1;
 }
 
 uint8_t naming_mark_pos(slop_arena* arena, naming_Registry* p, slop_string text) {
-    ({ slop_map_put(arena, (*p).pos_done, &(text), NULL, 0); });
+    ({ slop_map_put(NULL, (*p).pos_done, &(text), NULL, 0); });
     return 1;
 }
 
@@ -112,7 +112,7 @@ slop_list_owl2_RawConcept naming_flatten_and(slop_arena* arena, owl2_RawConcept 
                 break;
             }
             default: {
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
         }
@@ -242,10 +242,10 @@ slop_string naming_role_key(slop_arena* arena, types_RoleId r) {
 
 slop_string naming_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept conj, int64_t upto) {
     {
-        __auto_type pre = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type pre = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t i = 0;
         while (i < upto) {
-            ({ __auto_type _lst_p = &(pre); __auto_type _item = (owl2_concept_at(conj, i)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(pre); __auto_type _item = (owl2_concept_at(conj, i)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             i = (i + 1);
         }
         return naming_concept_key(arena, ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_and, .data.rc_and = pre }));

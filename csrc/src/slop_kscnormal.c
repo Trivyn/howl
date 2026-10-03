@@ -47,7 +47,7 @@ slop_list_types_KscAxiom kscnormal_copy_ksc_axioms(slop_arena* arena, slop_list_
 kscnormal_KscState* kscnormal_new_ksc_state(slop_arena* arena) {
     {
         __auto_type p = ((kscnormal_KscState*)(({ __auto_type _alloc = (kscnormal_KscState*)slop_arena_alloc(arena, sizeof(kscnormal_KscState)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
-        (*p) = ((kscnormal_KscState){.axioms = ((slop_list_types_KscAxiom){ .data = NULL, .len = 0, .cap = 0 }), .registry = naming_new_registry(arena)});
+        (*p) = ((kscnormal_KscState){.axioms = ((slop_list_types_KscAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .registry = naming_new_registry(arena)});
         return p;
     }
 }
@@ -55,7 +55,7 @@ kscnormal_KscState* kscnormal_new_ksc_state(slop_arena* arena) {
 uint8_t kscnormal_k_emit(slop_arena* arena, kscnormal_KscState* p, types_KscAxiom ax) {
     {
         __auto_type s = (*p);
-        ({ __auto_type _lst_p = &(s.axioms); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(s.axioms); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         (*p) = s;
         return 1;
     }
@@ -316,7 +316,7 @@ types_KName kscnormal_neg_atom(slop_arena* arena, kscnormal_KscState* p, owl2_Ra
         {
             __auto_type _ = _mv_392.data.rc_and;
             {
-                __auto_type flat = naming_flatten_and(arena, c, ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 }));
+                __auto_type flat = naming_flatten_and(arena, c, ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena }));
                 __auto_type n = ((int64_t)(((int64_t)((flat).len))));
                 if (n == 0) {
                     return kscnormal_top_name();
@@ -514,7 +514,7 @@ uint8_t kscnormal_normalize_gci(slop_arena* arena, kscnormal_KscState* p, owl2_R
         }
         default: {
             {
-                __auto_type conj = naming_flatten_and(arena, lhs, ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 }));
+                __auto_type conj = naming_flatten_and(arena, lhs, ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena }));
                 __auto_type n = ((int64_t)(((int64_t)((conj).len))));
                 __auto_type _mv_402 = rhs;
                 switch (_mv_402.tag) {
@@ -675,9 +675,9 @@ uint8_t kscnormal_normalize_axiom(slop_arena* arena, kscnormal_KscState* p, owl2
                         __auto_type j = (i + 1);
                         while (j < n) {
                             {
-                                __auto_type pair = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
-                                ({ __auto_type _lst_p = &(pair); __auto_type _item = (kscnormal_node_of(kscnormal_node_at_or_top(ns, i))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                ({ __auto_type _lst_p = &(pair); __auto_type _item = (kscnormal_node_of(kscnormal_node_at_or_top(ns, j))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                __auto_type pair = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+                                ({ __auto_type _lst_p = &(pair); __auto_type _item = (kscnormal_node_of(kscnormal_node_at_or_top(ns, i))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(pair); __auto_type _item = (kscnormal_node_of(kscnormal_node_at_or_top(ns, j))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 kscnormal_normalize_gci(arena, p, ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_and, .data.rc_and = pair }), ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_nothing }));
                                 j = (j + 1);
                             }
@@ -692,9 +692,9 @@ uint8_t kscnormal_normalize_axiom(slop_arena* arena, kscnormal_KscState* p, owl2
         {
             __auto_type e = _mv_404.data.ra_negative_assertion;
             {
-                __auto_type both = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0 });
-                ({ __auto_type _lst_p = &(both); __auto_type _item = (kscnormal_node_of(e.from)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                ({ __auto_type _lst_p = &(both); __auto_type _item = (((owl2_RawConcept){ .tag = owl2_RawConcept_rc_has_value, .data.rc_has_value = { .f0 = e.role, .f1 = e.to } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                __auto_type both = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+                ({ __auto_type _lst_p = &(both); __auto_type _item = (kscnormal_node_of(e.from)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(both); __auto_type _item = (((owl2_RawConcept){ .tag = owl2_RawConcept_rc_has_value, .data.rc_has_value = { .f0 = e.role, .f1 = e.to } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 return kscnormal_normalize_gci(arena, p, ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_and, .data.rc_and = both }), ((owl2_RawConcept){ .tag = owl2_RawConcept_rc_nothing }));
             }
         }
@@ -1035,12 +1035,12 @@ types_KscAxiom kscnormal_copy_ksc_axiom(slop_arena* arena, types_KscAxiom ax) {
 
 slop_list_types_KscAxiom kscnormal_copy_ksc_axioms(slop_arena* arena, slop_list_types_KscAxiom axs) {
     {
-        __auto_type out = ((slop_list_types_KscAxiom){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_KscAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (kscnormal_copy_ksc_axiom(arena, ax)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (kscnormal_copy_ksc_axiom(arena, ax)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
