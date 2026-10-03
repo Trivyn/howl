@@ -71,7 +71,7 @@
   (import kscnormal (copy-kname))
   (import kscnames (KscNames build-ksc-names rename-ksc-axioms rename-classes unrename-answer))
   (import kscids (KscIds CFact build-ksc-ids elem-id role-id id-elem id-term id-role encode-fact
-                  inst-kind triple-kind))
+                  decode-fact inst-kind triple-kind))
 
   (export
     IdList RoleIds KStore Base RunResult
@@ -194,8 +194,27 @@
     (@alloc arena)
     (if (store-holds st base f)
       false
-      (let ((c (encode-fact (. st ids) f)))
+      (file-new arena st f (encode-fact (. st ids) f))))
+
+  (fn commit-coded ((arena Arena) (st KStore) (c CFact))
+    (@intent "A round's commit of a conclusion its worker found absent from the frozen store: the fact if it is new, none if this round already stored it")
+    (@spec ((Arena KStore CFact) -> (Option KFact)))
+    (@alloc arena)
+    ;; The worker checked c against the store as the round began, the base
+    ;; included; the base never changes during a run, so only facts this
+    ;; round committed can make it a duplicate now, and those are in `seen`.
+    (if (set-has (. st seen) c)
+      (none)
+      (let ((f (decode-fact (. st ids) c)))
         (do
+          (file-new arena st f c)
+          (some f)))))
+
+  (fn file-new ((arena Arena) (st KStore) (f KFact) (c CFact))
+    (@intent "Store a fact known to be new: the dedup set and every index it belongs in; true")
+    (@spec ((Arena KStore KFact CFact) -> Bool))
+    (@alloc arena)
+      (do
           (set-put (. st seen) c)
           (match f
             ((f-inst x y)
@@ -212,7 +231,7 @@
                 (ri-push arena (. st outs) (. c a) (. c b) (. c c))
                 (ri-push arena (. st ins) (. c c) (. c b) (. c a))))
             ((f-self _ _) (do)))
-          true))))
+          true))
 
   (fn id-items ((m (Map U32 IdList)) (k U32))
     (@intent "The ids filed under k, if any")
@@ -779,36 +798,174 @@
         (list-push out c)
         out)))
 
-  (fn ksc-round ((arena Arena) (na Arena) (ra Arena) (idx KscIndex) (st KStore) (base (Option Base))
-                 (delta (List KFact)) (stop-at-bottom Bool) (unsat0 Bool))
-    (@intent "One semi-naive round: derive from every fact of the delta, commit what is new")
-    (@spec ((Arena Arena Arena KscIndex KStore (Option Base) (List KFact) Bool Bool) -> RoundOut))
+  ;; ============================================================
+  ;; A ROUND IS A BARRIER (SPEC §5.4 "Rounds and the cap"), as el's
+  ;; (§6.8, saturate.slop): Sₙ is frozen at the round's start, Δₙ
+  ;; included; every fact of Δₙ is derived against the frozen Sₙ; then a
+  ;; serial commit, in Δₙ's order, dedups the conclusions into Sₙ₊₁ and
+  ;; Δₙ₊₁. Nothing writes the store while anything derives.
+  ;;
+  ;; WHY THE ROUND IS THE SAME AT EVERY WORKER COUNT. A derivation reads
+  ;; only the frozen store, so what it yields is a function of the fact
+  ;; and Sₙ. Workers take contiguous chunks of Δₙ and keep, in order, the
+  ;; conclusions Sₙ does not hold; the commit walks the chunks in order, so
+  ;; it sees the very sequence W = 1 sees and commits, dedups and flags
+  ;; identically - Δₙ₊₁, the count, K3's flag and the rounds with them.
+  ;; (Under stop-at-bottom the commit stops at the first flagging fact,
+  ;; which is therefore the same fact at every W.)
+  ;; ============================================================
+
+  ;; A record around a list, for KList's reason: a worker's conclusions,
+  ;; handed back through a Map it alone writes.
+  (type CFactList (record
+    (items (List CFact))))
+
+  ;; EVERY ALLOCATION HERE NAMES ITS ARENA. A worker's list grew in its
+  ;; rule arena `ra` - emptied after each fact, freed at the end - when it
+  ;; was pushed from the function that also handed `ra` to derive: slop
+  ;; picks the arena an unnamed allocation uses. So pushes and the final put
+  ;; go through helpers whose @alloc is the worker's arena, as delta-push
+  ;; does for the next delta.
+  (fn cfact-push ((wa Arena) (l (List CFact)) (c CFact))
+    (@intent "l with c appended, any growth in wa")
+    (@spec ((Arena (List CFact) CFact) -> (List CFact)))
+    (@alloc wa)
+    (let ((mut out l))
+      (do
+        (list-push out c)
+        out)))
+
+  (fn put-chunk ((wa Arena) (out (Map Int CFactList)) (items (List CFact)))
+    (@intent "Hand a worker's conclusions back through its map, in wa")
+    (@spec ((Arena (Map Int CFactList) (List CFact)) -> Bool))
+    (@alloc wa)
+    (do
+      (map-put out 0 (record-new CFactList (items items)))
+      true))
+
+  (fn derive-chunk ((wa Arena) (ra Arena) (idx KscIndex) (st KStore) (base (Option Base)) (delta (List KFact))
+                    (lo Int) (hi Int) (out (Map Int CFactList)))
+    (@intent "One worker's share of a round: derive from delta[lo, hi) against the frozen store, keep what it lacks")
+    (@spec ((Arena Arena KscIndex KStore (Option Base) (List KFact) Int Int (Map Int CFactList)) -> Int))
+    (@alloc wa)
+    ;; Returns an Int because a spawned function is called through
+    ;; `int64_t(*)(void*)`. It only READS the store, the base, the index
+    ;; and the id tables; it writes `wa`, its rule arena `ra` (emptied after
+    ;; each fact, as before), and `out`, which no other thread sees. A
+    ;; conclusion is kept as its 16-byte encoding.
+    (let ((mut items (list-new wa CFact))
+          (mut i lo))
+      (do
+        (while (< i hi)
+          (do
+            (match (list-get delta i)
+              ((some f)
+                (do
+                  (for-each (c (derive ra idx st base f))
+                    (when (not (store-holds st base c))
+                      (set! items (cfact-push wa items (encode-fact (. st ids) c)))))
+                  (reuse-arena ra)))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        (put-chunk wa out items)
+        0)))
+
+  (fn round-workers ((workers Int) (n Int))
+    (@intent "How many workers a round of n facts uses: up to `workers`, at most one per fact")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= 1})
+    ;; No floor for small rounds: the result is the same at any count, a
+    ;; spawn costs microseconds, and the tests' small fixtures then take
+    ;; the parallel path too.
+    (worker-count-for workers n))
+
+  ;; A round's derive half: the worker arenas to free once committed, and
+  ;; the workers' results in chunk order.
+  (type Derived (record
+    (arenas (List Arena))
+    (outs   (List (Map Int CFactList)))))
+
+  (fn derive-round ((arena Arena) (idx KscIndex) (st KStore) (base (Option Base))
+                    (delta (List KFact)) (workers Int))
+    (@intent "Derive from every fact of the delta against the frozen store, on up to `workers` threads")
+    (@spec ((Arena KscIndex KStore (Option Base) (List KFact) Int) -> Derived))
     (@alloc arena)
-    ;; The store grows in `arena`, the next delta in `na`, and everything
-    ;; `derive` allocates in `ra`, emptied after each fact: `commit` copies
-    ;; a conclusion's value into the store, so nothing in `ra` outlives the
-    ;; fact that produced it (el's per-context rule arena).
-    (let ((mut next (list-new na KFact))
+    ;; EVERYTHING THE ROUND KEEPS ONLY UNTIL ITS COMMIT LIVES IN `arena`,
+    ;; ksc-round's scratch: the lists below, the thread structs and the
+    ;; spawned closures' environments. Kept in ksc-round, they grew in the
+    ;; run's arena, never freed. The parameter is NAMED `arena` on purpose:
+    ;; slop puts an allocation that names no arena (a list's growth, a
+    ;; closure's environment) in a variable called `arena` when one is in
+    ;; scope, and otherwise in the nearest let-bound arena, which here would
+    ;; be a worker's, freed under the thread using it.
+    (let ((n (cast Int (list-len delta)))
+          (nw (round-workers workers (cast Int (list-len delta))))
+          (per (/ (+ (cast Int (list-len delta)) (- (round-workers workers (cast Int (list-len delta))) 1))
+                  (round-workers workers (cast Int (list-len delta)))))
+          (mut was (list-new arena Arena))
+          (mut outs (list-new arena (Map Int CFactList)))
+          (mut threads (list-new arena (Ptr (Thread Int))))
+          (mut k 0))
+      (do
+        (while (< k nw)
+          (let ((wa (arena-new 1048576))
+                (ra (arena-new 1048576))
+                (out (map-new wa Int CFactList))
+                (lo (* k per))
+                (hi (if (< (* (+ k 1) per) n) (* (+ k 1) per) n)))
+            (do
+              (list-push was wa)
+              (list-push was ra)
+              (list-push outs out)
+              ;; `wa`, `ra`, `out`, `lo` and `hi` are IMMUTABLE bindings,
+              ;; captured by value (slop#193).
+              (if (<= nw 1)
+                (do (derive-chunk wa ra idx st base delta lo hi out) (do))
+                (list-push threads
+                  (spawn arena (fn () (derive-chunk wa ra idx st base delta lo hi out)))))
+              (set! k (+ k 1)))))
+        (for-each (t threads) (join t))
+        (record-new Derived (arenas was) (outs outs)))))
+
+  (fn ksc-round ((arena Arena) (na Arena) (idx KscIndex) (st KStore) (base (Option Base))
+                 (delta (List KFact)) (stop-at-bottom Bool) (unsat0 Bool) (workers Int))
+    (@intent "One barrier round: derive from every fact of the delta against the frozen store, then commit what is new")
+    (@spec ((Arena Arena KscIndex KStore (Option Base) (List KFact) Bool Bool Int) -> RoundOut))
+    (@alloc arena)
+    ;; The store grows in `arena`, the next delta in `na`; the derive half
+    ;; lives in `scratch` and the workers' arenas, all freed here once the
+    ;; commit has read them.
+    (let ((scratch (arena-new 65536))
+          (d (derive-round scratch idx st base delta workers))
+          (mut next (list-new na KFact))
           (mut unsat unsat0)
           (mut added 0))
       (do
-        (for-each (f delta)
-          (when (not (if stop-at-bottom unsat false))
-            (do
-              (for-each (c (derive ra idx st base f))
-                (when (commit arena st base c)
-                  (do
-                    (set! next (delta-push na next c))
-                    (set! added (+ added 1))
-                    (when (is-bottom-fact c) (set! unsat true))
-                    (when (reaches-bottom base c) (set! unsat true)))))
-              (reuse-arena ra))))
+        ;; THE COMMIT, serial and in Δₙ's order: chunk by chunk, each in
+        ;; the order its worker derived.
+        (for-each (out (. d outs))
+          (match (map-get out 0)
+            ((some cl)
+              (for-each (c (. cl items))
+                (when (not (if stop-at-bottom unsat false))
+                  (match (commit-coded arena st c)
+                    ((some f)
+                      (do
+                        (set! next (delta-push na next f))
+                        (set! added (+ added 1))
+                        (when (is-bottom-fact f) (set! unsat true))
+                        (when (reaches-bottom base f) (set! unsat true))))
+                    ((none) (do))))))
+            ((none) (do))))
+        (for-each (wa (. d arenas)) (arena-free wa))
+        (arena-free scratch)
         (record-new RoundOut (next next) (added added) (unsat unsat)))))
 
   (fn run-ksc ((arena Arena) (idx KscIndex) (ids KscIds) (base (Option Base)) (seeds (List KFact))
-                (stop-at-bottom Bool) (budget Int) (cancel I64))
+                (stop-at-bottom Bool) (budget Int) (cancel I64) (workers Int))
     (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
-    (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64) -> RunResult))
+    (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64 Int) -> RunResult))
     (@alloc arena)
     ;; THE CAP: a run never takes more rounds than it was given (§5.4
     ;; "Rounds and the cap"): `going` admits a round only while
@@ -819,9 +976,9 @@
     ;; counterexample (the same function returning the bare Int proves).
     ;;
     ;; Each round's delta lives in an arena of its own, freed once the next
-    ;; round's delta exists.
+    ;; round's delta exists. `workers` derives each round on up to that many
+    ;; threads (ksc-round); the run is the same at every count.
     (let ((st (new-store arena ids))
-          (ra (arena-new 1048576))
           (seeded (seed-run arena st base seeds))
           (mut da (arena-new 1048576))
           (mut delta (. seeded next))
@@ -850,7 +1007,7 @@
             (if (if cancelled true (>= rounds budget))
               (set! going false)
               (let ((na (arena-new 1048576))
-                    (ro (ksc-round arena na ra idx st base delta stop-at-bottom unsat)))
+                    (ro (ksc-round arena na idx st base delta stop-at-bottom unsat workers)))
                 (do
                   (set! rounds (+ rounds 1))
                   (set! facts (+ facts (. ro added)))
@@ -862,7 +1019,6 @@
         (let ((capped (> (list-len delta) 0)))
           (do
             (arena-free da)
-            (arena-free ra)
             (record-new RunResult (store st) (rounds rounds) (unsat unsat) (capped capped)
               (cancelled cancelled) (facts facts)))))))
 
@@ -951,7 +1107,9 @@
           (qseeds (list-new scratch KFact)))
       (do
         (list-push qseeds (. (ksc-q q) fact))
-        (let ((r (run-ksc scratch idx (. (. base g) ids) (some base) qseeds true budget cancel))
+        ;; One worker: phase Q already runs its classes on separate threads
+        ;; (run-chunk), and nesting would oversubscribe the machine.
+        (let ((r (run-ksc scratch idx (. (. base g) ids) (some base) qseeds true budget cancel 1))
               (ans (record-new ClassAnswer
                      (cls       q)
                      (shared    false)
@@ -1020,14 +1178,16 @@
         (list-push wseeds (. (ksc-q thing) fact))
         (for-each (q classes)
           (list-push wseeds (. (ksc-q q) fact)))
-        (let ((g (run-ksc arena idx ids (none) gseeds true n (. config cancel-ptr))))
+        (let ((g (run-ksc arena idx ids (none) gseeds true n (. config cancel-ptr)
+                   (cast Int (. config worker-count)))))
           (if (. g cancelled)
             (error (union-new Fault cancelled))
           (if (. g unsat)
             (ok (g-only arena g true))
             (if (. g capped)
               (ok (g-only arena g false))
-              (let ((w (run-ksc arena idx ids (none) wseeds false (- n (. g rounds)) (. config cancel-ptr))))
+              (let ((w (run-ksc arena idx ids (none) wseeds false (- n (. g rounds)) (. config cancel-ptr)
+                         (cast Int (. config worker-count)))))
                 (if (. w cancelled)
                   (error (union-new Fault cancelled))
                 (if (. w capped)

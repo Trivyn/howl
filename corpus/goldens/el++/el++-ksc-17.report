@@ -2,7 +2,7 @@ howl-report 2
 profile el++
 verdict coherent
 termination fixpoint
-rounds 16
+rounds 17
 inconsistent false
 omitted 0
 unsatisfiable 0

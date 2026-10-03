@@ -1726,7 +1726,20 @@ flag is read before the cap, so a run with work pending is cancelled even with n
 spend.
 
 **Rounds and the cap.** A round is one semi-naive step of all rules over the previous round's new
-facts. Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` over `G ∪ W_S`.
+facts. It is a **barrier**, as `el`'s are ([§6.8](#68-determinism-binding)):
+- the store `Sₙ` is frozen at the round's start, `Δₙ` included;
+- every fact of `Δₙ` is derived against the frozen `Sₙ`. The derivations run in parallel over
+  contiguous chunks of `Δₙ` (`--workers`), each keeping the conclusions `Sₙ` lacks;
+- a serial commit, in `Δₙ`'s order, dedups them into `Sₙ₊₁` and `Δₙ₊₁`, raising K3's flag at
+  the first `⊥` it stores.
+
+A derivation reads only the frozen store, and the commit sees the same sequence at every worker
+count. So `Δₙ₊₁`, the flag and the rounds count, and with them every report, capped runs
+included, are the same at every W. Phases G and W derive in parallel. Phase Q's runs use one
+worker each, since they already run in parallel across classes. (Until 2026-10-02 the engine
+committed each conclusion as it derived it, so later derivations of the same round saw it. That
+made the engine sequential, and its `rounds` counts differ slightly from these; its answers do
+not.) Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` over `G ∪ W_S`.
 - `rounds` = `rounds(G)` + `rounds(W)` + the most rounds any single unsafe `q` took.
 - `--max-iterations n` bounds that same sum: W gets what G leaves, and phase Q's runs get what G and
   W leave. A phase stopped by the bound makes the termination `resource-limit`.
@@ -1765,8 +1778,12 @@ the stored G is compared with Psc's G fact for fact, through K7.
 times are the median of three runs, without parse and decode).**
 - OBI: 0.15 s for all 5,241 classes; 156 are unsafe and run on their own.
 - GO: 0.86 s; every class is safe, so it is one saturation, of 1.07M facts.
-- EL-GALEN: 3.75 s; every class is safe. W holds 3.3M facts where rule (13) made it 10.3M, in 27
+- EL-GALEN: 3.75 s; every class is safe. W holds 3.3M facts where rule (13) made it 10.3M, in 28
   rounds where it took 32.
+- **On four workers** (barrier rounds, phase W in parallel): EL-GALEN 1.9 s and GO 0.56 s, down
+  from 5.0 s and 1.2 s when phase W ran on one thread (`howl validate --profile el++`, reason
+  phase). At eight workers they are 1.5 s and 0.45 s. The serial commit is what remains
+  unparallelized.
 - **Peak resident memory**, `howl validate --profile el++ --workers 1`, against `el` on the same
   input:
 
