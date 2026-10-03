@@ -65,14 +65,16 @@
 ;; removing the first, and let `extract-findings` read the uncommitted
 ;; generation by mistake — a silent over-report with no error.
 ;;
-;; WHY THIS IS HARD TO VIOLATE RATHER THAN MERELY DOCUMENTED. The
-;; invariant reduces to one reviewable property: `round-join` and
-;; everything it calls contain no `set-put`/`map-put`/`list-push` whose
-;; target is reachable from `sat`. And it is enforced mechanically —
-;; the read-only accessors below take NO `Arena` parameter, while
-;; `set-put`/`map-put`/`set-elements` all emit the bare C identifier
-;; `arena`. A store write in the join phase is therefore a COMPILE
-;; ERROR, not a review finding.
+;; HOW THE INVARIANT IS HELD. It reduces to one reviewable property:
+;; `round-join` and everything it calls contain no `set-put`/`map-put`/
+;; `list-push` whose target is reachable from `sat`. Until slop #278 it
+;; was also a compile error, because a put needed an arena in scope and
+;; the read-only accessors below take none. Since #278 a put grows the
+;; collection in the arena it was made in and needs nothing in scope, so
+;; that guard is GONE: a store write in the join phase now compiles. What
+;; catches one is `make test-tsan`, which runs every test's round on
+;; worker threads, so a join that writes the shared store races with its
+;; siblings and is reported.
 ;;
 ;; TERMINATION. `A ⊑ B, B ⊑ A`: round 1 admits both against the empty
 ;; store and commits them; round 2 re-derives both, `admit` finds them
@@ -146,11 +148,11 @@
   ;; ============================================================
   ;; READ-ONLY STORE ACCESSORS
   ;;
-  ;; NO `Arena` PARAMETER, ON PURPOSE. `set-put`/`map-put` emit the bare
-  ;; identifier `arena`, so without one in scope a store write here does
-  ;; not compile. This is the mechanical half of the frozen-store
-  ;; invariant; the reviewable half is that `round-join` calls nothing
-  ;; that mutates.
+  ;; NO `Arena` PARAMETER, and nothing here may mutate: the join reads the
+  ;; frozen store through these. Before slop #278 the missing arena made a
+  ;; store write here a compile error; since #278 it would compile, so the
+  ;; frozen-store invariant rests on review and on `make test-tsan` (see
+  ;; the header).
   ;; ============================================================
 
   (fn context-of ((sat Saturation) (n Node))
@@ -503,6 +505,11 @@
           (set! turn (partition-delta arena run sat d part turn w)))
         part)))
 
+  ;; A COMMITTER GROWS COLLECTIONS ANOTHER THREAD MADE. A context's sets
+  ;; and maps were made in the run arena, but each committer grows those of
+  ;; the contexts it owns, alongside the others; a collection grows in the
+  ;; arena it was made in (slop #278) unless the put names one, so every put
+  ;; here names `arena`, the committer's own store arena (`ca`).
   (fn commit-succ ((arena Arena) (store Context) (r RoleId) (y Node))
     (@intent "Store y as an r-successor; true when it was not already stored")
     (@spec ((Arena Context RoleId Node) -> Bool))
@@ -511,10 +518,10 @@
       ((some s)
         (if (set-has s y)
           false
-          (do (set-put s y) true)))
+          (do (set-put s y :arena arena) true)))
       ((none)
         (let ((s (set-new arena Node)))
-          (do (set-put s y) (map-put (. store succs) r s) true)))))
+          (do (set-put s y :arena arena) (map-put (. store succs) r s :arena arena) true)))))
 
   (fn commit-pred ((arena Arena) (store Context) (r RoleId) (x Node))
     (@intent "Store x as an r-predecessor; true when it was not already stored")
@@ -524,10 +531,10 @@
       ((some s)
         (if (set-has s x)
           false
-          (do (set-put s x) true)))
+          (do (set-put s x :arena arena) true)))
       ((none)
         (let ((s (set-new arena Node)))
-          (do (set-put s x) (map-put (. store preds) r s) true)))))
+          (do (set-put s x :arena arena) (map-put (. store preds) r s :arena arena) true)))))
 
   (fn commit-sub ((arena Arena) (store Context) (b Node))
     (@intent "Add b to S(X); true if it was new")
@@ -538,7 +545,7 @@
     ;; names `arena`, its queue arena.
     (if (set-has (. store subsumers) b)
       false
-      (do (set-put (. store subsumers) b) true)))
+      (do (set-put (. store subsumers) b :arena arena) true)))
 
   (fn commit-entry ((arena Arena) (ca Arena) (sat Saturation) (e Touched) (qs Queues))
     (@intent "Fold one delta's facts for one owned context into the store, queueing the new ones")
@@ -571,7 +578,9 @@
                     (list-push (. q items) (union-new Derived derived-pred r p)))))
               ;; Written back AFTER every push: `q` is a value struct, and
               ;; storing it earlier would keep a copy of the wrong length.
-              (map-put (. qs by-node) x q))))
+              ;; `qs.by-node` is the coordinator's, made in its scratch; this
+              ;; committer grows it in its own queue arena (slop #278).
+              (map-put (. qs by-node) x q :arena arena))))
         ((none) (do)))))
 
   (fn commit-bucket ((arena Arena) (ca Arena) (sat Saturation) (entries (List Touched)) (qs Queues))

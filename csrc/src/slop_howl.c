@@ -122,7 +122,7 @@ types_Profile howl_auto_profile(normalize_Decoded d) {
         __auto_type scratch = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
         __auto_type out_el = howl_out_of_profile_count(gate_gate_axioms(scratch, d.axioms, d.signature, d.omissions, types_Profile_profile_el).omissions);
         __auto_type out_pp = (((out_el == 0)) ? 0 : howl_out_of_profile_count(gate_gate_axioms(scratch, d.axioms, d.signature, d.omissions, types_Profile_profile_el_plus_plus).omissions));
-        __auto_type chosen = select_choose_auto(((int64_t)(out_el)), ((int64_t)(out_pp)));
+        __auto_type chosen = select_choose_auto(((int64_t)(SLOP_RANGE(int64_t, out_el, 1, 0, 0, 0, "(Int 0 ..) at howl.slop:323:50"))), ((int64_t)(SLOP_RANGE(int64_t, out_pp, 1, 0, 0, 0, "(Int 0 ..) at howl.slop:323:75"))));
         ({ slop_arena_free(scratch); free(scratch); });
         return chosen;
     }
@@ -173,12 +173,12 @@ slop_result_howl_Prepared_types_Fault howl_prepare_ksc(slop_arena* arena, normal
 
 slop_list_types_KName howl_copy_knames(slop_arena* arena, slop_list_types_KName ns) {
     {
-        __auto_type out = ((slop_list_types_KName){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_KName){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = ns;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type n = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (kscnormal_copy_kname(arena, n)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (kscnormal_copy_kname(arena, n)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;

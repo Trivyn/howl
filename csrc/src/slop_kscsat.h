@@ -444,9 +444,6 @@ slop_list_types_KFact kscsat_derive(slop_arena* arena, kscpremise_KscIndex idx, 
 types_RoleId kscsat_ksc_dummy_role(void);
 uint8_t kscsat_is_bottom_fact(types_KFact f);
 uint8_t kscsat_reaches_bottom(slop_option_kscsat_Base base, types_KFact f);
-slop_list_types_KFact kscsat_delta_push(slop_arena* na, slop_list_types_KFact l, types_KFact c);
-slop_list_kscids_CFact kscsat_cfact_push(slop_arena* wa, slop_list_kscids_CFact l, kscids_CFact c);
-uint8_t kscsat_put_chunk(slop_arena* wa, slop_map* out, slop_list_kscids_CFact items);
 int64_t kscsat_derive_chunk(slop_arena* wa, slop_arena* ra, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t lo, int64_t hi, slop_map* out);
 int64_t kscsat_round_workers(int64_t workers, int64_t n);
 kscsat_Derived kscsat_derive_round(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t workers);

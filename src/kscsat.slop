@@ -784,20 +784,6 @@
     (added Int)
     (unsat Bool)))
 
-  ;; The next delta grows in `na`, not in the round's arena. An empty List
-  ;; names no arena: `list-push` grows it in the arena of the function
-  ;; that pushes, so pushing from ksc-round would put every round's delta,
-  ;; and every buffer its growth abandons, in the store's arena for good
-  ;; (on EL-GALEN, most of a gigabyte).
-  (fn delta-push ((na Arena) (l (List KFact)) (c KFact))
-    (@intent "l with c appended, any growth in na")
-    (@spec ((Arena (List KFact) KFact) -> (List KFact)))
-    (@alloc na)
-    (let ((mut out l))
-      (do
-        (list-push out c)
-        out)))
-
   ;; ============================================================
   ;; A ROUND IS A BARRIER (SPEC §5.4 "Rounds and the cap"), as el's
   ;; (§6.8, saturate.slop): Sₙ is frozen at the round's start, Δₙ
@@ -820,29 +806,6 @@
   (type CFactList (record
     (items (List CFact))))
 
-  ;; EVERY ALLOCATION HERE NAMES ITS ARENA. A worker's list grew in its
-  ;; rule arena `ra` - emptied after each fact, freed at the end - when it
-  ;; was pushed from the function that also handed `ra` to derive: slop
-  ;; picks the arena an unnamed allocation uses. So pushes and the final put
-  ;; go through helpers whose @alloc is the worker's arena, as delta-push
-  ;; does for the next delta.
-  (fn cfact-push ((wa Arena) (l (List CFact)) (c CFact))
-    (@intent "l with c appended, any growth in wa")
-    (@spec ((Arena (List CFact) CFact) -> (List CFact)))
-    (@alloc wa)
-    (let ((mut out l))
-      (do
-        (list-push out c)
-        out)))
-
-  (fn put-chunk ((wa Arena) (out (Map Int CFactList)) (items (List CFact)))
-    (@intent "Hand a worker's conclusions back through its map, in wa")
-    (@spec ((Arena (Map Int CFactList) (List CFact)) -> Bool))
-    (@alloc wa)
-    (do
-      (map-put out 0 (record-new CFactList (items items)))
-      true))
-
   (fn derive-chunk ((wa Arena) (ra Arena) (idx KscIndex) (st KStore) (base (Option Base)) (delta (List KFact))
                     (lo Int) (hi Int) (out (Map Int CFactList)))
     (@intent "One worker's share of a round: derive from delta[lo, hi) against the frozen store, keep what it lacks")
@@ -851,8 +814,10 @@
     ;; Returns an Int because a spawned function is called through
     ;; `int64_t(*)(void*)`. It only READS the store, the base, the index
     ;; and the id tables; it writes `wa`, its rule arena `ra` (emptied after
-    ;; each fact, as before), and `out`, which no other thread sees. A
-    ;; conclusion is kept as its 16-byte encoding.
+    ;; each fact, as before), and `out`, which no other thread sees. Its
+    ;; list and `out` were made in `wa`, so they grow there (a collection
+    ;; grows in the arena it was made in, slop #278). A conclusion is kept as
+    ;; its 16-byte encoding.
     (let ((mut items (list-new wa CFact))
           (mut i lo))
       (do
@@ -863,11 +828,11 @@
                 (do
                   (for-each (c (derive ra idx st base f))
                     (when (not (store-holds st base c))
-                      (set! items (cfact-push wa items (encode-fact (. st ids) c)))))
+                      (list-push items (encode-fact (. st ids) c))))
                   (reuse-arena ra)))
               ((none) (do)))
             (set! i (+ i 1))))
-        (put-chunk wa out items)
+        (map-put out 0 (record-new CFactList (items items)))
         0)))
 
   (fn round-workers ((workers Int) (n Int))
@@ -892,13 +857,9 @@
     (@spec ((Arena KscIndex KStore (Option Base) (List KFact) Int) -> Derived))
     (@alloc arena)
     ;; EVERYTHING THE ROUND KEEPS ONLY UNTIL ITS COMMIT LIVES IN `arena`,
-    ;; ksc-round's scratch: the lists below, the thread structs and the
-    ;; spawned closures' environments. Kept in ksc-round, they grew in the
-    ;; run's arena, never freed. The parameter is NAMED `arena` on purpose:
-    ;; slop puts an allocation that names no arena (a list's growth, a
-    ;; closure's environment) in a variable called `arena` when one is in
-    ;; scope, and otherwise in the nearest let-bound arena, which here would
-    ;; be a worker's, freed under the thread using it.
+    ;; ksc-round's scratch: the lists below (made there, so grown there),
+    ;; the thread structs and the spawned closures' environments (`spawn`
+    ;; allocates both in the arena it is given).
     (let ((n (cast Int (list-len delta)))
           (nw (round-workers workers (cast Int (list-len delta))))
           (per (/ (+ (cast Int (list-len delta)) (- (round-workers workers (cast Int (list-len delta))) 1))
@@ -952,7 +913,7 @@
                   (match (commit-coded arena st c)
                     ((some f)
                       (do
-                        (set! next (delta-push na next f))
+                        (list-push next f)
                         (set! added (+ added 1))
                         (when (is-bottom-fact f) (set! unsat true))
                         (when (reaches-bottom base f) (set! unsat true))))

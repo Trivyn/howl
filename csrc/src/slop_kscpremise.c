@@ -21,8 +21,8 @@ uint8_t kscpremise_role_under(kscpremise_KscIndex idx, types_RoleId e, types_Rol
 
 kscpremise_KList kscpremise_k_pushed(slop_arena* arena, slop_option_kscpremise_KList found, types_KscAxiom ax) {
     {
-        __auto_type items = ({ __auto_type _mv = found; _mv.has_value ? ({ __auto_type l = _mv.value; l.items; }) : (((slop_list_types_KscAxiom){ .data = NULL, .len = 0, .cap = 0 })); });
-        ({ __auto_type _lst_p = &(items); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        __auto_type items = ({ __auto_type _mv = found; _mv.has_value ? ({ __auto_type l = _mv.value; l.items; }) : (((slop_list_types_KscAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena })); });
+        ({ __auto_type _lst_p = &(items); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         return ((kscpremise_KList){.items = items});
     }
 }
@@ -32,8 +32,8 @@ uint8_t kscpremise_k_partnered(slop_arena* arena, slop_map* m, types_KTerm key, 
         __auto_type p = ({ __auto_type _mv = ({ void* _ptr = slop_map_get(m, &(key)); _ptr ? (slop_option_kscpremise_KPartners){ .has_value = true, .value = *(kscpremise_KPartners*)_ptr } : (slop_option_kscpremise_KPartners){ .has_value = false }; }); _mv.has_value ? ({ __auto_type q = _mv.value; q; }) : (((kscpremise_KPartners){.by_other = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KTerm, slop_hash_types_KTerm, slop_eq_types_KTerm, SLOP_KEY_HASHED, kscpremise_KList); slop_map_new_ptr(arena, 0, &_d); }), .count = 0})); });
         __auto_type prior = ({ void* _ptr = slop_map_get(p.by_other, &(other)); _ptr ? (slop_option_kscpremise_KList){ .has_value = true, .value = *(kscpremise_KList*)_ptr } : (slop_option_kscpremise_KList){ .has_value = false }; });
         __auto_type l = kscpremise_k_pushed(arena, prior, ax);
-        ({ kscpremise_KList _val = l; slop_map_put(arena, p.by_other, &(other), &_val, sizeof(_val)); });
-        ({ kscpremise_KPartners _val = ((kscpremise_KPartners){.by_other = p.by_other, .count = ({ __auto_type _mv = prior; _mv.has_value ? ({ __auto_type _ = _mv.value; p.count; }) : ((p.count + 1)); })}); slop_map_put(arena, m, &(key), &_val, sizeof(_val)); });
+        ({ kscpremise_KList _val = l; slop_map_put(NULL, p.by_other, &(other), &_val, sizeof(_val)); });
+        ({ kscpremise_KPartners _val = ((kscpremise_KPartners){.by_other = p.by_other, .count = ({ __auto_type _mv = prior; _mv.has_value ? ({ __auto_type _ = _mv.value; p.count; }) : ((p.count + 1)); })}); slop_map_put(NULL, m, &(key), &_val, sizeof(_val)); });
         return 1;
     }
 }
@@ -43,8 +43,8 @@ uint8_t kscpremise_r_partnered(slop_arena* arena, slop_map* m, types_RoleId key,
         __auto_type p = ({ __auto_type _mv = ({ void* _ptr = slop_map_get(m, &(key)); _ptr ? (slop_option_kscpremise_KPartners){ .has_value = true, .value = *(kscpremise_KPartners*)_ptr } : (slop_option_kscpremise_KPartners){ .has_value = false }; }); _mv.has_value ? ({ __auto_type q = _mv.value; q; }) : (((kscpremise_KPartners){.by_other = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KTerm, slop_hash_types_KTerm, slop_eq_types_KTerm, SLOP_KEY_HASHED, kscpremise_KList); slop_map_new_ptr(arena, 0, &_d); }), .count = 0})); });
         __auto_type prior = ({ void* _ptr = slop_map_get(p.by_other, &(other)); _ptr ? (slop_option_kscpremise_KList){ .has_value = true, .value = *(kscpremise_KList*)_ptr } : (slop_option_kscpremise_KList){ .has_value = false }; });
         __auto_type l = kscpremise_k_pushed(arena, prior, ax);
-        ({ kscpremise_KList _val = l; slop_map_put(arena, p.by_other, &(other), &_val, sizeof(_val)); });
-        ({ kscpremise_KPartners _val = ((kscpremise_KPartners){.by_other = p.by_other, .count = ({ __auto_type _mv = prior; _mv.has_value ? ({ __auto_type _ = _mv.value; p.count; }) : ((p.count + 1)); })}); slop_map_put(arena, m, &(key), &_val, sizeof(_val)); });
+        ({ kscpremise_KList _val = l; slop_map_put(NULL, p.by_other, &(other), &_val, sizeof(_val)); });
+        ({ kscpremise_KPartners _val = ((kscpremise_KPartners){.by_other = p.by_other, .count = ({ __auto_type _mv = prior; _mv.has_value ? ({ __auto_type _ = _mv.value; p.count; }) : ((p.count + 1)); })}); slop_map_put(NULL, m, &(key), &_val, sizeof(_val)); });
         return 1;
     }
 }
@@ -52,7 +52,7 @@ uint8_t kscpremise_r_partnered(slop_arena* arena, slop_map* m, types_RoleId key,
 uint8_t kscpremise_file_term(slop_arena* arena, slop_map* m, types_KTerm y, types_KscAxiom ax) {
     {
         __auto_type l = kscpremise_k_pushed(arena, ({ void* _ptr = slop_map_get(m, &(y)); _ptr ? (slop_option_kscpremise_KList){ .has_value = true, .value = *(kscpremise_KList*)_ptr } : (slop_option_kscpremise_KList){ .has_value = false }; }), ax);
-        ({ kscpremise_KList _val = l; slop_map_put(arena, m, &(y), &_val, sizeof(_val)); });
+        ({ kscpremise_KList _val = l; slop_map_put(NULL, m, &(y), &_val, sizeof(_val)); });
         return 1;
     }
 }
@@ -60,7 +60,7 @@ uint8_t kscpremise_file_term(slop_arena* arena, slop_map* m, types_KTerm y, type
 uint8_t kscpremise_file_role(slop_arena* arena, slop_map* m, types_RoleId v, types_KscAxiom ax) {
     {
         __auto_type l = kscpremise_k_pushed(arena, ({ void* _ptr = slop_map_get(m, &(v)); _ptr ? (slop_option_kscpremise_KList){ .has_value = true, .value = *(kscpremise_KList*)_ptr } : (slop_option_kscpremise_KList){ .has_value = false }; }), ax);
-        ({ kscpremise_KList _val = l; slop_map_put(arena, m, &(v), &_val, sizeof(_val)); });
+        ({ kscpremise_KList _val = l; slop_map_put(NULL, m, &(v), &_val, sizeof(_val)); });
         return 1;
     }
 }
@@ -69,7 +69,7 @@ uint8_t kscpremise_first_mention(slop_arena* arena, slop_map* seen, rdf_IRI a) {
     if (slop_map_has(seen, &(a))) {
         return 0;
     } else {
-        ({ slop_map_put(arena, seen, &(a), NULL, 0); });
+        ({ slop_map_put(NULL, seen, &(a), NULL, 0); });
         return 1;
     }
 }
@@ -103,7 +103,7 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
         __auto_type and_pairs = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_KTerm, slop_hash_types_KTerm, slop_eq_types_KTerm, SLOP_KEY_HASHED, kscpremise_KPartners); slop_map_new_ptr(arena, 0, &_d); });
         __auto_type ex_by_role = ({ static const slop_map_desc _d = SLOP_MAP_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED, kscpremise_KPartners); slop_map_new_ptr(arena, 0, &_d); });
         __auto_type seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
-        __auto_type nis = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type nis = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = axioms;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -119,7 +119,7 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
                         if (_mv_502.has_value) {
                             __auto_type a = _mv_502.value;
                             if (kscpremise_first_mention(arena, seen, a)) {
-                                ({ __auto_type _lst_p = &(nis); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(nis); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         } else if (!_mv_502.has_value) {
                         }
@@ -127,7 +127,7 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
                         if (_mv_503.has_value) {
                             __auto_type a = _mv_503.value;
                             if (kscpremise_first_mention(arena, seen, a)) {
-                                ({ __auto_type _lst_p = &(nis); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(nis); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         } else if (!_mv_503.has_value) {
                         }
@@ -177,8 +177,8 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
                         {
                             __auto_type u = kscpremise_role_pushed(arena, ({ void* _ptr = slop_map_get(up, &(v)); _ptr ? (slop_option_kscpremise_RoleList){ .has_value = true, .value = *(kscpremise_RoleList*)_ptr } : (slop_option_kscpremise_RoleList){ .has_value = false }; }), w);
                             __auto_type d = kscpremise_role_pushed(arena, ({ void* _ptr = slop_map_get(down, &(w)); _ptr ? (slop_option_kscpremise_RoleList){ .has_value = true, .value = *(kscpremise_RoleList*)_ptr } : (slop_option_kscpremise_RoleList){ .has_value = false }; }), v);
-                            ({ kscpremise_RoleList _val = u; slop_map_put(arena, up, &(v), &_val, sizeof(_val)); });
-                            ({ kscpremise_RoleList _val = d; slop_map_put(arena, down, &(w), &_val, sizeof(_val)); });
+                            ({ kscpremise_RoleList _val = u; slop_map_put(NULL, up, &(v), &_val, sizeof(_val)); });
+                            ({ kscpremise_RoleList _val = d; slop_map_put(NULL, down, &(w), &_val, sizeof(_val)); });
                         }
                         break;
                     }
@@ -204,10 +204,10 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
                         __auto_type b = _mv_501.data.k_role_assert.f2;
                         kscpremise_file_term(arena, on_term, types_nominal_term(a), ax);
                         if (kscpremise_first_mention(arena, seen, a)) {
-                            ({ __auto_type _lst_p = &(nis); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ __auto_type _lst_p = &(nis); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                         if (kscpremise_first_mention(arena, seen, b)) {
-                            ({ __auto_type _lst_p = &(nis); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ __auto_type _lst_p = &(nis); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                         break;
                     }
@@ -225,16 +225,16 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
                         __auto_type v = _mv_508.data.k_role.f0;
                         __auto_type w = _mv_508.data.k_role.f1;
                         if (!(slop_map_has(sups, &(v)))) {
-                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, up, v); slop_map_put(arena, sups, &(v), &_val, sizeof(_val)); });
+                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, up, v); slop_map_put(NULL, sups, &(v), &_val, sizeof(_val)); });
                         }
                         if (!(slop_map_has(sups, &(w)))) {
-                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, up, w); slop_map_put(arena, sups, &(w), &_val, sizeof(_val)); });
+                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, up, w); slop_map_put(NULL, sups, &(w), &_val, sizeof(_val)); });
                         }
                         if (!(slop_map_has(subs, &(v)))) {
-                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, down, v); slop_map_put(arena, subs, &(v), &_val, sizeof(_val)); });
+                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, down, v); slop_map_put(NULL, subs, &(v), &_val, sizeof(_val)); });
                         }
                         if (!(slop_map_has(subs, &(w)))) {
-                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, down, w); slop_map_put(arena, subs, &(w), &_val, sizeof(_val)); });
+                            ({ kscpremise_RoleList _val = kscpremise_role_walk(arena, down, w); slop_map_put(NULL, subs, &(w), &_val, sizeof(_val)); });
                         }
                         break;
                     }
@@ -288,7 +288,7 @@ kscpremise_KscIndex kscpremise_build_ksc_index(slop_arena* arena, slop_list_type
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type e = _coll.data[_i];
                             if (!(types_role_eq(e, v))) {
-                                ({ kscpremise_RolePair _key_517 = (((kscpremise_RolePair){.sub = e, .sup = v})); slop_map_put(arena, below, &_key_517, NULL, 0); });
+                                ({ kscpremise_RolePair _key_517 = (((kscpremise_RolePair){.sub = e, .sup = v})); slop_map_put(NULL, below, &_key_517, NULL, 0); });
                             }
                         }
                     }
@@ -317,19 +317,19 @@ slop_option_kscpremise_KPartners kscpremise_ex_partners(kscpremise_KscIndex idx,
 
 kscpremise_RoleList kscpremise_role_pushed(slop_arena* arena, slop_option_kscpremise_RoleList found, types_RoleId r) {
     {
-        __auto_type items = ({ __auto_type _mv = found; _mv.has_value ? ({ __auto_type l = _mv.value; l.items; }) : (((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 })); });
-        ({ __auto_type _lst_p = &(items); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        __auto_type items = ({ __auto_type _mv = found; _mv.has_value ? ({ __auto_type l = _mv.value; l.items; }) : (((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena })); });
+        ({ __auto_type _lst_p = &(items); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         return ((kscpremise_RoleList){.items = items});
     }
 }
 
 kscpremise_RoleList kscpremise_role_walk(slop_arena* arena, slop_map* edges, types_RoleId r) {
     {
-        __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_RoleId, slop_hash_types_RoleId, slop_eq_types_RoleId, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
         int64_t i = 0;
-        ({ slop_map_put(arena, seen, &(r), NULL, 0); });
-        ({ __auto_type _lst_p = &(out); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ slop_map_put(NULL, seen, &(r), NULL, 0); });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         while (i < ((int64_t)(((int64_t)((out).len))))) {
             __auto_type _mv_523 = ({ __auto_type _lst = out; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
             if (_mv_523.has_value) {
@@ -342,8 +342,8 @@ kscpremise_RoleList kscpremise_role_walk(slop_arena* arena, slop_map* edges, typ
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type s = _coll.data[_i];
                             if (!(slop_map_has(seen, &(s)))) {
-                                ({ slop_map_put(arena, seen, &(s), NULL, 0); });
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ slop_map_put(NULL, seen, &(s), NULL, 0); });
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                     }
@@ -364,8 +364,8 @@ slop_list_types_RoleId kscpremise_role_sups(slop_arena* arena, kscpremise_KscInd
         return l.items;
     } else if (!_mv_529.has_value) {
         {
-            __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
-            ({ __auto_type _lst_p = &(out); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             return out;
         }
     }
@@ -379,8 +379,8 @@ slop_list_types_RoleId kscpremise_role_subs(slop_arena* arena, kscpremise_KscInd
         return l.items;
     } else if (!_mv_531.has_value) {
         {
-            __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0 });
-            ({ __auto_type _lst_p = &(out); __auto_type _item = (v); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (v); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             return out;
         }
     }

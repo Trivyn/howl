@@ -489,8 +489,8 @@ types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n)
                     {
                         __auto_type k = ((int64_t)(((int64_t)(names.nodes)->len)));
                         __auto_type c = types_copy_node(arena, n);
-                        ({ int64_t _val = k; slop_map_put(arena, names.node_ids, &(c), &_val, sizeof(_val)); });
-                        ({ types_Node _val = c; slop_map_put(arena, names.nodes, &(int64_t){k}, &_val, sizeof(_val)); });
+                        ({ int64_t _val = k; slop_map_put(NULL, names.node_ids, &(c), &_val, sizeof(_val)); });
+                        ({ types_Node _val = c; slop_map_put(NULL, names.nodes, &(int64_t){k}, &_val, sizeof(_val)); });
                         return ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = k });
                     }
                 }
@@ -509,8 +509,8 @@ types_RoleId types_intern_role(slop_arena* arena, types_Names names, types_RoleI
         {
             __auto_type k = ((int64_t)(((int64_t)(names.roles)->len)));
             __auto_type c = types_copy_role(arena, r);
-            ({ int64_t _val = k; slop_map_put(arena, names.role_ids, &(c), &_val, sizeof(_val)); });
-            ({ types_RoleId _val = c; slop_map_put(arena, names.roles, &(int64_t){k}, &_val, sizeof(_val)); });
+            ({ int64_t _val = k; slop_map_put(NULL, names.role_ids, &(c), &_val, sizeof(_val)); });
+            ({ types_RoleId _val = c; slop_map_put(NULL, names.roles, &(int64_t){k}, &_val, sizeof(_val)); });
             return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = k });
         }
     }
@@ -607,12 +607,12 @@ types_Omission types_copy_omission(slop_arena* arena, types_Omission o) {
         {
             __auto_type m = _mv_44.data.missing_declaration;
             {
-                __auto_type refs = ((slop_list_types_AxiomRef){ .data = NULL, .len = 0, .cap = 0 });
+                __auto_type refs = ((slop_list_types_AxiomRef){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                 {
                     __auto_type _coll = m.referring;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type a = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(refs); __auto_type _item = (types_copy_axiom_ref(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(refs); __auto_type _item = (types_copy_axiom_ref(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
                 return ((types_Omission){ .tag = types_Omission_missing_declaration, .data.missing_declaration = ((types_MissingDeclaration){.kind = m.kind, .entity = types_copy_iri(arena, m.entity), .referring = refs}) });
@@ -624,12 +624,12 @@ types_Omission types_copy_omission(slop_arena* arena, types_Omission o) {
 
 slop_list_types_Omission types_copy_omissions(slop_arena* arena, slop_list_types_Omission os) {
     {
-        __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = os;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type o = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_copy_omission(arena, o)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_copy_omission(arena, o)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -759,7 +759,7 @@ types_Context types_make_context(slop_arena* arena, types_Node root) {
 
 types_Queue types_make_queue(slop_arena* arena) {
     types_Queue _retval = {0};
-    _retval = ((types_Queue){.items = ((slop_list_types_Derived){ .data = NULL, .len = 0, .cap = 0 })});
+    _retval = ((types_Queue){.items = ((slop_list_types_Derived){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
     goto _slop_post;
     _slop_post: ;
     SLOP_POST(((((int64_t)((_retval.items).len)) == 0)), "(== (list-len (. $result items)) 0)");

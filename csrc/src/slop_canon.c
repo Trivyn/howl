@@ -624,13 +624,13 @@ uint8_t canon_merge_run(slop_list_int src, slop_list_int dst, int64_t lo, int64_
 
 slop_list_int canon_sort_range(slop_arena* arena, int64_t n, slop_closure_t cmp) {
     {
-        __auto_type src = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0 });
-        __auto_type dst = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type src = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type dst = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t i = 0;
         int64_t width = 1;
         while (i < n) {
-            ({ __auto_type _lst_p = &(src); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ __auto_type _lst_p = &(dst); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(src); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(dst); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             i = (i + 1);
         }
         while (width < n) {
@@ -659,12 +659,12 @@ slop_list_int canon_sort_range(slop_arena* arena, int64_t n, slop_closure_t cmp)
 slop_list_string canon_sort_strings(slop_arena* arena, slop_list_string xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_92_env_t* canon__lambda_92_env = (canon__lambda_92_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_92_env_t)); *canon__lambda_92_env = (canon__lambda_92_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_92, (void*)canon__lambda_92_env }; }));
-        __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_str_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_str_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -674,12 +674,12 @@ slop_list_string canon_sort_strings(slop_arena* arena, slop_list_string xs) {
 slop_list_rdf_IRI canon_sort_iris(slop_arena* arena, slop_list_rdf_IRI xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_93_env_t* canon__lambda_93_env = (canon__lambda_93_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_93_env_t)); *canon__lambda_93_env = (canon__lambda_93_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_93, (void*)canon__lambda_93_env }; }));
-        __auto_type out = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_iri_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_iri_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -689,12 +689,12 @@ slop_list_rdf_IRI canon_sort_iris(slop_arena* arena, slop_list_rdf_IRI xs) {
 slop_list_types_Node canon_sort_nodes(slop_arena* arena, slop_list_types_Node xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_94_env_t* canon__lambda_94_env = (canon__lambda_94_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_94_env_t)); *canon__lambda_94_env = (canon__lambda_94_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_94, (void*)canon__lambda_94_env }; }));
-        __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_node_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_node_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -704,12 +704,12 @@ slop_list_types_Node canon_sort_nodes(slop_arena* arena, slop_list_types_Node xs
 slop_list_types_SubPair canon_sort_sub_pairs(slop_arena* arena, slop_list_types_SubPair xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_95_env_t* canon__lambda_95_env = (canon__lambda_95_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_95_env_t)); *canon__lambda_95_env = (canon__lambda_95_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_95, (void*)canon__lambda_95_env }; }));
-        __auto_type out = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_sub_pair_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_sub_pair_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -719,12 +719,12 @@ slop_list_types_SubPair canon_sort_sub_pairs(slop_arena* arena, slop_list_types_
 slop_list_types_AxiomRef canon_sort_axiom_refs(slop_arena* arena, slop_list_types_AxiomRef xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_96_env_t* canon__lambda_96_env = (canon__lambda_96_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_96_env_t)); *canon__lambda_96_env = (canon__lambda_96_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_96, (void*)canon__lambda_96_env }; }));
-        __auto_type out = ((slop_list_types_AxiomRef){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_AxiomRef){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_axiom_ref_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_axiom_ref_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;
@@ -734,12 +734,12 @@ slop_list_types_AxiomRef canon_sort_axiom_refs(slop_arena* arena, slop_list_type
 slop_list_types_Omission canon_sort_omissions(slop_arena* arena, slop_list_types_Omission xs) {
     {
         __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_97_env_t* canon__lambda_97_env = (canon__lambda_97_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_97_env_t)); *canon__lambda_97_env = (canon__lambda_97_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_97, (void*)canon__lambda_97_env }; }));
-        __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type k = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_omission_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (canon_omission_at(xs, k)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;

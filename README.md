@@ -345,7 +345,7 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **81 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
+`make verify` verifies **84 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
 invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
 it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
 whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
@@ -377,8 +377,10 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop `main` at or after [#255](https://github.com/slop-lang/slop/pull/255), not yet
-in a release.** el++'s rule contracts need #247 (`list-visited`, which makes the join's completeness
+**Toolchain: slop `main` at or after [#278](https://github.com/slop-lang/slop/pull/278), not yet
+in a release.** #278 makes a collection grow in the arena it was made in, with `:arena` for a put
+that must grow elsewhere (SLOP facts, below). Since #265 the verifier also proves a range return type
+rather than assuming it, which is why the naming registry types its ids `(Int 0 ..)`. el++'s rule contracts need #247 (`list-visited`, which makes the join's completeness
 statable), #248 (no trigger patterns on hypotheses; `list-contains` by structure), #251 (a pure
 call's record result is one term), and #252 (`@example :eq` on a record result). #244 checks a
 postcondition at every return in the generated C, and #243 has the verifier check the contract where
@@ -488,13 +490,23 @@ exists because of that finding.
 
 ## SLOP facts that shaped the implementation
 
-Three properties of the toolchain are load-bearing here and none are obvious from the source:
+Four properties of the toolchain are load-bearing here and none are obvious from the source:
 
 **`(Set T)`/`(Map K V)` are pointers; `(List T)` is a value struct.** Mutating a Set or Map field
 reached through a `map-get` copy is visible in the map; `list-push` on a List field of that same copy
 updates only the copy's `len`, and if `cap` allows it writes into the shared buffer past the stored
 length. This is why `Context` no longer carries a queue, why rules never take an accumulator
 parameter, and why `round-commit` writes a queue into its map only after every push.
+
+**A collection grows in the arena it was made in** (slop
+[#278](https://github.com/slop-lang/slop/pull/278), from HOWL's
+[#275](https://github.com/slop-lang/slop/issues/275)). `list-new`, `map-new` and `set-new` record
+their arena, and `list-push`, `map-put` and `set-put` grow the collection there, whatever arena is in
+scope at the push. A put can name another with `:arena a`, and that is required when a thread grows
+a collection another thread made: `el`'s parallel commit grows the run's store sets and the
+coordinator's queue map from each committer, so those puts name the committer's own arena (`make
+test-tsan` reports the race without them). Before #278 growth went to whatever arena the push site
+resolved, which put an `el++` worker's results in an arena emptied after every fact.
 
 **Multi-payload union variants compared only their FIRST payload** — fixed in 0.2.1
 ([#66](https://github.com/slop-lang/slop/issues/66)), verified here by direct test. Through 0.1.2 a

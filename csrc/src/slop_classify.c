@@ -122,7 +122,7 @@ uint8_t classify_is_bottom_iri(rdf_IRI iri) {
 
 slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Saturation sat, types_Names names) {
     {
-        __auto_type unsat = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type unsat = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type bottom = types_node_bottom();
         {
             slop_map* _coll = (slop_map*)sat.contexts;
@@ -137,7 +137,7 @@ slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Satura
                             __auto_type iri = _mv_892.data.class_node;
                             if (!(classify_is_bottom_iri(iri))) {
                                 if (slop_map_has(ctx.subsumers, &(bottom))) {
-                                    ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 }
                             }
                             break;
@@ -162,7 +162,7 @@ slop_list_rdf_IRI classify_collect_unsatisfiable(slop_arena* arena, types_Satura
 
 slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Saturation sat, types_Names names) {
     {
-        __auto_type subs = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type subs = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type bottom = types_node_bottom();
         {
             slop_map* _coll = (slop_map*)sat.contexts;
@@ -179,7 +179,7 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
                                 if (slop_map_has(ctx.subsumers, &(bottom))) {
                                     {
                                         __auto_type n = types_original_node(names, rn);
-                                        ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                        ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     }
                                 } else {
                                     {
@@ -195,7 +195,7 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
                                                         {
                                                             __auto_type n = types_original_node(names, rn);
                                                             __auto_type b = types_original_node(names, rb);
-                                                            ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = b})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                            ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = b})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                         }
                                                         break;
                                                     }
@@ -238,13 +238,13 @@ slop_list_types_SubPair classify_collect_taxonomy(slop_arena* arena, types_Satur
 types_Findings classify_extract_findings(slop_arena* arena, types_Saturation sat, types_Names names) {
     {
         __auto_type inconsistent = classify_detect_inconsistent(sat, names);
-        return ((types_Findings){.inconsistent = inconsistent, .unsatisfiable = ((inconsistent) ? ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 }) : classify_collect_unsatisfiable(arena, sat, names)), .subsumptions = ((inconsistent) ? ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0 }) : classify_collect_taxonomy(arena, sat, names)), .imports_seen = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 })});
+        return ((types_Findings){.inconsistent = inconsistent, .unsatisfiable = ((inconsistent) ? ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena }) : classify_collect_unsatisfiable(arena, sat, names)), .subsumptions = ((inconsistent) ? ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0, .arena = arena }) : classify_collect_taxonomy(arena, sat, names)), .imports_seen = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
     }
 }
 
 slop_list_rdf_IRI classify_ksc_unsatisfiable(slop_arena* arena, types_KscResult r) {
     {
-        __auto_type unsat = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type unsat = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = r.answers;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -256,7 +256,7 @@ slop_list_rdf_IRI classify_ksc_unsatisfiable(slop_arena* arena, types_KscResult 
                         __auto_type iri = _mv_897.data.k_class;
                         if (!(classify_is_bottom_iri(iri))) {
                             if (a.unsat) {
-                                ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                         break;
@@ -275,7 +275,7 @@ slop_list_rdf_IRI classify_ksc_unsatisfiable(slop_arena* arena, types_KscResult 
 
 slop_list_types_SubPair classify_ksc_taxonomy(slop_arena* arena, types_KscResult r) {
     {
-        __auto_type subs = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0 });
+        __auto_type subs = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type bottom = types_node_bottom();
         {
             __auto_type _coll = r.answers;
@@ -290,7 +290,7 @@ slop_list_types_SubPair classify_ksc_taxonomy(slop_arena* arena, types_KscResult
                             {
                                 __auto_type n = ((types_Node){ .tag = types_Node_class_node, .data.class_node = iri });
                                 if (a.unsat) {
-                                    ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = bottom})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 } else {
                                     {
                                         __auto_type _coll = a.subsumers;
@@ -301,7 +301,7 @@ slop_list_types_SubPair classify_ksc_taxonomy(slop_arena* arena, types_KscResult
                                                 case types_KName_k_class:
                                                 {
                                                     __auto_type biri = _mv_899.data.k_class;
-                                                    ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = ((types_Node){ .tag = types_Node_class_node, .data.class_node = biri })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                                    ({ __auto_type _lst_p = &(subs); __auto_type _item = (((types_SubPair){.sub = n, .super = ((types_Node){ .tag = types_Node_class_node, .data.class_node = biri })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                     break;
                                                 }
                                                 case types_KName_k_fresh:
@@ -333,7 +333,7 @@ types_Findings classify_extract_ksc_findings(slop_arena* arena, types_KscResult 
     types_Findings _retval = {0};
     {
         __auto_type inconsistent = r.inconsistent;
-        _retval = ((types_Findings){.inconsistent = inconsistent, .unsatisfiable = ((inconsistent) ? ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 }) : classify_ksc_unsatisfiable(arena, r)), .subsumptions = ((inconsistent) ? ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0 }) : classify_ksc_taxonomy(arena, r)), .imports_seen = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0 })});
+        _retval = ((types_Findings){.inconsistent = inconsistent, .unsatisfiable = ((inconsistent) ? ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena }) : classify_ksc_unsatisfiable(arena, r)), .subsumptions = ((inconsistent) ? ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0, .arena = arena }) : classify_ksc_taxonomy(arena, r)), .imports_seen = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
         goto _slop_post;
     }
     _slop_post: ;

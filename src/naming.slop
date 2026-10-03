@@ -26,12 +26,14 @@
   ;; did — the id IS the position a text was first appended at — so ids
   ;; stay first-occurrence and nothing downstream moves. Map and Set
   ;; fields are pointers, so the copy-mutate-write-back below shares them
-  ;; without any extra write-back.
+  ;; without any extra write-back. An id is a position, so it is never
+  ;; negative, and the types say so: what a fresh-node or fresh-role
+  ;; carries is an (Int 0 ..).
   (type Registry (record
     (fresh            (List String))      ; index = fresh-node id, value = its key (concept-key)
-    (fresh-index      (Map String Int))   ; key -> fresh-node id
+    (fresh-index      (Map String (Int 0 ..)))   ; key -> fresh-node id
     (fresh-roles      (List String))      ; index = fresh-role id, value = provenance text
-    (fresh-role-index (Map String Int))   ; provenance text -> fresh-role id
+    (fresh-role-index (Map String (Int 0 ..)))   ; provenance text -> fresh-role id
     (neg-done         (Set String))       ; expressions whose NEGATIVE definition is emitted
     (pos-done         (Set String))))     ; expressions whose POSITIVE definition is emitted
 
@@ -43,16 +45,16 @@
       (do
         (set! (deref p) (record-new Registry
                           (fresh            (list-new arena String))
-                          (fresh-index      (map-new arena String Int))
+                          (fresh-index      (map-new arena String (Int 0 ..)))
                           (fresh-roles      (list-new arena String))
-                          (fresh-role-index (map-new arena String Int))
+                          (fresh-role-index (map-new arena String (Int 0 ..)))
                           (neg-done         (set-new arena String))
                           (pos-done         (set-new arena String))))
         p)))
 
   (fn fresh-id ((arena Arena) (p (Ptr Registry)) (text String))
     (@intent "The fresh-node id for a canonical expression, minting on first use")
-    (@spec ((Arena (Ptr Registry) String) -> Int))
+    (@spec ((Arena (Ptr Registry) String) -> (Int 0 ..)))
     (@alloc arena)
     ;; FRESH SYMBOLS ARE KEYED BY CANONICAL EXPRESSION ALONE — one node
     ;; per distinct subexpression, carrying a negative-definition bit
@@ -60,11 +62,14 @@
     ;; would mint two nodes for an expression occurring at both, which
     ;; changes fresh ids, saturation size, derivation depth, and
     ;; therefore every capped-run report.
+    ;; The cast restates the map's own value type: slop's verifier reads an
+    ;; Option payload as an unconstrained Int (slop #167), and since #265 a
+    ;; cast is checked at run time, so this narrows nothing it cannot prove.
     (match (map-get (. (deref p) fresh-index) text)
-      ((some id) id)
+      ((some id) (cast (Int 0 ..) id))
       ((none)
         (let ((mut s (deref p))
-              (id (cast Int (list-len (. (deref p) fresh)))))
+              (id (cast (Int 0 ..) (list-len (. (deref p) fresh)))))
           (do
             (list-push (. s fresh) text)
             (map-put (. s fresh-index) text id)
@@ -73,13 +78,13 @@
 
   (fn fresh-role-id ((arena Arena) (p (Ptr Registry)) (text String))
     (@intent "A fresh role id for a chain decomposition step")
-    (@spec ((Arena (Ptr Registry) String) -> Int))
+    (@spec ((Arena (Ptr Registry) String) -> (Int 0 ..)))
     (@alloc arena)
     (match (map-get (. (deref p) fresh-role-index) text)
-      ((some id) id)
+      ((some id) (cast (Int 0 ..) id))   ; as fresh-id (slop #167)
       ((none)
         (let ((mut s (deref p))
-              (id (cast Int (list-len (. (deref p) fresh-roles)))))
+              (id (cast (Int 0 ..) (list-len (. (deref p) fresh-roles)))))
           (do
             (list-push (. s fresh-roles) text)
             (map-put (. s fresh-role-index) text id)
