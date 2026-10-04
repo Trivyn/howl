@@ -866,6 +866,7 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
 #endif
 
 types_ReasonerConfig howl_default_config(void);
+uint8_t types_cancel_requested(int64_t cancel);
 types_Node types_node_top(void);
 types_Node types_node_bottom(void);
 uint8_t types_node_eq(types_Node a, types_Node b);

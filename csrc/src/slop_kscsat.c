@@ -33,6 +33,7 @@ int64_t kscsat_round_workers(int64_t workers, int64_t n);
 kscsat_Derived kscsat_derive_round(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t workers);
 kscsat_RoundOut kscsat_ksc_round(slop_arena* arena, slop_arena* na, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, uint8_t stop_at_bottom, uint8_t unsat0, int64_t workers);
 kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom, int64_t budget, int64_t cancel, int64_t workers);
+kscsat_RunResult kscsat_run_result(kscsat_KStore st, int64_t rounds, uint8_t unsat, uint8_t capped, uint8_t cancelled, int64_t facts);
 kscsat_RoundOut kscsat_seed_run(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact seeds);
 slop_list_types_KName kscsat_answer_subsumers(slop_arena* arena, kscsat_KStore st, types_KName q);
 slop_map* kscsat_backward_closure(slop_arena* arena, kscsat_KStore w, slop_list_types_KElem start);
@@ -1507,6 +1508,8 @@ kscsat_RoundOut kscsat_ksc_round(slop_arena* arena, slop_arena* na, kscpremise_K
 }
 
 kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom, int64_t budget, int64_t cancel, int64_t workers) {
+    SLOP_PRE(((budget >= 0)), "(>= budget 0)");
+    kscsat_RunResult _retval = {0};
     {
         __auto_type st = kscsat_new_store(arena, ids);
         __auto_type seeded = kscsat_seed_run(arena, st, base, seeds);
@@ -1522,7 +1525,9 @@ kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, ksci
             going = 0;
         }
         while (going) {
-            if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { cancelled = 1; };
+            if (types_cancel_requested(cancel)) {
+                cancelled = 1;
+            }
             if ((cancelled) ? 1 : (rounds >= budget)) {
                 going = 0;
             } else {
@@ -1542,9 +1547,22 @@ kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, ksci
         {
             __auto_type capped = (((int64_t)((delta).len)) > 0);
             ({ slop_arena_free(da); free(da); });
-            return ((kscsat_RunResult){.store = st, .rounds = rounds, .unsat = unsat, .capped = capped, .cancelled = cancelled, .facts = facts});
+            _retval = kscsat_run_result(st, rounds, unsat, capped, cancelled, facts);
+            goto _slop_post;
         }
     }
+    _slop_post: ;
+    SLOP_POST(((_retval.rounds <= budget)), "(<= (. $result rounds) budget)");
+    return _retval;
+}
+
+kscsat_RunResult kscsat_run_result(kscsat_KStore st, int64_t rounds, uint8_t unsat, uint8_t capped, uint8_t cancelled, int64_t facts) {
+    kscsat_RunResult _retval = {0};
+    _retval = ((kscsat_RunResult){.store = st, .rounds = rounds, .unsat = unsat, .capped = capped, .cancelled = cancelled, .facts = facts});
+    goto _slop_post;
+    _slop_post: ;
+    SLOP_POST(((_retval.rounds == rounds)), "(== (. $result rounds) rounds)");
+    return _retval;
 }
 
 kscsat_RoundOut kscsat_seed_run(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact seeds) {
@@ -1819,7 +1837,9 @@ int64_t kscsat_run_chunk(slop_arena* wa, kscpremise_KscIndex idx, kscsat_Base ba
             __auto_type _coll = todo;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type i = _coll.data[_i];
-                if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { cancelled = 1; };
+                if (types_cancel_requested(cancel)) {
+                    cancelled = 1;
+                }
                 if (!(cancelled)) {
                     __auto_type _mv_871 = ({ __auto_type _lst = classes; size_t _idx = (size_t)i; slop_option_types_KName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
                     if (_mv_871.has_value) {

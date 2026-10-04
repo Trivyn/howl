@@ -54,7 +54,7 @@
 
   (import rdf (IRI))
   (import vocab (OWL_THING OWL_NOTHING))
-  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig Fault
+  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig Fault cancel-requested
                  role-eq kname-eq kterm-eq kelem-eq
                  name-term nominal-term ind-elem class-elem copy-iri))
   (import ksc (Concl JoinRule is-name is-nominal is-individual term-elem
@@ -928,13 +928,14 @@
     (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
     (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64 Int) -> RunResult))
     (@alloc arena)
+    (@pre {budget >= 0})
+    (@post {(. $result rounds) <= budget})
     ;; THE CAP: a run never takes more rounds than it was given (§5.4
     ;; "Rounds and the cap"): `going` admits a round only while
-    ;; `rounds < budget`. OWED AS A CONTRACT, held by test-ksc-cap. The
-    ;; invariants below are true, but slop's checker does not link the
-    ;; fields of a `record-new` built after a loop to the values the loop
-    ;; ends with, so `(@post {(. $result rounds) <= budget})` fails on a
-    ;; counterexample (the same function returning the bare Int proves).
+    ;; `rounds < budget`. Proved, through the loop invariant below; the
+    ;; cancel read is `cancel-requested` and the result is built by
+    ;; `run-result` so that slop's verifier can follow both (slop #280,
+    ;; #279). test-ksc-cap checks it at run time as well.
     ;;
     ;; Each round's delta lives in an arena of its own, freed once the next
     ;; round's delta exists. `workers` derives each round on up to that many
@@ -963,8 +964,9 @@
         ;; before its budget; its caller turns that into Fault::cancelled,
         ;; never a result.
         (while going
+          (@loop-invariant {rounds <= budget})
           (do
-            (c-inline "if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { cancelled = 1; }")
+            (when (cancel-requested cancel) (set! cancelled true))
             (if (if cancelled true (>= rounds budget))
               (set! going false)
               (let ((na (arena-new 1048576))
@@ -980,8 +982,19 @@
         (let ((capped (> (list-len delta) 0)))
           (do
             (arena-free da)
-            (record-new RunResult (store st) (rounds rounds) (unsat unsat) (capped capped)
-              (cancelled cancelled) (facts facts)))))))
+            (run-result st rounds unsat capped cancelled facts))))))
+
+  (fn run-result ((st KStore) (rounds Int) (unsat Bool) (capped Bool) (cancelled Bool) (facts Int))
+    (@intent "A run's result, built from the values its loop ended with")
+    (@spec ((KStore Int Bool Bool Bool Int) -> RunResult))
+    (@pure)
+    (@post {(. $result rounds) == rounds})
+    ;; A constructor of its own only so run-ksc's cap proves: a record-new
+    ;; that is a function's result loses any field read from a `set!`
+    ;; variable in slop's verifier (slop #279), while a call's @post is
+    ;; assumed with its arguments' final values.
+    (record-new RunResult (store st) (rounds rounds) (unsat unsat) (capped capped)
+      (cancelled cancelled) (facts facts)))
 
   (fn seed-run ((arena Arena) (st KStore) (base (Option Base)) (seeds (List KFact)))
     (@intent "Commit a run's seeds; the first delta")
@@ -1248,7 +1261,7 @@
       (do
         (for-each (i todo)
           (do
-            (c-inline "if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { cancelled = 1; }")
+            (when (cancel-requested cancel) (set! cancelled true))
             (when (not cancelled)
               (match (list-get classes i)
                 ((some q)

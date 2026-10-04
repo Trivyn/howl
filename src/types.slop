@@ -51,6 +51,7 @@
     ReasonerConfig
     ;; helpers
     default-config
+    cancel-requested
     node-top
     node-bottom
     node-eq
@@ -581,6 +582,20 @@
       (strict-profile false)
       (cancel-ptr 0)
       (verbose false)))
+
+  (fn cancel-requested ((cancel I64))
+    (@intent "Has the host set the cancel flag `cancel` points at? (0 means no flag)")
+    (@spec ((I64) -> Bool))
+    ;; The one read of cancel-ptr (§6.8), relaxed: a round boundary only
+    ;; needs to see the flag eventually. It is a function rather than a
+    ;; `c-inline` in each round loop because slop's verifier does not model
+    ;; a loop whose body contains a `c-inline`: it reports every invariant
+    ;; of that loop unknown (slop #280). A call to this is modelled like
+    ;; any other.
+    (let ((mut seen false))
+      (do
+        (c-inline "if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { seen = 1; }")
+        seen)))
 
   ;; ============================================================
   ;; Helpers

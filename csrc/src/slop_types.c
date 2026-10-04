@@ -2,6 +2,7 @@
 #include "slop_types.h"
 
 types_ReasonerConfig howl_default_config(void);
+uint8_t types_cancel_requested(int64_t cancel);
 types_Node types_node_top(void);
 types_Node types_node_bottom(void);
 uint8_t types_node_eq(types_Node a, types_Node b);
@@ -54,6 +55,14 @@ types_ReasonerConfig howl_default_config(void) {
     SLOP_POST(((_retval.strict_profile == 0)), "(== (. $result strict-profile) false)");
     SLOP_POST((({ __auto_type _mv = _retval.selection; uint8_t _mr = {0}; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = 0; break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = (p == types_Profile_profile_el); break; }  } _mr; })), "(match (. $result selection) ((auto) false) ((explicit p) (== p (quote profile-el))))");
     return _retval;
+}
+
+uint8_t types_cancel_requested(int64_t cancel) {
+    {
+        uint8_t seen = 0;
+        if (cancel && __atomic_load_n((uint32_t*)(uintptr_t)cancel, __ATOMIC_RELAXED)) { seen = 1; };
+        return seen;
+    }
 }
 
 types_Node types_node_top(void) {
