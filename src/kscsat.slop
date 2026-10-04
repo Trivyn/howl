@@ -56,7 +56,7 @@
   (import vocab (OWL_THING OWL_NOTHING))
   (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig Fault cancel-requested
                  role-eq kname-eq kterm-eq kelem-eq
-                 name-term nominal-term ind-elem class-elem copy-iri))
+                 name-term nominal-term ind-elem class-elem copy-iri nothing-term))
   (import ksc (Concl JoinRule is-name is-nominal is-individual term-elem
                ksc-1 ksc-q ksc-2 ksc-3 ksc-4 ksc-5 ksc-6 ksc-7 ksc-8
                ksc-9 ksc-9-assert ksc-10 ksc-10-assert ksc-11 ksc-12 ksc-13 ksc-14
@@ -75,7 +75,7 @@
 
   (export
     IdList RoleIds KStore Base RunResult
-    new-store run-ksc ksc-classify input-classes answer-subsumers answer-holds store-holds is-bottom-fact)
+    new-store run-ksc ksc-classify input-classes answer-subsumers answer-holds store-holds is-bottom-fact store-facts)
 
   ;; THE STORE KEEPS IDS (kscids.slop). A fact is a 16-byte CFact in the
   ;; dedup set, and an index entry is the one id its key does not give:
@@ -88,8 +88,15 @@
   (type RoleIds (record
     (by-role (Map U32 IdList))))         ; a role id → the other ends under it
 
-  (type KStore (record
-    (ids     KscIds)                     ; shared by every store of one classification
+  ;; THE STORE IS SHARDED BY ELEMENT, so a round's commit can run on
+  ;; several threads (ksc-round): a slop Map or Set may have one writer at
+  ;; a time, and each shard has one per commit step. Every collection is
+  ;; keyed by an element id, and the key picks the shard (`shard-at`):
+  ;; `seen`, insts, noms, outs, noms-at and bots by the fact's subject,
+  ;; ins by a triple's other end, holders by the nominal's element. The
+  ;; shard count changes WHERE a fact is filed, never what is filed or in
+  ;; what order under one key, so the store means the same at any count.
+  (type Shard (record
     (seen    (Set CFact))
     (insts   (Map U32 IdList))           ; x → every y with inst(x, y)
     (noms    (Map U32 IdList))           ; x → every nominal {a} with inst(x, {a})
@@ -98,6 +105,11 @@
     (ins     (Map U32 RoleIds))          ; x′ → v → every x with triple(x, v, x′)
     (noms-at (Set KElem))                ; the elements holding a nominal: K6's taint
     (bots    (Set KElem))))              ; the elements holding owl:Nothing
+
+  (type KStore (record
+    (ids     KscIds)                     ; shared by every store of one classification
+    (home    Shard)                      ; shard 0, which `shard-at` falls back to
+    (shards  (List Shard))))
 
   ;; K6: what a class's run reads besides its own facts. G whole; W only
   ;; where the facts' subject is safe - W's facts about an unsafe element
@@ -120,12 +132,11 @@
   ;; The store
   ;; ============================================================
 
-  (fn new-store ((arena Arena) (ids KscIds))
-    (@intent "An empty fact store over a classification's id tables")
-    (@spec ((Arena KscIds) -> KStore))
+  (fn new-shard ((arena Arena))
+    (@intent "An empty shard")
+    (@spec ((Arena) -> Shard))
     (@alloc arena)
-    (record-new KStore
-      (ids     ids)
+    (record-new Shard
       (seen    (set-new arena CFact))
       (insts   (map-new arena U32 IdList))
       (noms    (map-new arena U32 IdList))
@@ -135,17 +146,78 @@
       (noms-at (set-new arena KElem))
       (bots    (set-new arena KElem))))
 
+  (fn new-store ((arena Arena) (ids KscIds) (nshards Int))
+    (@intent "An empty fact store over a classification's id tables, in nshards shards (at least one)")
+    (@spec ((Arena KscIds Int) -> KStore))
+    (@alloc arena)
+    (let ((home (new-shard arena))
+          (mut shards (list-new arena Shard))
+          (mut k 1))
+      (do
+        (list-push shards home)
+        (while (< k nshards)
+          (do
+            (list-push shards (new-shard arena))
+            (set! k (+ k 1))))
+        (record-new KStore (ids ids) (home home) (shards shards)))))
+
+  (fn shard-count ((st KStore))
+    (@intent "How many shards a store has")
+    (@spec ((KStore) -> Int))
+    (cast Int (list-len (. st shards))))
+
+  (fn shard-index ((k U32) (n Int))
+    (@intent "The shard an element id is filed in, of n")
+    (@spec ((U32 Int) -> Int))
+    (@pure)
+    (if (<= n 1) 0 (% (cast Int k) n)))
+
+  (fn shard-at ((st KStore) (k U32))
+    (@intent "The shard element id k is filed in")
+    (@spec ((KStore U32) -> Shard))
+    ;; One shard (W = 1, and every phase-Q run) is the common case, read
+    ;; on every lookup: no index to compute.
+    (if (<= (shard-count st) 1)
+      (. st home)
+      (match (list-get (. st shards) (shard-index k (shard-count st)))
+        ((some sh) sh)
+        ((none)    (. st home)))))
+
+  (fn store-bots ((arena Arena) (st KStore))
+    (@intent "Every element holding owl:Nothing, shard by shard")
+    (@spec ((Arena KStore) -> (List KElem)))
+    (@alloc arena)
+    (let ((mut out (list-new arena KElem)))
+      (do
+        (for-each (sh (. st shards))
+          (for-each (x (set-elements (. sh bots))) (list-push out x)))
+        out)))
+
+  (fn store-facts ((arena Arena) (st KStore))
+    (@intent "Every fact a store holds, encoded, shard by shard")
+    (@spec ((Arena KStore) -> (List CFact)))
+    (@alloc arena)
+    (let ((mut out (list-new arena CFact)))
+      (do
+        (for-each (sh (. st shards))
+          (for-each (c (set-elements (. sh seen))) (list-push out c)))
+        out)))
+
   (fn il-push ((arena Arena) (m (Map U32 IdList)) (k U32) (i U32))
     (@intent "Append id i to the list filed under k")
     (@spec ((Arena (Map U32 IdList) U32 U32) -> Bool))
     (@alloc arena)
     ;; Read, push, write back: a List is a value, the Map holds the record.
+    ;; Every put names `arena`, the committer's own: a shard's collections
+    ;; were made in another arena, and a later round may give the shard to
+    ;; another committer (slop #278: a collection grows in the arena it
+    ;; was made in unless told otherwise).
     (let ((mut items (match (map-get m k)
                        ((some l) (. l items))
                        ((none)   (list-new arena U32)))))
       (do
-        (list-push items i)
-        (map-put m k (record-new IdList (items items)))
+        (list-push items i :arena arena)
+        (map-put m k (record-new IdList (items items)) :arena arena)
         true)))
 
   (fn ri-push ((arena Arena) (m (Map U32 RoleIds)) (k U32) (v U32) (i U32))
@@ -155,7 +227,7 @@
     (let ((rf (match (map-get m k)
                 ((some r) r)
                 ((none)   (let ((fresh (record-new RoleIds (by-role (map-new arena U32 IdList)))))
-                            (do (map-put m k fresh) fresh))))))
+                            (do (map-put m k fresh :arena arena) fresh))))))
       (il-push arena (. rf by-role) v i)))
 
   (fn fact-subject ((f KFact))
@@ -173,18 +245,23 @@
     (@pure)
     (not (set-has (. b unsafe) x)))
 
+  (fn holds-coded ((st KStore) (c CFact))
+    (@intent "Is the encoded fact c in this store?")
+    (@spec ((KStore CFact) -> Bool))
+    (set-has (. (shard-at st (. c a)) seen) c))
+
   (fn store-holds ((st KStore) (base (Option Base)) (f KFact))
     (@intent "Is f in this run, or in the base it runs over (G, and W where f's subject is safe)?")
     (@spec ((KStore (Option Base) KFact) -> Bool))
     (let ((c (encode-fact (. st ids) f)))
-      (if (set-has (. st seen) c)
+      (if (holds-coded st c)
         true
         (match base
           ((some b)
-            (if (set-has (. (. b g) seen) c)
+            (if (holds-coded (. b g) c)
               true
               (if (is-safe b (fact-subject f))
-                (set-has (. (. b w) seen) c)
+                (holds-coded (. b w) c)
                 false)))
           ((none) false)))))
 
@@ -203,7 +280,7 @@
     ;; The worker checked c against the store as the round began, the base
     ;; included; the base never changes during a run, so only facts this
     ;; round committed can make it a duplicate now, and those are in `seen`.
-    (if (set-has (. st seen) c)
+    (if (holds-coded st c)
       (none)
       (let ((f (decode-fact (. st ids) c)))
         (do
@@ -214,24 +291,49 @@
     (@intent "Store a fact known to be new: the dedup set and every index it belongs in; true")
     (@spec ((Arena KStore KFact CFact) -> Bool))
     (@alloc arena)
-      (do
-          (set-put (. st seen) c)
-          (match f
-            ((f-inst x y)
+    (do
+      (file-subject arena (shard-at st (. c a)) f c)
+      (match (other-end st f c)
+        ((some h) (file-other arena st c h))
+        ((none)   true))))
+
+  (fn file-subject ((arena Arena) (sh Shard) (f KFact) (c CFact))
+    (@intent "The subject's half of filing a new fact, all in its subject's shard: seen, insts, noms, outs, noms-at, bots")
+    (@spec ((Arena Shard KFact CFact) -> Bool))
+    (@alloc arena)
+    (do
+      (set-put (. sh seen) c :arena arena)
+      (match f
+        ((f-inst x y)
+          (do
+            (il-push arena (. sh insts) (. c a) (. c b))
+            (when (ksc-4 x y) (set-put (. sh bots) x :arena arena))
+            (when (is-nominal y)
               (do
-                (il-push arena (. st insts) (. c a) (. c b))
-                (when (ksc-4 x y) (set-put (. st bots) x))
-                (when (is-nominal y)
-                  (do
-                    (set-put (. st noms-at) x)
-                    (il-push arena (. st noms) (. c a) (. c b))
-                    (il-push arena (. st holders) (elem-id (. st ids) (term-elem y)) (. c a))))))
-            ((f-triple _ _ _)
-              (do
-                (ri-push arena (. st outs) (. c a) (. c b) (. c c))
-                (ri-push arena (. st ins) (. c c) (. c b) (. c a))))
-            ((f-self _ _) (do)))
-          true))
+                (set-put (. sh noms-at) x :arena arena)
+                (il-push arena (. sh noms) (. c a) (. c b))))))
+        ((f-triple _ _ _)
+          (ri-push arena (. sh outs) (. c a) (. c b) (. c c)))
+        ((f-self _ _) (do)))
+      true))
+
+  (fn other-end ((st KStore) (f KFact) (c CFact))
+    (@intent "The element id a new fact is filed under besides its subject: a triple's x′, a nominal's {a}; none for the rest")
+    (@spec ((KStore KFact CFact) -> (Option U32)))
+    (match f
+      ((f-inst _ y)
+        (if (is-nominal y) (some (elem-id (. st ids) (term-elem y))) (none)))
+      ((f-triple _ _ _) (some (. c c)))
+      ((f-self _ _)     (none))))
+
+  (fn file-other ((arena Arena) (st KStore) (c CFact) (h U32))
+    (@intent "The other end's half of filing a new fact, in h's shard: ins for a triple, holders for a nominal inst")
+    (@spec ((Arena KStore CFact U32) -> Bool))
+    (@alloc arena)
+    (let ((sh (shard-at st h)))
+      (if (== (. c kind) (triple-kind))
+        (ri-push arena (. sh ins) h (. c b) (. c a))
+        (il-push arena (. sh holders) h (. c a)))))
 
   (fn id-items ((m (Map U32 IdList)) (k U32))
     (@intent "The ids filed under k, if any")
@@ -253,13 +355,13 @@
 
   (type Field (enum fd-insts fd-noms fd-holders))
 
-  (fn field-map ((st KStore) (fd Field))
-    (@intent "The element-keyed map a Field names")
-    (@spec ((KStore Field) -> (Map U32 IdList)))
+  (fn field-map ((sh Shard) (fd Field))
+    (@intent "The element-keyed map a Field names, in one shard")
+    (@spec ((Shard Field) -> (Map U32 IdList)))
     (match fd
-      ('fd-insts   (. st insts))
-      ('fd-noms    (. st noms))
-      ('fd-holders (. st holders))))
+      ('fd-insts   (. sh insts))
+      ('fd-noms    (. sh noms))
+      ('fd-holders (. sh holders))))
 
   (fn keyed-by-subject ((fd Field))
     (@intent "Are a Field's lists filed under their facts' own subject?")
@@ -278,7 +380,7 @@
     ;; individual a, hold the x of inst(x, {a}).
     (let ((mut out (list-new arena KFact)))
       (do
-        (match (id-items (field-map st fd) (elem-id (. st ids) k))
+        (match (let ((ki (elem-id (. st ids) k))) (id-items (field-map (shard-at st ki) fd) ki))
           ((some is)
             (if (keyed-by-subject fd)
               (for-each (i is)
@@ -375,10 +477,10 @@
     (idx KscIndex)
     (v   RoleId)))
 
-  (fn side-map ((st KStore) (outward Bool))
-    (@intent "A store's out-edges if outward, its in-edges if not")
-    (@spec ((KStore Bool) -> (Map U32 RoleIds)))
-    (if outward (. st outs) (. st ins)))
+  (fn side-map ((sh Shard) (outward Bool))
+    (@intent "A shard's out-edges if outward, its in-edges if not")
+    (@spec ((Shard Bool) -> (Map U32 RoleIds)))
+    (if outward (. sh outs) (. sh ins)))
 
   (fn legs-in-store ((arena Arena) (st KStore) (outward Bool) (k KElem) (under (Option Under)))
     (@intent "One store's triples at k by stored role, every role or those in sub*(v), decoded")
@@ -388,7 +490,7 @@
           (ids (. st ids)))
       (do
         (let ((kid (elem-id ids k)))
-            (match (map-get (side-map st outward) kid)
+            (match (map-get (side-map (shard-at st kid) outward) kid)
               ((some rf)
                 (match under
                   ((none)
@@ -473,11 +575,11 @@
         (match base
           ((some b)
             (do
-              (match (id-items (. (. b g) insts) xi) ((some l) (list-push out l)) ((none) (do)))
+              (match (id-items (. (shard-at (. b g) xi) insts) xi) ((some l) (list-push out l)) ((none) (do)))
               (when (is-safe b x)
-                (match (id-items (. (. b w) insts) xi) ((some l) (list-push out l)) ((none) (do))))))
+                (match (id-items (. (shard-at (. b w) xi) insts) xi) ((some l) (list-push out l)) ((none) (do))))))
           ((none) (do)))
-        (match (id-items (. st insts) xi) ((some l) (list-push out l)) ((none) (do)))
+        (match (id-items (. (shard-at st xi) insts) xi) ((some l) (list-push out l)) ((none) (do)))
         out)))
 
   (fn partner-matches ((arena Arena) (st KStore) (base (Option Base)) (x KElem) (p KPartners))
@@ -788,13 +890,14 @@
   ;; A ROUND IS A BARRIER (SPEC §5.4 "Rounds and the cap"), as el's
   ;; (§6.8, saturate.slop): Sₙ is frozen at the round's start, Δₙ
   ;; included; every fact of Δₙ is derived against the frozen Sₙ; then a
-  ;; serial commit, in Δₙ's order, dedups the conclusions into Sₙ₊₁ and
-  ;; Δₙ₊₁. Nothing writes the store while anything derives.
+  ;; commit, in Δₙ's order, dedups the conclusions into Sₙ₊₁ and Δₙ₊₁ -
+  ;; serially, or on several threads with the same result (THE PARALLEL
+  ;; COMMIT, below). Nothing writes the store while anything derives.
   ;;
   ;; WHY THE ROUND IS THE SAME AT EVERY WORKER COUNT. A derivation reads
   ;; only the frozen store, so what it yields is a function of the fact
   ;; and Sₙ. Workers take contiguous chunks of Δₙ and keep, in order, the
-  ;; conclusions Sₙ does not hold; the commit walks the chunks in order, so
+  ;; conclusions Sₙ does not hold; the commit takes the chunks in order, so
   ;; it sees the very sequence W = 1 sees and commits, dedups and flags
   ;; identically - Δₙ₊₁, the count, K3's flag and the rounds with them.
   ;; (Under stop-at-bottom the commit stops at the first flagging fact,
@@ -890,21 +993,46 @@
         (record-new Derived (arenas was) (outs outs)))))
 
   (fn ksc-round ((arena Arena) (na Arena) (idx KscIndex) (st KStore) (base (Option Base))
-                 (delta (List KFact)) (stop-at-bottom Bool) (unsat0 Bool) (workers Int))
+                 (delta (List KFact)) (stop-at-bottom Bool) (unsat0 Bool) (workers Int) (cas (List Arena)))
     (@intent "One barrier round: derive from every fact of the delta against the frozen store, then commit what is new")
-    (@spec ((Arena Arena KscIndex KStore (Option Base) (List KFact) Bool Bool Int) -> RoundOut))
+    (@spec ((Arena Arena KscIndex KStore (Option Base) (List KFact) Bool Bool Int (List Arena)) -> RoundOut))
     (@alloc arena)
-    ;; The store grows in `arena`, the next delta in `na`; the derive half
-    ;; lives in `scratch` and the workers' arenas, all freed here once the
-    ;; commit has read them.
+    ;; The next delta grows in `na`; the derive half lives in `scratch` and
+    ;; the workers' arenas, all freed here once the commit has read them.
+    ;; The store grows in `arena` under the serial commit and in the
+    ;; committers' own arenas `cas` under the parallel one.
     (let ((scratch (arena-new 65536))
           (d (derive-round scratch idx st base delta workers))
-          (mut next (list-new na KFact))
+          (nc (round-workers (cast Int (list-len cas)) (conclusion-count d)))
+          (ro (if (parallel-commit-ok st base d stop-at-bottom unsat0 nc)
+                (commit-parallel scratch na st base d cas nc unsat0)
+                (commit-serial arena na st base d stop-at-bottom unsat0))))
+      (do
+        (for-each (wa (. d arenas)) (arena-free wa))
+        (arena-free scratch)
+        ro)))
+
+  (fn conclusion-count ((d Derived))
+    (@intent "How many conclusions a round's workers kept, duplicates included")
+    (@spec ((Derived) -> Int))
+    (let ((mut n 0))
+      (do
+        (for-each (out (. d outs))
+          (match (map-get out 0)
+            ((some cl) (set! n (+ n (cast Int (list-len (. cl items))))))
+            ((none) (do))))
+        n)))
+
+  (fn commit-serial ((arena Arena) (na Arena) (st KStore) (base (Option Base)) (d Derived)
+                     (stop-at-bottom Bool) (unsat0 Bool))
+    (@intent "The reference commit: every conclusion in Δₙ's order, on this thread, stopping at ⊥ if asked")
+    (@spec ((Arena Arena KStore (Option Base) Derived Bool Bool) -> RoundOut))
+    (@alloc arena)
+    (let ((mut next (list-new na KFact))
           (mut unsat unsat0)
           (mut added 0))
       (do
-        ;; THE COMMIT, serial and in Δₙ's order: chunk by chunk, each in
-        ;; the order its worker derived.
+        ;; Chunk by chunk, each in the order its worker derived.
         (for-each (out (. d outs))
           (match (map-get out 0)
             ((some cl)
@@ -919,14 +1047,239 @@
                         (when (reaches-bottom base f) (set! unsat true))))
                     ((none) (do))))))
             ((none) (do))))
-        (for-each (wa (. d arenas)) (arena-free wa))
-        (arena-free scratch)
         (record-new RoundOut (next next) (added added) (unsat unsat)))))
 
+  ;; ============================================================
+  ;; THE PARALLEL COMMIT (phases G and W, at W > 1): the serial commit's
+  ;; result, on nc threads, over a store sharded by element.
+  ;;
+  ;;   subject pass  committer k walks every conclusion in Δₙ's order and
+  ;;                 takes those whose subject's shard it owns (shard mod
+  ;;                 nc == k): it dedups each against that shard's `seen`
+  ;;                 and files the subject's half (file-subject), keeping
+  ;;                 the new ones with their position;
+  ;;   merge         serial: walks the conclusions again and, at each
+  ;;                 position its owner kept, appends that fact to Δₙ₊₁,
+  ;;                 counts it, raises K3's flag, and lists its other end;
+  ;;   other pass    committer k files the other end's half (file-other)
+  ;;                 of each listed fact whose other end's shard it owns.
+  ;;
+  ;; WHY IT IS THE SERIAL COMMIT. A fact has one subject, so it is deduped
+  ;; in exactly one shard, by one committer, in Δₙ's order: the first
+  ;; occurrence wins, as serially. Every collection is keyed by one
+  ;; element and written by that element's committer in Δₙ's order, so
+  ;; each key's list, and each key's role map, is built by the same puts
+  ;; in the same order. The merge restores Δₙ's order for Δₙ₊₁. So the
+  ;; store, Δₙ₊₁, the count and the flag are the serial commit's at every
+  ;; W, and so is everything derived from them.
+  ;;
+  ;; The one thing it cannot do is stop at the first ⊥: under
+  ;; stop-at-bottom the serial commit stores nothing after it. A round
+  ;; that could raise the flag there commits serially (parallel-commit-ok);
+  ;; such a fact ends the run, so that is at most one round of a run.
+  ;;
+  ;; Committer k writes only in cas[k], and only the shards it owns in the
+  ;; pass it is in; nothing else writes the store while the passes run.
+  ;; ============================================================
+
+  (fn parallel-commit-ok ((st KStore) (base (Option Base)) (d Derived) (stop-at-bottom Bool) (unsat0 Bool) (nc Int))
+    (@intent "May this round commit in parallel: more than one committer, and no ⊥ to stop at?")
+    (@spec ((KStore (Option Base) Derived Bool Bool Int) -> Bool))
+    (if (<= nc 1)
+      false
+      (if (not stop-at-bottom)
+        true
+        (if unsat0
+          false
+          (match base
+            ;; Over a base, a triple can raise the flag too (K6.3).
+            ((some _) false)
+            ((none)   (not (any-bottom-coded st d))))))))
+
+  (fn any-bottom-coded ((st KStore) (d Derived))
+    (@intent "Is any conclusion of the round inst(u, owl:Nothing)?")
+    (@spec ((KStore Derived) -> Bool))
+    (let ((nothing (nothing-term))
+          (mut found false))
+      (do
+        (for-each (out (. d outs))
+          (match (map-get out 0)
+            ((some cl)
+              (for-each (c (. cl items))
+                (when (== (. c kind) (inst-kind))
+                  (when (kterm-eq (id-term (. st ids) (. c b)) nothing)
+                    (set! found true)))))
+            ((none) (do))))
+        found)))
+
+  ;; One committer's subject pass: the conclusions it found new, with
+  ;; their positions in Δₙ's order. A record because a worker hands it
+  ;; back through a Map it alone writes.
+  (type Fresh (record
+    (pos   (List Int))
+    (facts (List KFact))))
+
+  ;; A new fact's other half, for the other pass.
+  (type Held (record
+    (key U32)
+    (c   CFact)))
+
+  (fn committer-of ((st KStore) (k U32) (nc Int))
+    (@intent "Which of nc committers owns element id k's shard")
+    (@spec ((KStore U32 Int) -> Int))
+    (% (shard-index k (shard-count st)) nc))
+
+  (fn commit-subjects ((ca Arena) (sa Arena) (st KStore) (d Derived) (k Int) (nc Int) (res (Map Int Fresh)))
+    (@intent "Committer k's subject pass: dedup and file the subject's half of every conclusion its shards own, in Δₙ's order")
+    (@spec ((Arena Arena KStore Derived Int Int (Map Int Fresh)) -> Int))
+    (@alloc sa)
+    ;; Returns an Int because a spawned function is called through
+    ;; `int64_t(*)(void*)`. It reads the workers' outputs (frozen), writes
+    ;; only the shards it owns (growing them in `ca`), and keeps its result
+    ;; in `sa` and `res`, which no other thread sees.
+    (let ((mut pos (list-new sa Int))
+          (mut facts (list-new sa KFact))
+          (mut p 0))
+      (do
+        (for-each (out (. d outs))
+          (match (map-get out 0)
+            ((some cl)
+              (for-each (c (. cl items))
+                (do
+                  (when (== (committer-of st (. c a) nc) k)
+                    (let ((sh (shard-at st (. c a))))
+                      (when (not (set-has (. sh seen) c))
+                        (let ((f (decode-fact (. st ids) c)))
+                          (do
+                            (file-subject ca sh f c)
+                            (list-push pos p)
+                            (list-push facts f))))))
+                  (set! p (+ p 1)))))
+            ((none) (do))))
+        (map-put res 0 (record-new Fresh (pos pos) (facts facts)))
+        0)))
+
+  (fn commit-others ((ca Arena) (st KStore) (held (List Held)) (k Int) (nc Int))
+    (@intent "Committer k's other pass: file the other end's half of each new fact whose other end's shard it owns, in Δₙ's order")
+    (@spec ((Arena KStore (List Held) Int Int) -> Int))
+    (@alloc ca)
+    (do
+      (for-each (h held)
+        (when (== (committer-of st (. h key) nc) k)
+          (file-other ca st (. h c) (. h key))))
+      0))
+
+  (fn commit-parallel ((scratch Arena) (na Arena) (st KStore) (base (Option Base)) (d Derived)
+                       (cas (List Arena)) (nc Int) (unsat0 Bool))
+    (@intent "The commit on nc threads: subject pass, merge in Δₙ's order, other pass; the serial commit's result")
+    (@spec ((Arena Arena KStore (Option Base) Derived (List Arena) Int Bool) -> RoundOut))
+    (@alloc scratch)
+    ;; The subject pass's results live in each committer's `sa`, freed once
+    ;; merged; the merge's list and the thread structs in `scratch`.
+    (let ((mut sas (list-new scratch Arena))
+          (mut ress (list-new scratch (Map Int Fresh)))
+          (mut threads (list-new scratch (Ptr (Thread Int))))
+          (mut k 0))
+      (do
+        (while (< k nc)
+          (let ((sa (arena-new 1048576))
+                (ca (committer-arena cas k))
+                (res (map-new sa Int Fresh))
+                (kk k))
+            (do
+              (list-push sas sa)
+              (list-push ress res)
+              (list-push threads
+                (spawn scratch (fn () (commit-subjects ca sa st d kk nc res))))
+              (set! k (+ k 1)))))
+        (for-each (t threads) (join t))
+        (let ((merged (merge-fresh scratch na st base d ress nc unsat0))
+              (mut others (list-new scratch (Ptr (Thread Int))))
+              (mut j 0))
+          (do
+            (for-each (sa sas) (arena-free sa))
+            (while (< j nc)
+              (let ((ca (committer-arena cas j))
+                    (held (. merged held))
+                    (jj j))
+                (do
+                  (list-push others
+                    (spawn scratch (fn () (commit-others ca st held jj nc))))
+                  (set! j (+ j 1)))))
+            (for-each (t others) (join t))
+            (. merged out))))))
+
+  (fn committer-arena ((cas (List Arena)) (k Int))
+    (@intent "Committer k's arena")
+    (@spec (((List Arena) Int) -> Arena))
+    (match (list-get cas k)
+      ((some a) a)
+      ;; Unreachable: nc never exceeds the arenas a run was given.
+      ((none) (match (list-get cas 0) ((some a) a) ((none) (arena-new 4096))))))
+
+  ;; The merge's result: the round's outcome and the other halves to file.
+  (type Merged (record
+    (out  RoundOut)
+    (held (List Held))))
+
+  (fn merge-fresh ((scratch Arena) (na Arena) (st KStore) (base (Option Base)) (d Derived)
+                   (ress (List (Map Int Fresh))) (nc Int) (unsat0 Bool))
+    (@intent "Δₙ₊₁ in Δₙ's order from the committers' new facts, with the count, K3's flag and the other halves")
+    (@spec ((Arena Arena KStore (Option Base) Derived (List (Map Int Fresh)) Int Bool) -> Merged))
+    (@alloc scratch)
+    ;; Each committer's positions ascend, so a cursor per committer finds,
+    ;; at each position, whether its owner kept that conclusion.
+    (let ((mut frs (list-new scratch Fresh))
+          (mut cur (list-new scratch Int))
+          (mut next (list-new na KFact))
+          (mut held (list-new scratch Held))
+          (mut unsat unsat0)
+          (mut added 0)
+          (mut p 0))
+      (do
+        (for-each (r ress)
+          (match (map-get r 0)
+            ((some fr) (do (list-push frs fr) (list-push cur 0)))
+            ((none)    (do (list-push frs (record-new Fresh (pos (list-new scratch Int)) (facts (list-new scratch KFact))))
+                           (list-push cur 0)))))
+        (for-each (out (. d outs))
+          (match (map-get out 0)
+            ((some cl)
+              (for-each (c (. cl items))
+                (do
+                  (let ((k (committer-of st (. c a) nc)))
+                    (match (list-get frs k)
+                      ((some fr)
+                        (match (list-get cur k)
+                          ((some i)
+                            (match (list-get (. fr pos) i)
+                              ((some q)
+                                (when (== q p)
+                                  (match (list-get (. fr facts) i)
+                                    ((some f)
+                                      (do
+                                        (list-push next f)
+                                        (set! added (+ added 1))
+                                        (when (is-bottom-fact f) (set! unsat true))
+                                        (when (reaches-bottom base f) (set! unsat true))
+                                        (match (other-end st f c)
+                                          ((some h) (list-push held (record-new Held (key h) (c c))))
+                                          ((none)   (do)))
+                                        (list-set cur k (+ i 1))))
+                                    ((none) (do)))))
+                              ((none) (do))))
+                          ((none) (do))))
+                      ((none) (do))))
+                  (set! p (+ p 1)))))
+            ((none) (do))))
+        (record-new Merged
+          (out  (record-new RoundOut (next next) (added added) (unsat unsat)))
+          (held held)))))
+
   (fn run-ksc ((arena Arena) (idx KscIndex) (ids KscIds) (base (Option Base)) (seeds (List KFact))
-                (stop-at-bottom Bool) (budget Int) (cancel I64) (workers Int))
+                (stop-at-bottom Bool) (budget Int) (cancel I64) (workers Int) (cas (List Arena)))
     (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
-    (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64 Int) -> RunResult))
+    (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64 Int (List Arena)) -> RunResult))
     (@alloc arena)
     (@pre {budget >= 0})
     (@post {(. $result rounds) <= budget})
@@ -939,8 +1292,10 @@
     ;;
     ;; Each round's delta lives in an arena of its own, freed once the next
     ;; round's delta exists. `workers` derives each round on up to that many
-    ;; threads (ksc-round); the run is the same at every count.
-    (let ((st (new-store arena ids))
+    ;; threads, and `cas`, one arena per committer, commits it on as many
+    ;; (ksc-round); none means a store of one shard and the serial commit.
+    ;; The run is the same at every count.
+    (let ((st (new-store arena ids (cast Int (list-len cas))))
           (seeded (seed-run arena st base seeds))
           (mut da (arena-new 1048576))
           (mut delta (. seeded next))
@@ -970,7 +1325,7 @@
             (if (if cancelled true (>= rounds budget))
               (set! going false)
               (let ((na (arena-new 1048576))
-                    (ro (ksc-round arena na idx st base delta stop-at-bottom unsat workers)))
+                    (ro (ksc-round arena na idx st base delta stop-at-bottom unsat workers cas)))
                 (do
                   (set! rounds (+ rounds 1))
                   (set! facts (+ facts (. ro added)))
@@ -1059,7 +1414,7 @@
           (do
             (match (list-get work i)
               ((some xi)
-                (match (map-get (. w ins) xi)
+                (match (map-get (. (shard-at w xi) ins) xi)
                   ((some rf)
                     (for-each ((v il) (. rf by-role))
                       (for-each (pi (. il items))
@@ -1083,7 +1438,8 @@
         (list-push qseeds (. (ksc-q q) fact))
         ;; One worker: phase Q already runs its classes on separate threads
         ;; (run-chunk), and nesting would oversubscribe the machine.
-        (let ((r (run-ksc scratch idx (. (. base g) ids) (some base) qseeds true budget cancel 1))
+        (let ((r (run-ksc scratch idx (. (. base g) ids) (some base) qseeds true budget cancel 1
+                   (list-new scratch Arena)))
               (ans (record-new ClassAnswer
                      (cls       q)
                      (shared    false)
@@ -1126,6 +1482,34 @@
     (@intent "Phase G, phase W, then a run for each unsafe class, over engine names")
     (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig) -> (Result KscResult Fault)))
     (@alloc arena)
+    ;; G's and W's stores grow in one arena per committer (ksc-round). They
+    ;; are read until every class is answered, and nothing returned points
+    ;; into them - answers are copied into `arena` - so they are freed here.
+    (let ((cas (ksc-commit-arenas arena (cast Int (. config worker-count))))
+          (r (classify-phases arena axioms classes config cas)))
+      (do
+        (for-each (a cas) (arena-free a))
+        r)))
+
+  (fn ksc-commit-arenas ((arena Arena) (w Int))
+    (@intent "One arena per committer at W > 1; none at W = 1, where the store has one shard and commits serially")
+    (@spec ((Arena Int) -> (List Arena)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Arena))
+          (mut k 0))
+      (do
+        (when (> w 1)
+          (while (< k w)
+            (do
+              (list-push out (arena-new 1048576))
+              (set! k (+ k 1)))))
+        out)))
+
+  (fn classify-phases ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (config ReasonerConfig)
+                       (cas (List Arena)))
+    (@intent "Phase G, phase W, then a run for each unsafe class, G and W committing in cas")
+    (@spec ((Arena (List KscAxiom) (List KName) ReasonerConfig (List Arena)) -> (Result KscResult Fault)))
+    (@alloc arena)
     ;; K3: the ontology is inconsistent iff unsat(owl:Thing), so owl:Thing
     ;; is always seeded in W and always answered, listed or not. A ⊥ in G
     ;; flags every class, so then nothing else runs; with no individuals,
@@ -1153,7 +1537,7 @@
         (for-each (q classes)
           (list-push wseeds (. (ksc-q q) fact)))
         (let ((g (run-ksc arena idx ids (none) gseeds true n (. config cancel-ptr)
-                   (cast Int (. config worker-count)))))
+                   (cast Int (. config worker-count)) cas)))
           (if (. g cancelled)
             (error (union-new Fault cancelled))
           (if (. g unsat)
@@ -1161,7 +1545,7 @@
             (if (. g capped)
               (ok (g-only arena g false))
               (let ((w (run-ksc arena idx ids (none) wseeds false (- n (. g rounds)) (. config cancel-ptr)
-                         (cast Int (. config worker-count)))))
+                         (cast Int (. config worker-count)) cas)))
                 (if (. w cancelled)
                   (error (union-new Fault cancelled))
                 (if (. w capped)
@@ -1312,14 +1696,15 @@
           (mut cancelled 0))
       (do
         (for-each (x tainted) (list-push taint x))
-        (for-each (x (set-elements (. (. w store) noms-at)))
-          (list-push taint x))
+        (for-each (sh (. (. w store) shards))
+          (for-each (x (set-elements (. sh noms-at)))
+            (list-push taint x)))
         (let ((base (record-new Base
                       (g        (. g store))
                       (w        (. w store))
                       (unsafe   (backward-closure arena (. w store) taint))
                       (botreach (backward-closure arena (. w store)
-                                  (set-elements (. (. w store) bots))))))
+                                  (store-bots arena (. w store))))))
               (thing-run (class-answer arena idx base false budget cancel thing))
               (shared (map-new arena Int ClassAnswer))
               (mut todo (list-new arena Int))

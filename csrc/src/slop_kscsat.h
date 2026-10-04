@@ -19,6 +19,7 @@
 
 typedef struct kscsat_IdList kscsat_IdList;
 typedef struct kscsat_RoleIds kscsat_RoleIds;
+typedef struct kscsat_Shard kscsat_Shard;
 typedef struct kscsat_KStore kscsat_KStore;
 typedef struct kscsat_Base kscsat_Base;
 typedef struct kscsat_RunResult kscsat_RunResult;
@@ -28,6 +29,9 @@ typedef struct kscsat_Match kscsat_Match;
 typedef struct kscsat_RoundOut kscsat_RoundOut;
 typedef struct kscsat_CFactList kscsat_CFactList;
 typedef struct kscsat_Derived kscsat_Derived;
+typedef struct kscsat_Fresh kscsat_Fresh;
+typedef struct kscsat_Held kscsat_Held;
+typedef struct kscsat_Merged kscsat_Merged;
 
 typedef enum {
     kscsat_Field_fd_insts,
@@ -176,8 +180,7 @@ typedef struct kscsat_RoleIds kscsat_RoleIds;
 SLOP_OPTION_DEFINE(kscsat_RoleIds, slop_option_kscsat_RoleIds)
 #endif
 
-struct kscsat_KStore {
-    kscids_KscIds ids;
+struct kscsat_Shard {
     slop_map* seen;
     slop_map* insts;
     slop_map* noms;
@@ -186,6 +189,24 @@ struct kscsat_KStore {
     slop_map* ins;
     slop_map* noms_at;
     slop_map* bots;
+};
+typedef struct kscsat_Shard kscsat_Shard;
+
+#ifndef SLOP_OPTION_KSCSAT_SHARD_DEFINED
+#define SLOP_OPTION_KSCSAT_SHARD_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Shard, slop_option_kscsat_Shard)
+#endif
+
+#ifndef SLOP_LIST_KSCSAT_SHARD_DEFINED
+#define SLOP_LIST_KSCSAT_SHARD_DEFINED
+#define SLOP_LIST_KSCSAT_SHARD_IMPL_DEFINED
+SLOP_LIST_DEFINE(kscsat_Shard, slop_list_kscsat_Shard)
+#endif
+
+struct kscsat_KStore {
+    kscids_KscIds ids;
+    kscsat_Shard home;
+    slop_list_kscsat_Shard shards;
 };
 typedef struct kscsat_KStore kscsat_KStore;
 
@@ -298,6 +319,45 @@ typedef struct kscsat_Derived kscsat_Derived;
 #ifndef SLOP_OPTION_KSCSAT_DERIVED_DEFINED
 #define SLOP_OPTION_KSCSAT_DERIVED_DEFINED
 SLOP_OPTION_DEFINE(kscsat_Derived, slop_option_kscsat_Derived)
+#endif
+
+struct kscsat_Fresh {
+    slop_list_int pos;
+    slop_list_types_KFact facts;
+};
+typedef struct kscsat_Fresh kscsat_Fresh;
+
+#ifndef SLOP_OPTION_KSCSAT_FRESH_DEFINED
+#define SLOP_OPTION_KSCSAT_FRESH_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Fresh, slop_option_kscsat_Fresh)
+#endif
+
+struct kscsat_Held {
+    uint32_t key;
+    kscids_CFact c;
+};
+typedef struct kscsat_Held kscsat_Held;
+
+#ifndef SLOP_OPTION_KSCSAT_HELD_DEFINED
+#define SLOP_OPTION_KSCSAT_HELD_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Held, slop_option_kscsat_Held)
+#endif
+
+#ifndef SLOP_LIST_KSCSAT_HELD_DEFINED
+#define SLOP_LIST_KSCSAT_HELD_DEFINED
+#define SLOP_LIST_KSCSAT_HELD_IMPL_DEFINED
+SLOP_LIST_DEFINE(kscsat_Held, slop_list_kscsat_Held)
+#endif
+
+struct kscsat_Merged {
+    kscsat_RoundOut out;
+    slop_list_kscsat_Held held;
+};
+typedef struct kscsat_Merged kscsat_Merged;
+
+#ifndef SLOP_OPTION_KSCSAT_MERGED_DEFINED
+#define SLOP_OPTION_KSCSAT_MERGED_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Merged, slop_option_kscsat_Merged)
 #endif
 
 
@@ -417,17 +477,27 @@ static inline bool slop_eq_types_KElem(const void* a, const void* b) {
 typedef struct { bool is_ok; union { types_KscResult ok; types_Fault err; } data; } slop_result_types_KscResult_types_Fault;
 #endif
 
-kscsat_KStore kscsat_new_store(slop_arena* arena, kscids_KscIds ids);
+kscsat_Shard kscsat_new_shard(slop_arena* arena);
+kscsat_KStore kscsat_new_store(slop_arena* arena, kscids_KscIds ids, int64_t nshards);
+int64_t kscsat_shard_count(kscsat_KStore st);
+int64_t kscsat_shard_index(uint32_t k, int64_t n);
+kscsat_Shard kscsat_shard_at(kscsat_KStore st, uint32_t k);
+slop_list_types_KElem kscsat_store_bots(slop_arena* arena, kscsat_KStore st);
+slop_list_kscids_CFact kscsat_store_facts(slop_arena* arena, kscsat_KStore st);
 uint8_t kscsat_il_push(slop_arena* arena, slop_map* m, uint32_t k, uint32_t i);
 uint8_t kscsat_ri_push(slop_arena* arena, slop_map* m, uint32_t k, uint32_t v, uint32_t i);
 types_KElem kscsat_fact_subject(types_KFact f);
 uint8_t kscsat_is_safe(kscsat_Base b, types_KElem x);
+uint8_t kscsat_holds_coded(kscsat_KStore st, kscids_CFact c);
 uint8_t kscsat_store_holds(kscsat_KStore st, slop_option_kscsat_Base base, types_KFact f);
 uint8_t kscsat_commit(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, types_KFact f);
 slop_option_types_KFact kscsat_commit_coded(slop_arena* arena, kscsat_KStore st, kscids_CFact c);
 uint8_t kscsat_file_new(slop_arena* arena, kscsat_KStore st, types_KFact f, kscids_CFact c);
+uint8_t kscsat_file_subject(slop_arena* arena, kscsat_Shard sh, types_KFact f, kscids_CFact c);
+slop_option_u32 kscsat_other_end(kscsat_KStore st, types_KFact f, kscids_CFact c);
+uint8_t kscsat_file_other(slop_arena* arena, kscsat_KStore st, kscids_CFact c, uint32_t h);
 slop_option_list_u32 kscsat_id_items(slop_map* m, uint32_t k);
-slop_map* kscsat_field_map(kscsat_KStore st, kscsat_Field fd);
+slop_map* kscsat_field_map(kscsat_Shard sh, kscsat_Field fd);
 uint8_t kscsat_keyed_by_subject(kscsat_Field fd);
 slop_list_types_KFact kscsat_field_items(slop_arena* arena, kscsat_KStore st, kscsat_Field fd, types_KElem k);
 slop_list_types_KFact kscsat_safe_facts(slop_arena* arena, kscsat_Base b, slop_list_types_KFact xs);
@@ -435,7 +505,7 @@ slop_list_types_KFact kscsat_w_items(slop_arena* arena, kscsat_Base b, uint8_t b
 slop_list_list_types_KFact kscsat_partners(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Field fd, types_KElem k);
 slop_list_types_KFact kscsat_leg_facts(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, uint32_t e, slop_list_u32 is);
 slop_list_list_types_KFact kscsat_all_ins(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, types_KElem k);
-slop_map* kscsat_side_map(kscsat_KStore st, uint8_t outward);
+slop_map* kscsat_side_map(kscsat_Shard sh, uint8_t outward);
 slop_list_kscsat_RoleLegs kscsat_legs_in_store(slop_arena* arena, kscsat_KStore st, uint8_t outward, types_KElem k, slop_option_kscsat_Under under);
 slop_list_kscsat_RoleLegs kscsat_role_legs(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, uint8_t outward, types_KElem k, types_RoleId v);
 slop_list_list_u32 kscsat_inst_id_lists(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, types_KElem x);
@@ -447,8 +517,18 @@ uint8_t kscsat_reaches_bottom(slop_option_kscsat_Base base, types_KFact f);
 int64_t kscsat_derive_chunk(slop_arena* wa, slop_arena* ra, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t lo, int64_t hi, slop_map* out);
 int64_t kscsat_round_workers(int64_t workers, int64_t n);
 kscsat_Derived kscsat_derive_round(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t workers);
-kscsat_RoundOut kscsat_ksc_round(slop_arena* arena, slop_arena* na, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, uint8_t stop_at_bottom, uint8_t unsat0, int64_t workers);
-kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom, int64_t budget, int64_t cancel, int64_t workers);
+kscsat_RoundOut kscsat_ksc_round(slop_arena* arena, slop_arena* na, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, uint8_t stop_at_bottom, uint8_t unsat0, int64_t workers, slop_list_arena_ptr cas);
+int64_t kscsat_conclusion_count(kscsat_Derived d);
+kscsat_RoundOut kscsat_commit_serial(slop_arena* arena, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0);
+uint8_t kscsat_parallel_commit_ok(kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0, int64_t nc);
+uint8_t kscsat_any_bottom_coded(kscsat_KStore st, kscsat_Derived d);
+int64_t kscsat_committer_of(kscsat_KStore st, uint32_t k, int64_t nc);
+int64_t kscsat_commit_subjects(slop_arena* ca, slop_arena* sa, kscsat_KStore st, kscsat_Derived d, int64_t k, int64_t nc, slop_map* res);
+int64_t kscsat_commit_others(slop_arena* ca, kscsat_KStore st, slop_list_kscsat_Held held, int64_t k, int64_t nc);
+kscsat_RoundOut kscsat_commit_parallel(slop_arena* scratch, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, slop_list_arena_ptr cas, int64_t nc, uint8_t unsat0);
+slop_arena* kscsat_committer_arena(slop_list_arena_ptr cas, int64_t k);
+kscsat_Merged kscsat_merge_fresh(slop_arena* scratch, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, slop_list_map_ptr ress, int64_t nc, uint8_t unsat0);
+kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom, int64_t budget, int64_t cancel, int64_t workers, slop_list_arena_ptr cas);
 kscsat_RunResult kscsat_run_result(kscsat_KStore st, int64_t rounds, uint8_t unsat, uint8_t capped, uint8_t cancelled, int64_t facts);
 kscsat_RoundOut kscsat_seed_run(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact seeds);
 slop_list_types_KName kscsat_answer_subsumers(slop_arena* arena, kscsat_KStore st, types_KName q);
@@ -457,6 +537,8 @@ slop_option_types_ClassAnswer kscsat_class_run(slop_arena* arena, kscpremise_Ksc
 types_ClassAnswer kscsat_shared_answer(slop_arena* arena, kscsat_Base base, uint8_t g_unsat, types_KName q);
 slop_option_types_ClassAnswer kscsat_class_answer(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, int64_t budget, int64_t cancel, types_KName q);
 slop_result_types_KscResult_types_Fault kscsat_classify_renamed(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
+slop_list_arena_ptr kscsat_ksc_commit_arenas(slop_arena* arena, int64_t w);
+slop_result_types_KscResult_types_Fault kscsat_classify_phases(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config, slop_list_arena_ptr cas);
 slop_result_types_KscResult_types_Fault kscsat_ksc_classify(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
 types_KscResult kscsat_unrename_result(slop_arena* arena, kscnames_KscNames nm, types_KscResult r);
 types_KscResult kscsat_g_only(slop_arena* arena, kscsat_RunResult g, uint8_t inconsistent);
@@ -492,6 +574,11 @@ SLOP_OPTION_DEFINE(kscids_CFact, slop_option_kscids_CFact)
 #ifndef SLOP_OPTION_TYPES_KELEM_DEFINED
 #define SLOP_OPTION_TYPES_KELEM_DEFINED
 SLOP_OPTION_DEFINE(types_KElem, slop_option_types_KElem)
+#endif
+
+#ifndef SLOP_OPTION_KSCSAT_SHARD_DEFINED
+#define SLOP_OPTION_KSCSAT_SHARD_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Shard, slop_option_kscsat_Shard)
 #endif
 
 #ifndef SLOP_OPTION_KSCSAT_KSTORE_DEFINED
@@ -564,6 +651,21 @@ SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
 SLOP_OPTION_DEFINE(kscsat_Derived, slop_option_kscsat_Derived)
 #endif
 
+#ifndef SLOP_OPTION_KSCSAT_FRESH_DEFINED
+#define SLOP_OPTION_KSCSAT_FRESH_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Fresh, slop_option_kscsat_Fresh)
+#endif
+
+#ifndef SLOP_OPTION_KSCSAT_HELD_DEFINED
+#define SLOP_OPTION_KSCSAT_HELD_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Held, slop_option_kscsat_Held)
+#endif
+
+#ifndef SLOP_OPTION_KSCSAT_MERGED_DEFINED
+#define SLOP_OPTION_KSCSAT_MERGED_DEFINED
+SLOP_OPTION_DEFINE(kscsat_Merged, slop_option_kscsat_Merged)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KNAME_DEFINED
 #define SLOP_OPTION_TYPES_KNAME_DEFINED
 SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
@@ -598,6 +700,12 @@ SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #define SLOP_LIST_THREAD_INT_PTR_DEFINED
 #define SLOP_LIST_THREAD_INT_PTR_IMPL_DEFINED
 SLOP_LIST_DEFINE(slop_thread_int*, slop_list_thread_int_ptr)
+#endif
+
+#ifndef SLOP_LIST_KSCSAT_FRESH_DEFINED
+#define SLOP_LIST_KSCSAT_FRESH_DEFINED
+#define SLOP_LIST_KSCSAT_FRESH_IMPL_DEFINED
+SLOP_LIST_DEFINE(kscsat_Fresh, slop_list_kscsat_Fresh)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED

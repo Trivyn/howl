@@ -198,8 +198,10 @@ Its engine shares one saturation across every class no nominal reaches (§5.4 K6
 inclusions through the told hierarchy instead of copying each edge to every super-role (K7), so a
 nominal-free ontology costs a small multiple of what it costs `el`: on one thread GO reasons in
 0.86 s and EL-GALEN in 3.75 s, about 1.5× and 2× `el`. Its rounds are barriers, as `el`'s are, so
-phase W derives on every worker: at four, EL-GALEN takes 1.9 s (`el` 0.82 s) and GO 0.56 s. It stores facts as dense ids, so EL-GALEN peaks at 0.81 GB, against `el`'s 0.44 GB, and
-GO at 0.62 GB, against 0.57 GB. Select it with `--profile el++`, or let `auto` choose it.
+phases G and W derive and commit on every worker, over a store sharded by element: at four,
+EL-GALEN takes 1.3 s and GO 0.40 s, and at eight 0.90 s and 0.31 s. It stores facts as dense ids, so
+EL-GALEN peaks at 0.81 GB on one worker (0.64 GB on four), against `el`'s 0.44 GB, and GO at 0.62 GB,
+against 0.57 GB. Select it with `--profile el++`, or let `auto` choose it.
 
 **`el++`'s evidence**, each a `make` target that runs both rungs:
 - **Probes:** 9 capability probes, one or more per construct it adds. Each is
@@ -217,8 +219,8 @@ GO at 0.62 GB, against 0.57 GB. Select it with `--profile el++`, or let `auto` c
   inequality and negative assertions match HermiT (211 of them inconsistent).
 - **Determinism:** reports are byte-identical at every worker count for every round cap from 0 to
   R, which cuts each of phase G, phase W and phase Q.
-- **Bench** (`make bench-el++`, informational, W = 4): OBI 0.03× and RO 0.08× HermiT; GO 1.1× and
-  EL-GALEN 6.0× ELK (`el`: 0.84× and 2.9×). Each round's commit is still serial.
+- **Bench** (`make bench-el++`, informational, W = 4): OBI 0.03× and RO 0.10× HermiT; GO 0.95× and
+  EL-GALEN 5.25× ELK (`el`: 0.84× and 2.9×).
 `horn-sriq` ([§12](./SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
 EL++'s nominals.
 
