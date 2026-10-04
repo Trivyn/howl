@@ -345,11 +345,13 @@ never the presence of one.
 
 ## What `slop verify` can and cannot check here
 
-`make verify` verifies **84 functions, 0 failing, 1 unknown**. The unknown is `saturate`'s budget
-invariant (`iteration <= max-iterations`): slop now proves a `@loop-invariant` instead of trusting
-it, and its check cannot yet follow that loop's `c-inline` cancel test, its `break`s, or a call
-whose arguments carry maps. `advance-round`'s one-round-per-call contract, which the invariant rests
-on, is proved. The profile seam's contracts are among the verified: `select-profile` resolves an
+`make verify` verifies **87 functions, 0 failing, 0 unknown**. Both round caps are proved:
+`saturate`'s budget invariant and result (`iteration <= max-iterations`, el) and `run-ksc`'s
+(`rounds <= budget`, el++), each through a checked `@loop-invariant` and the one-round-per-call
+contract it rests on. Both loops are written so slop's loop analysis can follow them: cancel-ptr
+is read through `cancel-requested`
+([#280](https://github.com/slop-lang/slop/issues/280)), el's loop has no `break`, and the calls in
+it take counts, not the Saturation. The profile seam's contracts are among the verified: `select-profile` resolves an
 explicit request to exactly itself and leaves `auto` to the ontology, `profile-implemented` admits
 `el` and `el++` only, `choose-auto` proves `auto`'s three cases (`el` when it omits nothing, else the
 rung omitting fewer, ties to `el`), and `default-config` selects `el`; each was seen to fail under a
@@ -415,7 +417,8 @@ rows below were re-probed on each bump rather than assumed from release notes.
 | A field projected from a pure call's record result, `(. (f q) fires)`, in a body, an invariant and a post alike ([#251](https://github.com/slop-lang/slop/pull/251)) | — |
 | A single-payload `union-new`'s payload ([#249](https://github.com/slop-lang/slop/pull/249)), and a bare `Bool` field as a filter test ([#246](https://github.com/slop-lang/slop/pull/246)) | — |
 | `@example :eq f` on a record result ([#252](https://github.com/slop-lang/slop/pull/252)) | — |
-| A loop-invariant proof about a counter, read back as the function's `Int` result | The same counter read back through a **`record-new` built after the loop** — the record's field is not linked to the loop's final value, so `(. $result rounds) <= budget` fails on a counterexample (el++'s `run-ksc` budget, owed) |
+| A `set!` local read back as the function's `Int` result, or through a constructor whose `@post` states the field (`run-result`) | The same local in a **`record-new` that is the function's result** — the field is unconstrained, so a true `(. $result rounds) <= budget` fails on a counterexample ([#279](https://github.com/slop-lang/slop/issues/279)) |
+| A `c-inline` in a function the loop calls (`cancel-requested`) | **A `c-inline` in the loop body** — every `@loop-invariant` of the loop is *unknown* ([#280](https://github.com/slop-lang/slop/issues/280)); so is a loop with a `break`, or one calling a function handed the Saturation |
 
 Four consequences worth knowing before writing a contract:
 

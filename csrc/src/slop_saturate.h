@@ -249,7 +249,7 @@ saturate_Joined saturate_parallel_join(slop_arena* arena, types_Saturation sat, 
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
 uint8_t saturate_frontier_is_empty(types_Saturation sat);
-uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config);
+uint8_t saturate_budget_exhausted(int64_t iteration, int64_t max_iterations);
 slop_list_arena_ptr saturate_commit_arenas(slop_arena* arena, int64_t w);
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);

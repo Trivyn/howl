@@ -100,7 +100,7 @@
   (import types (Node RoleId NormAxiom Derived Addressed LogicalEdge
                  Context Queue Saturation
                  Termination Fault ReasonerConfig
-                 node-top node-bottom make-context make-queue))
+                 node-top node-bottom make-context make-queue cancel-requested))
   (import el (apply-el-rules))
   (import premise (RuleIndex))
   (import thread (spawn join))
@@ -711,10 +711,8 @@
     (@spec ((Arena Saturation RuleIndex ReasonerConfig (List Arena)) -> Advanced))
     (@alloc arena)
     ;; ONE ROUND, EXACTLY, from `commit-round`'s own @post: slop's verifier
-    ;; assumes a callee's @post where the call runs. (`saturate`'s budget
-    ;; invariant rests on this, but the verifier cannot yet follow a call
-    ;; like this one - its arguments carry maps - inside the invariant's
-    ;; check, so that invariant is reported unknown rather than trusted.)
+    ;; assumes a callee's @post where the call runs. `saturate`'s budget
+    ;; invariant rests on this.
     (@post {(. (. $result saturation) iteration) == ((. sat iteration) + 1)})
     ;;
     ;; THE JOIN ALLOCATES IN A SCRATCH ARENA, FREED AT THE BARRIER. The
@@ -929,25 +927,29 @@
     (@post {$result == ((. sat active-count) == 0)})
     (== (. sat active-count) 0))
 
-  (fn budget-exhausted ((sat Saturation) (config ReasonerConfig))
+  (fn budget-exhausted ((iteration Int) (max-iterations Int))
     (@intent "Whether the permitted number of completed rounds has been used up")
-    (@spec ((Saturation ReasonerConfig) -> Bool))
+    (@spec ((Int Int) -> Bool))
     (@pure)
     ;; `max-iterations = n` permits n COMPLETED global rounds.
-    ;; The @pre restates the field's own `(Int 0 ..)` range. That looks
+    ;; The @pre restates Saturation's `(Int 0 ..)` iteration. That looks
     ;; redundant and is not: the WP checker does not carry range
     ;; constraints from a record field declaration into the proof, so
     ;; without it the zero-budget property below is unprovable.
-    (@pre  {(. sat iteration) >= 0})
-    (@post {$result == ((. sat iteration) >= (. config max-iterations))})
+    ;;
+    ;; It takes the two counts, not the Saturation and the config, so
+    ;; `saturate`'s budget invariant proves: slop's loop analysis cannot
+    ;; follow a call inside the loop that is handed the Saturation.
+    (@pre  {iteration >= 0})
+    (@post {$result == (iteration >= max-iterations)})
     ;; The budget-zero case, pinned as its own obligation because it is
     ;; the boundary two conforming implementations most easily disagree
     ;; on: max-iterations = 0 performs NO rounds and must always report
     ;; the run incomplete. Δ₀ is never empty — `make-initial-saturation`
     ;; guarantees ⊤ and ⊥ contexts and seeds every context with two delta
     ;; facts — so there is no reachable empty-frontier case at budget zero.
-    (@post (implies {(. config max-iterations) == 0} {$result == true}))
-    (>= (. sat iteration) (. config max-iterations)))
+    (@post (implies {max-iterations == 0} {$result == true}))
+    (>= iteration max-iterations))
 
   (fn commit-arenas ((arena Arena) (w Int))
     (@intent "One arena per committer: the run arena alone at W = 1, W fresh ones otherwise")
@@ -985,15 +987,19 @@
     ;;   - `max-iterations = 0` performs no rounds and ALWAYS yields
     ;;     `resource-limit`, since Δ₀ is never empty.
     ;;
-    ;; THE BUDGET BOUND, stated as the `@loop-invariant` below. §7 calls
-    ;; termination for v0 "expressible as a monotone-growth-toward-a-
-    ;; finite-cap loop invariant" — this is that invariant. It holds: the
-    ;; loop advances only while `budget-exhausted` is false, and each
-    ;; `advance-round` adds exactly one round (its proved @post). slop's
-    ;; verifier used to TRUST a loop invariant; it now proves them, and
-    ;; reports this one unknown, because its check cannot follow the
-    ;; `c-inline` cancel test, the `break`s, or a call whose arguments
-    ;; carry maps. So it is not claimed as verified.
+    ;; THE BUDGET BOUND, stated as the `@loop-invariant` below and proved
+    ;; with the @post that rests on it. §7 calls termination for v0
+    ;; "expressible as a monotone-growth-toward-a-finite-cap loop
+    ;; invariant" — this is that invariant. It holds: the loop advances
+    ;; only while `budget-exhausted` is false, and each `advance-round`
+    ;; adds exactly one round (its proved @post). It is written for slop's
+    ;; loop analysis, which does not follow a `c-inline` in the body
+    ;; (slop #280: hence `cancel-requested`), a `break`, or a call handed
+    ;; the Saturation (hence `budget-exhausted` takes the two counts). The
+    ;; @pre only states what the @post always required: a Saturation already
+    ;; past the cap could never return within it. HOWL's callers start from
+    ;; iteration 0.
+    (@pre {(. sat iteration) <= (. config max-iterations)})
     (@post (match $result
              ((ok r) {(. (. r saturation) iteration) <= (. config max-iterations)})
              ((error _) true)))
@@ -1005,11 +1011,12 @@
     ;; returned saturation holds its queues.
     (let ((mut state sat)
           (mut cancelled false)
+          (mut going (not (frontier-is-empty sat)))
           (mut prev (list-new arena Arena))
           (cas (commit-arenas arena (. config worker-count))))
       (do
         ;; Fixpoint first, budget second — in that order.
-        (while (not (frontier-is-empty state))
+        (while going
           (@loop-invariant {(. state iteration) <= (. config max-iterations)})
           (do
             ;; Cancellation is observed HERE, at the barrier, BEFORE the
@@ -1018,16 +1025,15 @@
             ;; consumer may conclude (§6.8). It yields Fault::cancelled
             ;; with no payload: a cancelled partial state stops at a
             ;; scheduler-dependent point and so is not reproducible.
-            (c-inline "if (config.cancel_ptr && __atomic_load_n((uint32_t*)(uintptr_t)config.cancel_ptr, __ATOMIC_RELAXED)) { cancelled = 1; }")
-            (if cancelled
-              (break)
-              (if (budget-exhausted state config)
-                (break)
-                (let ((adv (advance-round arena state idx config cas)))
-                  (do
-                    (for-each (a prev) (arena-free a))
-                    (set! prev (. adv arenas))
-                    (set! state (. adv saturation))))))))
+            (when (cancel-requested (. config cancel-ptr)) (set! cancelled true))
+            (if (if cancelled true (budget-exhausted (. state iteration) (. config max-iterations)))
+              (set! going false)
+              (let ((adv (advance-round arena state idx config cas)))
+                (do
+                  (for-each (a prev) (arena-free a))
+                  (set! prev (. adv arenas))
+                  (set! state (. adv saturation))
+                  (set! going (not (frontier-is-empty state))))))))
         (if cancelled
           (error (union-new Fault cancelled))
           (if (frontier-is-empty state)

@@ -34,7 +34,7 @@ saturate_Joined saturate_parallel_join(slop_arena* arena, types_Saturation sat, 
 uint8_t saturate_seed_node(slop_arena* arena, types_Saturation sat, types_Node n);
 types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_types_Node signature);
 uint8_t saturate_frontier_is_empty(types_Saturation sat);
-uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config);
+uint8_t saturate_budget_exhausted(int64_t iteration, int64_t max_iterations);
 slop_list_arena_ptr saturate_commit_arenas(slop_arena* arena, int64_t w);
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);
@@ -665,7 +665,7 @@ types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_t
         if (saturate_seed_node(arena, acc, types_node_bottom())) {
             count = (count + 1);
         }
-        _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:913:25"), .iteration = 0});
+        _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:911:25"), .iteration = 0});
         goto _slop_post;
     }
     _slop_post: ;
@@ -683,13 +683,13 @@ uint8_t saturate_frontier_is_empty(types_Saturation sat) {
     return _retval;
 }
 
-uint8_t saturate_budget_exhausted(types_Saturation sat, types_ReasonerConfig config) {
-    SLOP_PRE(((sat.iteration >= 0)), "(>= (. sat iteration) 0)");
+uint8_t saturate_budget_exhausted(int64_t iteration, int64_t max_iterations) {
+    SLOP_PRE(((iteration >= 0)), "(>= iteration 0)");
     uint8_t _retval = {0};
-    _retval = (sat.iteration >= config.max_iterations);
+    _retval = (iteration >= max_iterations);
     goto _slop_post;
     _slop_post: ;
-    SLOP_POST(((_retval == (sat.iteration >= config.max_iterations))), "(== $result (>= (. sat iteration) (. config max-iterations)))");
+    SLOP_POST(((_retval == (iteration >= max_iterations))), "(== $result (>= iteration max-iterations))");
     return _retval;
 }
 
@@ -715,32 +715,33 @@ slop_list_arena_ptr saturate_commit_arenas(slop_arena* arena, int64_t w) {
 }
 
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config) {
+    SLOP_PRE(((sat.iteration <= config.max_iterations)), "(<= (. sat iteration) (. config max-iterations))");
     slop_result_saturate_RoundResult_types_Fault _retval = {0};
     {
         __auto_type state = sat;
         uint8_t cancelled = 0;
+        uint8_t going = !(saturate_frontier_is_empty(sat));
         __auto_type prev = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type cas = saturate_commit_arenas(arena, config.worker_count);
-        while (!(saturate_frontier_is_empty(state))) {
-            if (config.cancel_ptr && __atomic_load_n((uint32_t*)(uintptr_t)config.cancel_ptr, __ATOMIC_RELAXED)) { cancelled = 1; };
-            if (cancelled) {
-                break;
+        while (going) {
+            if (types_cancel_requested(config.cancel_ptr)) {
+                cancelled = 1;
+            }
+            if ((cancelled) ? 1 : saturate_budget_exhausted(state.iteration, config.max_iterations)) {
+                going = 0;
             } else {
-                if (saturate_budget_exhausted(state, config)) {
-                    break;
-                } else {
+                {
+                    __auto_type adv = saturate_advance_round(arena, state, idx, config, cas);
                     {
-                        __auto_type adv = saturate_advance_round(arena, state, idx, config, cas);
-                        {
-                            __auto_type _coll = prev;
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type a = _coll.data[_i];
-                                ({ slop_arena_free(a); free(a); });
-                            }
+                        __auto_type _coll = prev;
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type a = _coll.data[_i];
+                            ({ slop_arena_free(a); free(a); });
                         }
-                        prev = adv.arenas;
-                        state = adv.saturation;
                     }
+                    prev = adv.arenas;
+                    state = adv.saturation;
+                    going = !(saturate_frontier_is_empty(state));
                 }
             }
         }
