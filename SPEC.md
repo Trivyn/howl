@@ -1730,13 +1730,16 @@ facts. It is a **barrier**, as `el`'s are ([§6.8](#68-determinism-binding)):
 - the store `Sₙ` is frozen at the round's start, `Δₙ` included;
 - every fact of `Δₙ` is derived against the frozen `Sₙ`. The derivations run in parallel over
   contiguous chunks of `Δₙ` (`--workers`), each keeping the conclusions `Sₙ` lacks;
-- a serial commit, in `Δₙ`'s order, dedups them into `Sₙ₊₁` and `Δₙ₊₁`, raising K3's flag at
-  the first `⊥` it stores.
+- a commit, in `Δₙ`'s order, dedups them into `Sₙ₊₁` and `Δₙ₊₁`, raising K3's flag at the first
+  `⊥` it stores. It runs on up to `--workers` threads over a store sharded by element, and is
+  identical to committing serially: each fact is deduplicated in one shard, in `Δₙ`'s order, and
+  `Δₙ₊₁` keeps that order. A round that may raise the flag in a run that stops at `⊥` commits
+  serially, since only the serial commit can stop at the first one.
 
 A derivation reads only the frozen store, and the commit sees the same sequence at every worker
 count. So `Δₙ₊₁`, the flag and the rounds count, and with them every report, capped runs
-included, are the same at every W. Phases G and W derive in parallel. Phase Q's runs use one
-worker each, since they already run in parallel across classes. (Until 2026-10-02 the engine
+included, are the same at every W. Phases G and W derive and commit in parallel. Phase Q's runs
+use one worker each, since they already run in parallel across classes. (Until 2026-10-02 the engine
 committed each conclusion as it derived it, so later derivations of the same round saw it. That
 made the engine sequential, and its `rounds` counts differ slightly from these; its answers do
 not.) Phase G runs first, then phase W (K6), then phase Q runs each unsafe `q` over `G ∪ W_S`.
@@ -1782,8 +1785,16 @@ times are the median of three runs, without parse and decode).**
   rounds where it took 32.
 - **On four workers** (barrier rounds, phase W in parallel): EL-GALEN 1.9 s and GO 0.56 s, down
   from 5.0 s and 1.2 s when phase W ran on one thread (`howl validate --profile el++`, reason
-  phase). At eight workers they are 1.5 s and 0.45 s. The serial commit is what remains
-  unparallelized.
+  phase). At eight workers they are 1.5 s and 0.45 s.
+- **With the parallel commit** (2026-10-04; median of 3, the same session for both builds):
+
+  | | W = 1 | W = 4 | W = 8 |
+  |---|---|---|---|
+  | EL-GALEN, serial commit → parallel | 3.41 → 3.48 s | 1.49 → 1.31 s | 1.19 → 0.90 s |
+  | GO, serial commit → parallel | 0.84 → 0.85 s | 0.44 → 0.40 s | 0.38 → 0.31 s |
+
+  Peak memory at four workers falls from 818 to 644 MB on EL-GALEN and from 630 to 565 MB on GO.
+  One worker is about 2% slower: the shard lookup on every read, and filing split in two.
 - **Peak resident memory**, `howl validate --profile el++ --workers 1`, against `el` on the same
   input:
 

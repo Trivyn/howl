@@ -977,6 +977,8 @@ uint8_t test_test_ksc_ids_round_trip(slop_arena* arena);
 uint8_t test_holds_under(kscpremise_KscIndex idx, slop_list_types_KFact fs, types_KElem x, types_RoleId v, types_KElem y);
 uint8_t test_g_matches_reference(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes);
 uint8_t test_test_ksc_g_matches_reference(slop_arena* arena);
+uint8_t test_commit_agrees(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, uint8_t stop, uint8_t with_classes);
+uint8_t test_test_ksc_commit_identical(slop_arena* arena);
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap);
 uint8_t test_answers_equal(types_KscResult a, types_KscResult b);
 uint8_t test_test_ksc_workers_agree(slop_arena* arena);
@@ -1189,11 +1191,6 @@ SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 #define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
-#endif
-
-#ifndef SLOP_OPTION_KSCIDS_CFACT_DEFINED
-#define SLOP_OPTION_KSCIDS_CFACT_DEFINED
-SLOP_OPTION_DEFINE(kscids_CFact, slop_option_kscids_CFact)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED

@@ -55,8 +55,8 @@
   (import select (profile-name parse-profile))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
   (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq))
-  (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact))
-  (import ksc (reference-closure reference-answer ksc-1))
+  (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact store-facts store-holds))
+  (import ksc (reference-closure reference-answer ksc-1 ksc-q))
   (import kscids (KscIds CFact build-ksc-ids encode-fact decode-fact))
   (import kscpremise (KscIndex build-ksc-index role-under))
   (import kscnames (build-ksc-names rename-ksc-axioms rename-classes))
@@ -2667,10 +2667,10 @@
           true
           (do
             (for-each (a (. idx individuals)) (list-push seeds (. (ksc-1 a) fact)))
-            (let ((g (run-ksc arena idx ids (none) seeds false 10000 0 1))
+            (let ((g (run-ksc arena idx ids (none) seeds false 10000 0 1 (list-new arena Arena)))
                   (engset (set-new arena KFact)))
               (do
-                (for-each (c (set-elements (. (. g store) seen)))
+                (for-each (c (store-facts arena (. g store)))
                   (let ((f (decode-fact ids c)))
                     (do
                       (list-push eng f)
@@ -2697,6 +2697,61 @@
                 (when (not (g-matches-reference arena (. fx axioms) (. fx classes)))
                   (do (println (string-concat arena "  [ksc G] differs from the reference, fixture " (int-to-string arena i)))
                       (set! ok false))))
+              ((none) (set! ok false)))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn commit-agrees ((arena Arena) (axioms (List KscAxiom)) (classes (List KName)) (stop Bool) (with-classes Bool))
+    (@intent "Does a run committing on four threads over four shards store and count what the serial one-shard run does?")
+    (@spec ((Arena (List KscAxiom) (List KName) Bool Bool) -> Bool))
+    (@alloc arena)
+    ;; G's shape (individuals, stopping at ⊥, which exercises the serial
+    ;; fallback) or W's (every class seeded too, never stopping).
+    (let ((idx (build-ksc-index arena axioms))
+          (ids (build-ksc-ids arena axioms classes (. idx individuals)))
+          (cas (list-new arena Arena))
+          (mut seeds (list-new arena KFact))
+          (mut ok true))
+      (do
+        (for-each (a (. idx individuals)) (list-push seeds (. (ksc-1 a) fact)))
+        (when with-classes
+          (for-each (q classes) (list-push seeds (. (ksc-q q) fact))))
+        (list-push cas (arena-new 4096))
+        (list-push cas (arena-new 4096))
+        (list-push cas (arena-new 4096))
+        (list-push cas (arena-new 4096))
+        (let ((one (run-ksc arena idx ids (none) seeds stop 10000 0 1 (list-new arena Arena)))
+              (par (run-ksc arena idx ids (none) seeds stop 10000 0 4 cas)))
+          (do
+            (when (not (== (. one rounds) (. par rounds))) (set! ok false))
+            (when (not (== (. one facts) (. par facts))) (set! ok false))
+            (when (not (== (. one unsat) (. par unsat))) (set! ok false))
+            (when (not (== (. one capped) (. par capped))) (set! ok false))
+            (for-each (c (store-facts arena (. one store)))
+              (when (not (store-holds (. par store) (none) (decode-fact ids c))) (set! ok false)))
+            (for-each (c (store-facts arena (. par store)))
+              (when (not (store-holds (. one store) (none) (decode-fact ids c))) (set! ok false)))
+            (for-each (a cas) (arena-free a))
+            ok)))))
+
+  (fn test-ksc-commit-identical ((arena Arena))
+    (@intent "On every el++ fixture the parallel commit stores and counts exactly what the serial one does, in G's shape and W's")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (while (< i (ksc-fixture-count))
+          (do
+            (match (ksc-fixture arena (ksc-fixture-at i))
+              ((some fx)
+                (do
+                  (when (not (commit-agrees arena (. fx axioms) (. fx classes) true false))
+                    (do (println (string-concat arena "  [ksc commit, G] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
+                        (set! ok false)))
+                  (when (not (commit-agrees arena (. fx axioms) (. fx classes) false true))
+                    (do (println (string-concat arena "  [ksc commit, W] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
+                        (set! ok false)))))
               ((none) (set! ok false)))
             (set! i (+ i 1))))
         ok)))
@@ -5064,6 +5119,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-g-matches-reference arena)))
             (print-test-result "ksc: the stored G is Psc's G, fact for fact through K7" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-commit-identical arena)))
+            (print-test-result "ksc: the parallel commit stores and counts what the serial one does" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))
