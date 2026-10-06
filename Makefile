@@ -71,13 +71,19 @@ $(BIN)/libhowl.a: $(SHARED_OBJS) | $(BIN)
 # examples/c/classify.c is built against that header and libhowl.a ALONE -
 # no engine header on its include path - and run on the litmus.
 # examples/c/api_test.c drives every entry point over the fixtures, on both
-# built profiles at W in {1,2,4}, under ASan and UBSan.
+# built profiles at W in {1,2,4}, under ASan and UBSan - all of UBSan but
+# -fsanitize=function, which flags slop's own closure convention: a lambda
+# is generated taking its typed env (`f(env_t*, T)`) and called through
+# `void (*)(void*, T)`. That is every slop closure (the CLI's parse callback
+# too), harmless on every ABI HOWL builds for, and slop's codegen to change,
+# not HOWL's; clang enables the check by default on Linux, not on macOS.
 c-example: lib
 	$(CC) -O2 -Wall -Werror -Iinclude examples/c/classify.c $(BIN)/libhowl.a $(LDFLAGS) -o $(BIN)/howl-classify-c
 	$(BIN)/howl-classify-c corpus/fixtures/v0/litmus.ttl > $(BIN)/howl-classify-c.out
 	@grep -qx 'verdict: coherent' $(BIN)/howl-classify-c.out || { cat $(BIN)/howl-classify-c.out; echo "FAIL: examples/c/classify.c on the litmus"; exit 1; }
 	@grep -qx 'http://example.org/t#Mother <= http://example.org/t#Parent' $(BIN)/howl-classify-c.out || { cat $(BIN)/howl-classify-c.out; echo "FAIL: examples/c/classify.c lost Mother <= Parent"; exit 1; }
-	$(CC) -O1 -g -fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer -w \
+	$(CC) -O1 -g -fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined \
+	  -fno-omit-frame-pointer -w \
 	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
 	  -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) -Iinclude examples/c/api_test.c $(LDFLAGS) -o $(BIN)/howl-api-test
 	$(BIN)/howl-api-test corpus/fixtures/v0/*.ttl corpus/fixtures/el++/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/imports/root.ttl
