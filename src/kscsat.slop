@@ -983,7 +983,8 @@
               (list-push was ra)
               (list-push outs out)
               ;; `wa`, `ra`, `out`, `lo` and `hi` are IMMUTABLE bindings,
-              ;; captured by value (slop#193).
+              ;; captured by value (slop 0.4.0 rejects a `mut` capture in
+              ;; spawn, slop#193).
               (if (<= nw 1)
                 (do (derive-chunk wa ra idx st base delta lo hi out) (do))
                 (list-push threads
@@ -1737,7 +1738,8 @@
                       (list-push was wa)
                       (list-push outs out)
                       ;; `wa`, `out` and `chunk` are IMMUTABLE bindings,
-                      ;; captured by value (slop#193).
+                      ;; captured by value (slop 0.4.0 rejects a `mut`
+                      ;; capture in spawn, slop#193).
                       (if (<= nw 1)
                         (set! cancelled (+ cancelled (run-chunk wa idx base budget cancel classes chunk out)))
                         (list-push threads

@@ -665,7 +665,7 @@ types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_t
         if (saturate_seed_node(arena, acc, types_node_bottom())) {
             count = (count + 1);
         }
-        _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:911:25"), .iteration = 0});
+        _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:912:25"), .iteration = 0});
         goto _slop_post;
     }
     _slop_post: ;

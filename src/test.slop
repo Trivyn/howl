@@ -1169,8 +1169,8 @@
     (@intent "A prefix orders by LENGTH, not by the bytes that follow it in the buffer")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    ;; THE HAZARD, DEMONSTRATED. `strlib.compare` is `strcmp` over
-    ;; `(. a data)`, so it reads to the first NUL. Every IRI HOWL
+    ;; THE HAZARD, DEMONSTRATED. Before slop 0.4.0 `strlib.compare` was
+    ;; `strcmp` over `(. a data)` (slop#161), so it read to the first NUL. Every IRI HOWL
     ;; orders is a slice into a parsed Turtle buffer, where the byte
     ;; after an IRI is the rest of the document. `apple` below is
     ;; exactly such a slice — it shares its storage with `applesauce`
@@ -3426,10 +3426,11 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
     (@spec ((Arena String) -> Bool))
     (@alloc arena)
     ;; A SEPARATE FUNCTION ON PURPOSE. Inlined as an operand of `and`,
-    ;; this `match` sits in expression position, and the transpiler then
-    ;; lowers `(sub-some-rhs c rr d)` by binding `c` to the whole payload
-    ;; and never declaring `rr` or `d` — a C compile error. In statement
-    ;; position, as here, it destructures all three fields.
+    ;; this `match` sits in expression position, and before slop 0.4.0
+    ;; the transpiler lowered `(sub-some-rhs c rr d)` by binding `c` to
+    ;; the whole payload and never declaring `rr` or `d` — a C compile
+    ;; error (slop#171, fixed). In statement position, as here, it
+    ;; destructures all three fields on any slop.
     (let ((c1 (cls "http://example.org/t#C1"))
           (c2 (cls "http://example.org/t#C2"))
           (r  (rol "http://example.org/t#r")))
@@ -3484,7 +3485,8 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
   ;;
   ;; Each helper that destructures a multi-payload variant is its own
   ;; function, so its `match` sits in statement position: inside an
-  ;; `and`/`or` operand the transpiler drops the extra pattern bindings.
+  ;; `and`/`or` operand, slop before 0.4.0 dropped the extra pattern
+  ;; bindings (slop#171).
   ;; ============================================================
 
   (fn m0-fixture-paths ((arena Arena))
