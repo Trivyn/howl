@@ -497,7 +497,7 @@ uint8_t kscnormal_normalize_gci(slop_arena* arena, kscnormal_KscState* p, owl2_R
         {
             __auto_type ds = _mv_401.data.rc_and;
             {
-                __auto_type ok = 1;
+                uint8_t ok = 1;
                 {
                     __auto_type _coll = ds;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -651,7 +651,7 @@ uint8_t kscnormal_normalize_axiom(slop_arena* arena, kscnormal_KscState* p, owl2
             __auto_type ns = _mv_404.data.ra_same_individual;
             {
                 __auto_type a0 = kscnormal_node_term(kscnormal_node_at_or_top(ns, 0));
-                __auto_type i = 1;
+                int64_t i = 1;
                 __auto_type n = ((int64_t)(((int64_t)((ns).len))));
                 while (i < n) {
                     {
@@ -669,10 +669,10 @@ uint8_t kscnormal_normalize_axiom(slop_arena* arena, kscnormal_KscState* p, owl2
             __auto_type ns = _mv_404.data.ra_different_individuals;
             {
                 __auto_type n = ((int64_t)(((int64_t)((ns).len))));
-                __auto_type i = 0;
+                int64_t i = 0;
                 while (i < n) {
                     {
-                        __auto_type j = (i + 1);
+                        int64_t j = (i + 1);
                         while (j < n) {
                             {
                                 __auto_type pair = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });

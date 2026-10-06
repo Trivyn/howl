@@ -141,7 +141,7 @@ slop_string naming_concept_key(slop_arena* arena, owl2_RawConcept c) {
             __auto_type cs = _mv_183.data.rc_and;
             {
                 __auto_type out = SLOP_STR("and(");
-                __auto_type first = 1;
+                uint8_t first = 1;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {

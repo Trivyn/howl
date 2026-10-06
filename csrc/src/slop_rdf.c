@@ -33,7 +33,7 @@ rdf_Term rdf_make_iri(slop_arena* arena, slop_string value) {
     _retval = ((rdf_Term){ .tag = rdf_Term_term_iri, .data.term_iri = ((rdf_IRI){.value = value}) });
     goto _slop_post;
     _slop_post: ;
-    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_iri: { __auto_type _ = _mv.data.term_iri; _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-iri _) true) (_ false))");
+    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_iri: { _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-iri _) true) (_ false))");
     return _retval;
 }
 
@@ -43,7 +43,7 @@ rdf_Term rdf_make_blank(slop_arena* arena, rdf_BlankNodeId id) {
     _retval = ((rdf_Term){ .tag = rdf_Term_term_blank, .data.term_blank = ((rdf_BlankNode){.id = id}) });
     goto _slop_post;
     _slop_post: ;
-    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_blank: { __auto_type _ = _mv.data.term_blank; _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-blank _) true) (_ false))");
+    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_blank: { _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-blank _) true) (_ false))");
     return _retval;
 }
 
@@ -53,7 +53,7 @@ rdf_Term rdf_make_literal(slop_arena* arena, slop_string value, slop_option_stri
     _retval = ((rdf_Term){ .tag = rdf_Term_term_literal, .data.term_literal = ((rdf_Literal){.value = value, .datatype = datatype, .lang = lang}) });
     goto _slop_post;
     _slop_post: ;
-    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_literal: { __auto_type _ = _mv.data.term_literal; _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-literal _) true) (_ false))");
+    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_literal: { _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-literal _) true) (_ false))");
     return _retval;
 }
 
@@ -68,7 +68,7 @@ rdf_Term rdf_make_triple_term(slop_arena* arena, rdf_Triple t) {
         goto _slop_post;
     }
     _slop_post: ;
-    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_triple: { __auto_type _ = _mv.data.term_triple; _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-triple _) true) (_ false))");
+    SLOP_POST((({ __auto_type _mv = _retval; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_triple: { _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })), "(match $result ((term-triple _) true) (_ false))");
     return _retval;
 }
 

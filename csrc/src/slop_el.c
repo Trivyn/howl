@@ -125,7 +125,7 @@ slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx,
                 __auto_type a2 = _mv_193.data.sub_and.f1;
                 __auto_type a = _mv_193.data.sub_and.f2;
                 {
-                    __auto_type fire = 0;
+                    uint8_t fire = 0;
                     if (types_node_eq(b, a1)) {
                         if (slop_map_has(ctx.subsumers, &(a2))) {
                             fire = 1;
@@ -779,7 +779,7 @@ uint8_t el_in_sups(premise_RoleClosure rc, types_RoleId e, types_RoleId r) {
     if (_mv_229.has_value) {
         __auto_type l = _mv_229.value;
         {
-            __auto_type found = 0;
+            uint8_t found = 0;
             {
                 __auto_type _coll = l.items;
                 for (size_t _i = 0; _i < _coll.len; _i++) {

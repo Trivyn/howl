@@ -25,7 +25,7 @@ slop_option_types_Profile select_select_profile(types_ProfileSelection selection
     }
     SLOP_UNREACHABLE();
     _slop_post: ;
-    SLOP_POST((({ __auto_type _mv = selection; uint8_t _mr = {0}; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = ({ __auto_type _mv = _retval; _mv.has_value ? ({ __auto_type _ = _mv.value; 0; }) : (1); }); break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = ({ __auto_type _mv = _retval; _mv.has_value ? ({ __auto_type q = _mv.value; (q == p); }) : (0); }); break; }  } _mr; })), "(match selection ((auto) (match $result ((none) true) ((some _) false))) ((explicit p) (match $result ((some q) (== q p)) ((none) false))))");
+    SLOP_POST((({ __auto_type _mv = selection; uint8_t _mr = {0}; int _mm = 0; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = ({ __auto_type _mv = _retval; _mv.has_value ? ({ __auto_type _ = _mv.value; 0; }) : (1); }); _mm = 1; break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = ({ __auto_type _mv = _retval; _mv.has_value ? ({ __auto_type q = _mv.value; (q == p); }) : (0); }); _mm = 1; break; }  } if (!_mm) { SLOP_UNREACHABLE(); } _mr; })), "(match selection ((auto) (match $result ((none) true) ((some _) false))) ((explicit p) (match $result ((some q) (== q p)) ((none) false))))");
     return _retval;
 }
 

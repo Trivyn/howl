@@ -53,7 +53,7 @@ types_ReasonerConfig howl_default_config(void) {
     SLOP_POST(((_retval.cancel_ptr == 0)), "(== (. $result cancel-ptr) 0)");
     SLOP_POST(((_retval.verbose == 0)), "(== (. $result verbose) false)");
     SLOP_POST(((_retval.strict_profile == 0)), "(== (. $result strict-profile) false)");
-    SLOP_POST((({ __auto_type _mv = _retval.selection; uint8_t _mr = {0}; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = 0; break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = (p == types_Profile_profile_el); break; }  } _mr; })), "(match (. $result selection) ((auto) false) ((explicit p) (== p (quote profile-el))))");
+    SLOP_POST((({ __auto_type _mv = _retval.selection; uint8_t _mr = {0}; int _mm = 0; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = 0; _mm = 1; break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = (p == types_Profile_profile_el); _mm = 1; break; }  } if (!_mm) { SLOP_UNREACHABLE(); } _mr; })), "(match (. $result selection) ((auto) false) ((explicit p) (== p (quote profile-el))))");
     return _retval;
 }
 
@@ -888,7 +888,7 @@ types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e) {
 
 uint8_t types_outcome_is_complete(types_Outcome o) {
     uint8_t _retval = {0};
-    _retval = ((((int64_t)((o.coverage.omitted).len)) == 0) && ({ __auto_type _mv = o.termination; uint8_t _mr = {0}; switch (_mv.tag) { case types_Termination_fixpoint: { _mr = 1; break; } case types_Termination_resource_limit: { __auto_type _ = _mv.data.resource_limit; _mr = 0; break; }  } _mr; }));
+    _retval = ((((int64_t)((o.coverage.omitted).len)) == 0) && ({ __auto_type _mv = o.termination; uint8_t _mr = {0}; int _mm = 0; switch (_mv.tag) { case types_Termination_fixpoint: { _mr = 1; _mm = 1; break; } case types_Termination_resource_limit: { _mr = 0; _mm = 1; break; }  } if (!_mm) { SLOP_UNREACHABLE(); } _mr; }));
     goto _slop_post;
     _slop_post: ;
     return _retval;

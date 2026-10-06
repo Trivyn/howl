@@ -177,8 +177,9 @@ slop_thread_int* thread_spawn(slop_arena* arena, slop_closure_t func) {
         __auto_type th = ((thread_ThreadInt*)(({ __auto_type _alloc = (thread_ThreadInt*)slop_arena_alloc(arena, sizeof(thread_ThreadInt)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
         (*th).func = ((void*)(func.fn));
         (*th).env = NULL;
+        (*th).result = 0;
         (*th).done = 0;
-        pthread_create((&(*th).id), NULL, ((void*)((void*)slop_thread_int_entry)), ((void*)(th)));
+        slop_thread_start((&(*th).id), ((void*)((void*)slop_thread_int_entry)), ((void*)(th)));
         _retval = ((slop_thread_int*)(th));
         goto _slop_post;
     }
@@ -193,8 +194,9 @@ slop_thread_int* thread_spawn_closure(slop_arena* arena, thread_Closure closure)
         __auto_type th = ((thread_ThreadInt*)(({ __auto_type _alloc = (thread_ThreadInt*)slop_arena_alloc(arena, sizeof(thread_ThreadInt)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
         (*th).func = closure.fn;
         (*th).env = closure.env;
+        (*th).result = 0;
         (*th).done = 0;
-        pthread_create((&(*th).id), NULL, ((void*)((void*)slop_thread_int_entry)), ((void*)(th)));
+        slop_thread_start((&(*th).id), ((void*)((void*)slop_thread_int_entry)), ((void*)(th)));
         _retval = ((slop_thread_int*)(th));
         goto _slop_post;
     }
@@ -211,8 +213,9 @@ thread_ThreadWithChan* thread_spawn_with_chan(slop_arena* arena, slop_closure_t 
         (*th).func = ((void*)(func.fn));
         (*th).chan = ch;
         (*th).env = NULL;
+        (*th).result = 0;
         (*th).done = 0;
-        pthread_create((&(*th).id), NULL, ((void*)(thread_thread_with_chan_entry)), ((void*)(th)));
+        slop_thread_start((&(*th).id), ((void*)(thread_thread_with_chan_entry)), ((void*)(th)));
         _retval = th;
         goto _slop_post;
     }
@@ -243,7 +246,7 @@ void* thread_thread_with_chan_entry(void* arg) {
 
 int64_t thread_join(slop_thread_int* thread) {
     SLOP_PRE(((thread != NULL)), "(!= thread nil)");
-    pthread_join(thread->id, NULL);
+    slop_thread_wait(thread->id);
     return thread->result;
 }
 

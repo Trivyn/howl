@@ -135,7 +135,7 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
                             if (n > 0) {
                                 {
                                     __auto_type hub = owl2_concept_at(sorted, 0);
-                                    __auto_type i = 1;
+                                    int64_t i = 1;
                                     while (i < n) {
                                         {
                                             __auto_type c = owl2_concept_at(sorted, i);
@@ -159,10 +159,10 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
                             } else {
                                 {
                                     __auto_type sorted = owl2_sort_concepts(arena, cs);
-                                    __auto_type i = 0;
+                                    int64_t i = 0;
                                     while (i < n) {
                                         {
-                                            __auto_type j = (i + 1);
+                                            int64_t j = (i + 1);
                                             while (j < n) {
                                                 {
                                                     __auto_type pair = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -203,7 +203,7 @@ uint8_t gate_has_negated_conjunct(owl2_RawConcept c) {
         {
             __auto_type cs = _mv_770.data.rc_and;
             {
-                __auto_type found = 0;
+                uint8_t found = 0;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -551,7 +551,7 @@ uint8_t gate_concept_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_Ra
         {
             __auto_type cs = _mv_779.data.rc_and;
             {
-                __auto_type ok = 1;
+                uint8_t ok = 1;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -588,7 +588,7 @@ uint8_t gate_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawAxiom a
         {
             __auto_type cs = _mv_780.data.ra_disjoint_classes;
             {
-                __auto_type ok = 1;
+                uint8_t ok = 1;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -675,7 +675,7 @@ gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs,
             }
         }
         {
-            __auto_type rbox_bad = ({ __auto_type _mv = gate_check_regularity(arena, expanded); uint8_t _mr = {0}; switch (_mv.tag) { case gate_RboxVerdict_rbox_regular: { _mr = 0; break; } case gate_RboxVerdict_rbox_irregular: { __auto_type _ = _mv.data.rbox_irregular; _mr = 1; break; }  } _mr; });
+            __auto_type rbox_bad = ({ __auto_type _mv = gate_check_regularity(arena, expanded); uint8_t _mr = {0}; int _mm = 0; switch (_mv.tag) { case gate_RboxVerdict_rbox_regular: { _mr = 0; _mm = 1; break; } case gate_RboxVerdict_rbox_irregular: { _mr = 1; _mm = 1; break; }  } if (!_mm) { SLOP_UNREACHABLE(); } _mr; });
             __auto_type rroles = gate_collect_rbox_roles(arena, expanded);
             __auto_type told = gate_told_closure(arena, expanded, rroles, ((int64_t)(((int64_t)((rroles).len)))));
             __auto_type ranges = gate_collect_ranges(arena, expanded, rroles);

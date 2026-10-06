@@ -215,7 +215,7 @@ uint8_t normalize_normalize_gci(slop_arena* arena, normalize_NormState* p, owl2_
         {
             __auto_type ds = _mv_927.data.rc_and;
             {
-                __auto_type ok = 1;
+                uint8_t ok = 1;
                 {
                     __auto_type _coll = ds;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
