@@ -20,26 +20,31 @@ typedef struct { bool has_value; slop_string value; } slop_option_string;
 typedef struct { void* fn; void* env; } slop_closure_t;
 
 /* Type definitions */
-typedef int64_t rdf_BlankNodeId;
+typedef enum {
+    howl_FaultKind_fault_none,
+    howl_FaultKind_fault_cancelled,
+    howl_FaultKind_fault_input_error,
+    howl_FaultKind_fault_unavailable,
+    howl_FaultKind_fault_invalid_options
+} howl_FaultKind;
 
-struct rdf_BlankNode {
-    rdf_BlankNodeId id;
+struct howl_Input {
+    void* p;
 };
-typedef struct rdf_BlankNode rdf_BlankNode;
+typedef struct howl_Input howl_Input;
 
-typedef int64_t rdf_GraphSize;
-
-struct rdf_IRI {
-    slop_string value;
+struct howl_Run {
+    void* p;
 };
-typedef struct rdf_IRI rdf_IRI;
+typedef struct howl_Run howl_Run;
 
-struct rdf_Literal {
-    slop_string value;
-    slop_option_string datatype;
-    slop_option_string lang;
+struct howl_TurtleResult {
+    uint8_t ok;
+    slop_string message;
+    int64_t line;
+    int64_t column;
 };
-typedef struct rdf_Literal rdf_Literal;
+typedef struct howl_TurtleResult howl_TurtleResult;
 
 typedef enum {
     rdf_TermKind_iri,
@@ -48,12 +53,14 @@ typedef enum {
     rdf_TermKind_triple
 } rdf_TermKind;
 
-typedef enum {
-    rdf_Term_term_iri,
-    rdf_Term_term_blank,
-    rdf_Term_term_literal,
-    rdf_Term_term_triple
-} rdf_Term_tag;
+struct howl_TermIn {
+    rdf_TermKind kind;
+    int64_t blank;
+    slop_string value;
+    slop_string datatype;
+    slop_string lang;
+};
+typedef struct howl_TermIn howl_TermIn;
 
 typedef enum {
     types_Profile_profile_el,
@@ -62,87 +69,62 @@ typedef enum {
     types_Profile_profile_sriq
 } types_Profile;
 
+struct howl_Options {
+    int64_t workers;
+    int64_t max_iterations;
+    types_Profile profile;
+    uint8_t auto_select;
+    int64_t cancel;
+};
+typedef struct howl_Options howl_Options;
+
 typedef enum {
-    types_ProfileSelection_slop_auto,
-    types_ProfileSelection_explicit
-} types_ProfileSelection_tag;
+    types_Termination_fixpoint,
+    types_Termination_resource_limit
+} types_Termination_tag;
 
-struct types_ProfileSelection {
-    types_ProfileSelection_tag tag;
+struct types_Termination {
+    types_Termination_tag tag;
     union {
-        types_Profile explicit;
+        int64_t resource_limit;
     } data;
 };
-typedef struct types_ProfileSelection types_ProfileSelection;
+typedef struct types_Termination types_Termination;
 
-struct types_ReasonerConfig {
-    uint8_t worker_count;
-    uint16_t channel_buffer;
-    uint16_t max_iterations;
-    types_ProfileSelection selection;
-    uint8_t strict_profile;
-    int64_t cancel_ptr;
-    uint8_t verbose;
-};
-typedef struct types_ReasonerConfig types_ReasonerConfig;
-
-struct rdf_Graph {
-    slop_list_rdf_Triple triples;
-    rdf_GraphSize size;
-};
-typedef struct rdf_Graph rdf_Graph;
-
-struct rdf_Term {
-    rdf_Term_tag tag;
-    union {
-        rdf_IRI term_iri;
-        rdf_BlankNode term_blank;
-        rdf_Literal term_literal;
-        rdf_Triple* term_triple;
-    } data;
-};
-typedef struct rdf_Term rdf_Term;
-
-struct rdf_Triple {
-    rdf_Term subject;
-    rdf_Term predicate;
-    rdf_Term object;
-};
-typedef struct rdf_Triple rdf_Triple;
-
-typedef struct { size_t len; size_t cap; rdf_Triple* data; } slop_list_rdf_Triple;
-
-typedef struct { bool has_value; rdf_Term value; } slop_option_rdf_Term;
+typedef enum {
+    types_Verdict_verdict_coherent,
+    types_Verdict_verdict_incoherent,
+    types_Verdict_verdict_inconclusive
+} types_Verdict;
 
 /* Public API */
-types_ReasonerConfig howl_default_config(void);
-uint8_t rdf_blank_eq(rdf_BlankNode a, rdf_BlankNode b);
-rdf_Graph rdf_graph_add(slop_arena* arena, rdf_Graph g, rdf_Triple t);
-rdf_Graph rdf_graph_add_unchecked(slop_arena* arena, rdf_Graph g, rdf_Triple t);
-uint8_t rdf_graph_contains(rdf_Graph g, rdf_Triple t);
-void rdf_graph_free(rdf_Graph* g);
-rdf_Graph rdf_graph_match(slop_arena* arena, rdf_Graph g, slop_option_rdf_Term subject, slop_option_rdf_Term predicate, slop_option_rdf_Term object);
-rdf_Graph rdf_graph_remove(slop_arena* arena, rdf_Graph g, rdf_Triple t);
-rdf_GraphSize rdf_graph_size(rdf_Graph g);
-uint8_t rdf_iri_eq(rdf_IRI a, rdf_IRI b);
-uint8_t rdf_literal_eq(rdf_Literal a, rdf_Literal b);
-rdf_Term rdf_make_blank(slop_arena* arena, rdf_BlankNodeId id);
-rdf_Graph rdf_make_graph(slop_arena* arena);
-rdf_Term rdf_make_iri(slop_arena* arena, slop_string value);
-rdf_Term rdf_make_literal(slop_arena* arena, slop_string value, slop_option_string datatype, slop_option_string lang);
-rdf_Triple rdf_make_triple(slop_arena* arena, rdf_Term subject, rdf_Term predicate, rdf_Term object);
-rdf_Term rdf_make_triple_term(slop_arena* arena, rdf_Triple t);
-uint8_t rdf_option_string_eq(slop_option_string a, slop_option_string b);
-uint8_t rdf_term_eq(rdf_Term a, rdf_Term b);
-void rdf_term_free(rdf_Term* t);
-rdf_TermKind rdf_term_kind(rdf_Term t);
-uint8_t rdf_triple_eq(rdf_Triple a, rdf_Triple b);
-void rdf_triple_free(rdf_Triple* t);
-rdf_Term rdf_triple_object(rdf_Triple t);
-rdf_Term rdf_triple_predicate(rdf_Triple t);
-rdf_Term rdf_triple_subject(rdf_Triple t);
-
-#define types_default_config howl_default_config
+howl_Options howl_default_options(void);
+uint8_t howl_input_add_triple(howl_Input in, howl_TermIn s, howl_TermIn p, howl_TermIn o);
+howl_TurtleResult howl_input_add_turtle(howl_Input in, slop_string text);
+void howl_input_attest_import(howl_Input in, slop_string iri);
+void howl_input_begin_document(howl_Input in);
+void howl_input_free(howl_Input in);
+howl_Input howl_input_new(void);
+howl_Run howl_run_classify(howl_Input in, howl_Options o);
+howl_FaultKind howl_run_fault(howl_Run r);
+slop_string howl_run_fault_message(howl_Run r);
+types_Profile howl_run_fault_profile(howl_Run r);
+void howl_run_free(howl_Run r);
+uint8_t howl_run_inconsistent(howl_Run r);
+uint8_t howl_run_ok(howl_Run r);
+slop_string howl_run_omission(howl_Run r, int64_t i);
+int64_t howl_run_omission_len(howl_Run r);
+types_Profile howl_run_profile(howl_Run r);
+int64_t howl_run_report_len(howl_Run r);
+slop_string howl_run_report_line(howl_Run r, int64_t i);
+int64_t howl_run_rounds(howl_Run r);
+slop_string howl_run_sub(howl_Run r, int64_t i);
+int64_t howl_run_sub_len(howl_Run r);
+slop_string howl_run_super(howl_Run r, int64_t i);
+types_Termination howl_run_termination(howl_Run r);
+slop_string howl_run_unsat(howl_Run r, int64_t i);
+int64_t howl_run_unsat_len(howl_Run r);
+types_Verdict howl_run_verdict(howl_Run r);
 
 #ifdef __cplusplus
 }

@@ -36,6 +36,13 @@ jobs:
       - name: Build and test Rust crate
         run: make crate-test CC=${{ matrix.cc }}
 
+      # The public C API as a C caller sees it: the example built against
+      # the generated include/howl.h and libhowl.a alone, and every entry
+      # point under ASan and UBSan. clang on both runners: Homebrew gcc on
+      # macOS does not ship the sanitizer runtimes.
+      - name: C API example and sanitizer test
+        run: make c-example CC=clang
+
       - name: Build release CLI
         run: make release CC=${{ matrix.cc }}
 

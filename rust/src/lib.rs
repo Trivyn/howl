@@ -22,12 +22,14 @@
 //!
 //! HOWL's first consumer calls it through an FFI behind a reasoner
 //! port, so **the port, not the CLI, is the deliverable** (SPEC §8.4).
-//! The engine's result never crosses as a struct: it stays in C behind
-//! an opaque handle, and this crate copies what it needs out through
-//! accessors compiled against the real headers. Only `ReasonerConfig`
-//! and the shim's own term struct are mirrored, and the layout guards
-//! in [`ffi`] assert both against the C ABI — see that module for the
-//! GROWL 0.6.0 regression they exist to prevent.
+//! This crate binds HOWL's public C API, which is written in SLOP (the
+//! `:c-name` functions in `src/howl.slop`) and whose header slop
+//! generates (`include/howl.h`). The engine's results never cross as
+//! structs: they stay behind an opaque run handle, and this crate copies
+//! what it needs out through the API's accessors. Only the API's small
+//! value types are mirrored, and the layout guards in [`ffi`] assert them
+//! against the header — see that module for the GROWL 0.6.0 regression
+//! they exist to prevent.
 //!
 //! An [`Input`] is encoded exactly as the `howl` CLI encodes its files,
 //! and classified by the same engine path, so the CLI's committed golden
@@ -42,8 +44,7 @@ extern crate slop_std_sys as _;
 
 use std::collections::HashMap;
 use std::fmt;
-use std::os::raw::{c_char, c_int};
-use std::ptr::NonNull;
+use std::os::raw::c_int;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
@@ -147,30 +148,24 @@ impl Profile {
         }
     }
 
-    fn to_ffi(self) -> ffi::Profile {
+    fn to_ffi(self) -> c_int {
         match self {
-            Profile::El => ffi::Profile::El,
-            Profile::ElPlusPlus => ffi::Profile::ElPlusPlus,
-            Profile::HornSriq => ffi::Profile::HornSriq,
-            Profile::Sriq => ffi::Profile::Sriq,
+            Profile::El => ffi::PROFILE_EL,
+            Profile::ElPlusPlus => ffi::PROFILE_EL_PLUS_PLUS,
+            Profile::HornSriq => ffi::PROFILE_HORN_SRIQ,
+            Profile::Sriq => ffi::PROFILE_SRIQ,
         }
     }
 
-    fn from_ffi(p: ffi::Profile) -> Self {
-        match p {
-            ffi::Profile::El => Profile::El,
-            ffi::Profile::ElPlusPlus => Profile::ElPlusPlus,
-            ffi::Profile::HornSriq => Profile::HornSriq,
-            ffi::Profile::Sriq => Profile::Sriq,
+    /// From a C `types_Profile`, as an accessor returns it.
+    fn from_ffi(d: c_int) -> Self {
+        match d {
+            ffi::PROFILE_EL => Profile::El,
+            ffi::PROFILE_EL_PLUS_PLUS => Profile::ElPlusPlus,
+            ffi::PROFILE_HORN_SRIQ => Profile::HornSriq,
+            ffi::PROFILE_SRIQ => Profile::Sriq,
+            d => panic!("the engine returned profile {d}"),
         }
-    }
-
-    /// From a C discriminant, as an accessor returns it.
-    fn from_c(d: c_int) -> Self {
-        [Profile::El, Profile::ElPlusPlus, Profile::HornSriq, Profile::Sriq]
-            .into_iter()
-            .find(|p| p.to_ffi() as c_int == d)
-            .unwrap_or_else(|| panic!("the engine returned profile discriminant {d}"))
     }
 }
 
@@ -186,43 +181,17 @@ pub enum ProfileSelection {
     Explicit(Profile),
 }
 
-impl ProfileSelection {
-    fn to_ffi(self) -> ffi::ProfileSelection {
-        match self {
-            ProfileSelection::Auto => ffi::ProfileSelection {
-                tag: ffi::ProfileSelectionTag::Auto,
-                data: ffi::ProfileSelectionData { explicit: ffi::Profile::El },
-            },
-            ProfileSelection::Explicit(p) => ffi::ProfileSelection {
-                tag: ffi::ProfileSelectionTag::Explicit,
-                data: ffi::ProfileSelectionData { explicit: p.to_ffi() },
-            },
-        }
-    }
-
-    fn from_ffi(s: ffi::ProfileSelection) -> Self {
-        match s.tag {
-            ffi::ProfileSelectionTag::Auto => ProfileSelection::Auto,
-            // SAFETY: the tag says the `explicit` arm is the live one.
-            ffi::ProfileSelectionTag::Explicit => {
-                ProfileSelection::Explicit(Profile::from_ffi(unsafe { s.data.explicit }))
-            }
-        }
-    }
-}
-
 /// Reasoner configuration.
 ///
 /// Mirrors the engine's own defaults rather than inventing new ones, so
 /// the two cannot drift. There is deliberately no `strict` field: the
 /// library always runs non-strict — an omission is a report, not a
-/// refusal (SPEC §8.4).
+/// refusal (SPEC §8.4). The engine checks the ranges; a value outside
+/// one is [`Fault::InvalidConfig`].
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
     /// Worker threads, `1..=64`. The report is identical at every count.
     pub worker_count: u8,
-    /// `64..=4096`.
-    pub channel_buffer: u16,
     /// Permits `n` **completed global rounds**, `0..=10000`. The
     /// fixpoint check happens at a round boundary *before* consuming
     /// budget for the next round, so reaching the answer exactly on
@@ -238,36 +207,32 @@ impl Default for Config {
         // Read the defaults across the FFI rather than restating them,
         // so a change on the engine side cannot silently disagree with
         // this crate.
-        let c = unsafe { ffi::howl_default_config() };
+        let o = unsafe { ffi::howl_default_options() };
         Config {
-            worker_count: c.worker_count,
-            channel_buffer: c.channel_buffer,
-            max_iterations: c.max_iterations,
-            selection: ProfileSelection::from_ffi(c.selection),
+            worker_count: o.workers as u8,
+            max_iterations: o.max_iterations as u16,
+            selection: if o.auto_select != 0 {
+                ProfileSelection::Auto
+            } else {
+                ProfileSelection::Explicit(Profile::from_ffi(o.profile))
+            },
         }
     }
 }
 
 impl Config {
-    /// The engine's config with this one's fields. The SLOP range types
-    /// are checked here: the C struct holds whatever it is handed.
-    fn to_ffi(self, cancel_ptr: i64) -> Result<ffi::ReasonerConfig, Fault> {
-        if !(1..=64).contains(&self.worker_count) {
-            return Err(Fault::InvalidConfig(format!("worker_count {} is not in 1..=64", self.worker_count)));
+    fn to_ffi(self, cancel: i64) -> ffi::Options {
+        let (profile, auto_select) = match self.selection {
+            ProfileSelection::Auto => (ffi::PROFILE_EL, 1),
+            ProfileSelection::Explicit(p) => (p.to_ffi(), 0),
+        };
+        ffi::Options {
+            workers: self.worker_count as i64,
+            max_iterations: self.max_iterations as i64,
+            profile,
+            auto_select,
+            cancel,
         }
-        if !(64..=4096).contains(&self.channel_buffer) {
-            return Err(Fault::InvalidConfig(format!("channel_buffer {} is not in 64..=4096", self.channel_buffer)));
-        }
-        if self.max_iterations > 10000 {
-            return Err(Fault::InvalidConfig(format!("max_iterations {} is not in 0..=10000", self.max_iterations)));
-        }
-        let mut c = unsafe { ffi::howl_default_config() };
-        c.worker_count = self.worker_count;
-        c.channel_buffer = self.channel_buffer;
-        c.max_iterations = self.max_iterations;
-        c.selection = self.selection.to_ffi();
-        c.cancel_ptr = cancel_ptr;
-        Ok(c)
     }
 }
 
@@ -307,38 +272,29 @@ impl Term {
 /// has its blank nodes standardized apart from the ones before it, as
 /// `howl validate ROOT -I IMPORT` does.
 pub struct Input {
-    raw: NonNull<ffi::HowlInput>,
-    /// A document that failed to parse leaves its earlier triples
-    /// encoded, so the input can no longer be classified.
-    poisoned: Option<String>,
+    raw: ffi::Input,
 }
 
-// The handle owns its arena outright and the C side keeps no thread
+// The handle owns its arena outright and the engine keeps no thread
 // affinity, so it may move between threads. It is not `Sync`: adding a
 // document mutates it.
 unsafe impl Send for Input {}
 
 impl Input {
     pub fn new() -> Self {
-        let raw = unsafe { ffi::howl_input_new() };
-        Input {
-            raw: NonNull::new(raw).expect("howl: cannot allocate an input arena"),
-            poisoned: None,
-        }
+        Input { raw: unsafe { ffi::howl_input_new() } }
     }
 
     /// Add one document given as triples.
     pub fn add_triples(&mut self, triples: &[(Term, Term, Term)]) {
         let mut blanks: HashMap<&str, i64> = HashMap::new();
-        let mut terms = Vec::with_capacity(triples.len() * 3);
+        unsafe { ffi::howl_input_begin_document(self.raw) };
         for (s, p, o) in triples {
-            for t in [s, p, o] {
-                terms.push(howl_term(t, &mut blanks));
-            }
-        }
-        unsafe {
-            ffi::howl_input_begin_document(self.raw.as_ptr());
-            ffi::howl_input_add_triples(self.raw.as_ptr(), terms.as_ptr(), triples.len());
+            let (s, p, o) = (term_in(s, &mut blanks), term_in(p, &mut blanks), term_in(o, &mut blanks));
+            // Every Term this crate can build is one HOWL takes, so this
+            // never refuses; were it to, the engine refuses the input and
+            // classify says so.
+            unsafe { ffi::howl_input_add_triple(self.raw, s, p, o) };
         }
     }
 
@@ -348,25 +304,16 @@ impl Input {
     /// so is every later [`Reasoner::classify`] of this input: the
     /// triples before the error were already added.
     pub fn add_turtle(&mut self, text: &str) -> Result<(), Fault> {
-        let mut message = ffi::SlopString { len: 0, data: std::ptr::null() };
-        let (mut line, mut column) = (0i64, 0i64);
-        let ok = unsafe {
-            ffi::howl_input_begin_document(self.raw.as_ptr());
-            ffi::howl_input_add_turtle(
-                self.raw.as_ptr(),
-                text.as_ptr() as *const c_char,
-                text.len(),
-                &mut message,
-                &mut line,
-                &mut column,
-            )
-        };
-        if ok != 0 {
+        let r = unsafe { ffi::howl_input_add_turtle(self.raw, ffi::SlopString::borrow(text)) };
+        if r.ok != 0 {
             return Ok(());
         }
-        let m = format!("Turtle does not parse at line {line}, column {column}: {}", unsafe { owned(message) });
-        self.poisoned = Some(m.clone());
-        Err(Fault::InputError(m))
+        Err(Fault::InputError(format!(
+            "Turtle does not parse at line {}, column {}: {}",
+            r.line,
+            r.column,
+            unsafe { owned(r.message) }
+        )))
     }
 
     /// Attest that `iri`, an `owl:imports` target, is resolved: its
@@ -380,7 +327,7 @@ impl Input {
     /// triples were never added passes silently. The attestation is a
     /// trust boundary, not a proof.
     pub fn attest_import(&mut self, iri: &str) {
-        unsafe { ffi::howl_input_attest_import(self.raw.as_ptr(), iri.as_ptr() as *const c_char, iri.len()) }
+        unsafe { ffi::howl_input_attest_import(self.raw, ffi::SlopString::borrow(iri)) }
     }
 }
 
@@ -392,37 +339,32 @@ impl Default for Input {
 
 impl Drop for Input {
     fn drop(&mut self) {
-        unsafe { ffi::howl_input_free(self.raw.as_ptr()) }
+        unsafe { ffi::howl_input_free(self.raw) }
     }
 }
 
-fn howl_term<'a>(t: &'a Term, blanks: &mut HashMap<&'a str, i64>) -> ffi::HowlTerm {
-    let none = (std::ptr::null(), 0usize);
-    let str_of = |s: &str| (s.as_ptr() as *const c_char, s.len());
-    let (kind, blank, value, datatype, lang) = match t {
-        Term::Iri(v) => (ffi::HOWL_TERM_IRI, 0, str_of(v), none, none),
+fn term_in<'a>(t: &'a Term, blanks: &mut HashMap<&'a str, i64>) -> ffi::TermIn {
+    let empty = ffi::SlopString::borrow("");
+    match t {
+        Term::Iri(v) => ffi::TermIn {
+            kind: ffi::TERM_IRI,
+            blank: 0,
+            value: ffi::SlopString::borrow(v),
+            datatype: empty,
+            lang: empty,
+        },
         Term::Blank(label) => {
             let next = blanks.len() as i64;
             let id = *blanks.entry(label.as_str()).or_insert(next);
-            (ffi::HOWL_TERM_BLANK, id, none, none, none)
+            ffi::TermIn { kind: ffi::TERM_BLANK, blank: id, value: empty, datatype: empty, lang: empty }
         }
-        Term::Literal { value, datatype, lang } => (
-            ffi::HOWL_TERM_LITERAL,
-            0,
-            str_of(value),
-            datatype.as_deref().map_or(none, str_of),
-            lang.as_deref().map_or(none, str_of),
-        ),
-    };
-    ffi::HowlTerm {
-        kind,
-        blank,
-        value: value.0,
-        value_len: value.1,
-        datatype: datatype.0,
-        datatype_len: datatype.1,
-        lang: lang.0,
-        lang_len: lang.1,
+        Term::Literal { value, datatype, lang } => ffi::TermIn {
+            kind: ffi::TERM_LITERAL,
+            blank: 0,
+            value: ffi::SlopString::borrow(value),
+            datatype: ffi::SlopString::borrow(datatype.as_deref().unwrap_or("")),
+            lang: ffi::SlopString::borrow(lang.as_deref().unwrap_or("")),
+        },
     }
 }
 
@@ -531,47 +473,47 @@ impl Reasoner {
         self.run(input, cancel.as_cancel_ptr())
     }
 
-    fn run(&self, input: &Input, cancel_ptr: i64) -> Result<Report, Fault> {
-        if let Some(m) = &input.poisoned {
-            return Err(Fault::InputError(m.clone()));
-        }
-        let config = self.config.to_ffi(cancel_ptr)?;
-        let raw = unsafe { ffi::howl_run_classify(input.raw.as_ptr(), config) };
-        let run = Run(NonNull::new(raw).expect("howl: cannot allocate a run arena"));
+    fn run(&self, input: &Input, cancel: i64) -> Result<Report, Fault> {
+        let run = Run(unsafe { ffi::howl_run_classify(input.raw, self.config.to_ffi(cancel)) });
         run.result()
     }
 }
 
-/// A finished run; frees the engine's arena when dropped.
-struct Run(NonNull<ffi::HowlRun>);
+/// A finished run; frees the engine's arenas when dropped.
+struct Run(ffi::Run);
 
 impl Drop for Run {
     fn drop(&mut self) {
-        unsafe { ffi::howl_run_free(self.0.as_ptr()) }
+        unsafe { ffi::howl_run_free(self.0) }
     }
 }
 
 impl Run {
     fn result(&self) -> Result<Report, Fault> {
-        let r = self.0.as_ptr();
+        let r = self.0;
         unsafe {
             if ffi::howl_run_ok(r) == 0 {
-                return Err(fault(r));
+                return Err(match ffi::howl_run_fault(r) {
+                    ffi::FAULT_CANCELLED => Fault::Cancelled,
+                    ffi::FAULT_INPUT_ERROR => Fault::InputError(owned(ffi::howl_run_fault_message(r))),
+                    ffi::FAULT_UNAVAILABLE => Fault::ProfileUnavailable(Profile::from_ffi(ffi::howl_run_fault_profile(r))),
+                    ffi::FAULT_INVALID_OPTIONS => Fault::InvalidConfig(owned(ffi::howl_run_fault_message(r))),
+                    f => panic!("the engine returned fault {f} for a run with no result"),
+                });
             }
-            let termination = match ffi::howl_run_termination_tag(r) {
+            let t = ffi::howl_run_termination(r);
+            let termination = match t.tag {
                 ffi::TERMINATION_FIXPOINT => Termination::Fixpoint,
-                ffi::TERMINATION_RESOURCE_LIMIT => {
-                    Termination::ResourceLimit(ffi::howl_run_resource_limit(r) as u64)
-                }
-                t => panic!("the engine returned termination tag {t}"),
+                ffi::TERMINATION_RESOURCE_LIMIT => Termination::ResourceLimit(t.resource_limit as u64),
+                t => panic!("the engine returned termination {t}"),
             };
             Ok(Report {
-                profile: Profile::from_c(ffi::howl_run_profile(r)),
+                profile: Profile::from_ffi(ffi::howl_run_profile(r)),
                 verdict: match ffi::howl_run_verdict(r) {
                     ffi::VERDICT_COHERENT => Verdict::Coherent,
                     ffi::VERDICT_INCOHERENT => Verdict::Incoherent,
                     ffi::VERDICT_INCONCLUSIVE => Verdict::Inconclusive,
-                    v => panic!("the engine returned verdict discriminant {v}"),
+                    v => panic!("the engine returned verdict {v}"),
                 },
                 inconsistent: ffi::howl_run_inconsistent(r) != 0,
                 unsatisfiable: (0..ffi::howl_run_unsat_len(r)).map(|i| owned(ffi::howl_run_unsat(r, i))).collect(),
@@ -584,21 +526,6 @@ impl Run {
                 lines: (0..ffi::howl_run_report_len(r)).map(|i| owned(ffi::howl_run_report_line(r, i))).collect(),
             })
         }
-    }
-}
-
-unsafe fn fault(r: *mut ffi::HowlRun) -> Fault {
-    match ffi::howl_run_fault_tag(r) {
-        ffi::FAULT_CANCELLED => Fault::Cancelled,
-        ffi::FAULT_INPUT_ERROR => Fault::InputError(owned(ffi::howl_run_fault_message(r))),
-        ffi::FAULT_UNAVAILABLE => Fault::ProfileUnavailable(Profile::from_c(ffi::howl_run_fault_profile(r))),
-        // Only a strict run refuses, and the shim never runs strict. Should
-        // it happen anyway, the omissions are named rather than dropped.
-        ffi::FAULT_REFUSED => {
-            let oms: Vec<String> = (0..ffi::howl_run_refused_len(r)).map(|i| owned(ffi::howl_run_refused(r, i))).collect();
-            Fault::InputError(format!("refused under a strict profile: {}", oms.join("; ")))
-        }
-        t => panic!("the engine returned fault tag {t}"),
     }
 }
 
@@ -632,7 +559,13 @@ mod tests {
             ProfileSelection::Explicit(Profile::HornSriq),
             ProfileSelection::Explicit(Profile::Sriq),
         ] {
-            assert_eq!(ProfileSelection::from_ffi(s.to_ffi()), s);
+            let o = Config { selection: s, ..Config::default() }.to_ffi(0);
+            let back = if o.auto_select != 0 {
+                ProfileSelection::Auto
+            } else {
+                ProfileSelection::Explicit(Profile::from_ffi(o.profile))
+            };
+            assert_eq!(back, s);
         }
     }
 
@@ -643,11 +576,10 @@ mod tests {
     }
 
     #[test]
-    fn out_of_range_config_is_refused_before_the_engine() {
+    fn out_of_range_config_is_refused_by_name() {
         for c in [
             Config { worker_count: 0, ..Config::default() },
             Config { worker_count: 65, ..Config::default() },
-            Config { channel_buffer: 63, ..Config::default() },
             Config { max_iterations: 10001, ..Config::default() },
         ] {
             match Reasoner::with_config(c).classify(&Input::new()) {

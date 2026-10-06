@@ -6,10 +6,19 @@ This script uses slop's existing module resolution to determine the correct
 build order, then calls the native transpiler and writes the C files to
 the output directory.
 
-Usage: python3 generate_c.py [--append] <tool_dir> <output_dir>
+Usage: python3 generate_c.py [--append] [--ffi-header PATH SRC_DIR] <tool_dir> <output_dir>
   tool_dir:   Directory containing slop.toml (e.g., cli/ or cli/tests/)
   output_dir: Where to write the C files (e.g., csrc/src)
   --append:   Don't clear existing slop_* files before writing (for second pass)
+  --ffi-header PATH SRC_DIR:
+              Also write the public C header to PATH with slop's own generator
+              (slop.ffi.generate_ffi_header, what `slop build` uses), from the
+              same transpile as the C, over the `:c-name` functions of the
+              sources under SRC_DIR only. Scoped so a dependency's own
+              `:c-name` functions (slop-rdf's graph helpers) are not swept
+              into HOWL's API - and because, swept in, they make the
+              generated header fail to compile (an rdf_Term/rdf_Triple
+              pointer cycle the generator does not forward-declare).
 """
 
 import sys
@@ -36,6 +45,12 @@ def main():
     if "--append" in args:
         append_mode = True
         args.remove("--append")
+    ffi_header = ffi_src = None
+    if "--ffi-header" in args:
+        i = args.index("--ffi-header")
+        ffi_header = Path(args[i + 1]).resolve()
+        ffi_src = Path(args[i + 2]).resolve()
+        del args[i:i + 3]
 
     if len(args) != 2:
         print(f"Usage: {sys.argv[0]} [--append] <tool_dir> <output_dir>")
@@ -153,6 +168,18 @@ def main():
             written += 1
 
         print(f"  Generated {written} modules in {output_dir}")
+
+        if ffi_header:
+            from slop.ffi import generate_ffi_header
+            results = {name: (c.get("header", ""), c.get("impl", "")) for name, c in modules.items()}
+            scoped = [f for f in source_files if Path(f).resolve().is_relative_to(ffi_src)]
+            header = generate_ffi_header("howl", results, scoped)
+            if not header:
+                print("Error: no :c-name functions under", ffi_src)
+                sys.exit(1)
+            ffi_header.parent.mkdir(parents=True, exist_ok=True)
+            ffi_header.write_text(header)
+            print(f"  Public header: {ffi_header}")
         if skipped:
             print(f"  Skipped {skipped} modules (already present)")
 

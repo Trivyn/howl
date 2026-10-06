@@ -80,11 +80,13 @@ classified concurrently. The engine also runs its own worker threads (`Config::w
 
 ## The FFI
 
-The engine's result never crosses the FFI as a struct. It stays in C behind an opaque handle, and
-the crate copies it out through accessors compiled against the real headers, then frees it. Only
-three structs are mirrored in Rust: `ReasonerConfig`, the shim's term struct and `slop_string`. Tests
-assert each mirror's sizes, offsets and field widths, and the enum values the accessors return,
-against the C ABI. `build.rs` refuses to build if HOWL's `slop_runtime.h` differs from the one
+The crate binds HOWL's public C API. That API is written in SLOP (the `:c-name` functions in
+`src/howl.slop`), and slop generates its header, `include/howl.h`. The engine's result never crosses
+the FFI as a struct: it stays behind an opaque run handle, and the crate copies it out through the
+API's accessors, then frees it. Rust mirrors only the API's small value types (options, an input
+term, a Turtle result, a termination, `slop_string`) and its enum values. Tests assert each
+mirror's sizes, offsets and field widths, and every enum value, against the generated header
+(`layout_probes.c`). `build.rs` refuses to build if HOWL's `slop_runtime.h` differs from the one
 `slop-std-sys` ships.
 
 ## Minimum Rust version
