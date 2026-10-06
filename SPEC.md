@@ -1983,8 +1983,8 @@ GROWL's `Delta`.
   (@alloc arena)
   (@post {(. (. $result succ-half) to) == (. e from)})
   (@post {(. (. $result pred-half) to) == (. e to)})
-  ;; @property rather than @post: a @post is also a runtime check under SLOP_DEBUG, and the
-  ;; transpiler mis-lowers a multi-payload match there (slop-lang/slop#171).
+  ;; @property rather than @post: a @post is also a runtime check under SLOP_DEBUG, and before
+  ;; slop 0.4.0 the transpiler mis-lowered a multi-payload match there (slop-lang/slop#171).
   (@property succ-says-edge
     (match (. (. $result succ-half) what)
       ((derived-succ r y) (and (== r (. e role)) (== y (. e to))))
@@ -3003,11 +3003,11 @@ capped runs included.
 - `make determinism` compares every report at W ∈ {1,2,4,8} for every cap in
   {0, 1, R/2, R−1, R, ∞}. It refuses to pass unless some cap actually cut a run short.
 
-**One precondition the language does not yet check: every worker thread starts.** slop's `spawn`
-ignores a `pthread_create` failure ([slop#192](https://github.com/slop-lang/slop/issues/192)). A
-share whose thread never started would contribute no delta, and nothing would say so. Until #192 is
-fixed, the guarantee above holds for runs where every spawn succeeds. Worker arenas are kept small
-(1 MB, growing on demand) so that `--workers 64` does not itself cause such a failure.
+**Every worker thread starts, or the run aborts.** Since slop 0.4.0, `spawn` aborts the process
+when `pthread_create` fails ([slop#192](https://github.com/slop-lang/slop/issues/192)); before it,
+a share whose thread never started contributed no delta and nothing said so. An abort produces no
+report, so it can never be read as a verdict. Worker arenas are kept small (1 MB, growing on
+demand) so that `--workers 64` does not itself cause such a failure.
 
 Consequences, stated honestly:
 

@@ -637,7 +637,7 @@
             (do
               (list-push qss qs)
               ;; `share`, `ca`, `qa` and `qs` are IMMUTABLE bindings, captured
-              ;; by value (slop#193: a `mut` local would be captured by address).
+              ;; by value (slop#193: slop 0.4.0 rejects a `mut` capture in spawn).
               (if (<= w 1)
                 (do (commit-bucket qa ca sat share qs) (do))
                 (list-push threads
@@ -801,8 +801,9 @@
                     ;; `share` is an IMMUTABLE copy of the finished partition,
                     ;; and that is load-bearing: a closure captures a `mut`
                     ;; local BY REFERENCE (`&part` in the C), and `part` is a
-                    ;; stack slot of this loop body. Spawned on `part` itself,
-                    ;; every worker read a slot the next iteration reused —
+                    ;; stack slot of this loop body. Spawned on `part` itself
+                    ;; (which slop 0.4.0 now rejects at compile time), every
+                    ;; worker read a slot the next iteration reused —
                     ;; wrong partitions, lost conclusions, the litmus failing
                     ;; deterministically. An immutable binding is captured by
                     ;; value, so each thread owns its list header (slop#193).

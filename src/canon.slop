@@ -25,9 +25,9 @@
 ;;   §5.2          MissingDeclaration.referring, and every Omission list
 ;;
 ;; WHY memcmp AND NOT `strlib.compare`. strlib exports a `compare`
-;; returning -1/0/1 and it is the obvious import — but it is
-;; implemented as `strcmp` over `(. a data)` (strlib.slop:804), which
-;; assumes NUL termination. A SLOP `String` is `{len, data}`, and the
+;; returning -1/0/1 and it is the obvious import — but before slop
+;; 0.4.0 it was `strcmp` over `(. a data)` (slop-lang/slop#161, fixed:
+;; it now reads a String by its len), which assumes NUL termination. A SLOP `String` is `{len, data}`, and the
 ;; Strings this module actually orders are IRIs sliced out of a parsed
 ;; Turtle buffer: the byte after an IRI is the rest of the document,
 ;; not a NUL. `strcmp` would run past the IRI and order two entries by

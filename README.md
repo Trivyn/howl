@@ -381,8 +381,8 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop `main` at or after [#278](https://github.com/slop-lang/slop/pull/278), not yet
-in a release.** #278 makes a collection grow in the arena it was made in, with `:arena` for a put
+**Toolchain: slop 0.4.0 and slop-rdf 0.5.0** (the Rust crate's `slop-std-sys` 0.4.0 and
+`slop-rdf-sys` 0.5.0 vendor the same generation). 0.4.0 carries [#278](https://github.com/slop-lang/slop/pull/278), which makes a collection grow in the arena it was made in, with `:arena` for a put
 that must grow elsewhere (SLOP facts, below). Since #265 the verifier also proves a range return type
 rather than assuming it, which is why the naming registry types its ids `(Int 0 ..)`. el++'s rule contracts need #247 (`list-visited`, which makes the join's completeness
 statable), #248 (no trigger patterns on hypotheses; `list-contains` by structure), #251 (a pure
@@ -399,7 +399,9 @@ those properties come back unknown or failed; CI's verify step is non-blocking. 
 needs [#173](https://github.com/slop-lang/slop/issues/173) (a call resolves within its module, so
 `join` is the thread's and not `strlib`'s). 0.3.0 makes an unmarked parameter read-only
 ([#180](https://github.com/slop-lang/slop/issues/180)), so slop-rdf must be at or after its
-`param-mode-fixes` merge; the memory figures need its streaming scratch arena (slop-rdf #8). The
+`param-mode-fixes` merge; the memory figures need its streaming scratch arena (slop-rdf #8). 0.4.0's
+`spawn` aborts when a thread cannot start ([#192](https://github.com/slop-lang/slop/issues/192)) and
+rejects a `mut` capture ([#193](https://github.com/slop-lang/slop/issues/193)). The
 rows below were re-probed on each bump rather than assumed from release notes.
 
 | Works | Does not |

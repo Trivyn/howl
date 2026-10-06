@@ -1621,8 +1621,8 @@
     ;; undeclared user property whose kind nobody can determine.
     ;;
     ;; `starts-with` is bounded by the PREFIX length and length-checks
-    ;; first, so unlike `strlib.compare` it is safe on a String that
-    ;; slices into a larger buffer (slop-lang/slop#161).
+    ;; first, so it is safe on a String that slices into a larger buffer
+    ;; (as `strlib.compare` was not before slop 0.4.0, slop-lang/slop#161).
     (or (starts-with v OWL_NS)
         (starts-with v RDF_NS)
         (starts-with v RDFS_NS)

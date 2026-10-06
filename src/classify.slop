@@ -255,7 +255,8 @@
         ;;
         ;; The comparator is `canon.string-cmp` (FFI memcmp), NOT
         ;; `strlib.compare` — see the header of src/canon.slop for why
-        ;; strcmp is unsafe on the IRI slices this walks.
+        ;; strcmp (strlib's before slop 0.4.0) is unsafe on the IRI slices
+        ;; this walks.
         (sort-sub-pairs arena subs))))
 
   (fn extract-findings ((arena Arena) (sat Saturation) (names Names))
