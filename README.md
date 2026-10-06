@@ -273,7 +273,8 @@ make test     # verdict-discipline and structural-invariant tests
 make lib      # static library
 make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
 make example      # executable @example blocks: the completion rules, canon, context coverage
-make crate-test   # Rust crate, including the FFI layout guards
+make crate-test   # Rust crate: layout guards, API tests, every golden reproduced through it
+make crate-package  # the crate as `cargo publish` would package it (dry run, no upload)
 make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
 make test-tsan    # the tests under ThreadSanitizer (every test runs the parallel round)
 make determinism  # reports byte-identical at W in {1,2,4,8} for every round cap (fixtures; -corpus for RO/OBI/GO/GALEN)
@@ -329,7 +330,7 @@ src/
 cli/              CLI harness (§9) — exit codes are the verdict table
 oracle/           the differential oracle: ELK and HermiT behind one pinned OWL API (Gradle)
 corpus/           pinned ontologies, fixtures, probes, goldens; census, entdiff and the harness
-rust/             FFI layer, with the ABI layout guards
+rust/             the `howl` crate: C shim, safe API, layout guards (rust/README.md)
 csrc/             transpiled C (committed)
 ```
 
@@ -533,21 +534,31 @@ Neither is documented; the first is an "Unknown type" at check time and the seco
 address of an rvalue" at compile time. Both are loud, which is the only reason they are footnotes
 rather than entries in the list above.
 
-## The FFI layout guards
+## The Rust crate and its layout guards
 
-`rust/src/ffi.rs` hand-mirrors C structs the SLOP transpiler generates. Those definitions live in
-another repository and change without notice, so the mirrors are asserted against the real ABI in
-tests (`make crate-test`) rather than maintained by care.
+`rust/` is the `howl` crate ([`rust/README.md`](rust/README.md)): `Input`, then
+`Reasoner::classify`, then an owned `Report` whose verdict comes from the engine. It links the RDF and
+runtime C from `slop-rdf-sys` 0.5.0 and `slop-std-sys` 0.4.0 on crates.io. Its input is encoded as
+the CLI encodes, so `make crate-test` reproduces every committed golden byte for byte through the
+crate.
+
+**The engine's results never cross the FFI as structs.** An `Outcome` embeds a whole `Saturation`
+or `KscResult` by value. Those are dozens of engine-internal structs, and they change with every
+engine change. So the result stays in C (`rust/csrc_shim.c`) and is copied out through accessors
+compiled against the real headers. Rust mirrors only `ReasonerConfig`, the shim's term struct and
+`slop_string`. Those mirrors are asserted against the real ABI in tests rather than maintained by
+care.
 
 This is not hypothetical. GROWL 0.6.0 shipped a wrong-offset FFI read: a dependency added a field to
 a struct embedded by value in another, every following field shifted, the Rust mirror was not
 updated, and `graph.size()` returned a garbage pointer. Nothing failed loudly.
 
-The guards check sizes, offsets, **and field widths**. The last one is not redundant: SLOP range
-types lower to narrow integers (`(Int 1 .. 64)` → `uint8_t`), and widening one on the Rust side can
-be absorbed entirely by struct padding — leaving every offset and the total size identical while the
-Rust side reads padding into the high bits of the value. That gap was found by deliberately drifting
-a mirror to check the guards actually bite.
+The guards check sizes, offsets, **field widths** and the enum values the accessors return. The
+widths are not redundant. SLOP range types lower to narrow integers (`(Int 1 .. 64)` → `uint8_t`),
+and widening one on the Rust side can be absorbed entirely by struct padding. Every offset and the
+total size would stay identical while the Rust side reads padding into the high bits of the value.
+That gap was found by deliberately drifting a mirror to check the guards actually bite. `build.rs`
+also refuses to build if `csrc/runtime/slop_runtime.h` differs from the one `slop-std-sys` ships.
 
 ## Read next
 

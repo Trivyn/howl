@@ -179,6 +179,9 @@ slop_list_types_KName howl_copy_knames(slop_arena* arena, slop_list_types_KName 
 slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
+void howl_release_outcome(types_Outcome o);
+slop_result_howl_Prepared_types_Fault howl_prepare_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
+slop_result_types_Outcome_types_Fault howl_classify_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 
 #ifndef SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_NORMAXIOM_DEFINED
@@ -228,6 +231,17 @@ SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
 #endif
 
 

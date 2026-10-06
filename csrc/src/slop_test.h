@@ -1025,6 +1025,8 @@ slop_option_normalize_NormOutput test_normalize_triples(slop_arena* arena, slop_
 uint8_t test_same_normal_form(normalize_NormOutput a, normalize_NormOutput b);
 uint8_t test_same_report(types_Outcome a, types_Outcome b);
 uint8_t test_same_lines(slop_list_string a, slop_list_string b);
+uint8_t test_encoded_agrees(slop_arena* arena, slop_string path, types_ProfileSelection selection);
+uint8_t test_test_classify_encoded_is_classify(slop_arena* arena);
 uint8_t test_order_independent(slop_arena* arena, slop_string path);
 uint8_t test_test_triple_order_independence(slop_arena* arena);
 uint8_t test_addressed_subset(slop_list_types_Addressed xs, slop_list_types_Addressed ys);
@@ -1173,6 +1175,11 @@ SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
 #ifndef SLOP_OPTION_MAP_PTR_DEFINED
 #define SLOP_OPTION_MAP_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
@@ -1181,11 +1188,6 @@ SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
 #ifndef SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
 #define SLOP_OPTION_SATURATE_ROUNDDELTA_DEFINED
 SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
-#endif
-
-#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
-#define SLOP_OPTION_ARENA_PTR_DEFINED
-SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
@@ -1211,16 +1213,16 @@ SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
-#ifndef SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
-#define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
-#define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
-SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
-#endif
-
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
 SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
+#endif
+
+#ifndef SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
+#define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
+SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
 #endif
 
 #ifndef SLOP_LIST_TYPES_CLASSANSWER_DEFINED

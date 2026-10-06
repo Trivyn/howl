@@ -507,7 +507,8 @@
     (findings    Findings)     ; what WAS derived — always present, always meaningful
     (evidence    Evidence)     ; always present; PARTIAL unless the run was complete
     (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4)
-    (names       Names)))      ; el's saturation nodes are RENAMED: map back through this
+    (names       Names)        ; el's saturation nodes are RENAMED: map back through this
+    (owned       (List Arena)))) ; arenas `evidence` lives in beyond the caller's: release-outcome
 
   ;; The error path. Distinct from an Outcome: these produce no result
   ;; to report on.

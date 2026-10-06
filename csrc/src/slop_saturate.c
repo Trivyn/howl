@@ -506,7 +506,7 @@ types_Saturation saturate_commit_round(slop_arena* arena, slop_arena* run, slop_
                     }
                 }
             }
-            _retval = ((types_Saturation){.contexts = sat.contexts, .queues = new_queues, .active = new_active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:661:29"), .iteration = (sat.iteration + 1)});
+            _retval = ((types_Saturation){.contexts = sat.contexts, .queues = new_queues, .active = new_active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:667:29"), .iteration = (sat.iteration + 1)});
             goto _slop_post;
         }
     }
@@ -665,7 +665,7 @@ types_Saturation saturate_make_initial_saturation(slop_arena* arena, slop_list_t
         if (saturate_seed_node(arena, acc, types_node_bottom())) {
             count = (count + 1);
         }
-        _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:912:25"), .iteration = 0});
+        _retval = ((types_Saturation){.contexts = acc.contexts, .queues = acc.queues, .active = acc.active, .active_count = SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at saturate.slop:918:25"), .iteration = 0});
         goto _slop_post;
     }
     _slop_post: ;
@@ -745,15 +745,31 @@ slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena
                 }
             }
         }
+        if (config.worker_count > 1) {
+            {
+                __auto_type _coll = cas;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type a = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(prev); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
+            }
+        }
         if (cancelled) {
+            {
+                __auto_type _coll = prev;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type a = _coll.data[_i];
+                    ({ slop_arena_free(a); free(a); });
+                }
+            }
             _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
             goto _slop_post;
         } else {
             if (saturate_frontier_is_empty(state)) {
-                _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = true, .data.ok = ((saturate_RoundResult){.saturation = state, .termination = ((types_Termination){ .tag = types_Termination_fixpoint })}) });
+                _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = true, .data.ok = ((saturate_RoundResult){.saturation = state, .termination = ((types_Termination){ .tag = types_Termination_fixpoint }), .arenas = prev}) });
                 goto _slop_post;
             } else {
-                _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = true, .data.ok = ((saturate_RoundResult){.saturation = state, .termination = ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = state.iteration })}) });
+                _retval = ((slop_result_saturate_RoundResult_types_Fault){ .is_ok = true, .data.ok = ((saturate_RoundResult){.saturation = state, .termination = ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = state.iteration }), .arenas = prev}) });
                 goto _slop_post;
             }
         }

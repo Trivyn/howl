@@ -53,6 +53,7 @@ SLOP_OPTION_DEFINE(types_Queue, slop_option_types_Queue)
 struct saturate_RoundResult {
     types_Saturation saturation;
     types_Termination termination;
+    slop_list_arena_ptr arenas;
 };
 typedef struct saturate_RoundResult saturate_RoundResult;
 
@@ -254,6 +255,11 @@ slop_list_arena_ptr saturate_commit_arenas(slop_arena* arena, int64_t w);
 slop_result_saturate_RoundResult_types_Fault saturate_saturate(slop_arena* arena, types_Saturation sat, premise_RuleIndex idx, types_ReasonerConfig config);
 uint8_t saturate_deliver_seed(slop_arena* arena, types_Saturation sat, types_Node to, types_Derived d);
 
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
 #ifndef SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 #define SLOP_OPTION_SATURATE_ROUNDRESULT_DEFINED
 SLOP_OPTION_DEFINE(saturate_RoundResult, slop_option_saturate_RoundResult)
@@ -297,11 +303,6 @@ SLOP_OPTION_DEFINE(saturate_Queues, slop_option_saturate_Queues)
 #ifndef SLOP_OPTION_SATURATE_PARTITION_DEFINED
 #define SLOP_OPTION_SATURATE_PARTITION_DEFINED
 SLOP_OPTION_DEFINE(saturate_Partition, slop_option_saturate_Partition)
-#endif
-
-#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
-#define SLOP_OPTION_ARENA_PTR_DEFINED
-SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #endif
 
 #ifndef SLOP_OPTION_SATURATE_JOINED_DEFINED

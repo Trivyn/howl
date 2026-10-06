@@ -42,7 +42,7 @@ SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS)
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
-        acceptance corpus-acceptance golden golden-update test-asan golden-asan crate-vendor crate-build crate-test crate-publish \
+        acceptance corpus-acceptance golden golden-update test-asan golden-asan crate-vendor crate-build crate-test crate-package crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-el++ bench-check abox-fuzz
 
@@ -552,15 +552,19 @@ dist:
 # crate must not vendor its own copy, or consumers linking both will
 # collide on duplicate symbols.
 SHARED_MODULES := common file index list rdf serialize_ttl strlib thread ttl vocab xsd
+# The CLI's and the test harness's entry points are not library code; the
+# crate's build.rs compiles every .c it is given.
+ENTRY_MODULES  := main test
 
+CRATE_SKIP  := $(SHARED_MODULES) $(ENTRY_MODULES)
 CRATE_ALL_C := $(wildcard $(CSRC)/*.c)
 CRATE_ALL_H := $(wildcard $(CSRC)/*.h)
-CRATE_SRCS  := $(filter-out $(foreach m,$(SHARED_MODULES),$(CSRC)/slop_$(m).c),$(CRATE_ALL_C))
-CRATE_HDRS  := $(filter-out $(foreach m,$(SHARED_MODULES),$(CSRC)/slop_$(m).h),$(CRATE_ALL_H))
+CRATE_SRCS  := $(filter-out $(foreach m,$(CRATE_SKIP),$(CSRC)/slop_$(m).c),$(CRATE_ALL_C))
+CRATE_HDRS  := $(filter-out $(foreach m,$(CRATE_SKIP),$(CSRC)/slop_$(m).h),$(CRATE_ALL_H))
 
 crate-vendor:
 	@mkdir -p rust/csrc/src rust/csrc/runtime
-	rm -f $(foreach m,$(SHARED_MODULES),rust/csrc/src/slop_$(m).c rust/csrc/src/slop_$(m).h)
+	rm -f $(foreach m,$(CRATE_SKIP),rust/csrc/src/slop_$(m).c rust/csrc/src/slop_$(m).h)
 	cp $(CRATE_SRCS) $(CRATE_HDRS) rust/csrc/src/
 	cp csrc/runtime/slop_runtime.h rust/csrc/runtime/
 	cp LICENSE rust/LICENSE 2>/dev/null || true
@@ -571,6 +575,11 @@ crate-build: crate-vendor
 
 crate-test: crate-vendor
 	cd rust && cargo test
+
+# What `crate-publish` would upload, built from the packaged files alone
+# (no upload). --allow-dirty because csrc/ is vendored, not committed.
+crate-package: crate-vendor
+	cd rust && cargo publish --dry-run --allow-dirty
 
 crate-publish: crate-vendor
 	cd rust && cargo publish --allow-dirty

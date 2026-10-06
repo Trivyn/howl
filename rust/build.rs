@@ -1,4 +1,5 @@
 use std::env;
+use std::fs;
 use std::path::Path;
 
 fn main() {
@@ -11,23 +12,26 @@ fn main() {
     let rdf_inc = env::var("DEP_SLOP_RDF_INCLUDE").expect("slop-rdf-sys must be a dependency");
     let std_inc = env::var("DEP_SLOP_STD_INCLUDE").expect("slop-std-sys must be a dependency");
 
-    // HOWL's own modules that the bound API reaches. NOT YET EVERY ONE:
-    // the decoder and the el++ engine (decode, gate, canon, owl2, naming,
-    // premise, report, termstore, ksc*) use OWL 2 reserved vocabulary
-    // (owl:Axiom, owl:annotatedSource, ...) that slop-rdf added in 73091e0
-    // and slop-rdf-sys v0.2.1 does not yet vendor, so they cannot link
-    // against it. They join this list with the slop-rdf-sys release that
-    // carries that slop-rdf, which is also what binding `classify`
-    // (lib.rs, NotImplemented until then) needs.
-    let sources = [
-        "slop_types.c",
-        "slop_el.c",
-        "slop_classify.c",
-        "slop_saturate.c",
-        "slop_select.c",
-        "slop_normalize.c",
-        "slop_howl.c",
-    ];
+    // HOWL's modules are compiled against its own copy of the runtime
+    // header and linked against slop-std-sys's runtime objects, so the two
+    // must be the same generation. A mismatch would build cleanly and
+    // disagree about every inline runtime struct.
+    let ours = fs::read(runtime.join("slop_runtime.h")).expect("csrc/runtime/slop_runtime.h (run `make crate-vendor`)");
+    let theirs = fs::read(Path::new(&std_inc).join("../runtime/slop_runtime.h"))
+        .expect("slop-std-sys's csrc/runtime/slop_runtime.h");
+    assert!(
+        ours == theirs,
+        "HOWL's slop_runtime.h differs from slop-std-sys's: csrc/ and the -sys crates come from different slop releases"
+    );
+
+    // Every vendored HOWL module (`make crate-vendor` leaves out the
+    // shared ones and the CLI and test entry points), in a fixed order.
+    let mut sources: Vec<_> = fs::read_dir(csrc)
+        .expect("csrc/src (run `make crate-vendor`)")
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().map_or(false, |x| x == "c"))
+        .collect();
+    sources.sort();
 
     let mut build = cc::Build::new();
     build
@@ -40,19 +44,13 @@ fn main() {
         .opt_level(2)
         .warnings(false);
     for src in &sources {
-        build.file(csrc.join(src));
+        build.file(src);
     }
-    // Keeps the howl_arena_* wrappers and the howl_layout_* ABI probes.
+    // The input/run handles, their accessors, and the layout probes.
     build.file("csrc_shim.c");
     build.compile("howl_c");
 
     println!("cargo:rustc-link-lib=pthread");
     println!("cargo:rerun-if-changed=csrc_shim.c");
-    for src in &sources {
-        println!("cargo:rerun-if-changed={}", csrc.join(src).display());
-    }
-    println!(
-        "cargo:rerun-if-changed={}",
-        runtime.join("slop_runtime.h").display()
-    );
+    println!("cargo:rerun-if-changed=csrc");
 }

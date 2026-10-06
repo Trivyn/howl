@@ -56,9 +56,20 @@ typedef enum {
     types_Profile_profile_sriq
 } types_Profile;
 
+#ifndef SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_DEFINED
+#define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
+#endif
+
 #ifndef SLOP_OPTION_MAP_PTR_DEFINED
 #define SLOP_OPTION_MAP_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #endif
 
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
@@ -715,6 +726,7 @@ struct types_Outcome {
     types_Evidence evidence;
     int64_t rounds;
     types_Names names;
+    slop_list_arena_ptr owned;
 };
 typedef struct types_Outcome types_Outcome;
 
@@ -1052,6 +1064,11 @@ SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
 #ifndef SLOP_OPTION_TYPES_EVIDENCE_DEFINED
 #define SLOP_OPTION_TYPES_EVIDENCE_DEFINED
 SLOP_OPTION_DEFINE(types_Evidence, slop_option_types_Evidence)
+#endif
+
+#ifndef SLOP_OPTION_ARENA_PTR_DEFINED
+#define SLOP_OPTION_ARENA_PTR_DEFINED
+SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
