@@ -21,7 +21,7 @@
   (@doc "Verdict-discipline and structural-invariant tests")
 
   (import rdf (IRI Triple Term make-iri make-blank make-literal make-triple make-triple-term term-eq))
-  (import termstore (build-store store-objects store-typed store-contains store-has-any triple-of
+  (import termstore (encode-triples build-store store-objects store-typed store-contains store-has-any triple-of
                      store-over store-insert-ids))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
                  OWL_THING OWL_NOTHING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
@@ -47,7 +47,7 @@
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
-  (import howl (Verdict verdict classify Prepared ElWork prepare reason decode-owned prepare-in-profile))
+  (import howl (Verdict verdict classify classify-encoded Prepared ElWork prepare reason decode-owned prepare-in-profile))
   (import el (apply-el-rules apply-el-rules-reference))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
@@ -133,7 +133,8 @@
           (findings    (make-findings arena inconsistent unsat-count))
           (evidence    (union-new Evidence el-evidence (empty-saturation arena)))
           (rounds      0)
-          (names       (empty-names arena))))))
+          (names       (empty-names arena))
+          (owned       (list-new arena Arena))))))
 
   (fn verdict-eq ((a Verdict) (b Verdict))
     (@intent "Compare two verdicts")
@@ -3781,6 +3782,52 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (set! i (+ i 1))))
         ok)))
 
+  (fn encoded-agrees ((arena Arena) (path String) (selection ProfileSelection))
+    (@intent "classify over the triples and classify-encoded over their encoding give the same report")
+    (@spec ((Arena String ProfileSelection) -> Bool))
+    (@alloc arena)
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg selection selection)
+        (match (parse-ttl-file arena path)
+          ((error _) false)
+          ((ok g)
+            (let ((doc (encode-triples arena (. g triples))))
+              (match (classify arena (. g triples) (list-new arena IRI) cfg)
+                ((error _) false)
+                ((ok o1)
+                  ;; Twice over the same encoding: classify-encoded only
+                  ;; reads it, so a second run must see the same document.
+                  (match (classify-encoded arena doc (list-new arena IRI) cfg)
+                    ((error _) false)
+                    ((ok o2)
+                      (match (classify-encoded arena doc (list-new arena IRI) cfg)
+                        ((error _) false)
+                        ((ok o3)
+                          (let ((l1 (report-lines arena o1)))
+                            (if (and (same-lines l1 (report-lines arena o2))
+                                     (same-lines l1 (report-lines arena o3)))
+                              true
+                              (do (print "  [encoded] report differs: ") (println path) false)))))))))))))))
+
+  (fn test-classify-encoded-is-classify ((arena Arena))
+    (@intent "The Rust crate's entry point reports exactly what classify does, on el and el++")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; classify-encoded is the crate's whole path (rust/csrc_shim.c). The
+    ;; crate's own tests hold it to the CLI's goldens; this holds it to
+    ;; `classify`, the port's entry point, without leaving SLOP.
+    (let ((mut ok true)
+          (el   (union-new ProfileSelection explicit 'profile-el))
+          (elpp (union-new ProfileSelection explicit 'profile-el-plus-plus)))
+      (do
+        (for-each (p (m0-fixture-paths arena))
+          (when (not (and (encoded-agrees arena p el) (encoded-agrees arena p elpp)))
+            (set! ok false)))
+        (when (not (encoded-agrees arena "corpus/fixtures/hazards/unattested-import.ttl" el))
+          (set! ok false))
+        ok)))
+
   (fn order-independent ((arena Arena) (path String))
     (@intent "The same document with its triples reversed: identical normal form and report")
     (@spec ((Arena String) -> Bool))
@@ -5209,6 +5256,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-triple-order-independence arena)))
             (print-test-result "§6.8: reversed triples give the same normal form and report" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-classify-encoded-is-classify arena)))
+            (print-test-result "§8.4: classify-encoded reports what classify does (el, el++)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-indexed-dispatch-matches-reference arena)))

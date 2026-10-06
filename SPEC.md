@@ -3284,6 +3284,27 @@ oracles checked against each other in production**. Differential testing ([§10]
 stops being a CI activity and becomes a live mechanism, and agreement with GROWL on the overlap
 becomes a standing correctness obligation.
 
+**The Rust crate (`rust/`) is the adapter's substrate.** `Reasoner::classify(&Input)` returns an
+owned `Report` or a `Fault`.
+
+- **The `Report`** holds the profile that ran, the engine's verdict (never recomputed in Rust),
+  `inconsistent`, the unsatisfiable classes, the subsumptions, the omissions (rendered as the report
+  renders them), the termination, the rounds, and the canonical report lines.
+- **It always runs non-strict.**
+- **An `Input`** holds one or more documents, each standardized apart as `-I` does, plus the
+  caller's `imports_resolved` attestation. It is encoded as the CLI encodes, and classified by
+  `howl.classify-encoded`, the CLI's own path as one call. So the CLI's goldens certify the crate's
+  reports byte for byte (`rust/tests/goldens.rs`).
+- **Cancellation** is a `CancelToken` that the engine reads at round boundaries.
+- **What Rust mirrors:** only `ReasonerConfig`, the shim's term struct and `slop_string`. Every
+  engine result is read through C accessors compiled against the real headers. An `Outcome` embeds
+  its whole `Saturation` or `KscResult` by value, and that is the GROWL 0.6.0 drift hazard at its
+  largest.
+- **A run frees everything it allocated.** el's store and last queues live in arenas of the
+  engine's own, which the `Outcome` carries in `owned`. `howl.release-outcome` frees them once
+  nothing reads the evidence. The crate calls it when it drops a run, and a process that exits need
+  not.
+
 ### 8.5 Required port amendments
 
 Four capabilities this spec relies on cannot cross `TBoxReasoner` as it exists today. They are
@@ -3757,7 +3778,7 @@ howl/
     slop.toml             ← [project] howl-cli, entry main.slop, output build/howl
     main.slop
     tests/
-  rust/                   ← FFI layer (mirror GROWL; mind the ffi-abi-sync gotcha)
+  rust/                   ← the `howl` crate: C shim + safe API over an encoded Input (§8.4)
   include/howl.h
   Makefile
   .gitignore

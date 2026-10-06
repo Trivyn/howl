@@ -60,6 +60,8 @@
     default-config
     ;; The pipeline
     classify
+    classify-encoded
+    release-outcome
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
     Decoded
     decode
@@ -448,7 +450,8 @@
                   (findings    (extract-findings arena (. rr saturation) (. p names)))
                   (evidence    (union-new Evidence el-evidence (. rr saturation)))
                   (rounds      (. (. rr saturation) iteration))
-                  (names       (. p names)))))))
+                  (names       (. p names))
+                  (owned       (. rr arenas)))))))
       ((ksc-work w)
         (match (ksc-classify arena (. w axioms) (. w classes) config)
           ((error f) (error f))
@@ -460,7 +463,8 @@
                   (findings    (extract-ksc-findings arena r))
                   (evidence    (union-new Evidence ksc-evidence r))
                   (rounds      (. r rounds))
-                  (names       (. p names)))))))))
+                  (names       (. p names))
+                  (owned       (list-new arena Arena)))))))))
 
   (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")
@@ -469,6 +473,51 @@
     ;; The port's entry point. It stays one call, so the library path
     ;; cannot drift from the CLI's timed path: both are these two calls.
     (match (prepare arena triples imports-resolved config)
+      ((error f) (error f))
+      ((ok p)    (reason arena p config))))
+
+  (fn release-outcome ((o Outcome))
+    (@intent "Free the arenas an Outcome's evidence lives in beyond the caller's")
+    (@spec ((Outcome) -> Unit))
+    ;; For a host that classifies more than once (the Rust crate): el's
+    ;; store grows in commit arenas of its own and its last queues in their
+    ;; generation's, and `evidence` reads them, so they cannot go before
+    ;; the Outcome is done with - on GO, ~80 MB a run. Afterwards
+    ;; `evidence` must not be read; the findings, coverage and the report
+    ;; lines are in the caller's arena and stay valid. A process that exits
+    ;; (the CLI) need not call it.
+    (for-each (a (. o owned)) (arena-free a)))
+
+  (fn prepare-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "The front end over an encoded document, owning everything it returns")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; The CLI's `decode-held` and `prepare-from` as one call. `doc` is only
+    ;; read: decode's working memory is a scratch arena of its own, freed
+    ;; once the owned copy is taken, and the owned Decoded is freed once
+    ;; prepared - so `doc` can be prepared again.
+    (let ((held  (arena-new 16777216))
+          (front (arena-new 16777216))
+          (d     (own-decoded held (decode-from front doc imports-resolved))))
+      (do
+        (arena-free front)
+        ;; The `ok` arm first: slop types a match's result from its first arm.
+        (let ((res (match d
+                     ((ok dd)   (prepare-decoded arena dd config))
+                     ((error f) (error (copy-fault arena f))))))
+          (do
+            (arena-free held)
+            res)))))
+
+  (fn classify-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig))
+    (@intent "Classify an encoded document: the CLI's path, as one call")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; The entry point for a host that encodes its input as the CLI does
+    ;; (the Rust crate, rust/csrc_shim.c). With `prepare-encoded` it is the
+    ;; CLI's `decode-held`, `prepare-from` and `reason-prepared`, so a host's
+    ;; report is the CLI's report and the CLI's goldens certify it.
+    (match (prepare-encoded arena doc imports-resolved config)
       ((error f) (error f))
       ((ok p)    (reason arena p config))))
 )

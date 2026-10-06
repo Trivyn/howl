@@ -125,9 +125,15 @@
   ;; Saturation (§6.5): a capped run and a coherent ontology are
   ;; indistinguishable at the Saturation level, and conflating them is
   ;; how a validator returns a false pass.
+  ;;
+  ;; `arenas` are the ones the saturation's collections live in beyond the
+  ;; caller's: the commit arenas the store grew in, and the last
+  ;; generation's queues. They were made here and are the CALLER's to free,
+  ;; once nothing reads the saturation (howl.release-outcome).
   (type RoundResult (record
     (saturation  Saturation)
-    (termination Termination)))
+    (termination Termination)
+    (arenas      (List Arena))))
 
   ;; Δₙ₊₁ under construction: for each touched node, the NEW facts only.
   ;;
@@ -957,9 +963,10 @@
     (@spec ((Arena Int) -> (List Arena)))
     (@alloc arena)
     ;; The store grows into these for the rest of the run and extraction
-    ;; reads it afterwards, so they are never freed - like the run arena.
-    ;; At W = 1 the run arena is the only committer's, and nothing is
-    ;; spawned: the sequential reference path.
+    ;; reads it afterwards, so they outlive `saturate`: the W fresh ones
+    ;; travel out in its RoundResult, for howl.release-outcome. At W = 1 the
+    ;; run arena is the only committer's, and nothing is spawned: the
+    ;; sequential reference path.
     (let ((mut out (list-new arena Arena)))
       (do
         (if (<= w 1)
@@ -1035,15 +1042,26 @@
                   (set! prev (. adv arenas))
                   (set! state (. adv saturation))
                   (set! going (not (frontier-is-empty state))))))))
+        ;; The saturation's arenas outlive this call: the last generation's
+        ;; queues and the commit arenas the store grew in. A cancelled run's
+        ;; state is discarded, so they go now; otherwise they travel with it.
+        ;; At W = 1 the only commit arena is the caller's own (commit-arenas),
+        ;; which is never this call's to hand over.
+        (when (> (. config worker-count) 1)
+          (for-each (a cas) (list-push prev a)))
         (if cancelled
-          (error (union-new Fault cancelled))
+          (do
+            (for-each (a prev) (arena-free a))
+            (error (union-new Fault cancelled)))
           (if (frontier-is-empty state)
             (ok (record-new RoundResult
                   (saturation  state)
-                  (termination (union-new Termination fixpoint))))
+                  (termination (union-new Termination fixpoint))
+                  (arenas      prev)))
             (ok (record-new RoundResult
                   (saturation  state)
-                  (termination (union-new Termination resource-limit (. state iteration))))))))))
+                  (termination (union-new Termination resource-limit (. state iteration)))
+                  (arenas      prev))))))))
   (fn deliver-seed ((arena Arena) (sat Saturation) (to Node) (d Derived))
     (@intent "Place one derived fact into Δ₀ for an existing context")
     (@spec ((Arena Saturation Node Derived) -> Bool))
