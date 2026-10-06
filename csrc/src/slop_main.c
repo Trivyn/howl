@@ -77,7 +77,7 @@ int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r) {
     _slop_post: ;
     SLOP_POST(((_retval >= 0)), "(>= $result 0)");
     SLOP_POST(((_retval <= 3)), "(<= $result 3)");
-    SLOP_POST((({ __auto_type _mv = r; uint8_t _mr; if (_mv.is_ok) { __auto_type o = _mv.data.ok; _mr = (_retval <= 2); } else { __auto_type f = _mv.data.err; _mr = ({ __auto_type _mv = f; uint8_t _mr = {0}; switch (_mv.tag) { case types_Fault_cancelled: { _mr = (_retval == 2); break; } case types_Fault_refused: { __auto_type _ = _mv.data.refused; _mr = (_retval == 2); break; } case types_Fault_input_error: { __auto_type _ = _mv.data.input_error; _mr = (_retval == 3); break; } case types_Fault_unavailable: { __auto_type _ = _mv.data.unavailable; _mr = (_retval == 3); break; }  } _mr; }); } _mr; })), "(match r ((ok o) (<= $result 2)) ((error f) (match f ((cancelled) (== $result 2)) ((refused _) (== $result 2)) ((input-error _) (== $result 3)) ((unavailable _) (== $result 3)))))");
+    SLOP_POST((({ __auto_type _mv = r; uint8_t _mr; if (_mv.is_ok) { __auto_type o = _mv.data.ok; _mr = (_retval <= 2); } else { __auto_type f = _mv.data.err; _mr = ({ __auto_type _mv = f; uint8_t _mr = {0}; int _mm = 0; switch (_mv.tag) { case types_Fault_cancelled: { _mr = (_retval == 2); _mm = 1; break; } case types_Fault_refused: { _mr = (_retval == 2); _mm = 1; break; } case types_Fault_input_error: { _mr = (_retval == 3); _mm = 1; break; } case types_Fault_unavailable: { _mr = (_retval == 3); _mm = 1; break; }  } if (!_mm) { SLOP_UNREACHABLE(); } _mr; }); } _mr; })), "(match r ((ok o) (<= $result 2)) ((error f) (match f ((cancelled) (== $result 2)) ((refused _) (== $result 2)) ((input-error _) (== $result 3)) ((unavailable _) (== $result 3)))))");
     return _retval;
 }
 
@@ -267,16 +267,16 @@ int main(int argc, char** _c_argv) {
         #ifdef SLOP_DEBUG
         SLOP_PRE((268435456) > 0, "with-arena size must be positive");
         #endif
-        slop_arena _arena = slop_arena_new(268435456);
+        slop_arena _arena_4 = slop_arena_new(268435456);
         #ifdef SLOP_DEBUG
-        SLOP_PRE(_arena.base != NULL, "arena allocation failed");
+        SLOP_PRE(_arena_4.base != NULL, "arena allocation failed");
         #endif
-        slop_arena* arena = &_arena;
+        slop_arena* arena = &_arena_4;
         if (argc < 3) {
             main_print_usage();
             {
                 int _wa_ret = main_EXIT_ERROR;
-                slop_arena_free(arena);
+                slop_arena_free(&_arena_4);
                 return _wa_ret;
             }
         } else {
@@ -287,7 +287,7 @@ int main(int argc, char** _c_argv) {
                     printf("%.*s\n", (int)(command).len, (command).data);
                     {
                         int _wa_ret = main_EXIT_ERROR;
-                        slop_arena_free(arena);
+                        slop_arena_free(&_arena_4);
                         return _wa_ret;
                     }
                 } else {
@@ -469,7 +469,7 @@ int main(int argc, char** _c_argv) {
                         if (failed) {
                             {
                                 int _wa_ret = main_EXIT_ERROR;
-                                slop_arena_free(arena);
+                                slop_arena_free(&_arena_4);
                                 return _wa_ret;
                             }
                         } else {
@@ -558,7 +558,7 @@ int main(int argc, char** _c_argv) {
                                 }
                                 {
                                     int _wa_ret = main_exit_code_for(result);
-                                    slop_arena_free(arena);
+                                    slop_arena_free(&_arena_4);
                                     return _wa_ret;
                                 }
                             }

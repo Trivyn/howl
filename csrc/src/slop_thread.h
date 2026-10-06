@@ -4,6 +4,7 @@
 #include "../runtime/slop_runtime.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include <slop_runtime.h>
 #include <pthread.h>
 
 typedef struct thread_ThreadInt thread_ThreadInt;
