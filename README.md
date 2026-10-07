@@ -178,8 +178,9 @@ The library always runs as the CLI does without `--strict`: an omission is repor
 
 ### Rust
 
-The `howl` crate in [`rust/`](rust/README.md) wraps the C API in a safe interface whose results are
-owned Rust values. It is not on crates.io yet.
+The [`howl-reasoner`](https://crates.io/crates/howl-reasoner) crate in [`rust/`](rust/README.md)
+wraps the C API in a safe interface whose results are owned Rust values. Add it with
+`cargo add howl-reasoner`; it is imported as `howl`.
 
 ## Performance
 

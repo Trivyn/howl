@@ -23,7 +23,8 @@ from defined classes, which OWL 2 RL materialization cannot see.
     slop.
   - Inputs and runs are opaque handles. Turtle and triple input, attested imports and cancellation
     are supported. See `examples/c/classify.c`.
-- **A Rust crate** in `rust/`, a safe wrapper over the C API. It is not on crates.io yet.
+- **A Rust crate** in `rust/`, a safe wrapper over the C API, published on crates.io as
+  `howl-reasoner` (imported as `howl`).
 
 ### What it guarantees
 

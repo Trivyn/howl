@@ -1,5 +1,5 @@
 [package]
-name = "howl"
+name = "howl-reasoner"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.63"
@@ -21,6 +21,11 @@ include = [
     "README.md",
     "LICENSE",
 ]
+
+# `howl` on crates.io is an unrelated crate; the library keeps the name, so
+# callers write `use howl::...`.
+[lib]
+name = "howl"
 
 [dependencies]
 # slop 0.4.0 and slop-rdf 0.5.0: the generation HOWL's csrc/ is built with.

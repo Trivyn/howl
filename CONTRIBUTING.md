@@ -144,6 +144,10 @@ criteria.
   macOS;
 - publishes a GitHub release with those files, using the changelog entry as its notes.
 
+3. From the tagged commit, run `make crate-package` (a dry run), then `make crate-publish` to upload
+   `howl-reasoner` to crates.io. This needs `cargo login` with a token for the crate's owners. A
+   published version can be yanked but never replaced.
+
 ## Further reading
 
 - [`docs/verification.md`](docs/verification.md): what `slop verify` can and cannot prove here,
