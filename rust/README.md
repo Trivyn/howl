@@ -1,4 +1,4 @@
-# howl
+# howl-reasoner
 
 Rust bindings for [HOWL](https://github.com/Trivyn/howl), a consequence-based description-logic
 reasoner. HOWL classifies a TBox, giving its coherence, its unsatisfiable classes and its full
@@ -10,6 +10,12 @@ toolchain. The RDF and runtime C come from [`slop-rdf-sys`](https://crates.io/cr
 0.5.0 and [`slop-std-sys`](https://crates.io/crates/slop-std-sys) 0.4.0.
 
 ## Quick start
+
+```sh
+cargo add howl-reasoner
+```
+
+The library is imported as `howl`:
 
 ```rust
 use howl::{Input, Reasoner, Verdict};
