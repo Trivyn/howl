@@ -221,40 +221,43 @@ mod layout_guard {
         }};
     }
 
+    /// Call one probe. The probes take nothing and only report a constant.
+    fn c(probe: unsafe extern "C" fn() -> usize) -> usize {
+        unsafe { probe() }
+    }
+
     #[test]
     fn structs_match_c_abi() {
-        let checks: [(&str, usize, usize); 26] = unsafe {
-            [
-                ("slop_string", size_of::<SlopString>(), howl_layout_sizeof_slop_string()),
-                ("slop_string.data", offset_of!(SlopString, data), howl_layout_offset_slop_string_data()),
-                ("howl_Input", size_of::<Input>(), howl_layout_sizeof_howl_Input()),
-                ("howl_Run", size_of::<Run>(), howl_layout_sizeof_howl_Run()),
-                ("howl_Options", size_of::<Options>(), howl_layout_sizeof_howl_Options()),
-                ("howl_Options.max_iterations", offset_of!(Options, max_iterations), howl_layout_offset_howl_Options_max_iterations()),
-                ("howl_Options.profile", offset_of!(Options, profile), howl_layout_offset_howl_Options_profile()),
-                ("howl_Options.auto_select", offset_of!(Options, auto_select), howl_layout_offset_howl_Options_auto_select()),
-                ("howl_Options.cancel", offset_of!(Options, cancel), howl_layout_offset_howl_Options_cancel()),
-                ("width howl_Options.workers", width_of!(Options, workers), howl_layout_width_howl_Options_workers()),
-                ("width howl_Options.profile", width_of!(Options, profile), howl_layout_width_howl_Options_profile()),
+        let checks: [(&str, usize, usize); 26] = [
+                ("slop_string", size_of::<SlopString>(), c(howl_layout_sizeof_slop_string)),
+                ("slop_string.data", offset_of!(SlopString, data), c(howl_layout_offset_slop_string_data)),
+                ("howl_Input", size_of::<Input>(), c(howl_layout_sizeof_howl_Input)),
+                ("howl_Run", size_of::<Run>(), c(howl_layout_sizeof_howl_Run)),
+                ("howl_Options", size_of::<Options>(), c(howl_layout_sizeof_howl_Options)),
+                ("howl_Options.max_iterations", offset_of!(Options, max_iterations), c(howl_layout_offset_howl_Options_max_iterations)),
+                ("howl_Options.profile", offset_of!(Options, profile), c(howl_layout_offset_howl_Options_profile)),
+                ("howl_Options.auto_select", offset_of!(Options, auto_select), c(howl_layout_offset_howl_Options_auto_select)),
+                ("howl_Options.cancel", offset_of!(Options, cancel), c(howl_layout_offset_howl_Options_cancel)),
+                ("width howl_Options.workers", width_of!(Options, workers), c(howl_layout_width_howl_Options_workers)),
+                ("width howl_Options.profile", width_of!(Options, profile), c(howl_layout_width_howl_Options_profile)),
                 // One byte before 8-aligned `cancel`: padding would hide a
                 // widened mirror from every offset above.
-                ("width howl_Options.auto_select", width_of!(Options, auto_select), howl_layout_width_howl_Options_auto_select()),
-                ("howl_TermIn", size_of::<TermIn>(), howl_layout_sizeof_howl_TermIn()),
-                ("howl_TermIn.blank", offset_of!(TermIn, blank), howl_layout_offset_howl_TermIn_blank()),
-                ("howl_TermIn.value", offset_of!(TermIn, value), howl_layout_offset_howl_TermIn_value()),
-                ("howl_TermIn.datatype", offset_of!(TermIn, datatype), howl_layout_offset_howl_TermIn_datatype()),
-                ("howl_TermIn.lang", offset_of!(TermIn, lang), howl_layout_offset_howl_TermIn_lang()),
-                ("width howl_TermIn.kind", width_of!(TermIn, kind), howl_layout_width_howl_TermIn_kind()),
-                ("howl_TurtleResult", size_of::<TurtleResult>(), howl_layout_sizeof_howl_TurtleResult()),
-                ("howl_TurtleResult.message", offset_of!(TurtleResult, message), howl_layout_offset_howl_TurtleResult_message()),
-                ("howl_TurtleResult.line", offset_of!(TurtleResult, line), howl_layout_offset_howl_TurtleResult_line()),
-                ("howl_TurtleResult.column", offset_of!(TurtleResult, column), howl_layout_offset_howl_TurtleResult_column()),
-                ("width howl_TurtleResult.ok", width_of!(TurtleResult, ok), howl_layout_width_howl_TurtleResult_ok()),
-                ("types_Termination", size_of::<Termination>(), howl_layout_sizeof_types_Termination()),
-                ("types_Termination.data", offset_of!(Termination, resource_limit), howl_layout_offset_types_Termination_data()),
-                ("width types_Termination.tag", width_of!(Termination, tag), howl_layout_width_types_Termination_tag()),
-            ]
-        };
+                ("width howl_Options.auto_select", width_of!(Options, auto_select), c(howl_layout_width_howl_Options_auto_select)),
+                ("howl_TermIn", size_of::<TermIn>(), c(howl_layout_sizeof_howl_TermIn)),
+                ("howl_TermIn.blank", offset_of!(TermIn, blank), c(howl_layout_offset_howl_TermIn_blank)),
+                ("howl_TermIn.value", offset_of!(TermIn, value), c(howl_layout_offset_howl_TermIn_value)),
+                ("howl_TermIn.datatype", offset_of!(TermIn, datatype), c(howl_layout_offset_howl_TermIn_datatype)),
+                ("howl_TermIn.lang", offset_of!(TermIn, lang), c(howl_layout_offset_howl_TermIn_lang)),
+                ("width howl_TermIn.kind", width_of!(TermIn, kind), c(howl_layout_width_howl_TermIn_kind)),
+                ("howl_TurtleResult", size_of::<TurtleResult>(), c(howl_layout_sizeof_howl_TurtleResult)),
+                ("howl_TurtleResult.message", offset_of!(TurtleResult, message), c(howl_layout_offset_howl_TurtleResult_message)),
+                ("howl_TurtleResult.line", offset_of!(TurtleResult, line), c(howl_layout_offset_howl_TurtleResult_line)),
+                ("howl_TurtleResult.column", offset_of!(TurtleResult, column), c(howl_layout_offset_howl_TurtleResult_column)),
+                ("width howl_TurtleResult.ok", width_of!(TurtleResult, ok), c(howl_layout_width_howl_TurtleResult_ok)),
+                ("types_Termination", size_of::<Termination>(), c(howl_layout_sizeof_types_Termination)),
+                ("types_Termination.data", offset_of!(Termination, resource_limit), c(howl_layout_offset_types_Termination_data)),
+                ("width types_Termination.tag", width_of!(Termination, tag), c(howl_layout_width_types_Termination_tag)),
+        ];
         for (what, rust, c) in checks {
             assert_eq!(rust, c, "{what} drifted from include/howl.h");
         }
