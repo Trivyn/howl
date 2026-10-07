@@ -131,6 +131,19 @@ criteria.
 | M3 | Turtle emission + GROWL round-trip | not started |
 | M4 | alignment + minimal repair | not started |
 
+## Releasing
+
+1. Set the version in `slop.toml` and `rust/Cargo.toml`, and add its entry to `CHANGELOG.md`
+   (`## X.Y.Z — date`). Merge.
+2. Tag the merge commit `vX.Y.Z` and push the tag.
+
+`.github/workflows/release.yml` then:
+- refuses a tag that disagrees with `slop.toml`, the crate or the changelog;
+- runs the tests and the C API test;
+- builds the release CLI (`howl --version` must print the tag's version) and `libhowl` on Linux and
+  macOS;
+- publishes a GitHub release with those files, using the changelog entry as its notes.
+
 ## Further reading
 
 - [`docs/verification.md`](docs/verification.md): what `slop verify` can and cannot prove here,

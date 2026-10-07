@@ -20,11 +20,14 @@ HOWL is a consequence-based reasoner for the OWL 2 EL family. It is written in
 
 ## Quick start
 
-HOWL builds from the committed C with nothing but a C compiler:
+Each [GitHub release](https://github.com/Trivyn/howl/releases) has the `howl` binary and the C
+library for linux-x86_64 and macos-arm64. Anywhere else, HOWL builds from the committed C with
+nothing but a C compiler:
 
 ```sh
 make                 # builds ./build/howl
 ./build/howl validate ontology.ttl
+./build/howl --version
 ```
 
 ```
@@ -84,6 +87,7 @@ any omission makes an otherwise clean run inconclusive.
 ```
 howl validate <ontology.ttl> [--profile P] [--strict] [--no-imports] [-I FILE]...
                              [--report] [--timings] [--max-iterations N] [--workers N]
+howl --version
 ```
 
 - **`-I FILE`** loads an imported document and attests it. HOWL never fetches anything, so each

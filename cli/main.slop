@@ -224,6 +224,14 @@
     (let ((ptr (@ argv index)))
       (String ptr (strlen ptr))))
 
+  (fn is-version-request ((argc Int) (argv (Ptr (Ptr U8))))
+    (@intent "Whether the command line is exactly `howl --version` (or -V)")
+    (@spec ((Int (Ptr (Ptr U8))) -> Bool))
+    (if (== argc 2)
+      (let ((a (argv-to-string argv 1)))
+        (if (string-eq a "--version") true (string-eq a "-V")))
+      false))
+
   (fn print-usage ()
     (@intent "Print the command surface")
     (@spec (() -> Unit))
@@ -233,6 +241,7 @@
       (println "USAGE:")
       (println "  howl validate    <ontology.ttl> [--profile P] [--strict] [--no-imports] [-I FILE]...")
       (println "  howl classify    <ontology.ttl>          (--reduce, --emit: not until M3)")
+      (println "  howl --version")
       (println "")
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
       (println "  --profile P  the calculus: el (default), el++, horn-sriq, sriq, or auto;")
@@ -401,6 +410,11 @@
     ;; the CI line believes the run refused. Unknown commands, unknown
     ;; arguments and unimplemented flags all exit 3.
     (with-arena 268435456
+      (if (is-version-request argc argv)
+        ;; The build's version, from the HOWL_VERSION every Makefile build
+        ;; defines (slop.toml's, or the release tag's). It is never part of
+        ;; a report: a report is a function of input and budget alone.
+        (do (c-inline "printf(\"howl %s\\n\", HOWL_VERSION);") 0)
       (if (< argc 3)
         (do (print-usage) EXIT_ERROR)
         (let ((command (argv-to-string argv 1)))
@@ -610,4 +624,4 @@
                                   (print-omissions arena os))))))
                       (when timings
                         (print-memory arena m-parsed m-decoded m-prepared m-reasoned (peak-mb)))
-                      (exit-code-for result))))))))))))
+                      (exit-code-for result)))))))))))))
