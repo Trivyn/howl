@@ -21,8 +21,9 @@ HOWL is a consequence-based reasoner for the OWL 2 EL family. It is written in
 ## Quick start
 
 Each [GitHub release](https://github.com/Trivyn/howl/releases) has the `howl` binary and the C
-library for linux-x86_64 and macos-arm64. Anywhere else, HOWL builds from the committed C with
-nothing but a C compiler:
+library for linux-x86_64 and macos-arm64. From Rust, use the
+[`howl-reasoner`](https://crates.io/crates/howl-reasoner) crate ([below](#rust)). Anywhere else,
+HOWL builds from the committed C with nothing but a C compiler:
 
 ```sh
 make                 # builds ./build/howl
@@ -178,9 +179,33 @@ The library always runs as the CLI does without `--strict`: an omission is repor
 
 ### Rust
 
-The [`howl-reasoner`](https://crates.io/crates/howl-reasoner) crate in [`rust/`](rust/README.md)
-wraps the C API in a safe interface whose results are owned Rust values. Add it with
-`cargo add howl-reasoner`; it is imported as `howl`.
+The [`howl-reasoner`](https://crates.io/crates/howl-reasoner) crate wraps the C API in a safe
+interface whose results are owned Rust values. It builds the engine from vendored C, so it needs a C
+compiler but no SLOP toolchain.
+
+```sh
+cargo add howl-reasoner
+```
+
+The crate is imported as `howl` (the name `howl` on crates.io belongs to an unrelated crate):
+
+```rust
+use howl::{Input, Reasoner, Verdict};
+
+let mut input = Input::new();
+input.add_turtle(&std::fs::read_to_string("ontology.ttl")?)?;
+
+let report = Reasoner::new().classify(&input)?;
+match report.verdict {
+    Verdict::Coherent => println!("coherent"),
+    Verdict::Incoherent => println!("unsatisfiable: {:?}", report.unsatisfiable),
+    // NOT a pass: something was omitted, or the run stopped early.
+    Verdict::Inconclusive => println!("omitted: {:?}", report.omissions),
+}
+```
+
+[`rust/README.md`](rust/README.md) covers input, the report, cancellation and threads. The API
+reference is on [docs.rs](https://docs.rs/howl-reasoner).
 
 ## Performance
 
