@@ -41,6 +41,9 @@ a false one. An attested IRI whose triples were never added passes silently.
 A document that fails to parse returns `Fault::InputError`, and so does every later `classify` of
 that input, because the triples before the error were already added.
 
+Choose the profile with `Config::selection`: `ProfileSelection::Explicit(Profile::El)` (the
+default), `Explicit(Profile::ElPlusPlus)`, or `Auto`.
+
 ## Report
 
 `Reasoner::classify(&input)` returns a `Report` or a `Fault`. Classifying does not consume the
