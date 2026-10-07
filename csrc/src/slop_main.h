@@ -59,6 +59,7 @@ int64_t main_exit_code_for(slop_result_types_Outcome_types_Fault r);
 uint8_t main_parse_into(slop_arena* arena, termstore_Encoded* enc, slop_string path);
 slop_option_rdf_IRI main_ontology_iri_from(termstore_Encoded e, int64_t from);
 slop_string main_argv_to_string(uint8_t** argv, int64_t index);
+uint8_t main_is_version_request(int64_t argc, uint8_t** argv);
 void main_print_usage(void);
 void main_eprint(slop_string s);
 void main_print_timings(slop_arena* arena, int64_t t0, int64_t t1, int64_t t2, int64_t t3, int64_t t4);

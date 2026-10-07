@@ -1,0 +1,87 @@
+name: Release
+
+# Pushing a tag vX.Y.Z builds the CLI and the C library (libhowl.a with its
+# generated include/howl.h) on Linux and macOS from the committed C, and
+# publishes them as a GitHub release whose notes are CHANGELOG.md's entry for
+# X.Y.Z. No SLOP toolchain is needed: csrc/ and include/howl.h are committed.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+            cc: gcc
+          - os: macos-26
+            platform: macos-arm64
+            cc: gcc-14
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # A tag that disagrees with the version the sources declare would ship a
+      # binary whose --version names one release and whose crate names another.
+      - name: Tag matches slop.toml, the crate and CHANGELOG.md
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          grep -qx "version = \"$VERSION\"" slop.toml || { echo "slop.toml is not $VERSION"; exit 1; }
+          grep -qx "version = \"$VERSION\"" rust/Cargo.toml || { echo "rust/Cargo.toml is not $VERSION"; exit 1; }
+          grep -q "^## $VERSION " CHANGELOG.md || { echo "CHANGELOG.md has no $VERSION entry"; exit 1; }
+
+      - name: Install GCC 14 (macOS)
+        if: runner.os == 'macOS'
+        run: brew install gcc@14
+
+      - name: Run tests
+        run: make test CC=${{ matrix.cc }}
+
+      - name: C API example and sanitizer test
+        run: make c-example CC=clang
+
+      - name: Build release CLI
+        run: |
+          make release CC=${{ matrix.cc }} HOWL_VERSION="${GITHUB_REF_NAME#v}"
+          ./build/howl --version | grep -qx "howl ${GITHUB_REF_NAME#v}"
+          ./build/howl validate corpus/fixtures/v0/litmus.ttl
+          mv build/howl howl-${{ matrix.platform }}
+
+      - name: Build and package the C library
+        run: make lib dist CC=${{ matrix.cc }} PLATFORM=${{ matrix.platform }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: howl-${{ matrix.platform }}
+          path: |
+            howl-${{ matrix.platform }}
+            libhowl-${{ matrix.platform }}.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          awk -v v="$VERSION" '/^## /{p = index($0, "## " v " ") == 1; next} p' CHANGELOG.md > notes.md
+          test -s notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: artifacts/*/*
