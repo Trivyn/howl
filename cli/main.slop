@@ -74,10 +74,10 @@
 
   (import rdf (IRI Triple Term BlankNode make-blank make-triple make-triple-term
                term-eq make-iri))
-  (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection default-config
+  (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection Verdict verdict default-config
                  copy-fault))
   (import owl2 (render-omission))
-  (import howl (Verdict verdict Decoded decode-from own-decoded Prepared prepare-decoded reason))
+  (import howl (Decoded decode-from own-decoded Prepared prepare-decoded reason))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
   (import report (report-lines))
   (import select (profile-name parse-profile))

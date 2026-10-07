@@ -26,12 +26,11 @@
   (@doc "The canonical, input-determined report of an Outcome (§6.7, §6.8)")
 
   (import rdf (IRI))
-  (import types (Node SubPair Omission Outcome Termination))
+  (import types (Node SubPair Omission Outcome Termination Verdict verdict))
   (import owl2 (render-omission))
-  (import howl (Verdict verdict))
   (import select (profile-name))
 
-  (export report-lines)
+  (export report-lines node-text)
 
   (fn node-text ((arena Arena) (n Node))
     (@intent "A node as report text — injective across the three node kinds")

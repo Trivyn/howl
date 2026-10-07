@@ -7,7 +7,6 @@
 #include "slop_rdf.h"
 #include "slop_types.h"
 #include "slop_owl2.h"
-#include "slop_howl.h"
 #include "slop_select.h"
 
 slop_string report_node_text(slop_arena* arena, types_Node n);

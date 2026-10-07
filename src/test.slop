@@ -34,6 +34,7 @@
                 signature-has-object-property signature-has-annotation-property
                 RawAxiom Disposition disposition axiom-in-profile render-axiom))
   (import ttl (parse-ttl-file parse-ttl-string))
+  (import file (file-open file-close file-read-all))
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
@@ -47,7 +48,10 @@
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
-  (import howl (Verdict verdict classify classify-encoded Prepared ElWork prepare reason decode-owned prepare-in-profile))
+  (import howl (Verdict verdict classify classify-encoded Input Run Options FaultKind
+                input-new input-free input-add-turtle default-options run-classify run-free
+                run-ok run-fault run-fault-profile run-verdict run-report-len run-report-line
+                Prepared ElWork prepare reason decode-owned prepare-in-profile))
   (import el (apply-el-rules apply-el-rules-reference))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
@@ -3828,6 +3832,107 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           (set! ok false))
         ok)))
 
+  (fn file-text ((arena Arena) (path String))
+    (@intent "A file's whole text, or none")
+    (@spec ((Arena String) -> (Option String)))
+    (@alloc arena)
+    (match (file-open path 'read)
+      ((error _) (none))
+      ((ok f)
+        (let ((mut h f)
+              (text (match (file-read-all arena (addr h)) ((ok t) (some t)) ((error _) (none)))))
+          (do (file-close (addr h)) text)))))
+
+  (fn api-lines ((arena Arena) (r Run))
+    (@intent "A run's report lines, read through the public API's accessors")
+    (@spec ((Arena Run) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String))
+          (mut i 0))
+      (do
+        (while (< i (run-report-len r))
+          (do
+            (list-push out (string-concat arena "" (run-report-line r i)))
+            (set! i (+ i 1))))
+        out)))
+
+  (fn api-agrees ((arena Arena) (path String) (profile Profile))
+    (@intent "The public API reports what classify does, for one fixture and profile")
+    (@spec ((Arena String Profile) -> Bool))
+    (@alloc arena)
+    (match (file-text arena path)
+      ((none) false)
+      ((some text)
+        (match (parse-ttl-file arena path)
+          ((error _) false)
+          ((ok g)
+            (let ((mut cfg (default-config))
+                  (mut o (default-options))
+                  (in (input-new)))
+              (do
+                (set! cfg selection (union-new ProfileSelection explicit profile))
+                (set! o profile profile)
+                (input-add-turtle in text)
+                (let ((r (run-classify in o))
+                      (same (match (classify arena (. g triples) (list-new arena IRI) cfg)
+                              ((error _) false)
+                              ((ok want) (same-lines (report-lines arena want) (api-lines arena r))))))
+                  (do
+                    (run-free r)
+                    (input-free in)
+                    (when (not same) (do (print "  [api] report differs: ") (println path)))
+                    same)))))))))
+
+  (fn api-fault ((o Options))
+    (@intent "What the public API reports for an empty input under o")
+    (@spec ((Options) -> FaultKind))
+    (let ((in (input-new))
+          (r  (run-classify in o))
+          (f  (run-fault r)))
+      (do (run-free r) (input-free in) f)))
+
+  (fn test-public-api ((arena Arena))
+    (@intent "§8.4: the public C API reports what classify does, and refuses what it must")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The API is the `:c-name` section of howl.slop; slop generates
+    ;; include/howl.h from it. examples/c/api_test.c drives it from C under
+    ;; ASan and the crate's goldens hold it to every committed report; this
+    ;; holds it to `classify` without leaving SLOP.
+    (let ((mut ok true)
+          (d (default-options)))
+      (do
+        (for-each (p (m0-fixture-paths arena))
+          (when (not (and (api-agrees arena p 'profile-el) (api-agrees arena p 'profile-el-plus-plus)))
+            (set! ok false)))
+        ;; Out of range is refused by name, never narrowed into range.
+        (let ((mut o d)) (do (set! o workers 0)
+          (when (not (== (api-fault o) 'fault-invalid-options)) (set! ok false))))
+        (let ((mut o d)) (do (set! o workers 65)
+          (when (not (== (api-fault o) 'fault-invalid-options)) (set! ok false))))
+        (let ((mut o d)) (do (set! o max-iterations 10001)
+          (when (not (== (api-fault o) 'fault-invalid-options)) (set! ok false))))
+        (let ((mut o d)) (do (set! o max-iterations -1)
+          (when (not (== (api-fault o) 'fault-invalid-options)) (set! ok false))))
+        ;; An unbuilt profile is refused, named, and never a pass.
+        (let ((mut o d)
+              (in (input-new)))
+          (do
+            (set! o profile 'profile-horn-sriq)
+            (let ((r (run-classify in o)))
+              (do
+                (when (not (and (== (run-fault r) 'fault-unavailable)
+                                (== (run-fault-profile r) 'profile-horn-sriq)
+                                (== (run-verdict r) 'verdict-inconclusive)
+                                (not (run-ok r))))
+                  (set! ok false))
+                (run-free r)
+                (input-free in)))))
+        ;; The edges themselves run.
+        (let ((mut o d)) (do (set! o workers 64) (set! o max-iterations 0)
+          (when (not (== (api-fault o) 'fault-none)) (set! ok false))))
+        ok)))
+
   (fn order-independent ((arena Arena) (path String))
     (@intent "The same document with its triples reversed: identical normal form and report")
     (@spec ((Arena String) -> Bool))
@@ -5260,6 +5365,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-classify-encoded-is-classify arena)))
             (print-test-result "§8.4: classify-encoded reports what classify does (el, el++)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-public-api arena)))
+            (print-test-result "§8.4: the public C API reports what classify does, and refuses what it must" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-indexed-dispatch-matches-reference arena)))

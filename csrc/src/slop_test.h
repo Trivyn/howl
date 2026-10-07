@@ -12,6 +12,7 @@
 #include "slop_normalize.h"
 #include "slop_owl2.h"
 #include "slop_ttl.h"
+#include "slop_file.h"
 #include "slop_types.h"
 #include "slop_canon.h"
 #include "slop_saturate.h"
@@ -852,7 +853,7 @@ types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
 howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
 types_Findings test_make_findings(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count);
 types_Outcome test_make_outcome(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count, int64_t omitted_count, uint8_t reached_fixpoint);
-uint8_t test_verdict_eq(howl_Verdict a, howl_Verdict b);
+uint8_t test_verdict_eq(types_Verdict a, types_Verdict b);
 uint8_t test_test_coherent_requires_complete(slop_arena* arena);
 uint8_t test_test_omission_blocks_coherent(slop_arena* arena);
 uint8_t test_test_cap_blocks_coherent(slop_arena* arena);
@@ -1027,6 +1028,11 @@ uint8_t test_same_report(types_Outcome a, types_Outcome b);
 uint8_t test_same_lines(slop_list_string a, slop_list_string b);
 uint8_t test_encoded_agrees(slop_arena* arena, slop_string path, types_ProfileSelection selection);
 uint8_t test_test_classify_encoded_is_classify(slop_arena* arena);
+slop_option_string test_file_text(slop_arena* arena, slop_string path);
+slop_list_string test_api_lines(slop_arena* arena, howl_Run r);
+uint8_t test_api_agrees(slop_arena* arena, slop_string path, types_Profile profile);
+howl_FaultKind test_api_fault(howl_Options o);
+uint8_t test_test_public_api(slop_arena* arena);
 uint8_t test_order_independent(slop_arena* arena, slop_string path);
 uint8_t test_test_triple_order_independence(slop_arena* arena);
 uint8_t test_addressed_subset(slop_list_types_Addressed xs, slop_list_types_Addressed ys);

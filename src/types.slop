@@ -78,7 +78,9 @@
     original-role
     queue-is-active
     outcome-is-complete
-    findings-are-incoherent)
+    findings-are-incoherent
+    Verdict
+    verdict)
 
   ;; ============================================================
   ;; Internal identity
@@ -574,7 +576,6 @@
     (@post (match (. $result selection)
              ((auto)       false)
              ((explicit p) {p == 'profile-el})))
-    :c-name "howl_default_config"
     (record-new ReasonerConfig
       (worker-count 4)
       (channel-buffer 256)
@@ -1200,4 +1201,70 @@
     ;; not.
     (if (> (list-len (. f unsatisfiable)) 0)
       true
-      (. f inconsistent))))
+      (. f inconsistent)))
+
+  ;; ============================================================
+  ;; The verdict (§6.2)
+  ;;
+  ;; | Findings      | Coverage + termination            | Verdict      |
+  ;; |---------------|-----------------------------------|--------------|
+  ;; | incoherent    | ANYTHING                          | incoherent   |
+  ;; | not incoherent| omitted ≠ ∅, or termination ≠ fix | inconclusive |
+  ;; | not incoherent| omitted = ∅ AND fixpoint          | coherent     |
+  ;;
+  ;; The asymmetry between rows 1 and 2 is not a compromise; it falls
+  ;; out of MONOTONICITY. Every rule is faithful, so anything in
+  ;; findings is sound whatever the coverage; and restoring an omitted
+  ;; axiom can only ADD conclusions, never retract one. So a ⊥ derived
+  ;; from a subset of the ontology is a ⊥ in the whole ontology.
+  ;;
+  ;; The same monotonicity is why a partial run may still never report
+  ;; a COMPLETE hierarchy or a MINIMAL repair: those are claims about
+  ;; absence.
+  ;; ============================================================
+
+  (type Verdict (enum
+    verdict-coherent       ; exit 0
+    verdict-incoherent     ; exit 1
+    verdict-inconclusive)) ; exit 2
+
+  (fn verdict ((o Outcome))
+    (@intent "Map an Outcome to its verdict — the ONE statement of §6.2's rule")
+    (@spec ((Outcome) -> Verdict))
+    (@pure)
+    ;; THE SAFETY PROPERTY, in machine-checkable form: a coverage gap
+    ;; must be unable to produce a COHERENT verdict. This is the false
+    ;; pass the whole design exists to prevent — a validator that
+    ;; returns "coherent" when it could not actually tell is worse than
+    ;; no validator, because CI trains users to trust it.
+    ;;
+    ;; Provable only because the coverage test below is LOCAL. The WP
+    ;; checker does no interprocedural reasoning — it models a callee as
+    ;; an uninterpreted function, so delegating the whole test to
+    ;; `outcome-is-complete` lets it return True under a non-empty
+    ;; omission list and the property fails with exactly that
+    ;; counterexample.
+    (@post (implies {(list-len (. (. o coverage) omitted)) > 0}
+                    {$result != 'verdict-coherent}))
+    ;; A finding wins over incomplete coverage, always. Testing
+    ;; coverage first would implement an early `inconclusive` that
+    ;; DISCARDS a definitive finding — the precise inversion the rule
+    ;; forbids, and the one an earlier draft of the spec got wrong.
+    (if (findings-are-incoherent (. o findings))
+      'verdict-incoherent
+      ;; The explicit coverage early-out is REDUNDANT with
+      ;; `outcome-is-complete`, which tests the same conjunct — and it
+      ;; is kept deliberately. Its job is not to change the answer but
+      ;; to put the safety property within reach of the prover: with the
+      ;; test local, "a coverage gap cannot yield coherent" is a
+      ;; structural fact about this function rather than an inference
+      ;; across a call boundary the checker will not make.
+      ;;
+      ;; Defence in depth on the one property most worth having proved.
+      ;; The termination arm stays delegated, so the definition of
+      ;; `complete` still lives in one place.
+      (if (> (list-len (. (. o coverage) omitted)) 0)
+        'verdict-inconclusive
+        (if (outcome-is-complete o)
+          'verdict-coherent
+          'verdict-inconclusive)))))

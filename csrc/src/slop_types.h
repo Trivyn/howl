@@ -56,6 +56,12 @@ typedef enum {
     types_Profile_profile_sriq
 } types_Profile;
 
+typedef enum {
+    types_Verdict_verdict_coherent,
+    types_Verdict_verdict_incoherent,
+    types_Verdict_verdict_inconclusive
+} types_Verdict;
+
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
@@ -877,7 +883,7 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
 }
 #endif
 
-types_ReasonerConfig howl_default_config(void);
+types_ReasonerConfig types_default_config(void);
 uint8_t types_cancel_requested(int64_t cancel);
 types_Node types_node_top(void);
 types_Node types_node_bottom(void);
@@ -917,9 +923,7 @@ uint8_t types_addressed_eq(types_Addressed a, types_Addressed b);
 types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
-
-/* Function name aliases for C interop */
-#define types_default_config howl_default_config
+types_Verdict types_verdict(types_Outcome o);
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED

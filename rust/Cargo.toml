@@ -14,7 +14,8 @@ include = [
     # Not tests/: they reproduce the repository's corpus goldens, which are
     # not packaged. The layout guards live in src/ and ship.
     "csrc/**/*",
-    "csrc_shim.c",
+    "include/**/*",
+    "layout_probes.c",
     "build.rs",
     "Cargo.toml",
     "README.md",

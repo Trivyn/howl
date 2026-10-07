@@ -12,20 +12,23 @@
 (module howl
   (@doc "Consequence-based description-logic reasoner (v0: ELH⊥R+ with domain/range)")
 
-  (import rdf (Triple IRI))
+  (import rdf (Triple IRI Term TermKind make-iri make-blank make-literal make-triple))
+  (import ttl (parse-ttl-string-for-each-triple))
+  (import report (report-lines node-text))
+  (import owl2 (render-omission))
   (import types (Node RoleId Concept NormAxiom
                  Derived Addressed Context Saturation
                  EntityKind AxiomRef InputRef MissingDeclaration Omission Coverage Termination
                  EdgePair
-                 SubPair Findings Outcome Fault Names
+                 SubPair Findings Outcome Fault Names Verdict verdict
                  Profile ProfileSelection ReasonerConfig
                  KName KscAxiom Evidence KscResult
                  default-config emit-edge make-context copy-fault copy-omissions empty-names
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
-  (import termstore (Encoded))
+  (import termstore (Encoded new-encoded encoded-add encoded-next-document))
   (import select (select-profile choose-auto profile-implemented))
-  (import saturate (RoundResult saturate))
+  (import saturate (RoundResult saturate reuse-arena))
   (import classify (extract-findings entails-sub extract-ksc-findings))
   (import gate (gate-axioms))
   (import kscnormal (normalize-ksc copy-ksc-axioms copy-kname))
@@ -62,6 +65,15 @@
     classify
     classify-encoded
     release-outcome
+    ;; The public C API (`:c-name`; slop generates include/howl.h from it)
+    Input Run Options TermIn TurtleResult FaultKind
+    input-new input-free input-begin-document input-add-triple input-add-turtle
+    input-attest-import
+    default-options run-classify run-free
+    run-ok run-fault run-fault-message run-fault-profile
+    run-profile run-verdict run-inconsistent run-termination run-rounds
+    run-unsat-len run-unsat run-sub-len run-sub run-super
+    run-omission-len run-omission run-report-len run-report-line
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
     Decoded
     decode
@@ -81,72 +93,6 @@
     EdgePair
     emit-edge
     make-context)
-
-  ;; ============================================================
-  ;; The verdict (§6.2)
-  ;;
-  ;; | Findings      | Coverage + termination            | Verdict      |
-  ;; |---------------|-----------------------------------|--------------|
-  ;; | incoherent    | ANYTHING                          | incoherent   |
-  ;; | not incoherent| omitted ≠ ∅, or termination ≠ fix | inconclusive |
-  ;; | not incoherent| omitted = ∅ AND fixpoint          | coherent     |
-  ;;
-  ;; The asymmetry between rows 1 and 2 is not a compromise; it falls
-  ;; out of MONOTONICITY. Every rule is faithful, so anything in
-  ;; findings is sound whatever the coverage; and restoring an omitted
-  ;; axiom can only ADD conclusions, never retract one. So a ⊥ derived
-  ;; from a subset of the ontology is a ⊥ in the whole ontology.
-  ;;
-  ;; The same monotonicity is why a partial run may still never report
-  ;; a COMPLETE hierarchy or a MINIMAL repair: those are claims about
-  ;; absence.
-  ;; ============================================================
-
-  (type Verdict (enum
-    verdict-coherent       ; exit 0
-    verdict-incoherent     ; exit 1
-    verdict-inconclusive)) ; exit 2
-
-  (fn verdict ((o Outcome))
-    (@intent "Map an Outcome to its verdict — the ONE statement of §6.2's rule")
-    (@spec ((Outcome) -> Verdict))
-    (@pure)
-    ;; THE SAFETY PROPERTY, in machine-checkable form: a coverage gap
-    ;; must be unable to produce a COHERENT verdict. This is the false
-    ;; pass the whole design exists to prevent — a validator that
-    ;; returns "coherent" when it could not actually tell is worse than
-    ;; no validator, because CI trains users to trust it.
-    ;;
-    ;; Provable only because the coverage test below is LOCAL. The WP
-    ;; checker does no interprocedural reasoning — it models a callee as
-    ;; an uninterpreted function, so delegating the whole test to
-    ;; `outcome-is-complete` lets it return True under a non-empty
-    ;; omission list and the property fails with exactly that
-    ;; counterexample.
-    (@post (implies {(list-len (. (. o coverage) omitted)) > 0}
-                    {$result != 'verdict-coherent}))
-    ;; A finding wins over incomplete coverage, always. Testing
-    ;; coverage first would implement an early `inconclusive` that
-    ;; DISCARDS a definitive finding — the precise inversion the rule
-    ;; forbids, and the one an earlier draft of the spec got wrong.
-    (if (findings-are-incoherent (. o findings))
-      'verdict-incoherent
-      ;; The explicit coverage early-out is REDUNDANT with
-      ;; `outcome-is-complete`, which tests the same conjunct — and it
-      ;; is kept deliberately. Its job is not to change the answer but
-      ;; to put the safety property within reach of the prover: with the
-      ;; test local, "a coverage gap cannot yield coherent" is a
-      ;; structural fact about this function rather than an inference
-      ;; across a call boundary the checker will not make.
-      ;;
-      ;; Defence in depth on the one property most worth having proved.
-      ;; The termination arm stays delegated, so the definition of
-      ;; `complete` still lives in one place.
-      (if (> (list-len (. (. o coverage) omitted)) 0)
-        'verdict-inconclusive
-        (if (outcome-is-complete o)
-          'verdict-coherent
-          'verdict-inconclusive))))
 
   ;; ============================================================
   ;; The pipeline
@@ -520,4 +466,462 @@
     (match (prepare-encoded arena doc imports-resolved config)
       ((error f) (error f))
       ((ok p)    (reason arena p config))))
+
+  ;; ============================================================
+  ;; The public C API
+  ;;
+  ;; Every function below carries a `:c-name`, and that is what makes it
+  ;; public: slop's header generator (`slop build`, and `make csrc` through
+  ;; csrc/generate_c.py) writes include/howl.h from exactly the `:c-name`
+  ;; functions and the types their signatures reach.
+  ;;
+  ;; HANDLES ARE OPAQUE. An Input or a Run is one `(Ptr Void)` field, so the
+  ;; header holds `void*` and nothing behind it. An Outcome embeds its whole
+  ;; Saturation or KscResult by value; were it reachable from a signature,
+  ;; dozens of engine-internal structs would land in the header and change
+  ;; with every engine change - the GROWL 0.6.0 wrong-offset hazard for
+  ;; every mirror of them. Behind each handle is a state record in an arena
+  ;; of its own, which `*-free` frees.
+  ;;
+  ;; THE INPUT IS ENCODED AS THE CLI ENCODES IT (`encoded-add`, and
+  ;; `encoded-next-document` between documents) and classified by
+  ;; `classify-encoded`, the CLI's own path as one call, so the CLI's
+  ;; goldens certify a caller's report byte for byte (rust/tests/goldens.rs).
+  ;;
+  ;; EVERY ACCESSOR IS TOTAL. Asked of a faulted run, the verdict is
+  ;; inconclusive - never a pass - and every list is empty.
+  ;; ============================================================
+
+  (type Input (record (p (Ptr Void))))
+  (type Run   (record (p (Ptr Void))))
+
+  (type InputState (record
+    (arena     Arena)              ; the Encoded and the attested IRIs; the state itself
+    (scratch   Arena)              ; one triple's terms at a time, emptied after each
+    (enc       (Ptr Encoded))
+    (imports   (List IRI))
+    (documents Int)
+    (failed    (Option String))))  ; set: a document or term was refused, and the input with it
+
+  ;; The options a caller sets. Plain integers, not SLOP's range types: a
+  ;; C caller can hand over any value, and an out-of-range one is refused
+  ;; by name (fault-invalid-options) rather than narrowed into range.
+  (type Options (record
+    (workers        Int)           ; 1..64; never changes the report
+    (max-iterations Int)           ; 0..10000 rounds
+    (profile        Profile)       ; ignored when auto-select is set
+    (auto-select    Bool)          ; the cheapest built profile covering the ontology
+    (cancel         I64)))         ; address of a uint32 flag, 0 for none; read at round boundaries
+
+  ;; An RDF term. An empty `datatype` or `lang` is absent - neither may be
+  ;; empty in RDF. `blank` is a blank node's id within its document.
+  (type TermIn (record
+    (kind     TermKind)
+    (blank    Int)
+    (value    String)
+    (datatype String)
+    (lang     String)))
+
+  (type TurtleResult (record
+    (ok      Bool)
+    (message String)               ; owned by the input
+    (line    Int)
+    (column  Int)))
+
+  (type FaultKind (enum
+    fault-none                     ; the run has a result
+    fault-cancelled                ; no partial result: where it stopped depends on scheduling
+    fault-input-error
+    fault-unavailable              ; the profile asked for is not built yet
+    fault-invalid-options))
+
+  (type RunState (record
+    (arena         Arena)
+    (outcome       (Option Outcome))
+    (fault         FaultKind)
+    (message       String)
+    (fault-profile Profile)
+    (verdict       Verdict)
+    (lines         (List String))))
+
+  (fn input-state ((in Input))
+    (@intent "The state behind an Input handle")
+    (@spec ((Input) -> (Ptr InputState)))
+    (cast (Ptr InputState) (. in p)))
+
+  (fn run-state ((r Run))
+    (@intent "The state behind a Run handle")
+    (@spec ((Run) -> RunState))
+    (deref (cast (Ptr RunState) (. r p))))
+
+  (fn input-new ()
+    (@intent "An empty input")
+    (@spec (() -> Input))
+    :c-name "howl_input_new"
+    (let ((a (arena-new 16777216))
+          (p (cast (Ptr InputState) (arena-alloc a (sizeof InputState)))))
+      (do
+        (set! (deref p) (record-new InputState
+                          (arena     a)
+                          (scratch   (arena-new 1048576))
+                          (enc       (new-encoded a))
+                          (imports   (list-new a IRI))
+                          (documents 0)
+                          (failed    (none))))
+        (record-new Input (p (cast (Ptr Void) p))))))
+
+  (fn input-free ((in Input))
+    (@intent "Free an input and everything added to it")
+    (@spec ((Input) -> Unit))
+    :c-name "howl_input_free"
+    (let ((s (deref (input-state in))))
+      (do
+        (arena-free (. s scratch))
+        (arena-free (. s arena)))))
+
+  (fn input-begin-document ((in Input))
+    (@intent "Begin the next document: its blank nodes are kept apart from the ones before")
+    (@spec ((Input) -> Unit))
+    :c-name "howl_input_begin_document"
+    ;; As `howl validate ROOT -I FILE` does: every document after the first
+    ;; has its blank ids shifted past everything already encoded.
+    (let ((p (input-state in))
+          (mut s (deref p)))
+      (do
+        (when (> (. s documents) 0)
+          (encoded-next-document (. s arena) (. s enc)))
+        (set! s documents (+ (. s documents) 1))
+        (set! (deref p) s))))
+
+  (fn optional-string ((s String))
+    (@intent "An empty string as absent")
+    (@spec ((String) -> (Option String)))
+    (if (== (string-len s) 0) (none) (some s)))
+
+  (fn make-term ((arena Arena) (t TermIn))
+    (@intent "A slop-rdf term from a TermIn, or none for a kind HOWL does not take as input")
+    (@spec ((Arena TermIn) -> (Option Term)))
+    (@alloc arena)
+    (match (. t kind)
+      ('iri     (some (make-iri arena (. t value))))
+      ;; Bounded, not just non-negative: every later document's ids are
+      ;; shifted past the highest one so far (encoded-next-document), and
+      ;; an id near the top of Int would overflow that shift.
+      ('blank   (if (and (>= (. t blank) 0) (<= (. t blank) 1099511627775))
+                  (some (make-blank arena (cast (Int 0 ..) (. t blank))))
+                  (none)))
+      ('literal (some (make-literal arena (. t value)
+                        (optional-string (. t datatype)) (optional-string (. t lang)))))
+      ('triple  (none))))
+
+  (fn input-add-triple ((in Input) (s TermIn) (p TermIn) (o TermIn))
+    (@intent "Add one triple to the current document; false, and the input refused, for a term it cannot take")
+    (@spec ((Input TermIn TermIn TermIn) -> Bool))
+    :c-name "howl_input_add_triple"
+    ;; The terms are built in the scratch arena and emptied after the call:
+    ;; `encoded-add` copies every string it keeps into the input's arena.
+    (let ((ptr (input-state in))
+          (mut st (deref ptr))
+          (sc (. st scratch))
+          (ok (match (make-term sc s)
+                ((none) false)
+                ((some ts)
+                  (match (make-term sc p)
+                    ((none) false)
+                    ((some tp)
+                      (match (make-term sc o)
+                        ((none) false)
+                        ((some to)
+                          (do (encoded-add (. st arena) (. st enc) (make-triple sc ts tp to))
+                              true)))))))))
+      (do
+        (reuse-arena sc)
+        (when (not ok)
+          (do
+            (set! st failed (some "a term of a kind HOWL does not take (a quoted triple, or a blank id outside 0..2^40-1)"))
+            (set! (deref ptr) st)))
+        ok)))
+
+  (fn input-add-turtle ((in Input) (text String))
+    (@intent "Add one Turtle document; a document that does not parse refuses the input")
+    (@spec ((Input String) -> TurtleResult))
+    :c-name "howl_input_add_turtle"
+    ;; As the CLI's `parse-into`: slop-rdf's streaming parser, its memory a
+    ;; scratch arena freed on return; only what `encoded-add` copies
+    ;; survives. The triples before a parse error stay encoded, which is
+    ;; why the input is refused rather than classified short.
+    (do
+      (input-begin-document in)
+      (if (== (string-len text) 0)
+        (record-new TurtleResult (ok true) (message "") (line 0) (column 0))
+        (let ((ptr   (input-state in))
+              (mut st (deref ptr))
+              (arena (. st arena))
+              (enc   (. st enc))
+              (parse (arena-new 16777216))
+              (res   (match (parse-ttl-string-for-each-triple parse text
+                              (fn ((t Triple)) (encoded-add arena enc t)))
+                       ((ok _)    (record-new TurtleResult (ok true) (message "") (line 0) (column 0)))
+                       ((error e) (record-new TurtleResult
+                                    (ok      false)
+                                    (message (string-concat arena "" (. e message)))
+                                    (line    (. (. e position) line))
+                                    (column  (. (. e position) column)))))))
+          (do
+            (arena-free parse)
+            (when (not (. res ok))
+              (do
+                (set! st failed (some (string-concat arena "a Turtle document does not parse: " (. res message))))
+                (set! (deref ptr) st)))
+            res)))))
+
+  (fn input-attest-import ((in Input) (iri String))
+    (@intent "Attest that an owl:imports target is resolved: its document has been added")
+    (@spec ((Input String) -> Unit))
+    :c-name "howl_input_attest_import"
+    ;; This catches forgetting, not lying: nothing ties the IRI to any
+    ;; triples once documents are merged.
+    (let ((ptr (input-state in))
+          (mut st (deref ptr)))
+      (do
+        (list-push (. st imports) (record-new IRI (value (string-concat (. st arena) "" iri))))
+        (set! (deref ptr) st))))
+
+  (fn default-options ()
+    (@intent "The engine's defaults as Options: explicit el, 4 workers, 1000 rounds")
+    (@spec (() -> Options))
+    :c-name "howl_default_options"
+    (let ((c (default-config)))
+      (record-new Options
+        (workers        (cast Int (. c worker-count)))
+        (max-iterations (cast Int (. c max-iterations)))
+        (profile        (match (. c selection) ((explicit p) p) ((auto) 'profile-el)))
+        (auto-select    (match (. c selection) ((explicit _) false) ((auto) true)))
+        (cancel         (. c cancel-ptr)))))
+
+  (fn options-problem ((o Options))
+    (@intent "Why options cannot run, or none")
+    (@spec ((Options) -> (Option String)))
+    (@post (match $result
+             ((none) (and {(. o workers) >= 1} {(. o workers) <= 64}
+                          {(. o max-iterations) >= 0} {(. o max-iterations) <= 10000}))
+             ((some _) true)))
+    (if (< (. o workers) 1) (some "workers must be 1..64")
+      (if (> (. o workers) 64) (some "workers must be 1..64")
+        (if (< (. o max-iterations) 0) (some "max_iterations must be 0..10000")
+          (if (> (. o max-iterations) 10000) (some "max_iterations must be 0..10000")
+            (none))))))
+
+  (fn options-config ((o Options))
+    (@intent "The engine's config for in-range options: always non-strict")
+    (@spec ((Options) -> ReasonerConfig))
+    (@pre {(. o workers) >= 1})
+    (@pre {(. o workers) <= 64})
+    (@pre {(. o max-iterations) >= 0})
+    (@pre {(. o max-iterations) <= 10000})
+    ;; The library always runs non-strict (SPEC §8.4): an omission is a
+    ;; report, not a refusal.
+    (let ((mut c (default-config)))
+      (do
+        (set! c worker-count (cast (Int 1 .. 64) (. o workers)))
+        (set! c max-iterations (cast (Int 0 .. 10000) (. o max-iterations)))
+        (set! c selection (if (. o auto-select)
+                            (union-new ProfileSelection auto)
+                            (union-new ProfileSelection explicit (. o profile))))
+        (set! c strict-profile false)
+        (set! c cancel-ptr (. o cancel))
+        c)))
+
+  (fn new-run ((a Arena) (st RunState))
+    (@intent "A Run handle over state stored in its own arena")
+    (@spec ((Arena RunState) -> Run))
+    (let ((p (cast (Ptr RunState) (arena-alloc a (sizeof RunState)))))
+      (do
+        (set! (deref p) st)
+        (record-new Run (p (cast (Ptr Void) p))))))
+
+  (fn faulted ((a Arena) (kind FaultKind) (message String) (profile Profile))
+    (@intent "A run with no result")
+    (@spec ((Arena FaultKind String Profile) -> Run))
+    (new-run a (record-new RunState
+                 (arena a) (outcome (none)) (fault kind) (message message)
+                 (fault-profile profile) (verdict 'verdict-inconclusive)
+                 (lines (list-new a String)))))
+
+  (fn run-classify ((in Input) (o Options))
+    (@intent "Classify an input: coherence, unsatisfiable classes, and the subsumption hierarchy")
+    (@spec ((Input Options) -> Run))
+    :c-name "howl_run_classify"
+    ;; The input is only read, and can be classified again.
+    (let ((a  (arena-new 16777216))
+          (st (deref (input-state in))))
+      (match (options-problem o)
+        ((some why) (faulted a 'fault-invalid-options why (. o profile)))
+        ((none)
+          (match (. st failed)
+            ;; Copied: `why` lives in the input's arena, and a run's
+            ;; strings must outlive the input (until run-free).
+            ((some why) (faulted a 'fault-input-error (string-concat a "" why) (. o profile)))
+            ((none)
+              (match (classify-encoded a (deref (. st enc)) (. st imports) (options-config o))
+                ((ok out)
+                  (new-run a (record-new RunState
+                               (arena a) (outcome (some out)) (fault 'fault-none) (message "")
+                               (fault-profile (. out profile)) (verdict (verdict out))
+                               (lines (report-lines a out)))))
+                ((error f)
+                  (match f
+                    ((cancelled)       (faulted a 'fault-cancelled "" (. o profile)))
+                    ((input-error m)   (faulted a 'fault-input-error m (. o profile)))
+                    ((unavailable p)   (faulted a 'fault-unavailable "" p))
+                    ;; Only a strict run refuses, and this API never runs
+                    ;; strict; should it happen it is an input error, never
+                    ;; a verdict.
+                    ((refused _)       (faulted a 'fault-input-error "refused under a strict profile" (. o profile))))))))))))
+
+  (fn run-free ((r Run))
+    (@intent "Free a run and every string it returned")
+    (@spec ((Run) -> Unit))
+    :c-name "howl_run_free"
+    ;; el's store and last queues live in arenas of the engine's own, which
+    ;; the Outcome carries; they go first, then the run's own arena.
+    (let ((st (run-state r)))
+      (do
+        (match (. st outcome)
+          ((some o) (release-outcome o))
+          ((none)   (do)))
+        (arena-free (. st arena)))))
+
+  (fn run-ok ((r Run))
+    (@intent "Whether the run has a result")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_ok"
+    (match (. (run-state r) outcome) ((some _) true) ((none) false)))
+
+  (fn run-fault ((r Run))
+    (@intent "Why the run has no result, or fault-none")
+    (@spec ((Run) -> FaultKind))
+    :c-name "howl_run_fault"
+    (. (run-state r) fault))
+
+  (fn run-fault-message ((r Run))
+    (@intent "The fault's message: the input error or the option out of range")
+    (@spec ((Run) -> String))
+    :c-name "howl_run_fault_message"
+    (. (run-state r) message))
+
+  (fn run-fault-profile ((r Run))
+    (@intent "The profile a fault-unavailable run asked for")
+    (@spec ((Run) -> Profile))
+    :c-name "howl_run_fault_profile"
+    (. (run-state r) fault-profile))
+
+  (fn run-profile ((r Run))
+    (@intent "The profile that ran")
+    (@spec ((Run) -> Profile))
+    :c-name "howl_run_profile"
+    (. (run-state r) fault-profile))
+
+  (fn run-verdict ((r Run))
+    (@intent "The run's verdict (§6.2); inconclusive for a run with no result")
+    (@spec ((Run) -> Verdict))
+    :c-name "howl_run_verdict"
+    (. (run-state r) verdict))
+
+  (fn run-inconsistent ((r Run))
+    (@intent "Whether the ontology was found inconsistent")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_inconsistent"
+    (match (. (run-state r) outcome) ((some o) (. (. o findings) inconsistent)) ((none) false)))
+
+  (fn run-termination ((r Run))
+    (@intent "How the run ended: fixpoint, or the round budget ran out")
+    (@spec ((Run) -> Termination))
+    :c-name "howl_run_termination"
+    (match (. (run-state r) outcome)
+      ((some o) (. o termination))
+      ((none)   (union-new Termination resource-limit 0))))
+
+  (fn run-rounds ((r Run))
+    (@intent "Rounds run (the report's `rounds` line)")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_rounds"
+    (match (. (run-state r) outcome) ((some o) (. o rounds)) ((none) 0)))
+
+  (fn run-unsat-len ((r Run))
+    (@intent "How many named classes are unsatisfiable")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_unsat_len"
+    (match (. (run-state r) outcome)
+      ((some o) (cast Int (list-len (. (. o findings) unsatisfiable))))
+      ((none)   0)))
+
+  (fn run-unsat ((r Run) (i Int))
+    (@intent "The i-th unsatisfiable class's IRI, in canonical order")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_unsat"
+    (match (. (run-state r) outcome)
+      ((some o) (match (list-get (. (. o findings) unsatisfiable) i) ((some c) (. c value)) ((none) "")))
+      ((none)   "")))
+
+  (fn run-sub-len ((r Run))
+    (@intent "How many (sub, super) pairs the taxonomy has")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_sub_len"
+    (match (. (run-state r) outcome)
+      ((some o) (cast Int (list-len (. (. o findings) subsumptions))))
+      ((none)   0)))
+
+  (fn run-sub ((r Run) (i Int))
+    (@intent "The i-th pair's subclass, rendered as the report's `sub` line renders it")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_sub"
+    (let ((st (run-state r)))
+      (match (. st outcome)
+        ((some o) (match (list-get (. (. o findings) subsumptions) i)
+                    ((some sp) (node-text (. st arena) (. sp sub)))
+                    ((none)    "")))
+        ((none)   ""))))
+
+  (fn run-super ((r Run) (i Int))
+    (@intent "The i-th pair's superclass, rendered as the report's `sub` line renders it")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_super"
+    (let ((st (run-state r)))
+      (match (. st outcome)
+        ((some o) (match (list-get (. (. o findings) subsumptions) i)
+                    ((some sp) (node-text (. st arena) (. sp super)))
+                    ((none)    "")))
+        ((none)   ""))))
+
+  (fn run-omission-len ((r Run))
+    (@intent "How many inputs the run did not cover; any makes a clean run inconclusive")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_omission_len"
+    (match (. (run-state r) outcome)
+      ((some o) (cast Int (list-len (. (. o coverage) omitted))))
+      ((none)   0)))
+
+  (fn run-omission ((r Run) (i Int))
+    (@intent "The i-th omission, rendered as the report's `omission` line renders it")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_omission"
+    (let ((st (run-state r)))
+      (match (. st outcome)
+        ((some o) (match (list-get (. (. o coverage) omitted) i)
+                    ((some om) (render-omission (. st arena) om))
+                    ((none)    "")))
+        ((none)   ""))))
+
+  (fn run-report-len ((r Run))
+    (@intent "How many lines the canonical report has")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_report_len"
+    (cast Int (list-len (. (run-state r) lines))))
+
+  (fn run-report-line ((r Run) (i Int))
+    (@intent "The canonical report's i-th line: the bytes `howl validate --report` prints")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_report_line"
+    (match (list-get (. (run-state r) lines) i) ((some l) l) ((none) "")))
 )

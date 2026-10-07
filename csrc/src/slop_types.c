@@ -1,7 +1,7 @@
 #include "../runtime/slop_runtime.h"
 #include "slop_types.h"
 
-types_ReasonerConfig howl_default_config(void);
+types_ReasonerConfig types_default_config(void);
 uint8_t types_cancel_requested(int64_t cancel);
 types_Node types_node_top(void);
 types_Node types_node_bottom(void);
@@ -41,8 +41,9 @@ uint8_t types_addressed_eq(types_Addressed a, types_Addressed b);
 types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
+types_Verdict types_verdict(types_Outcome o);
 
-types_ReasonerConfig howl_default_config(void) {
+types_ReasonerConfig types_default_config(void) {
     types_ReasonerConfig _retval = {0};
     _retval = ((types_ReasonerConfig){.worker_count = 4, .channel_buffer = 256, .max_iterations = 1000, .selection = ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = types_Profile_profile_el }), .strict_profile = 0, .cancel_ptr = 0, .verbose = 0});
     goto _slop_post;
@@ -902,6 +903,29 @@ uint8_t types_findings_are_incoherent(types_Findings f) {
     } else {
         _retval = f.inconsistent;
         goto _slop_post;
+    }
+    _slop_post: ;
+    return _retval;
+}
+
+types_Verdict types_verdict(types_Outcome o) {
+    types_Verdict _retval = {0};
+    if (types_findings_are_incoherent(o.findings)) {
+        _retval = types_Verdict_verdict_incoherent;
+        goto _slop_post;
+    } else {
+        if (((int64_t)((o.coverage.omitted).len)) > 0) {
+            _retval = types_Verdict_verdict_inconclusive;
+            goto _slop_post;
+        } else {
+            if (types_outcome_is_complete(o)) {
+                _retval = types_Verdict_verdict_coherent;
+                goto _slop_post;
+            } else {
+                _retval = types_Verdict_verdict_inconclusive;
+                goto _slop_post;
+            }
+        }
     }
     _slop_post: ;
     return _retval;

@@ -19,7 +19,8 @@ echo ""
 
 # 1. Transpile the CLI — its entry point pulls in every library module.
 echo "Pass 1: CLI (main + all dependencies)"
-python3 "$SCRIPT_DIR/generate_c.py" "$PROJECT_ROOT/cli" "$SCRIPT_DIR/src"
+python3 "$SCRIPT_DIR/generate_c.py" --ffi-header "$PROJECT_ROOT/include/howl.h" "$PROJECT_ROOT/src" \
+  "$PROJECT_ROOT/cli" "$SCRIPT_DIR/src"
 echo ""
 
 # 2. Transpile the test harness in append mode, which adds only the

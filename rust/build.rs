@@ -37,6 +37,7 @@ fn main() {
     build
         .include(runtime)
         .include(csrc)
+        .include("include")
         .include(&rdf_inc)
         .include(&std_inc)
         .define("SLOP_ARENA_NO_CAP", None)
@@ -46,11 +47,14 @@ fn main() {
     for src in &sources {
         build.file(src);
     }
-    // The input/run handles, their accessors, and the layout probes.
-    build.file("csrc_shim.c");
+    // The engine's C includes the public API (src/howl.slop's `:c-name`
+    // functions). Only the layout probes are hand-written C: they report
+    // include/howl.h's ABI to the mirror guards in src/ffi.rs.
+    build.file("layout_probes.c");
     build.compile("howl_c");
 
     println!("cargo:rustc-link-lib=pthread");
-    println!("cargo:rerun-if-changed=csrc_shim.c");
+    println!("cargo:rerun-if-changed=layout_probes.c");
+    println!("cargo:rerun-if-changed=include");
     println!("cargo:rerun-if-changed=csrc");
 }
