@@ -1,10 +1,12 @@
 # HOWL — a consequence-based description-logic reasoner
 
-**Status:** Design draft (2026-07-28; revised 2026-08-10). No implementation yet — but no longer a
-plan on the shelf. The execution trigger has **fired**: MOOSE's Living Ontology needs the EL engine
-behind its `TBoxReasoner` port, where a stub currently caps what the system can validate
-([§8.4](#84-the-moose-tboxreasoner-port), [§13](#13-execution-trigger)). That consumer, not the
-originally-anticipated Trivyn pipeline stages, is what v0 is now designed against.
+**Status:** Approved for implementation 2026-08-17. Amended since, each amendment reviewed and
+accepted on its own (§5.3, §5.4); §5.5 is under review. `el` and `el++` are built and released
+(v0.1.0, 2026-10-06). `sriq` is specified in §5.5 and not yet built. The execution trigger
+**fired**: MOOSE's Living Ontology needs the engine behind its `TBoxReasoner` port, where a stub
+capped what the system could validate ([§8.4](#84-the-moose-tboxreasoner-port),
+[§13](#13-execution-trigger)). That consumer, not the originally anticipated Trivyn pipeline stages,
+is what v0 was designed against.
 
 **One line:** HOWL is a sound-and-complete, consequence-based (saturation) description-logic
 reasoner written in [SLOP](https://example.invalid/slop), designed as a sibling to
@@ -13,9 +15,9 @@ logic — it computes the complete subsumption hierarchy and consistency of a TB
 entailments that forward-chaining materialization structurally cannot see.
 
 > The name: **GR-OWL** and **H-OWL** both carry "OWL". GROWL is the RL materialization engine;
-> HOWL is the DL classifier. "HOWL = **Horn OWL**" is also apt — the v0/v1 targets (a CB **EL**
-> fragment, [§5.2](#52-the-exact-v0-language), and Horn-SRIQ) are both *Horn* fragments, the
-> deterministic-saturation sweet spot this design is built around.
+> HOWL is the DL classifier. "HOWL = **Horn OWL**" fit the first targets, `el` and `el++`, which
+> are *Horn* fragments. `sriq` ([§5.5](#55-the-sriq-calculus)) is not Horn, but its calculus is
+> still deterministic saturation, the sweet spot this design is built around.
 
 ---
 
@@ -49,7 +51,7 @@ reasoning services**:
 |---|---|---|
 | Service | **Materialization** — forward-chain sound consequences (mostly ABox/schema edges) | **Classification** — complete subsumption hierarchy + consistency of the TBox |
 | Method | Rule-based semi-naive fixpoint over RDF triples | Consequence-based saturation over derived axioms |
-| Logic | OWL 2 RL (a DL-*derived* rule fragment / DLP) | A named description logic (EL → Horn-SRIQ → SRIQ object fragment, [§5](#5-fragment-roadmap)) |
+| Logic | OWL 2 RL (a DL-*derived* rule fragment / DLP) | A named description logic (EL → OWL 2 EL → SRIQ object fragment, [§5](#5-fragment-roadmap)) |
 | Completeness | Sound; deliberately incomplete for OWL-DL | Sound **and complete** for its target fragment |
 | Best at | Enrichment (materializing edges), bulk ABox reasoning | Defined-class subsumption, coherence of definitions and mappings |
 
@@ -123,7 +125,7 @@ independent axes are often conflated:
 
 - **Service axis:** *materialization* → *classification / consistency / satisfiability /
   realization*. **This is what flips the label.**
-- **Logic axis:** EL vs Horn-SHIQ vs SROIQ. This only decides *which* DL you are a reasoner *for*.
+- **Logic axis:** EL vs SRIQ vs SROIQ. This only decides *which* DL you are a reasoner *for*.
 
 ELK (EL) and HermiT (SROIQ) are both "DL reasoners" without qualification, because each **decides
 the standard problems, completely, for a named logic**. By that standard:
@@ -152,13 +154,14 @@ CB-EL completion must.
 ### 3.2 Terminology discipline
 
 - **"a DL reasoner"** — true from **v0** (complete for *some* DL).
-- **"an OWL 2 DL reasoner"** — reserved for **v2**, and not earned by a SROIQ(D) calculus alone.
+- **"an OWL 2 DL reasoner"** — earned by no planned rung (`sriq` has no datatypes, class nominals
+  or keys), and not earned by a SROIQ(D) calculus alone.
   OWL 2 DL is the OWL 2 *structural language* satisfying its global restrictions under Direct
   Semantics; it **closely corresponds to and extends** SROIQ, which by itself provides neither
   datatypes nor punning, while OWL 2 additionally gives semantics to constructs such as keys.
   "OWL 2 DL is SROIQ(D)" — an earlier draft's phrasing — would let a future implementer treat a
   conventional SROIQ(D) calculus as sufficient without checking the full construct surface or the
-  global restrictions. Define v2 coverage construct-by-construct, not by the label.
+  global restrictions. Define each rung's coverage construct-by-construct, not by the label.
 
 ---
 
@@ -178,37 +181,57 @@ model.
   contract posture.
 - Modern performance lives in CB: **ELK** (EL, massively parallel), **Sequoia** (CB SROIQ),
   **Konclude** (saturation-heavy hybrid, the ORE performance leader).
-- CB decomposes naturally into **contexts** (one per concept), which maps directly onto GROWL's
-  fork-join worker model (see [§6.6](#66-parallelism-context-based)).
+- CB decomposes naturally into **contexts** (one per concept in `el`; one per core in `sriq`'s
+  calculus), which maps directly onto GROWL's fork-join worker model (see
+  [§6.6](#66-parallelism-context-based)).
+- CB stays deterministic beyond Horn logics. [TGH21]'s calculus handles disjunction and equality
+  by ordered resolution inside contexts ([§5.5](#55-the-sriq-calculus)), with no case splits and
+  no backtracking.
 
 ---
 
 ## 5. Fragment roadmap
 
-The **fragment** is the real decision; the calculus (CB saturation) is fixed. Staged so that
-v0→v1 is a smooth ramp on the same engine, and the discontinuity (non-determinism) is isolated in
-v2.
+The **fragment** is the real decision; the calculus family (CB saturation) is fixed. Each rung runs
+the published calculus its logic needs. `el` and `el++` are Horn and polynomial. `sriq` is
+[TGH21]'s clause calculus, which handles disjunction and equality by ordered resolution in
+contexts. It is still deterministic saturation: no backtracking and no model search.
 
 | Rung (`--profile`) | Logic | Worst case | Calculus it cites | Adds over `el` | Status |
 |---|---|---|---|---|---|
 | **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)); `¬` in a superclass, domain or range is taken by rewriting, so the logic is unchanged | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
 | **`el++`** | the **OWL 2 EL object fragment**: SROEL(⊓,×) without products on the left ([§5.4](#54-the-el-calculus)) | PTIME | [Krö10] Theorem 2 (Ksc); [§5.4](#54-the-el-calculus) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions, `owl:bottomObjectProperty`. Datatypes, keys, anonymous individuals and `owl:topObjectProperty` outside a super-role stay omissions | **implemented** ([§5.4](#54-the-el-calculus)) |
-| **`horn-sriq`** (v1) | **Horn-SRIQ** | ExpTime | [Kaz09] + chain elimination, or the Horn slice of [Bate+18] | inverses, functionality, `∀` on the right, symmetric/asymmetric/irreflexive roles, disjoint roles, Horn number restrictions | planned (M5) |
-| **`sriq`** (v2) | **SRIQ object fragment** (non-Horn) | 2ExpTime | [Bate+18] | disjunction, full negation, number restrictions | not scheduled |
+| **`sriq`** | **SRIQ object fragment with an ABox** ([§5.5](#55-the-sriq-calculus)) | 2ExpTime without an ABox (SRIQ's own); with one, [TGH21] Theorem 5 bounds it only triple-exponentially in the chain-eliminated ontology | [Sim12] Theorem 3, then [TGH21] Theorems 1 and 2; [§5.5](#55-the-sriq-calculus) | inverses, `∀`, unions, full negation, qualified number restrictions, `ObjectHasSelf`, every OWL 2 DL property characteristic, `SameIndividual`/`DifferentIndividuals`, negative assertions. Class nominals, datatypes, keys, anonymous individuals and the universal role stay omissions | **specified** (M5, [§12](#12-milestones--acceptance-criteria)) |
 
-**The ladder is almost a chain.** `el ⊂ horn-sriq ⊂ sriq`, because the gate already enforces
-regularity, so every `el` role box is a Horn-SRIQ one. `el ⊂ el++` too. `el++` alone is incomparable
-with the two above it, because of nominals. An earlier draft made v1 **Horn-SHIQ**. That logic has no
-role chains, so it does not contain v0, and an ontology with both a chain and an inverse was inside
-neither rung. Horn-SRIQ contains both.
+**The ladder is almost a chain.**
+- `el ⊂ el++`.
+- `el ⊂ sriq`, because the gate already enforces regularity.
+- `el++` and `sriq` are incomparable. `el++` has nominals, and `sriq` has inverses, unions and
+  counting.
+- A later **`sroiq`** rung would add class nominals to `sriq`'s calculus, which [TGH21] already
+  covers, and would contain both. It is not planned. [§5.5](#55-the-sriq-calculus) is built so that
+  it can be added without a rewrite: constants, the root context and the Nom rule are there from the
+  start.
+
+**Earlier drafts.**
+- **v1 was first Horn-SHIQ.** That logic has no role chains, so it does not contain v0, and an
+  ontology with both a chain and an inverse was inside no rung.
+- **Then v1 was `horn-sriq`,** a Horn rung below `sriq`. It was dropped on 2026-10-08. With one
+  calculus for both, it would have run at the same speed and with the same worst case: chain
+  elimination is exponential in depth before an exponential calculus, Horn or not. So it would only
+  have been a stricter gate, which a lint does better.
+- **The `Profile` value `profile-horn-sriq` keeps its slot** in the published C and Rust enums,
+  permanently unavailable, so the 0.1.0 ABI is not renumbered
+  ([§5.1](#51-profiles-are-selectable)).
 
 **Each rung is named by its logic, never by a wider label** (Constraint f8ee2abd), and each cites
 the calculus it is complete for. Adding **any one** of inverses, `∀` on the right, functionality,
 `≥ 2` or disjunction to EL makes reasoning ExpTime-complete ([BBL05] Thms 6–11; [BBL08] Thm 3;
 [KRH13] Thms 6.8, 6.9). So `el` and `el++` are the rungs with a fixed polynomial cost class, and
-the reason `el` is the default ([§5.1](#51-profiles-are-selectable)). The consequence-based
-calculi above `el++` are **pay-as-you-go** ([Bate+18] Props 11, 12; [TGH21] Prop 2): on input
-inside a lower rung they cost about what that rung's calculus would.
+that is why `el` is the default ([§5.1](#51-profiles-are-selectable)).
+
+`sriq`'s calculus is **pay-as-you-go** ([Bate+18] Props 11, 12; [TGH21] Theorem 6). On ELH input it
+is polynomial, and on EL input its inferences correspond linearly to [BBL05]'s.
 
 **Why SRIQ and not SROIQ at the top.** Measured on the target ontologies (2026-09-30):
 
@@ -219,27 +242,37 @@ inside a lower rung they cost about what that rung's calculus would.
 | RO | SROIF(D) + 25 SWRL rules | 25 unions and one 9-individual `oneOf` (an IAO metadata class) | that `oneOf` / ≤ 1 |
 | OBI | SROIQ(D) | 124 axioms | 150 Horn `hasValue` / 2 qualified `= 1` |
 
-The BFO family needs no nominals and no counting beyond functionality. Functionality combined with
-disjunction already needs equality reasoning, so **SRIQ is the least logic complete for BFO, CCO and
-RO**. Full SROIQ is published ([TGH21]) and implemented (Sequoia), but not as a small-team target:
-nominals need a root context and a rule that invents individuals (triple-exponential in general),
-chain elimination is exponential, and no consequence-based calculus handles datatypes. SROIQ stays
-unplanned until a consumer needs it, and OBI would be the first.
+The BFO family needs no class nominals and no counting beyond functionality. Functionality
+combined with disjunction already needs equality reasoning, so **SRIQ is the least logic complete
+for BFO, CCO and RO**. RO's one `oneOf` is IAO metadata, a 9-individual curation-status list. OBI
+is the only one of the four that uses nominals in earnest.
 
-**The non-Horn residue before `sriq`.** An approximation mode, off by default and **not a profile**,
-is the planned bridge:
+Class nominals are the step from `sriq` to `sroiq`. It is smaller than it looks:
+- the ABox already brings constants, the root context and the Nom rule into `sriq`
+  ([§5.5](#55-the-sriq-calculus));
+- what `sroiq` would add is the gate and the evidence.
+
+It stays unplanned until a consumer needs it, and OBI would be the first. No consequence-based
+calculus handles datatypes, so OWL 2 DL itself stays out of reach ([§14](#14-non-goals)).
+
+**The approximation mode is shelved.** It was planned as a bridge to `sriq`'s non-Horn residue,
+off by default and **not a profile**:
 - a lower bound weakens `A ⊔ B` to its least named common subsumer, and its findings are sound;
 - an upper bound strengthens the theory ([PAGOdA] Thms 5.5, 5.14) and can certify *coherent*.
 
-Letting a run with omitted axioms report *coherent* would amend the Constraint "only a complete run
-may report coherent", so that decision belongs to the plan for the mode, not to this section.
+With `sriq` scheduled it has no residue left to bridge in the BFO family. Letting a run with omitted
+axioms report *coherent* would amend the Constraint "only a complete run may report coherent", so
+reviving the mode would need its own plan.
 
 **Sources.**
-- [Kaz09] Kazakov, *Consequence-Driven Reasoning for Horn SHIQ Ontologies*, IJCAI 2009.
+- [Kaz09] Kazakov, *Consequence-Driven Reasoning for Horn SHIQ Ontologies*, IJCAI 2009. It is the
+  Horn calculus an earlier draft cited for v1; no rung uses it now.
 - [Bate+18] Bate, Motik, Cuenca Grau, Tena Cucala, Simančík, Horrocks, *Consequence-Based
   Reasoning for Description Logics with Disjunctions and Number Restrictions*, JAIR 63, 2018.
 - [TGH21] Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for the
-  description logic SROIQ*, AIJ 298, 2021.
+  description logic SROIQ*, Artificial Intelligence 298 (2021), 103518. [TGH18] is its IJCAI 2018
+  paper (arXiv:1805.01396).
+- [Sim12] Simančík, *Elimination of Complex RIAs without Automata*, DL 2012.
 - [KRH13] Krötzsch, Rudolph, Hitzler, *Complexities of Horn Description Logics*, ACM TOCL 14(1), 2013.
 - [PAGOdA] Zhou, Cuenca Grau, Nenov, Kaminski, Horrocks, JAIR 54, 2015.
 - [BBL05], [BBL08] and [KKS12] as in [§5.3](#53-the-abox-reduction-is-sound-and-complete);
@@ -264,8 +297,8 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
 (enum Profile
   profile-el             ; ELH⊥R+ + domain/range + ABox, exactly §5.2, positive ¬ rewritten (implemented)
   profile-el-plus-plus   ; the OWL 2 EL object fragment, §5.4 (implemented)
-  profile-horn-sriq      ; Horn-SRIQ
-  profile-sriq)          ; SRIQ object fragment, non-Horn (not OWL 2 DL: no datatypes, no nominals)
+  profile-horn-sriq      ; dropped 2026-10-08 (§5): always unavailable; the slot keeps 0.1.0's ABI
+  profile-sriq)          ; SRIQ object fragment with ABox, §5.5 (not OWL 2 DL: no datatypes, no class nominals)
 
 ;; Threaded through config beside worker-count / max-iterations / cancel-ptr:
 ;;   (selection ProfileSelection)   ; default: (explicit profile-el)
@@ -283,47 +316,53 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   changes under an upgrade: a new rung changes results only for callers who ask for it. Nothing is
   hidden. An ontology outside `el` is still reported *inconclusive*, with every omitted axiom listed
   ([§6.2](#62-data-model)). (An earlier draft made `auto` the default.)
-- **Explicit:** `--profile el|el++|horn-sriq|sriq`, much as `robot reason --reasoner ELK|HermiT`.
+- **Explicit:** `--profile el|el++|sriq`, much as `robot reason --reasoner ELK|HermiT`.
   An explicit request runs **exactly** that calculus, or is refused as `unavailable` if it is not
-  built. Running `el` in its place would classify a smaller theory than was asked for and report
+  built. `horn-sriq` is refused that way permanently, and its message names `sriq`. A future
+  `sroiq` value is appended after `profile-sriq`, never inserted. Running `el` in its place would classify a smaller theory than was asked for and report
   it under the wrong name. `select-profile`'s and `profile-implemented`'s postconditions pin both
   halves (`src/select.slop`).
 - **`auto`** (an opt-in, `--profile auto`): run the cheap *syntactic* profile check first, then
   pick the **cheapest implemented calculus complete for the ontology's actual constructs**. The
   gate tests membership in **HOWL's implemented language, not in OWL 2 EL**. The two are not the
   same set ([§5.2](#52-the-exact-v0-language)), and testing the wrong one is precisely how an
-  incomplete run gets reported as a complete one. With `el` and `el++` built, `auto` runs `el` when
-  nothing is out of `el`'s profile (it comes first, and `el ⊂ el++`). Otherwise it gates under
-  `el++` as well and runs whichever leaves fewer logical axioms out of profile, a tie going to
-  `el` (`choose-auto`, `src/select.slop`, whose postconditions pin all three cases). Unresolved
-  imports and missing declarations are the same under every rung, so they never decide.
+  incomplete run gets reported as a complete one.
+
+  `auto` gates under each built rung in the order `el < el++ < sriq`, which is by cost, and runs
+  the first that leaves nothing out of profile. If every rung leaves something out, it runs the one
+  that leaves the fewest logical axioms out, a tie going to the earlier rung (`choose-auto`,
+  `src/select.slop`, whose postconditions pin the cases). Unresolved imports and missing
+  declarations are the same under every rung, so they never decide. With `el` and `el++` built,
+  that is today's rule: `el` when nothing is out of `el`'s profile, else the one of the two that
+  omits fewer, ties going to `el`.
 - **The report states the resolved profile** (`profile el`, [§6.7](#67-output--classification)).
   A report is a function of (input, budget, profile). Its findings are complete for that rung's
   logic and no other.
 - **The top rung widens the ladder; it does not make selection total.** `sriq` is complete for
-  the **SRIQ object fragment**, a superset of `el` and `horn-sriq` but not of `el++`. So from then
-  on, `auto` reaches a complete answer for ontologies wholly inside one rung. Nominals, datatypes,
-  keys and punning stay outside it ([§14](#14-non-goals)), so those inputs remain partial runs
-  under the rule below. Saying the top rung makes selection "total", as an earlier draft did,
-  would license treating its presence as a guaranteed complete fallback. **With `el` and `el++`
-  built there is no such rung:** an ontology outside both has nothing to escalate to, and the run
-  is inconclusive ([§6.2](#62-data-model)), never "coherent". Once
-  `horn-sriq` exists, an ontology using inverses or functionality and otherwise inside it must be
-  run there **by `auto`**, not reported inconclusive. The default stays `el`.
+  the **SRIQ object fragment with an ABox**, a superset of `el` but not of `el++`. So once it is
+  built, `auto` reaches a complete answer for ontologies wholly inside one rung. Class nominals,
+  datatypes beyond the data lemma, and keys stay outside it ([§14](#14-non-goals)), so those inputs
+  remain partial runs under the rule below.
+  - Saying the top rung makes selection "total", as an earlier draft did, would license treating
+    its presence as a guaranteed complete fallback.
+  - **With `el` and `el++` built there is no such rung:** an ontology outside both has nothing to
+    escalate to, and the run is inconclusive ([§6.2](#62-data-model)), never "coherent".
+  - Once `sriq` is built, `auto` must run there an ontology that uses inverses or functionality and
+    is otherwise inside `sriq`, not report it inconclusive.
+  - The default stays `el`.
 
   **Selection is whole-ontology membership in a single implemented profile — never a union.** Pick
   the cheapest implemented profile that contains *every* construct in the ontology. If none does,
   the run is partial — and **which** profile it runs under is fixed by rule, not left open: choose
   the one that leaves the fewest logical axioms omitted, breaking ties by the fixed profile order
-  (el < el++ < horn-sriq < sriq). Without that rule two conforming implementations classify different
+  (el < el++ < sriq). Without that rule two conforming implementations classify different
   sub-theories of the same input and return different findings — both sound, neither reproducible,
   and [§6.8](#68-determinism-binding) violated across implementations rather than across runs. It
-  matters because the ladder is not quite a chain: `el++` is **incomparable** with `horn-sriq` and
-  `sriq`. An ontology with both a nominal (`el++`, not `horn-sriq`) and an inverse (`horn-sriq`, not
-  `el++`) is inside neither. "Escalate when constructs span fragments" would have an implementation
-  pick one and silently drop the other's constructs. (Choosing Horn-SRIQ over the earlier Horn-SHIQ
-  for v1 removed the worse case, where every chain-plus-inverse ontology, RO and CCO among them, was
-  inside no rung.) Contrast GROWL, which has *no* complete-for-DL rung at all: RL and EL are
+  matters because the ladder is not quite a chain: `el++` is **incomparable** with `sriq`. An
+  ontology with both a class nominal (`el++`, not `sriq`) and an inverse (`sriq`, not `el++`) is
+  inside neither. "Escalate when constructs span fragments" would have an implementation pick one
+  and silently drop the other's constructs. (An earlier Horn-SHIQ v1 left a worse case: every
+  chain-plus-inverse ontology, RO and CCO among them, was inside no rung. `sriq` contains them.) Contrast GROWL, which has *no* complete-for-DL rung at all: RL and EL are
   incomparable islands, which is exactly why you cannot simply "switch on EL" inside an RL engine.
 - **Safety.** Choosing a profile *weaker* than the ontology needs makes HOWL **incomplete** for it —
   it may miss entailments and, critically for validation, **miss an incoherence**. So an
@@ -336,9 +375,10 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   and there is no flag that makes it count. This is the "fragment drift" hazard from GROWL's smoke test, made explicit and
   structurally unable to pass silently.
 
-The selection seam is built with only `profile-el` behind it — a dispatch point left in place is
-far cheaper than one retrofitted later. `prepare-decoded` (`src/howl.slop`) resolves the profile
-before the gate and refuses an unbuilt one; `prepare-in-profile` is where a second rung dispatches.
+The selection seam was built with only `profile-el` behind it, because a dispatch point left in
+place is far cheaper than one retrofitted later. `prepare-decoded` (`src/howl.slop`) resolves the
+profile before the gate and refuses an unbuilt one. `prepare-in-profile` dispatches `el` and `el++`
+today; `sriq` is its third arm.
 
 ### 5.2 The exact v0 language
 
@@ -403,8 +443,8 @@ because "ABox axioms are in v0" is not a grammar:
 | Assertion | Status |
 |---|---|
 | `C(a)`, `r(a,b)` | **in v0** — encoded as concepts, below |
-| `owl:sameAs`, `owl:differentFrom`, `AllDifferent` | **out-of-profile** — equality is what the nominal-free encoding deliberately lacks |
-| Negative property assertions | **out-of-profile** — `¬r(a,b)` is `{a} ⊓ ∃r.{b} ⊑ ⊥`, and the filler `{b}` is a nominal |
+| `owl:sameAs`, `owl:differentFrom`, `AllDifferent` | **out-of-profile** in `el` — equality is what the nominal-free encoding deliberately lacks (`el++` and `sriq` take them) |
+| Negative property assertions | **out-of-profile** in `el` — `¬r(a,b)` is `{a} ⊓ ∃r.{b} ⊑ ⊥`, and the filler `{b}` is a nominal (`el++` and `sriq` take them) |
 | Datatype property assertions | **out-of-profile** (concrete domains) |
 | Annotation assertions (`rdfs:label`, `rdfs:comment`, …) | **inert** |
 | Declaration triples (`rdf:type owl:Class` / `owl:ObjectProperty` / `owl:NamedIndividual`) | **inert semantically, but read** — see below |
@@ -594,7 +634,9 @@ without them would be a **functional regression at the swap**
 > which is why it is a gate rather than a runtime check.
 
 **The range/composition admissibility condition.** Ranges and role composition cannot be combined
-freely. The condition is stated here algorithmically, because a gate cannot be implemented against
+freely in EL. (This is an OWL 2 EL restriction, applied by `el` and `el++`. `sriq` has no such
+condition: its chains are eliminated before the calculus sees a range,
+[§5.5](#55-the-sriq-calculus) S1.) The condition is stated here algorithmically, because a gate cannot be implemented against
 prose — and because the reason is derivable rather than merely cited:
 
 > CR7 derives `(X,Z) ∈ R(t)` from `(X,Y) ∈ R(r)` and `(Y,Z) ∈ R(s)`. The target `Z` of that composed
@@ -816,15 +858,18 @@ through two gates at once.
 
 | Construct | Status |
 |---|---|
-| Inverse, functional, qualified cardinality | **v1** (`horn-sriq`) — the largest real gap, see [§8.4](#84-the-moose-tboxreasoner-port) |
-| Concrete domains / datatype properties, XSD ranges | out-of-profile; the consumer partitions them and keeps a told-coherence side-check rather than HOWL growing a concrete domain ([§14](#14-non-goals)) |
+| Inverse, functional, qualified cardinality | **`sriq`** ([§5.5](#55-the-sriq-calculus)) — the largest real gap, see [§8.4](#84-the-moose-tboxreasoner-port) |
+| Concrete domains / datatype properties, XSD ranges | **inert** when the data lemma below applies (the properties are idle); otherwise out-of-profile in every rung, and the consumer keeps a told-coherence side-check rather than HOWL growing a concrete domain ([§14](#14-non-goals)) |
 | `ObjectHasSelf` | in the **OWL 2 EL profile**, but *not* in the cited EL++ class-constructor syntax — deferred |
 | **Reflexive role inclusions** (`ReflexiveObjectProperty`) | covered by the updated EL++ paper (global reflexive roles) and by OWL 2 EL — deferred |
 | `owl:topObjectProperty`, `owl:bottomObjectProperty` | built-in role semantics CR1–CR7 do not implement — see below |
 | Nominals `{a}`, `ObjectHasValue` | deferred, and now **answered no** for the first consumer ([§15 Q3](#15-open-questions)) |
-| `⊔`, `∀`, and `¬` outside a positive position | **v2** (`sriq`) — `¬` in a positive position is in v0 by rewriting (above) |
+| `⊔`, `∀`, and `¬` outside a positive position | **`sriq`** ([§5.5](#55-the-sriq-calculus)) — `¬` in a positive position is in v0 by rewriting (above) |
 
-**Every recognized OWL construct has exactly one disposition, and this table is the authority.** The
+**Every recognized OWL construct has exactly one disposition, and this table is the authority** for
+`el`. `el++` and `sriq` take further constructs, listed in their own language tables
+([§5.4](#54-the-el-calculus), [§5.5](#55-the-sriq-calculus)); everything else keeps the disposition
+below in every rung. The
 grammar above says what v0 *reasons over*; it does not say what the front end *does with everything
 else*, and constructs the grammar can express are reachable from OWL syntax the decoder must
 therefore recognize. A construct absent from this table is a spec bug, not an implementer's
@@ -845,8 +890,9 @@ judgement call.
 | **Reserved-vocabulary IRIs as entity names** (e.g. `owl:Nothing` as an individual) | **out-of-profile** — OWL 2 forbids reserved IRIs as named individuals; not a punning case to support |
 | `DisjointUnion` | **out-of-profile** — union |
 | `DisjointObjectProperties`, `IrreflexiveObjectProperty`, `SymmetricObjectProperty`, `AsymmetricObjectProperty`, `FunctionalObjectProperty`, `InverseFunctionalObjectProperty` | **out-of-profile** |
-| `HasKey`, `DatatypeDefinition`, `SubDataPropertyOf`, `EquivalentDataProperties`, `DisjointDataProperties`, `FunctionalDataProperty`, `DataPropertyDomain`/`Range`, `DataPropertyAssertion`, `NegativeDataPropertyAssertion` | **out-of-profile** |
-| `InverseObjectProperties` | **out-of-profile** — v1 |
+| `SubDataPropertyOf`, `EquivalentDataProperties`, `DisjointDataProperties`, `FunctionalDataProperty`, `DataPropertyDomain`/`Range` on idle data properties | **inert**, in every rung — the data lemma, below |
+| `HasKey`, `DatatypeDefinition`, `DataPropertyAssertion`, `NegativeDataPropertyAssertion`, and the data-property axioms the data lemma does not set aside | **out-of-profile** |
+| `InverseObjectProperties` | **out-of-profile** — in `sriq` ([§5.5](#55-the-sriq-calculus)) |
 | `SameIndividual`, `DifferentIndividuals`, `NegativeObjectPropertyAssertion` | **out-of-profile** |
 | Datatype properties, data ranges, literals in class positions | **out-of-profile** |
 | `AnnotationAssertion`, `SubAnnotationPropertyOf`, `AnnotationPropertyDomain`, `AnnotationPropertyRange` | **inert** — annotation axioms are semantically inert in OWL 2; treating them as unsupported returns false inconclusive on ordinary documentation |
@@ -869,7 +915,7 @@ ontology. Their shapes, measured:
 | Shape | Count | Note |
 |---|---|---|
 | Plain v0 role chains | 6 | already in the fragment — written as rules rather than `owl:propertyChainAxiom` |
-| Require inverses | 5 | v1 territory |
+| Require inverses | 5 | `sriq` territory |
 | **Derive `owl:Nothing`** | 2 | unsatisfiability conditions — exactly what `validate` exists to catch |
 | Class-guarded chains, 3+ atoms | 12 | no DL in the roadmap expresses these |
 
@@ -924,6 +970,48 @@ own properties, and an IRI whitelist would make routine custom metadata out-of-p
 false-inconclusive on entirely valid documents. Separately enumerated, and *consumed* rather than
 inert, are the RDF-mapping and header predicates that are syntax scaffolding
 ([§6.3](#63-normalization) step 0).
+
+**Data axioms on idle data properties are inert, in every rung: the data lemma.** No rung reasons
+over data. But the property axioms of a data property that nothing uses cannot change any answer,
+and omitting them made such ontologies inconclusive for nothing. CCO is the case in point: 8
+data-property domains and 8 ranges, and no other data.
+
+- **Idle.** A data property `P` is *idle* if neither `P` nor any data property below it in the told
+  data-property hierarchy occurs in a class expression, an assertion or a key. The hierarchy is
+  `SubDataPropertyOf` and `EquivalentDataProperties`, reflexive and transitive.
+  `owl:topDataProperty` is never idle.
+- **Set aside.** An axiom is *inert* when it is one of these:
+  - `DataPropertyDomain(P C)`, `DataPropertyRange(P DR)` or `FunctionalDataProperty(P)`, with `P`
+    idle;
+  - `SubDataPropertyOf(P Q)`, with `P` idle;
+  - `EquivalentDataProperties(P₁ … Pₙ)`, with every `Pᵢ` idle;
+  - `DisjointDataProperties(P₁ … Pₙ)`, where every pair has an idle member;
+  - `SubDataPropertyOf(P owl:topDataProperty)`, a tautology.
+- **What stays out of profile.**
+  - Every other data axiom.
+  - Any other use of `owl:topDataProperty`. OWL 2 DL forbids it (Structural Specification §11.2),
+    and the argument below cannot cover it. The property's extension is never empty, so a range on
+    it is inconsistent and a domain on it puts every individual into the class.
+- **Lemma.** Let `A` be the inert data axioms of `O`. Then `O` and `O ∖ A` agree on consistency, on
+  the satisfiability of every class, and on every subsumption between classes.
+
+  *Proof.* A model of `O` is a model of `O ∖ A`. For the converse, take a model `I` of `O ∖ A`, and
+  let `I′` be `I` with every idle property's extension emptied.
+  - **`A` holds in `I′`.** Domains, ranges and functionality hold vacuously. An inclusion from an
+    empty property holds trivially. An equivalence between empty properties holds. So does a
+    disjointness in which every pair has an empty member.
+  - **`O ∖ A` still holds.** The only axiom of `O ∖ A` that can mention an idle `P` is a
+    `DisjointDataProperties`, because every other data-property axiom naming `P` is in `A`: the
+    sub-properties of an idle property are idle. Emptying `P` keeps a disjointness true.
+  - **The classes do not change.** `I′` changes no class, individual or object property, and no
+    class expression or assertion mentions an idle property. So every class has the same extension
+    in `I′` as in `I`.
+
+  Hence `I′ ⊨ O`, with the same class extensions as `I`, and the claims follow.
+- **Every rung applies it.** The lemma is about the theory, not a calculus. So `el` and `el++`
+  reports on such input go from *inconclusive* to *coherent* when nothing else is omitted.
+- **What it does not touch.** Data assertions, data restrictions in class expressions and keys
+  still need a concrete domain, and no rung has one ([§14](#14-non-goals)).
 
 The fallback covers what is left: a triple typable as neither a supported logical axiom nor an
 annotation assertion is **out-of-profile**, never dropped. Getting that default backwards in either
@@ -1003,7 +1091,8 @@ is no `class` constructor for a `Concept`, only `class-node` over an IRI. The re
 without it a class `:x ⊑ ⊥` and an unrelated individual `:x` merge into one context and the encoding
 manufactures a false inconsistency ([§6.2](#62-data-model)'s `Node`). This is sound *and* complete
 here precisely because the fragment has no nominals, functionality, or cardinality — nothing can
-force two individuals to be equal, so no equality machinery is needed. It also means v0 answers
+force two individuals to be equal, so no equality machinery is needed. (`sriq` has functionality
+and cardinality, so it encodes assertions through nominals instead, [§5.5](#55-the-sriq-calculus).) It also means v0 answers
 **TBox coherence plus assertion-driven clashes**, not full OWL consistency: without equality and
 nominals there are OWL-inconsistent ontologies v0 cannot detect, which is why anything outside this
 section is out-of-profile rather than best-effort.
@@ -1816,6 +1905,511 @@ times are the median of three runs, without parse and decode).**
 - **Not `ElPlusPlus`.** EL++ [BBL05] includes concrete domains, which `el++` omits. So the rung
   registers as `BoundedDl`, naming its logic ([§8.4](#84-the-moose-tboxreasoner-port)).
 
+### 5.5 The sriq calculus
+
+The `sriq` rung ([§5](#5-fragment-roadmap)) reasons over the **SRIQ object fragment with an ABox**:
+`el`'s language plus inverse roles, `∀`, unions, full negation, qualified number restrictions,
+`ObjectHasSelf`, every property characteristic OWL 2 DL allows, and every kind of object assertion.
+It does **not** take class nominals (`ObjectHasValue`, `ObjectOneOf`). Those belong to a possible
+later rung, `sroiq`, and nothing here may wall that rung off.
+
+Its completeness rests on two published results, applied in sequence:
+- **[Sim12] Theorem 3** eliminates complex role inclusions (chains, transitivity, and inclusions
+  into the roles they make non-simple). It keeps every consequence over concepts, simple roles and
+  individuals.
+- **[TGH21] Theorems 1 and 2** prove the consequence-based calculus for ALCHOIQ+ sound, and
+  complete for query clauses on any saturated context structure that meets Theorem 2's conditions. Without constants it is
+  [Bate+18]'s calculus for ALCHIQ+, whose Theorems 8 and 9 are the special case ([TGH21] §4, and
+  Theorem 6's proof).
+
+**Why [TGH21] and not [Bate+18]: the ABox.** [Bate+18] has no individuals. [TGH21] normalises an
+assertion through nominals (its §2.3). `R(a, b)` becomes `{a} ⊑ ∃R.{b}`, and that `{b}` becomes a
+DL11 clause, `B(x) → x ≈ b`. Table 1 has no form for a role assertion without one. So nominals still
+reach the calculus, as the encoding of assertions, even though the gate refuses them in class
+expressions. HOWL therefore implements [TGH21] **whole, the Nom rule included** (S3). Dropping Nom
+would need a new proof that it never fires on `sriq` input. Implementing the published rule needs
+none, and `sroiq` needs that rule anyway.
+
+HOWL implements [TGH21] as published. The rest of this section is the translation from OWL into its
+normal form, the chain elimination in front of it, and the bookkeeping around them. The choices
+[TGH21] leaves open are fixed in S5 and S6, each with its argument.
+
+> **Review status.** Written 2026-10-08 on the `sriq-spec` branch.
+> - **Adversarial review (Codex, three passes, 2026-10-08): signed off.** It found no
+>   counterexample to:
+>   - the role gate (the collapse of role-equivalence classes, and the constraint check over `R^c`);
+>   - S1's elimination after the ABox encoding, with symmetric roles, `Ref` on non-simple roles,
+>     and negative assertions on transitive roles;
+>   - S6's R4: multi-premise rules, Succ and r-Succ with ground `K2` atoms, new contexts and
+>     constants, equality at the root, and premises deleted in the round they are used;
+>   - the data lemma, with top and bottom data properties, equivalence, disjointness,
+>     functionality and the direction of the hierarchy.
+>
+>   Its findings, each fixed in the text:
+>   - the stored Λ needed an argument that it changes no run (S3);
+>   - a negated filler such as `∀R.¬B` had no Table 1 form (S2);
+>   - `owl:Thing`'s queries needed an empty body (S4);
+>   - R7 claimed monotonicity in the cap for the bottom-compressed report, not just the raw queries;
+>   - E3 was left owed, and is now settled with a proof;
+>   - `docs/coverage.md` misstated "idle".
+> - **Project owner: pending.** No `sriq` code before acceptance.
+
+**Sources.**
+- **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for
+  the description logic SROIQ*, Artificial Intelligence 298 (2021), article 103518,
+  DOI 10.1016/j.artint.2021.103518. The authors' PDF is on cs.ox.ac.uk; there is no arXiv version.
+  Used:
+  - §2.1: containment up to redundancy, `∈̂`;
+  - §2.3 and Table 1: the normal form and DL-clauses;
+  - Definitions 1–7: nominal labels, context terms and clauses, context structures, triggers,
+    expansion strategies, soundness, admissible orders;
+  - Tables 2 and 3: the rules;
+  - Theorems 1 and 2: soundness and completeness;
+  - §5.1: Definition 9, Algorithm 1 and Corollary 1;
+  - Theorems 5 and 6: termination and complexity;
+  - §4.2: the Sequoia context order, with its admissibility proof in Appendix A.
+- **[Bate+18]** as in [§5](#5-fragment-roadmap): Table 2, Definition 4, Theorems 8 and 9,
+  Propositions 10–12, and the trivial, eager and cautious strategies (§4.2).
+- **[Sim12]** František Simančík, *Elimination of Complex RIAs without Automata*, DL 2012. Used:
+  - §2.1: SROIQ with the simple roles given in the signature, and ≺-regular RBoxes;
+  - Definitions 1–6, Proposition 2, and Theorems 1–3.
+- **[TGH18]** The IJCAI 2018 paper that [TGH21] extends (arXiv:1805.01396). Its Nom, Join and r-Succ
+  rules and its orders differ from [TGH21]'s, so it is cited only for one remark on Nom.
+
+**The language.** The OWL constructs, and what S0 makes of each before chain elimination. `R` and
+`S` are object property expressions, possibly `ObjectInverseOf`. `C` and `D` are class expressions
+from this table.
+
+| OWL | SROIQ, before [Sim12] |
+|---|---|
+| `owl:Thing`, `owl:Nothing`, `ObjectIntersectionOf`, `ObjectUnionOf`, `ObjectComplementOf` | `⊤`, `⊥`, `⊓`, `⊔`, `¬` |
+| `ObjectSomeValuesFrom(R C)`, `ObjectAllValuesFrom(R C)` | `∃R.C`, `∀R.C` |
+| `ObjectMinCardinality`, `ObjectMaxCardinality`, `ObjectExactCardinality` (`n R C`; unqualified means `C = ⊤`), with `R` simple and `n ≤ 16` | `≥n R.C`, `≤n R.C`, and both |
+| `ObjectHasSelf(R)`, `R` simple | `∃R.Self` |
+| `SubClassOf`, `EquivalentClasses`, `DisjointClasses`, `DisjointUnion(C D₁ … Dₙ)` | GCIs. `DisjointUnion` is `C ≡ D₁ ⊔ … ⊔ Dₙ` with the `Dᵢ` pairwise disjoint |
+| `ObjectPropertyDomain(R C)`, `ObjectPropertyRange(R C)` | `∃R.⊤ ⊑ C`, `⊤ ⊑ ∀R.C` |
+| `SubObjectPropertyOf` with or without a chain, `EquivalentObjectProperties`, `InverseObjectProperties(R S)` | RIAs. `R ≡ S⁻` is `R ⊑ S⁻` and `S⁻ ⊑ R` |
+| `TransitiveObjectProperty(R)`, `SymmetricObjectProperty(R)` | `R ∘ R ⊑ R`, `R⁻ ⊑ R` |
+| `ReflexiveObjectProperty(R)` | `Ref(R)` |
+| `IrreflexiveObjectProperty(R)`, `AsymmetricObjectProperty(R)`, `DisjointObjectProperties`, all on simple roles | `Irr(R)`, `Dis(R, R⁻)`, `Dis(R, S)` for each pair |
+| `FunctionalObjectProperty(R)`, `InverseFunctionalObjectProperty(R)`, `R` simple | `⊤ ⊑ ≤1 R.⊤`, `⊤ ⊑ ≤1 R⁻.⊤` |
+| `owl:bottomObjectProperty` | a role name `N` with `∃N.⊤ ⊑ ⊥`, as in [§5.4](#54-the-el-calculus) |
+| `R ⊑ owl:topObjectProperty`, or a chain into it | dropped as tautologies, as in [§5.4](#54-the-el-calculus) |
+| `ClassAssertion(C a)` | `{a} ⊑ C` |
+| `ObjectPropertyAssertion(R a b)` | `{a} ⊑ ∃R.{b}` |
+| `NegativeObjectPropertyAssertion(R a b)` | `{a} ⊑ ∀R.¬{b}` |
+| `SameIndividual(a₁ … aₙ)` | `{a₁} ⊑ {aᵢ}` and `{aᵢ} ⊑ {a₁}` for each `i` |
+| `DifferentIndividuals(a₁ … aₙ)` | `{aᵢ} ⊓ {aⱼ} ⊑ ⊥` for each `i < j` |
+| data axioms that [§5.2](#52-the-exact-v0-language)'s data lemma sets aside | inert, as in every rung |
+
+The `{a}` in the assertion rows are the only nominals, and only assertions produce them.
+
+**Out of profile in `sriq`:**
+- **Class nominals:** `ObjectHasValue`, `ObjectOneOf`. They belong to `sroiq`.
+- **Anonymous individuals.** A later amendment may treat them as fresh named individuals
+  (Skolemisation). That preserves every entailment that does not mention them, but it needs a
+  canonical name for each, and blank-node labels do not give one ([§6.8](#68-determinism-binding)).
+- **`owl:topObjectProperty` anywhere but a super-role.** The universal role has no [TGH21] form.
+- **A cardinality with `n > 16`.** This is a resource guard, not a proof condition. Numbers are
+  coded in unary, so a `≤n` clause has `C(n+1, 2)` equalities in its head. A gate stricter than its
+  proof is allowed (Constraint ae25e3d4).
+- **Other data, `HasKey`, `DatatypeDefinition` and SWRL.** "Other data" means anything the data
+  lemma does not set aside.
+- **RBoxes:** an RBox the gate below rejects, and the complex RIAs that S1's size guard omits.
+
+**Gate conditions.** They are [Sim12]'s preconditions, checked as written, so the gate is exactly
+as strict as the proof.
+- **Simple roles.** "Simple" is as OWL 2 Structural Specification §11.1 defines it, over `AllOPE`,
+  with `→` taking inverse and symmetric axioms into account. Cardinalities, Self, and functional,
+  inverse-functional, irreflexive, asymmetric and disjoint axioms take simple roles only (§11.2's
+  restriction on simple roles). This fixes [Sim12]'s `Σ_S`: a RIA between simple roles is simple,
+  and every other RIA is complex.
+- **Role-equivalence classes are collapsed first** (S0). Every strongly connected component of `→`
+  becomes one role.
+- **≺-regularity** ([Sim12] §2.1) of the completion `R^c` of the collapsed RBox: there must be a
+  regular order under which every complex RIA has one of the forms (R1)–(R5). The check is
+  [§5.2](#52-the-exact-v0-language)'s, with its dominance rule and witness policy, but over a
+  different constraint set:
+  - each complex RIA in `R^c`, length 1 included, contributes the ⊆-least constraint set among the
+    forms it matches;
+  - (R4) `R ∘ R ⊑ R` and (R5) `R⁻ ⊑ R` contribute nothing;
+  - in (R1)–(R3), every position other than a recursive end (the `R` that opens an (R2) or closes
+    an (R3)) contributes `Rᵢ ≺ R`;
+  - the RBox is regular iff the constraint graph is acyclic.
+
+  `R^c` is closed under `inv`, so the graph is too. Its transitive closure is then a regular order:
+  `R₁ ≺ R₂` iff `inv(R₁) ≺ inv(R₂)`.
+- **Why this is not OWL 2's own regularity check.**
+  - OWL 2 §11.2 constrains only chains of length ≥ 2, and ties its order to `→*`. [Sim12]
+    constrains every complex RIA, length 1 included, and has no `→*` condition.
+  - The collapse reconciles the two on real input. Without it, RO's
+    `InverseObjectProperties(part_of has_part)`, with both roles transitive, demands both
+    `has_part ≺ part_of⁻` and `part_of⁻ ≺ has_part`.
+  - The gate checks [Sim12]'s condition because that is the one the proof needs.
+  - That the gate, after the collapse, accepts every RBox OWL 2 accepts is expected, not claimed.
+    The gate's slice measures it on the corpus and the W3C tests. A refusal there is a defect in the
+    expectation, never a license to loosen the gate.
+
+**S0 — translation into SROIQ.** Elementary and row by row, as K0 is.
+- **Read-off rows.** Every row of the table except the ABox rows is its construct's Direct Semantics
+  read off (OWL 2 Direct Semantics §2.2–2.3). `owl:bottomObjectProperty` and the dropped top-role
+  inclusions are [§5.4](#54-the-el-calculus) K0's arguments, unchanged.
+- **The ABox rows.** Each is an equivalence, so the models coincide:
+  - `a^I ∈ C^I` iff `{a}^I ⊆ C^I`;
+  - `(a^I, b^I) ∈ R^I` iff `{a}^I ⊆ (∃R.{b})^I`;
+  - `(a^I, b^I) ∉ R^I` iff `{a}^I ⊆ (∀R.¬{b})^I`;
+  - equality and inequality are as in [§5.4](#54-the-el-calculus) K0.
+- **The collapse.**
+  - **Why it is safe:** if `R →* S` and `S →* R`, then `R^I = S^I` in every model, with `INV` read as
+    the inverse.
+  - **How:**
+    - Each component's representative is its least role-name IRI, oriented positively.
+    - Every role in the component is replaced by the representative, and every inverse by the
+      representative's inverse.
+    - A component that holds both `P` and `P⁻` keeps `P⁻ ⊑ P`.
+  - **Why it preserves the report:**
+    - Every model of the input is a model of the result.
+    - A model of the result becomes a model of the input once each replaced name is interpreted as
+      its representative or the representative's inverse.
+    - The report names no role, so nothing it reads changes.
+- **Punning** needs no special treatment. Classes, roles and individuals are separate sorts in
+  [TGH21]'s signature, which is how OWL 2 DL's punning semantics treats them.
+
+**S1 — chain elimination.** [Sim12] §4, run on S0's output:
+1. **Initialisation** (Definition 3):
+   - drop every complex RIA;
+   - keep the simple RIAs and the role assertions `Ref`, `Irr` and `Dis`;
+   - label every positive `∀R.C` and every negative `∃R.C`.
+2. **Expansion** (Definitions 4–6), repeated until nothing is labelled:
+   - a labelled `∀^R R.C` is replaced by a fresh `I`, with `F ⊑ C` and `expand(I ⊑ ∀^R R.F)` added;
+   - a labelled `∃^R R.C` is replaced by a fresh `F`, with `C ⊑ I` and
+     `expand(I ⊑ ∀^R inv(R).F)` added.
+
+   `expand`'s items 1–5 encode the two-state automaton of `R`'s RIAs in `R^c`. A symmetric role is
+   expanded in both directions.
+3. **Simple roles are not expanded.** This is [Sim12]'s closing optimisation: a labelled
+   restriction on a simple role is unlabelled in place.
+
+**What survives.** [Sim12] Theorem 3: the result is **simple-conservative** over the input. Their
+models coincide on the input's concept names, simple roles and individuals, so consistency, unsatisfiability and
+subsumption between classes are preserved exactly, and they are all the report reads.
+
+What is lost is entailments about non-simple roles, such as `T ∘ P ∘ S ⊑ T`, or a role assertion
+derived through a chain. The report states neither.
+
+The output has no complex RIA. What remains:
+- the simple RIAs;
+- `Ref`, `Irr` and `Dis`;
+- GCIs, whose new axioms have the form `I ⊑ ∀R.F`, over possibly inverse roles.
+
+That is an ALCHOIQ+ TBox whose nominals all come from assertions.
+
+The negative assertion `{a} ⊑ ∀R.¬{b}` is a positive `∀`, so a negative assertion on a transitive
+role is expanded like any other. It then constrains every chain from `a` to `b`, as it must.
+
+**Size guard.** [Sim12] Theorem 3 bounds the number of expansions by `‖T‖·(2‖R‖)^d`, where `d` is
+the RBox's depth. That is exponential in the depth, and optimal. If S1's output would exceed a fixed
+bound, every complex RIA is omitted instead, witnessed as a set, and the run is inconclusive. The
+bound is set in the chain-elimination slice, where RO (depth 12) is measured. The guard is
+deterministic, and it only ever weakens the theory, so its findings stay sound (S7).
+
+**S2 — normal form.** The structural transformation takes S1's output into [TGH21] Table 1's
+DL1–DL11:
+- Every GCI `C ⊑ D` becomes `⊤ ⊑ NNF(¬C ⊔ D)`, so every subconcept occurrence is then positive.
+- Each subconcept `E` that is not a concept name gets one fresh name `A_E` per distinct `E`, with
+  `A_E ⊑ E`, and `E`'s own subconcepts are replaced by their names. The one exception is a literal
+  standing directly in a disjunction, which goes to DL1 as it is. So the filler of every `∃`, `∀`,
+  `≥` and `≤` is a name, even when it is a literal. `∀R.¬B`, for example, gets `A_{¬B}` with the
+  DL1 clause `A_{¬B} ⊓ B ⊑ ⊥`. Three cases name differently:
+  - in `≤n R.F`, `F`'s occurrence is negative, so it is named through `F ⊑ B`;
+  - a literal `¬{o}` is named through `{o} ⊑ X` (DL10), and becomes `¬X`;
+  - a literal `¬∃R.Self` is named through `∃R.Self ⊑ X` (DL6), and becomes `¬X`.
+- The shapes are then read off:
+
+  | Shape | Table 1 form |
+  |---|---|
+  | a disjunction of literals (negated names go to the body) | DL1 |
+  | `∃R.B`, `≥n R.B` | DL2 |
+  | `∀R.B` | DL3, over `inv(R)` |
+  | `≤n R.B` | DL4 |
+  | `∃R.Self` | DL5 |
+  | `∃R.Self ⊑ B` (for `Irr`, with `B ⊑ ⊥`) | DL6 |
+  | simple RIAs | DL7, DL8 |
+  | `Dis` | DL9 |
+  | `{o} ⊑ B` | DL10 |
+  | `B ⊑ {o}` | DL11 |
+- `Ref(R)` is `⊤ ⊑ ∃R.Self` ([TGH21] §2.3's rewriting): DL1's `⊤ ⊑ B`, then DL5's `B ⊑ ∃R.Self`.
+- Table 1's forms take role *names*. So each name `P` whose inverse is needed as an argument gets a
+  fresh name `P̄`, with the two DL8 clauses `P ⊑ P̄⁻` and `P̄ ⊑ P⁻`.
+
+*Proof.*
+- **Input to output:** any model of the input becomes a model of the output by setting
+  `A_E^I := E^I` and `P̄^I := (P^I)⁻`.
+- **Output to input:** any model of the output satisfies the input, by induction on `E`. A name
+  stands *below* what it names where the occurrence is positive (`A_E ⊑ E`), and *above* it where
+  the occurrence is negative (`F ⊑ B`, `{o} ⊑ X`, `∃R.Self ⊑ X`). So putting the named concepts
+  back in place of the names can only grow each disjunct, and `⊤ ⊑ NNF(¬C ⊔ D)` still holds.
+
+So the output is a conservative extension of the input, and agrees with it on every entailment over
+the input signature. This is the standard argument for the transformation [TGH21] §2.3 cites. It is
+written out here because two choices are HOWL's own: one name per distinct `E`, and the inverse
+names.
+
+**S3 — the calculus, as published.** [TGH21]:
+- **Tables 2 and 3.** In a context: Core, Hyper, Eq, Ineq, Factor, Elim, Join and Nom. Between
+  contexts: Succ, Pred, r-Succ and r-Pred.
+- **Definition 4:** the trigger sets.
+- **Definition 5:** the expansion strategies.
+- **Definition 3:** the context structure, with its root context `v_r`.
+
+- **Nom is in.** It introduces auxiliary constants when "an inverse role, an at-most number
+  restriction, and a nominal" interact ([TGH21] §4.1). [TGH18] adds that the rule "does not apply if
+  the input ontology lacks either inverse roles, or nominals, or number restrictions."
+  - An ABox-free `sriq` ontology has no nominal, so it never reaches Nom.
+  - The slice that builds Nom counts its firings on the corpus.
+- **The depth limit Λ** is Algorithm 1 step A4's, `2^τSu · 2^τPr · (ω + ω_D)`, which meets
+  Theorem 2's precondition. HOWL computes it exactly when it is below 2⁶², and stores 2⁶²
+  otherwise. That changes no run:
+  - Nom on `o_ρ` needs a clause that mentions `o_ρ`. Such a clause exists only from the round in
+    which `o_ρ` was created, so Nom adds at most one to the longest label per round, and every label
+    is no longer than the number of rounds run.
+  - Every run stops within 10,000 rounds. That is the cap's range, which the CLI and the API both
+    enforce ([§9](#9-cli--interface-sketch)).
+  - So every label a run can build is shorter than 2⁶², and the test `|ρ| < Λ` has the same outcome
+    under the stored value as under the true one.
+- **Errata.** Each is read as follows, and each is checked against the completeness proof:
+  - **E1.** Table 2's Nom prints its DL4 premise's head as `⋁_{1≤i<j≤n}`. Table 1 has `n+1`
+    neighbours, so the head is `⋁_{1≤i<j≤n+1}`.
+  - **E2.** Definition 7(3) prints "`f(x) ≻ a` for every `f ∈ Σf` and `u ∈ Σu`". It means
+    `f(x) ≻ u`.
+  - **E3. r-Pred's conclusion carries `⋀_{i=1}^m Aᵢ`, which its premise never binds.** Read as
+    Pred is written, the `Aᵢ` are ground body atoms of the main premise, carried into the
+    conclusion unresolved. A root clause's body holds only atoms of `Su^r(O)` (from r-Succ) and
+    ground atoms (from Pred), so its non-ground body atoms are exactly its `S(y, u)` and `S(u, y)`.
+    - **HOWL's r-Pred.** Every non-ground body atom is resolved, as a `Cᵢ`, through an edge
+      `⟨v, v_r, u⟩` and a side premise in `v`, exactly as the rule prints it. Every ground body atom
+      is carried, as an `Aᵢ`. A root clause with no non-ground body atom therefore reaches every
+      context, as the printed rule's empty edge condition says. [TGH21] §7.3.2 restricts that
+      propagation as an optimisation, which would need its own argument here.
+    - **Sound.** The root clause holds for every value of `y` (Definition 6, S1). Put `y := x`. The
+      side premises supply each `Cᵢσ` or their `Δᵢ`, and the carried `Aᵢ` stay hypotheses. So the
+      conclusion is entailed, the same argument as Pred's ([TGH21] Appendix B: "analogous to that
+      used in the proof for the Pred").
+    - **Complete under any reading** in which the `Aᵢ` are ground body atoms, including the one
+      that resolves ground atoms too.
+      - Take an instance that resolves a ground atom `A` with a side premise `Γ → Δ ∨ A`, `A`
+        maximal. Carrying `A` instead, then Join with that same side premise, reaches the same
+        conclusion: Join has the same maximality condition and needs no edge.
+      - A store closed under HOWL's r-Pred and Join therefore holds that instance's conclusion up to
+        redundancy. If the carried clause is subsumed by a stored clause without `A`, that stored
+        clause subsumes the conclusion. Otherwise Join applies to the stored clause.
+      - So Theorem 2's saturation holds for the printed rule under either reading.
+    - **The paper's own Example 1 runs this way.** Root clause (118),
+      `C(o) ∧ D(o) ∧ S(y, o) → F(y)`, gives `C(o) ∧ D(o) → F(x)` in `v_B`, and Join with (110),
+      `⊤ → C(o)`, gives (112), `D(o) → F(x)`.
+  - [Bate+18] Table 1 prints DL9 as `S₁(z₁,x) ∧ S₂(z₂,x) → ⊥`. HOWL uses [TGH21] Table 1's
+    `S₂(z₁,x)`.
+
+**S4 — queries, and what the report reads.**
+- **Initialisation** (Algorithm 1, steps A1–A2) creates:
+  - the root context `v_r`;
+  - a context `v_B` with core `{B(x)}` for each class name `B` of the input signature other than
+    `owl:Thing` and `owl:Nothing`;
+  - `v_⊤`, with the empty core.
+
+  All of them use S5's single context order, which satisfies Theorem 2's condition C2 for every
+  query ([TGH21] §4.2: "The context order for Sequoia described above satisfies Condition C2 of
+  Theorem 2 for any query Q"). C1 holds by Core. The initial structure is sound for `O` and mentions
+  no auxiliary constant, as Theorem 2 requires.
+- **Raw queries** ([TGH21] Algorithm 1 step A6, Corollary 1), for class names `A` and `B` other
+  than `owl:Thing` and `owl:Nothing`:
+  - `inconsistent` iff `⊤ → ⊥ ∈̂ S_{v_⊤}`;
+  - `unsat(B)` iff `B(x) → ⊥ ∈̂ S_{v_B}`;
+  - `holds(B, A)` iff `B(x) → A(x) ∈̂ S_{v_B}`;
+  - `holds(owl:Thing, A)` iff `⊤ → A(x) ∈̂ S_{v_⊤}`. This is a query with an empty body, so C1 holds
+    vacuously. For the other queries C1 holds by Core, which puts `⊤ → B(x)` in `v_B`.
+
+  The rest need no query:
+  - `unsat(owl:Thing)` is `inconsistent`;
+  - `holds(B, owl:Thing)` is always true;
+  - `holds(B, owl:Nothing)` is `unsat(B)`;
+  - `owl:Nothing` is below everything.
+
+  Fresh names are never queried: S1's `I` and `F`, S2's `A_E` and `P̄`.
+- **The report** is extracted from these raw queries exactly as [§5.4](#54-the-el-calculus)'s K5
+  extracts `el++`'s:
+  - `owl:Nothing` is never an unsatisfiable finding;
+  - an inconsistent ontology reports no unsatisfiable classes and no hierarchy;
+  - `entails-sub(A, B)` iff `inconsistent`, or `unsat(A)`, or `holds(A, B)`;
+  - the taxonomy is bottom-compressed.
+
+  So on input inside `el`'s or `el++`'s language, **when both runs are complete**, `sriq`'s report
+  equals theirs except for the `profile` and `rounds` lines. All three rungs are sound and complete
+  for the same Direct-Semantics entailments.
+- **A run that derives `⊤ → ⊥` in `v_⊤` stops after that round's commit.** It is complete for its
+  answers, as K3's flagged run is: an inconsistent ontology entails everything, and the report says
+  so.
+
+**S5 — representation.** [TGH21] leaves each of these choices open, so none needs a new proof. Each
+is fixed here so that reports are input-determined.
+- **One expansion strategy, fixed: cautious** ([Bate+18] §4.2). It picks `v_B` when `f` occurs in
+  exactly one atom `B(f(x))` of `O` and `B(x) ∈ K1`, and `v_⊤` otherwise.
+  - It is admissible: Definition 9, at most one context per class name.
+  - It makes successor contexts and query contexts one family.
+  - With eager Hyper, it gives Proposition 12's linear correspondence on EL.
+  - It is a pure function of `f` and `K1`.
+
+  Completeness holds for any admissible strategy (Theorem 2). Capped reports and `rounds` depend on
+  which strategy runs, though, so the strategy is not a runtime option. The feasibility checkpoint
+  measures eager against it, and a change is an amendment to this paragraph.
+- **One context order, for every context:** [TGH21] §4.2's Sequoia order, admissible by Appendix A.
+  It is the least order containing the lexicographic path order on a-terms induced by `⋗`, plus
+  that section's seven comparisons. It compares two p-terms only when one is the other with smaller
+  a-terms, so distinct class names are never ordered against each other.
+
+  `⋗` orders `Σf ∪ Σu`:
+  - every function symbol is above every constant;
+  - function symbols are ordered by id;
+  - constants are ordered by label length, then by base individual (by IRI, as `canon.slop`'s
+    `iri-cmp` does), then by label, lexicographically.
+
+  That order is a-admissible (Definition 7). It is total over every constant Nom could ever invent,
+  so it is fixed before the run.
+- **Ids are created from content.** These get dense ids in the canonical order of what they name,
+  never in input order, as the gate's canonical forms already are
+  ([§6.8](#68-determinism-binding)):
+  - class and role names;
+  - S1's `I` and `F`, and S2's `A_E` and `P̄`;
+  - function symbols and constants.
+
+  A context's identity is its core.
+
+**S6 — rounds, and why every report is the same at every worker count.** [TGH21]'s rules are a set
+of independent inferences, and S6 fixes their schedule. The state at boundary `n` is:
+- the contexts with their cores, the edges `Eₙ`, and the constants;
+- each context's clause set `S_vⁿ`;
+- `Δₙ`: the clauses, edges, contexts and constants committed at boundary `n` (`Δₙ ⊆ Sₙ`).
+
+A round has four steps:
+1. **Derive**, in parallel over contiguous chunks of `Δₙ`, against the frozen `Sₙ`.
+   - Every rule instance with at least one premise in `Δₙ` runs, reading its other premises from
+     `Sₙ`. A Succ instance for `u` and `f` counts every clause that puts an atom into its `K2` as a
+     premise, beside its trigger clause.
+   - A new context also takes its Core clauses, plus the Hyper conclusions of every bodiless
+     ontology clause.
+   - A new constant takes the root's Hyper conclusions of those same clauses.
+   - Each worker keeps, in its own arena, the conclusions not `∈̂` their context's `Sₙ`, and the
+     Succ, r-Succ and Nom actions whose preconditions `Sₙ` satisfies. Nothing is written to the
+     store.
+2. **Create**, serially. New contexts (identified by core), edges and constants get ids in content
+   order. Their Core clauses and `A → A` clauses join the candidates.
+3. **Commit**, per context shard, with one committer each. Sort the context's candidates by content,
+   then take each candidate `c` in turn, with `W` the context's current set:
+   - if `c ∈̂ W`, skip it;
+   - otherwise delete every `w ∈ W` that `c` subsumes, and insert `c`.
+
+   What is inserted forms `Δₙ₊₁`, in context-id order and then content order, along with the new
+   edges, contexts and constants.
+4. **Boundary.** Check cancellation, then the cap, as `run-ksc` does. An empty `Δₙ₊₁` is the
+   fixpoint.
+
+The argument, one short step at a time:
+- **R1 — the commit does not depend on order.**
+  - Under subsumption (`Γ′ ⊆ Γ`, `Δ′ ⊆ Δ`), set-clauses are partially ordered. A clause subsumed by
+    a tautology is itself a tautology, by [TGH21] §2.1's definition of `∈̂`.
+  - Exhaustive Elim on a finite set `X` leaves exactly `min(X)`: the non-tautologies that no other
+    member subsumes.
+  - Step 3 computes `min(Sₙ ∪ C)` in any processing order. A minimal clause is never skipped or
+    deleted. A non-minimal one is skipped or deleted by some minimal clause below it.
+  - So each `S_vⁿ⁺¹` is a function of `S_vⁿ` and the *set* of candidates.
+- **R2 — `∈̂` persists.** If `c ∈̂ Sₙ`, then `c ∈̂ Sₙ₊₁`. A deleted subsumer has a surviving subsumer
+  of its own (R1), and subsumption is transitive.
+- **R3 — nothing comes back.** A deleted clause stays `∈̂` (R2), and no rule adds a conclusion that
+  is already `∈̂`. So every clause in the final store `F` has been present without a break since it
+  arrived.
+- **R4 — the final store is saturated** in [TGH21]'s sense, so Theorem 2 applies.
+  - **Every rule precondition is one of three kinds:**
+    - *static*: an ontology clause, a literal's shape, maximality under `≻_v`, or membership in a
+      trigger set;
+    - *monotone*: a premise clause is present, or an edge is present;
+    - *negative over a persistent property*: the conclusion is `∉̂`, or (Succ, r-Succ) there is no
+      edge whose target holds each `A′ → A′`.
+  - **Every instance over `F` ran.** Take any instance whose premises all lie in `F`, and its
+    latest-arriving premise, which was in some `Δ_r`.
+    - That premise was derived against `S_r`, which held all the others: they had arrived and never
+      left (R3), and `Δ_r ⊆ S_r`.
+    - So the instance ran. Its conclusion was already `∈̂` or became a candidate, and either way it
+      is `∈̂ F` by R1 and R2.
+  - **Succ.**
+    - `K2` collects the atoms `A′σ`, for `A′ ∈ Su(O)`, that are maximal in a clause of `S_u`. Each
+      either mentions `f(x)` (`f(u)` at the root) or is ground.
+    - Its preconditions therefore read a set of clauses. That is why derive counts each clause that
+      contributes to `K2` as a premise, and re-checks Succ for `(u, f)` whenever one arrives.
+    - The last of `F_u`'s trigger and contributing clauses to arrive saw every earlier one. So the
+      edge created or confirmed in that round covers `K2(F_u)`, and its `A′ → A′` clauses are `∈̂`
+      from then on.
+    - r-Succ is the same, per constant.
+  - **Elim** is not applicable, because every `S_v` is a `min` set.
+  - **Deleting a premise in the round it is used loses nothing.** The instances that matter are the
+    ones over `F`, and a deleted clause is not in `F`.
+- **R5 — termination.** Each round adds a clause not previously `∈̂`, or an edge, context or
+  constant. Each of those is finite in number: terms are bounded, the strategy is admissible
+  (Definition 9), and labels are shorter than Λ ([TGH21] Theorem 5).
+- **R6 — independence from the worker count.**
+  - Each step is a function of sets: derive of `(Dₙ, Δₙ)`, create of the action set, and commit of
+    each context's candidate set (R1).
+  - So `Dₙ₊₁`, the termination and `rounds`, and with them every report, capped runs included, are
+    the same at every worker count.
+  - This is stronger than `el++`'s order-preserving commit: permuting `Δₙ` changes nothing. The
+    parallel-rounds slice tests that directly.
+- **R7 — caps.**
+  - **Sound:** every inference is one of [TGH21]'s, or HOWL's r-Pred, which E3 proves sound. So
+    every structure reached is sound (Theorem 1), and a capped run's findings are sound.
+  - **The raw queries are monotone in the cap.** `inconsistent`, `unsat` and `holds` are read
+    through `∈̂`, so by R2 a larger cap only makes more of them true, and the complete run makes all
+    the true ones true.
+  - **The report is not monotone in the cap.** K5's extraction compresses the taxonomy at the
+    bottom. So a larger cap that finds `A ⊑ ⊥` replaces `A`'s `sub` lines by its unsatisfiability,
+    and one that finds inconsistency drops the hierarchy. Each report is still sound (S7).
+
+**Cancellation.** As in `el++`. It is checked at every round boundary, before the cap, and yields
+`Fault::cancelled` with no Outcome.
+
+**S7 — soundness under omissions and caps.** Omitting an axiom only removes premises. The
+description logic is monotone, so a run over the part the gate accepts is sound for the whole
+ontology, and R7 covers a cap. As in every rung, a finding stands, and only the absence of a finding
+needs a complete run ([§6.2](#62-data-model)).
+
+**Cost.**
+- **Without an ABox,** S2's output is ALCHIQ+, with no DL10 or DL11. The calculus runs in time
+  exponential in it ([TGH21] Theorem 6; [Bate+18] Proposition 10). With chains, `sriq` is therefore
+  doubly exponential in the input in the worst case. That is SRIQ's complexity, so it is optimal.
+- **With an ABox,** the assertions' nominals make S2's output ALCHOIQ+. There [TGH21] proves only
+  a bound triple-exponential in that output (Theorem 5), because Nom can invent doubly
+  exponentially many constants; the output is itself exponential in the RBox's depth (S1). That is
+  not worst-case optimal, since an ABox does not raise SHIQ's ExpTime. It is the price of citing
+  [TGH21] unchanged. Nom fires only where inverse roles, an at-most restriction and an individual
+  meet. In [TGH21]'s evaluation (§8), no ontology in the corpus needed it to invent a constant.
+- **Pay-as-you-go.**
+  - On ELH input, the calculus is polynomial with the cautious strategy ([Bate+18] Proposition 11;
+    [TGH21] Theorem 6).
+  - On EL input, with eager Hyper, its inferences correspond linearly to [BBL05]'s
+    (Proposition 12).
+- **Measured on the targets.** Sequoia, the published implementation, was run on 2026-10-07
+  (Consequence 237dd717). Its saturation took 18 ms on BFO-core, 164 ms on CCO and 259 ms on RO.
+  RO's 205 complex RIAs, of depth 12, compile in about 2 s.
+
+**What is not claimed.**
+- **No instance retrieval and no entailment about roles.** S1 does not preserve role entailments over
+  non-simple roles, so neither is in the report.
+- **Out-of-profile input is inconclusive, never coherent.** That covers class nominals, anonymous
+  individuals, data beyond the lemma, keys and the universal role.
+- **Not OWL 2 DL:** no datatypes, nominals or keys ([§3](#3-scope-and-when-is-it-a-dl-reasoner)).
+  The rung registers as `BoundedDl` with the name
+  `"howl-sriq/SRIQ object fragment with ABox, no nominals, datatypes or keys"`
+  ([§8.4](#84-the-moose-tboxreasoner-port)).
+- **No completeness under omissions or a cap.** S7 is soundness only.
+
 ---
 
 ## 6. Architecture
@@ -2256,9 +2850,10 @@ flowchart TB
 *The verdict rule of §6.2, as a decision procedure. §8.4's fault precedence and §9's exit codes are
 this diagram in their own dialects.*
 
-> **v2 generalization.** For non-Horn, `Derived`/`NormAxiom` generalize to **clauses**
-> (disjunctions of literals) and `Saturation` gains a clause store; the completion rules become
-> ordered-resolution inferences. The Horn shapes above are the deterministic special case.
+> **These types are `el`'s.** `el++` has its own fact store ([§5.4](#54-the-el-calculus)), and
+> `sriq` has context clauses, a context structure with a root context, and [TGH21]'s rules
+> ([§5.5](#55-the-sriq-calculus)). The Horn shapes above are not a special case that `sriq`
+> generalizes; `sriq` is a separate engine behind the same front end and report.
 
 ### 6.3 Normalization
 
@@ -2953,7 +3548,9 @@ untidy — it breaks verdict identity, and every downstream guarantee built on i
 
 **Where the risk actually is.** Not in the complete case: EL saturation is **confluent**, so a run
 that reaches the fixpoint derives the same conclusion set regardless of the order contexts were
-processed in. Scheduling cannot change a completed answer. The exposure is entirely in the
+processed in. (`sriq` deletes redundant clauses, so its final store is not confluent in the same
+sense; only its answers are. [§5.5](#55-the-sriq-calculus) S6 makes its rounds a function of sets
+and argues W-independence directly, R1–R7.) Scheduling cannot change a completed answer. The exposure is entirely in the
 **non-complete** runs — a `resource-limit` run stops at whatever partial state the
 scheduler happened to produce, and with racing workers ([§6.6](#66-parallelism-context-based)) that
 state is a function of thread timing. Two identical runs at the same budget could report different
@@ -3065,8 +3662,10 @@ row below sits on one side of that line.
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
 | **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract; each part of the read-through was seen to fail under a mutation, caught by that differential or a pinned entailment ([§5.4](#54-the-el-calculus), K7's gate). Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
 | **`el++` translation and sharing** — K0–K7: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, the shared saturation for safe classes, and role inclusions read through the told closure (rule (13) is the dispatcher's `sup*`/`sub*` reads, not a rule function, so its coverage is held by the reference differential, not a per-rule contract) | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
-| **Termination (v0)** — the saturation halts | EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant | **Yes** (v0; harder for v1/v2) |
-| **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK; for v1, Kazakov's Horn-SHIQ calculus with chain elimination) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
+| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`, planned), with `sound`, `complete` and `head` properties against the rule's line; Hyper and Pred split into a loop-free step and one join combinator with loop invariants, as `ksc-join`; a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Yes** — structural, once built |
+| **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
+| **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
+| **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK for `el`; [Krö10] for `el++`; [Sim12] then [TGH21] for `sriq`) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
 
 So Z3 buys exactly one thing, and it is worth having: **the implementation cannot drift from the
 calculus without a contract failing.** HOWL does **not** make that claim yet. Today it holds rule by
@@ -3089,7 +3688,7 @@ Two consequences worth keeping in view:
   are still sound. If a rule can emit an unlicensed conclusion, a truncated run is not merely
   incomplete but wrong, and [§6.2](#62-data-model)'s verdict rule stops meaning anything.
 - Termination being Z3-reachable does **not** make `max-iterations` redundant. The proof covers the
-  calculus; the cap covers bugs, pathological inputs, and v1/v2 where the argument is harder. That
+  calculus; the cap covers bugs, pathological inputs, and `sriq`, whose bounds are astronomical. That
   is precisely why the cap needs a result status rather than a silent exit.
 
 ---
@@ -3230,8 +3829,9 @@ Five things the port constrains that are easy to get wrong:
   by default ([§5.1](#51-profiles-are-selectable)). **No rung registers as `ElPlusPlus`:** EL++
   includes concrete domains, which `el++` omits, so `el++` registers as
   `BoundedDl(ProfileDecl { name: "howl-el++/SROEL(⊓,×) object fragment, no datatypes or keys" })`
-  ([§5.4](#54-the-el-calculus)), and `horn-sriq` and `sriq` register as `BoundedDl` naming their
-  logic.
+  ([§5.4](#54-the-el-calculus)), and `sriq` registers as
+  `BoundedDl(ProfileDecl { name: "howl-sriq/SRIQ object fragment with ABox, no nominals, datatypes or keys" })`
+  ([§5.5](#55-the-sriq-calculus)).
 - **The fingerprint is hashed into every verdict**, so it must cover name, version, profile, *and
   rule-set version* — it is what marks which stored verdicts need re-validation when the engine
   changes. Worker count must not appear in it ([§6.8](#68-determinism-binding)).
@@ -3377,11 +3977,12 @@ howl align-check <o1.ttl> <o2.ttl> <mappings.ttl> [--repair]       # merged cohe
 howl explain     <ontology.ttl> --sub A B                          # justification — POST-M4, see below
 ```
 
-Global flags: `--profile el|el++|horn-sriq|sriq|auto` selects the calculus (default **`el`**;
-`auto` picks the cheapest built rung containing the ontology, else the one omitting the fewest
-logical axioms; [§5.1](#51-profiles-are-selectable)). `el` and `el++` are built. A rung that is not
-built yet exits `3` with `howl: profile P is not implemented yet (implemented: el, el++)`
-(`Fault::unavailable`). The top rung is `sriq`, not `dl`, because it is the SRIQ *object
+Global flags: `--profile el|el++|sriq|auto` selects the calculus (default **`el`**; `auto` picks
+the cheapest built rung containing the ontology, else the one omitting the fewest logical axioms;
+[§5.1](#51-profiles-are-selectable)). `el` and `el++` are built. A rung that is not built yet exits
+`3` with `howl: profile P is not implemented yet (implemented: el, el++)` (`Fault::unavailable`).
+`horn-sriq` was dropped ([§5](#5-fragment-roadmap)) and is refused the same way, permanently, with
+a message naming `sriq`. The top rung is `sriq`, not `dl`, because it is the SRIQ *object
 fragment* and a flag named `dl` would promise OWL 2 DL ([§3.2](#32-terminology-discipline));
 `--strict` makes an out-of-profile construct refuse the run
 outright — yielding `Fault::refused` and exit `2` ([§6.2](#62-data-model)) — instead of returning an
@@ -3609,7 +4210,7 @@ the weaker, more useful condition.
        unparsed. The unparsed-triple refusal is not weakened to admit it.
 2. **Corpus — and every input must clear the v0 gate.** Start with small hand-built defined-class
    fixtures (including the §3.1 litmus test), then GO / a SNOMED fragment / OBO ontologies for EL;
-   add BFO/CCO-with-definitions for v1.
+   BFO-core, CCO, RO and OBI for `sriq` (below).
 
    **Every differential and benchmark input must produce empty `coverage.omitted`.** HOWL v0 is
    narrower than OWL 2 EL ([§5.2](#52-the-exact-v0-language)), so an off-the-shelf "EL corpus"
@@ -3650,6 +4251,20 @@ the weaker, more useful condition.
        oracle there, and it is far slower.
      - An oracle that does not finish inside the timeout is "no oracle", a failure.
      - The outcome is recorded in `corpus/corpus-differential.txt`.
+   - **`sriq`'s evidence** ([§5.5](#55-the-sriq-calculus); M5 (b)–(f)):
+     - **HermiT routes everything.** ELK cannot judge inverses, unions or counting.
+     - **Sequoia** is a second oracle for TBoxes only. It drops ABox and irreflexive axioms. It is
+       GPL-3.0, so it is run as a pinned external process, never linked or read as a source, and is
+       capability-probed like HermiT.
+     - **Probes:** `corpus/fixtures/probes-sriq/`, one load-bearing ontology per `sriq` construct.
+     - **Conformance:** the approved Direct-Semantics W3C tests outside EL, filtered by construct
+       membership.
+     - **Corpus:** BFO-core and CCO are vendored and pinned beside RO and OBI. Each gets a `sriq`
+       projection, which is empty for BFO and CCO once the data lemma applies.
+     - **Fixtures:** ABox fixtures for equality (a functional role with two asserted successors),
+       negative assertions on transitive roles, and inverse functionality.
+     - **Engine checks:** the literal reference evaluator, and determinism with a shuffled `Δ`
+       (S6, R6).
 3. **Contract obligations.** Every loop-free completion rule carries a `sound`/`complete`
    *faithfulness* pair of `@property`s ([§7](#7-verification--contracts)), each seen to stop
    verifying under a mutation of the rule's body; the four loop rules are owed. The driver
@@ -3771,15 +4386,21 @@ howl/
   README.md
   slop.toml               ← [project] howl, entry src/howl.slop, output build/libhowl.a, [verify] Z3
   src/
-    howl.slop             ← library root / entry
+    howl.slop             ← library root / entry, and the public C API (`:c-name`)
     types.slop            ← Concept, Role, NormAxiom, Saturation, Derived, Profile, ReasonerConfig, results
-    select.slop           ← syntactic profile detection + calculus dispatch (§5.1)
-    normalize.slop        ← RDF/OWL → NormAxiom (per-profile front-end)
-    saturate.slop         ← the fixpoint driver (shared skeleton, HOWL fact type)
-    classify.slop         ← hierarchy extraction, reduction, output
+    termstore.slop        ← input triples, interned per document
+    decode.slop, owl2.slop ← RDF → RawAxiom, lossless (§6.3 steps 0–1)
+    gate.slop             ← dispositions, RBox gates (regularity, range/composition), per profile
+    canon.slop, naming.slop ← canonical forms and fresh names (§6.8)
+    select.slop           ← profile selection and `auto` (§5.1)
+    normalize.slop        ← `el`'s normal form (§6.3)
+    saturate.slop         ← `el`'s fixpoint driver
+    classify.slop, report.slop ← extraction and the canonical report (§6.7)
+    kscnormal.slop, kscnames.slop, kscids.slop, kscsat.slop ← `el++`'s normal form, ids and engine (§5.4)
     rules/
-      el.slop             ← v0 CEL/ELK completion rules (CR1–CR7)
-      horn.slop           ← v1 Horn-SRIQ rules (inverses, functionality, ≤n)
+      el.slop, premise.slop  ← `el`'s completion rules (CR1–CR7) and premise index
+      ksc.slop, kscpremise.slop ← `el++`'s rules ([Krö10] Fig. 3) and premise index
+      sriq.slop ...          ← `sriq`'s rules (§5.5), planned; its normaliser, chain elimination and engine get their own files
     test.slop
   cli/
     slop.toml             ← [project] howl-cli, entry main.slop, output build/howl
@@ -3805,7 +4426,7 @@ flowchart TB
   A["M2a · port amendments<br/>A1 provenance · A2 attestation<br/>A3 baseline · A4 probe readback"] --> M2b
   M2b --> M3["M3 · emit + GROWL round-trip"]
   M3 --> M4["M4 · alignment, minimal repair"]
-  M4 --> M5["M5 · v1 Horn-SRIQ<br/>closes the coverage gap"]
+  M4 --> M5["M5 · sriq<br/>closes the coverage gap"]
   style A stroke-dasharray: 4 3
 ```
 
@@ -4006,17 +4627,49 @@ flowchart TB
   > and so some repair to exist, is a claim about absence. The M4 test asserts the **entire expected repair family**, not one member —
   > "returns a correct minimal repair" is satisfiable by an implementation that stops after the
   > first, which is precisely the thing that needs testing.
-- **M5 — v1 Horn-SRIQ (`--profile horn-sriq`).** Inverses/functionality/`∀` on the right/Horn
-  number restrictions, with v0's role chains kept ([§5](#5-fragment-roadmap)); matches HermiT on a
-  Horn-SRIQ corpus (BFO/CCO/RO with their unions omitted), including the ABox, which [Kaz09] does
-  not cover and so needs its own argument, as v0's did ([§5.3](#53-the-abox-reduction-is-sound-and-complete)). **This is where the first consumer's coverage gap
-  actually closes** — 33 `owl:inverseOf` uses in its corpus are out-of-profile until then, so v0
-  buys instance-bearing verdicts and range coherence, not a clean pass on its own theory.
-- *(`el++` — specified in [§5.4](#54-the-el-calculus), built in slices: decode fixes, a
-  profile-aware gate and census, the Ksc normaliser, the rules with their contracts (with a
-  single-threaded prototype engine and the literal reference evaluator), the engine, then wiring;
-  selectable as `--profile el++` and by `auto` since 2026-10-02.) The approximation mode — planned, with its own plan. v2 `sriq` — separate
-  decision, not scheduled; SROIQ is not planned, [§5](#5-fragment-roadmap).)*
+- **M5 — `sriq` (`--profile sriq`, [§5.5](#55-the-sriq-calculus)).** The SRIQ object fragment
+  with an ABox, on [Sim12]'s chain elimination and [TGH21]'s calculus.
+
+  **This is where the first consumer's coverage gap actually closes.** 33 `owl:inverseOf` uses in
+  its corpus are out-of-profile until then, so `el` buys instance-bearing verdicts and range
+  coherence, not a clean pass on its own theory. BFO and CCO, whose taxonomies `el` already gets
+  right, become *certifiable*.
+
+  M5 is met when all eight hold:
+  - **(a) The specification is accepted.** §5.5 and the data lemma are signed off by adversarial
+    review and accepted by the owner, and their Requirements and Constraints are in the graph.
+  - **(b) Faithfulness.** Every rule function carries its contracts, each seen to fail under
+    mutation, or an explicit owed row in [§7](#7-verification--contracts). The engine answers every
+    class of every fixture as the literal reference evaluator does, and the reference agrees with
+    its own eager-strategy run.
+  - **(c) Differential.** HermiT agrees on consistency and on every ordered pair of named classes,
+    for BFO-core, CCO, RO and OBI's `sriq` projection, ABoxes included. Sequoia, run as a pinned
+    external process, agrees on their TBoxes. Every oracle is capability-probed per construct
+    (Constraint b293cf6e).
+  - **(d) Conformance.** The approved Direct-Semantics W3C tests whose constructs are all in `sriq`
+    run with 0 FAIL.
+  - **(e) Fuzzing.** `abox-fuzz --profile sriq` matches HermiT on generated ontologies that use
+    inverses, functionality, counting, unions, `SameIndividual`/`DifferentIndividuals` and negative
+    assertions.
+  - **(f) Determinism.** Every cap from 0 to R, at W ∈ {1, 2, 4, 8}, gives identical reports, and a
+    shuffled `Δ` changes nothing (S6).
+  - **(g) BFO and CCO pass.** `howl validate --profile sriq` exits 0 on both.
+  - **(h) Performance is recorded** against HermiT and Sequoia. The target is set at the
+    feasibility checkpoint, which may also stop and re-plan the program.
+- *Earlier rungs and plans:*
+  - **`el++`** was specified in [§5.4](#54-the-el-calculus) and built in slices:
+    1. decode fixes;
+    2. a profile-aware gate and census;
+    3. the Ksc normaliser;
+    4. the rules with their contracts, with a single-threaded prototype engine and the literal
+       reference evaluator;
+    5. the engine;
+    6. wiring.
+
+    It has been selectable as `--profile el++` and by `auto` since 2026-10-02.
+  - **`horn-sriq`** was dropped on 2026-10-08 ([§5](#5-fragment-roadmap)).
+  - **The approximation mode** is shelved.
+  - **`sroiq`** is not planned ([§5](#5-fragment-roadmap)).
 
 ---
 
@@ -4063,17 +4716,17 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
 
 - **Not** a replacement for GROWL. GROWL remains the production RL materialization/enrichment engine.
 - **Not** a tableau reasoner. No model construction, backtracking, or blocking.
-- **Not** OWL 2 Full, rule extensions (SWRL), or datatype reasoning. v0 excludes concrete domains
-  outright ([§5.2](#52-the-exact-v0-language)); datatype axioms are enumerated as out-of-profile,
-  and the consumer partitions them off and keeps its own told-coherence side-check rather than HOWL
-  growing a concrete domain to absorb them. Keeping the language honest is worth more here than
+- **Not** OWL 2 Full, rule extensions (SWRL), or datatype reasoning. No rung has a concrete domain.
+  The property axioms of *idle* data properties are inert by the data lemma
+  ([§5.2](#52-the-exact-v0-language)), because they provably change no answer. Every other datatype
+  axiom is enumerated as out-of-profile, and the consumer partitions those off and keeps its own
+  told-coherence side-check rather than HOWL growing a concrete domain to absorb them. Keeping the language honest is worth more here than
   absorbing one more construct.
 - **Not** an ABox-scale query engine. HOWL classifies TBoxes and checks coherence; bulk ABox
   materialization stays GROWL's job.
-- **v2 (non-Horn SRIQ) is out of scope** for the initial build — designed-around, not built. And
-  even v2 as sketched is the SRIQ *object* fragment: OWL 2 DL is SROIQ**(D)**, so nominals,
-  datatypes, keys, and punning would all have to land before the unqualified phrase is earned
-  ([§3.2](#32-terminology-discipline)).
+- **Not** an OWL 2 DL reasoner. `sriq` ([§5.5](#55-the-sriq-calculus)) is scheduled, but it is the
+  SRIQ *object* fragment. OWL 2 DL is SROIQ**(D)**, so class nominals, datatypes and keys would all
+  have to land before the unqualified phrase is earned ([§3.2](#32-terminology-discipline)).
 
 ---
 
@@ -4087,7 +4740,10 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
 3. ~~**Nominals & EL++ extras.**~~ **ANSWERED — no nominals in v0; ranges pulled in.** A construct
    census over the first consumer's corpus found zero `ObjectHasValue` and no nominal use (only
    inert `owl:NamedIndividual` declarations), so the construct that would have broken
-   [§6.6](#66-parallelism-context-based)'s context independence is not needed. Range restrictions
+   [§6.6](#66-parallelism-context-based)'s context independence is not needed. (`sriq` reopens this
+   for itself: its ABox brings a root context that exchanges clauses with every context reaching an
+   individual. [§5.5](#55-the-sriq-calculus) S6's barrier rounds keep that deterministic. `el` and
+   `el++` are unaffected.) Range restrictions
    went the other way — 90 uses, and the stub HOWL replaces already decides range coherence — so
    they moved **into** v0, handled by the published elimination construction rather than a new
    rule ([§5.2](#52-the-exact-v0-language)). Concrete domains stay out; the
@@ -4107,12 +4763,13 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
    CLI remains useful for CI and standalone runs but is not how the first consumer calls HOWL. Mind
    the `ffi-abi-sync` gotcha recorded in GROWL's memory.
 6. **Incremental classification.** ELK supports incremental reasoning. **Upgraded from "would
-   benefit" to a v1-scoped want:** every validation in the first consumer is a small delta against a
+   benefit" to a want (for `el` first):** every validation in the first consumer is a small delta against a
    large committed TBox, and the port's `subsumption_delta` field asks for exactly this shape. v0
    serves it as classify-baseline + classify-candidate + diff, which EL's speed makes viable — so
    this is a performance want, not a correctness blocker. The hard part when it does land is
    **deletion**: retracting an axiom can un-derive conclusions, which monotone saturation does not
-   do for free.
+   do for free, and `sriq`'s store also deletes subsumed clauses (S6), which makes retraction
+   harder still.
 7. ~~**Does SLOP's `@post` support quantifiers?**~~ **ANSWERED — yes, for loop-free rules.**
    `forall`/`exists` over `$result` translate, and since slop-lang/slop #166 and #170 a result
    built by guarded pushes with no loop is modelled exactly and a contract can `match` a union's
@@ -4133,9 +4790,15 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
   (`≡`) conditions; defined classes are what require DL reasoning.
 - **Consequence-based (CB)** — derive entailments forward by saturation; contrast tableau (refutation
   by model construction).
-- **Completion rules** — the inference rules of a CB calculus (HOWL v0: CR1–CR7, [§6.4](#64-completion-rules)).
+- **Completion rules** — the inference rules of a CB calculus (`el`: CR1–CR7, [§6.4](#64-completion-rules); `el++`: [Krö10] Fig. 3; `sriq`: [TGH21] Tables 2–3).
+- **Context clause / context structure** — `sriq`'s unit of storage: clauses `Γ → Δ` over the terms
+  `x`, `y`, `f(x)` and constants, held per context; contexts are created on demand by an expansion
+  strategy, plus one root context for individuals ([§5.5](#55-the-sriq-calculus)).
+- **Chain elimination** — rewriting complex role inclusions into GCIs over fresh concepts ([Sim12]),
+  preserving every consequence over concepts, simple roles and individuals.
 - **`S(C)` / `R(r)`** — subsumer sets / role-edge relation, the core CB EL data structures.
-- **Horn fragment** — no disjunction in consequents ⇒ deterministic saturation, no case splits.
+- **Horn fragment** — no disjunction in consequents. `el` and `el++` are Horn. `sriq` is not, yet its
+  calculus is still deterministic saturation with no case splits.
 - **MUPS / justification** — a minimal axiom set responsible for an (un)satisfiability, used for repair.
 
 **References.**
@@ -4145,11 +4808,14 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
   extension and the `X_{r,D}` elimination construction** — [§6.3](#63-normalization). The 2005 paper
   does not cover ranges; citing it for them was an error in an earlier draft.)
 - Kazakov, Krötzsch, Simančík. *The Incredible ELK.* J. Automated Reasoning 2014. (ELK; parallel CB EL.)
-- Kazakov. *Consequence-Driven Reasoning for Horn SHIQ Ontologies.* IJCAI 2009. (v1 calculus, with chain elimination.)
+- Kazakov. *Consequence-Driven Reasoning for Horn SHIQ Ontologies.* IJCAI 2009. (Cited by an earlier draft for v1; no rung uses it.)
 - Bate, Motik, Cuenca Grau, Tena Cucala, Simančík, Horrocks. *Consequence-Based Reasoning for
-  Description Logics with Disjunctions and Number Restrictions.* JAIR 63, 2018. (v2 calculus: SRIQ.)
+  Description Logics with Disjunctions and Number Restrictions.* JAIR 63, 2018. (ALCHIQ+; the constant-free case of [TGH21].)
 - Tena Cucala, Cuenca Grau, Horrocks. *Pay-as-you-go consequence-based reasoning for the description
-  logic SROIQ.* AIJ 298, 2021. (Sequoia; why SROIQ is not planned, [§5](#5-fragment-roadmap).)
+  logic SROIQ.* Artificial Intelligence 298 (2021), 103518. (`sriq`'s calculus,
+  [§5.5](#55-the-sriq-calculus); Sequoia.) Its IJCAI 2018 version is arXiv:1805.01396.
+- Simančík. *Elimination of Complex RIAs without Automata.* DL 2012. (`sriq`'s chain elimination,
+  [§5.5](#55-the-sriq-calculus) S1.)
 - Kazakov, Krötzsch, Simančík. *Practical Reasoning with Nominals in the EL Family of Description
   Logics.* KR 2012. (ELK's nominal calculus, complete for ELO only; the nominal counterexample
   [§5.3](#53-the-abox-reduction-is-sound-and-complete) routes around.)
