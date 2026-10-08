@@ -1957,8 +1957,7 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
   - §2.1: SROIQ with the simple roles given in the signature, and ≺-regular RBoxes;
   - Definitions 1–6, Proposition 2, and Theorems 1–3.
 - **[TGH18]** The IJCAI 2018 paper that [TGH21] extends (arXiv:1805.01396). Its Nom, Join and r-Succ
-  rules and its orders differ from [TGH21]'s, so it is cited only to read erratum E3 and for one
-  remark on Nom.
+  rules and its orders differ from [TGH21]'s, so it is cited only for one remark on Nom.
 
 **The language.** The OWL constructs, and what S0 makes of each before chain elimination. `R` and
 `S` are object property expressions, possibly `ObjectInverseOf`. `C` and `D` are class expressions
@@ -2100,8 +2099,11 @@ deterministic, and it only ever weakens the theory, so its findings stay sound (
 **S2 — normal form.** The structural transformation takes S1's output into [TGH21] Table 1's
 DL1–DL11:
 - Every GCI `C ⊑ D` becomes `⊤ ⊑ NNF(¬C ⊔ D)`, so every subconcept occurrence is then positive.
-- Each non-literal subconcept `E` gets one fresh name `A_E` per distinct `E`, with `A_E ⊑ E`, and
-  `E`'s own subconcepts are replaced by their names. Two cases name differently:
+- Each subconcept `E` that is not a concept name gets one fresh name `A_E` per distinct `E`, with
+  `A_E ⊑ E`, and `E`'s own subconcepts are replaced by their names. The one exception is a literal
+  standing directly in a disjunction, which goes to DL1 as it is. So the filler of every `∃`, `∀`,
+  `≥` and `≤` is a name, even when it is a literal. `∀R.¬B`, for example, gets `A_{¬B}` with the
+  DL1 clause `A_{¬B} ⊓ B ⊑ ⊥`. Three cases name differently:
   - in `≤n R.F`, `F`'s occurrence is negative, so it is named through `F ⊑ B`;
   - a literal `¬{o}` is named through `{o} ⊑ X` (DL10), and becomes `¬X`;
   - a literal `¬∃R.Self` is named through `∃R.Self ⊑ X` (DL6), and becomes `¬X`.
@@ -2148,40 +2150,73 @@ names.
   the input ontology lacks either inverse roles, or nominals, or number restrictions."
   - An ABox-free `sriq` ontology has no nominal, so it never reaches Nom.
   - The slice that builds Nom counts its firings on the corpus.
-- **The depth limit Λ** is Algorithm 1 step A4's: `2^τSu · 2^τPr · (ω + ω_D)`. It is computed in
-  saturating 63-bit arithmetic. A nominal label longer than 2⁶² is never built, so saturating the
-  bound changes no run.
+- **The depth limit Λ** is Algorithm 1 step A4's, `2^τSu · 2^τPr · (ω + ω_D)`, which meets
+  Theorem 2's precondition. HOWL computes it exactly when it is below 2⁶², and stores 2⁶²
+  otherwise. That changes no run:
+  - Nom on `o_ρ` needs a clause that mentions `o_ρ`. Such a clause exists only from the round in
+    which `o_ρ` was created, so Nom adds at most one to the longest label per round, and every label
+    is no longer than the number of rounds run.
+  - Every run stops within 10,000 rounds. That is the cap's range, which the CLI and the API both
+    enforce ([§9](#9-cli--interface-sketch)).
+  - So every label a run can build is shorter than 2⁶², and the test `|ρ| < Λ` has the same outcome
+    under the stored value as under the true one.
 - **Errata.** Each is read as follows, and each is checked against the completeness proof:
   - **E1.** Table 2's Nom prints its DL4 premise's head as `⋁_{1≤i<j≤n}`. Table 1 has `n+1`
     neighbours, so the head is `⋁_{1≤i<j≤n+1}`.
   - **E2.** Definition 7(3) prints "`f(x) ≻ a` for every `f ∈ Σf` and `u ∈ Σu`". It means
     `f(x) ≻ u`.
-  - **E3.** r-Pred's conclusion carries `⋀_{i=1}^m Aᵢ`, which its premise never binds.
-    - **HOWL's reading:** the main premise is `⋀_{i=1}^m Aᵢ ∧ ⋀_{i=1}^n Cᵢ → ⋁ Lᵢ`, with each `Aᵢ`
-      ground and not resolved, so the `Aᵢ` carry over to the conclusion. That is how Pred's premise
-      is written, and r-Pred's soundness proof (Appendix B) is "analogous to that used in the proof
-      for the Pred".
-    - **Owed before the slice that implements r-Pred:** confirm this reading against Appendix D's
-      uses of the rule and [TGH18]'s version, or revise this erratum. No r-Pred code is written
-      before then.
+  - **E3. r-Pred's conclusion carries `⋀_{i=1}^m Aᵢ`, which its premise never binds.** Read as
+    Pred is written, the `Aᵢ` are ground body atoms of the main premise, carried into the
+    conclusion unresolved. A root clause's body holds only atoms of `Su^r(O)` (from r-Succ) and
+    ground atoms (from Pred), so its non-ground body atoms are exactly its `S(y, u)` and `S(u, y)`.
+    - **HOWL's r-Pred.** Every non-ground body atom is resolved, as a `Cᵢ`, through an edge
+      `⟨v, v_r, u⟩` and a side premise in `v`, exactly as the rule prints it. Every ground body atom
+      is carried, as an `Aᵢ`. A root clause with no non-ground body atom therefore reaches every
+      context, as the printed rule's empty edge condition says. [TGH21] §7.3.2 restricts that
+      propagation as an optimisation, which would need its own argument here.
+    - **Sound.** The root clause holds for every value of `y` (Definition 6, S1). Put `y := x`. The
+      side premises supply each `Cᵢσ` or their `Δᵢ`, and the carried `Aᵢ` stay hypotheses. So the
+      conclusion is entailed, the same argument as Pred's ([TGH21] Appendix B: "analogous to that
+      used in the proof for the Pred").
+    - **Complete under any reading** in which the `Aᵢ` are ground body atoms, including the one
+      that resolves ground atoms too.
+      - Take an instance that resolves a ground atom `A` with a side premise `Γ → Δ ∨ A`, `A`
+        maximal. Carrying `A` instead, then Join with that same side premise, reaches the same
+        conclusion: Join has the same maximality condition and needs no edge.
+      - A store closed under HOWL's r-Pred and Join therefore holds that instance's conclusion up to
+        redundancy. If the carried clause is subsumed by a stored clause without `A`, that stored
+        clause subsumes the conclusion. Otherwise Join applies to the stored clause.
+      - So Theorem 2's saturation holds for the printed rule under either reading.
+    - **The paper's own Example 1 runs this way.** Root clause (118),
+      `C(o) ∧ D(o) ∧ S(y, o) → F(y)`, gives `C(o) ∧ D(o) → F(x)` in `v_B`, and Join with (110),
+      `⊤ → C(o)`, gives (112), `D(o) → F(x)`.
   - [Bate+18] Table 1 prints DL9 as `S₁(z₁,x) ∧ S₂(z₂,x) → ⊥`. HOWL uses [TGH21] Table 1's
     `S₂(z₁,x)`.
 
 **S4 — queries, and what the report reads.**
 - **Initialisation** (Algorithm 1, steps A1–A2) creates:
   - the root context `v_r`;
-  - a context `v_B` with core `{B(x)}` for each class name `B` of the input signature
-    (`owl:Thing`'s is `v_⊤`, and `owl:Nothing` needs none: K5 never reports it);
+  - a context `v_B` with core `{B(x)}` for each class name `B` of the input signature other than
+    `owl:Thing` and `owl:Nothing`;
   - `v_⊤`, with the empty core.
 
   All of them use S5's single context order, which satisfies Theorem 2's condition C2 for every
   query ([TGH21] §4.2: "The context order for Sequoia described above satisfies Condition C2 of
   Theorem 2 for any query Q"). C1 holds by Core. The initial structure is sound for `O` and mentions
   no auxiliary constant, as Theorem 2 requires.
-- **Raw queries** ([TGH21] Algorithm 1 step A6, Corollary 1), for class names `A` and `B`:
+- **Raw queries** ([TGH21] Algorithm 1 step A6, Corollary 1), for class names `A` and `B` other
+  than `owl:Thing` and `owl:Nothing`:
   - `inconsistent` iff `⊤ → ⊥ ∈̂ S_{v_⊤}`;
   - `unsat(B)` iff `B(x) → ⊥ ∈̂ S_{v_B}`;
-  - `holds(B, A)` iff `B(x) → A(x) ∈̂ S_{v_B}`.
+  - `holds(B, A)` iff `B(x) → A(x) ∈̂ S_{v_B}`;
+  - `holds(owl:Thing, A)` iff `⊤ → A(x) ∈̂ S_{v_⊤}`. This is a query with an empty body, so C1 holds
+    vacuously. For the other queries C1 holds by Core, which puts `⊤ → B(x)` in `v_B`.
+
+  The rest need no query:
+  - `unsat(owl:Thing)` is `inconsistent`;
+  - `holds(B, owl:Thing)` is always true;
+  - `holds(B, owl:Nothing)` is `unsat(B)`;
+  - `owl:Nothing` is below everything.
 
   Fresh names are never queried: S1's `I` and `F`, S2's `A_E` and `P̄`.
 - **The report** is extracted from these raw queries exactly as [§5.4](#54-the-el-calculus)'s K5
@@ -2311,10 +2346,14 @@ The argument, one short step at a time:
   - This is stronger than `el++`'s order-preserving commit: permuting `Δₙ` changes nothing. The
     parallel-rounds slice tests that directly.
 - **R7 — caps.**
-  - **Sound:** every inference is one of [TGH21]'s, applied to a sound structure, so every structure
-    reached is sound (Theorem 1), and a capped run's findings are sound.
-  - **Monotone in the cap:** findings are read through `∈̂`, so by R2 a larger cap only adds
-    findings, and the complete run has all of them.
+  - **Sound:** every inference is one of [TGH21]'s, or HOWL's r-Pred, which E3 proves sound. So
+    every structure reached is sound (Theorem 1), and a capped run's findings are sound.
+  - **The raw queries are monotone in the cap.** `inconsistent`, `unsat` and `holds` are read
+    through `∈̂`, so by R2 a larger cap only makes more of them true, and the complete run makes all
+    the true ones true.
+  - **The report is not monotone in the cap.** K5's extraction compresses the taxonomy at the
+    bottom. So a larger cap that finds `A ⊑ ⊥` replaces `A`'s `sub` lines by its unsatisfiability,
+    and one that finds inconsistency drops the hierarchy. Each report is still sound (S7).
 
 **Cancellation.** As in `el++`. It is checked at every round boundary, before the cap, and yields
 `Fault::cancelled` with no Outcome.

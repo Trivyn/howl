@@ -51,7 +51,8 @@ document using it reports *inconclusive*, never *coherent*. **non-goal** — exc
 | `NegativeObjectPropertyAssertion` | via {a} | ✓ | **done (`el++`)** | {a} ⊓ ∃r.{b} ⊑ ⊥ |
 | `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality; outside `el++` too |
 | ***Concrete domains*** | | | | |
-| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
+| Domain, range, sub-property, equivalence, disjointness and functionality axioms of *idle* data properties (used in no class expression, assertion or key) | ✓ | ✓ | **inert, every rung** | the data lemma ([SPEC §5.2](../SPEC.md#52-the-exact-v0-language)): emptying an idle property changes no answer |
+| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data assertions, `DatatypeDefinition`, and the property axioms of data properties that are used | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
 
 † Sound and complete by the argument in [SPEC §5.3](../SPEC.md#53-the-abox-reduction-is-sound-and-complete)
 (M1 (f), reviewed 2026-09-30): a reduction to the published EL++ calculus on a nominal-free CBox and
