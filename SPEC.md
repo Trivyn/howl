@@ -1934,8 +1934,25 @@ HOWL implements [TGH21] as published. The rest of this section is the translatio
 normal form, the chain elimination in front of it, and the bookkeeping around them. The choices
 [TGH21] leaves open are fixed in S5 and S6, each with its argument.
 
-> **Review status.** Written 2026-10-08 on the `sriq-spec` branch. Adversarial review: pending.
-> Project owner: pending. No `sriq` code before acceptance.
+> **Review status.** Written 2026-10-08 on the `sriq-spec` branch.
+> - **Adversarial review (Codex, three passes, 2026-10-08): signed off.** It found no
+>   counterexample to:
+>   - the role gate (the collapse of role-equivalence classes, and the constraint check over `R^c`);
+>   - S1's elimination after the ABox encoding, with symmetric roles, `Ref` on non-simple roles,
+>     and negative assertions on transitive roles;
+>   - S6's R4: multi-premise rules, Succ and r-Succ with ground `K2` atoms, new contexts and
+>     constants, equality at the root, and premises deleted in the round they are used;
+>   - the data lemma, with top and bottom data properties, equivalence, disjointness,
+>     functionality and the direction of the hierarchy.
+>
+>   Its findings, each fixed in the text:
+>   - the stored Λ needed an argument that it changes no run (S3);
+>   - a negated filler such as `∀R.¬B` had no Table 1 form (S2);
+>   - `owl:Thing`'s queries needed an empty body (S4);
+>   - R7 claimed monotonicity in the cap for the bottom-compressed report, not just the raw queries;
+>   - E3 was left owed, and is now settled with a proof;
+>   - `docs/coverage.md` misstated "idle".
+> - **Project owner: pending.** No `sriq` code before acceptance.
 
 **Sources.**
 - **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for
