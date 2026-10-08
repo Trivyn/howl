@@ -1,8 +1,8 @@
 # HOWL — a consequence-based description-logic reasoner
 
 **Status:** Approved for implementation 2026-08-17. Amended since, each amendment reviewed and
-accepted on its own (§5.3, §5.4); §5.5 is under review. `el` and `el++` are built and released
-(v0.1.0, 2026-10-06). `sriq` is specified in §5.5 and not yet built. The execution trigger
+accepted on its own (§5.3, §5.4, §5.5). `el` and `el++` are built and released (v0.1.0, 2026-10-06).
+`sriq` is specified in §5.5 (accepted 2026-10-08) and not yet built. The execution trigger
 **fired**: MOOSE's Living Ontology needs the engine behind its `TBoxReasoner` port, where a stub
 capped what the system could validate ([§8.4](#84-the-moose-tboxreasoner-port),
 [§13](#13-execution-trigger)). That consumer, not the originally anticipated Trivyn pipeline stages,
@@ -1952,7 +1952,8 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
 >   - R7 claimed monotonicity in the cap for the bottom-compressed report, not just the raw queries;
 >   - E3 was left owed, and is now settled with a proof;
 >   - `docs/coverage.md` misstated "idle".
-> - **Project owner: pending.** No `sriq` code before acceptance.
+> - **Project owner: accepted, 2026-10-08** (PR #34; spec approval recorded as AD e81ee7a2).
+>   `--profile sriq` exits 3 until the wiring slice.
 
 **Sources.**
 - **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for
