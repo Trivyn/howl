@@ -1,0 +1,439 @@
+;; ============================================================
+;; The SROIQ working form of sriq's normaliser  —  SPEC.md §5.5 S0–S2
+;;
+;; S0 translates the gate's accepted axioms into this form: GCIs between
+;; SROIQ concepts, role inclusions, and Ref, Irr and Dis. S1 (slice 6)
+;; and S2 (slice 5c) work on it, so it is a module of its own.
+;;
+;; CANONICAL BY CONSTRUCTION. `sc-canon` flattens, dedupes and sorts every
+;; ⊓ and ⊔ (§5.5 S2 choice 1: one name per concept up to ⊓/⊔
+;; commutativity, associativity and idempotence) and applies choice 7's
+;; equivalences. Its order, `sc-cmp`, is structural (choice 8): roles by
+;; `role-cmp`, IRIs by `iri-cmp`, never by a rendered key.
+;; ============================================================
+
+(module sroiq
+  (@doc "The SROIQ working form of sriq's normaliser (SPEC 5.5 S0-S2)")
+
+  (import rdf (IRI))
+  (import types (RoleId))
+  (import canon (role-cmp iri-cmp sort-range))
+
+  (export
+    SConcept SAxiom SRia
+    sc-cmp sa-cmp sc-canon sc-top-p sort-saxioms dedupe-saxioms
+    inv-role box-sc
+    render-sconcept render-saxiom)
+
+  (type SConcept (union
+    (sc-top)
+    (sc-bottom)
+    (sc-name    IRI)                              ; a class name
+    (sc-nominal IRI)                              ; {o}, from an assertion only
+    (sc-not     (Ptr SConcept))
+    (sc-and     (List SConcept))
+    (sc-or      (List SConcept))
+    (sc-some    RoleId (Ptr SConcept))
+    (sc-all     RoleId (Ptr SConcept))
+    (sc-atleast (Int 0 ..) RoleId (Ptr SConcept))  ; ≥n R.C
+    (sc-atmost  (Int 0 ..) RoleId (Ptr SConcept))  ; ≤n R.C
+    (sc-self    RoleId)))
+
+  ;; A role inclusion R₁ ∘ … ∘ Rₙ ⊑ R. A record: a list beside another
+  ;; field in one variant is past the transpiler (owl2.slop's note).
+  (type SRia (record
+    (word  (List RoleId))
+    (super RoleId)))
+
+  (type SAxiom (union
+    (sa-gci (Ptr SConcept) (Ptr SConcept))   ; C ⊑ D
+    (sa-ria SRia)
+    (sa-ref RoleId)                          ; Ref(R)
+    (sa-irr RoleId)                          ; Irr(R)
+    (sa-dis RoleId RoleId)))                 ; Dis(R, S)
+
+  ;; ============================================================
+  ;; Construction helpers
+  ;; ============================================================
+
+  (fn box-sc ((arena Arena) (c SConcept))
+    (@intent "Heap-box a concept for a variant that carries a pointer")
+    (@spec ((Arena SConcept) -> (Ptr SConcept)))
+    (@alloc arena)
+    (let ((p (cast (Ptr SConcept) (arena-alloc arena (sizeof SConcept)))))
+      (do (set! (deref p) c) p)))
+
+  (fn inv-role ((r RoleId))
+    (@intent "inv(R): P for P⁻, P⁻ for P")
+    (@spec ((RoleId) -> RoleId))
+    (@pure)
+    (match r
+      ((named-role i)   (union-new RoleId inverse-role i))
+      ((inverse-role i) (union-new RoleId named-role i))
+      ((fresh-role _)   r)))
+
+  (fn sc-top-p ((c SConcept))
+    (@intent "Is this ⊤?")
+    (@spec ((SConcept) -> Bool))
+    (@pure)
+    (match c ((sc-top) true) (_ false)))
+
+  ;; ============================================================
+  ;; The structural order (§5.5 S2 choice 8)
+  ;; ============================================================
+
+  (fn sc-rank ((c SConcept))
+    (@intent "A variant's place in the canonical order")
+    (@spec ((SConcept) -> Int))
+    (@pure)
+    (match c
+      ((sc-top)            0)
+      ((sc-bottom)         1)
+      ((sc-name _)         2)
+      ((sc-nominal _)      3)
+      ((sc-not _)          4)
+      ((sc-and _)          5)
+      ((sc-or _)           6)
+      ((sc-some _ _)       7)
+      ((sc-all _ _)        8)
+      ((sc-atleast _ _ _)  9)
+      ((sc-atmost _ _ _)   10)
+      ((sc-self _)         11)))
+
+  (fn sc-at ((xs (List SConcept)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List SConcept) Int) -> SConcept))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new SConcept sc-top))))
+
+  (fn sc-list-cmp ((a (List SConcept)) (b (List SConcept)))
+    (@intent "Lexicographic order on concept lists, length as tiebreak")
+    (@spec (((List SConcept) (List SConcept)) -> Int))
+    (@pure)
+    (let ((alen (cast Int (list-len a)))
+          (blen (cast Int (list-len b)))
+          (n    (min alen blen))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do
+            (set! r (sc-cmp (sc-at a i) (sc-at b i)))
+            (set! i (+ i 1))))
+        (cond ((!= r 0) r)
+              ((< alen blen) -1)
+              ((> alen blen) 1)
+              (else 0)))))
+
+  (fn int-cmp ((a Int) (b Int))
+    (@intent "-1, 0 or 1")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn role-then ((ra RoleId) (rb RoleId) (fa SConcept) (fb SConcept))
+    (@intent "Order two restrictions' role, then filler")
+    (@spec ((RoleId RoleId SConcept SConcept) -> Int))
+    (@pure)
+    (let ((rr (role-cmp ra rb)))
+      (if (!= rr 0) rr (sc-cmp fa fb))))
+
+  (fn sc-cmp ((a SConcept) (b SConcept))
+    (@intent "Total structural order on concepts")
+    (@spec ((SConcept SConcept) -> Int))
+    (@pure)
+    (let ((ka (sc-rank a)) (kb (sc-rank b)))
+      (if (!= ka kb)
+        (int-cmp ka kb)
+        ;; Same variant: compare payloads. Every arm is total, so two
+        ;; concepts compare 0 exactly when they are the same concept.
+        (match a
+          ((sc-top)        0)
+          ((sc-bottom)     0)
+          ((sc-name ia)    (match b ((sc-name ib) (iri-cmp ia ib)) (_ 0)))
+          ((sc-nominal ia) (match b ((sc-nominal ib) (iri-cmp ia ib)) (_ 0)))
+          ((sc-not fa)     (match b ((sc-not fb) (sc-cmp (deref fa) (deref fb))) (_ 0)))
+          ((sc-and xs)     (match b ((sc-and ys) (sc-list-cmp xs ys)) (_ 0)))
+          ((sc-or xs)      (match b ((sc-or ys) (sc-list-cmp xs ys)) (_ 0)))
+          ((sc-some ra fa)
+            (match b ((sc-some rb fb) (role-then ra rb (deref fa) (deref fb))) (_ 0)))
+          ((sc-all ra fa)
+            (match b ((sc-all rb fb) (role-then ra rb (deref fa) (deref fb))) (_ 0)))
+          ((sc-atleast na ra fa)
+            (match b
+              ((sc-atleast nb rb fb)
+                (let ((nn (int-cmp na nb)))
+                  (if (!= nn 0) nn (role-then ra rb (deref fa) (deref fb)))))
+              (_ 0)))
+          ((sc-atmost na ra fa)
+            (match b
+              ((sc-atmost nb rb fb)
+                (let ((nn (int-cmp na nb)))
+                  (if (!= nn 0) nn (role-then ra rb (deref fa) (deref fb)))))
+              (_ 0)))
+          ((sc-self ra)    (match b ((sc-self rb) (role-cmp ra rb)) (_ 0)))))))
+
+  (fn role-list-cmp ((a (List RoleId)) (b (List RoleId)))
+    (@intent "Lexicographic order on role words, length as tiebreak")
+    (@spec (((List RoleId) (List RoleId)) -> Int))
+    (@pure)
+    (let ((alen (cast Int (list-len a)))
+          (blen (cast Int (list-len b)))
+          (n    (min alen blen))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do
+            (match (list-get a i)
+              ((some x)
+                (match (list-get b i)
+                  ((some y) (set! r (role-cmp x y)))
+                  ((none)   (do))))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        (cond ((!= r 0) r)
+              ((< alen blen) -1)
+              ((> alen blen) 1)
+              (else 0)))))
+
+  (fn sa-rank ((a SAxiom))
+    (@intent "A variant's place in the canonical axiom order")
+    (@spec ((SAxiom) -> Int))
+    (@pure)
+    (match a
+      ((sa-gci _ _) 0)
+      ((sa-ria _)   1)
+      ((sa-ref _)   2)
+      ((sa-irr _)   3)
+      ((sa-dis _ _) 4)))
+
+  (fn sa-cmp ((a SAxiom) (b SAxiom))
+    (@intent "Total structural order on axioms")
+    (@spec ((SAxiom SAxiom) -> Int))
+    (@pure)
+    (let ((ka (sa-rank a)) (kb (sa-rank b)))
+      (if (!= ka kb)
+        (int-cmp ka kb)
+        (match a
+          ((sa-gci la ra)
+            (match b
+              ((sa-gci lb rb)
+                (let ((l (sc-cmp (deref la) (deref lb))))
+                  (if (!= l 0) l (sc-cmp (deref ra) (deref rb)))))
+              (_ 0)))
+          ((sa-ria x)
+            (match b
+              ((sa-ria y)
+                (let ((s (role-cmp (. x super) (. y super))))
+                  (if (!= s 0) s (role-list-cmp (. x word) (. y word)))))
+              (_ 0)))
+          ((sa-ref r) (match b ((sa-ref q) (role-cmp r q)) (_ 0)))
+          ((sa-irr r) (match b ((sa-irr q) (role-cmp r q)) (_ 0)))
+          ((sa-dis r1 r2)
+            (match b
+              ((sa-dis q1 q2)
+                (let ((c1 (role-cmp r1 q1)))
+                  (if (!= c1 0) c1 (role-cmp r2 q2))))
+              (_ 0)))))))
+
+  ;; ============================================================
+  ;; The canonical form
+  ;; ============================================================
+
+  (fn sort-sconcepts ((arena Arena) (xs (List SConcept)))
+    (@intent "Sorted by sc-cmp, duplicates dropped")
+    (@spec ((Arena (List SConcept)) -> (List SConcept)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (sc-cmp (sc-at xs i) (sc-at xs j)))))
+          (mut out (list-new arena SConcept))
+          (mut have false)
+          (mut last (union-new SConcept sc-top)))
+      (do
+        (for-each (k idx)
+          (let ((c (sc-at xs k)))
+            (when (or (not have) (!= (sc-cmp c last) 0))
+              (do (list-push out c) (set! last c) (set! have true)))))
+        out)))
+
+  (fn sc-canon ((arena Arena) (c SConcept))
+    (@intent "The canonical form: ⊓/⊔ flattened, deduped and sorted; §5.5 S2 choice 7's equivalences")
+    (@spec ((Arena SConcept) -> SConcept))
+    (@alloc arena)
+    (match c
+      ((sc-top)        c)
+      ((sc-bottom)     c)
+      ((sc-name _)     c)
+      ((sc-nominal _)  c)
+      ((sc-not f)      (union-new SConcept sc-not (box-sc arena (sc-canon arena (deref f)))))
+      ((sc-and xs)     (canon-junction arena xs true))
+      ((sc-or xs)      (canon-junction arena xs false))
+      ((sc-some r f)   (union-new SConcept sc-some r (box-sc arena (sc-canon arena (deref f)))))
+      ((sc-all r f)    (union-new SConcept sc-all r (box-sc arena (sc-canon arena (deref f)))))
+      ;; ≥1 R.C is ∃R.C.
+      ((sc-atleast n r f)
+        (if (== n 1)
+          (union-new SConcept sc-some r (box-sc arena (sc-canon arena (deref f))))
+          (union-new SConcept sc-atleast n r (box-sc arena (sc-canon arena (deref f))))))
+      ((sc-atmost n r f)
+        (union-new SConcept sc-atmost n r (box-sc arena (sc-canon arena (deref f)))))
+      ;; ∃P⁻.Self is ∃P.Self: both say (x, x) ∈ P^I.
+      ((sc-self r)
+        (match r
+          ((inverse-role i) (union-new SConcept sc-self (union-new RoleId named-role i)))
+          (_                c)))))
+
+  (fn canon-junction ((arena Arena) (xs (List SConcept)) (conj Bool))
+    (@intent "A ⊓ (conj) or ⊔ of canonical operands: flattened, unit and zero laws applied, deduped, sorted")
+    (@spec ((Arena (List SConcept) Bool) -> SConcept))
+    (@alloc arena)
+    ;; §5.5 S2 choice 1: ACI, and ⊤/⊥'s laws. ⊤ is ⊓'s unit and ⊔'s zero,
+    ;; ⊥ the reverse: C ⊓ ⊤ = C ⊔ ⊥ = C, C ⊔ ⊤ = ⊤, C ⊓ ⊥ = ⊥. An empty ⊓ is
+    ;; ⊤ and an empty ⊔ is ⊥; one operand is itself.
+    (let ((mut flat (list-new arena SConcept))
+          (mut zero false))
+      (do
+        (for-each (x xs)
+          (let ((cx (sc-canon arena x)))
+            (match cx
+              ((sc-top)    (when (not conj) (set! zero true)))
+              ((sc-bottom) (when conj (set! zero true)))
+              ((sc-and ys) (if conj (for-each (y ys) (list-push flat y)) (list-push flat cx)))
+              ((sc-or ys)  (if conj (list-push flat cx) (for-each (y ys) (list-push flat y))))
+              (_           (list-push flat cx)))))
+        (if zero
+          (if conj (union-new SConcept sc-bottom) (union-new SConcept sc-top))
+          (let ((sorted (sort-sconcepts arena flat)))
+            (cond
+              ((== (list-len sorted) 0)
+                (if conj (union-new SConcept sc-top) (union-new SConcept sc-bottom)))
+              ((== (list-len sorted) 1) (sc-at sorted 0))
+              (else
+                (if conj (union-new SConcept sc-and sorted) (union-new SConcept sc-or sorted)))))))))
+
+  (fn sa-at ((xs (List SAxiom)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List SAxiom) Int) -> SAxiom))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new SAxiom sa-ref (union-new RoleId fresh-role 0)))))
+
+  (fn sort-saxioms ((arena Arena) (xs (List SAxiom)))
+    (@intent "Sorted by sa-cmp")
+    (@spec ((Arena (List SAxiom)) -> (List SAxiom)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (sa-cmp (sa-at xs i) (sa-at xs j)))))
+          (mut out (list-new arena SAxiom)))
+      (do (for-each (k idx) (list-push out (sa-at xs k))) out)))
+
+  (fn dedupe-saxioms ((arena Arena) (xs (List SAxiom)))
+    (@intent "A sorted list with adjacent duplicates dropped")
+    (@spec ((Arena (List SAxiom)) -> (List SAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SAxiom))
+          (mut have false)
+          (mut last (union-new SAxiom sa-ref (union-new RoleId fresh-role 0))))
+      (do
+        (for-each (a xs)
+          (when (or (not have) (!= (sa-cmp a last) 0))
+            (do (list-push out a) (set! last a) (set! have true))))
+        out)))
+
+  ;; ============================================================
+  ;; Rendering, in DL notation, for the row tests
+  ;; ============================================================
+
+  (fn render-srole ((arena Arena) (r RoleId))
+    (@intent "A role: its IRI, with ⁻ for an inverse")
+    (@spec ((Arena RoleId) -> String))
+    (@alloc arena)
+    (match r
+      ((named-role i)   (. i value))
+      ((inverse-role i) (string-concat arena (. i value) "⁻"))
+      ((fresh-role _)   "_:fresh-role")))
+
+  (fn render-sconcepts ((arena Arena) (xs (List SConcept)) (sep String))
+    (@intent "Operands, joined by sep")
+    (@spec ((Arena (List SConcept) String) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (x xs)
+          (do
+            (when (not first) (set! out (string-concat arena out sep)))
+            (set! out (string-concat arena out (render-sconcept arena x)))
+            (set! first false)))
+        out)))
+
+  (fn render-restriction ((arena Arena) (head String) (r RoleId) (f SConcept))
+    (@intent "head R.F, as ∃R.F")
+    (@spec ((Arena String RoleId SConcept) -> String))
+    (@alloc arena)
+    (string-concat arena head
+      (string-concat arena (render-srole arena r)
+        (string-concat arena "." (render-sconcept arena f)))))
+
+  (fn render-sconcept ((arena Arena) (c SConcept))
+    (@intent "A concept in DL notation; a compound operand is parenthesised")
+    (@spec ((Arena SConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((sc-top)          "⊤")
+      ((sc-bottom)       "⊥")
+      ((sc-name i)       (. i value))
+      ((sc-nominal i)    (string-concat arena "{" (string-concat arena (. i value) "}")))
+      ((sc-not f)        (string-concat arena "¬" (render-sconcept arena (deref f))))
+      ((sc-and xs)       (string-concat arena "(" (string-concat arena (render-sconcepts arena xs " ⊓ ") ")")))
+      ((sc-or xs)        (string-concat arena "(" (string-concat arena (render-sconcepts arena xs " ⊔ ") ")")))
+      ((sc-some r f)     (render-restriction arena "∃" r (deref f)))
+      ((sc-all r f)      (render-restriction arena "∀" r (deref f)))
+      ((sc-atleast n r f)
+        (render-restriction arena (string-concat arena "≥" (string-concat arena (int-to-string arena n) " ")) r (deref f)))
+      ((sc-atmost n r f)
+        (render-restriction arena (string-concat arena "≤" (string-concat arena (int-to-string arena n) " ")) r (deref f)))
+      ((sc-self r)       (string-concat arena "∃" (string-concat arena (render-srole arena r) ".Self")))))
+
+  (fn render-word ((arena Arena) (w (List RoleId)))
+    (@intent "A role word, joined by ∘")
+    (@spec ((Arena (List RoleId)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (r w)
+          (do
+            (when (not first) (set! out (string-concat arena out " ∘ ")))
+            (set! out (string-concat arena out (render-srole arena r)))
+            (set! first false)))
+        out)))
+
+  (fn render-saxiom ((arena Arena) (a SAxiom))
+    (@intent "An axiom in DL notation")
+    (@spec ((Arena SAxiom) -> String))
+    (@alloc arena)
+    (match a
+      ((sa-gci l r)
+        (string-concat arena (render-sconcept arena (deref l))
+          (string-concat arena " ⊑ " (render-sconcept arena (deref r)))))
+      ((sa-ria x)
+        (string-concat arena (render-word arena (. x word))
+          (string-concat arena " ⊑ " (render-srole arena (. x super)))))
+      ((sa-ref r) (string-concat arena "Ref(" (string-concat arena (render-srole arena r) ")")))
+      ((sa-irr r) (string-concat arena "Irr(" (string-concat arena (render-srole arena r) ")")))
+      ((sa-dis r s)
+        (string-concat arena "Dis("
+          (string-concat arena (render-srole arena r)
+            (string-concat arena ", " (string-concat arena (render-srole arena s) ")")))))))
+)

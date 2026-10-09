@@ -35,6 +35,8 @@
                 RawAxiom Disposition disposition axiom-in-profile render-axiom
                 concept-cmp CardKind))
   (import ttl (parse-ttl-file parse-ttl-string))
+  (import sroiq (SAxiom render-saxiom))
+  (import sriqnormal (S0 sriq-s0 sriq-s1))
   (import file (file-open file-close file-read-all))
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
@@ -2277,6 +2279,198 @@
             (print "  el++ ") (print (int-to-string arena pp))
             (print "  sriq ") (println (int-to-string arena sq))
             false)))))
+
+  ;; ============================================================
+  ;; sriq slice 5b: S0, the collapse, and S1's hook
+  ;; ============================================================
+
+  (fn s0-prefix ()
+    (@intent "The prefix block for the S0 rows: short IRIs, so the expected text stays readable")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <urn:x:> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class . :B a owl:Class . :C a owl:Class .\n:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n")
+
+  (fn render-saxioms ((arena Arena) (axs (List SAxiom)))
+    (@intent "One axiom per line")
+    (@spec ((Arena (List SAxiom)) -> String))
+    (@alloc arena)
+    (let ((mut out ""))
+      (do
+        (for-each (a axs)
+          (set! out (string-concat arena out (string-concat arena (render-saxiom arena a) "\n"))))
+        out)))
+
+  (fn s0-of ((arena Arena) (ttl String) (through-s1 Bool))
+    (@intent "S0's axioms for an inline document gated under sriq, after S1's hook when asked")
+    (@spec ((Arena String Bool) -> String))
+    (@alloc arena)
+    (match (gate-ttl-in arena (string-concat arena (s0-prefix) ttl) 'profile-sriq)
+      ((none) "did not gate\n")
+      ((some gr)
+        (let ((om (cast Int (list-len (. gr omissions))))
+              (lead (if (> (cast Int (list-len (. gr omissions))) 0)
+                      (string-concat arena "omitted " (string-concat arena (int-to-string arena om) "\n"))
+                      "")))
+          (match (sriq-s0 arena (. gr accepted))
+            ((error m) (string-concat arena lead (string-concat arena "refused: " (string-concat arena m "\n"))))
+            ((ok s0)
+              (if through-s1
+                (match (sriq-s1 arena s0)
+                  ((error m) (string-concat arena lead (string-concat arena "refused: " (string-concat arena m "\n"))))
+                  ((ok axs)  (string-concat arena lead (render-saxioms arena axs))))
+                (string-concat arena lead (render-saxioms arena (. s0 axioms))))))))))
+
+  (fn s0-is ((arena Arena) (label String) (ttl String) (want String))
+    (@intent "Does S0 give exactly these axioms? Prints what it got when not")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((got (s0-of arena ttl false)))
+      (if (== (string-cmp got want) 0)
+        true
+        (do
+          (println (string-concat arena "  [s0] " label))
+          (print got)
+          false))))
+
+  (fn s1-is ((arena Arena) (label String) (ttl String) (want String))
+    (@intent "Does S0 then S1's hook give exactly this? Prints what it got when not")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((got (s0-of arena ttl true)))
+      (if (== (string-cmp got want) 0)
+        true
+        (do
+          (println (string-concat arena "  [s1] " label))
+          (print got)
+          false))))
+
+  (fn test-sriq-s0-rows ((arena Arena))
+    (@intent "§5.5 S0, row by row: the language table, the collapse, the canonical forms, S1's hook")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
+      (do
+        (when (not (s0-is arena "subclass"
+                     ":A rdfs:subClassOf :B ."
+                     "urn:x:A ⊑ urn:x:B\n"))
+          (set! ok false))
+        (when (not (s0-is arena "domain"
+                     ":r rdfs:domain :A ."
+                     "∃urn:x:r.⊤ ⊑ urn:x:A\n"))
+          (set! ok false))
+        (when (not (s0-is arena "range"
+                     ":r rdfs:range :A ."
+                     "⊤ ⊑ ∀urn:x:r.urn:x:A\n"))
+          (set! ok false))
+        (when (not (s0-is arena "union and complement"
+                     ":A rdfs:subClassOf [ owl:unionOf ( :B [ owl:complementOf :C ] ) ] ."
+                     "urn:x:A ⊑ (urn:x:B ⊔ ¬urn:x:C)\n"))
+          (set! ok false))
+        (when (not (s0-is arena "ACI: a nested, repeated, reordered conjunction"
+                     ":A rdfs:subClassOf [ owl:intersectionOf ( :C [ owl:intersectionOf ( :B :C ) ] ) ] ."
+                     "urn:x:A ⊑ (urn:x:B ⊓ urn:x:C)\n"))
+          (set! ok false))
+        (when (not (s0-is arena "a unit: C or bottom is C"
+                     ":A rdfs:subClassOf [ owl:unionOf ( :B owl:Nothing ) ] ."
+                     "urn:x:A ⊑ urn:x:B\n"))
+          (set! ok false))
+        (when (not (s0-is arena "a unit: C and top is C"
+                     ":A rdfs:subClassOf [ owl:intersectionOf ( :B owl:Thing ) ] ."
+                     "urn:x:A ⊑ urn:x:B\n"))
+          (set! ok false))
+        (when (not (s0-is arena "a zero: C or top is top"
+                     ":A rdfs:subClassOf [ owl:unionOf ( :B owl:Thing ) ] ."
+                     "urn:x:A ⊑ ⊤\n"))
+          (set! ok false))
+        (when (not (s0-is arena "qualified >=1 is exists"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:minQualifiedCardinality 1 ; owl:onClass :B ] ."
+                     "urn:x:A ⊑ ∃urn:x:r.urn:x:B\n"))
+          (set! ok false))
+        (when (not (s0-is arena "exact 2 is >=2 and <=2"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:qualifiedCardinality 2 ; owl:onClass :B ] ."
+                     "urn:x:A ⊑ (≥2 urn:x:r.urn:x:B ⊓ ≤2 urn:x:r.urn:x:B)\n"))
+          (set! ok false))
+        (when (not (s0-is arena "unqualified is qualified by top"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 3 ] ."
+                     "urn:x:A ⊑ ≤3 urn:x:r.⊤\n"))
+          (set! ok false))
+        (when (not (s0-is arena "Self on an inverse is Self on the property"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :r ] ; owl:hasSelf true ] ."
+                     "urn:x:A ⊑ ∃urn:x:r.Self\n"))
+          (set! ok false))
+        (when (not (s0-is arena "DisjointClasses"
+                     ":A owl:disjointWith :B ."
+                     "(urn:x:A ⊓ urn:x:B) ⊑ ⊥\n"))
+          (set! ok false))
+        (when (not (s0-is arena "DisjointUnion"
+                     ":C owl:disjointUnionOf ( :A :B ) ."
+                     "urn:x:C ⊑ (urn:x:A ⊔ urn:x:B)\n(urn:x:A ⊓ urn:x:B) ⊑ ⊥\n(urn:x:A ⊔ urn:x:B) ⊑ urn:x:C\n"))
+          (set! ok false))
+        (when (not (s0-is arena "characteristics"
+                     ":r a owl:FunctionalProperty , owl:InverseFunctionalProperty , owl:ReflexiveProperty , owl:IrreflexiveProperty , owl:AsymmetricProperty ."
+                     "⊤ ⊑ ≤1 urn:x:r.⊤\n⊤ ⊑ ≤1 urn:x:r⁻.⊤\nRef(urn:x:r)\nIrr(urn:x:r)\nDis(urn:x:r, urn:x:r⁻)\n"))
+          (set! ok false))
+        (when (not (s0-is arena "DisjointObjectProperties"
+                     ":r owl:propertyDisjointWith :s ."
+                     "Dis(urn:x:r, urn:x:s)\n"))
+          (set! ok false))
+        (when (not (s0-is arena "ClassAssertion"
+                     ":a a [ owl:unionOf ( :A :B ) ] ."
+                     "{urn:x:a} ⊑ (urn:x:A ⊔ urn:x:B)\n"))
+          (set! ok false))
+        (when (not (s0-is arena "ObjectPropertyAssertion"
+                     ":a :r :b ."
+                     "{urn:x:a} ⊑ ∃urn:x:r.{urn:x:b}\n"))
+          (set! ok false))
+        (when (not (s0-is arena "NegativeObjectPropertyAssertion"
+                     "[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ] ."
+                     "{urn:x:a} ⊑ ∀urn:x:r.¬{urn:x:b}\n"))
+          (set! ok false))
+        (when (not (s0-is arena "SameIndividual around the least member"
+                     ":b owl:sameAs :a ."
+                     "{urn:x:a} ⊑ {urn:x:b}\n{urn:x:b} ⊑ {urn:x:a}\n"))
+          (set! ok false))
+        (when (not (s0-is arena "DifferentIndividuals"
+                     ":a owl:differentFrom :b ."
+                     "({urn:x:a} ⊓ {urn:x:b}) ⊑ ⊥\n"))
+          (set! ok false))
+        (when (not (s0-is arena "InverseObjectProperties collapses to nothing"
+                     ":r owl:inverseOf :s .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] ."
+                     "urn:x:A ⊑ ∃urn:x:r⁻.urn:x:B\n"))
+          (set! ok false))
+        (when (not (s0-is arena "an equivalence with an inverse collapses"
+                     ":r owl:equivalentProperty [ owl:inverseOf :s ] .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] ."
+                     "urn:x:A ⊑ ∃urn:x:r⁻.urn:x:B\n"))
+          (set! ok false))
+        (when (not (s0-is arena "P and P- in one component keep P- [= P"
+                     ":r owl:inverseOf :r ."
+                     "urn:x:r⁻ ⊑ urn:x:r\n"))
+          (set! ok false))
+        (when (not (s0-is arena "symmetry is P- [= P"
+                     ":r a owl:SymmetricProperty ."
+                     "urn:x:r⁻ ⊑ urn:x:r\n"))
+          (set! ok false))
+        (when (not (s0-is arena "RO's part_of/has_part: transitivity in both orientations"
+                     ":r a owl:TransitiveProperty . :s a owl:TransitiveProperty . :r owl:inverseOf :s ."
+                     "urn:x:r ∘ urn:x:r ⊑ urn:x:r\nurn:x:r⁻ ∘ urn:x:r⁻ ⊑ urn:x:r⁻\n"))
+          (set! ok false))
+        (when (not (s0-is arena "a simple role hierarchy"
+                     ":r rdfs:subPropertyOf :s . :s rdfs:subPropertyOf :t ."
+                     "urn:x:r ⊑ urn:x:s\nurn:x:s ⊑ urn:x:t\n"))
+          (set! ok false))
+        (when (not (s0-is arena "the empty role"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom :B ] ."
+                     "urn:x:A ⊑ ∃http://www.w3.org/2002/07/owl#bottomObjectProperty.urn:x:B\n∃http://www.w3.org/2002/07/owl#bottomObjectProperty.⊤ ⊑ ⊥\n"))
+          (set! ok false))
+        (when (not (s1-is arena "S1's hook passes a chain-free RBox"
+                     ":r rdfs:subPropertyOf :s .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ."
+                     "urn:x:A ⊑ ∃urn:x:r.urn:x:B\nurn:x:r ⊑ urn:x:s\n"))
+          (set! ok false))
+        (when (not (s1-is arena "S1's hook refuses a complex RIA"
+                     ":r a owl:TransitiveProperty ."
+                     "refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: urn:x:r ∘ urn:x:r ⊑ urn:x:r\n"))
+          (set! ok false))
+        ok)))
 
   (fn test-sriq-gate-table ((arena Arena))
     (@intent "§5.5's language and gate conditions, row by row, against el and el++")
@@ -5673,6 +5867,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-data-lemma arena)))
             (print-test-result "§5.2: data axioms on idle data properties are inert in both rungs" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-s0-rows arena)))
+            (print-test-result "5b: sriq's S0, the collapse and S1's hook, row by row" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-gate-table arena)))

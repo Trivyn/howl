@@ -12,6 +12,8 @@
 #include "slop_normalize.h"
 #include "slop_owl2.h"
 #include "slop_ttl.h"
+#include "slop_sroiq.h"
+#include "slop_sriqnormal.h"
 #include "slop_file.h"
 #include "slop_types.h"
 #include "slop_canon.h"
@@ -60,6 +62,12 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 #define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
+#define SLOP_LIST_SROIQ_SAXIOM_DEFINED
+#define SLOP_LIST_SROIQ_SAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(sroiq_SAxiom, slop_list_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
@@ -119,6 +127,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
+#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1002,6 +1015,12 @@ uint8_t test_test_data_constructs_decode_as_data(slop_arena* arena);
 uint8_t test_test_concept_order_is_total(slop_arena* arena);
 owl2_RawConcept* test_box_test_concept(slop_arena* arena, owl2_RawConcept c);
 uint8_t test_rungs3_omit(slop_arena* arena, slop_string label, slop_string ttl, int64_t el_want, int64_t elpp_want, int64_t sriq_want);
+slop_string test_s0_prefix(void);
+slop_string test_render_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom axs);
+slop_string test_s0_of(slop_arena* arena, slop_string ttl, uint8_t through_s1);
+uint8_t test_s0_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
+uint8_t test_s1_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
+uint8_t test_test_sriq_s0_rows(slop_arena* arena);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1171,6 +1190,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
+#endif
+
+#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
