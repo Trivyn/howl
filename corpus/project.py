@@ -62,11 +62,17 @@ PROFILE = "el"
 PROJ = os.path.join(HERE, "projections")
 
 
+# The rungs a projection can be taken for: every built rung, and sriq, whose
+# census column exists before the engine does (census.PROFILES). Projecting
+# needs only the census; running HOWL on the projection needs the rung built.
+PROJECTABLE = profiles.BUILT + ("sriq",)
+
+
 def set_profile(p):
-    """Project for one rung: el (the default, corpus/projections/) or el++."""
+    """Project for one rung: el (the default, corpus/projections/), el++ or sriq."""
     global PROFILE, PROJ
-    if p not in profiles.BUILT:
-        sys.exit(f"unknown profile {p} ({profiles.expected()})")
+    if p not in PROJECTABLE:
+        sys.exit(f"unknown profile {p} (expected one of {', '.join(PROJECTABLE)})")
     PROFILE = p
     PROJ = os.path.join(HERE, "projections") if p == "el" else os.path.join(HERE, "projections", p)
 
@@ -447,8 +453,11 @@ def main():
     for e in entries:
         # A functional-syntax source is projected from its PINNED derived
         # Turtle (fetch.sh, derived_sha256): rdflib cannot read the source.
+        # A functional-syntax source is projected from its pinned derived
+        # Turtle, a Turtle source from itself, an RDF/XML one from its .owl.
         ofn = e.get("format") == "ofn"
-        src = os.path.join(HERE, "vendor", f"{e['name']}-{e['version']}.{'ttl' if ofn else 'owl'}")
+        ttl_src = ofn or e.get("format") == "ttl"
+        src = os.path.join(HERE, "vendor", f"{e['name']}-{e['version']}.{'ttl' if ttl_src else 'owl'}")
         pinned_sha = e["derived_sha256"] if ofn else e["sha256"]
         if not os.path.exists(src):
             if verify:

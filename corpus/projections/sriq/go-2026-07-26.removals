@@ -1,0 +1,26 @@
+# HOWL sriq projection — REMOVAL LIST
+#
+# projected theory == pinned source MINUS the axioms below.
+#
+# source                  go-2026-07-26.owl
+# source_sha256           653ce47cd7b02304e67eb67c54d3be02ec5b0ba5e00eb7384dfa0da00f9682ec
+# source_triples          1,445,043
+# axioms_removed          0
+# triples_removed         0
+# in_v0_swept_in          0
+# projected_triples       1,445,043
+# projected_ground_sha256 8db645cd9906375ec208a51bfc92e4eee9c06412437616de270cf7e7b6f3f15b
+# projected_bnode_triples 862,029
+# projected_bnode_sha256  a32a9ecd0f8d324a376a081893e6e48f6da99439ef441f7933ac5759ebfb0c3d
+#
+# The ground hash covers every triple with no blank node on either
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
+#
+# Anchors are named subjects; blank nodes print as _:_ because parser
+# -assigned labels differ run to run and would churn the file.
+#
+
+

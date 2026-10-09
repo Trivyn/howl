@@ -83,6 +83,8 @@ def convert(owl, e):
     """The verified source -> Turtle beside it, skipped when up to date."""
     if e.get("format") == "ofn":
         return convert_ofn(owl, e)
+    if e.get("format") == "ttl":
+        return 0          # the pinned source is already the Turtle HOWL reads
     ttl = owl[:-len(".owl")] + ".ttl"
     name = os.path.basename(ttl)
     if os.path.exists(ttl) and os.path.getmtime(ttl) >= os.path.getmtime(owl):
@@ -105,7 +107,10 @@ def convert(owl, e):
 
 rc = 0
 for e in entries:
-    dest = os.path.join(vendor, f"{e['name']}-{e['version']}.owl")
+    # A Turtle source is kept as the .ttl itself: the pinned bytes are what
+    # HOWL and the census read, with no conversion in between.
+    ext = "ttl" if e.get("format") == "ttl" else "owl"
+    dest = os.path.join(vendor, f"{e['name']}-{e['version']}.{ext}")
     if os.path.exists(dest) and sha256(dest) == e["sha256"]:
         print(f"  ok       {e['name']}-{e['version']} (cached)")
         rc |= convert(dest, e)

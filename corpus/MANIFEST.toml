@@ -10,6 +10,12 @@
 # The versioned PURLs are immutable — verified for ro.owl, whose versioned and
 # latest fetches are byte-identical at this release.
 #
+# WHERE NO VERSIONED PURL SERVES THE BYTES, A COMMIT DOES. BFO-core's dated PURL
+# (.../obo/bfo/2020/bfo-core.ttl) redirects to whatever release is newest — a
+# "latest" in disguise — and CCO has no PURL for its merged file. Both are
+# pinned to a raw URL at a COMMIT of their upstream repository, which is
+# immutable, never at a branch or a tag, which can move.
+#
 # `out_of_profile` is measured by corpus/census.py against SPEC.md §5.2 and is
 # the reason each entry does or does not need a projection (§10 item 2). A
 # benchmark or differential run over an entry with non-empty coverage.omitted
@@ -91,12 +97,41 @@ projection     = "corpus/projections/el-galen-2011-04-12.removals"
 projection_removes = { axioms = 0, triples = 0, in_v0_swept_in = 0 }
 role           = "BENCHMARK, with GO: plain EL (intersection, existentials, role hierarchy, transitivity; no ranges, chains or inverses), so ELK is its routed oracle. Entirely inside v0: an empty projection."
 
+[[ontology]]
+name           = "bfo-core"
+version        = "2024-02-07"
+url            = "https://raw.githubusercontent.com/BFO-ontology/BFO-2020/5ed468765ea5655a0ff9a93877fd059f294a152d/src/owl/bfo-core.ttl"
+format         = "ttl"
+sha256         = "128f5fe1dab7ee804a3037a836813e5953c846eeeefee883a47d5db0b37a106b"
+bytes          = 109_227
+licence        = "CC BY 4.0"
+logical_axioms = 271
+in_v0          = 190
+out_of_profile = 81
+projection     = "corpus/projections/bfo-core-2024-02-07.removals"
+projection_removes = { axioms = 67, triples = 332, in_v0_swept_in = 47 }
+provenance     = "BFO-2020 at commit 5ed46876 (2024-02-07), src/owl/bfo-core.ttl: byte-identical to the copy every earlier BFO measurement used (../growl). The PURL .../obo/bfo/2020/bfo-core.ttl serves release-2024-01-29 instead, a different file."
+role           = "M5 TARGET, the first consumer's upper ontology. Its inverses, unions and universals are outside el and el++, and sriq's gate omits nothing of it (M5 (g)): the corpus entry whose sriq projection is empty."
+
+[[ontology]]
+name           = "cco"
+version        = "2024-11-06"
+url            = "https://raw.githubusercontent.com/CommonCoreOntology/CommonCoreOntologies/510dad76be0ef710b65a421075af912af25342b7/src/cco-merged/CommonCoreOntologiesMerged.ttl"
+format         = "ttl"
+sha256         = "e609db27478a2c8b52b9bb5eb5ac979ac323510e851c368e4d9ec7d1c153fe5b"
+bytes          = 1_239_810
+licence        = "BSD-3-Clause"
+logical_axioms = 2928
+in_v0          = 2710
+out_of_profile = 218
+projection     = "corpus/projections/cco-2024-11-06.removals"
+projection_removes = { axioms = 204, triples = 541, in_v0_swept_in = 59 }
+provenance     = "CommonCoreOntologies tag v2.0-2024-11-06 (commit 510dad76), src/cco-merged/CommonCoreOntologiesMerged.ttl: byte-identical to the copy every earlier CCO measurement used."
+role           = "M5 TARGET, the first consumer's mid-level ontology, with an ABox: 127 InverseObjectProperties, unions and universals outside el and el++, and data axioms the data lemma sets aside. sriq's gate omits nothing of it (M5 (g))."
+
 # ---------------------------------------------------------------------------
 # NOT YET PINNED — open items, listed so they are scheduled rather than
 # rediscovered.
 #
 #   SNOMED CT  requires an affiliate licence; never vendored, never fetched by
 #            CI. Opt-in local path only, per §12.
-#   BFO/CCO  measured (33.8% / 8.2% out-of-profile) and available in ../growl,
-#            but BFO is a poor v0 fit — projecting it would gut it. Both belong
-#            to the M5 / Horn-SHIQ corpus, not v0.

@@ -14,6 +14,12 @@
     role-equivalence classes, and Simančík's ≺-regularity; a failure omits the whole RBox.
   - On BFO-core and CCO it omits nothing. On RO and OBI it omits no RBox axiom; what it omits there
     is SWRL, class nominals and used data.
+- **BFO-core and CCO are in the pinned corpus** (`corpus/MANIFEST.toml`).
+  - Both are pinned to an upstream *commit*: BFO-2020 `5ed46876`, and CommonCoreOntologies
+    `510dad76` (tag v2.0-2024-11-06). No versioned PURL serves these bytes.
+  - Each has `el` and `el++` projections, re-certified against HermiT.
+  - Every entry also has a `sriq` projection (census only, until the engine runs `sriq`). BFO-core's,
+    CCO's, GO's and EL-GALEN's are empty.
 
 ### Changed
 
