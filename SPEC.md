@@ -1957,6 +1957,9 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
 > - **Built so far:** the language's representation (`RoleId`'s inverse arm, [§6.2](#62-data-model))
 >   and the gate below, with the census's independent column (slice 4). The gate runs only under
 >   test until the wiring slice.
+> - **Amended 2026-10-09 (slice 5):** S2 pins [TGH21] Table 1 and the choices it leaves open, and S5
+>   lists `S_{B₂}`. Until S1 is built (slice 6), the normaliser refuses an input with a complex RIA,
+>   transitivity included, with that reason, rather than normalise it wrongly.
 
 **Sources.**
 - **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for
@@ -2123,7 +2126,7 @@ DL1–DL11:
 - Each subconcept `E` that is not a concept name gets one fresh name `A_E` per distinct `E`, with
   `A_E ⊑ E`, and `E`'s own subconcepts are replaced by their names. The one exception is a literal
   standing directly in a disjunction, which goes to DL1 as it is. So the filler of every `∃`, `∀`,
-  `≥` and `≤` is a name, even when it is a literal. `∀R.¬B`, for example, gets `A_{¬B}` with the
+  `≥` and `≤` is a name, even when it is a literal, except ⊤, which stays ⊤ (choice 6 below). `∀R.¬B`, for example, gets `A_{¬B}` with the
   DL1 clause `A_{¬B} ⊓ B ⊑ ⊥`. Three cases name differently:
   - in `≤n R.F`, `F`'s occurrence is negative, so it is named through `F ⊑ B`;
   - a literal `¬{o}` is named through `{o} ⊑ X` (DL10), and becomes `¬X`;
@@ -2146,6 +2149,60 @@ DL1–DL11:
 - Table 1's forms take role *names*. So each name `P` whose inverse is needed as an argument gets a
   fresh name `P̄`, with the two DL8 clauses `P ⊑ P̄⁻` and `P̄ ⊑ P⁻`.
 
+**[TGH21] Table 1, pinned** (AIJ 298, §2.3, p. 5). These are the clauses the reference evaluator and
+the engine read. Every `B` is a class name, every `S` a role name, each `fᵢ` a fresh function
+symbol, and `o` a constant. `n = 0` in DL1 is the empty body (`⊤`), and an empty head is `⊥`.
+
+| Form | Axiom | DL-clauses |
+|---|---|---|
+| DL1 | `B₁ ⊓ … ⊓ Bₙ ⊑ Bₙ₊₁ ⊔ … ⊔ Bₘ` | `B₁(x) ∧ … ∧ Bₙ(x) → Bₙ₊₁(x) ∨ … ∨ Bₘ(x)` |
+| DL2 | `B₁ ⊑ ≥n S.B₂` | `B₁(x) → B₂(fᵢ(x))` and `B₁(x) → S(x, fᵢ(x))` for `1 ≤ i ≤ n`; `B₁(x) → fᵢ(x) ≉ fⱼ(x)` for `1 ≤ i < j ≤ n` |
+| DL3 | `∃S.B₁ ⊑ B₂` | `S(z₁, x) ∧ B₁(x) → B₂(z₁)` |
+| DL4 | `B₁ ⊑ ≤n S.B₂` | `S(z₁, x) ∧ B₂(x) → S_{B₂}(z₁, x)`; `B₁(x) ∧ ⋀_{1≤i≤n+1} S_{B₂}(x, zᵢ) → ⋁_{1≤i<j≤n+1} zᵢ ≈ zⱼ` |
+| DL5 | `B ⊑ ∃S.Self` | `B(x) → S(x, x)` |
+| DL6 | `∃S.Self ⊑ B` | `S(x, x) → B(x)` |
+| DL7 | `S₁ ⊑ S₂` | `S₁(z₁, x) → S₂(z₁, x)` |
+| DL8 | `S₁ ⊑ S₂⁻` | `S₁(z₁, x) → S₂(x, z₁)` |
+| DL9 | `Disj(S₁, S₂)` | `S₁(z₁, x) ∧ S₂(z₁, x) → ⊥` |
+| DL10 | `{o} ⊑ B` | `⊤ → B(o)` |
+| DL11 | `B ⊑ {o}` | `B(x) → x ≈ o` |
+
+DL4's `S_{B₂}` is a fresh role, one for each pair of `S` and `B₂` ([TGH21]: "determined by `S` and
+`B₂`"). It is a third kind of HOWL-minted role name, beside `P̄`.
+
+**What S2 fixes that [TGH21] leaves open.** Each of these changes names, ids, rounds or capped
+reports, so each is fixed here. None changes the proof below, which holds for any naming that puts a
+name below what it names at a positive occurrence and above it at a negative one. (Owner-approved,
+2026-10-09; AD 3f4c88fc.)
+1. **One name per distinct concept, up to ⊓/⊔ commutativity, associativity and idempotence, and
+   ⊤/⊥'s unit and zero laws** (`C ⊔ ⊥ = C ⊓ ⊤ = C`, `C ⊔ ⊤ = ⊤`, `C ⊓ ⊥ = ⊥`). The decoder keeps an
+   RDF list's order, so the normaliser flattens, simplifies, dedupes and sorts every ⊓ and ⊔ before
+   it names. Two occurrences of the same concept, in any order, share one `A_E`. The laws matter at
+   the top level too: `⊤ ⊑ B ⊓ C` is `⊤ ⊑ NNF(⊥ ⊔ (B ⊓ C))`, which is `B ⊓ C`, so it splits (choice
+   3) rather than naming the conjunction. (Owner-approved, 2026-10-09, during slice 5c.)
+2. **No shortcut for a single-name body.** `A ⊑ ∃R.B` is DL1 `A → A_E` and then DL2 for `A_E`, as
+   the transformation reads. Emitting DL2 for `A` directly would save a name and a rule application.
+   It changes rounds, so it is an optimisation that needs its own amendment.
+3. **A top-level ⊓ is split:** `⊤ ⊑ E₁ ⊓ … ⊓ Eₖ` is k axioms. A nested ⊓ is a concept like any
+   other, named once.
+4. **DL1 holds names only.** A positive `{o}` or `∃R.Self` standing in a disjunction gets its `A_E`,
+   with DL11 or DL5. The literal exception above covers names and negated names, not these.
+5. **One name per concept across polarities.** `A_E ⊑ E` and `E ⊑ A_E`, when both are needed, share
+   `A_E`, as el's registry does with its direction bits. The proof sets `A_E^I := E^I` either way.
+6. **⊤ and ⊥ are the empty body and the empty head.** A DL2 whose filler is ⊤ emits only its `S` and
+   `≉` clauses. Its `B₂(fᵢ(x))` would be `⊤(fᵢ(x))`, a tautology, and every remaining clause is of a
+   Table 1 form. The cautious strategy (S5) takes `v_⊤` for an `f` that occurs in no atom `B(f(x))`.
+7. **Canonical forms, all equivalences:**
+   - `≥1 R.C` is `∃R.C`;
+   - `∃P⁻.Self` is `∃P.Self`: both say `(x, x) ∈ P^I`;
+   - `=n R.C` is `≥n R.C ⊓ ≤n R.C`;
+   - an unqualified number restriction is qualified by ⊤.
+8. **"The canonical order of what they name"** (S5) is a structural comparison: `concept-cmp` on
+   concepts, `role-cmp` on roles, `iri-cmp` on IRIs. It is never the byte order of a rendered key.
+9. **NNF runs here,** after S1's polarity labelling, as written. S1 labels by polarity on the
+   un-normalised GCIs.
+10. **SameIndividual's hub** is its canonically least member, not the first written.
+
 *Proof.*
 - **Input to output:** any model of the input becomes a model of the output by setting
   `A_E^I := E^I` and `P̄^I := (P^I)⁻`.
@@ -2156,8 +2213,8 @@ DL1–DL11:
 
 So the output is a conservative extension of the input, and agrees with it on every entailment over
 the input signature. This is the standard argument for the transformation [TGH21] §2.3 cites. It is
-written out here because two choices are HOWL's own: one name per distinct `E`, and the inverse
-names.
+written out here because the naming is HOWL's own: one name per distinct `E` (with the choices
+above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own translation introduces.
 
 **S3 — the calculus, as published.** [TGH21]:
 - **Tables 2 and 3.** In a context: Core, Hyper, Eq, Ineq, Factor, Elim, Join and Nom. Between
@@ -2239,7 +2296,7 @@ names.
   - `holds(B, owl:Nothing)` is `unsat(B)`;
   - `owl:Nothing` is below everything.
 
-  Fresh names are never queried: S1's `I` and `F`, S2's `A_E` and `P̄`.
+  Fresh names are never queried: S1's `I` and `F`, S2's `A_E`, `P̄` and `S_{B₂}`.
 - **The report** is extracted from these raw queries exactly as [§5.4](#54-the-el-calculus)'s K5
   extracts `el++`'s:
   - `owl:Nothing` is never an unsatisfiable finding;
@@ -2283,8 +2340,10 @@ is fixed here so that reports are input-determined.
   never in input order, as the gate's canonical forms already are
   ([§6.8](#68-determinism-binding)):
   - class and role names;
-  - S1's `I` and `F`, and S2's `A_E` and `P̄`;
-  - function symbols and constants.
+  - S1's `I` and `F`, and S2's `A_E`, `P̄` and `S_{B₂}`. `P̄` is keyed by `P`, and `S_{B₂}` by the
+    pair `(S, B₂)`;
+  - function symbols and constants. Each DL2 function symbol `fᵢ` is keyed by its axiom's content
+    and its position `i`.
 
   A context's identity is its core.
 
