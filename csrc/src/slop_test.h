@@ -1050,6 +1050,7 @@ slop_string test_s2_after_s1(slop_arena* arena, slop_result_list_sroiq_SAxiom_st
 slop_string test_s2_after_s0(slop_arena* arena, slop_result_sriqnormal_S0_string r);
 slop_string test_s2_of(slop_arena* arena, slop_string ttl);
 uint8_t test_s2_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
+slop_list_string test_sriq_fixtures(slop_arena* arena);
 slop_option_gate_GateResult test_gate_triples_in(slop_arena* arena, slop_list_rdf_Triple ts, types_Profile p);
 slop_list_owl2_RawAxiom test_reversed_raw(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 slop_list_sroiq_SAxiom test_reversed_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs);
@@ -1060,6 +1061,7 @@ slop_list_string test_nf_lines(slop_arena* arena, slop_result_sriqnames_SriqNorm
 uint8_t test_nf_invariants_hold(slop_arena* arena, slop_string path, slop_result_sriqnames_SriqNormal_string r);
 uint8_t test_sriq_order_independent(slop_arena* arena, slop_string path);
 uint8_t test_test_sriq_ids_row(slop_arena* arena);
+uint8_t test_test_sriq_one_clause_from_two_axioms(slop_arena* arena);
 uint8_t test_test_sriq_ids_from_content(slop_arena* arena);
 uint8_t test_yields_nothing_by_design(owl2_RawAxiom a);
 uint8_t test_every_axiom_yields(slop_arena* arena, slop_string path);

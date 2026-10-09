@@ -2551,9 +2551,35 @@
   ;; order; S5 renumbers every one by what it names. So reordering the
   ;; input anywhere — its triples, the gate's accepted list, or S2's own
   ;; input — must change no byte of the output, and the output must keep
-  ;; S5's promises (sriq-invariants). The corpus is run with its complex
-  ;; RIAs set aside, since S1 (slice 6) would refuse it.
+  ;; S5's promises (sriq-invariants). Tracked fixtures only: `make test`
+  ;; is what CI runs, and corpus/vendor/ is fetched locally (corpus/fetch.sh).
+  ;; A fixture with a complex RIA has it set aside, since S1 (slice 6)
+  ;; would refuse it.
   ;; ------------------------------------------------------------
+
+  (fn sriq-fixtures ((arena Arena))
+    (@intent "Tracked fixtures that between them mint every id kind S5 renumbers")
+    (@spec ((Arena) -> (List String)))
+    (@alloc arena)
+    ;; A_E, P̄ and function symbols are everywhere; role-hierarchy-deep has
+    ;; the most of each (21, 6, 9). S_{B₂} comes only from the two
+    ;; out-of-profile cardinality fixtures.
+    (let ((mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-domain-range.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/property-characteristics.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/cardinality.ttl")
+        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-complex-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-nary-chain.ttl")
+        (list-push ps "corpus/fixtures/hazards/smaller-side-join.ttl")
+        (list-push ps "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
+        (list-push ps "corpus/fixtures/el++/ksc-22.ttl")
+        (list-push ps "corpus/fixtures/el++/ksc-28.ttl")
+        ps)))
 
   (fn gate-triples-in ((arena Arena) (ts (List Triple)) (p Profile))
     (@intent "Stage 0, decode and gate a triple list under a rung")
@@ -2684,6 +2710,28 @@
               true
               (do (println "  [s5] ids row, got:") (print got) false)))))))
 
+  (fn test-sriq-one-clause-from-two-axioms ((arena Arena))
+    (@intent "Two axioms with the same clause between them give it once")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The collapse makes t ⊑ u, with t = r⁻ and u = s⁻, into r⁻ ⊑ s⁻:
+    ;; distinct from r ⊑ s to S0, and the same DL7 r ⊑ s to S2. The
+    ;; corpus does this (BFO-core's DL7/DL8 duplicates); S5's dedupe is
+    ;; what keeps the clause list a set.
+    (match (gate-ttl-in arena (string-concat arena (s0-prefix)
+             ":u a owl:ObjectProperty .\n:r rdfs:subPropertyOf :s .\n:t owl:inverseOf :r .\n:u owl:inverseOf :s .\n:t rdfs:subPropertyOf :u .")
+             'profile-sriq)
+      ((none) false)
+      ((some gr)
+        (let ((want "DL7|urn:x:r|urn:x:s\nfns 0\nclass urn:x:A\nclass urn:x:B\nclass urn:x:C\nindividual urn:x:a\nindividual urn:x:b\n")
+              (mut got ""))
+          (do
+            (for-each (l (nf-lines arena (sriq-normalize arena (. gr accepted) (. gr signature))))
+              (set! got (string-concat arena got (string-concat arena l "\n"))))
+            (if (string-eq got want)
+              true
+              (do (println "  [s5] one clause from two axioms, got:") (print got) false)))))))
+
   (fn test-sriq-ids-from-content ((arena Arena))
     (@intent "§5.5 S5 / §6.8: the sriq normal form is order-independent, and its ids dense and in key order")
     (@spec ((Arena) -> Bool))
@@ -2691,15 +2739,7 @@
     (let ((mut ok true)
           (mut ps (list-new arena String)))
       (do
-        (list-push ps "corpus/fixtures/v0/litmus.ttl")
-        (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
-        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
-        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
-        (list-push ps "corpus/vendor/bfo-core-2024-02-07.ttl")
-        (list-push ps "corpus/vendor/cco-2024-11-06.ttl")
-        (list-push ps "corpus/vendor/ro-2025-12-17.ttl")
-        (list-push ps "corpus/vendor/obi-2026-07-27.ttl")
-        (for-each (p ps) (when (not (sriq-order-independent arena p)) (set! ok false)))
+        (for-each (p (sriq-fixtures arena)) (when (not (sriq-order-independent arena p)) (set! ok false)))
         ok)))
 
   (fn yields-nothing-by-design ((a RawAxiom))
@@ -2755,12 +2795,7 @@
     (let ((mut ok true)
           (mut ps (list-new arena String)))
       (do
-        (list-push ps "corpus/fixtures/v0/litmus.ttl")
-        (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
-        (list-push ps "corpus/vendor/bfo-core-2024-02-07.ttl")
-        (list-push ps "corpus/vendor/cco-2024-11-06.ttl")
-        (list-push ps "corpus/vendor/ro-2025-12-17.ttl")
-        (for-each (p ps) (when (not (every-axiom-yields arena p)) (set! ok false)))
+        (for-each (p (sriq-fixtures arena)) (when (not (every-axiom-yields arena p)) (set! ok false)))
         ok)))
 
   (fn test-sriq-s2-refuses-a-count-past-the-bound ((arena Arena))
@@ -6347,6 +6382,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-ids-row arena)))
             (print-test-result "5d: one document's ids, hand-checked" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-one-clause-from-two-axioms arena)))
+            (print-test-result "5d: one clause from two axioms, once" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-ids-from-content arena)))
