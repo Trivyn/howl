@@ -1,0 +1,92 @@
+# HOWL el++ projection — REMOVAL LIST
+#
+# projected theory == pinned source MINUS the axioms below.
+#
+# source                  bfo-core-2024-02-07.ttl
+# source_sha256           128f5fe1dab7ee804a3037a836813e5953c846eeeefee883a47d5db0b37a106b
+# source_triples          1,014
+# axioms_removed          67
+# triples_removed         332
+# in_v0_swept_in          47   <- collateral from blank-node closures
+# projected_triples       682
+# projected_ground_sha256 f73eac68c5f64e039fe94e90c52c3d0616dcd18daf24bdad310e1c944900ea68
+# projected_bnode_triples 125
+# projected_bnode_sha256  d96829008f207360b921cd45512fbaa356e63a2852d716545cdd4db81a16ef95
+#
+# The ground hash covers every triple with no blank node on either
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
+#
+# Anchors are named subjects; blank nodes print as _:_ because parser
+# -assigned labels differ run to run and would churn the file.
+#
+
+<http://purl.obolibrary.org/obo/BFO_0000002> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [7da1b9fb]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000004> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [123f25fd]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000006> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [f5143e2e]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000008> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [685b5cc1]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000008> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [eed684cd]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000009> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [7de4312c]  (+11 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000011> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [1840577d]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000011> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [498c7606]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [143bf1b4]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [8d08c25a]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [cdc6986d]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000018> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [772d545f]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000026> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [4be47f4e]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000028> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [4e57e303]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000029> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [b784233c]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000029> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [f4ad1874]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000029> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [e2adee7b]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [28e2ebab]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [f35678ff]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [392287d5]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [84900766]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000038> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [1d488427]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000038> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [c8545703]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000040> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [92fd4191]  (+11 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000040> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [c089a962]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000054> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000055> .    # InverseObjectProperties [2635afde]
+<http://purl.obolibrary.org/obo/BFO_0000056> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf + ObjectUnionOf [b2ff8380]  (+16 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000056> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000057> .    # InverseObjectProperties [39d06bc0]
+<http://purl.obolibrary.org/obo/BFO_0000057> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf + ObjectUnionOf [080e1e8c]  (+16 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000058> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [65dafeed]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000058> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000059> .    # InverseObjectProperties [678c0d55]
+<http://purl.obolibrary.org/obo/BFO_0000059> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [1b127d8d]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000062> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000063> .    # InverseObjectProperties [4f79ed38]
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [cf94b471]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [10aa0416]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000183> .    # InverseObjectProperties [2e582c7a]
+<http://purl.obolibrary.org/obo/BFO_0000084> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000101> .    # InverseObjectProperties [14d9134e]
+<http://purl.obolibrary.org/obo/BFO_0000115> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000129> .    # InverseObjectProperties [8cfc03c6]
+<http://purl.obolibrary.org/obo/BFO_0000117> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000132> .    # InverseObjectProperties [8284eb09]
+<http://purl.obolibrary.org/obo/BFO_0000121> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000139> .    # InverseObjectProperties [4ca2fb3f]
+<http://purl.obolibrary.org/obo/BFO_0000124> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000171> .    # InverseObjectProperties [47b4d844]
+<http://purl.obolibrary.org/obo/BFO_0000127> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000218> .    # InverseObjectProperties [7db88e1a]
+<http://purl.obolibrary.org/obo/BFO_0000140> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [361bc959]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000140> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [5e1ab2fa]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000142> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [91a5a328]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000146> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [883c7c09]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000147> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [570cc990]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000148> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [8bcd0a94]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000153> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [986bb802]
+<http://purl.obolibrary.org/obo/BFO_0000176> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000178> .    # InverseObjectProperties [daa5ff1b]
+<http://purl.obolibrary.org/obo/BFO_0000183> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [8d175764]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000183> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [1bb2958c]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000184> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [5f41a8f8]
+<http://purl.obolibrary.org/obo/BFO_0000184> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#InverseFunctionalProperty> .    # InverseFunctionalObjectProperty [d3ab7c57]
+<http://purl.obolibrary.org/obo/BFO_0000184> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000185> .    # InverseObjectProperties [49c2deef]
+<http://purl.obolibrary.org/obo/BFO_0000194> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf + ObjectUnionOf [0814b7ee]  (+14 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000194> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000195> .    # InverseObjectProperties [d2fd5cd1]
+<http://purl.obolibrary.org/obo/BFO_0000195> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf + ObjectUnionOf [66f9df9c]  (+14 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000196> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000197> .    # InverseObjectProperties [854c7f3d]
+<http://purl.obolibrary.org/obo/BFO_0000199> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [13d29316]
+<http://purl.obolibrary.org/obo/BFO_0000199> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [d13e7744]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000200> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [ac87db93]
+<http://purl.obolibrary.org/obo/BFO_0000200> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [2d367001]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000221> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000222> .    # InverseObjectProperties [953b35ad]
+<http://purl.obolibrary.org/obo/BFO_0000222> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [6d269570]
+<http://purl.obolibrary.org/obo/BFO_0000223> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000224> .    # InverseObjectProperties [edbb09f8]
+<http://purl.obolibrary.org/obo/BFO_0000224> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [aaeea414]

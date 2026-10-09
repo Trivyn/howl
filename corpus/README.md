@@ -60,20 +60,25 @@ out-of-profile because the literal test ran before the header test.
 
 ## Measured fitness
 
-Every real ontology needs projection; none is clean as shipped.
+Under `el` every real ontology but EL-GALEN needs a projection. Under `sriq` (SPEC §5.5),
+BFO-core, CCO and GO need none. The figures are the census's, in MANIFEST.toml (`el`) and in
+corpus/projections/sriq/ (`sriq`, as axioms removed).
 
-| Ontology | logical axioms | in v0 | out-of-profile | |
-|---|---:|---:|---:|---|
-| **GO** | 117,791 | 117,790 | **1** | one `owl:inverseOf` — the benchmark target |
-| **OBI** | 26,813 | 26,403 | 410 (1.5%) | primary differential entry |
-| CCO | 2,939 | 2,697 | 242 (8.2%) | 127 inverses — the M5 gap, measured |
-| RO | 1,983 | 1,465 | 518 (26.1%) | the RBox exercise; 25 SWRL rules |
-| BFO-core | 266 | 176 | 90 (33.8%) | poor v0 fit; belongs to M5 |
+| Ontology | logical axioms | in `el` | out under `el` | out under `sriq` | |
+|---|---:|---:|---:|---:|---|
+| **GO** | 117,791 | 117,790 | **1** | 0 | one `owl:inverseOf`: the benchmark target |
+| **OBI** | 26,811 | 26,399 | 412 (1.5%) | 163 | primary differential entry; under `sriq`, class nominals and used data |
+| EL-GALEN | 81,513 | 81,513 | 0 | 0 | plain EL; the second benchmark |
+| CCO | 2,928 | 2,710 | 218 (7.4%) | **0** | 127 inverses: the M5 gap, measured |
+| RO | 1,978 | 1,417 | 561 (28.4%) | 50 | the RBox exercise; 25 SWRL rules, which stay out under `sriq` |
+| BFO-core | 271 | 190 | 81 (29.9%) | **0** | poor `el` fit; an M5 ontology |
 
-Two things worth knowing before choosing an entry. **BFO is the worst fit despite
-being foundational** — projecting it would gut it, so it is an M5 ontology, not a
-v0 one. And **RO is where the RBox lives**: 160 property chains and 45 transitive
-properties, against CR6/CR7 having no fixtures of their own.
+Two things are worth knowing before choosing an entry.
+- **BFO is the worst `el` fit despite being foundational.** Projecting it guts it, so it is an M5
+  ontology, and `sriq` takes all of it.
+- **RO is where the RBox lives:** 160 property chains and 45 transitive properties. CR6 and CR7
+  have no fixtures of their own. Under `sriq`, its `part_of`/`has_part`, both transitive and
+  inverse to each other, is regular only after the collapse of role-equivalence classes.
 
 ## Usage
 

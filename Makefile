@@ -320,7 +320,7 @@ corpus-acceptance: cli
 	check ro-2025-12-17 ro 2; \
 	check obi-2026-07-27 obi 2; \
 	check go-2026-07-26 go 2; \
-	check el-galen-2011-04-12 el-galen 0; \
+	check el-galen-2011-04-12 el-galen 0; 	check bfo-core-2024-02-07 bfo-core 2; 	check cco-2024-11-06 cco 2; \
 	projected() { f=corpus/vendor/$$1.v0.ttl; \
 	          if [ ! -f "$$f" ]; then echo "  MISSING $$f (run make materialize)"; fail=1; return; fi; \
 	          rep=$$(./$(BIN)/howl validate $$f --report 2>/dev/null); rc=$$?; \
@@ -330,7 +330,7 @@ corpus-acceptance: cli
 	projected ro-2025-12-17 0; \
 	projected obi-2026-07-27 0; \
 	projected go-2026-07-26 0; \
-	projected el-galen-2011-04-12 0; \
+	projected el-galen-2011-04-12 0; 	projected bfo-core-2024-02-07 0; 	projected cco-2024-11-06 0; \
 	if [ "$$fail" -eq 0 ]; then echo "  real-corpus acceptance met"; \
 	else echo "  CORPUS ACCEPTANCE FAILED"; exit 1; fi
 
@@ -354,7 +354,7 @@ GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*
 # correctness is the engine-vs-reference differential (make test) and the
 # oracle differential; these pin that nothing changes unnoticed.
 GOLDEN_ELPP_FIXTURES := $(wildcard corpus/fixtures/el++/*.ttl corpus/fixtures/v0/*.ttl corpus/fixtures/data/*.ttl)
-GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
+GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12 bfo-core-2024-02-07 cco-2024-11-06
 # IMPORT RUNS, `howl validate DOC.ttl -I IMPORT.ttl --report`, one per
 # DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
 # an attested import - its blank nodes standardized apart from the root's -
@@ -363,7 +363,7 @@ GOLDEN_IMPORTS  := root:imported
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
-GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
+GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12 bfo-core-2024-02-07 cco-2024-11-06
 # Override to capture from a different build, e.g. the pre-change binary.
 HOWL ?= ./$(BIN)/howl
 
@@ -557,11 +557,13 @@ census:
 project: corpus
 	python3 corpus/project.py
 	python3 corpus/project.py --profile el++
+	python3 corpus/project.py --profile sriq
 
 project-verify:
 	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --verify
 	python3 corpus/project.py --profile el++ --verify
+	python3 corpus/project.py --profile sriq --verify
 
 # THE PROJECTED ONTOLOGIES ITSELF, as Turtle under corpus/vendor/ (not
 # committed): the one input HOWL and the oracles share in the corpus

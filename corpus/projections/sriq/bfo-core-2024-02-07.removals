@@ -1,0 +1,26 @@
+# HOWL sriq projection — REMOVAL LIST
+#
+# projected theory == pinned source MINUS the axioms below.
+#
+# source                  bfo-core-2024-02-07.ttl
+# source_sha256           128f5fe1dab7ee804a3037a836813e5953c846eeeefee883a47d5db0b37a106b
+# source_triples          1,014
+# axioms_removed          0
+# triples_removed         0
+# in_v0_swept_in          0
+# projected_triples       1,014
+# projected_ground_sha256 c68afa28a98504045b54d58716e178c9b29f064e0331387d134039513c6de417
+# projected_bnode_triples 433
+# projected_bnode_sha256  4739ff261052e8b4ec917d8234a1bf284b735ab6bac6fa8763d95898b6e31ac6
+#
+# The ground hash covers every triple with no blank node on either
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
+#
+# Anchors are named subjects; blank nodes print as _:_ because parser
+# -assigned labels differ run to run and would churn the file.
+#
+
+
