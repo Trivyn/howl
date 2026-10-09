@@ -6,6 +6,8 @@
 ;;   el          ELH⊥R+ + domain/range + ABox (§5.2)    PTIME     implemented
 ;;   el++        the OWL 2 EL object fragment (§5.4)     PTIME     implemented
 ;;   sriq        the SRIQ object fragment + ABox (§5.5)  2ExpTime  specified
+;;               (2ExpTime without an ABox; with one, §5.5 cites only a
+;;               triple-exponential bound in the chain-eliminated ontology)
 ;; el ⊂ el++ and el ⊂ sriq; el++ and sriq are incomparable (nominals
 ;; against inverses, unions and counting). The declaration order of
 ;; `Profile` is the fixed tie-break order.

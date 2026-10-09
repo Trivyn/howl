@@ -132,7 +132,7 @@ impl Verdict {
 /// |---|---|---|---|
 /// | [`El`](Profile::El) | ELH⊥R+ + domain/range + ABox | PTIME | yes |
 /// | [`ElPlusPlus`](Profile::ElPlusPlus) | the OWL 2 EL object fragment | PTIME | yes |
-/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment with ABox (SPEC §5.5) | 2ExpTime | not yet |
+/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment with ABox (SPEC §5.5) | 2ExpTime without an ABox; with one, a triple-exponential bound | not yet |
 ///
 /// Asking for an unbuilt rung is [`Fault::ProfileUnavailable`].
 /// [`HornSriq`](Profile::HornSriq) was dropped from the ladder (SPEC §5);

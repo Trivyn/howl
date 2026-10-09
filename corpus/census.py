@@ -14,12 +14,14 @@ Deliberately an INDEPENDENT implementation, not a wrapper over HOWL's own gate:
 if the projection guaranteeing "empty coverage.omitted" were produced by the very
 gate under test, the acceptance criterion would be self-certifying.
 """
+import os
 import sys
 from collections import Counter
 from rdflib import Graph, RDF, RDFS, OWL, BNode, URIRef, Literal, Namespace
 from rdflib.collection import Collection
 
-import profiles
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 
 SWRL = Namespace("http://www.w3.org/2003/11/swrl#")
 

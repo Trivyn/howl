@@ -29,10 +29,12 @@ Checked in order, and each reported under its own category:
 
 Exit 0 clean, 1 on any mismatch, 3 on malformed or refused input.
 """
+import os
 import sys
 from collections import defaultdict
 
-import profiles
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 
 NOTHING = "http://www.w3.org/2002/07/owl#Nothing"
 SHOWN = 50
