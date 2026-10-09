@@ -37,6 +37,7 @@
   (import ttl (parse-ttl-file parse-ttl-string))
   (import sroiq (SConcept SAxiom render-saxiom box-sc))
   (import sriqnormal (S0 sriq-s0 sriq-s1 S2 sriq-s2 render-dl))
+  (import sriqnames (SriqNormal sriq-normalize sriq-names render-sriq-normal sriq-invariants))
   (import file (file-open file-close file-read-all))
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
@@ -2544,6 +2545,274 @@
           (println (string-concat arena "  [s2] " label))
           (print got)
           false))))
+
+  ;; ------------------------------------------------------------
+  ;; 5d: ids from content (§5.5 S5). S2 mints names in first-occurrence
+  ;; order; S5 renumbers every one by what it names. So reordering the
+  ;; input anywhere — its triples, the gate's accepted list, or S2's own
+  ;; input — must change no byte of the output, and the output must keep
+  ;; S5's promises (sriq-invariants). Tracked fixtures only: `make test`
+  ;; is what CI runs, and corpus/vendor/ is fetched locally (corpus/fetch.sh).
+  ;; A fixture with a complex RIA has it set aside, since S1 (slice 6)
+  ;; would refuse it.
+  ;; ------------------------------------------------------------
+
+  (fn sriq-fixtures ((arena Arena))
+    (@intent "Tracked fixtures that between them mint every id kind S5 renumbers")
+    (@spec ((Arena) -> (List String)))
+    (@alloc arena)
+    ;; A_E, P̄ and function symbols are everywhere; role-hierarchy-deep has
+    ;; the most of each (21, 6, 9). S_{B₂} comes only from the two
+    ;; out-of-profile cardinality fixtures.
+    (let ((mut ps (list-new arena String)))
+      (do
+        (list-push ps "corpus/fixtures/v0/litmus.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-domain-range.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/inverse-expressions.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/property-characteristics.ttl")
+        (list-push ps "corpus/fixtures/out-of-profile/cardinality.ttl")
+        (list-push ps "corpus/fixtures/hazards/range-complex-fillers.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-disjoint-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-complex-range.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-nary-chain.ttl")
+        (list-push ps "corpus/fixtures/hazards/smaller-side-join.ttl")
+        (list-push ps "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
+        (list-push ps "corpus/fixtures/el++/ksc-22.ttl")
+        (list-push ps "corpus/fixtures/el++/ksc-28.ttl")
+        ps)))
+
+  (fn gate-triples-in ((arena Arena) (ts (List Triple)) (p Profile))
+    (@intent "Stage 0, decode and gate a triple list under a rung")
+    (@spec ((Arena (List Triple) Profile) -> (Option GateResult)))
+    (@alloc arena)
+    (match (stage0-header arena ts (list-new arena IRI))
+      ((error _) (none))
+      ((ok s0)
+        (match (decode-axioms arena (. s0 dict) (. s0 triples))
+          ((error _) (none))
+          ((ok s1) (some (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions) p)))))))
+
+  (fn reversed-raw ((arena Arena) (xs (List RawAxiom)))
+    (@intent "The same axioms, last first")
+    (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RawAxiom))
+          (mut k (- (cast Int (list-len xs)) 1)))
+      (do
+        (while (>= k 0)
+          (do (match (list-get xs k) ((some x) (list-push out x)) ((none) (do))) (set! k (- k 1))))
+        out)))
+
+  (fn reversed-saxioms ((arena Arena) (xs (List SAxiom)))
+    (@intent "The same axioms, last first")
+    (@spec ((Arena (List SAxiom)) -> (List SAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SAxiom))
+          (mut k (- (cast Int (list-len xs)) 1)))
+      (do
+        (while (>= k 0)
+          (do (match (list-get xs k) ((some x) (list-push out x)) ((none) (do))) (set! k (- k 1))))
+        out)))
+
+  (fn simple-rias-only ((arena Arena) (axs (List SAxiom)))
+    (@intent "S0's output with its complex RIAs set aside, for the corpus until S1 exists")
+    (@spec ((Arena (List SAxiom)) -> (List SAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SAxiom)))
+      (do
+        (for-each (a axs)
+          (match a
+            ((sa-ria x) (when (== (list-len (. x word)) 1) (list-push out a)))
+            (_ (list-push out a))))
+        out)))
+
+  (fn s2-to-names ((arena Arena) (axs (List SAxiom)) (flip Bool) (sig Signature))
+    (@intent "S2 then S5, S2's input reversed on request")
+    (@spec ((Arena (List SAxiom) Bool Signature) -> (Result SriqNormal String)))
+    (@alloc arena)
+    (match (sriq-s2 arena (if flip (reversed-saxioms arena axs) axs))
+      ((error m) (error m))
+      ((ok s2)   (ok (sriq-names arena s2 sig)))))
+
+  (fn sriq-nf ((arena Arena) (gr GateResult) (flip-accepted Bool) (flip-s2 Bool))
+    (@intent "A gated document's sriq normal form, its inputs reordered on request, complex RIAs set aside if S1 refuses")
+    (@spec ((Arena GateResult Bool Bool) -> (Result SriqNormal String)))
+    (@alloc arena)
+    (match (sriq-s0 arena (if flip-accepted (reversed-raw arena (. gr accepted)) (. gr accepted)))
+      ((error m) (error m))
+      ((ok s0)
+        (match (sriq-s1 arena s0)
+          ((error _) (s2-to-names arena (simple-rias-only arena (. s0 axioms)) flip-s2 (. gr signature)))
+          ((ok axs)  (s2-to-names arena axs flip-s2 (. gr signature)))))))
+
+  (fn nf-lines ((arena Arena) (r (Result SriqNormal String)))
+    (@intent "The rendered output, or the refusal as its one line")
+    (@spec ((Arena (Result SriqNormal String)) -> (List String)))
+    (@alloc arena)
+    (match r
+      ((ok n) (render-sriq-normal arena n))
+      ((error m) (let ((mut ls (list-new arena String))) (do (list-push ls (string-concat arena "error: " m)) ls)))))
+
+  (fn nf-invariants-hold ((arena Arena) (path String) (r (Result SriqNormal String)))
+    (@intent "Does the output keep S5's promises? Prints each failure")
+    (@spec ((Arena String (Result SriqNormal String)) -> Bool))
+    (@alloc arena)
+    (match r
+      ((error m) (do (print "  [s5] refused: ") (print path) (print " ") (println m) false))
+      ((ok n)
+        (let ((bad (sriq-invariants arena n)))
+          (if (== (list-len bad) 0)
+            true
+            (do (print "  [s5] ") (println path)
+                (for-each (b bad) (do (print "    ") (println b)))
+                false))))))
+
+  (fn sriq-order-independent ((arena Arena) (path String))
+    (@intent "One document: triples reversed, accepted reversed and S2's input reversed all give the same bytes")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) (do (print "  [s5] did not parse: ") (println path) false))
+      ((ok g)
+        (match (gate-triples-in arena (. g triples) 'profile-sriq)
+          ((none) (do (print "  [s5] did not gate: ") (println path) false))
+          ((some fwd)
+            (match (gate-triples-in arena (reversed-triples arena (. g triples)) 'profile-sriq)
+              ((none) false)
+              ((some rev)
+                (let ((n0 (sriq-nf arena fwd false false))
+                      (l0 (nf-lines arena n0))
+                      (l1 (nf-lines arena (sriq-nf arena rev false false)))
+                      (l2 (nf-lines arena (sriq-nf arena fwd true false)))
+                      (l3 (nf-lines arena (sriq-nf arena fwd false true)))
+                      (mut ok (nf-invariants-hold arena path n0)))
+                  (do
+                    (when (not (same-lines l0 l1)) (do (print "  [s5] triples reversed differ: ") (println path) (set! ok false)))
+                    (when (not (same-lines l0 l2)) (do (print "  [s5] accepted reversed differs: ") (println path) (set! ok false)))
+                    (when (not (same-lines l0 l3)) (do (print "  [s5] S2's input reversed differs: ") (println path) (set! ok false)))
+                    ok)))))))))
+
+  (fn test-sriq-ids-row ((arena Arena))
+    (@intent "One document's whole S5 output, hand-checked: ids follow content, not S2's mint order")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (gate-ttl-in arena (string-concat arena (s0-prefix)
+             ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :s ] ; owl:someValuesFrom :B ] .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :C ] .\n:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass [ owl:unionOf ( :A :C ) ] ] .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:minQualifiedCardinality 2 ; owl:onClass :B ] .")
+             'profile-sriq)
+      ((none) false)
+      ((some gr)
+        (let ((want "DL1|| A0 A1\nDL1| urn:x:A| A3\nDL1| urn:x:A| A4\nDL1| urn:x:A A0|\nDL1| urn:x:B| A5\nDL1| urn:x:C| A2\nDL1| urn:x:C A0|\nDL2|A2|urn:x:s^bar|1|urn:x:B| f0\nDL2|A4|urn:x:t|2|urn:x:B| f1 f2\nDL3|urn:x:r^bar|A3|urn:x:C\nDL4|A5|urn:x:r|1|A1|S0\nDL8|urn:x:r|urn:x:r^bar\nDL8|urn:x:s|urn:x:s^bar\nDL8|urn:x:r^bar|urn:x:r\nDL8|urn:x:s^bar|urn:x:s\nA0 = (¬urn:x:A ⊓ ¬urn:x:C)\nA1 = (urn:x:A ⊔ urn:x:C)\nA2 = ∃urn:x:s⁻.urn:x:B\nA3 = ∀urn:x:r.urn:x:C\nA4 = ≥2 urn:x:t.urn:x:B\nA5 = ≤1 urn:x:r.(urn:x:A ⊔ urn:x:C)\nS0 = urn:x:r A1\nbar urn:x:r\nbar urn:x:s\nfns 3\nclass urn:x:A\nclass urn:x:B\nclass urn:x:C\nindividual urn:x:a\nindividual urn:x:b\n")
+              (mut got ""))
+          (do
+            (for-each (l (nf-lines arena (sriq-normalize arena (. gr accepted) (. gr signature))))
+              (set! got (string-concat arena got (string-concat arena l "\n"))))
+            (if (string-eq got want)
+              true
+              (do (println "  [s5] ids row, got:") (print got) false)))))))
+
+  (fn test-sriq-one-clause-from-two-axioms ((arena Arena))
+    (@intent "Two axioms with the same clause between them give it once")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The collapse makes t ⊑ u, with t = r⁻ and u = s⁻, into r⁻ ⊑ s⁻:
+    ;; distinct from r ⊑ s to S0, and the same DL7 r ⊑ s to S2. The
+    ;; corpus does this (BFO-core's DL7/DL8 duplicates); S5's dedupe is
+    ;; what keeps the clause list a set.
+    (match (gate-ttl-in arena (string-concat arena (s0-prefix)
+             ":u a owl:ObjectProperty .\n:r rdfs:subPropertyOf :s .\n:t owl:inverseOf :r .\n:u owl:inverseOf :s .\n:t rdfs:subPropertyOf :u .")
+             'profile-sriq)
+      ((none) false)
+      ((some gr)
+        (let ((want "DL7|urn:x:r|urn:x:s\nfns 0\nclass urn:x:A\nclass urn:x:B\nclass urn:x:C\nindividual urn:x:a\nindividual urn:x:b\n")
+              (mut got ""))
+          (do
+            (for-each (l (nf-lines arena (sriq-normalize arena (. gr accepted) (. gr signature))))
+              (set! got (string-concat arena got (string-concat arena l "\n"))))
+            (if (string-eq got want)
+              true
+              (do (println "  [s5] one clause from two axioms, got:") (print got) false)))))))
+
+  (fn test-sriq-ids-from-content ((arena Arena))
+    (@intent "§5.5 S5 / §6.8: the sriq normal form is order-independent, and its ids dense and in key order")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (for-each (p (sriq-fixtures arena)) (when (not (sriq-order-independent arena p)) (set! ok false)))
+        ok)))
+
+  (fn yields-nothing-by-design ((a RawAxiom))
+    (@intent "Axioms with no clause of their own: no logical content, or absorbed into S0's collapse")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (match a
+      ((ra-declaration _)           true)
+      ((ra-annotation)              true)
+      ((ra-inert-data)              true)
+      ((ra-equivalent-properties _) true)
+      ((ra-inverse-properties _ _)  true)
+      (_                            false)))
+
+  (fn one-raw ((arena Arena) (a RawAxiom))
+    (@intent "[a]")
+    (@spec ((Arena RawAxiom) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut xs (list-new arena RawAxiom))) (do (list-push xs a) xs)))
+
+  (fn print-alone ((arena Arena) (a RawAxiom))
+    (@intent "An axiom that gave no clauses, as S0 reads it")
+    (@spec ((Arena RawAxiom) -> Bool))
+    (@alloc arena)
+    (do
+      (print "  [s5] no clauses from ")
+      (match (sriq-s0 arena (one-raw arena a))
+        ((ok s0)   (print (render-saxioms arena (. s0 axioms))))
+        ((error _) (println "?")))
+      true))
+
+  (fn yield-kind ((arena Arena) (a RawAxiom) (sig Signature))
+    (@intent "One axiom normalised alone: 0 it yields as it should, 1 a chain awaiting S1, 2 a fault (printed)")
+    (@spec ((Arena RawAxiom Signature) -> Int))
+    (@alloc arena)
+    (match (sriq-normalize arena (one-raw arena a) sig)
+      ((error m)
+        (if (starts-with m "complex role inclusions")
+          1
+          (do (print "  [s5] refused alone: ") (println m) 2)))
+      ((ok n)
+        (if (and (== (list-len (. n clauses)) 0) (not (yields-nothing-by-design a)))
+          (do (print-alone arena a) 2)
+          0))))
+
+  (fn every-axiom-yields ((arena Arena) (path String))
+    (@intent "Each accepted axiom, normalised alone, gives clauses or is one that yields nothing by design")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (gate-fixture-in arena path 'profile-sriq)
+      ((none) (do (print "  [s5] did not gate: ") (println path) false))
+      ((some gr)
+        (let ((mut ok true)
+              (mut chains 0))
+          (do
+            (for-each (a (. gr accepted))
+              (let ((k (yield-kind arena a (. gr signature))))
+                (do (when (== k 1) (set! chains (+ chains 1)))
+                    (when (== k 2) (set! ok false)))))
+            (print "  [s5] ") (print path) (print ": ")
+            (print (int-to-string arena (cast Int (list-len (. gr accepted))))) (print " accepted, ")
+            (print (int-to-string arena chains)) (println " awaiting S1")
+            ok)))))
+
+  (fn test-sriq-every-axiom-yields ((arena Arena))
+    (@intent "No accepted axiom is silently lost by the normaliser")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (mut ps (list-new arena String)))
+      (do
+        (for-each (p (sriq-fixtures arena)) (when (not (every-axiom-yields arena p)) (set! ok false)))
+        ok)))
 
   (fn test-sriq-s2-refuses-a-count-past-the-bound ((arena Arena))
     (@intent "S2 refuses a number restriction above the gate's bound, which its NNF could not keep exact")
@@ -6125,6 +6394,22 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-data-lemma arena)))
             (print-test-result "§5.2: data axioms on idle data properties are inert in both rungs" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ids-row arena)))
+            (print-test-result "5d: one document's ids, hand-checked" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-one-clause-from-two-axioms arena)))
+            (print-test-result "5d: one clause from two axioms, once" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ids-from-content arena)))
+            (print-test-result "5d: sriq's ids from content, order-independent" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-every-axiom-yields arena)))
+            (print-test-result "5d: every accepted axiom yields clauses" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-s2-refuses-a-count-past-the-bound arena)))
