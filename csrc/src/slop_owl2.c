@@ -1,7 +1,6 @@
 #include "../runtime/slop_runtime.h"
 #include "slop_owl2.h"
 
-#define owl2_SRIQ_MAX_COUNT (16)
 
 owl2_Disposition owl2_disposition(types_Profile p, owl2_RawAxiom ax);
 owl2_Signature owl2_make_signature(slop_arena* arena);

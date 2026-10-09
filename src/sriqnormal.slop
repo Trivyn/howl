@@ -22,15 +22,17 @@
 
   (import rdf (IRI))
   (import vocab (OWL_BOTTOM_OBJECT_PROPERTY))
-  (import types (RoleId Node))
+  (import types (RoleId Node DName DRole Dl1 Dl2 Dl4 DlClause))
   (import owl2 (RawAxiom RawConcept RawChain RawEdge RawClassAssertion RawDisjointUnion
-                PropCharacteristic CardKind))
+                PropCharacteristic CardKind SRIQ_MAX_COUNT))
   (import canon (iri-cmp string-cmp sort-range))
   (import sroiq (SConcept SAxiom SRia sc-canon sc-cmp sort-saxioms dedupe-saxioms inv-role box-sc
-                 render-saxiom))
+                 render-saxiom render-sconcept sc-key))
+  (import naming (Registry new-registry fresh-id fresh-role-id mark-neg mark-pos
+                  neg-defined pos-defined))
   (import sriqrbox (SriqRbox sriq-rbox sriq-node node-role))
 
-  (export S0 sriq-s0 sriq-s1)
+  (export S0 sriq-s0 sriq-s1 S2 sriq-s2 render-dl)
 
   ;; S0's output, with the RBox analysis S1 will need.
   (type S0 (record
@@ -694,4 +696,628 @@
             (error (string-concat arena
                      "complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: "
                      (render-saxiom arena a))))))))
+
+  ;; ============================================================
+  ;; S2 — the normal form (§5.5 S2, [TGH21] Table 1)
+  ;;
+  ;; Every GCI C ⊑ D becomes ⊤ ⊑ NNF(¬C ⊔ D); a top-level ⊓ is split
+  ;; (choice 3); each disjunct that is not a name or a negated name gets a
+  ;; fresh name A_E placed BELOW it (pos-name), and a filler whose
+  ;; occurrence is negative a name placed ABOVE it (neg-name). One name per
+  ;; concept, by its injective content key, whatever the polarity
+  ;; (choice 5): the registry's bits record which definitions are emitted.
+  ;; The shapes are then read off into DL1–DL11.
+  ;;
+  ;; The state is threaded by pointer, as kscnormal's is: a helper that
+  ;; pushed into a passed-in list would grow its own copy and lose it.
+  ;; ============================================================
+
+  (type S2State (record
+    (out      (List DlClause))
+    (registry (Ptr Registry))
+    (concepts (List SConcept))         ; A_E's concept, by fresh id
+    (sroles   (List DRole))            ; S_{B₂}'s S, by id
+    (sfills   (List (Option DName)))   ; S_{B₂}'s B₂ (none: ⊤), by id
+    (bars     (List IRI))              ; the properties whose P̄ is used, first-use order
+    (barset   (Set String))
+    (fnkeys   (List String))           ; a function symbol's key, by id
+    (fnindex  (Map String (Int 0 ..)))))
+
+  ;; S2's output: the clauses, and what S5's ids from content read.
+  (type S2 (record
+    (clauses  (List DlClause))
+    (concepts (List SConcept))
+    (sroles   (List DRole))
+    (sfills   (List (Option DName)))
+    (bars     (List IRI))
+    (fnkeys   (List String))))
+
+  (fn new-s2 ((arena Arena))
+    (@intent "An empty S2 state")
+    (@spec ((Arena) -> (Ptr S2State)))
+    (@alloc arena)
+    (let ((p (cast (Ptr S2State) (arena-alloc arena (sizeof S2State)))))
+      (do
+        (set! (deref p) (record-new S2State
+                          (out      (list-new arena DlClause))
+                          (registry (new-registry arena))
+                          (concepts (list-new arena SConcept))
+                          (sroles   (list-new arena DRole))
+                          (sfills   (list-new arena (Option DName)))
+                          (bars     (list-new arena IRI))
+                          (barset   (set-new arena String))
+                          (fnkeys   (list-new arena String))
+                          (fnindex  (map-new arena String (Int 0 ..)))))
+        p)))
+
+  (fn emit ((arena Arena) (p (Ptr S2State)) (c DlClause))
+    (@intent "Append one clause")
+    (@spec ((Arena (Ptr S2State) DlClause) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s out) c) (set! (deref p) s) true)))
+
+  (fn fresh-name ((arena Arena) (p (Ptr S2State)) (c SConcept))
+    (@intent "A_E's registry id for a concept, minting on first use")
+    (@spec ((Arena (Ptr S2State) SConcept) -> (Int 0 ..)))
+    (@alloc arena)
+    (let ((id (fresh-id arena (. (deref p) registry) (sc-key arena c))))
+      (do
+        (when (== (cast Int id) (cast Int (list-len (. (deref p) concepts))))
+          (let ((mut s (deref p)))
+            (do (list-push (. s concepts) c) (set! (deref p) s))))
+        id)))
+
+  (fn concept-of ((p (Ptr S2State)) (k (Int 0 ..)))
+    (@intent "The concept A_k names")
+    (@spec (((Ptr S2State) (Int 0 ..)) -> SConcept))
+    (match (list-get (. (deref p) concepts) k)
+      ((some c) c)
+      ((none)   (union-new SConcept sc-top))))
+
+  (fn role-name ((arena Arena) (p (Ptr S2State)) (r RoleId))
+    (@intent "A role as a Table 1 role name: P, or P̄ for P⁻ (noted as used)")
+    (@spec ((Arena (Ptr S2State) RoleId) -> DRole))
+    (@alloc arena)
+    (match r
+      ((named-role i) (union-new DRole dr-prop i))
+      ((inverse-role i)
+        (do
+          (when (not (set-has (. (deref p) barset) (. i value)))
+            (let ((mut s (deref p)))
+              (do (set-put (. s barset) (. i value)) (list-push (. s bars) i) (set! (deref p) s))))
+          (union-new DRole dr-bar i)))
+      ;; Unreachable: S0 and S1 mint no fresh role.
+      ((fresh-role k) (union-new DRole dr-sub k))))
+
+  (fn dname-key ((arena Arena) (p (Ptr S2State)) (n DName))
+    (@intent "A class name's content key")
+    (@spec ((Arena (Ptr S2State) DName) -> String))
+    (@alloc arena)
+    (match n
+      ((dn-class i) (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((dn-fresh k) (string-concat arena "[" (string-concat arena (sc-key arena (concept-of p k)) "]")))))
+
+  (fn filler-key ((arena Arena) (p (Ptr S2State)) (b (Option DName)))
+    (@intent "A filler's content key, T for ⊤")
+    (@spec ((Arena (Ptr S2State) (Option DName)) -> String))
+    (@alloc arena)
+    (match b ((some n) (dname-key arena p n)) ((none) "T")))
+
+  (fn drole-key ((arena Arena) (p (Ptr S2State)) (r DRole))
+    (@intent "A role name's content key")
+    (@spec ((Arena (Ptr S2State) DRole) -> String))
+    (@alloc arena)
+    (match r
+      ((dr-prop i) (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((dr-bar i)  (string-concat arena "<" (string-concat arena (. i value) ">bar")))
+      ((dr-sub k)
+        (srole-key arena p (match (list-get (. (deref p) sroles) k) ((some x) x) ((none) r))
+                           (match (list-get (. (deref p) sfills) k) ((some x) x) ((none) (none)))))))
+
+  (fn key-of ((arena Arena) (tag String) (parts (List String)))
+    (@intent "A content key: tag(p₁,…,pₙ)")
+    (@spec ((Arena String (List String)) -> String))
+    (@alloc arena)
+    (let ((mut out (string-concat arena tag "("))
+          (mut first true))
+      (do
+        (for-each (x parts)
+          (do (when (not first) (set! out (string-concat arena out ",")))
+              (set! out (string-concat arena out x))
+              (set! first false)))
+        (string-concat arena out ")"))))
+
+  (fn srole-key ((arena Arena) (p (Ptr S2State)) (s DRole) (b (Option DName)))
+    (@intent "S_{B₂}'s content key: S(S,B₂)")
+    (@spec ((Arena (Ptr S2State) DRole (Option DName)) -> String))
+    (@alloc arena)
+    (let ((mut parts (list-new arena String)))
+      (do (list-push parts (drole-key arena p s))
+          (list-push parts (filler-key arena p b))
+          (key-of arena "S" parts))))
+
+  (fn srole-of ((arena Arena) (p (Ptr S2State)) (s DRole) (b (Option DName)))
+    (@intent "DL4's fresh S_{B₂}, one per (S, B₂)")
+    (@spec ((Arena (Ptr S2State) DRole (Option DName)) -> DRole))
+    (@alloc arena)
+    (let ((id (fresh-role-id arena (. (deref p) registry) (srole-key arena p s b))))
+      (do
+        (when (== (cast Int id) (cast Int (list-len (. (deref p) sroles))))
+          (let ((mut st (deref p)))
+            (do (list-push (. st sroles) s) (list-push (. st sfills) b) (set! (deref p) st))))
+        (union-new DRole dr-sub id))))
+
+  (fn fn-id ((arena Arena) (p (Ptr S2State)) (key String))
+    (@intent "The function symbol for a key, minted on first use")
+    (@spec ((Arena (Ptr S2State) String) -> (Int 0 ..)))
+    (@alloc arena)
+    (match (map-get (. (deref p) fnindex) key)
+      ((some id) (cast (Int 0 ..) id))
+      ((none)
+        (let ((mut s (deref p))
+              (id (cast (Int 0 ..) (list-len (. (deref p) fnkeys)))))
+          (do
+            (list-push (. s fnkeys) key)
+            (map-put (. s fnindex) key id)
+            (set! (deref p) s)
+            id)))))
+
+  (fn fn-ids ((arena Arena) (p (Ptr S2State)) (axkey String) (n Int))
+    (@intent "A DL2 axiom's n function symbols, keyed by the axiom and the position (S5)")
+    (@spec ((Arena (Ptr S2State) String Int) -> (List (Int 0 ..))))
+    (@alloc arena)
+    (let ((mut out (list-new arena (Int 0 ..)))
+          (mut i 1))
+      (do
+        (while (<= i n)
+          (do
+            (list-push out (fn-id arena p (string-concat arena axkey (string-concat arena "|" (int-to-string arena i)))))
+            (set! i (+ i 1))))
+        out)))
+
+  ;; ------------------------------------------------------------
+  ;; NNF
+  ;; ------------------------------------------------------------
+
+  (fn nnf-list ((arena Arena) (xs (List SConcept)) (pos Bool))
+    (@intent "nnf over a list")
+    (@spec ((Arena (List SConcept) Bool) -> (List SConcept)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SConcept)))
+      (do (for-each (x xs) (list-push out (nnf arena x pos))) out)))
+
+  (fn nnf ((arena Arena) (c SConcept) (pos Bool))
+    (@intent "The negation normal form of c (pos) or of ¬c: negation on a name, a nominal or Self only")
+    (@spec ((Arena SConcept Bool) -> SConcept))
+    (@alloc arena)
+    (if pos
+      (match c
+        ((sc-top)           c)
+        ((sc-bottom)        c)
+        ((sc-name _)        c)
+        ((sc-nominal _)     c)
+        ((sc-self _)        c)
+        ((sc-not f)         (nnf arena (deref f) false))
+        ((sc-and xs)        (union-new SConcept sc-and (nnf-list arena xs true)))
+        ((sc-or xs)         (union-new SConcept sc-or (nnf-list arena xs true)))
+        ((sc-some r f)      (union-new SConcept sc-some r (sc arena (nnf arena (deref f) true))))
+        ((sc-all r f)       (union-new SConcept sc-all r (sc arena (nnf arena (deref f) true))))
+        ((sc-atleast n r f) (union-new SConcept sc-atleast n r (sc arena (nnf arena (deref f) true))))
+        ((sc-atmost n r f)  (union-new SConcept sc-atmost n r (sc arena (nnf arena (deref f) true)))))
+      (match c
+        ((sc-top)           (union-new SConcept sc-bottom))
+        ((sc-bottom)        (union-new SConcept sc-top))
+        ((sc-name _)        (union-new SConcept sc-not (sc arena c)))
+        ((sc-nominal _)     (union-new SConcept sc-not (sc arena c)))
+        ((sc-self _)        (union-new SConcept sc-not (sc arena c)))
+        ((sc-not f)         (nnf arena (deref f) true))
+        ((sc-and xs)        (union-new SConcept sc-or (nnf-list arena xs false)))
+        ((sc-or xs)         (union-new SConcept sc-and (nnf-list arena xs false)))
+        ((sc-some r f)      (union-new SConcept sc-all r (sc arena (nnf arena (deref f) false))))
+        ((sc-all r f)       (union-new SConcept sc-some r (sc arena (nnf arena (deref f) false))))
+        ;; ¬≥n R.C is ≤(n−1) R.C, and ¬≥0 R.C is ⊥; ¬≤n R.C is ≥(n+1) R.C.
+        ((sc-atleast n r f)
+          (if (== n 0)
+            (union-new SConcept sc-bottom)
+            (union-new SConcept sc-atmost (cast (Int 0 ..) (- n 1)) r (sc arena (nnf arena (deref f) true)))))
+        ((sc-atmost n r f)
+          (union-new SConcept sc-atleast (cast (Int 0 ..) (+ n 1)) r (sc arena (nnf arena (deref f) true)))))))
+
+  ;; ------------------------------------------------------------
+  ;; Naming
+  ;; ------------------------------------------------------------
+
+  (fn pos-name ((arena Arena) (p (Ptr S2State)) (c SConcept))
+    (@intent "A name below c (A ⊑ c): c itself if a class name, none for ⊤")
+    (@spec ((Arena (Ptr S2State) SConcept) -> (Option DName)))
+    (@alloc arena)
+    (match c
+      ((sc-top)    (none))
+      ((sc-name i) (some (union-new DName dn-class i)))
+      (_
+        (let ((key (sc-key arena c))
+              (x (union-new DName dn-fresh (fresh-name arena p c))))
+          (do
+            (when (not (pos-defined (. (deref p) registry) key))
+              (do
+                (mark-pos arena (. (deref p) registry) key)
+                (define-pos arena p x c)))
+            (some x))))))
+
+  (fn neg-name ((arena Arena) (p (Ptr S2State)) (c SConcept))
+    (@intent "A name above c (c ⊑ X): c itself if a class name, none for ⊤")
+    (@spec ((Arena (Ptr S2State) SConcept) -> (Option DName)))
+    (@alloc arena)
+    ;; {o} is named through DL10 and ∃R.Self through DL6 (§5.5 S2); any
+    ;; other concept through the GCI c ⊑ X.
+    (match c
+      ((sc-top)    (none))
+      ((sc-name i) (some (union-new DName dn-class i)))
+      (_
+        (let ((key (sc-key arena c))
+              (x (union-new DName dn-fresh (fresh-name arena p c))))
+          (do
+            (when (not (neg-defined (. (deref p) registry) key))
+              (do
+                (mark-neg arena (. (deref p) registry) key)
+                (match c
+                  ((sc-nominal i) (emit arena p (union-new DlClause dl10 i x)))
+                  ((sc-self r)    (emit arena p (union-new DlClause dl6 (role-name arena p r) x)))
+                  (_
+                    ;; c ⊑ X is ⊤ ⊑ NNF(¬c) ⊔ X.
+                    (disjunction arena p (none) (some x) (sc-canon arena (nnf arena c false)))))))
+            (some x))))))
+
+  (fn neg-literal-name ((arena Arena) (p (Ptr S2State)) (lit SConcept))
+    (@intent "The body name for a negated literal ¬L: L itself for a name, else the name above L")
+    (@spec ((Arena (Ptr S2State) SConcept) -> (Option DName)))
+    (@alloc arena)
+    (neg-name arena p lit))
+
+  ;; ------------------------------------------------------------
+  ;; Reading off: DL1 from a disjunction
+  ;; ------------------------------------------------------------
+
+  (fn singleton-sc ((arena Arena) (c SConcept))
+    (@intent "[c]")
+    (@spec ((Arena SConcept) -> (List SConcept)))
+    (@alloc arena)
+    (let ((mut xs (list-new arena SConcept))) (do (list-push xs c) xs)))
+
+  (fn disjunction ((arena Arena) (p (Ptr S2State)) (lhs (Option DName)) (extra (Option DName)) (e SConcept))
+    (@intent "DL1 for lhs ⊑ e ⊔ extra: names and negated names in place, every other disjunct named")
+    (@spec ((Arena (Ptr S2State) (Option DName) (Option DName) SConcept) -> Bool))
+    (@alloc arena)
+    ;; e is canonical NNF; lhs is the body name (none: ⊤), extra a head
+    ;; name to add (neg-name's X). A ⊤ disjunct makes the clause a
+    ;; tautology, and nothing is emitted; a ⊥ disjunct is dropped.
+    (let ((ds (match e ((sc-or xs) xs) (_ (singleton-sc arena e))))
+          (mut body (list-new arena DName))
+          (mut head (list-new arena DName))
+          (mut taut false))
+      (do
+        (match lhs ((some x) (list-push body x)) ((none) (do)))
+        (match extra ((some x) (list-push head x)) ((none) (do)))
+        (for-each (d ds)
+          (match d
+            ((sc-top)    (set! taut true))
+            ((sc-bottom) (do))
+            ((sc-name i) (list-push head (union-new DName dn-class i)))
+            ;; A negated literal goes to the body: a name as it is, a
+            ;; nominal or Self through the name above it (DL10, DL6).
+            ((sc-not f)
+              (match (neg-literal-name arena p (deref f))
+                ((some n) (list-push body n))
+                ;; ¬⊤ is ⊥ in NNF, so never here; dropped like ⊥.
+                ((none)   (do))))
+            (_
+              (match (pos-name arena p d)
+                ((some n) (list-push head n))
+                ((none)   (set! taut true))))))
+        (when (not taut)
+          (emit arena p (union-new DlClause dl1 (record-new Dl1 (body body) (head head)))))
+        true)))
+
+  ;; ------------------------------------------------------------
+  ;; Reading off: what A_E ⊑ E says, by E's shape
+  ;; ------------------------------------------------------------
+
+  (fn define-pos ((arena Arena) (p (Ptr S2State)) (x DName) (e SConcept))
+    (@intent "The clauses for x ⊑ e, e canonical NNF (§5.5 S2's shape table)")
+    (@spec ((Arena (Ptr S2State) DName SConcept) -> Bool))
+    (@alloc arena)
+    (match e
+      ((sc-top)        true)
+      ((sc-name _)     (disjunction arena p (some x) (none) e))
+      ((sc-bottom)     (disjunction arena p (some x) (none) e))
+      ((sc-not _)      (disjunction arena p (some x) (none) e))
+      ((sc-or _)       (disjunction arena p (some x) (none) e))
+      ((sc-nominal i)  (emit arena p (union-new DlClause dl11 x i)))
+      ;; A ⊓ is split: x ⊑ Eᵢ for each conjunct (choice 3).
+      ((sc-and xs)
+        (do (for-each (c xs) (define-pos arena p x c)) true))
+      ((sc-some r f)       (define-dl2 arena p x r 1 (deref f)))
+      ((sc-atleast n r f)  (if (== n 0) true (define-dl2 arena p x r n (deref f))))
+      ;; ∀R.F is DL3 over inv(R): ∃R⁻.x ⊑ B_F.
+      ((sc-all r f)
+        (match (pos-name arena p (deref f))
+          ((none)   true)
+          ((some b) (emit arena p (union-new DlClause dl3 (role-name arena p (inv-role r)) x b)))))
+      ;; ≤n R.F: F's occurrence is negative, named through F ⊑ B.
+      ((sc-atmost n r f)
+        (let ((s (role-name arena p r))
+              (b (neg-name arena p (deref f))))
+          (emit arena p (union-new DlClause dl4
+                          (record-new Dl4 (sub x) (role s) (count n) (filler b)
+                                          (srole (srole-of arena p s b)))))))
+      ((sc-self r)     (emit arena p (union-new DlClause dl5 x (role-name arena p r))))))
+
+  (fn define-dl2 ((arena Arena) (p (Ptr S2State)) (x DName) (r RoleId) (n (Int 0 ..)) (f SConcept))
+    (@intent "DL2: x ⊑ ≥n R.F, with its n function symbols")
+    (@spec ((Arena (Ptr S2State) DName RoleId (Int 0 ..) SConcept) -> Bool))
+    (@alloc arena)
+    (let ((s (role-name arena p r))
+          (b (pos-name arena p f))
+          (mut parts (list-new arena String)))
+      (do
+        (list-push parts (dname-key arena p x))
+        (list-push parts (int-to-string arena n))
+        (list-push parts (drole-key arena p s))
+        (list-push parts (filler-key arena p b))
+        (emit arena p (union-new DlClause dl2
+                        (record-new Dl2 (sub x) (role s) (count (cast (Int 1 ..) n)) (filler b)
+                                        (fns (fn-ids arena p (key-of arena "dl2" parts) (cast Int n)))))))))
+
+  ;; ------------------------------------------------------------
+  ;; The axioms
+  ;; ------------------------------------------------------------
+
+  (fn s2-gci ((arena Arena) (p (Ptr S2State)) (l SConcept) (r SConcept))
+    (@intent "C ⊑ D as ⊤ ⊑ NNF(¬C ⊔ D), a top-level ⊓ split")
+    (@spec ((Arena (Ptr S2State) SConcept SConcept) -> Bool))
+    (@alloc arena)
+    (let ((mut both (list-new arena SConcept)))
+      (do
+        (list-push both (union-new SConcept sc-not (sc arena l)))
+        (list-push both r)
+        (assert-top arena p (sc-canon arena (nnf arena (union-new SConcept sc-or both) true))))))
+
+  (fn assert-top ((arena Arena) (p (Ptr S2State)) (e SConcept))
+    (@intent "⊤ ⊑ e: each conjunct of a top-level ⊓ alone (choice 3), else one DL1")
+    (@spec ((Arena (Ptr S2State) SConcept) -> Bool))
+    (@alloc arena)
+    (match e
+      ((sc-and xs) (do (for-each (c xs) (assert-top arena p c)) true))
+      (_           (disjunction arena p (none) (none) e))))
+
+  (fn role-prop ((r RoleId))
+    (@intent "The property a role is or inverts; none for a fresh role")
+    (@spec ((RoleId) -> (Option IRI)))
+    (@pure)
+    (match r
+      ((named-role i)   (some i))
+      ((inverse-role i) (some i))
+      ((fresh-role _)   (none))))
+
+  (fn role-inverted ((r RoleId))
+    (@intent "Is the role an inverse?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    (match r ((inverse-role _) true) (_ false)))
+
+  (fn s2-inclusion ((arena Arena) (p (Ptr S2State)) (r RoleId) (s RoleId))
+    (@intent "R ⊑ S over property names: DL7 when both point the same way, DL8 when not")
+    (@spec ((Arena (Ptr S2State) RoleId RoleId) -> (Result Bool String)))
+    (@alloc arena)
+    ;; P ⊑ Q and P⁻ ⊑ Q⁻ are DL7 P ⊑ Q; P ⊑ Q⁻ and P⁻ ⊑ Q are DL8 P ⊑ Q⁻.
+    (match (role-prop r)
+      ((none) (error "a fresh role in S2"))
+      ((some pi)
+        (match (role-prop s)
+          ((none) (error "a fresh role in S2"))
+          ((some qi)
+            (let ((a (union-new DRole dr-prop pi))
+                  (b (union-new DRole dr-prop qi)))
+              (do
+                (emit arena p (if (== (role-inverted r) (role-inverted s))
+                                (union-new DlClause dl7 a b)
+                                (union-new DlClause dl8 a b)))
+                (ok true))))))))
+
+  (fn s2-ria ((arena Arena) (p (Ptr S2State)) (x SRia))
+    (@intent "A simple RIA R ⊑ S as DL7 or DL8, over role names")
+    (@spec ((Arena (Ptr S2State) SRia) -> (Result Bool String)))
+    (@alloc arena)
+    (if (!= (list-len (. x word)) 1)
+      (error "a complex role inclusion reached S2: S1 must eliminate it first")
+      (match (list-get (. x word) 0)
+        ((none)   (error "an empty role inclusion"))
+        ((some r) (s2-inclusion arena p r (. x super))))))
+
+  (fn s2-dis ((arena Arena) (p (Ptr S2State)) (r RoleId) (s RoleId))
+    (@intent "Dis(R, S) as DL9 over role names: both inverses flip to Dis(P, Q)")
+    (@spec ((Arena (Ptr S2State) RoleId RoleId) -> Bool))
+    (@alloc arena)
+    (match r
+      ((inverse-role pi)
+        (match s
+          ((inverse-role qi)
+            (emit arena p (union-new DlClause dl9 (union-new DRole dr-prop pi) (union-new DRole dr-prop qi))))
+          (_ (emit arena p (union-new DlClause dl9 (role-name arena p r) (role-name arena p s))))))
+      (_ (emit arena p (union-new DlClause dl9 (role-name arena p r) (role-name arena p s))))))
+
+  (fn counts-ok ((c SConcept))
+    (@intent "Is every number restriction in c within the sriq gate's bound?")
+    (@spec ((SConcept) -> Bool))
+    (@pure)
+    (match c
+      ((sc-top)           true)
+      ((sc-bottom)        true)
+      ((sc-name _)        true)
+      ((sc-nominal _)     true)
+      ((sc-self _)        true)
+      ((sc-not f)         (counts-ok (deref f)))
+      ((sc-and xs)        (counts-list-ok xs))
+      ((sc-or xs)         (counts-list-ok xs))
+      ((sc-some _ f)      (counts-ok (deref f)))
+      ((sc-all _ f)       (counts-ok (deref f)))
+      ((sc-atleast n _ f) (and (<= n SRIQ_MAX_COUNT) (counts-ok (deref f))))
+      ((sc-atmost n _ f)  (and (<= n SRIQ_MAX_COUNT) (counts-ok (deref f))))))
+
+  (fn counts-list-ok ((cs (List SConcept)))
+    (@intent "counts-ok over a list")
+    (@spec (((List SConcept)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (c cs) (when (not (counts-ok c)) (set! ok false))) ok)))
+
+  (fn sriq-s2 ((arena Arena) (axs (List SAxiom)))
+    (@intent "§5.5 S2: S1's output in [TGH21] Table 1's forms")
+    (@spec ((Arena (List SAxiom)) -> (Result S2 String)))
+    (@alloc arena)
+    ;; THE GATE'S COUNT BOUND IS AN INVARIANT HERE. NNF turns ¬(≤n R.C)
+    ;; into ≥(n+1) R.C, which is exact only while n + 1 is representable;
+    ;; the sriq gate admits n ≤ SRIQ_MAX_COUNT (§5.5), so S2 refuses
+    ;; anything past it rather than rely on that silently.
+    (let ((p (new-s2 arena))
+          (mut fault (Option String) (none)))
+      (do
+        (for-each (a axs)
+          (match a
+            ((sa-gci l r)
+              (when (not (and (counts-ok (deref l)) (counts-ok (deref r))))
+                (set! fault (some "a number restriction above the sriq gate's bound of 16 reached S2"))))
+            (_ (do))))
+        (for-each (a axs)
+          (match a
+            ((sa-gci l r) (s2-gci arena p (deref l) (deref r)))
+            ((sa-ria x)
+              (match (s2-ria arena p x)
+                ((ok _)    (do))
+                ((error m) (set! fault (some m)))))
+            ;; Ref(R) is ⊤ ⊑ ∃R.Self; Irr(R) is ∃R.Self ⊑ ⊥ (§5.5 S2).
+            ((sa-ref r)
+              (s2-gci arena p (union-new SConcept sc-top) (union-new SConcept sc-self r)))
+            ((sa-irr r)
+              (s2-gci arena p (union-new SConcept sc-self r) (union-new SConcept sc-bottom)))
+            ((sa-dis r s) (s2-dis arena p r s))))
+        ;; Each P̄ used: P ⊑ P̄⁻ and P̄ ⊑ P⁻ (DL8).
+        (for-each (i (. (deref p) bars))
+          (do
+            (emit arena p (union-new DlClause dl8 (union-new DRole dr-prop i) (union-new DRole dr-bar i)))
+            (emit arena p (union-new DlClause dl8 (union-new DRole dr-bar i) (union-new DRole dr-prop i)))))
+        (match fault
+          ((some m) (error m))
+          ((none)
+            (let ((s (deref p)))
+              (ok (record-new S2
+                    (clauses  (. s out))
+                    (concepts (. s concepts))
+                    (sroles   (. s sroles))
+                    (sfills   (. s sfills))
+                    (bars     (. s bars))
+                    (fnkeys   (. s fnkeys))))))))))
+
+  ;; ------------------------------------------------------------
+  ;; Rendering, for the row tests: fresh names by what they name, so
+  ;; they read the same before and after S5's ids from content
+  ;; ------------------------------------------------------------
+
+  (fn render-dname ((arena Arena) (s2 S2) (n DName))
+    (@intent "A class name: its IRI, or A[the concept it names]")
+    (@spec ((Arena S2 DName) -> String))
+    (@alloc arena)
+    (match n
+      ((dn-class i) (. i value))
+      ((dn-fresh k)
+        (match (list-get (. s2 concepts) k)
+          ((some c) (string-concat arena "A[" (string-concat arena (render-sconcept arena c) "]")))
+          ((none)   "A[?]")))))
+
+  (fn render-dfiller ((arena Arena) (s2 S2) (b (Option DName)))
+    (@intent "A filler, ⊤ for none")
+    (@spec ((Arena S2 (Option DName)) -> String))
+    (@alloc arena)
+    (match b ((some n) (render-dname arena s2 n)) ((none) "⊤")))
+
+  (fn render-drole ((arena Arena) (s2 S2) (r DRole))
+    (@intent "A role name: P, bar(P), or S_{S,B₂}")
+    (@spec ((Arena S2 DRole) -> String))
+    (@alloc arena)
+    (match r
+      ((dr-prop i) (. i value))
+      ((dr-bar i)  (string-concat arena "bar(" (string-concat arena (. i value) ")")))
+      ((dr-sub k)
+        (let ((s (match (list-get (. s2 sroles) k) ((some x) x) ((none) r)))
+              (b (match (list-get (. s2 sfills) k) ((some x) x) ((none) (none)))))
+          (string-concat arena "S_{" (string-concat arena (render-drole arena s2 s)
+            (string-concat arena "," (string-concat arena (render-dfiller arena s2 b) "}"))))))))
+
+  (fn render-dnames ((arena Arena) (s2 S2) (ns (List DName)) (sep String) (empty String))
+    (@intent "Names joined by sep, or empty")
+    (@spec ((Arena S2 (List DName) String String) -> String))
+    (@alloc arena)
+    (if (== (list-len ns) 0)
+      empty
+      (let ((mut out "")
+            (mut first true))
+        (do
+          (for-each (n ns)
+            (do
+              (when (not first) (set! out (string-concat arena out sep)))
+              (set! out (string-concat arena out (render-dname arena s2 n)))
+              (set! first false)))
+          out))))
+
+  (fn inclusion ((arena Arena) (form String) (lhs String) (rhs String))
+    (@intent "One clause line: its form, then lhs ⊑ rhs")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (string-concat arena form (string-concat arena " " (string-concat arena lhs (string-concat arena " ⊑ " rhs)))))
+
+  (fn restriction-text ((arena Arena) (op String) (role String) (filler String))
+    (@intent "op R.B, e.g. ∃R.B or ≥2 R.B")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (string-concat arena op (string-concat arena role (string-concat arena "." filler))))
+
+  (fn count-op ((arena Arena) (op String) (n Int))
+    (@intent "≥n or ≤n, then a space")
+    (@spec ((Arena String Int) -> String))
+    (@alloc arena)
+    (string-concat arena op (string-concat arena (int-to-string arena n) " ")))
+
+  (fn braces ((arena Arena) (o IRI))
+    (@intent "{o}")
+    (@spec ((Arena IRI) -> String))
+    (@alloc arena)
+    (string-concat arena "{" (string-concat arena (. o value) "}")))
+
+  (fn render-dl ((arena Arena) (s2 S2) (c DlClause))
+    (@intent "A clause, labelled with its Table 1 form, in DL notation")
+    (@spec ((Arena S2 DlClause) -> String))
+    (@alloc arena)
+    (match c
+      ((dl1 d)
+        (inclusion arena "DL1" (render-dnames arena s2 (. d body) " ⊓ " "⊤") (render-dnames arena s2 (. d head) " ⊔ " "⊥")))
+      ((dl2 d)
+        (inclusion arena "DL2" (render-dname arena s2 (. d sub))
+          (restriction-text arena (count-op arena "≥" (. d count)) (render-drole arena s2 (. d role)) (render-dfiller arena s2 (. d filler)))))
+      ((dl3 s b1 b2)
+        (inclusion arena "DL3" (restriction-text arena "∃" (render-drole arena s2 s) (render-dname arena s2 b1)) (render-dname arena s2 b2)))
+      ((dl4 d)
+        (inclusion arena "DL4" (render-dname arena s2 (. d sub))
+          (string-concat arena
+            (restriction-text arena (count-op arena "≤" (. d count)) (render-drole arena s2 (. d role)) (render-dfiller arena s2 (. d filler)))
+            (string-concat arena " via " (render-drole arena s2 (. d srole))))))
+      ((dl5 b s)  (inclusion arena "DL5" (render-dname arena s2 b) (restriction-text arena "∃" (render-drole arena s2 s) "Self")))
+      ((dl6 s b)  (inclusion arena "DL6" (restriction-text arena "∃" (render-drole arena s2 s) "Self") (render-dname arena s2 b)))
+      ((dl7 a b)  (inclusion arena "DL7" (render-drole arena s2 a) (render-drole arena s2 b)))
+      ((dl8 a b)  (inclusion arena "DL8" (render-drole arena s2 a) (string-concat arena (render-drole arena s2 b) "⁻")))
+      ((dl9 a b)
+        (string-concat arena "DL9 Disj(" (string-concat arena (render-drole arena s2 a)
+          (string-concat arena ", " (string-concat arena (render-drole arena s2 b) ")")))))
+      ((dl10 o b) (inclusion arena "DL10" (braces arena o) (render-dname arena s2 b)))
+      ((dl11 b o) (inclusion arena "DL11" (render-dname arena s2 b) (braces arena o)))))
 )

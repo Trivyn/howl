@@ -23,7 +23,7 @@
     SConcept SAxiom SRia
     sc-cmp sa-cmp sc-canon sc-top-p sort-saxioms dedupe-saxioms
     inv-role box-sc
-    render-sconcept render-saxiom)
+    render-sconcept render-saxiom sc-key role-key-s)
 
   (type SConcept (union
     (sc-top)
@@ -349,6 +349,64 @@
           (when (or (not have) (!= (sa-cmp a last) 0))
             (do (list-push out a) (set! last a) (set! have true))))
         out)))
+
+  ;; ============================================================
+  ;; The content key: injective, for naming one concept once
+  ;;
+  ;; IRIs are delimited by < >, which an IRI cannot contain, and every
+  ;; other separator stands outside them, so two different concepts never
+  ;; share a key (graph Lessons a9a014e2, 3638a9b5). render-sconcept is
+  ;; for people and is not injective: an IRI may contain '.'.
+  ;; ============================================================
+
+  (fn role-key-s ((arena Arena) (r RoleId))
+    (@intent "A role's key: <iri>, with ^ for an inverse")
+    (@spec ((Arena RoleId) -> String))
+    (@alloc arena)
+    (match r
+      ((named-role i)   (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((inverse-role i) (string-concat arena "<" (string-concat arena (. i value) ">^")))
+      ((fresh-role k)   (string-concat arena "#" (int-to-string arena k)))))
+
+  (fn sc-keys ((arena Arena) (xs (List SConcept)))
+    (@intent "Operands' keys, comma-joined")
+    (@spec ((Arena (List SConcept)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (x xs)
+          (do
+            (when (not first) (set! out (string-concat arena out ",")))
+            (set! out (string-concat arena out (sc-key arena x)))
+            (set! first false)))
+        out)))
+
+  (fn sc-key-r ((arena Arena) (head String) (r RoleId) (f SConcept))
+    (@intent "head(role,filler)")
+    (@spec ((Arena String RoleId SConcept) -> String))
+    (@alloc arena)
+    (string-concat arena head
+      (string-concat arena "(" (string-concat arena (role-key-s arena r)
+        (string-concat arena "," (string-concat arena (sc-key arena f) ")"))))))
+
+  (fn sc-key ((arena Arena) (c SConcept))
+    (@intent "An injective text key for a concept")
+    (@spec ((Arena SConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((sc-top)          "T")
+      ((sc-bottom)       "F")
+      ((sc-name i)       (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((sc-nominal i)    (string-concat arena "{<" (string-concat arena (. i value) ">}")))
+      ((sc-not f)        (string-concat arena "not(" (string-concat arena (sc-key arena (deref f)) ")")))
+      ((sc-and xs)       (string-concat arena "and(" (string-concat arena (sc-keys arena xs) ")")))
+      ((sc-or xs)        (string-concat arena "or(" (string-concat arena (sc-keys arena xs) ")")))
+      ((sc-some r f)     (sc-key-r arena "some" r (deref f)))
+      ((sc-all r f)      (sc-key-r arena "all" r (deref f)))
+      ((sc-atleast n r f) (sc-key-r arena (string-concat arena "ge" (int-to-string arena n)) r (deref f)))
+      ((sc-atmost n r f)  (sc-key-r arena (string-concat arena "le" (int-to-string arena n)) r (deref f)))
+      ((sc-self r)       (string-concat arena "self(" (string-concat arena (role-key-s arena r) ")")))))
 
   ;; ============================================================
   ;; Rendering, in DL notation, for the row tests

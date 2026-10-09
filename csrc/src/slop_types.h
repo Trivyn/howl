@@ -14,6 +14,12 @@ typedef struct types_NormAxiom types_NormAxiom;
 typedef struct types_KName types_KName;
 typedef struct types_KTerm types_KTerm;
 typedef struct types_KscAxiom types_KscAxiom;
+typedef struct types_DName types_DName;
+typedef struct types_DRole types_DRole;
+typedef struct types_Dl1 types_Dl1;
+typedef struct types_Dl2 types_Dl2;
+typedef struct types_Dl4 types_Dl4;
+typedef struct types_DlClause types_DlClause;
 typedef struct types_KElem types_KElem;
 typedef struct types_KFact types_KFact;
 typedef struct types_Derived types_Derived;
@@ -305,6 +311,153 @@ typedef struct types_KscAxiom types_KscAxiom;
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+typedef enum {
+    types_DName_dn_class,
+    types_DName_dn_fresh
+} types_DName_tag;
+
+struct types_DName {
+    types_DName_tag tag;
+    union {
+        rdf_IRI dn_class;
+        int64_t dn_fresh;
+    } data;
+};
+typedef struct types_DName types_DName;
+
+#ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_LIST_TYPES_DNAME_DEFINED
+#define SLOP_LIST_TYPES_DNAME_DEFINED
+#define SLOP_LIST_TYPES_DNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_DName, slop_list_types_DName)
+#endif
+
+typedef enum {
+    types_DRole_dr_prop,
+    types_DRole_dr_bar,
+    types_DRole_dr_sub
+} types_DRole_tag;
+
+struct types_DRole {
+    types_DRole_tag tag;
+    union {
+        rdf_IRI dr_prop;
+        rdf_IRI dr_bar;
+        int64_t dr_sub;
+    } data;
+};
+typedef struct types_DRole types_DRole;
+
+#ifndef SLOP_OPTION_TYPES_DROLE_DEFINED
+#define SLOP_OPTION_TYPES_DROLE_DEFINED
+SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
+#endif
+
+struct types_Dl1 {
+    slop_list_types_DName body;
+    slop_list_types_DName head;
+};
+typedef struct types_Dl1 types_Dl1;
+
+#ifndef SLOP_OPTION_TYPES_DL1_DEFINED
+#define SLOP_OPTION_TYPES_DL1_DEFINED
+SLOP_OPTION_DEFINE(types_Dl1, slop_option_types_Dl1)
+#endif
+
+struct types_Dl2 {
+    types_DName sub;
+    types_DRole role;
+    int64_t count;
+    slop_option_types_DName filler;
+    slop_list_int fns;
+};
+typedef struct types_Dl2 types_Dl2;
+
+#ifndef SLOP_OPTION_TYPES_DL2_DEFINED
+#define SLOP_OPTION_TYPES_DL2_DEFINED
+SLOP_OPTION_DEFINE(types_Dl2, slop_option_types_Dl2)
+#endif
+
+struct types_Dl4 {
+    types_DName sub;
+    types_DRole role;
+    int64_t count;
+    slop_option_types_DName filler;
+    types_DRole srole;
+};
+typedef struct types_Dl4 types_Dl4;
+
+#ifndef SLOP_OPTION_TYPES_DL4_DEFINED
+#define SLOP_OPTION_TYPES_DL4_DEFINED
+SLOP_OPTION_DEFINE(types_Dl4, slop_option_types_Dl4)
+#endif
+
+typedef enum {
+    types_DlClause_dl1,
+    types_DlClause_dl2,
+    types_DlClause_dl3,
+    types_DlClause_dl4,
+    types_DlClause_dl5,
+    types_DlClause_dl6,
+    types_DlClause_dl7,
+    types_DlClause_dl8,
+    types_DlClause_dl9,
+    types_DlClause_dl10,
+    types_DlClause_dl11
+} types_DlClause_tag;
+
+struct types_DlClause {
+    types_DlClause_tag tag;
+    union {
+        types_Dl1 dl1;
+        types_Dl2 dl2;
+        struct {
+            types_DRole f0;
+            types_DName f1;
+            types_DName f2;
+        } dl3;
+        types_Dl4 dl4;
+        struct {
+            types_DName f0;
+            types_DRole f1;
+        } dl5;
+        struct {
+            types_DRole f0;
+            types_DName f1;
+        } dl6;
+        struct {
+            types_DRole f0;
+            types_DRole f1;
+        } dl7;
+        struct {
+            types_DRole f0;
+            types_DRole f1;
+        } dl8;
+        struct {
+            types_DRole f0;
+            types_DRole f1;
+        } dl9;
+        struct {
+            rdf_IRI f0;
+            types_DName f1;
+        } dl10;
+        struct {
+            types_DName f0;
+            rdf_IRI f1;
+        } dl11;
+    } data;
+};
+typedef struct types_DlClause types_DlClause;
+
+#ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
 #endif
 
 typedef enum {
@@ -980,6 +1133,36 @@ SLOP_OPTION_DEFINE(types_KTerm, slop_option_types_KTerm)
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DROLE_DEFINED
+#define SLOP_OPTION_TYPES_DROLE_DEFINED
+SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DL1_DEFINED
+#define SLOP_OPTION_TYPES_DL1_DEFINED
+SLOP_OPTION_DEFINE(types_Dl1, slop_option_types_Dl1)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DL2_DEFINED
+#define SLOP_OPTION_TYPES_DL2_DEFINED
+SLOP_OPTION_DEFINE(types_Dl2, slop_option_types_Dl2)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DL4_DEFINED
+#define SLOP_OPTION_TYPES_DL4_DEFINED
+SLOP_OPTION_DEFINE(types_Dl4, slop_option_types_Dl4)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KELEM_DEFINED

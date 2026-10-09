@@ -55,7 +55,7 @@
     RawAxiom Disposition
     Signature
     disposition concept-in-profile concepts-in-profile axiom-in-profile role-in-profile
-    is-el-plus-plus is-sriq
+    is-el-plus-plus is-sriq SRIQ_MAX_COUNT
     concept-tag-rank concept-cmp concept-at sort-concepts
     render-concept render-axiom render-role render-omission
     copy-concept copy-raw-axiom copy-axioms copy-signature
