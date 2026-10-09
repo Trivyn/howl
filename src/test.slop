@@ -50,13 +50,13 @@
   (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify classify-encoded Input Run Options FaultKind
                 input-new input-free input-add-turtle default-options run-classify run-free
-                run-ok run-fault run-fault-profile run-verdict run-report-len run-report-line
+                run-ok run-fault run-fault-message run-fault-profile run-verdict run-report-len run-report-line
                 Prepared ElWork prepare reason decode-owned prepare-in-profile))
   (import el (apply-el-rules apply-el-rules-reference))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
   (import strlib (starts-with))
-  (import select (profile-name parse-profile))
+  (import select (profile-name parse-profile profile-dropped unavailable-message))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
   (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq))
   (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact store-facts store-holds))
@@ -3923,6 +3923,8 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
               (do
                 (when (not (and (== (run-fault r) 'fault-unavailable)
                                 (== (run-fault-profile r) 'profile-horn-sriq)
+                                (string-eq (run-fault-message r)
+                                           "profile horn-sriq was dropped; sriq covers its language")
                                 (== (run-verdict r) 'verdict-inconclusive)
                                 (not (run-ok r))))
                   (set! ok false))
@@ -4214,6 +4216,21 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
          (match (parse-profile "auto") ((some _) false) ((none) true))
          (match (parse-profile "EL") ((some _) false) ((none) true))
          (match (parse-profile "sroiq") ((some _) false) ((none) true))))
+
+  (fn test-dropped-rung-refusal ((arena Arena))
+    (@intent "§5: horn-sriq alone is dropped, and each refusal says why: dropped, or not built yet")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The two texts must not trade places: a dropped rung's refusal names
+    ;; what replaces it, an unbuilt one's what is implemented.
+    (and (profile-dropped 'profile-horn-sriq)
+         (not (profile-dropped 'profile-el))
+         (not (profile-dropped 'profile-el-plus-plus))
+         (not (profile-dropped 'profile-sriq))
+         (string-eq (unavailable-message arena 'profile-horn-sriq)
+                    "profile horn-sriq was dropped; sriq covers its language")
+         (string-eq (unavailable-message arena 'profile-sriq)
+                    "profile sriq is not implemented yet (implemented: el, el++)")))
 
   (fn name-round-trips ((p Profile))
     (@intent "Whether p's name parses back to p")
@@ -5389,6 +5406,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-profile-names-round-trip arena)))
             (print-test-result "§5.1: rung names round-trip" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-dropped-rung-refusal arena)))
+            (print-test-result "§5: horn-sriq is dropped, and each refusal says why" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (println "")

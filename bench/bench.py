@@ -65,6 +65,8 @@ HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "bench", "howl"))
 ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
 TRIPWIRE = os.path.join(ROOT, "corpus", "fixtures", "out-of-profile", "allvalues.ttl")
 CORPUS = os.path.join(ROOT, "corpus")
+sys.path.insert(0, CORPUS)
+import profiles  # noqa: E402
 PROFILE = "el"
 RECORD = os.path.join(CORPUS, "corpus-differential.txt")
 RESULTS = os.path.join(HERE, "results.txt")
@@ -73,8 +75,8 @@ RESULTS = os.path.join(HERE, "results.txt")
 def set_profile(p):
     """Benchmark one rung: its certified record, its projections, its results file."""
     global PROFILE, RECORD, RESULTS
-    if p not in ("el", "el++"):
-        raise Refusal(f"unknown profile {p} (el or el++)")
+    if p not in profiles.BUILT:
+        raise Refusal(f"unknown profile {p} ({profiles.expected()})")
     PROFILE = p
     if p != "el":
         RECORD = os.path.join(CORPUS, f"corpus-differential-{p}.txt")

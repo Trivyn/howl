@@ -63,18 +63,25 @@ pub enum Fault {
     /// Unparseable or structurally malformed input.
     InputError(String),
     /// An explicit request for a profile whose calculus is not built
-    /// yet. Refused, never quietly run as another profile: that would
-    /// classify a smaller theory than asked for, under the wrong name.
+    /// yet, or that was dropped from the ladder. Refused, never quietly
+    /// run as another profile: that would classify a smaller theory than
+    /// asked for, under the wrong name.
     ProfileUnavailable(Profile),
     /// A [`Config`] field outside the range the engine accepts.
     InvalidConfig(String),
 }
 
 impl fmt::Display for Fault {
+    #[allow(deprecated)]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Fault::Cancelled => write!(f, "cancelled"),
             Fault::InputError(m) => write!(f, "input error: {m}"),
+            // The engine's own texts (select.slop, `unavailable-message`),
+            // pinned on both sides.
+            Fault::ProfileUnavailable(Profile::HornSriq) => {
+                write!(f, "profile horn-sriq was dropped; sriq covers its language")
+            }
             Fault::ProfileUnavailable(p) => {
                 write!(f, "profile {} is not implemented yet (implemented: el, el++)", p.name())
             }
@@ -125,18 +132,27 @@ impl Verdict {
 /// |---|---|---|---|
 /// | [`El`](Profile::El) | ELH⊥R+ + domain/range + ABox | PTIME | yes |
 /// | [`ElPlusPlus`](Profile::ElPlusPlus) | the OWL 2 EL object fragment | PTIME | yes |
-/// | [`HornSriq`](Profile::HornSriq) | Horn-SRIQ | ExpTime | no |
-/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment (non-Horn) | 2ExpTime | no |
+/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment with ABox (SPEC §5.5) | 2ExpTime | not yet |
 ///
 /// Asking for an unbuilt rung is [`Fault::ProfileUnavailable`].
+/// [`HornSriq`](Profile::HornSriq) was dropped from the ladder (SPEC §5);
+/// it keeps its place so the C enum is not renumbered, and is always
+/// refused. The enum is `#[non_exhaustive]`: a later rung (`sroiq`) is
+/// added at the end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum Profile {
     El,
     ElPlusPlus,
+    #[deprecated(
+        since = "0.2.0",
+        note = "dropped from the ladder (SPEC §5): always Fault::ProfileUnavailable; Sriq covers its language"
+    )]
     HornSriq,
     Sriq,
 }
 
+#[allow(deprecated)]
 impl Profile {
     /// The name the CLI flag and the report use.
     pub fn name(self) -> &'static str {
@@ -551,6 +567,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn selections_survive_the_crossing() {
         for s in [
             ProfileSelection::Auto,
@@ -571,8 +588,15 @@ mod tests {
 
     #[test]
     fn unavailable_names_the_profile() {
+        let f = Fault::ProfileUnavailable(Profile::Sriq);
+        assert_eq!(f.to_string(), "profile sriq is not implemented yet (implemented: el, el++)");
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn the_dropped_profile_says_what_replaces_it() {
         let f = Fault::ProfileUnavailable(Profile::HornSriq);
-        assert_eq!(f.to_string(), "profile horn-sriq is not implemented yet (implemented: el, el++)");
+        assert_eq!(f.to_string(), "profile horn-sriq was dropped; sriq covers its language");
     }
 
     #[test]

@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Specified
+
+- **`sriq`**, the SRIQ object fragment with an ABox, is specified in SPEC §5.5. It uses Simančík's
+  chain elimination, then Tena Cucala, Cuenca Grau and Horrocks's consequence-based calculus. It is
+  not built yet; `--profile sriq` exits 3.
+- **The data lemma** (SPEC §5.2): the property axioms of data properties nothing uses will be
+  inert in every profile. It is not built yet.
+
+### Changed
+
+- **`horn-sriq` is dropped from the profile ladder.** On `sriq`'s calculus it would run at the same
+  cost, so it would only be a stricter gate.
+  - Its value keeps its place in the C `types_Profile` enum and in Rust's `Profile`, so neither is
+    renumbered.
+  - Asking for it is always refused (`unavailable`, exit 3), and the message names `sriq`.
+- **The C API's `howl_run_fault_message`** now says why an `unavailable` run was refused: "was
+  dropped", or "is not implemented yet". It used to be empty.
+- **Rust (breaking, for the next minor release):**
+  - `Profile` is `#[non_exhaustive]`.
+  - `Profile::HornSriq` is deprecated.
+  - `Fault::ProfileUnavailable`'s message for it says it was dropped.
+
 ## 0.1.0 — 2026-10-06
 
 The first release. HOWL classifies OWL ontologies: the complete subsumption hierarchy, every

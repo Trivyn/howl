@@ -40,6 +40,9 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+import profiles  # noqa: E402
+
 HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "howl"))
 WORKERS = (1, 2, 4, 8)
 UNCAPPED = 10000
@@ -80,8 +83,8 @@ def main(argv):
     global PROFILE
     if "--profile" in argv:
         PROFILE = argv[argv.index("--profile") + 1]
-        if PROFILE not in ("el", "el++"):
-            sys.exit(f"unknown profile {PROFILE} (el or el++)")
+        if PROFILE not in profiles.BUILT:
+            sys.exit(f"unknown profile {PROFILE} ({profiles.expected()})")
     corpus = "--corpus" in argv
     repeat = int(argv[argv.index("--repeat") + 1]) if "--repeat" in argv else 2
     failed, bit, checked = False, 0, 0

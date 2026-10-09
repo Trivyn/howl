@@ -19,6 +19,8 @@ from collections import Counter
 from rdflib import Graph, RDF, RDFS, OWL, BNode, URIRef, Literal, Namespace
 from rdflib.collection import Collection
 
+import profiles
+
 SWRL = Namespace("http://www.w3.org/2003/11/swrl#")
 
 IN_V0_PRED = {
@@ -255,7 +257,7 @@ def inadmissible_chains(g, sig=None):
     return bad
 
 
-PROFILES = ("el", "el++")
+PROFILES = profiles.BUILT
 
 
 def signature(g, profile="el"):

@@ -238,6 +238,10 @@ acceptance: cli
 	check() { f=$$1; want=$$2; shift 2; ./$(BIN)/howl validate $$f "$$@" >/dev/null 2>&1; rc=$$?; \
 	          if [ "$$rc" -eq "$$want" ]; then echo "  ok   $$f $$* -> $$rc"; \
 	          else echo "  FAIL $$f $$* -> $$rc (expected $$want)"; fail=1; fi; }; \
+	checkmsg() { f=$$1; want=$$2; msg=$$3; shift 3; out=$$(./$(BIN)/howl validate $$f "$$@" 2>&1); rc=$$?; \
+	          if [ "$$rc" -eq "$$want" ] && printf '%s\n' "$$out" | grep -qF -- "$$msg"; then \
+	            echo "  ok   $$f $$* -> $$rc, says \"$$msg\""; \
+	          else echo "  FAIL $$f $$* -> $$rc (expected $$want, saying \"$$msg\")"; fail=1; fi; }; \
 	check corpus/fixtures/v0/litmus.ttl 0; \
 	check corpus/fixtures/hazards/unattested-import.ttl 2; \
 	check corpus/fixtures/hazards/abox-disjoint-range.ttl 1; \
@@ -284,8 +288,8 @@ acceptance: cli
 	check corpus/fixtures/el++/ksc-07.ttl 1 --profile el++; \
 	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile auto; \
 	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile el++ --strict; \
-	check corpus/fixtures/v0/litmus.ttl 3 --profile horn-sriq; \
-	check corpus/fixtures/v0/litmus.ttl 3 --profile sriq; \
+	checkmsg corpus/fixtures/v0/litmus.ttl 3 "horn-sriq was dropped; sriq covers its language" --profile horn-sriq; \
+	checkmsg corpus/fixtures/v0/litmus.ttl 3 "sriq is not implemented yet" --profile sriq; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile sroiq; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi

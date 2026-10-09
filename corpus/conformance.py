@@ -46,6 +46,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import entdiff  # noqa: E402
+import profiles  # noqa: E402
 
 HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "howl"))
 ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
@@ -647,8 +648,8 @@ def cmd_run(update):
 def set_profile(p):
     """Point the run at one profile: HOWL's flag, the census, the record, the build directory."""
     global PROFILE, STATUS, OUT
-    if p not in ("el", "el++"):
-        raise HarnessError(f"unknown profile {p} (el or el++)")
+    if p not in profiles.BUILT:
+        raise HarnessError(f"unknown profile {p} ({profiles.expected()})")
     PROFILE = p
     STATUS = os.path.join(HERE, "conformance-status.txt" if p == "el" else f"conformance-status-{p}.txt")
     OUT = os.path.join(ROOT, "build", "conformance", p)

@@ -4,6 +4,8 @@
 slop_option_types_Profile select_select_profile(types_ProfileSelection selection);
 types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus);
 uint8_t select_profile_implemented(types_Profile p);
+uint8_t select_profile_dropped(types_Profile p);
+slop_string select_unavailable_message(slop_arena* arena, types_Profile p);
 slop_string select_profile_name(types_Profile p);
 slop_option_types_Profile select_parse_profile(slop_string s);
 
@@ -64,15 +66,48 @@ uint8_t select_profile_implemented(types_Profile p) {
     return _retval;
 }
 
-slop_string select_profile_name(types_Profile p) {
+uint8_t select_profile_dropped(types_Profile p) {
+    uint8_t _retval = {0};
     __auto_type _mv_802 = p;
     if (_mv_802 == types_Profile_profile_el) {
-        return SLOP_STR("el");
+        _retval = 0;
+        goto _slop_post;
     } else if (_mv_802 == types_Profile_profile_el_plus_plus) {
-        return SLOP_STR("el++");
+        _retval = 0;
+        goto _slop_post;
     } else if (_mv_802 == types_Profile_profile_horn_sriq) {
-        return SLOP_STR("horn-sriq");
+        _retval = 1;
+        goto _slop_post;
     } else if (_mv_802 == types_Profile_profile_sriq) {
+        _retval = 0;
+        goto _slop_post;
+    }
+    SLOP_UNREACHABLE();
+    _slop_post: ;
+    SLOP_POST(((_retval == (p == types_Profile_profile_horn_sriq))), "(== $result (== p (quote profile-horn-sriq)))");
+    return _retval;
+}
+
+slop_string select_unavailable_message(slop_arena* arena, types_Profile p) {
+    {
+        __auto_type named = string_concat(arena, SLOP_STR("profile "), select_profile_name(p));
+        if (select_profile_dropped(p)) {
+            return string_concat(arena, named, SLOP_STR(" was dropped; sriq covers its language"));
+        } else {
+            return string_concat(arena, named, SLOP_STR(" is not implemented yet (implemented: el, el++)"));
+        }
+    }
+}
+
+slop_string select_profile_name(types_Profile p) {
+    __auto_type _mv_803 = p;
+    if (_mv_803 == types_Profile_profile_el) {
+        return SLOP_STR("el");
+    } else if (_mv_803 == types_Profile_profile_el_plus_plus) {
+        return SLOP_STR("el++");
+    } else if (_mv_803 == types_Profile_profile_horn_sriq) {
+        return SLOP_STR("horn-sriq");
+    } else if (_mv_803 == types_Profile_profile_sriq) {
         return SLOP_STR("sriq");
     }
     SLOP_UNREACHABLE();

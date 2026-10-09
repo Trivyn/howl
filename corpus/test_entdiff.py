@@ -154,6 +154,9 @@ class EntdiffTest(unittest.TestCase):
                            "profile None")
         self.assertRefused(self.run_diff(howl(BASE).replace("profile el\n", "profile sroiq\n"),
                                          oracle(BASE)), "profile 'sroiq'")
+        # horn-sriq was dropped (SPEC §5): HOWL refuses it, so no report names it.
+        self.assertRefused(self.run_diff(howl(BASE).replace("profile el\n", "profile horn-sriq\n"),
+                                         oracle(BASE)), "profile 'horn-sriq'")
 
     def test_refuses_an_omission_count_that_lies(self):
         # `omitted 0` above an omission line: the count decides comparability,

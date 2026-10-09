@@ -1046,6 +1046,7 @@ uint8_t test_ran_as(test_RunAs r, types_Profile want);
 uint8_t test_refused_as(test_RunAs r, types_Profile want);
 uint8_t test_test_profile_selection(slop_arena* arena);
 uint8_t test_test_profile_names_round_trip(slop_arena* arena);
+uint8_t test_test_dropped_rung_refusal(slop_arena* arena);
 uint8_t test_name_round_trips(types_Profile p);
 uint8_t test_test_strict_refuses_past_omissions(slop_arena* arena);
 uint8_t test_test_nary_chain_decomposes_left_associated(slop_arena* arena);
