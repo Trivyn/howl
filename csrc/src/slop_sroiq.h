@@ -150,6 +150,10 @@ sroiq_SConcept sroiq_canon_junction(slop_arena* arena, slop_list_sroiq_SConcept 
 sroiq_SAxiom sroiq_sa_at(slop_list_sroiq_SAxiom xs, int64_t i);
 slop_list_sroiq_SAxiom sroiq_sort_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs);
 slop_list_sroiq_SAxiom sroiq_dedupe_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs);
+slop_string sroiq_role_key_s(slop_arena* arena, types_RoleId r);
+slop_string sroiq_sc_keys(slop_arena* arena, slop_list_sroiq_SConcept xs);
+slop_string sroiq_sc_key_r(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f);
+slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c);
 slop_string sroiq_render_srole(slop_arena* arena, types_RoleId r);
 slop_string sroiq_render_sconcepts(slop_arena* arena, slop_list_sroiq_SConcept xs, slop_string sep);
 slop_string sroiq_render_restriction(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f);

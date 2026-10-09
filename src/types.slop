@@ -22,6 +22,7 @@
     Concept
     NormAxiom
     KName KTerm KscAxiom
+    DName DRole Dl1 Dl2 Dl4 DlClause
     KElem KFact
     ;; saturation
     Derived
@@ -236,6 +237,63 @@
     (k-chain        RoleId RoleId RoleId)          ; subRChain  R ∘ S ⊑ T
     (k-range        RoleId KName)                  ; supProd    R ⊑ ⊤ × D
     (k-role-assert  IRI RoleId IRI)))              ; R(a, b) ↦ supEx(a, R, b, b) — §5.4's Fig. 2 erratum
+
+  ;; ============================================================
+  ;; sriq's normal form — [TGH21] Table 1, as SPEC §5.5 S2 pins it
+  ;;
+  ;; One variant per Table 1 form, at the axiom level; the engine reads
+  ;; each as the DL-clauses Table 1 lists for it. Every role slot is a
+  ;; role NAME (DRole has no inverse arm): an inverse argument is P̄, so
+  ;; "Table 1's forms take role names" holds by construction.
+  ;; ============================================================
+
+  ;; A class name: an input class, or a fresh A_E (its registry id; ids
+  ;; from content are given in S5's pass).
+  (type DName (union
+    (dn-class IRI)
+    (dn-fresh (Int 0 ..))))
+
+  ;; A role name: a property P, the fresh P̄ standing for P⁻, or DL4's
+  ;; fresh S_{B₂} (its registry id).
+  (type DRole (union
+    (dr-prop IRI)
+    (dr-bar  IRI)
+    (dr-sub  (Int 0 ..))))
+
+  ;; DL1  B₁ ⊓ … ⊓ Bₙ ⊑ Bₙ₊₁ ⊔ … ⊔ Bₘ. An empty body is ⊤, an empty head ⊥.
+  (type Dl1 (record
+    (body (List DName))
+    (head (List DName))))
+
+  ;; DL2  B₁ ⊑ ≥n S.B₂, with its n function symbols. A filler of none is
+  ;; ⊤ (S2 choice 6): its B₂(fᵢ(x)) clauses are omitted.
+  (type Dl2 (record
+    (sub    DName)
+    (role   DRole)
+    (count  (Int 1 ..))
+    (filler (Option DName))
+    (fns    (List (Int 0 ..)))))
+
+  ;; DL4  B₁ ⊑ ≤n S.B₂, with its fresh S_{B₂}. A filler of none is ⊤.
+  (type Dl4 (record
+    (sub    DName)
+    (role   DRole)
+    (count  (Int 0 ..))
+    (filler (Option DName))
+    (srole  DRole)))
+
+  (type DlClause (union
+    (dl1  Dl1)
+    (dl2  Dl2)
+    (dl3  DRole DName DName)    ; ∃S.B₁ ⊑ B₂
+    (dl4  Dl4)
+    (dl5  DName DRole)          ; B ⊑ ∃S.Self
+    (dl6  DRole DName)          ; ∃S.Self ⊑ B
+    (dl7  DRole DRole)          ; S₁ ⊑ S₂
+    (dl8  DRole DRole)          ; S₁ ⊑ S₂⁻
+    (dl9  DRole DRole)          ; Disj(S₁, S₂)
+    (dl10 IRI DName)            ; {o} ⊑ B
+    (dl11 DName IRI)))          ; B ⊑ {o}
 
   ;; ============================================================
   ;; el++ facts — Kinst's IDB, [Krö10] Fig. 3 (SPEC §5.4)

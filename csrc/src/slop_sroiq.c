@@ -19,6 +19,10 @@ sroiq_SConcept sroiq_canon_junction(slop_arena* arena, slop_list_sroiq_SConcept 
 sroiq_SAxiom sroiq_sa_at(slop_list_sroiq_SAxiom xs, int64_t i);
 slop_list_sroiq_SAxiom sroiq_sort_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs);
 slop_list_sroiq_SAxiom sroiq_dedupe_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs);
+slop_string sroiq_role_key_s(slop_arena* arena, types_RoleId r);
+slop_string sroiq_sc_keys(slop_arena* arena, slop_list_sroiq_SConcept xs);
+slop_string sroiq_sc_key_r(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f);
+slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c);
 slop_string sroiq_render_srole(slop_arena* arena, types_RoleId r);
 slop_string sroiq_render_sconcepts(slop_arena* arena, slop_list_sroiq_SConcept xs, slop_string sep);
 slop_string sroiq_render_restriction(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f);
@@ -832,22 +836,138 @@ slop_list_sroiq_SAxiom sroiq_dedupe_saxioms(slop_arena* arena, slop_list_sroiq_S
     }
 }
 
-slop_string sroiq_render_srole(slop_arena* arena, types_RoleId r) {
+slop_string sroiq_role_key_s(slop_arena* arena, types_RoleId r) {
     __auto_type _mv_1102 = r;
     switch (_mv_1102.tag) {
         case types_RoleId_named_role:
         {
             __auto_type i = _mv_1102.data.named_role;
-            return i.value;
+            return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
         }
         case types_RoleId_inverse_role:
         {
             __auto_type i = _mv_1102.data.inverse_role;
+            return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">^")));
+        }
+        case types_RoleId_fresh_role:
+        {
+            __auto_type k = _mv_1102.data.fresh_role;
+            return string_concat(arena, SLOP_STR("#"), int_to_string(arena, k));
+        }
+    }
+    SLOP_UNREACHABLE();
+}
+
+slop_string sroiq_sc_keys(slop_arena* arena, slop_list_sroiq_SConcept xs) {
+    {
+        __auto_type out = SLOP_STR("");
+        uint8_t first = 1;
+        {
+            __auto_type _coll = xs;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type x = _coll.data[_i];
+                if (!(first)) {
+                    out = string_concat(arena, out, SLOP_STR(","));
+                }
+                out = string_concat(arena, out, sroiq_sc_key(arena, x));
+                first = 0;
+            }
+        }
+        return out;
+    }
+}
+
+slop_string sroiq_sc_key_r(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f) {
+    return string_concat(arena, head, string_concat(arena, SLOP_STR("("), string_concat(arena, sroiq_role_key_s(arena, r), string_concat(arena, SLOP_STR(","), string_concat(arena, sroiq_sc_key(arena, f), SLOP_STR(")"))))));
+}
+
+slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c) {
+    __auto_type _mv_1103 = c;
+    switch (_mv_1103.tag) {
+        case sroiq_SConcept_sc_top:
+        {
+            return SLOP_STR("T");
+        }
+        case sroiq_SConcept_sc_bottom:
+        {
+            return SLOP_STR("F");
+        }
+        case sroiq_SConcept_sc_name:
+        {
+            __auto_type i = _mv_1103.data.sc_name;
+            return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
+        }
+        case sroiq_SConcept_sc_nominal:
+        {
+            __auto_type i = _mv_1103.data.sc_nominal;
+            return string_concat(arena, SLOP_STR("{<"), string_concat(arena, i.value, SLOP_STR(">}")));
+        }
+        case sroiq_SConcept_sc_not:
+        {
+            __auto_type f = _mv_1103.data.sc_not;
+            return string_concat(arena, SLOP_STR("not("), string_concat(arena, sroiq_sc_key(arena, (*f)), SLOP_STR(")")));
+        }
+        case sroiq_SConcept_sc_and:
+        {
+            __auto_type xs = _mv_1103.data.sc_and;
+            return string_concat(arena, SLOP_STR("and("), string_concat(arena, sroiq_sc_keys(arena, xs), SLOP_STR(")")));
+        }
+        case sroiq_SConcept_sc_or:
+        {
+            __auto_type xs = _mv_1103.data.sc_or;
+            return string_concat(arena, SLOP_STR("or("), string_concat(arena, sroiq_sc_keys(arena, xs), SLOP_STR(")")));
+        }
+        case sroiq_SConcept_sc_some:
+        {
+            __auto_type r = _mv_1103.data.sc_some.f0;
+            __auto_type f = _mv_1103.data.sc_some.f1;
+            return sroiq_sc_key_r(arena, SLOP_STR("some"), r, (*f));
+        }
+        case sroiq_SConcept_sc_all:
+        {
+            __auto_type r = _mv_1103.data.sc_all.f0;
+            __auto_type f = _mv_1103.data.sc_all.f1;
+            return sroiq_sc_key_r(arena, SLOP_STR("all"), r, (*f));
+        }
+        case sroiq_SConcept_sc_atleast:
+        {
+            __auto_type n = _mv_1103.data.sc_atleast.f0;
+            __auto_type r = _mv_1103.data.sc_atleast.f1;
+            __auto_type f = _mv_1103.data.sc_atleast.f2;
+            return sroiq_sc_key_r(arena, string_concat(arena, SLOP_STR("ge"), int_to_string(arena, n)), r, (*f));
+        }
+        case sroiq_SConcept_sc_atmost:
+        {
+            __auto_type n = _mv_1103.data.sc_atmost.f0;
+            __auto_type r = _mv_1103.data.sc_atmost.f1;
+            __auto_type f = _mv_1103.data.sc_atmost.f2;
+            return sroiq_sc_key_r(arena, string_concat(arena, SLOP_STR("le"), int_to_string(arena, n)), r, (*f));
+        }
+        case sroiq_SConcept_sc_self:
+        {
+            __auto_type r = _mv_1103.data.sc_self;
+            return string_concat(arena, SLOP_STR("self("), string_concat(arena, sroiq_role_key_s(arena, r), SLOP_STR(")")));
+        }
+    }
+    SLOP_UNREACHABLE();
+}
+
+slop_string sroiq_render_srole(slop_arena* arena, types_RoleId r) {
+    __auto_type _mv_1104 = r;
+    switch (_mv_1104.tag) {
+        case types_RoleId_named_role:
+        {
+            __auto_type i = _mv_1104.data.named_role;
+            return i.value;
+        }
+        case types_RoleId_inverse_role:
+        {
+            __auto_type i = _mv_1104.data.inverse_role;
             return string_concat(arena, i.value, SLOP_STR("⁻"));
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_1102.data.fresh_role;
+            __auto_type _ = _mv_1104.data.fresh_role;
             return SLOP_STR("_:fresh-role");
         }
     }
@@ -878,8 +998,8 @@ slop_string sroiq_render_restriction(slop_arena* arena, slop_string head, types_
 }
 
 slop_string sroiq_render_sconcept(slop_arena* arena, sroiq_SConcept c) {
-    __auto_type _mv_1103 = c;
-    switch (_mv_1103.tag) {
+    __auto_type _mv_1105 = c;
+    switch (_mv_1105.tag) {
         case sroiq_SConcept_sc_top:
         {
             return SLOP_STR("⊤");
@@ -890,58 +1010,58 @@ slop_string sroiq_render_sconcept(slop_arena* arena, sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_name:
         {
-            __auto_type i = _mv_1103.data.sc_name;
+            __auto_type i = _mv_1105.data.sc_name;
             return i.value;
         }
         case sroiq_SConcept_sc_nominal:
         {
-            __auto_type i = _mv_1103.data.sc_nominal;
+            __auto_type i = _mv_1105.data.sc_nominal;
             return string_concat(arena, SLOP_STR("{"), string_concat(arena, i.value, SLOP_STR("}")));
         }
         case sroiq_SConcept_sc_not:
         {
-            __auto_type f = _mv_1103.data.sc_not;
+            __auto_type f = _mv_1105.data.sc_not;
             return string_concat(arena, SLOP_STR("¬"), sroiq_render_sconcept(arena, (*f)));
         }
         case sroiq_SConcept_sc_and:
         {
-            __auto_type xs = _mv_1103.data.sc_and;
+            __auto_type xs = _mv_1105.data.sc_and;
             return string_concat(arena, SLOP_STR("("), string_concat(arena, sroiq_render_sconcepts(arena, xs, SLOP_STR(" ⊓ ")), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_or:
         {
-            __auto_type xs = _mv_1103.data.sc_or;
+            __auto_type xs = _mv_1105.data.sc_or;
             return string_concat(arena, SLOP_STR("("), string_concat(arena, sroiq_render_sconcepts(arena, xs, SLOP_STR(" ⊔ ")), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_some:
         {
-            __auto_type r = _mv_1103.data.sc_some.f0;
-            __auto_type f = _mv_1103.data.sc_some.f1;
+            __auto_type r = _mv_1105.data.sc_some.f0;
+            __auto_type f = _mv_1105.data.sc_some.f1;
             return sroiq_render_restriction(arena, SLOP_STR("∃"), r, (*f));
         }
         case sroiq_SConcept_sc_all:
         {
-            __auto_type r = _mv_1103.data.sc_all.f0;
-            __auto_type f = _mv_1103.data.sc_all.f1;
+            __auto_type r = _mv_1105.data.sc_all.f0;
+            __auto_type f = _mv_1105.data.sc_all.f1;
             return sroiq_render_restriction(arena, SLOP_STR("∀"), r, (*f));
         }
         case sroiq_SConcept_sc_atleast:
         {
-            __auto_type n = _mv_1103.data.sc_atleast.f0;
-            __auto_type r = _mv_1103.data.sc_atleast.f1;
-            __auto_type f = _mv_1103.data.sc_atleast.f2;
+            __auto_type n = _mv_1105.data.sc_atleast.f0;
+            __auto_type r = _mv_1105.data.sc_atleast.f1;
+            __auto_type f = _mv_1105.data.sc_atleast.f2;
             return sroiq_render_restriction(arena, string_concat(arena, SLOP_STR("≥"), string_concat(arena, int_to_string(arena, n), SLOP_STR(" "))), r, (*f));
         }
         case sroiq_SConcept_sc_atmost:
         {
-            __auto_type n = _mv_1103.data.sc_atmost.f0;
-            __auto_type r = _mv_1103.data.sc_atmost.f1;
-            __auto_type f = _mv_1103.data.sc_atmost.f2;
+            __auto_type n = _mv_1105.data.sc_atmost.f0;
+            __auto_type r = _mv_1105.data.sc_atmost.f1;
+            __auto_type f = _mv_1105.data.sc_atmost.f2;
             return sroiq_render_restriction(arena, string_concat(arena, SLOP_STR("≤"), string_concat(arena, int_to_string(arena, n), SLOP_STR(" "))), r, (*f));
         }
         case sroiq_SConcept_sc_self:
         {
-            __auto_type r = _mv_1103.data.sc_self;
+            __auto_type r = _mv_1105.data.sc_self;
             return string_concat(arena, SLOP_STR("∃"), string_concat(arena, sroiq_render_srole(arena, r), SLOP_STR(".Self")));
         }
     }
@@ -968,33 +1088,33 @@ slop_string sroiq_render_word(slop_arena* arena, slop_list_types_RoleId w) {
 }
 
 slop_string sroiq_render_saxiom(slop_arena* arena, sroiq_SAxiom a) {
-    __auto_type _mv_1104 = a;
-    switch (_mv_1104.tag) {
+    __auto_type _mv_1106 = a;
+    switch (_mv_1106.tag) {
         case sroiq_SAxiom_sa_gci:
         {
-            __auto_type l = _mv_1104.data.sa_gci.f0;
-            __auto_type r = _mv_1104.data.sa_gci.f1;
+            __auto_type l = _mv_1106.data.sa_gci.f0;
+            __auto_type r = _mv_1106.data.sa_gci.f1;
             return string_concat(arena, sroiq_render_sconcept(arena, (*l)), string_concat(arena, SLOP_STR(" ⊑ "), sroiq_render_sconcept(arena, (*r))));
         }
         case sroiq_SAxiom_sa_ria:
         {
-            __auto_type x = _mv_1104.data.sa_ria;
+            __auto_type x = _mv_1106.data.sa_ria;
             return string_concat(arena, sroiq_render_word(arena, x.word), string_concat(arena, SLOP_STR(" ⊑ "), sroiq_render_srole(arena, x.super)));
         }
         case sroiq_SAxiom_sa_ref:
         {
-            __auto_type r = _mv_1104.data.sa_ref;
+            __auto_type r = _mv_1106.data.sa_ref;
             return string_concat(arena, SLOP_STR("Ref("), string_concat(arena, sroiq_render_srole(arena, r), SLOP_STR(")")));
         }
         case sroiq_SAxiom_sa_irr:
         {
-            __auto_type r = _mv_1104.data.sa_irr;
+            __auto_type r = _mv_1106.data.sa_irr;
             return string_concat(arena, SLOP_STR("Irr("), string_concat(arena, sroiq_render_srole(arena, r), SLOP_STR(")")));
         }
         case sroiq_SAxiom_sa_dis:
         {
-            __auto_type r = _mv_1104.data.sa_dis.f0;
-            __auto_type s = _mv_1104.data.sa_dis.f1;
+            __auto_type r = _mv_1106.data.sa_dis.f0;
+            __auto_type s = _mv_1106.data.sa_dis.f1;
             return string_concat(arena, SLOP_STR("Dis("), string_concat(arena, sroiq_render_srole(arena, r), string_concat(arena, SLOP_STR(", "), string_concat(arena, sroiq_render_srole(arena, s), SLOP_STR(")")))));
         }
     }

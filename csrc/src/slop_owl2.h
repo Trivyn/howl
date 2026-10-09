@@ -376,6 +376,8 @@ slop_list_owl2_RawAxiom owl2_copy_axioms(slop_arena* arena, slop_list_owl2_RawAx
 owl2_Signature owl2_copy_signature(slop_arena* arena, owl2_Signature sig);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);
 
+#define owl2_SRIQ_MAX_COUNT (16)
+
 #ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
 #define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
