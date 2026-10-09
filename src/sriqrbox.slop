@@ -1,0 +1,604 @@
+;; ============================================================
+;; sriq's RBox analysis  —  SPEC.md §5.5 (gate conditions, S0's collapse)
+;;
+;; One analysis, two readers. The gate (gate.slop) asks it whether the
+;; RBox is ≺-regular and which roles are simple. The normaliser
+;; (sriqnormal.slop) reads its representatives, for S0's collapse, and
+;; its role inclusions. Moved here from gate.slop unchanged, so both read
+;; the same answer.
+;;
+;; Self-contained below canon and owl2: the gate imports it, so it may
+;; not import the gate. Its few list helpers are its own for that reason.
+;; ============================================================
+
+(module sriqrbox
+  (@doc "sriq's RBox: simple roles, the collapse, and Simancik's regularity (SPEC 5.5)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_BOTTOM_OBJECT_PROPERTY))
+  (import types (RoleId))
+  (import owl2 (RawAxiom RawConcept RawDisjointUnion PropCharacteristic))
+  (import canon (role-cmp sort-range string-cmp))
+
+  (export
+    Ria SriqRbox
+    sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple sriq-role-simple
+    sriq-node node-role inv-node)
+
+  ;; ============================================================
+  ;; Local helpers: a canonically sorted property list, and a Bool vector
+  ;; ============================================================
+
+  (fn prop-idx ((props (List RoleId)) (r RoleId))
+    (@intent "Canonical index of a property, or -1 if it is not in the list")
+    (@spec (((List RoleId) RoleId) -> Int))
+    (@pure)
+    (let ((mut found -1)
+          (mut i 0))
+      (do
+        (for-each (x props)
+          (do
+            (when (and (< found 0) (== (role-cmp x r) 0)) (set! found i))
+            (set! i (+ i 1))))
+        found)))
+
+  (fn prop-new ((props (List RoleId)) (r RoleId))
+    (@intent "Is this property not yet in the list? The caller pushes")
+    (@spec (((List RoleId) RoleId) -> Bool))
+    (@pure)
+    (< (prop-idx props r) 0))
+
+  (fn prop-at ((xs (List RoleId)) (i Int))
+    (@intent "Element i, where the caller has already bounds-checked")
+    (@spec (((List RoleId) Int) -> RoleId))
+    (@pure)
+    (@pre {i >= 0})
+    (@pre {i < (list-len xs)})
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new RoleId fresh-role 0))))
+
+  (fn sort-props ((arena Arena) (xs (List RoleId)))
+    (@intent "Canonically sorted copy")
+    (@spec ((Arena (List RoleId)) -> (List RoleId)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (role-cmp (prop-at xs i) (prop-at xs j)))))
+          (mut out (list-new arena RoleId)))
+      (do (for-each (k idx) (list-push out (prop-at xs k))) out)))
+
+  (fn bools-new ((arena Arena) (n Int))
+    (@intent "An n-long false vector")
+    (@spec ((Arena Int) -> (List Bool)))
+    (@alloc arena)
+    (let ((mut m (list-new arena Bool))
+          (mut i 0))
+      (do
+        (while (< i n) (do (list-push m false) (set! i (+ i 1))))
+        m)))
+
+  (fn bool-at ((m (List Bool)) (i Int))
+    (@intent "Cell i, false past the end")
+    (@spec (((List Bool) Int) -> Bool))
+    (@pure)
+    (match (list-get m i)
+      ((some v) v)
+      ((none)   false)))
+
+  (fn node-role ((props (List RoleId)) (n Int))
+    (@intent "The role a node stands for: property n/2, inverted when n is odd")
+    (@spec (((List RoleId) Int) -> RoleId))
+    (@pure)
+    (@pre {n >= 0})
+    (let ((p (prop-at props (/ n 2))))
+      (if (== (% n 2) 0)
+        p
+        (match p
+          ((named-role i)   (union-new RoleId inverse-role i))
+          ((inverse-role i) (union-new RoleId named-role i))
+          ((fresh-role _)   p)))))
+
+  ;; ============================================================
+  ;; sriq's RBox gate (§5.5): simple roles over AllOPE, the collapse of
+  ;; role-equivalence classes, and [Sim12]'s ≺-regularity
+  ;;
+  ;; Roles are NODES. Property k, in canonical IRI order, is node 2k and
+  ;; its inverse node 2k + 1, so `inv` flips one bit and every relation
+  ;; built below is closed under inv by construction, as §5.5 requires.
+  ;; Indices come from the canonically sorted property list (Lesson
+  ;; 68d3eeb0), so the answer cannot depend on serialization.
+  ;;
+  ;; Graphs are adjacency arrays (CSR) walked breadth-first: a closure
+  ;; matrix, as el's check uses, is cubic in 2 × RO's 650 properties.
+  ;; ============================================================
+
+  (type Ria (record
+    (word  (List Int))   ; the sub-role word, as nodes
+    (super Int)))        ; the super-role, as a node
+
+  (type Csr (record
+    (off (List Int))     ; node v's targets are adj[off[v] .. off[v+1])
+    (adj (List Int))))
+
+  (type SriqRbox (record
+    (props     (List RoleId))   ; the named properties, canonically sorted
+    (nonsimple (List Bool))     ; per node
+    (rep       (List Int))      ; per node: its component's representative (S0's collapse)
+    (rias      (List Ria))      ; S0's role inclusions, as node words, before the collapse
+    (regular   Bool)))
+
+  (fn ints-new ((arena Arena) (n Int) (v Int))
+    (@intent "An n-long list of v")
+    (@spec ((Arena Int Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut xs (list-new arena Int))
+          (mut i 0))
+      (do
+        (while (< i n) (do (list-push xs v) (set! i (+ i 1))))
+        xs)))
+
+  (fn int-at ((xs (List Int)) (i Int))
+    (@intent "Element i, or -1 past the end")
+    (@spec (((List Int) Int) -> Int))
+    (@pure)
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   -1)))
+
+  (fn inv-node ((n Int))
+    (@intent "The node of a role's inverse")
+    (@spec ((Int) -> Int))
+    (@pure)
+    (@pre {n >= 0})
+    (@post {$result >= 0})
+    (if (== (% n 2) 0) (+ n 1) (- n 1)))
+
+  (fn sriq-node ((props (List RoleId)) (r RoleId))
+    (@intent "A role's node, or -1 when it names no property of the RBox")
+    (@spec (((List RoleId) RoleId) -> Int))
+    (@pure)
+    (match r
+      ((named-role _)
+        (let ((k (prop-idx props r))) (if (< k 0) -1 (* 2 k))))
+      ((inverse-role i)
+        (let ((k (prop-idx props (union-new RoleId named-role i))))
+          (if (< k 0) -1 (+ (* 2 k) 1))))
+      ((fresh-role _) -1)))
+
+  (fn property-of ((r RoleId))
+    (@intent "The named property a role is or inverts")
+    (@spec ((RoleId) -> (Option RoleId)))
+    (@pure)
+    (match r
+      ((named-role _)   (some r))
+      ((inverse-role i) (some (union-new RoleId named-role i)))
+      ((fresh-role _)   (none))))
+
+  (fn ria-roles ((arena Arena) (ax RawAxiom))
+    (@intent "The roles of an axiom that is a role inclusion in §5.5's S0, or empty")
+    (@spec ((Arena RawAxiom) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut rs (list-new arena RoleId)))
+      (do
+        (match ax
+          ((ra-sub-object-property a b)    (do (list-push rs a) (list-push rs b)))
+          ((ra-property-chain ch)
+            (do (for-each (st (. ch steps)) (list-push rs st)) (list-push rs (. ch super))))
+          ((ra-equivalent-properties xs)   (for-each (x xs) (list-push rs x)))
+          ((ra-inverse-properties a b)     (do (list-push rs a) (list-push rs b)))
+          ((ra-property-characteristic c r)
+            (when (== c 'prop-symmetric) (list-push rs r)))
+          (_ (do)))
+        rs)))
+
+  (fn is-sriq-ria ((ax RawAxiom))
+    (@intent "Is this axiom a role inclusion in §5.5's S0, so part of the RBox the gate judges?")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    ;; SubObjectPropertyOf with or without a chain (transitivity is one by
+    ;; now, expand-sugar), equivalences, inverses, and symmetry (`R⁻ ⊑ R`).
+    (match ax
+      ((ra-sub-object-property _ _)    true)
+      ((ra-property-chain _)           true)
+      ((ra-equivalent-properties _)    true)
+      ((ra-inverse-properties _ _)     true)
+      ((ra-property-characteristic c _) (== c 'prop-symmetric))
+      (_ false)))
+
+  (fn sriq-props ((arena Arena) (axs (List RawAxiom)))
+    (@intent "Every property a role inclusion names, canonically sorted")
+    (@spec ((Arena (List RawAxiom)) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut ps (list-new arena RoleId)))
+      (do
+        (for-each (ax axs)
+          (for-each (r (ria-roles arena ax))
+            (match (property-of r)
+              ((some pr) (when (prop-new ps pr) (list-push ps pr)))
+              ((none)    (do)))))
+        (sort-props arena ps))))
+
+  (fn ria-of ((arena Arena) (x Int) (y Int))
+    (@intent "The one-step inclusion x ⊑ y")
+    (@spec ((Arena Int Int) -> Ria))
+    (@alloc arena)
+    (let ((mut w (list-new arena Int)))
+      (do (list-push w x) (record-new Ria (word w) (super y)))))
+
+  (fn sriq-rias ((arena Arena) (props (List RoleId)) (axs (List RawAxiom)))
+    (@intent "§5.5 S0's role inclusions, as node words")
+    (@spec ((Arena (List RoleId) (List RawAxiom)) -> (List Ria)))
+    (@alloc arena)
+    ;; R ≡ S⁻ is `R ⊑ S⁻` and `S⁻ ⊑ R`; symmetry is `R⁻ ⊑ R`; an
+    ;; equivalence (one with an inverse arrives whole) is every ordered
+    ;; pair. One local list, for expand-sugar's reason.
+    (let ((mut out (list-new arena Ria)))
+      (do
+        (for-each (ax axs)
+          (match ax
+            ((ra-sub-object-property a b)
+              (let ((na (sriq-node props a)) (nb (sriq-node props b)))
+                (when (and (>= na 0) (>= nb 0)) (list-push out (ria-of arena na nb)))))
+            ((ra-property-chain ch)
+              (let ((ns  (sriq-nodes arena props (. ch steps)))
+                    (sup (sriq-node props (. ch super))))
+                (when (and (>= sup 0) (all-nodes ns))
+                  (list-push out (record-new Ria (word ns) (super sup))))))
+            ((ra-equivalent-properties rs)
+              (let ((ns (sriq-nodes arena props rs)))
+                (when (all-nodes ns)
+                  (for-each (x ns)
+                    (for-each (y ns)
+                      (when (!= x y) (list-push out (ria-of arena x y))))))))
+            ((ra-inverse-properties a b)
+              (let ((na (sriq-node props a)) (nb (sriq-node props b)))
+                (when (and (>= na 0) (>= nb 0))
+                  (do (list-push out (ria-of arena na (inv-node nb)))
+                      (list-push out (ria-of arena (inv-node nb) na))))))
+            ((ra-property-characteristic c r)
+              (when (== c 'prop-symmetric)
+                (let ((nr (sriq-node props r)))
+                  (when (>= nr 0) (list-push out (ria-of arena (inv-node nr) nr))))))
+            (_ (do))))
+        out)))
+
+  (fn sriq-nodes ((arena Arena) (props (List RoleId)) (rs (List RoleId)))
+    (@intent "Each role's node, in order")
+    (@spec ((Arena (List RoleId) (List RoleId)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut ns (list-new arena Int)))
+      (do (for-each (r rs) (list-push ns (sriq-node props r))) ns)))
+
+  (fn all-nodes ((ns (List Int)))
+    (@intent "Does every role in the word have a node?")
+    (@spec (((List Int)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (n ns) (when (< n 0) (set! ok false))) ok)))
+
+  (fn csr-build ((arena Arena) (n Int) (src (List Int)) (dst (List Int)))
+    (@intent "The adjacency arrays of the edges src[k] → dst[k] over n nodes")
+    (@spec ((Arena Int (List Int) (List Int)) -> Csr))
+    (@alloc arena)
+    ;; A counting sort by source. `list-set` writes through, `list-push`
+    ;; into a parameter would not (expand-sugar's note).
+    (let ((off (ints-new arena (+ n 1) 0))
+          (m   (cast Int (list-len src)))
+          (mut i 0))
+      (do
+        (for-each (s src) (list-set off (+ s 1) (+ (int-at off (+ s 1)) 1)))
+        (set! i 1)
+        (while (<= i n)
+          (do (list-set off i (+ (int-at off i) (int-at off (- i 1))))
+              (set! i (+ i 1))))
+        (let ((pos (ints-new arena n 0))
+              (adj (ints-new arena m 0))
+              (mut k 0)
+              (mut v 0))
+          (do
+            (while (< v n) (do (list-set pos v (int-at off v)) (set! v (+ v 1))))
+            (while (< k m)
+              (let ((s (int-at src k)))
+                (do (list-set adj (int-at pos s) (int-at dst k))
+                    (list-set pos s (+ (int-at pos s) 1))
+                    (set! k (+ k 1)))))
+            (record-new Csr (off off) (adj adj)))))))
+
+  (fn csr-reach ((arena Arena) (g Csr) (n Int) (starts (List Int)))
+    (@intent "Every node reachable from the starts, starts included")
+    (@spec ((Arena Csr Int (List Int)) -> (List Bool)))
+    (@alloc arena)
+    (let ((seen (bools-new arena n))
+          (mut queue (list-new arena Int))
+          (mut head 0))
+      (do
+        (for-each (s starts)
+          (when (and (>= s 0) (not (bool-at seen s)))
+            (do (list-set seen s true) (list-push queue s))))
+        (while (< head (cast Int (list-len queue)))
+          (let ((v (int-at queue head)))
+            (do
+              (set! head (+ head 1))
+              (let ((mut e (int-at (. g off) v))
+                    (stop (int-at (. g off) (+ v 1))))
+                (while (< e stop)
+                  (let ((w (int-at (. g adj) e)))
+                    (do
+                      (when (not (bool-at seen w))
+                        (do (list-set seen w true) (list-push queue w)))
+                      (set! e (+ e 1)))))))))
+        seen)))
+
+  (fn sriq-reps ((arena Arena) (fwd Csr) (bwd Csr) (n Int))
+    (@intent "Each node's representative: §5.5's collapse of →'s strongly connected components")
+    (@spec ((Arena Csr Csr Int) -> (List Int)))
+    (@alloc arena)
+    ;; A component is what a node reaches and is reached from. Its
+    ;; representative is its least property, oriented as it occurs: the
+    ;; property's own node if the component holds it, else its inverse's.
+    ;; So the inverse component's representative is the inverse, and a
+    ;; component holding P and P⁻ is represented by P.
+    (let ((rep (ints-new arena n -1))
+          (mut v 0))
+      (do
+        (while (< v n)
+          (do
+            (when (< (int-at rep v) 0)
+              (let ((mut one (list-new arena Int)))
+                (do
+                  (list-push one v)
+                  (let ((f (csr-reach arena fwd n one))
+                        (b (csr-reach arena bwd n one))
+                        (mut m -1)
+                        (mut u 0)
+                        (mut x 0))
+                    (do
+                      (while (< u n)
+                        (do
+                          (when (and (bool-at f u) (bool-at b u)
+                                     (or (< m 0) (< (/ u 2) m)))
+                            (set! m (/ u 2)))
+                          (set! u (+ u 1))))
+                      (let ((r (if (and (bool-at f (* 2 m)) (bool-at b (* 2 m)))
+                                 (* 2 m)
+                                 (+ (* 2 m) 1))))
+                        (while (< x n)
+                          (do
+                            (when (and (bool-at f x) (bool-at b x)) (list-set rep x r))
+                            (set! x (+ x 1))))))))))
+            (set! v (+ v 1))))
+        rep)))
+
+  (fn word-slice ((arena Arena) (w (List Int)) (from Int) (upto Int))
+    (@intent "w[from .. upto)")
+    (@spec ((Arena (List Int) Int Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int))
+          (mut i from))
+      (do
+        (while (< i upto) (do (list-push out (int-at w i)) (set! i (+ i 1))))
+        out)))
+
+  (fn ints-subset ((a (List Int)) (b (List Int)))
+    (@intent "Is every element of a in b?")
+    (@spec (((List Int) (List Int)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (x a)
+          (let ((mut found false))
+            (do
+              (for-each (y b) (when (== x y) (set! found true)))
+              (when (not found) (set! ok false)))))
+        ok)))
+
+  (fn ria-constraints ((arena Arena) (w (List Int)) (s Int))
+    (@intent "The roles R_i ≺ S a complex RIA w ⊑ S demands: the ⊆-least set among the forms it matches")
+    (@spec ((Arena (List Int) Int) -> (List Int)))
+    (@alloc arena)
+    ;; [Sim12] §2.1's forms over R^c, after the collapse (§5.5):
+    ;; (R4) R ∘ R ⊑ R and (R5) R⁻ ⊑ R demand nothing, nor does `R ⊑ R`,
+    ;; which the collapse leaves of an inclusion inside one component.
+    ;; (R5) cannot actually arrive here: R⁻ ⊑ R puts R and R⁻ in one
+    ;; component, as → is closed under inv, so the collapse has already
+    ;; made it `R ⊑ R`. It is kept because §5.5 states it.
+    ;; In (R1)–(R3) every position but a recursive end, the R that opens
+    ;; (R2) or closes (R3), demands R_i ≺ R. Length 1 is (R1).
+    (let ((n (cast Int (list-len w)))
+          (nothing (list-new arena Int)))
+      (cond
+        ((== n 1)
+          (let ((x (int-at w 0)))
+            (if (or (== x s) (== x (inv-node s)))
+              nothing
+              w)))
+        ((and (== n 2) (== (int-at w 0) s) (== (int-at w 1) s)) nothing)
+        (else
+          (let ((r2 (== (int-at w 0) s))
+                (r3 (== (int-at w (- n 1)) s))
+                (tail (word-slice arena w 1 n))
+                (head (word-slice arena w 0 (- n 1))))
+            (cond
+              ;; Both ends recursive: both sets hold R itself, so either
+              ;; is cyclic; the ⊆-least is taken when there is one.
+              ((and r2 r3) (if (ints-subset head tail) head tail))
+              (r2 tail)
+              (r3 head)
+              (else w)))))))
+
+  (fn inv-word ((arena Arena) (w (List Int)))
+    (@intent "R^c's inverse of a word: reversed, each role inverted")
+    (@spec ((Arena (List Int)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int))
+          (mut i (- (cast Int (list-len w)) 1)))
+      (do
+        (while (>= i 0)
+          (do (list-push out (inv-node (int-at w i))) (set! i (- i 1))))
+        out)))
+
+  (fn rep-word ((arena Arena) (w (List Int)) (rep (List Int)))
+    (@intent "A word with each role replaced by its representative")
+    (@spec ((Arena (List Int) (List Int)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)))
+      (do (for-each (x w) (list-push out (int-at rep x))) out)))
+
+  (fn csr-acyclic ((arena Arena) (g Csr) (n Int))
+    (@intent "Has the graph no cycle (a self-loop included)? Kahn's algorithm")
+    (@spec ((Arena Csr Int) -> Bool))
+    (@alloc arena)
+    (let ((indeg (ints-new arena n 0))
+          (mut queue (list-new arena Int))
+          (mut head 0)
+          (mut done 0)
+          (mut v 0))
+      (do
+        (for-each (w (. g adj)) (list-set indeg w (+ (int-at indeg w) 1)))
+        (while (< v n)
+          (do (when (== (int-at indeg v) 0) (list-push queue v)) (set! v (+ v 1))))
+        (while (< head (cast Int (list-len queue)))
+          (let ((u (int-at queue head)))
+            (do
+              (set! head (+ head 1))
+              (set! done (+ done 1))
+              (let ((mut e (int-at (. g off) u))
+                    (stop (int-at (. g off) (+ u 1))))
+                (while (< e stop)
+                  (let ((w (int-at (. g adj) e)))
+                    (do
+                      (list-set indeg w (- (int-at indeg w) 1))
+                      (when (== (int-at indeg w) 0) (list-push queue w))
+                      (set! e (+ e 1)))))))))
+        (== done n))))
+
+  (fn sriq-rbox-none ((arena Arena))
+    (@intent "The RBox answer for a rung that is not sriq: nothing non-simple, regular")
+    (@spec ((Arena) -> SriqRbox))
+    (@alloc arena)
+    (record-new SriqRbox (props (list-new arena RoleId)) (nonsimple (list-new arena Bool))
+                         (rep (list-new arena Int)) (rias (list-new arena Ria)) (regular true)))
+
+  (fn sriq-rbox ((arena Arena) (axs (List RawAxiom)))
+    (@intent "§5.5's RBox gate: which roles are simple, and is the collapsed completion ≺-regular?")
+    (@spec ((Arena (List RawAxiom)) -> SriqRbox))
+    (@alloc arena)
+    ;; - → is OWL 2 §11.1's hierarchy over AllOPE: each one-step
+    ;;   inclusion R ⊑ S, and inv(R) ⊑ inv(S) with it.
+    ;; - A role is non-simple when a composite role reaches it along →.
+    ;;   Composite: the super of a chain of length ≥ 2, and its inverse;
+    ;;   owl:bottomObjectProperty counts as one, as under el++.
+    ;; - A RIA is complex unless it is one step into a simple role, and
+    ;;   R^c holds each complex RIA and its inverse, over representatives.
+    ;; - The RBox is regular iff their constraint graph is acyclic.
+    (let ((props (sriq-props arena axs))
+          (n     (* 2 (cast Int (list-len props))))
+          (rias  (sriq-rias arena props axs))
+          (mut fs    (list-new arena Int))
+          (mut fd    (list-new arena Int))
+          (mut seeds (list-new arena Int))
+          (mut cs    (list-new arena Int))
+          (mut cd    (list-new arena Int)))
+      (do
+        (for-each (ria rias)
+          (if (== (list-len (. ria word)) 1)
+            (let ((x (int-at (. ria word) 0)) (s (. ria super)))
+              (do (list-push fs x) (list-push fd s)
+                  (list-push fs (inv-node x)) (list-push fd (inv-node s))))
+            (do (list-push seeds (. ria super))
+                (list-push seeds (inv-node (. ria super))))))
+        (let ((bot (sriq-node props (union-new RoleId named-role
+                                      (record-new IRI (value OWL_BOTTOM_OBJECT_PROPERTY))))))
+          (when (>= bot 0) (do (list-push seeds bot) (list-push seeds (inv-node bot)))))
+        (let ((fwd (csr-build arena n fs fd))
+              (bwd (csr-build arena n fd fs)))
+          (let ((nonsimple (csr-reach arena fwd n seeds))
+                (rep       (sriq-reps arena fwd bwd n)))
+            (do
+              (for-each (ria rias)
+                (when (or (> (list-len (. ria word)) 1)
+                          (bool-at nonsimple (. ria super)))
+                  (let ((w  (rep-word arena (. ria word) rep))
+                        (s  (int-at rep (. ria super))))
+                    (do
+                      (for-each (x (ria-constraints arena w s))
+                        (do (list-push cs x) (list-push cd s)))
+                      (for-each (x (ria-constraints arena (inv-word arena w) (inv-node s)))
+                        (do (list-push cs x) (list-push cd (inv-node s))))))))
+              (record-new SriqRbox
+                (props props)
+                (nonsimple nonsimple)
+                (rep rep)
+                (rias rias)
+                (regular (csr-acyclic arena (csr-build arena n cs cd) n)))))))))
+
+  (fn sriq-role-simple ((rb SriqRbox) (r RoleId))
+    (@intent "Is this role simple in the RBox §5.5's gate judged?")
+    (@spec ((SriqRbox RoleId) -> Bool))
+    (@pure)
+    (let ((nd (sriq-node (. rb props) r)))
+      (if (< nd 0)
+        ;; In no role inclusion: simple, unless it is the empty role.
+        (match (property-of r)
+          ((some pr) (not (is-bottom-role pr)))
+          ((none)    true))
+        (not (bool-at (. rb nonsimple) nd)))))
+
+  (fn is-bottom-role ((r RoleId))
+    (@intent "Is this owl:bottomObjectProperty?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    (match r
+      ((named-role i)   (== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0))
+      ((inverse-role i) (== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0))
+      ((fresh-role _)   false)))
+
+  (fn sriq-concept-simple ((rb SriqRbox) (c RawConcept))
+    (@intent "Is every number restriction and Self in this concept on a simple role?")
+    (@spec ((SriqRbox RawConcept) -> Bool))
+    (@pure)
+    (match c
+      ((rc-card _ r _)    (sriq-role-simple rb r))
+      ((rc-qcard _ r _ f) (and (sriq-role-simple rb r) (sriq-concept-simple rb (deref f))))
+      ((rc-has-self r)    (sriq-role-simple rb r))
+      ((rc-and cs)        (sriq-concepts-simple rb cs))
+      ((rc-or cs)         (sriq-concepts-simple rb cs))
+      ((rc-not f)         (sriq-concept-simple rb (deref f)))
+      ((rc-some _ f)      (sriq-concept-simple rb (deref f)))
+      ((rc-all _ f)       (sriq-concept-simple rb (deref f)))
+      (_ true)))
+
+  (fn sriq-concepts-simple ((rb SriqRbox) (cs (List RawConcept)))
+    (@intent "sriq-concept-simple over a list")
+    (@spec ((SriqRbox (List RawConcept)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (c cs) (when (not (sriq-concept-simple rb c)) (set! ok false))) ok)))
+
+  (fn sriq-axiom-simple ((rb SriqRbox) (ax RawAxiom))
+    (@intent "Does this axiom put on simple roles everything OWL 2 §11.2 restricts to them?")
+    (@spec ((SriqRbox RawAxiom) -> Bool))
+    (@pure)
+    ;; Number restrictions, Self, functional, inverse-functional,
+    ;; irreflexive and asymmetric roles, and disjointness (§5.5). Per
+    ;; axiom: the offending axiom is its own witness.
+    (match ax
+      ((ra-sub-class-of l r)
+        (and (sriq-concept-simple rb (deref l)) (sriq-concept-simple rb (deref r))))
+      ((ra-equivalent-classes cs)      (sriq-concepts-simple rb cs))
+      ((ra-disjoint-classes cs)        (sriq-concepts-simple rb cs))
+      ((ra-object-property-domain _ c) (sriq-concept-simple rb (deref c)))
+      ((ra-object-property-range _ c)  (sriq-concept-simple rb (deref c)))
+      ((ra-class-assertion ca)         (sriq-concept-simple rb (deref (. ca concept))))
+      ((ra-disjoint-union du)          (sriq-concepts-simple rb (. du members)))
+      ((ra-property-characteristic c r)
+        (if (or (== c 'prop-functional) (or (== c 'prop-inverse-functional)
+                (or (== c 'prop-irreflexive) (== c 'prop-asymmetric))))
+          (sriq-role-simple rb r)
+          true))
+      ((ra-disjoint-properties rs)
+        (let ((mut ok true))
+          (do (for-each (r rs) (when (not (sriq-role-simple rb r)) (set! ok false))) ok)))
+      (_ true)))
+
+)

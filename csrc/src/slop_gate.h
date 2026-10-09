@@ -9,12 +9,10 @@
 #include "slop_types.h"
 #include "slop_owl2.h"
 #include "slop_canon.h"
+#include "slop_sriqrbox.h"
 
 typedef struct gate_GateResult gate_GateResult;
 typedef struct gate_NegSplit gate_NegSplit;
-typedef struct gate_Ria gate_Ria;
-typedef struct gate_Csr gate_Csr;
-typedef struct gate_SriqRbox gate_SriqRbox;
 typedef struct gate_RboxVerdict gate_RboxVerdict;
 typedef struct gate_RangeEntry gate_RangeEntry;
 typedef struct gate_EntityRef gate_EntityRef;
@@ -108,46 +106,6 @@ typedef struct gate_NegSplit gate_NegSplit;
 SLOP_OPTION_DEFINE(gate_NegSplit, slop_option_gate_NegSplit)
 #endif
 
-struct gate_Ria {
-    slop_list_int word;
-    int64_t super;
-};
-typedef struct gate_Ria gate_Ria;
-
-#ifndef SLOP_OPTION_GATE_RIA_DEFINED
-#define SLOP_OPTION_GATE_RIA_DEFINED
-SLOP_OPTION_DEFINE(gate_Ria, slop_option_gate_Ria)
-#endif
-
-#ifndef SLOP_LIST_GATE_RIA_DEFINED
-#define SLOP_LIST_GATE_RIA_DEFINED
-#define SLOP_LIST_GATE_RIA_IMPL_DEFINED
-SLOP_LIST_DEFINE(gate_Ria, slop_list_gate_Ria)
-#endif
-
-struct gate_Csr {
-    slop_list_int off;
-    slop_list_int adj;
-};
-typedef struct gate_Csr gate_Csr;
-
-#ifndef SLOP_OPTION_GATE_CSR_DEFINED
-#define SLOP_OPTION_GATE_CSR_DEFINED
-SLOP_OPTION_DEFINE(gate_Csr, slop_option_gate_Csr)
-#endif
-
-struct gate_SriqRbox {
-    slop_list_types_RoleId props;
-    slop_list_u8 nonsimple;
-    uint8_t regular;
-};
-typedef struct gate_SriqRbox gate_SriqRbox;
-
-#ifndef SLOP_OPTION_GATE_SRIQRBOX_DEFINED
-#define SLOP_OPTION_GATE_SRIQRBOX_DEFINED
-SLOP_OPTION_DEFINE(gate_SriqRbox, slop_option_gate_SriqRbox)
-#endif
-
 typedef enum {
     gate_RboxVerdict_rbox_regular,
     gate_RboxVerdict_rbox_irregular
@@ -224,35 +182,7 @@ slop_list_types_RoleId gate_non_simple_roles(slop_arena* arena, slop_list_owl2_R
 uint8_t gate_concept_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawConcept c);
 uint8_t gate_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawAxiom ax);
 owl2_RawConcept* gate_box_c(slop_arena* arena, owl2_RawConcept c);
-slop_list_int gate_ints_new(slop_arena* arena, int64_t n, int64_t v);
-int64_t gate_int_at(slop_list_int xs, int64_t i);
-int64_t gate_inv_node(int64_t n);
-int64_t gate_sriq_node(slop_list_types_RoleId props, types_RoleId r);
-slop_option_types_RoleId gate_property_of(types_RoleId r);
-slop_list_types_RoleId gate_ria_roles(slop_arena* arena, owl2_RawAxiom ax);
-uint8_t gate_is_sriq_ria(owl2_RawAxiom ax);
 slop_list_owl2_RawAxiom gate_admitted(slop_arena* arena, types_Profile p, slop_list_owl2_RawAxiom axs);
-slop_list_types_RoleId gate_sriq_props(slop_arena* arena, slop_list_owl2_RawAxiom axs);
-gate_Ria gate_ria_of(slop_arena* arena, int64_t x, int64_t y);
-slop_list_gate_Ria gate_sriq_rias(slop_arena* arena, slop_list_types_RoleId props, slop_list_owl2_RawAxiom axs);
-slop_list_int gate_sriq_nodes(slop_arena* arena, slop_list_types_RoleId props, slop_list_types_RoleId rs);
-uint8_t gate_all_nodes(slop_list_int ns);
-gate_Csr gate_csr_build(slop_arena* arena, int64_t n, slop_list_int src, slop_list_int dst);
-slop_list_u8 gate_csr_reach(slop_arena* arena, gate_Csr g, int64_t n, slop_list_int starts);
-slop_list_int gate_sriq_reps(slop_arena* arena, gate_Csr fwd, gate_Csr bwd, int64_t n);
-slop_list_int gate_word_slice(slop_arena* arena, slop_list_int w, int64_t from, int64_t upto);
-uint8_t gate_ints_subset(slop_list_int a, slop_list_int b);
-slop_list_int gate_ria_constraints(slop_arena* arena, slop_list_int w, int64_t s);
-slop_list_int gate_inv_word(slop_arena* arena, slop_list_int w);
-slop_list_int gate_rep_word(slop_arena* arena, slop_list_int w, slop_list_int rep);
-uint8_t gate_csr_acyclic(slop_arena* arena, gate_Csr g, int64_t n);
-gate_SriqRbox gate_sriq_rbox_none(slop_arena* arena);
-gate_SriqRbox gate_sriq_rbox(slop_arena* arena, slop_list_owl2_RawAxiom axs);
-uint8_t gate_sriq_role_simple(gate_SriqRbox rb, types_RoleId r);
-uint8_t gate_is_bottom_role(types_RoleId r);
-uint8_t gate_sriq_concept_simple(gate_SriqRbox rb, owl2_RawConcept c);
-uint8_t gate_sriq_concepts_simple(gate_SriqRbox rb, slop_list_owl2_RawConcept cs);
-uint8_t gate_sriq_axiom_simple(gate_SriqRbox rb, owl2_RawAxiom ax);
 uint8_t gate_is_rbox_axiom(owl2_RawAxiom ax);
 uint8_t gate_axiom_range_ok(slop_list_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles, owl2_RawAxiom ax);
 gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, owl2_Signature sig, slop_list_types_Omission carried, types_Profile p);
@@ -312,29 +242,14 @@ SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
 SLOP_OPTION_DEFINE(gate_NegSplit, slop_option_gate_NegSplit)
 #endif
 
-#ifndef SLOP_OPTION_GATE_RIA_DEFINED
-#define SLOP_OPTION_GATE_RIA_DEFINED
-SLOP_OPTION_DEFINE(gate_Ria, slop_option_gate_Ria)
-#endif
-
-#ifndef SLOP_OPTION_GATE_CSR_DEFINED
-#define SLOP_OPTION_GATE_CSR_DEFINED
-SLOP_OPTION_DEFINE(gate_Csr, slop_option_gate_Csr)
+#ifndef SLOP_OPTION_GATE_RANGEENTRY_DEFINED
+#define SLOP_OPTION_GATE_RANGEENTRY_DEFINED
+SLOP_OPTION_DEFINE(gate_RangeEntry, slop_option_gate_RangeEntry)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
-#endif
-
-#ifndef SLOP_OPTION_GATE_SRIQRBOX_DEFINED
-#define SLOP_OPTION_GATE_SRIQRBOX_DEFINED
-SLOP_OPTION_DEFINE(gate_SriqRbox, slop_option_gate_SriqRbox)
-#endif
-
-#ifndef SLOP_OPTION_GATE_RANGEENTRY_DEFINED
-#define SLOP_OPTION_GATE_RANGEENTRY_DEFINED
-SLOP_OPTION_DEFINE(gate_RangeEntry, slop_option_gate_RangeEntry)
 #endif
 
 #ifndef SLOP_OPTION_GATE_RBOXVERDICT_DEFINED

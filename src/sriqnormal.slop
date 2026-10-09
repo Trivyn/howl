@@ -1,0 +1,642 @@
+;; ============================================================
+;; sriq's normaliser: S0, the collapse, and S1's hook  —  SPEC.md §5.5
+;;
+;; S0 translates the sriq gate's accepted axioms into the SROIQ working
+;; form (sroiq.slop), row by row as §5.5's language table reads. Every
+;; RawAxiom and RawConcept variant is named, with no catch-all: a variant
+;; the gate does not admit under sriq is an error here, never a silent
+;; drop.
+;;
+;; THE COLLAPSE (S0) replaces every role by its component's
+;; representative, from the same RBox analysis the gate ran
+;; (sriqrbox.slop), drops the `R ⊑ R` it leaves, and keeps one `P⁻ ⊑ P`
+;; for a component that holds both P and P⁻.
+;;
+;; S1 IS SLICE 6. Until it is built, an input with a complex role
+;; inclusion (transitivity included) is refused with that reason, rather
+;; than normalised wrongly (§5.5's status note).
+;; ============================================================
+
+(module sriqnormal
+  (@doc "sriq's normaliser: S0, the collapse, and S1's hook (SPEC 5.5)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_BOTTOM_OBJECT_PROPERTY))
+  (import types (RoleId Node))
+  (import owl2 (RawAxiom RawConcept RawChain RawEdge RawClassAssertion RawDisjointUnion
+                PropCharacteristic CardKind))
+  (import canon (iri-cmp string-cmp sort-range))
+  (import sroiq (SConcept SAxiom SRia sc-canon sc-cmp sort-saxioms dedupe-saxioms inv-role box-sc
+                 render-saxiom))
+  (import sriqrbox (SriqRbox sriq-rbox sriq-node node-role))
+
+  (export S0 sriq-s0 sriq-s1)
+
+  ;; S0's output, with the RBox analysis S1 will need.
+  (type S0 (record
+    (axioms (List SAxiom))
+    (rbox   SriqRbox)))
+
+  ;; ============================================================
+  ;; Concepts
+  ;; ============================================================
+
+  (fn sc ((arena Arena) (c SConcept))
+    (@intent "c, boxed")
+    (@spec ((Arena SConcept) -> (Ptr SConcept)))
+    (@alloc arena)
+    (box-sc arena c))
+
+  (fn s0-concepts ((arena Arena) (cs (List RawConcept)))
+    (@intent "S0 over a list of concepts")
+    (@spec ((Arena (List RawConcept)) -> (Result (List SConcept) String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SConcept))
+          (mut fault (Option String) (none)))
+      (do
+        (for-each (c cs)
+          (match (s0-concept arena c)
+            ((ok x)    (list-push out x))
+            ((error m) (set! fault (some m)))))
+        (match fault
+          ((some m) (error m))
+          ((none)   (ok out))))))
+
+  (fn s0-filler ((arena Arena) (f (Ptr RawConcept)))
+    (@intent "S0 of a boxed filler")
+    (@spec ((Arena (Ptr RawConcept)) -> (Result SConcept String)))
+    (@alloc arena)
+    (s0-concept arena (deref f)))
+
+  (fn s0-count ((arena Arena) (k CardKind) (r RoleId) (n (Int 0 ..)) (f SConcept))
+    (@intent "A number restriction: ≥n, ≤n, or =n as ≥n ⊓ ≤n (§5.5 S2 choice 7)")
+    (@spec ((Arena CardKind RoleId (Int 0 ..) SConcept) -> SConcept))
+    (@alloc arena)
+    (match k
+      ('card-min   (union-new SConcept sc-atleast n r (sc arena f)))
+      ('card-max   (union-new SConcept sc-atmost n r (sc arena f)))
+      ('card-exact
+        (let ((mut both (list-new arena SConcept)))
+          (do
+            (list-push both (union-new SConcept sc-atleast n r (sc arena f)))
+            (list-push both (union-new SConcept sc-atmost n r (sc arena f)))
+            (union-new SConcept sc-and both))))))
+
+  (fn s0-concept ((arena Arena) (c RawConcept))
+    (@intent "§5.5's language table, on a class expression the sriq gate admitted")
+    (@spec ((Arena RawConcept) -> (Result SConcept String)))
+    (@alloc arena)
+    (match c
+      ((rc-name n)
+        (match n
+          ((class-node i)      (ok (union-new SConcept sc-name i)))
+          ((individual-node _) (error "an individual in a class position"))
+          ((fresh-node _)      (error "a fresh node in a class position"))))
+      ((rc-thing)   (ok (union-new SConcept sc-top)))
+      ((rc-nothing) (ok (union-new SConcept sc-bottom)))
+      ((rc-and cs)
+        (match (s0-concepts arena cs)
+          ((ok xs)   (ok (union-new SConcept sc-and xs)))
+          ((error m) (error m))))
+      ((rc-or cs)
+        (match (s0-concepts arena cs)
+          ((ok xs)   (ok (union-new SConcept sc-or xs)))
+          ((error m) (error m))))
+      ((rc-not f)
+        (match (s0-filler arena f)
+          ((ok x)    (ok (union-new SConcept sc-not (sc arena x))))
+          ((error m) (error m))))
+      ((rc-some r f)
+        (match (s0-filler arena f)
+          ((ok x)    (ok (union-new SConcept sc-some r (sc arena x))))
+          ((error m) (error m))))
+      ((rc-all r f)
+        (match (s0-filler arena f)
+          ((ok x)    (ok (union-new SConcept sc-all r (sc arena x))))
+          ((error m) (error m))))
+      ;; Unqualified is qualified by ⊤ (§5.5 S2 choice 7).
+      ((rc-card k r n)    (ok (s0-count arena k r n (union-new SConcept sc-top))))
+      ((rc-qcard k r n f)
+        (match (s0-filler arena f)
+          ((ok x)    (ok (s0-count arena k r n x)))
+          ((error m) (error m))))
+      ((rc-has-self r)    (ok (union-new SConcept sc-self r)))
+      ;; Class nominals are sroiq's, data is a non-goal, and an anonymous
+      ;; class is undecodable: the sriq gate admits none of them.
+      ((rc-oneof _)       (error "ObjectOneOf, which the sriq gate does not admit"))
+      ((rc-has-value _ _) (error "ObjectHasValue, which the sriq gate does not admit"))
+      ((rc-data _)        (error "a data range, which the sriq gate does not admit"))
+      ((rc-anon _)        (error "an undecodable class, which the sriq gate does not admit"))))
+
+  ;; ============================================================
+  ;; Axioms: §5.5's language table, row by row
+  ;; ============================================================
+
+  (fn gci ((arena Arena) (l SConcept) (r SConcept))
+    (@intent "l ⊑ r")
+    (@spec ((Arena SConcept SConcept) -> SAxiom))
+    (@alloc arena)
+    (union-new SAxiom sa-gci (sc arena l) (sc arena r)))
+
+  (fn ria ((arena Arena) (w (List RoleId)) (s RoleId))
+    (@intent "w ⊑ s")
+    (@spec ((Arena (List RoleId) RoleId) -> SAxiom))
+    (@alloc arena)
+    (union-new SAxiom sa-ria (record-new SRia (word w) (super s))))
+
+  (fn ria1 ((arena Arena) (r RoleId) (s RoleId))
+    (@intent "r ⊑ s")
+    (@spec ((Arena RoleId RoleId) -> SAxiom))
+    (@alloc arena)
+    (let ((mut w (list-new arena RoleId)))
+      (do (list-push w r) (ria arena w s))))
+
+  (fn nominal ((n Node))
+    (@intent "{a} for an individual, else none")
+    (@spec ((Node) -> (Option SConcept)))
+    (@pure)
+    (match n
+      ((individual-node i) (some (union-new SConcept sc-nominal i)))
+      ((class-node _)      (none))
+      ((fresh-node _)      (none))))
+
+  (fn least-individual ((ns (List Node)))
+    (@intent "The canonically least individual of a list (§5.5 S2 choice 10)")
+    (@spec (((List Node)) -> (Option IRI)))
+    (@pure)
+    (let ((mut best (Option IRI) (none)))
+      (do
+        (for-each (n ns)
+          (match n
+            ((individual-node i)
+              (match best
+                ((none)   (set! best (some i)))
+                ((some b) (when (< (iri-cmp i b) 0) (set! best (some i))))))
+            (_ (do))))
+        best)))
+
+  (fn top-sc ()
+    (@intent "⊤")
+    (@spec (() -> SConcept))
+    (@pure)
+    (union-new SConcept sc-top))
+
+  (fn s0-axiom ((arena Arena) (ax RawAxiom))
+    (@intent "One accepted axiom as S0's axioms")
+    (@spec ((Arena RawAxiom) -> (Result (List SAxiom) String)))
+    (@alloc arena)
+    ;; One local list, as gate.slop's expand-sugar: a helper pushing into
+    ;; a passed-in list would grow its own copy and lose it.
+    (let ((mut out (list-new arena SAxiom))
+          (mut fault (Option String) (none)))
+      (do
+        (match ax
+          ((ra-sub-class-of l r)
+            (match (s0-filler arena l)
+              ((error m) (set! fault (some m)))
+              ((ok lx)
+                (match (s0-filler arena r)
+                  ((error m) (set! fault (some m)))
+                  ((ok rx)   (list-push out (gci arena lx rx)))))))
+          ;; EquivalentClasses reaches here as its star, from the gate's
+          ;; expand-sugar; this row covers it whole regardless.
+          ((ra-equivalent-classes cs)
+            (match (s0-concepts arena cs)
+              ((error m) (set! fault (some m)))
+              ((ok xs)
+                (for-each (a xs)
+                  (for-each (b xs)
+                    (when (!= (sc-cmp a b) 0) (list-push out (gci arena a b))))))))
+          ;; DisjointClasses: each pair's meet is empty.
+          ((ra-disjoint-classes cs)
+            (match (s0-concepts arena cs)
+              ((error m) (set! fault (some m)))
+              ((ok xs)
+                (let ((n (cast Int (list-len xs)))
+                      (mut i 0))
+                  (while (< i n)
+                    (do
+                      (let ((mut j (+ i 1)))
+                        (while (< j n)
+                          (do
+                            (match (list-get xs i)
+                              ((some a)
+                                (match (list-get xs j)
+                                  ((some b)
+                                    (let ((mut ab (list-new arena SConcept)))
+                                      (do (list-push ab a) (list-push ab b)
+                                          (list-push out (gci arena (union-new SConcept sc-and ab)
+                                                              (union-new SConcept sc-bottom))))))
+                                  ((none) (do))))
+                              ((none) (do)))
+                            (set! j (+ j 1)))))
+                      (set! i (+ i 1))))))))
+          ((ra-sub-object-property a b)   (list-push out (ria1 arena a b)))
+          ((ra-property-chain ch)         (list-push out (ria arena (. ch steps) (. ch super))))
+          ;; Kept whole only with an inverse member (gate.slop): every
+          ;; ordered pair is an inclusion.
+          ((ra-equivalent-properties rs)
+            (for-each (a rs)
+              (for-each (b rs)
+                (list-push out (ria1 arena a b)))))
+          ((ra-transitive-property r)
+            (let ((mut w (list-new arena RoleId)))
+              (do (list-push w r) (list-push w r) (list-push out (ria arena w r)))))
+          ;; Domain: ∃R.⊤ ⊑ C. Range: ⊤ ⊑ ∀R.C.
+          ((ra-object-property-domain r c)
+            (match (s0-filler arena c)
+              ((error m) (set! fault (some m)))
+              ((ok cx)
+                (list-push out (gci arena (union-new SConcept sc-some r (sc arena (top-sc))) cx)))))
+          ((ra-object-property-range r c)
+            (match (s0-filler arena c)
+              ((error m) (set! fault (some m)))
+              ((ok cx)
+                (list-push out (gci arena (top-sc) (union-new SConcept sc-all r (sc arena cx)))))))
+          ;; ClassAssertion(C a): {a} ⊑ C.
+          ((ra-class-assertion ca)
+            (match (nominal (. ca subject))
+              ((none) (set! fault (some "a class assertion on a non-individual")))
+              ((some a)
+                (match (s0-filler arena (. ca concept))
+                  ((error m) (set! fault (some m)))
+                  ((ok cx)   (list-push out (gci arena a cx)))))))
+          ;; ObjectPropertyAssertion(R a b): {a} ⊑ ∃R.{b}.
+          ((ra-object-property-assertion e)
+            (match (nominal (. e from))
+              ((none) (set! fault (some "a property assertion from a non-individual")))
+              ((some a)
+                (match (nominal (. e to))
+                  ((none) (set! fault (some "a property assertion to a non-individual")))
+                  ((some b)
+                    (list-push out (gci arena a (union-new SConcept sc-some (. e role) (sc arena b)))))))))
+          ;; NegativeObjectPropertyAssertion(R a b): {a} ⊑ ∀R.¬{b}.
+          ((ra-negative-assertion e)
+            (match (nominal (. e from))
+              ((none) (set! fault (some "a negative assertion from a non-individual")))
+              ((some a)
+                (match (nominal (. e to))
+                  ((none) (set! fault (some "a negative assertion to a non-individual")))
+                  ((some b)
+                    (list-push out
+                      (gci arena a (union-new SConcept sc-all (. e role)
+                                     (sc arena (union-new SConcept sc-not (sc arena b)))))))))))
+          ;; InverseObjectProperties(R S): R ⊑ S⁻ and S⁻ ⊑ R.
+          ((ra-inverse-properties a b)
+            (do
+              (list-push out (ria1 arena a (inv-role b)))
+              (list-push out (ria1 arena (inv-role b) a))))
+          ((ra-property-characteristic c r)
+            (match c
+              ;; ⊤ ⊑ ≤1 R.⊤, and ≤1 R⁻.⊤.
+              ('prop-functional
+                (list-push out (gci arena (top-sc) (union-new SConcept sc-atmost 1 r (sc arena (top-sc))))))
+              ('prop-inverse-functional
+                (list-push out (gci arena (top-sc)
+                                 (union-new SConcept sc-atmost 1 (inv-role r) (sc arena (top-sc))))))
+              ;; R⁻ ⊑ R.
+              ('prop-symmetric   (list-push out (ria1 arena (inv-role r) r)))
+              ;; Dis(R, R⁻).
+              ('prop-asymmetric  (list-push out (union-new SAxiom sa-dis r (inv-role r))))
+              ('prop-reflexive   (list-push out (union-new SAxiom sa-ref r)))
+              ('prop-irreflexive (list-push out (union-new SAxiom sa-irr r)))))
+          ;; DisjointObjectProperties: each pair.
+          ((ra-disjoint-properties rs)
+            (let ((n (cast Int (list-len rs)))
+                  (mut i 0))
+              (while (< i n)
+                (do
+                  (let ((mut j (+ i 1)))
+                    (while (< j n)
+                      (do
+                        (match (list-get rs i)
+                          ((some a)
+                            (match (list-get rs j)
+                              ((some b) (list-push out (union-new SAxiom sa-dis a b)))
+                              ((none) (do))))
+                          ((none) (do)))
+                        (set! j (+ j 1)))))
+                  (set! i (+ i 1))))))
+          ;; SameIndividual: around the canonically least member.
+          ((ra-same-individual ns)
+            (match (least-individual ns)
+              ((none) (set! fault (some "SameIndividual without an individual")))
+              ((some h)
+                (let ((hub (union-new SConcept sc-nominal h)))
+                  (for-each (n ns)
+                    (match (nominal n)
+                      ((none) (set! fault (some "SameIndividual with a non-individual")))
+                      ;; The hub is not equated with itself.
+                      ((some x)
+                        (match n
+                          ((individual-node i)
+                            (when (!= (iri-cmp i h) 0)
+                              (do
+                                (list-push out (gci arena hub x))
+                                (list-push out (gci arena x hub)))))
+                          (_ (do))))))))))
+          ;; DifferentIndividuals: {aᵢ} ⊓ {aⱼ} ⊑ ⊥ for each pair.
+          ((ra-different-individuals ns)
+            (let ((n (cast Int (list-len ns)))
+                  (mut i 0))
+              (while (< i n)
+                (do
+                  (let ((mut j (+ i 1)))
+                    (while (< j n)
+                      (do
+                        (match (list-get ns i)
+                          ((some a)
+                            (match (list-get ns j)
+                              ((some b)
+                                (match (nominal a)
+                                  ((some xa)
+                                    (match (nominal b)
+                                      ((some xb)
+                                        (let ((mut ab (list-new arena SConcept)))
+                                          (do (list-push ab xa) (list-push ab xb)
+                                              (list-push out (gci arena (union-new SConcept sc-and ab)
+                                                                  (union-new SConcept sc-bottom))))))
+                                      ((none) (set! fault (some "DifferentIndividuals with a non-individual")))))
+                                  ((none) (set! fault (some "DifferentIndividuals with a non-individual")))))
+                              ((none) (do))))
+                          ((none) (do)))
+                        (set! j (+ j 1)))))
+                  (set! i (+ i 1))))))
+          ;; DisjointUnion(C D₁ … Dₙ): C ≡ D₁ ⊔ … ⊔ Dₙ, the Dᵢ pairwise disjoint.
+          ((ra-disjoint-union du)
+            (match (s0-concepts arena (. du members))
+              ((error m) (set! fault (some m)))
+              ((ok xs)
+                (let ((c   (union-new SConcept sc-name (. du class)))
+                      (uni (union-new SConcept sc-or xs))
+                      (n  (cast Int (list-len xs)))
+                      (mut i 0))
+                  (do
+                    (list-push out (gci arena c uni))
+                    (list-push out (gci arena uni c))
+                    (while (< i n)
+                      (do
+                        (let ((mut j (+ i 1)))
+                          (while (< j n)
+                            (do
+                              (match (list-get xs i)
+                                ((some a)
+                                  (match (list-get xs j)
+                                    ((some b)
+                                      (let ((mut ab (list-new arena SConcept)))
+                                        (do (list-push ab a) (list-push ab b)
+                                            (list-push out (gci arena (union-new SConcept sc-and ab)
+                                                                (union-new SConcept sc-bottom))))))
+                                    ((none) (do))))
+                                ((none) (do)))
+                              (set! j (+ j 1)))))
+                        (set! i (+ i 1)))))))))
+          ;; Never accepted under sriq: consumed, inert, or out of profile.
+          ((ra-declaration _)          (set! fault (some "a declaration reached the normaliser")))
+          ((ra-annotation)             (set! fault (some "an annotation reached the normaliser")))
+          ((ra-inert-data)             (set! fault (some "an inert data axiom reached the normaliser")))
+          ((ra-has-key _)              (set! fault (some "HasKey, which the sriq gate does not admit")))
+          ((ra-data-axiom _)           (set! fault (some "a data axiom, which the sriq gate does not admit")))
+          ((ra-builtin-role _)         (set! fault (some "a built-in role axiom, which the sriq gate does not admit")))
+          ((ra-anonymous-individual _) (set! fault (some "an anonymous individual, which the sriq gate does not admit")))
+          ((ra-reserved-vocabulary _)  (set! fault (some "reserved vocabulary, which the sriq gate does not admit")))
+          ((ra-swrl-rule _)            (set! fault (some "a SWRL rule, which the sriq gate does not admit")))
+          ((ra-unrecognized _)         (set! fault (some "an unrecognized axiom, which the sriq gate does not admit"))))
+        (match fault
+          ((some m) (error m))
+          ((none)   (ok out))))))
+
+  ;; ============================================================
+  ;; The collapse (§5.5 S0)
+  ;; ============================================================
+
+  (fn rep-at ((rb SriqRbox) (n Int))
+    (@intent "Node n's representative node")
+    (@spec ((SriqRbox Int) -> Int))
+    (@pure)
+    (match (list-get (. rb rep) n)
+      ((some v) v)
+      ((none)   n)))
+
+  (fn collapse-role ((rb SriqRbox) (r RoleId))
+    (@intent "R's representative: the least property of its component, oriented as R occurs")
+    (@spec ((SriqRbox RoleId) -> RoleId))
+    (@pure)
+    ;; A role in no inclusion is its own component.
+    (let ((n (sriq-node (. rb props) r)))
+      (if (< n 0) r (node-role (. rb props) (rep-at rb n)))))
+
+  (fn collapse-word ((arena Arena) (rb SriqRbox) (w (List RoleId)))
+    (@intent "Each role of a word, collapsed")
+    (@spec ((Arena SriqRbox (List RoleId)) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RoleId)))
+      (do (for-each (r w) (list-push out (collapse-role rb r))) out)))
+
+  (fn collapse-concepts ((arena Arena) (rb SriqRbox) (cs (List SConcept)))
+    (@intent "collapse-concept over a list")
+    (@spec ((Arena SriqRbox (List SConcept)) -> (List SConcept)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SConcept)))
+      (do (for-each (c cs) (list-push out (collapse-concept arena rb c))) out)))
+
+  (fn collapse-concept ((arena Arena) (rb SriqRbox) (c SConcept))
+    (@intent "Every role in a concept, collapsed")
+    (@spec ((Arena SriqRbox SConcept) -> SConcept))
+    (@alloc arena)
+    (match c
+      ((sc-top)          c)
+      ((sc-bottom)       c)
+      ((sc-name _)       c)
+      ((sc-nominal _)    c)
+      ((sc-not f)        (union-new SConcept sc-not (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-and xs)       (union-new SConcept sc-and (collapse-concepts arena rb xs)))
+      ((sc-or xs)        (union-new SConcept sc-or (collapse-concepts arena rb xs)))
+      ((sc-some r f)     (union-new SConcept sc-some (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-all r f)      (union-new SConcept sc-all (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-atleast n r f) (union-new SConcept sc-atleast n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-atmost n r f)  (union-new SConcept sc-atmost n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-self r)       (union-new SConcept sc-self (collapse-role rb r)))))
+
+  (fn trivial-ria ((w (List RoleId)) (s RoleId))
+    (@intent "Is this `R ⊑ R`, which the collapse leaves of an inclusion inside one component?")
+    (@spec (((List RoleId) RoleId) -> Bool))
+    (@pure)
+    (and (== (list-len w) 1)
+         (match (list-get w 0)
+           ((some r) (role-eq-p r s))
+           ((none)   false))))
+
+  (fn role-eq-p ((a RoleId) (b RoleId))
+    (@intent "Same role?")
+    (@spec ((RoleId RoleId) -> Bool))
+    (@pure)
+    (match a
+      ((named-role ia)
+        (match b ((named-role ib) (== (string-cmp (. ia value) (. ib value)) 0)) (_ false)))
+      ((inverse-role ia)
+        (match b ((inverse-role ib) (== (string-cmp (. ia value) (. ib value)) 0)) (_ false)))
+      ((fresh-role ka)
+        (match b ((fresh-role kb) (== ka kb)) (_ false)))))
+
+  (fn collapse-axiom ((arena Arena) (rb SriqRbox) (a SAxiom))
+    (@intent "An axiom with every role collapsed and every concept canonical; none for `R ⊑ R`")
+    (@spec ((Arena SriqRbox SAxiom) -> (Option SAxiom)))
+    (@alloc arena)
+    (match a
+      ((sa-gci l r)
+        (some (union-new SAxiom sa-gci
+                (sc arena (sc-canon arena (collapse-concept arena rb (deref l))))
+                (sc arena (sc-canon arena (collapse-concept arena rb (deref r)))))))
+      ((sa-ria x)
+        (let ((w (collapse-word arena rb (. x word)))
+              (s (collapse-role rb (. x super))))
+          (if (trivial-ria w s) (none) (some (ria arena w s)))))
+      ((sa-ref r)   (some (union-new SAxiom sa-ref (collapse-role rb r))))
+      ((sa-irr r)   (some (union-new SAxiom sa-irr (collapse-role rb r))))
+      ((sa-dis r s) (some (union-new SAxiom sa-dis (collapse-role rb r) (collapse-role rb s))))))
+
+  ;; ============================================================
+  ;; The empty role
+  ;; ============================================================
+
+  (fn bottom-role ()
+    (@intent "owl:bottomObjectProperty")
+    (@spec (() -> RoleId))
+    (@pure)
+    (union-new RoleId named-role (record-new IRI (value OWL_BOTTOM_OBJECT_PROPERTY))))
+
+  (fn is-bottom ((r RoleId))
+    (@intent "Is this the empty role, or its inverse?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    (match r
+      ((named-role i)   (== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0))
+      ((inverse-role i) (== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0))
+      ((fresh-role _)   false)))
+
+  (fn concept-bottom-p ((c SConcept))
+    (@intent "Does this concept mention the empty role?")
+    (@spec ((SConcept) -> Bool))
+    (@pure)
+    (match c
+      ((sc-top)            false)
+      ((sc-bottom)         false)
+      ((sc-name _)         false)
+      ((sc-nominal _)      false)
+      ((sc-not f)          (concept-bottom-p (deref f)))
+      ((sc-and xs)         (concepts-bottom-p xs))
+      ((sc-or xs)          (concepts-bottom-p xs))
+      ((sc-some r f)       (or (is-bottom r) (concept-bottom-p (deref f))))
+      ((sc-all r f)        (or (is-bottom r) (concept-bottom-p (deref f))))
+      ((sc-atleast _ r f)  (or (is-bottom r) (concept-bottom-p (deref f))))
+      ((sc-atmost _ r f)   (or (is-bottom r) (concept-bottom-p (deref f))))
+      ((sc-self r)         (is-bottom r))))
+
+  (fn concepts-bottom-p ((cs (List SConcept)))
+    (@intent "concept-bottom-p over a list")
+    (@spec (((List SConcept)) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (c cs) (when (concept-bottom-p c) (set! found true))) found)))
+
+  (fn axiom-bottom-p ((a SAxiom))
+    (@intent "Does this axiom mention the empty role?")
+    (@spec ((SAxiom) -> Bool))
+    (@pure)
+    (match a
+      ((sa-gci l r) (or (concept-bottom-p (deref l)) (concept-bottom-p (deref r))))
+      ((sa-ria x)
+        (let ((mut found (is-bottom (. x super))))
+          (do (for-each (r (. x word)) (when (is-bottom r) (set! found true))) found)))
+      ((sa-ref r)   (is-bottom r))
+      ((sa-irr r)   (is-bottom r))
+      ((sa-dis r s) (or (is-bottom r) (is-bottom s)))))
+
+  ;; ============================================================
+  ;; S0
+  ;; ============================================================
+
+  (fn sriq-s0 ((arena Arena) (accepted (List RawAxiom)))
+    (@intent "§5.5 S0: the gate's accepted axioms in SROIQ, collapsed, canonical, sorted")
+    (@spec ((Arena (List RawAxiom)) -> (Result S0 String)))
+    (@alloc arena)
+    ;; The RBox analysis is the gate's own, run on what it accepted: when
+    ;; the RBox was regular those are the axioms it judged, and when it
+    ;; was not, no role inclusion was accepted at all.
+    (let ((rb (sriq-rbox arena accepted))
+          (mut raw (list-new arena SAxiom))
+          (mut out (list-new arena SAxiom))
+          (mut bottom false)
+          (mut fault (Option String) (none)))
+      (do
+        (for-each (ax accepted)
+          (match (s0-axiom arena ax)
+            ((error m) (set! fault (some m)))
+            ((ok xs)   (for-each (x xs) (list-push raw x)))))
+        (for-each (a raw)
+          (do
+            (when (axiom-bottom-p a) (set! bottom true))
+            (match (collapse-axiom arena rb a)
+              ((some c) (list-push out c))
+              ((none)   (do)))))
+        ;; A component holding both P and P⁻ keeps P⁻ ⊑ P: its
+        ;; representative is P, and both were replaced by it.
+        (let ((k (cast Int (list-len (. rb props))))
+              (mut i 0))
+          (while (< i k)
+            (do
+              (when (and (== (rep-at rb (* 2 i)) (* 2 i))
+                         (== (rep-at rb (+ (* 2 i) 1)) (* 2 i)))
+                (let ((p (node-role (. rb props) (* 2 i))))
+                  (list-push out (ria1 arena (inv-role p) p))))
+              (set! i (+ i 1)))))
+        ;; The empty role: a role name N with ∃N.⊤ ⊑ ⊥ (§5.4 K0), once, for
+        ;; its component's representative.
+        (when bottom
+          (list-push out
+            (gci arena (union-new SConcept sc-some (collapse-role rb (bottom-role)) (sc arena (top-sc)))
+                       (union-new SConcept sc-bottom))))
+        (match fault
+          ((some m) (error m))
+          ((none)
+            (ok (record-new S0 (axioms (dedupe-saxioms arena (sort-saxioms arena out)))
+                               (rbox rb))))))))
+
+  ;; ============================================================
+  ;; S1's hook (S1 is slice 6)
+  ;; ============================================================
+
+  (fn ria-complex ((rb SriqRbox) (x SRia))
+    (@intent "Is this a complex RIA: a chain, or one step into a non-simple role?")
+    (@spec ((SriqRbox SRia) -> Bool))
+    (@pure)
+    (if (> (list-len (. x word)) 1)
+      true
+      (let ((n (sriq-node (. rb props) (. x super))))
+        (if (< n 0)
+          false
+          (match (list-get (. rb nonsimple) n)
+            ((some v) v)
+            ((none)   false))))))
+
+  (fn sriq-s1 ((arena Arena) (s0 S0))
+    (@intent "§5.5 S1 until it is built: the identity without a complex RIA, a refusal with one")
+    (@spec ((Arena S0) -> (Result (List SAxiom) String)))
+    (@alloc arena)
+    (let ((mut first (Option SAxiom) (none)))
+      (do
+        (for-each (a (. s0 axioms))
+          (match a
+            ((sa-ria x)
+              (when (and (ria-complex (. s0 rbox) x)
+                         (match first ((none) true) ((some _) false)))
+                (set! first (some a))))
+            (_ (do))))
+        (match first
+          ((none)   (ok (. s0 axioms)))
+          ((some a)
+            (error (string-concat arena
+                     "complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: "
+                     (render-saxiom arena a))))))))
+)
