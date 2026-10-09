@@ -1,0 +1,591 @@
+;; ============================================================
+;; sriq's ids from content  —  SPEC.md §5.5 S5
+;;
+;; S2 mints names in first-occurrence order. Here every minted name gets
+;; a dense id in the canonical order of WHAT IT NAMES, never input order,
+;; so a report cannot depend on serialization (§6.8):
+;;   - A_E by its concept (sc-cmp);
+;;   - S_{B₂} by (S, B₂), its filler renamed first;
+;;   - each DL2 function symbol by its axiom's content and its position:
+;;     the clauses are sorted first, and DL2's symbols numbered in that
+;;     order;
+;;   - P̄ by P, which is an IRI and needs no id.
+;; "Canonical order" is structural throughout (§5.5 S2 choice 8): a
+;; comparator on the named content, never the byte order of a key.
+;; ============================================================
+
+(module sriqnames
+  (@doc "sriq's ids from content (SPEC 5.5 S5), and the normaliser's entry")
+
+  (import rdf (IRI))
+  (import vocab (OWL_THING OWL_NOTHING))
+  (import types (RoleId DName DRole Dl1 Dl2 Dl4 DlClause))
+  (import owl2 (RawAxiom Signature))
+  (import canon (iri-cmp sort-range sort-iris))
+  (import sroiq (SConcept sc-cmp render-sconcept))
+  (import sriqnormal (S0 S2 sriq-s0 sriq-s1 sriq-s2))
+
+  (export SriqNormal sriq-normalize sriq-names render-dl-ids render-sriq-normal sriq-invariants)
+
+  ;; The normaliser's output, as the calculus will read it.
+  (type SriqNormal (record
+    (clauses     (List DlClause))          ; content ids, canonically sorted, deduped
+    (concepts    (List SConcept))          ; A_k's concept, by content id
+    (sroles      (List DRole))             ; S_{B₂}'s S, by content id
+    (sfills      (List (Option DName)))    ; S_{B₂}'s B₂ (none: ⊤), by content id
+    (bars        (List IRI))               ; the P with a P̄, sorted
+    (fns         (Int 0 ..))               ; function symbols: ids 0 .. fns−1
+    (classes     (List IRI))               ; the input's class names but ⊤ and ⊥, sorted (S4)
+    (individuals (List IRI))))             ; the input signature's individuals, sorted
+
+  ;; ============================================================
+  ;; Small helpers
+  ;; ============================================================
+
+  (fn int-at ((xs (List Int)) (i Int))
+    (@intent "Element i, or -1")
+    (@spec (((List Int) Int) -> Int))
+    (@pure)
+    (match (list-get xs i) ((some v) v) ((none) -1)))
+
+  (fn ints-new ((arena Arena) (n Int) (v Int))
+    (@intent "An n-long list of v")
+    (@spec ((Arena Int Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut xs (list-new arena Int))
+          (mut i 0))
+      (do (while (< i n) (do (list-push xs v) (set! i (+ i 1)))) xs)))
+
+  (fn cmp-int ((a Int) (b Int))
+    (@intent "-1, 0 or 1")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn sc-at-n ((xs (List SConcept)) (i Int))
+    (@intent "Element i, or ⊤")
+    (@spec (((List SConcept) Int) -> SConcept))
+    (@pure)
+    (match (list-get xs i) ((some v) v) ((none) (union-new SConcept sc-top))))
+
+  ;; ============================================================
+  ;; Structural order on the normal form, over renamed ids
+  ;; ============================================================
+
+  (fn dname-cmp ((a DName) (b DName))
+    (@intent "Class names before fresh ones; IRIs by iri-cmp, fresh names by id")
+    (@spec ((DName DName) -> Int))
+    (@pure)
+    (match a
+      ((dn-class ia) (match b ((dn-class ib) (iri-cmp ia ib)) ((dn-fresh _) -1)))
+      ((dn-fresh ka) (match b ((dn-class _) 1) ((dn-fresh kb) (cmp-int ka kb))))))
+
+  (fn filler-cmp ((a (Option DName)) (b (Option DName)))
+    (@intent "⊤ (none) first, then by name")
+    (@spec (((Option DName) (Option DName)) -> Int))
+    (@pure)
+    (match a
+      ((none)    (match b ((none) 0) ((some _) -1)))
+      ((some x)  (match b ((none) 1) ((some y) (dname-cmp x y))))))
+
+  (fn drole-rank ((r DRole))
+    (@intent "P before P̄ before S_{B₂}")
+    (@spec ((DRole) -> Int))
+    (@pure)
+    (match r ((dr-prop _) 0) ((dr-bar _) 1) ((dr-sub _) 2)))
+
+  (fn drole-cmp ((a DRole) (b DRole))
+    (@intent "Role names: by kind, then IRI or id")
+    (@spec ((DRole DRole) -> Int))
+    (@pure)
+    (let ((ra (drole-rank a)) (rb (drole-rank b)))
+      (if (!= ra rb)
+        (cmp-int ra rb)
+        (match a
+          ((dr-prop ia) (match b ((dr-prop ib) (iri-cmp ia ib)) (_ 0)))
+          ((dr-bar ia)  (match b ((dr-bar ib) (iri-cmp ia ib)) (_ 0)))
+          ((dr-sub ka)  (match b ((dr-sub kb) (cmp-int ka kb)) (_ 0)))))))
+
+  (fn dnames-cmp ((a (List DName)) (b (List DName)))
+    (@intent "Lexicographic on name lists, length as tiebreak")
+    (@spec (((List DName) (List DName)) -> Int))
+    (@pure)
+    (let ((alen (cast Int (list-len a)))
+          (blen (cast Int (list-len b)))
+          (n    (min alen blen))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do
+            (match (list-get a i)
+              ((some x) (match (list-get b i) ((some y) (set! r (dname-cmp x y))) ((none) (do))))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        (cond ((!= r 0) r) ((< alen blen) -1) ((> alen blen) 1) (else 0)))))
+
+  (fn dl-rank ((c DlClause))
+    (@intent "A form's place in the canonical clause order: DL1 first")
+    (@spec ((DlClause) -> Int))
+    (@pure)
+    (match c
+      ((dl1 _) 1) ((dl2 _) 2) ((dl3 _ _ _) 3) ((dl4 _) 4) ((dl5 _ _) 5) ((dl6 _ _) 6)
+      ((dl7 _ _) 7) ((dl8 _ _) 8) ((dl9 _ _) 9) ((dl10 _ _) 10) ((dl11 _ _) 11)))
+
+  (fn then-cmp ((first Int) (second Int))
+    (@intent "first, unless it ties")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (if (!= first 0) first second))
+
+  (fn dl-cmp ((a DlClause) (b DlClause))
+    (@intent "Total structural order on clauses; a DL2's function symbols follow from its content, so they are not compared")
+    (@spec ((DlClause DlClause) -> Int))
+    (@pure)
+    (let ((ra (dl-rank a)) (rb (dl-rank b)))
+      (if (!= ra rb)
+        (cmp-int ra rb)
+        (match a
+          ((dl1 x) (match b ((dl1 y) (then-cmp (dnames-cmp (. x body) (. y body)) (dnames-cmp (. x head) (. y head)))) (_ 0)))
+          ((dl2 x)
+            (match b
+              ((dl2 y)
+                (then-cmp (dname-cmp (. x sub) (. y sub))
+                  (then-cmp (drole-cmp (. x role) (. y role))
+                    (then-cmp (cmp-int (. x count) (. y count)) (filler-cmp (. x filler) (. y filler))))))
+              (_ 0)))
+          ((dl3 s1 b1 c1)
+            (match b ((dl3 s2 b2 c2) (then-cmp (drole-cmp s1 s2) (then-cmp (dname-cmp b1 b2) (dname-cmp c1 c2)))) (_ 0)))
+          ((dl4 x)
+            (match b
+              ((dl4 y)
+                (then-cmp (dname-cmp (. x sub) (. y sub))
+                  (then-cmp (drole-cmp (. x role) (. y role))
+                    (then-cmp (cmp-int (. x count) (. y count))
+                      (then-cmp (filler-cmp (. x filler) (. y filler)) (drole-cmp (. x srole) (. y srole)))))))
+              (_ 0)))
+          ((dl5 n1 s1)  (match b ((dl5 n2 s2) (then-cmp (dname-cmp n1 n2) (drole-cmp s1 s2))) (_ 0)))
+          ((dl6 s1 n1)  (match b ((dl6 s2 n2) (then-cmp (drole-cmp s1 s2) (dname-cmp n1 n2))) (_ 0)))
+          ((dl7 a1 b1)  (match b ((dl7 a2 b2) (then-cmp (drole-cmp a1 a2) (drole-cmp b1 b2))) (_ 0)))
+          ((dl8 a1 b1)  (match b ((dl8 a2 b2) (then-cmp (drole-cmp a1 a2) (drole-cmp b1 b2))) (_ 0)))
+          ((dl9 a1 b1)  (match b ((dl9 a2 b2) (then-cmp (drole-cmp a1 a2) (drole-cmp b1 b2))) (_ 0)))
+          ((dl10 o1 n1) (match b ((dl10 o2 n2) (then-cmp (iri-cmp o1 o2) (dname-cmp n1 n2))) (_ 0)))
+          ((dl11 n1 o1) (match b ((dl11 n2 o2) (then-cmp (dname-cmp n1 n2) (iri-cmp o1 o2))) (_ 0)))))))
+
+  ;; ============================================================
+  ;; Renaming
+  ;; ============================================================
+
+  (fn rename-name ((fresh (List Int)) (n DName))
+    (@intent "A class name with its fresh id renumbered")
+    (@spec (((List Int) DName) -> DName))
+    (@pure)
+    (match n
+      ((dn-class _) n)
+      ((dn-fresh k) (union-new DName dn-fresh (cast (Int 0 ..) (int-at fresh (cast Int k)))))))
+
+  (fn rename-filler ((fresh (List Int)) (b (Option DName)))
+    (@intent "rename-name inside an option")
+    (@spec (((List Int) (Option DName)) -> (Option DName)))
+    (@pure)
+    (match b ((none) b) ((some n) (some (rename-name fresh n)))))
+
+  (fn rename-role ((subs (List Int)) (r DRole))
+    (@intent "A role name with its S_{B₂} id renumbered")
+    (@spec (((List Int) DRole) -> DRole))
+    (@pure)
+    (match r
+      ((dr-sub k) (union-new DRole dr-sub (cast (Int 0 ..) (int-at subs (cast Int k)))))
+      (_ r)))
+
+  (fn sort-dnames ((arena Arena) (xs (List DName)))
+    (@intent "Sorted and deduped: a DL1 body or head is a set")
+    (@spec ((Arena (List DName)) -> (List DName)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (dname-cmp (dname-at xs i) (dname-at xs j)))))
+          (mut out (list-new arena DName))
+          (mut have false)
+          (mut last (union-new DName dn-fresh 0)))
+      (do
+        (for-each (k idx)
+          (let ((n (dname-at xs k)))
+            (when (or (not have) (!= (dname-cmp n last) 0))
+              (do (list-push out n) (set! last n) (set! have true)))))
+        out)))
+
+  (fn dname-at ((xs (List DName)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List DName) Int) -> DName))
+    (@pure)
+    (match (list-get xs i) ((some v) v) ((none) (union-new DName dn-fresh 0))))
+
+  (fn rename-names ((arena Arena) (fresh (List Int)) (ns (List DName)))
+    (@intent "rename-name over a list")
+    (@spec ((Arena (List Int) (List DName)) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DName)))
+      (do (for-each (n ns) (list-push out (rename-name fresh n))) out)))
+
+  (fn rename-clause ((arena Arena) (fresh (List Int)) (subs (List Int)) (c DlClause))
+    (@intent "A clause with every id renumbered; a DL1's body and head as sorted sets")
+    (@spec ((Arena (List Int) (List Int) DlClause) -> DlClause))
+    (@alloc arena)
+    (match c
+      ((dl1 d)
+        (union-new DlClause dl1
+          (record-new Dl1 (body (sort-dnames arena (rename-names arena fresh (. d body))))
+                          (head (sort-dnames arena (rename-names arena fresh (. d head)))))))
+      ((dl2 d)
+        (union-new DlClause dl2
+          (record-new Dl2 (sub (rename-name fresh (. d sub))) (role (rename-role subs (. d role)))
+                          (count (. d count)) (filler (rename-filler fresh (. d filler))) (fns (. d fns)))))
+      ((dl3 s b1 b2) (union-new DlClause dl3 (rename-role subs s) (rename-name fresh b1) (rename-name fresh b2)))
+      ((dl4 d)
+        (union-new DlClause dl4
+          (record-new Dl4 (sub (rename-name fresh (. d sub))) (role (rename-role subs (. d role)))
+                          (count (. d count)) (filler (rename-filler fresh (. d filler)))
+                          (srole (rename-role subs (. d srole))))))
+      ((dl5 b s)  (union-new DlClause dl5 (rename-name fresh b) (rename-role subs s)))
+      ((dl6 s b)  (union-new DlClause dl6 (rename-role subs s) (rename-name fresh b)))
+      ((dl7 a b)  (union-new DlClause dl7 (rename-role subs a) (rename-role subs b)))
+      ((dl8 a b)  (union-new DlClause dl8 (rename-role subs a) (rename-role subs b)))
+      ((dl9 a b)  (union-new DlClause dl9 (rename-role subs a) (rename-role subs b)))
+      ((dl10 o b) (union-new DlClause dl10 o (rename-name fresh b)))
+      ((dl11 b o) (union-new DlClause dl11 (rename-name fresh b) o))))
+
+  (fn clause-at ((xs (List DlClause)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List DlClause) Int) -> DlClause))
+    (@pure)
+    (match (list-get xs i)
+      ((some v) v)
+      ((none)   (union-new DlClause dl7 (union-new DRole dr-sub 0) (union-new DRole dr-sub 0)))))
+
+  (fn renumber-fns ((arena Arena) (c DlClause) (next Int))
+    (@intent "A DL2 with its function symbols numbered from next; other forms as they are")
+    (@spec ((Arena DlClause Int) -> DlClause))
+    (@alloc arena)
+    (match c
+      ((dl2 d)
+        (let ((mut fs (list-new arena (Int 0 ..)))
+              (mut i 0))
+          (do
+            (while (< i (cast Int (list-len (. d fns))))
+              (do (list-push fs (cast (Int 0 ..) (+ next i))) (set! i (+ i 1))))
+            (union-new DlClause dl2
+              (record-new Dl2 (sub (. d sub)) (role (. d role)) (count (. d count))
+                              (filler (. d filler)) (fns fs))))))
+      (_ c)))
+
+  (fn fn-count ((c DlClause))
+    (@intent "How many function symbols a clause carries")
+    (@spec ((DlClause) -> Int))
+    (@pure)
+    (match c ((dl2 d) (cast Int (list-len (. d fns)))) (_ 0)))
+
+  (fn sriq-names ((arena Arena) (s2 S2) (sig Signature))
+    (@intent "§5.5 S5: every minted name renumbered by its content, the clauses sorted and deduped")
+    (@spec ((Arena S2 Signature) -> SriqNormal))
+    (@alloc arena)
+    ;; The signature's sets are read here, inline: a Set cannot be passed
+    ;; to a helper (see normalize.slop).
+    (let ((nf (cast Int (list-len (. s2 concepts))))
+          (mut classes (list-new arena IRI))
+          (mut individuals (list-new arena IRI))
+          ;; A_E: by concept.
+          (forder (sort-range arena nf
+                    (fn ((i Int) (j Int)) (sc-cmp (sc-at-n (. s2 concepts) i) (sc-at-n (. s2 concepts) j)))))
+          (fresh (ints-new arena nf 0))
+          (mut concepts (list-new arena SConcept))
+          (mut k 0))
+      (do
+        (for-each (c (set-elements (. sig classes)))
+          (when (not (or (string-eq (. c value) OWL_THING) (string-eq (. c value) OWL_NOTHING)))
+            (list-push classes c)))
+        (for-each (a (set-elements (. sig individuals))) (list-push individuals a))
+        (for-each (old forder)
+          (do (list-set fresh old k) (list-push concepts (sc-at-n (. s2 concepts) old)) (set! k (+ k 1))))
+        ;; S_{B₂}: by (S, B₂), B₂ renamed first.
+        (let ((ns (cast Int (list-len (. s2 sroles))))
+              (mut fills (list-new arena (Option DName)))
+              (mut roles (list-new arena DRole)))
+          (do
+            (for-each (b (. s2 sfills)) (list-push fills (rename-filler fresh b)))
+            (for-each (r (. s2 sroles)) (list-push roles r))
+            (let ((sorder (sort-range arena ns
+                            (fn ((i Int) (j Int))
+                              (then-cmp (drole-cmp (role-at roles i) (role-at roles j))
+                                        (filler-cmp (fill-at fills i) (fill-at fills j))))))
+                  (subs (ints-new arena ns 0))
+                  (mut sroles (list-new arena DRole))
+                  (mut sfills (list-new arena (Option DName)))
+                  (mut m 0))
+              (do
+                (for-each (old sorder)
+                  (do (list-set subs old m)
+                      (list-push sroles (role-at roles old))
+                      (list-push sfills (fill-at fills old))
+                      (set! m (+ m 1))))
+                ;; The clauses, renamed, sorted, deduped; then DL2's
+                ;; function symbols numbered in that order.
+                (let ((mut renamed (list-new arena DlClause)))
+                  (do
+                    (for-each (c (. s2 clauses)) (list-push renamed (rename-clause arena fresh subs c)))
+                    (let ((corder (sort-range arena (cast Int (list-len renamed))
+                                    (fn ((i Int) (j Int)) (dl-cmp (clause-at renamed i) (clause-at renamed j)))))
+                          (mut out (list-new arena DlClause))
+                          (mut have false)
+                          (mut last (clause-at renamed 0))
+                          (mut next 0))
+                      (do
+                        (for-each (ci corder)
+                          (let ((c (clause-at renamed ci)))
+                            (when (or (not have) (!= (dl-cmp c last) 0))
+                              (do
+                                (list-push out (renumber-fns arena c next))
+                                (set! next (+ next (fn-count c)))
+                                (set! last c)
+                                (set! have true)))))
+                        (record-new SriqNormal
+                          (clauses     out)
+                          (concepts    concepts)
+                          (sroles      sroles)
+                          (sfills      sfills)
+                          (bars        (sort-iris arena (. s2 bars)))
+                          (fns         (cast (Int 0 ..) next))
+                          (classes     (sort-iris arena classes))
+                          (individuals (sort-iris arena individuals))))))))))))))
+
+  (fn role-at ((xs (List DRole)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List DRole) Int) -> DRole))
+    (@pure)
+    (match (list-get xs i) ((some v) v) ((none) (union-new DRole dr-sub 0))))
+
+  (fn fill-at ((xs (List (Option DName))) (i Int))
+    (@intent "Element i, or ⊤")
+    (@spec (((List (Option DName)) Int) -> (Option DName)))
+    (@pure)
+    (match (list-get xs i) ((some v) v) ((none) (none))))
+
+  ;; ============================================================
+  ;; The normaliser's entry
+  ;; ============================================================
+
+  (fn sriq-normalize ((arena Arena) (accepted (List RawAxiom)) (sig Signature))
+    (@intent "§5.5's normaliser: S0, S1 (its hook until slice 6), S2, then ids from content")
+    (@spec ((Arena (List RawAxiom) Signature) -> (Result SriqNormal String)))
+    (@alloc arena)
+    (match (sriq-s0 arena accepted)
+      ((error m) (error m))
+      ((ok s0)
+        (match (sriq-s1 arena s0)
+          ((error m) (error m))
+          ((ok axs)
+            (match (sriq-s2 arena axs)
+              ((error m) (error m))
+              ((ok s2)   (ok (sriq-names arena s2 sig)))))))))
+
+  ;; ============================================================
+  ;; Rendering with ids, for the determinism tests
+  ;; ============================================================
+
+  (fn rn ((arena Arena) (n DName))
+    (@intent "A name: its IRI, or A<id>")
+    (@spec ((Arena DName) -> String))
+    (@alloc arena)
+    (match n
+      ((dn-class i) (. i value))
+      ((dn-fresh k) (string-concat arena "A" (int-to-string arena k)))))
+
+  (fn rr ((arena Arena) (r DRole))
+    (@intent "A role name: P, P^bar, or S<id>")
+    (@spec ((Arena DRole) -> String))
+    (@alloc arena)
+    (match r
+      ((dr-prop i) (. i value))
+      ((dr-bar i)  (string-concat arena (. i value) "^bar"))
+      ((dr-sub k)  (string-concat arena "S" (int-to-string arena k)))))
+
+  (fn rf ((arena Arena) (b (Option DName)))
+    (@intent "A filler, T for ⊤")
+    (@spec ((Arena (Option DName)) -> String))
+    (@alloc arena)
+    (match b ((none) "T") ((some n) (rn arena n))))
+
+  (fn rns ((arena Arena) (ns (List DName)))
+    (@intent "Names, space-joined")
+    (@spec ((Arena (List DName)) -> String))
+    (@alloc arena)
+    (let ((mut out "")) (do (for-each (n ns) (set! out (string-concat arena out (string-concat arena " " (rn arena n))))) out)))
+
+  (fn rints ((arena Arena) (xs (List (Int 0 ..))))
+    (@intent "Ids, space-joined")
+    (@spec ((Arena (List (Int 0 ..))) -> String))
+    (@alloc arena)
+    (let ((mut out "")) (do (for-each (x xs) (set! out (string-concat arena out (string-concat arena " f" (int-to-string arena x))))) out)))
+
+  (fn j ((arena Arena) (parts (List String)))
+    (@intent "Parts joined by |")
+    (@spec ((Arena (List String)) -> String))
+    (@alloc arena)
+    (let ((mut out "") (mut first true))
+      (do (for-each (s parts)
+            (do (when (not first) (set! out (string-concat arena out "|")))
+                (set! out (string-concat arena out s)) (set! first false)))
+          out)))
+
+  (fn render-dl-ids ((arena Arena) (c DlClause))
+    (@intent "A clause with its ids, as the engine will see it")
+    (@spec ((Arena DlClause) -> String))
+    (@alloc arena)
+    (let ((mut ps (list-new arena String)))
+      (do
+        (match c
+          ((dl1 d)  (do (list-push ps "DL1") (list-push ps (rns arena (. d body))) (list-push ps (rns arena (. d head)))))
+          ((dl2 d)  (do (list-push ps "DL2") (list-push ps (rn arena (. d sub))) (list-push ps (rr arena (. d role)))
+                        (list-push ps (int-to-string arena (. d count))) (list-push ps (rf arena (. d filler)))
+                        (list-push ps (rints arena (. d fns)))))
+          ((dl3 s a b) (do (list-push ps "DL3") (list-push ps (rr arena s)) (list-push ps (rn arena a)) (list-push ps (rn arena b))))
+          ((dl4 d)  (do (list-push ps "DL4") (list-push ps (rn arena (. d sub))) (list-push ps (rr arena (. d role)))
+                        (list-push ps (int-to-string arena (. d count))) (list-push ps (rf arena (. d filler)))
+                        (list-push ps (rr arena (. d srole)))))
+          ((dl5 b s)  (do (list-push ps "DL5") (list-push ps (rn arena b)) (list-push ps (rr arena s))))
+          ((dl6 s b)  (do (list-push ps "DL6") (list-push ps (rr arena s)) (list-push ps (rn arena b))))
+          ((dl7 a b)  (do (list-push ps "DL7") (list-push ps (rr arena a)) (list-push ps (rr arena b))))
+          ((dl8 a b)  (do (list-push ps "DL8") (list-push ps (rr arena a)) (list-push ps (rr arena b))))
+          ((dl9 a b)  (do (list-push ps "DL9") (list-push ps (rr arena a)) (list-push ps (rr arena b))))
+          ((dl10 o b) (do (list-push ps "DL10") (list-push ps (. o value)) (list-push ps (rn arena b))))
+          ((dl11 b o) (do (list-push ps "DL11") (list-push ps (rn arena b)) (list-push ps (. o value)))))
+        (j arena ps))))
+
+  (fn render-sriq-normal ((arena Arena) (n SriqNormal))
+    (@intent "The whole output, one line per clause, id and signature entry, for the determinism tests")
+    (@spec ((Arena SriqNormal) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String))
+          (mut k 0))
+      (do
+        (for-each (c (. n clauses)) (list-push out (render-dl-ids arena c)))
+        (for-each (c (. n concepts))
+          (do (list-push out (string-concat arena "A" (string-concat arena (int-to-string arena k)
+                                (string-concat arena " = " (render-sconcept arena c)))))
+              (set! k (+ k 1))))
+        (set! k 0)
+        (for-each (r (. n sroles))
+          (do (list-push out (string-concat arena "S" (string-concat arena (int-to-string arena k)
+                                (string-concat arena " = " (string-concat arena (rr arena r)
+                                  (string-concat arena " " (rf arena (fill-at (. n sfills) k))))))))
+              (set! k (+ k 1))))
+        (for-each (i (. n bars)) (list-push out (string-concat arena "bar " (. i value))))
+        (list-push out (string-concat arena "fns " (int-to-string arena (. n fns))))
+        (for-each (i (. n classes)) (list-push out (string-concat arena "class " (. i value))))
+        (for-each (i (. n individuals)) (list-push out (string-concat arena "individual " (. i value))))
+        out)))
+
+  ;; ============================================================
+  ;; S5's promises, checked
+  ;; ============================================================
+
+  (fn name-in-range ((n DName) (nc Int))
+    (@intent "Is a fresh name's id below nc? Class names always are")
+    (@spec ((DName Int) -> Bool))
+    (@pure)
+    (match n ((dn-class _) true) ((dn-fresh k) (< (cast Int k) nc))))
+
+  (fn names-in-range ((ns (List DName)) (nc Int))
+    (@intent "name-in-range over a list")
+    (@spec (((List DName) Int) -> Bool))
+    (@pure)
+    (let ((mut ok true)) (do (for-each (n ns) (when (not (name-in-range n nc)) (set! ok false))) ok)))
+
+  (fn filler-in-range ((b (Option DName)) (nc Int))
+    (@intent "name-in-range inside an option")
+    (@spec (((Option DName) Int) -> Bool))
+    (@pure)
+    (match b ((none) true) ((some n) (name-in-range n nc))))
+
+  (fn role-in-range ((r DRole) (ns Int))
+    (@intent "Is an S_{B₂}'s id below ns? Other role names always are")
+    (@spec ((DRole Int) -> Bool))
+    (@pure)
+    (match r ((dr-sub k) (< (cast Int k) ns)) (_ true)))
+
+  (fn clause-in-range ((c DlClause) (nc Int) (ns Int))
+    (@intent "Does every id in c name an entry of the output's tables?")
+    (@spec ((DlClause Int Int) -> Bool))
+    (@pure)
+    (match c
+      ((dl1 d)     (and (names-in-range (. d body) nc) (names-in-range (. d head) nc)))
+      ((dl2 d)     (and (name-in-range (. d sub) nc) (role-in-range (. d role) ns) (filler-in-range (. d filler) nc)))
+      ((dl3 r a b) (and (role-in-range r ns) (name-in-range a nc) (name-in-range b nc)))
+      ((dl4 d)     (and (name-in-range (. d sub) nc) (role-in-range (. d role) ns)
+                        (filler-in-range (. d filler) nc) (role-in-range (. d srole) ns)))
+      ((dl5 b r)   (and (name-in-range b nc) (role-in-range r ns)))
+      ((dl6 r b)   (and (role-in-range r ns) (name-in-range b nc)))
+      ((dl7 a b)   (and (role-in-range a ns) (role-in-range b ns)))
+      ((dl8 a b)   (and (role-in-range a ns) (role-in-range b ns)))
+      ((dl9 a b)   (and (role-in-range a ns) (role-in-range b ns)))
+      ((dl10 _ b)  (name-in-range b nc))
+      ((dl11 b _)  (name-in-range b nc))))
+
+  (fn sriq-invariants ((arena Arena) (n SriqNormal))
+    (@intent "What S5 promises, as the list of what fails (empty: all hold)")
+    (@spec ((Arena SriqNormal) -> (List String)))
+    (@alloc arena)
+    ;; Ids in key order: each table strictly increasing in its content's
+    ;; order, so dense and duplicate-free. Clauses sorted and deduped.
+    ;; Every id in range. DL2's function symbols 0 .. fns−1, in clause
+    ;; order, one per witness. No A_E stands for a class name or ⊤, which
+    ;; are their own names: a fresh name never aliases the signature.
+    (let ((nc (cast Int (list-len (. n concepts))))
+          (ns (cast Int (list-len (. n sroles))))
+          (mut bad (list-new arena String))
+          (mut i 1)
+          (mut next 0))
+      (do
+        (while (< i nc)
+          (do
+            (when (>= (sc-cmp (sc-at-n (. n concepts) (- i 1)) (sc-at-n (. n concepts) i)) 0)
+              (list-push bad (string-concat arena "A ids out of key order at " (int-to-string arena i))))
+            (set! i (+ i 1))))
+        (set! i 1)
+        (while (< i ns)
+          (do
+            (when (>= (then-cmp (drole-cmp (role-at (. n sroles) (- i 1)) (role-at (. n sroles) i))
+                                (filler-cmp (fill-at (. n sfills) (- i 1)) (fill-at (. n sfills) i))) 0)
+              (list-push bad (string-concat arena "S ids out of key order at " (int-to-string arena i))))
+            (set! i (+ i 1))))
+        (set! i 1)
+        (while (< i (cast Int (list-len (. n clauses))))
+          (do
+            (when (>= (dl-cmp (clause-at (. n clauses) (- i 1)) (clause-at (. n clauses) i)) 0)
+              (list-push bad (string-concat arena "clauses out of order at " (int-to-string arena i))))
+            (set! i (+ i 1))))
+        (for-each (c (. n clauses))
+          (do
+            (when (not (clause-in-range c nc ns))
+              (list-push bad (string-concat arena "an id out of range: " (render-dl-ids arena c))))
+            (match c
+              ((dl2 d)
+                (do
+                (when (!= (cast Int (list-len (. d fns))) (cast Int (. d count)))
+                  (list-push bad (string-concat arena "a DL2 without one function symbol per witness: " (render-dl-ids arena c))))
+                (for-each (f (. d fns))
+                  (do
+                    (when (!= (cast Int f) next)
+                      (list-push bad (string-concat arena "function symbols not dense: " (render-dl-ids arena c))))
+                    (set! next (+ next 1))))))
+              (_ (do)))))
+        (when (!= next (cast Int (. n fns)))
+          (list-push bad "the function symbol count disagrees with the clauses"))
+        (for-each (c (. n concepts))
+          (match c
+            ((sc-name _) (list-push bad (string-concat arena "a fresh name for a class name: " (render-sconcept arena c))))
+            ((sc-top)    (list-push bad "a fresh name for ⊤"))
+            (_ (do))))
+        bad)))
+)
