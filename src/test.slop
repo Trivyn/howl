@@ -2261,6 +2261,186 @@
     (let ((p (cast (Ptr RawConcept) (arena-alloc arena (sizeof RawConcept)))))
       (do (set! (deref p) c) p)))
 
+  (fn rungs3-omit ((arena Arena) (label String) (ttl String) (el-want Int) (elpp-want Int) (sriq-want Int))
+    (@intent "Does the gate omit exactly this many axioms under el, el++ and sriq?")
+    (@spec ((Arena String String Int Int Int) -> Bool))
+    (@alloc arena)
+    (let ((doc (string-concat arena (rung-prefix) ttl)))
+      (let ((el (omissions-under arena doc 'profile-el))
+            (pp (omissions-under arena doc 'profile-el-plus-plus))
+            (sq (omissions-under arena doc 'profile-sriq)))
+        (if (and (== el el-want) (and (== pp elpp-want) (== sq sriq-want)))
+          true
+          (do
+            (println (string-concat arena "  [rungs3] " label))
+            (print "    el ") (print (int-to-string arena el))
+            (print "  el++ ") (print (int-to-string arena pp))
+            (print "  sriq ") (println (int-to-string arena sq))
+            false)))))
+
+  (fn test-sriq-gate-table ((arena Arena))
+    (@intent "§5.5's language and gate conditions, row by row, against el and el++")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Each row is the omissions under el, el++ and sriq. sriq is not
+    ;; wired (--profile sriq exits 3); its gate runs here only. The rows
+    ;; are mirrored in corpus/test_project.py's SriqTest.
+    (let ((mut ok true))
+      (do
+        (when (not
+      (rungs3-omit arena "plain EL stays in every rung"
+          ":C rdfs:subClassOf :D ." 0 0 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "InverseObjectProperties"
+          ":r owl:inverseOf :s ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a restriction on an inverse"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :r ] ; owl:someValuesFrom :D ] ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "ObjectAllValuesFrom"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :D ] ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "ObjectUnionOf with a complement"
+          ":C rdfs:subClassOf [ owl:unionOf ( :D [ owl:complementOf :D ] ) ] ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a complement on the left"
+          "[ owl:complementOf :C ] rdfs:subClassOf :D ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a qualified cardinality, n = 16"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 16 ; owl:onClass :D ] ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a qualified cardinality, n = 17"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 17 ; owl:onClass :D ] ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "an unqualified exact cardinality"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:cardinality 2 ] ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a cardinality on a transitive role"
+          ":r a owl:TransitiveProperty .
+  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 1 ] ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "FunctionalObjectProperty"
+          ":r a owl:FunctionalProperty ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a functional transitive role"
+          ":r a owl:TransitiveProperty , owl:FunctionalProperty ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "InverseFunctionalObjectProperty"
+          ":r a owl:InverseFunctionalProperty ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "irreflexive and asymmetric"
+          ":r a owl:IrreflexiveProperty , owl:AsymmetricProperty ." 2 2 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "Self on a simple role"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] ." 1 0 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "Self on a transitive role"
+          ":r a owl:TransitiveProperty .
+  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "symmetric and transitive: (R5) and (R4)"
+          ":r a owl:SymmetricProperty , owl:TransitiveProperty ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "RO's part_of/has_part: regular only after the collapse"
+          ":r a owl:TransitiveProperty . :s a owl:TransitiveProperty . :r owl:inverseOf :s ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "P and P- in one component"
+          ":r owl:inverseOf :r . :r a owl:TransitiveProperty ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "R o R- [= R: R^c makes it cyclic, so the whole RBox goes"
+          ":s rdfs:subPropertyOf :t .
+  :r owl:propertyChainAxiom ( :r [ owl:inverseOf :r ] ) ." 1 1 2))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a cycle through a length-1 complex RIA"
+          ":r owl:propertyChainAxiom ( :s :t ) . :r rdfs:subPropertyOf :s ." 2 2 2))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "DisjointObjectProperties"
+          ":r owl:propertyDisjointWith :s ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "DisjointObjectProperties on a transitive role"
+          ":r a owl:TransitiveProperty . :r owl:propertyDisjointWith :s ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "DisjointUnion"
+          ":C owl:disjointUnionOf ( :D [ owl:complementOf :D ] ) ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "the top role as a super-role is a tautology"
+          ":r rdfs:subPropertyOf owl:topObjectProperty ." 1 0 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "an inverse into the top role is a tautology under sriq"
+          "[ owl:inverseOf :r ] rdfs:subPropertyOf owl:topObjectProperty ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "the top role elsewhere"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:topObjectProperty ; owl:someValuesFrom :D ] ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "the bottom role"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom :D ] ." 1 0 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a cardinality on the bottom role"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:maxCardinality 1 ] ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "ObjectHasValue: a class nominal"
+          ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] ." 1 0 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "ObjectOneOf: a class nominal"
+          ":C rdfs:subClassOf [ owl:oneOf ( :a ) ] ." 1 0 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "an anonymous individual"
+          "_:x :r :a ." 1 1 1))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "SameIndividual and DifferentIndividuals"
+          ":a owl:sameAs :b . :a owl:differentFrom :b ." 2 0 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a negative object assertion"
+          "[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ] ." 1 0 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "a class assertion with a union"
+          ":a a [ owl:unionOf ( :C :D ) ] ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "no range condition under sriq"
+          ":s rdfs:range :C . :t rdfs:range :D .
+  :t owl:propertyChainAxiom ( :r :s ) ." 1 1 0))
+          (set! ok false))
+        (when (not
+      (rungs3-omit arena "used data stays out"
+          ":d a owl:DatatypeProperty . :a :d 1 ." 1 1 1))
+          (set! ok false))
+        ok)))
+
   (fn test-el-plus-plus-gate-table ((arena Arena))
     (@intent "Each el++ construct is omitted under el and accepted under el++, or omitted by both")
     (@spec ((Arena) -> Bool))
@@ -5493,6 +5673,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-data-lemma arena)))
             (print-test-result "§5.2: data axioms on idle data properties are inert in both rungs" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-gate-table arena)))
+            (print-test-result "gate: sriq admits §5.5's language; el and el++ omit it (three-rung table)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-el-plus-plus-gate-table arena)))

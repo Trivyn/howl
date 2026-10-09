@@ -1001,6 +1001,8 @@ uint8_t test_test_inverses_decode_whole(slop_arena* arena);
 uint8_t test_test_data_constructs_decode_as_data(slop_arena* arena);
 uint8_t test_test_concept_order_is_total(slop_arena* arena);
 owl2_RawConcept* test_box_test_concept(slop_arena* arena, owl2_RawConcept c);
+uint8_t test_rungs3_omit(slop_arena* arena, slop_string label, slop_string ttl, int64_t el_want, int64_t elpp_want, int64_t sriq_want);
+uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
 slop_string test_ksc_form_of_ttl(slop_arena* arena, slop_string ttl);

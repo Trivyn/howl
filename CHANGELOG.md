@@ -7,6 +7,13 @@
 - **`sriq`**, the SRIQ object fragment with an ABox, is specified in SPEC §5.5. It uses Simančík's
   chain elimination, then Tena Cucala, Cuenca Grau and Horrocks's consequence-based calculus. It is
   not built yet; `--profile sriq` exits 3.
+  - **Its gate is built** and tested, with the census's independent column beside it. It admits
+    inverses, `∀`, unions, full negation, number restrictions up to 16, Self, every property
+    characteristic, disjoint properties, `DisjointUnion`, equality and inequality, and negative
+    assertions. Its RBox condition is simple roles over every property expression, the collapse of
+    role-equivalence classes, and Simančík's ≺-regularity; a failure omits the whole RBox.
+  - On BFO-core and CCO it omits nothing. On RO and OBI it omits no RBox axiom; what it omits there
+    is SWRL, class nominals and used data.
 
 ### Changed
 

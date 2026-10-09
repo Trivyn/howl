@@ -1954,6 +1954,9 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
 >   - `docs/coverage.md` misstated "idle".
 > - **Project owner: accepted, 2026-10-08** (PR #34; spec approval recorded as AD e81ee7a2).
 >   `--profile sriq` exits 3 until the wiring slice.
+> - **Built so far:** the language's representation (`RoleId`'s inverse arm, [§6.2](#62-data-model))
+>   and the gate below, with the census's independent column (slice 4). The gate runs only under
+>   test until the wiring slice.
 
 **Sources.**
 - **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for

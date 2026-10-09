@@ -272,6 +272,11 @@ def inadmissible_chains(g, sig=None):
     range the rewrite cannot take (some part of it is out of profile) is left
     as written and imposes its whole filler.
     """
+    # sriq has no range condition ([TGH21] needs none), and its chains may
+    # step through an inverse: no chain is inadmissible there (SPEC §5.5).
+    # project.py calls this directly, past signature()'s own answer.
+    if sig is not None and sig.get("profile") == "sriq":
+        return {}
     sig = sig or _base_signature(g)
     positive = sig["positive_complements"]
 
@@ -331,7 +336,12 @@ def inadmissible_chains(g, sig=None):
     return bad
 
 
-PROFILES = profiles.BUILT
+# The census judges sriq (SPEC.md §5.5) before the engine runs it: its gate
+# is built and tested (test.slop's three-rung table, mirrored in
+# test_project.py's SriqTest) while `--profile sriq` still exits 3. So the
+# census lists it, and profiles.BUILT, which every harness that runs HOWL
+# checks, does not. The el++ precedent did the same.
+PROFILES = profiles.BUILT + ("sriq",)
 
 
 def signature(g, profile="el"):
@@ -343,6 +353,12 @@ def signature(g, profile="el"):
     sig["profile"] = profile
     if profile == "el++":
         sig.update(_el_plus_plus_signature(g))
+    if profile == "sriq":
+        sig.update(_sriq_signature(g))
+        # sriq has no range condition ([TGH21] needs none), and its
+        # regularity check is HOWL's alone, as el's is.
+        sig["inadmissible_chains"] = {}
+        return sig
     sig["inadmissible_chains"] = inadmissible_chains(g, sig)
     return sig
 
@@ -527,6 +543,176 @@ def _base_signature(g):
     }
 
 
+def role_expr(g, t):
+    """An object property expression: ('+', P) for P, ('-', P) for
+    ObjectInverseOf(P), None for anything else."""
+    if isinstance(t, URIRef):
+        return ("+", t)
+    if isinstance(t, BNode):
+        objs = list(g.objects(t, OWL.inverseOf))
+        if len(objs) == 1 and isinstance(objs[0], URIRef):
+            return ("-", objs[0])
+    return None
+
+
+def inv(r):
+    return ("-" if r[0] == "+" else "+", r[1])
+
+
+def _sriq_signature(g):
+    """SPEC.md §5.5's gate, read off the graph, independently of HOWL's: the
+    non-simple role expressions (OWL 2 §11.1 over AllOPE, -> taking inverse and
+    symmetric axioms into account), and the restriction nodes and axioms whose
+    roles must be simple."""
+    step = {}
+
+    def edge(a, b):
+        if a is not None and b is not None:
+            step.setdefault(a, set()).add(b)
+            step.setdefault(inv(a), set()).add(inv(b))
+
+    for a, b in g.subject_objects(RDFS.subPropertyOf):
+        edge(role_expr(g, a), role_expr(g, b))
+    for a, b in g.subject_objects(OWL.equivalentProperty):
+        edge(role_expr(g, a), role_expr(g, b))
+        edge(role_expr(g, b), role_expr(g, a))
+    for a, b in g.subject_objects(OWL.inverseOf):
+        if isinstance(a, BNode) and role_expr(g, a) == ("-", b):
+            continue                      # an ObjectInverseOf's own triple
+        ra, rb = role_expr(g, a), role_expr(g, b)
+        if ra is not None and rb is not None:
+            edge(ra, inv(rb))
+            edge(inv(rb), ra)
+    for r in g.subjects(RDF.type, OWL.SymmetricProperty):
+        rr = role_expr(g, r)
+        if rr is not None:
+            edge(inv(rr), rr)
+    composite = set()
+    for r in list(g.subjects(OWL.propertyChainAxiom, None)) + list(g.subjects(RDF.type, OWL.TransitiveProperty)):
+        rr = role_expr(g, r)
+        if rr is not None:
+            composite |= {rr, inv(rr)}
+    for b in BUILTIN_ROLES:
+        composite |= {("+", b), ("-", b)}
+    nonsimple, todo = set(composite), list(composite)
+    while todo:
+        x = todo.pop()
+        for y in step.get(x, ()):
+            if y not in nonsimple:
+                nonsimple.add(y)
+                todo.append(y)
+
+    def simple(t):
+        r = role_expr(g, t)
+        return r is not None and r not in nonsimple
+
+    counts = (OWL.minCardinality, OWL.maxCardinality, OWL.cardinality,
+              OWL.minQualifiedCardinality, OWL.maxQualifiedCardinality, OWL.qualifiedCardinality)
+    bad_restriction = set()
+    for p in counts:
+        for x, n in g.subject_objects(p):
+            on = g.value(x, OWL.onProperty)
+            try:
+                big = int(n) > SRIQ_MAX_COUNT
+            except (TypeError, ValueError):
+                big = True
+            if big or on is None or not simple(on):
+                bad_restriction.add(x)
+    for x in g.subjects(OWL.hasSelf, None):
+        on = g.value(x, OWL.onProperty)
+        if on is None or not simple(on):
+            bad_restriction.add(x)
+    return {"sriq_nonsimple": nonsimple, "sriq_bad_restriction": bad_restriction,
+            "sriq_simple": simple, "sriq_graph": g}
+
+
+# sriq's largest number in a number restriction (SPEC.md §5.5): a resource
+# guard, not a proof condition.
+SRIQ_MAX_COUNT = 16
+SIMPLE_ONLY = {OWL.FunctionalProperty, OWL.InverseFunctionalProperty,
+               OWL.IrreflexiveProperty, OWL.AsymmetricProperty}
+
+
+def _classify_sriq(sig, s, p, o):
+    """SPEC.md §5.5's table, or None when §5.2 decides. Checked BEFORE §5.2's
+    rules, because they move triples out of OUT. Class nominals (hasValue,
+    oneOf) are not here: they stay OUT, as in el."""
+    g, simple = sig["sriq_graph"], sig["sriq_simple"]
+    restriction_preds = (OWL.someValuesFrom, OWL.allValuesFrom, OWL.hasSelf, OWL.minCardinality,
+                         OWL.maxCardinality, OWL.cardinality, OWL.minQualifiedCardinality,
+                         OWL.maxQualifiedCardinality, OWL.qualifiedCardinality)
+    if p in restriction_preds and s in sig["data_restrictions"]:
+        return None                         # data, decided by §5.2
+    # The universal role: a super-role inclusion is a tautology; anywhere
+    # else it stays out (§5.2's built-in rule).
+    if p == RDFS.subPropertyOf and o == OWL.topObjectProperty:
+        return INERT, "inclusion into owl:topObjectProperty (tautology)"
+    if p == OWL.propertyChainAxiom and s == OWL.topObjectProperty:
+        return INERT, "inclusion into owl:topObjectProperty (tautology)"
+    if OWL.topObjectProperty in (s, o) and p in (OWL.onProperty, RDFS.subPropertyOf, OWL.equivalentProperty,
+                                                 OWL.inverseOf, OWL.propertyDisjointWith):
+        return None
+    # The empty role is implemented, as in el++.
+    if p == OWL.onProperty and o == OWL.bottomObjectProperty:
+        return IN, "built-in role (bottomObjectProperty)"
+    if p in (RDFS.subPropertyOf, OWL.equivalentProperty) and OWL.bottomObjectProperty in (s, o):
+        return IN, "built-in role (bottomObjectProperty)"
+    if p == OWL.inverseOf:
+        if role_expr(g, s) is not None and role_expr(g, o) is not None:
+            return IN, ("ObjectInverseOf" if isinstance(s, BNode) and role_expr(g, s) == ("-", o)
+                        else "InverseObjectProperties")
+        return None
+    if p in (OWL.unionOf, OWL.complementOf, OWL.allValuesFrom):
+        return IN, {OWL.unionOf: "ObjectUnionOf", OWL.complementOf: "ObjectComplementOf",
+                    OWL.allValuesFrom: "ObjectAllValuesFrom"}[p]
+    if p in (OWL.minCardinality, OWL.maxCardinality, OWL.cardinality, OWL.minQualifiedCardinality,
+             OWL.maxQualifiedCardinality, OWL.qualifiedCardinality, OWL.hasSelf):
+        if s in sig["sriq_bad_restriction"]:
+            return OUT, ("ObjectHasSelf on a non-simple role" if p == OWL.hasSelf
+                         else "cardinality on a non-simple role, or above 16")
+        return IN, "ObjectHasSelf" if p == OWL.hasSelf else "cardinality"
+    if p == RDF.type and o in SIMPLE_ONLY:
+        if role_expr(g, s) is not None and s not in sig["data"]:
+            return (IN, OUT_TYPE[o]) if simple(s) else (OUT, OUT_TYPE[o] + " on a non-simple role")
+        return None
+    if p == RDF.type and o in (OWL.SymmetricProperty, OWL.ReflexiveProperty, OWL.TransitiveProperty):
+        if role_expr(g, s) is not None and s not in sig["data"] and s not in BUILTIN_ROLES:
+            return IN, OUT_TYPE.get(o, "TransitiveObjectProperty")
+        return None
+    if p == OWL.propertyDisjointWith:
+        if s in sig["data"] or o in sig["data"]:
+            return None
+        if simple(s) and simple(o):
+            return IN, "DisjointObjectProperties"
+        return OUT, "DisjointObjectProperties on a non-simple role"
+    if p == RDF.type and o == OWL.AllDisjointProperties:
+        ms = [m for h in g.objects(s, OWL.members) for m in Collection(g, h)]
+        if len(ms) >= 2 and not any(m in sig["data"] for m in ms):
+            return (IN, "DisjointObjectProperties") if all(simple(m) for m in ms) \
+                else (OUT, "DisjointObjectProperties on a non-simple role")
+        return None
+    if p == OWL.disjointUnionOf and isinstance(s, URIRef):
+        return IN, "DisjointUnion"
+    if p in (OWL.sameAs, OWL.differentFrom) and _named(s) and _named(o):
+        return IN, "SameIndividual" if p == OWL.sameAs else "DifferentIndividuals"
+    if p == RDF.type and o == OWL.AllDifferent:
+        ms = [m for h in list(g.objects(s, OWL.members)) + list(g.objects(s, OWL.distinctMembers))
+              for m in Collection(g, h)]
+        if len(ms) >= 2 and all(_named(m) for m in ms):
+            return IN, "DifferentIndividuals"
+        return None
+    if p == RDF.type and o == OWL.NegativePropertyAssertion:
+        src = list(g.objects(s, OWL.sourceIndividual))
+        prop = list(g.objects(s, OWL.assertionProperty))
+        tgt = list(g.objects(s, OWL.targetIndividual))
+        if (len(src) == len(prop) == len(tgt) == 1 and not list(g.objects(s, OWL.targetValue))
+                and _named(src[0]) and _named(tgt[0]) and role_expr(g, prop[0]) is not None
+                and prop[0] not in sig["data"] and prop[0] != OWL.topObjectProperty):
+            return IN, "NegativeObjectPropertyAssertion"
+        return None
+    return None
+
+
 def _classify_el_plus_plus(sig, s, p, o):
     """SPEC.md §5.4's additions to the table, or None when §5.2 decides.
     Checked BEFORE §5.2's rules, because they move triples out of OUT."""
@@ -564,6 +750,10 @@ def classify_triple(sig, s, p, o):
         return INERT, INERT_DATA
     if sig.get("profile") == "el++":
         decided = _classify_el_plus_plus(sig, s, p, o)
+        if decided is not None:
+            return decided
+    if sig.get("profile") == "sriq":
+        decided = _classify_sriq(sig, s, p, o)
         if decided is not None:
             return decided
     # Built-in roles first: they appear as the OBJECT of owl:onProperty, so a
