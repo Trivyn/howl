@@ -7,11 +7,17 @@
 - **`sriq`**, the SRIQ object fragment with an ABox, is specified in SPEC §5.5. It uses Simančík's
   chain elimination, then Tena Cucala, Cuenca Grau and Horrocks's consequence-based calculus. It is
   not built yet; `--profile sriq` exits 3.
-- **The data lemma** (SPEC §5.2): the property axioms of data properties nothing uses will be
-  inert in every profile. It is not built yet.
 
 ### Changed
 
+- **The data lemma** (SPEC §5.2): the domain, range, functionality, sub-property, equivalence and
+  disjointness axioms of a data property that nothing uses are set aside in every profile. "Used"
+  means used in a class expression, an assertion or a key, by the property or by any data property
+  below it. These axioms provably change no answer, so they are no longer omissions.
+  - On CCO, 16 omissions go: 220 → 204 under `el`, 218 → 202 under `el++`.
+  - On RO, 5 go, including the 4 lines its range's datatype restriction used to leak.
+  - On OBI, 2 go.
+  - The RO and OBI projections keep those axioms, and their pins were re-certified against HermiT.
 - **`horn-sriq` is dropped from the profile ladder.** On `sriq`'s calculus it would run at the same
   cost, so it would only be a stricter gate.
   - Its value keeps its place in the C `types_Profile` enum and in Rust's `Profile`, so neither is

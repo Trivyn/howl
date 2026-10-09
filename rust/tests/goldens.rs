@@ -80,7 +80,7 @@ fn check(goldens: &[(PathBuf, PathBuf)], selection: ProfileSelection) {
 
 #[test]
 fn el_fixture_goldens() {
-    let gs = goldens_in("fixtures", &["out-of-profile", "hazards", "v0", "probes", "el++"]);
+    let gs = goldens_in("fixtures", &["out-of-profile", "hazards", "v0", "probes", "el++", "data"]);
     // The directory is a wildcard over what exists: a count this low
     // means the goldens moved, not that there is nothing to check.
     assert!(gs.len() >= 100, "only {} fixture goldens found", gs.len());
@@ -89,7 +89,7 @@ fn el_fixture_goldens() {
 
 #[test]
 fn el_plus_plus_fixture_goldens() {
-    let gs = goldens_in("el++", &["v0", "el++"]);
+    let gs = goldens_in("el++", &["v0", "el++", "data"]);
     assert!(gs.len() >= 50, "only {} el++ goldens found", gs.len());
     check(&gs, ProfileSelection::Explicit(Profile::ElPlusPlus));
 }

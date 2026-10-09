@@ -155,6 +155,12 @@
     ;; cost ~0.6 GB. `decode-axioms` counts them rather than keeping them.
     (ra-annotation)
 
+    ;; An axiom §5.2's data lemma sets aside: the domain, range,
+    ;; functionality, sub-property, equivalence or disjointness of a data
+    ;; property nothing uses, even below it. Inert in every rung, and like
+    ;; an annotation it is counted, never kept or rendered.
+    (ra-inert-data)
+
     ;; --- out-of-profile: object side, structure retained ---
     (ra-inverse-properties    RoleId RoleId)
     (ra-property-characteristic PropCharacteristic RoleId)
@@ -167,7 +173,7 @@
     (ra-inverse-expression    InputRef)   ; ObjectInverseOf as an operand — v1
 
     ;; --- out-of-profile: built on vocabulary v0 has no types for ---
-    (ra-data-axiom            InputRef)   ; the whole data side (§5.2)
+    (ra-data-axiom            InputRef)   ; the data side, but for what the data lemma sets aside (§5.2)
     (ra-builtin-role          InputRef)   ; owl:top/bottomObjectProperty
     (ra-anonymous-individual  InputRef)
     (ra-reserved-vocabulary   InputRef)   ; e.g. owl:Nothing as an individual
@@ -216,6 +222,7 @@
       ((ra-declaration _)               'd-consumed)
 
       ((ra-annotation)                  'd-inert)
+      ((ra-inert-data)                  'd-inert)
 
       ((ra-inverse-properties _ _)      'd-out-of-profile)
       ((ra-property-characteristic _ _) (when-el-plus-plus p))
@@ -463,6 +470,7 @@
         ;; stays total and a disposition change cannot slip past.
         ((ra-declaration _)              false)
         ((ra-annotation)                 false)
+        ((ra-inert-data)                 false)
         ((ra-inverse-properties _ _)     false)
         ((ra-disjoint-properties _)      false)
         ((ra-disjoint-union _)           false)
@@ -798,6 +806,7 @@
       ((ra-declaration d)
         (wrap arena "Declaration" (. (. d entity) value)))
       ((ra-annotation)                "Annotation()")
+      ((ra-inert-data)                "InertDataAxiom()")
       ((ra-inverse-properties a b)
         (wrap arena "InverseObjectProperties" (join2 arena (render-role a) (render-role b))))
       ((ra-property-characteristic c r)
@@ -936,6 +945,7 @@
         (union-new RawAxiom ra-declaration
           (record-new RawDeclaration (kind (. d kind)) (entity (copy-iri arena (. d entity))))))
       ((ra-annotation) (union-new RawAxiom ra-annotation))
+      ((ra-inert-data) (union-new RawAxiom ra-inert-data))
       ((ra-inverse-properties a b)
         (union-new RawAxiom ra-inverse-properties (copy-role arena a) (copy-role arena b)))
       ((ra-property-characteristic c r)

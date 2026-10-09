@@ -13,7 +13,7 @@ import sys
 import tempfile
 import unittest
 
-from rdflib import Graph
+from rdflib import Graph, URIRef
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import census   # noqa: E402
@@ -256,6 +256,99 @@ class ElPlusPlusTest(unittest.TestCase):
     def test_unknown_profile_is_refused(self):
         with self.assertRaises(ValueError):
             census.signature(graph(""), "sroiq")
+
+
+class DataLemmaTest(unittest.TestCase):
+    """SPEC.md §5.2's data lemma, as the census implements it independently.
+
+    Each row is the number of OUT-OF-PROFILE triples in both rungs; a set-aside
+    axiom is INERT. These mirror test.slop's test-data-lemma, which counts
+    HOWL's omissions: the two implementations must agree.
+    """
+    HEAD_X = "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n:C a owl:Class . :a a owl:NamedIndividual .\n"
+    ROWS = [
+        ("idle: domain, range, functionality",
+         ":d a owl:DatatypeProperty , owl:FunctionalProperty ; rdfs:domain :C ; rdfs:range xsd:integer .", 0),
+        ("idle: sub-property, equivalence, disjointness",
+         ":d a owl:DatatypeProperty . :e a owl:DatatypeProperty . :f a owl:DatatypeProperty .\n"
+         ":d rdfs:subPropertyOf :e ; owl:equivalentProperty :f . :e owl:propertyDisjointWith :f .", 0),
+        ("used in an assertion",
+         ":d a owl:DatatypeProperty ; rdfs:domain :C . :a :d 1 .", 2),
+        ("used below: the super-property is not idle",
+         ":p a owl:DatatypeProperty ; rdfs:domain :C .\n"
+         ":q a owl:DatatypeProperty ; rdfs:subPropertyOf :p . :a :q 1 .", 3),
+        ("disjointness: an idle member suffices, two used ones do not",
+         ":u a owl:DatatypeProperty . :v a owl:DatatypeProperty . :i a owl:DatatypeProperty .\n"
+         ":u owl:propertyDisjointWith :i . :u owl:propertyDisjointWith :v . :a :u 1 ; :v 2 .", 3),
+        ("a DatatypeRestriction range goes with its axiom",
+         ":d a owl:DatatypeProperty ; rdfs:range [ a rdfs:Datatype ; owl:onDatatype xsd:short ;\n"
+         "  owl:withRestrictions ( [ xsd:minInclusive 0 ] ) ] .", 0),
+        ("a sub-property of owl:topDataProperty is a tautology",
+         ":d a owl:DatatypeProperty ; rdfs:subPropertyOf owl:topDataProperty .", 0),
+        ("a domain on owl:topDataProperty stays",
+         "owl:topDataProperty rdfs:domain :C .", 1),
+        ("a declared owl:topDataProperty is still never idle",
+         "owl:topDataProperty a owl:DatatypeProperty ; rdfs:domain :C .", 1),
+        ("a disjointness with owl:topDataProperty stays",
+         ":d a owl:DatatypeProperty ; owl:propertyDisjointWith owl:topDataProperty .", 1),
+        ("an axiom annotation is not a use (RO annotates RO_0002029's range)",
+         ":d a owl:DatatypeProperty ; rdfs:range xsd:integer .\n"
+         "[ a owl:Axiom ; owl:annotatedSource :d ; owl:annotatedProperty rdfs:range ;\n"
+         "  owl:annotatedTarget xsd:integer ; rdfs:comment \"why\" ] .", 0),
+        ("a filler shared with its own reification still goes with its axiom",
+         ":d a owl:DatatypeProperty ; rdfs:range _:x .\n"
+         "_:x a rdfs:Datatype ; owl:onDatatype xsd:short ; owl:withRestrictions ( [ xsd:minInclusive 0 ] ) .\n"
+         "[ a owl:Axiom ; owl:annotatedSource :d ; owl:annotatedProperty rdfs:range ;\n"
+         "  owl:annotatedTarget _:x ; rdfs:comment \"why\" ] .", 0),
+        ("owl:withRestrictions without owl:onDatatype is not swallowed",
+         ":d a owl:DatatypeProperty ; rdfs:domain _:x .\n"
+         "_:x a owl:Class ; owl:withRestrictions ( [ xsd:minInclusive 0 ] ) .", 2),
+        ("a facet node with a second triple is not swallowed",
+         ":d a owl:DatatypeProperty ; rdfs:range [ a rdfs:Datatype ; owl:onDatatype xsd:short ;\n"
+         "  owl:withRestrictions ( [ xsd:minInclusive 0 ; owl:someValuesFrom :C ] ) ] .", 1),
+        ("a reified-only declaration declares: stage 0 rebuilds it",
+         "[ a owl:Axiom ; owl:annotatedSource :d ; owl:annotatedProperty rdf:type ;\n"
+         "  owl:annotatedTarget owl:DatatypeProperty ] .\n:d rdfs:range xsd:integer .", 0),
+    ]
+
+    def out(self, text, profile):
+        _, _, out, _, _ = census.census(None, graph=graph(self.HEAD_X + text), profile=profile)
+        return sum(out.values())
+
+    def test_each_row_under_both_rungs(self):
+        for label, text, want in self.ROWS:
+            with self.subTest(label):
+                self.assertEqual(self.out(text, "el"), want, "el")
+                self.assertEqual(self.out(text, "el++"), want, "el++")
+
+    def test_a_filler_that_heads_an_axiom_keeps_it(self):
+        # Consuming the filler whole dropped the GCI, and with it D's
+        # unsatisfiability, with no out-of-profile triple to show for it.
+        g = graph(self.HEAD_X + ":D a owl:Class .\n:d a owl:DatatypeProperty ; rdfs:domain _:x .\n"
+                  "_:x owl:intersectionOf ( :C :D ) ; rdfs:subClassOf owl:Nothing .")
+        sig = census.signature(g)
+        self.assertEqual(sig["data_tree"], set())
+        _, in_v0, _, _, _ = census.census(None, graph=g)
+        self.assertIn("SubClassOf", in_v0)
+
+    def test_a_reified_only_assertion_is_a_use(self):
+        # HOWL rebuilds `:a :d "x"` before its lemma, so :d is not idle.
+        g = graph(self.HEAD_X + ':d a owl:DatatypeProperty ; rdfs:domain :C .\n'
+                  '[ a owl:Axiom ; owl:annotatedSource :a ; owl:annotatedProperty :d ; owl:annotatedTarget "x" ] .')
+        self.assertNotIn(URIRef("http://example.org/t#d"), census.signature(g)["data_idle"])
+
+    def test_an_ambiguous_reification_rebuilds_nothing(self):
+        # HOWL faults the document (two sources), so nothing is rebuilt.
+        g = graph(self.HEAD_X + "[ a owl:Axiom ; owl:annotatedSource :d , :e ;\n"
+                  "  owl:annotatedProperty rdfs:range ; owl:annotatedTarget :C ] .")
+        self.assertEqual(set(census.decoder_triples(g)) - set(g), set())
+
+    def test_a_shared_filler_is_not_set_aside(self):
+        # The range's blank node is also a class assertion's object, so it is
+        # referenced twice and decoded as written: only the range is inert.
+        g = graph(self.HEAD_X + ":d a owl:DatatypeProperty ; rdfs:range _:x .\n_:x a rdfs:Datatype .\n:b :r _:x .")
+        sig = census.signature(g)
+        self.assertEqual(sig["data_tree"], set())
 
 
 if __name__ == "__main__":

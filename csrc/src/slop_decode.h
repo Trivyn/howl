@@ -18,6 +18,8 @@ typedef struct decode_Rebuilt decode_Rebuilt;
 typedef struct decode_IndividualTerm decode_IndividualTerm;
 typedef struct decode_NodeList decode_NodeList;
 typedef struct decode_Stage1 decode_Stage1;
+typedef struct decode_DataVocab decode_DataVocab;
+typedef struct decode_DataLemma decode_DataLemma;
 
 typedef enum {
     decode_LookupFault_lookup_missing,
@@ -229,6 +231,37 @@ typedef struct decode_Stage1 decode_Stage1;
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+struct decode_DataVocab {
+    int64_t rdf_type;
+    int64_t data_property;
+    int64_t functional;
+    int64_t domain;
+    int64_t range;
+    int64_t sub_property;
+    int64_t equivalent;
+    int64_t disjoint;
+    int64_t top;
+    int64_t on_datatype;
+};
+typedef struct decode_DataVocab decode_DataVocab;
+
+#ifndef SLOP_OPTION_DECODE_DATAVOCAB_DEFINED
+#define SLOP_OPTION_DECODE_DATAVOCAB_DEFINED
+SLOP_OPTION_DEFINE(decode_DataVocab, slop_option_decode_DataVocab)
+#endif
+
+struct decode_DataLemma {
+    slop_map* data;
+    slop_map* idle;
+    slop_map* tree;
+};
+typedef struct decode_DataLemma decode_DataLemma;
+
+#ifndef SLOP_OPTION_DECODE_DATALEMMA_DEFINED
+#define SLOP_OPTION_DECODE_DATALEMMA_DEFINED
+SLOP_OPTION_DEFINE(decode_DataLemma, slop_option_decode_DataLemma)
 #endif
 
 
@@ -461,6 +494,14 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, te
 termstore_TermStore decode_decode_store(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_list_string decode_queried_predicates(slop_arena* arena);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+decode_DataVocab decode_data_vocab(slop_arena* arena, termstore_TermStore dict);
+decode_DataLemma decode_data_lemma(slop_arena* arena, termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_list_termstore_IdTriple triples);
+void decode_mark_data_uses(termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_map* data, slop_map* used, termstore_IdTriple it);
+uint8_t decode_predicate_is_annotation(termstore_TermStore dict, owl2_Signature sig, int64_t p);
+void decode_collect_inert_trees(slop_arena* arena, termstore_TermStore dict, decode_DataVocab v, slop_map* idle, slop_map* tree, slop_list_termstore_IdTriple triples);
+uint8_t decode_filler_triple(rdf_Triple t, uint8_t restriction, uint8_t single);
+uint8_t decode_id_is_blank(termstore_TermStore dict, int64_t id);
+uint8_t decode_inert_data_axiom(decode_DataVocab v, decode_DataLemma lemma, termstore_IdTriple it);
 slop_map* decode_negative_assertion_nodes(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_map* decode_negative_assertion_parts(slop_arena* arena, termstore_TermStore dict);
 uint8_t decode_negative_assertion_part(termstore_IdTriple it, slop_map* nodes, slop_map* parts);
@@ -551,6 +592,16 @@ SLOP_OPTION_DEFINE(owl2_PropCharacteristic, slop_option_owl2_PropCharacteristic)
 #ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
 #define SLOP_OPTION_TYPES_ROLEID_DEFINED
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_DATAVOCAB_DEFINED
+#define SLOP_OPTION_DECODE_DATAVOCAB_DEFINED
+SLOP_OPTION_DEFINE(decode_DataVocab, slop_option_decode_DataVocab)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_DATALEMMA_DEFINED
+#define SLOP_OPTION_DECODE_DATALEMMA_DEFINED
+SLOP_OPTION_DEFINE(decode_DataLemma, slop_option_decode_DataLemma)
 #endif
 
 

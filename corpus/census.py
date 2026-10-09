@@ -17,7 +17,7 @@ gate under test, the acceptance criterion would be self-certifying.
 import os
 import sys
 from collections import Counter
-from rdflib import Graph, RDF, RDFS, OWL, BNode, URIRef, Literal, Namespace
+from rdflib import Graph, RDF, RDFS, OWL, XSD, BNode, URIRef, Literal, Namespace
 from rdflib.collection import Collection
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -98,6 +98,78 @@ HEADER_PRED = {
 BUILTIN_ROLES = {OWL.topObjectProperty, OWL.bottomObjectProperty}
 
 OUT, IN, INERT, CONSUMED = "out", "in_v0", "inert", "consumed"
+
+# The construct an axiom the data lemma sets aside is counted under (SPEC.md
+# §5.2). It is INERT, so in_v0 does not move; the differential adds it to the
+# constructs it routes on, and no oracle's capability set holds it, so such an
+# input goes to HermiT: ELK cannot read data property axioms.
+INERT_DATA = "inert data axiom (data lemma)"
+
+# The built-in annotation properties, as HOWL's add-builtins (decode.slop)
+# registers them; declared ones carry owl:AnnotationProperty.
+BUILTIN_ANNOTATION = {RDFS.label, RDFS.comment, RDFS.seeAlso, RDFS.isDefinedBy,
+                      OWL.versionInfo, OWL.deprecated, OWL.priorVersion,
+                      OWL.backwardCompatibleWith, OWL.incompatibleWith}
+
+# HOWL's stage 0 (decode.slop's stage0-scan and header-consumable) runs before
+# its data lemma. A triple of an ontology, axiom or annotation node is consumed
+# unless its predicate is logical, and a reified axiom is rebuilt unless the
+# document also asserts it. The census mirrors that to read the same triples.
+HEADER_TYPES = {OWL.Ontology, OWL.Axiom, OWL.Annotation}
+LOGICAL_PRED = {
+    RDFS.subClassOf, OWL.equivalentClass, OWL.disjointWith, RDFS.subPropertyOf,
+    OWL.equivalentProperty, OWL.propertyDisjointWith, OWL.propertyChainAxiom, OWL.inverseOf,
+    RDFS.domain, RDFS.range, OWL.sameAs, OWL.differentFrom, OWL.hasKey, OWL.intersectionOf,
+    OWL.unionOf, OWL.complementOf, OWL.oneOf, OWL.someValuesFrom, OWL.allValuesFrom,
+    OWL.hasValue, OWL.hasSelf, OWL.onProperty, OWL.members, OWL.distinctMembers,
+}
+
+
+# A class expression's or a data range's internals, read only through what
+# references them: decode.slop's structural-triple and filler-triple. Its
+# subject is always blank here, so owl:inverseOf is an ObjectInverseOf.
+FILLER_PRED = {
+    RDF.first, RDF.rest, OWL.intersectionOf, OWL.unionOf, OWL.oneOf, OWL.complementOf,
+    OWL.someValuesFrom, OWL.allValuesFrom, OWL.hasValue, OWL.hasSelf, OWL.onProperty,
+    OWL.onClass, OWL.onDataRange, OWL.onDatatype, OWL.datatypeComplementOf,
+    OWL.minCardinality, OWL.maxCardinality, OWL.cardinality, OWL.minQualifiedCardinality,
+    OWL.maxQualifiedCardinality, OWL.qualifiedCardinality, OWL.members, OWL.distinctMembers,
+    OWL.inverseOf,
+}
+FILLER_TYPES = {OWL.Class, OWL.Restriction, RDFS.Datatype, OWL.DataRange}
+LANG_RANGE = URIRef(str(RDF) + "langRange")
+
+
+def filler_triple(p, o, restriction, single):
+    """In the shape OWL 2's mapping gives a DatatypeRestriction:
+    owl:withRestrictions only beside an owl:onDatatype, a facet only as its
+    node's one triple. Anything else under an inert filler is malformed."""
+    if p == RDF.type:
+        return o in FILLER_TYPES
+    if p == OWL.withRestrictions:
+        return restriction
+    if p == LANG_RANGE or str(p).startswith(str(XSD)):
+        return single
+    return p in FILLER_PRED
+
+
+def decoder_triples(g):
+    """The triples HOWL's decoder reads: stage 0's scaffolding consumed, each
+    reified axiom rebuilt unless asserted."""
+    header = {s for t in HEADER_TYPES for s in g.subjects(RDF.type, t)}
+    for s, p, o in g:
+        if s in header and (o in HEADER_TYPES if p == RDF.type else p not in LOGICAL_PRED):
+            continue
+        yield s, p, o
+    for ax in g.subjects(RDF.type, OWL.Axiom):
+        # Exactly one of each, or HOWL faults the document and nothing is
+        # rebuilt.
+        parts = [list(g.objects(ax, q)) for q in
+                 (OWL.annotatedSource, OWL.annotatedProperty, OWL.annotatedTarget)]
+        if all(len(v) == 1 for v in parts):
+            t = tuple(v[0] for v in parts)
+            if t not in g:
+                yield t
 
 
 def _expression_key(g, t, seen=()):
@@ -336,14 +408,106 @@ def _el_plus_plus_signature(g):
             "all_different_named": all_different, "npa_object": npa}
 
 
+def _data_lemma(triples, data, ann):
+    """SPEC.md §5.2's data lemma: (idle data properties, blank nodes set aside).
+
+    Written from the SPEC, not from HOWL's decoder, so the two can disagree and
+    project-verify will say so. A data property is USED by any occurrence but as
+    the subject of its declaration or of a functionality, domain or range
+    triple, at either end of a sub-property, equivalence or disjointness between
+    two data properties, or in an annotation; owl:topDataProperty always is.
+    Used is closed UP the told data hierarchy (equivalence both ways), and the
+    rest is idle. A blank node under an inert domain's or range's filler goes
+    with its axiom when nothing else references it and every triple it heads
+    is a filler's internals. All of it is read over decoder_triples, as HOWL
+    reads it after stage 0.
+    """
+    hierarchy = (RDFS.subPropertyOf, OWL.equivalentProperty, OWL.propertyDisjointWith)
+    used = {OWL.topDataProperty}
+    for s, p, o in triples:
+        if p == RDF.type:
+            if o in data:
+                used.add(o)
+            if s in data and o not in (OWL.DatatypeProperty, OWL.FunctionalProperty):
+                used.add(s)
+        elif p in ann or p in BUILTIN_ANNOTATION:
+            continue
+        elif p in (RDFS.domain, RDFS.range):
+            if o in data:
+                used.add(o)
+        elif p in hierarchy and s in data and o in data:
+            continue
+        else:
+            used.update(t for t in (s, p, o) if t in data)
+    changed = True
+    while changed:
+        changed = False
+        for s, p, o in triples:
+            if p in (RDFS.subPropertyOf, OWL.equivalentProperty) and s in data and o in data:
+                for a, b in ((s, o), (o, s)) if p == OWL.equivalentProperty else ((s, o),):
+                    if a in used and b not in used:
+                        used.add(b)
+                        changed = True
+    idle = data - used
+    incoming = Counter(o for _, _, o in triples if isinstance(o, BNode))
+    # A blank node that heads an axiom, an assertion or an annotation of its
+    # own keeps its structure for it: consuming `_:x owl:intersectionOf
+    # (:C :D) ; rdfs:subClassOf owl:Nothing` whole dropped the GCI.
+    restricts = {s for s, p, _ in triples if p == OWL.onDatatype}
+    heads = Counter(s for s, _, _ in triples)
+    impure = {s for s, p, o in triples if isinstance(s, BNode)
+              and not filler_triple(p, o, s in restricts, heads[s] == 1)}
+    below = {}
+    for s, _, o in triples:
+        below.setdefault(s, []).append(o)
+    tree, frontier = set(), [o for s, p, o in triples
+                             if p in (RDFS.domain, RDFS.range) and s in idle
+                             and isinstance(o, BNode) and incoming[o] == 1 and o not in impure]
+    while frontier:
+        n = frontier.pop()
+        if n not in tree:
+            tree.add(n)
+            frontier.extend(o for o in below.get(n, ())
+                            if isinstance(o, BNode) and incoming[o] == 1 and o not in impure
+                            and o not in tree)
+    return idle, tree
+
+
+def data_inert(sig, s, p, o):
+    """Is this triple an axiom the data lemma sets aside, or part of one's filler?"""
+    data, idle = sig["data"], sig["data_idle"]
+    if s in sig["data_tree"]:
+        return True
+    if p in (RDFS.domain, RDFS.range):
+        return s in idle
+    if p == RDF.type:
+        return o == OWL.FunctionalProperty and s in idle
+    if p == RDFS.subPropertyOf:
+        return s in data and o in data and (s in idle or o == OWL.topDataProperty)
+    if p == OWL.equivalentProperty:
+        return s in idle and o in idle
+    if p == OWL.propertyDisjointWith:
+        return (s in data and o in data and OWL.topDataProperty not in (s, o)
+                and (s in idle or o in idle))
+    return False
+
+
 def _base_signature(g):
     """The signature without the chain verdicts, which are judged over it."""
     # The built-in data properties are data properties without a declaration,
     # as HOWL's add-builtins (decode.slop) registers them.
-    data = set(g.subjects(RDF.type, OWL.DatatypeProperty)) | {OWL.topDataProperty, OWL.bottomDataProperty}
+    # Declarations are read as HOWL's build-signature reads them, after
+    # stage 0: a reified-only declaration declares.
+    triples = list(decoder_triples(g))
+    data = {s for s, p, o in triples if p == RDF.type and o == OWL.DatatypeProperty} \
+        | {OWL.topDataProperty, OWL.bottomDataProperty}
+    ann = {s for s, p, o in triples if p == RDF.type and o == OWL.AnnotationProperty}
+    data_idle, data_tree = _data_lemma(triples, data, ann)
     return {
-        "ann":     set(g.subjects(RDF.type, OWL.AnnotationProperty)),
+        "ann":     ann,
         "data":    data,
+        "data_idle": data_idle,
+        "data_tree": data_tree,
         "obj":     set(g.subjects(RDF.type, OWL.ObjectProperty)),
         "classes": set(g.subjects(RDF.type, OWL.Class)),
         # Restrictions ON A DATA PROPERTY. owl:someValuesFrom is spelled the
@@ -395,6 +559,9 @@ def _classify_el_plus_plus(sig, s, p, o):
 
 def classify_triple(sig, s, p, o):
     """(bucket, construct) for one triple. THE disposition table, in code."""
+    # The data lemma first, and in every rung: HOWL decides it before its gate.
+    if data_inert(sig, s, p, o):
+        return INERT, INERT_DATA
     if sig.get("profile") == "el++":
         decided = _classify_el_plus_plus(sig, s, p, o)
         if decided is not None:

@@ -68,6 +68,14 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, te
 termstore_TermStore decode_decode_store(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_list_string decode_queried_predicates(slop_arena* arena);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+decode_DataVocab decode_data_vocab(slop_arena* arena, termstore_TermStore dict);
+decode_DataLemma decode_data_lemma(slop_arena* arena, termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_list_termstore_IdTriple triples);
+void decode_mark_data_uses(termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_map* data, slop_map* used, termstore_IdTriple it);
+uint8_t decode_predicate_is_annotation(termstore_TermStore dict, owl2_Signature sig, int64_t p);
+void decode_collect_inert_trees(slop_arena* arena, termstore_TermStore dict, decode_DataVocab v, slop_map* idle, slop_map* tree, slop_list_termstore_IdTriple triples);
+uint8_t decode_filler_triple(rdf_Triple t, uint8_t restriction, uint8_t single);
+uint8_t decode_id_is_blank(termstore_TermStore dict, int64_t id);
+uint8_t decode_inert_data_axiom(decode_DataVocab v, decode_DataLemma lemma, termstore_IdTriple it);
 slop_map* decode_negative_assertion_nodes(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_map* decode_negative_assertion_parts(slop_arena* arena, termstore_TermStore dict);
 uint8_t decode_negative_assertion_part(termstore_IdTriple it, slop_map* nodes, slop_map* parts);
@@ -2155,28 +2163,39 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* aren
         {
             __auto_type npa_nodes = decode_negative_assertion_nodes(arena, dict, triples);
             __auto_type npa_parts = decode_negative_assertion_parts(arena, dict);
+            __auto_type dv = decode_data_vocab(arena, dict);
+            __auto_type lemma = decode_data_lemma(arena, dict, sig, dv, triples);
             {
                 __auto_type _coll = triples;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type it = _coll.data[_i];
                     {
                         __auto_type t = termstore_triple_of(dict, it);
-                        if (!(decode_structural_triple(t)) && !(decode_negative_assertion_part(it, npa_nodes, npa_parts))) {
-                            __auto_type _mv_759 = decode_decode_axiom(arena, ig, sig, t);
-                            if (!_mv_759.is_ok) {
-                                __auto_type m = _mv_759.data.err;
-                                fault = (slop_option_string){.has_value = 1, .value = m};
-                            } else if (_mv_759.is_ok) {
-                                __auto_type ax = _mv_759.data.ok;
-                                __auto_type _mv_760 = owl2_disposition(types_Profile_profile_el, ax);
+                        if ((!(decode_structural_triple(t))) && (!(decode_negative_assertion_part(it, npa_nodes, npa_parts))) && (!(slop_map_has(lemma.tree, &(int64_t){it.s})))) {
+                            if (decode_inert_data_axiom(dv, lemma, it)) {
+                                __auto_type _mv_760 = owl2_disposition(types_Profile_profile_el, ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inert_data }));
                                 if (_mv_760 == owl2_Disposition_d_inert) {
                                     inert = (inert + 1);
-                                } else if (_mv_760 == owl2_Disposition_d_consumed) {
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                } else if (_mv_760 == owl2_Disposition_d_in_profile) {
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                } else if (_mv_760 == owl2_Disposition_d_out_of_profile) {
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                } else {
+                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inert_data })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                }
+                            } else {
+                                __auto_type _mv_761 = decode_decode_axiom(arena, ig, sig, t);
+                                if (!_mv_761.is_ok) {
+                                    __auto_type m = _mv_761.data.err;
+                                    fault = (slop_option_string){.has_value = 1, .value = m};
+                                } else if (_mv_761.is_ok) {
+                                    __auto_type ax = _mv_761.data.ok;
+                                    __auto_type _mv_762 = owl2_disposition(types_Profile_profile_el, ax);
+                                    if (_mv_762 == owl2_Disposition_d_inert) {
+                                        inert = (inert + 1);
+                                    } else if (_mv_762 == owl2_Disposition_d_consumed) {
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    } else if (_mv_762 == owl2_Disposition_d_in_profile) {
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    } else if (_mv_762 == owl2_Disposition_d_out_of_profile) {
+                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                    }
                                 }
                             }
                         }
@@ -2184,14 +2203,253 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* aren
                 }
             }
         }
-        __auto_type _mv_761 = fault;
-        if (_mv_761.has_value) {
-            __auto_type m = _mv_761.value;
+        __auto_type _mv_763 = fault;
+        if (_mv_763.has_value) {
+            __auto_type m = _mv_763.value;
             return ((slop_result_decode_Stage1_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_input_error, .data.input_error = m }) });
-        } else if (!_mv_761.has_value) {
+        } else if (!_mv_763.has_value) {
             return ((slop_result_decode_Stage1_types_Fault){ .is_ok = true, .data.ok = ((decode_Stage1){.axioms = out, .signature = sig, .inert = inert}) });
         }
         SLOP_UNREACHABLE();
+    }
+}
+
+decode_DataVocab decode_data_vocab(slop_arena* arena, termstore_TermStore dict) {
+    return ((decode_DataVocab){.rdf_type = dict.rdf_type, .data_property = decode_vocab_id(arena, dict, vocab_OWL_DATATYPE_PROPERTY), .functional = decode_vocab_id(arena, dict, vocab_OWL_FUNCTIONAL_PROPERTY), .domain = decode_vocab_id(arena, dict, vocab_RDFS_DOMAIN), .range = decode_vocab_id(arena, dict, vocab_RDFS_RANGE), .sub_property = decode_vocab_id(arena, dict, vocab_RDFS_SUBPROPERTY_OF), .equivalent = decode_vocab_id(arena, dict, vocab_OWL_EQUIVALENT_PROPERTY), .disjoint = decode_vocab_id(arena, dict, vocab_OWL_PROPERTY_DISJOINT_WITH), .top = decode_vocab_id(arena, dict, vocab_OWL_TOP_DATA_PROPERTY), .on_datatype = decode_vocab_id(arena, dict, vocab_OWL_ON_DATATYPE)});
+}
+
+decode_DataLemma decode_data_lemma(slop_arena* arena, termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_list_termstore_IdTriple triples) {
+    {
+        __auto_type data = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type used = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type idle = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type tree = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type bottom = decode_vocab_id(arena, dict, vocab_OWL_BOTTOM_DATA_PROPERTY);
+        uint8_t any = 0;
+        uint8_t changed = 1;
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                if ((it.p == v.rdf_type) && (it.o == v.data_property)) {
+                    ({ slop_map_put(NULL, data, &(int64_t){it.s}, NULL, 0); });
+                    any = 1;
+                }
+            }
+        }
+        if (v.top >= 0) {
+            ({ slop_map_put(NULL, data, &(int64_t){v.top}, NULL, 0); });
+            ({ slop_map_put(NULL, used, &(int64_t){v.top}, NULL, 0); });
+            any = 1;
+        }
+        if (bottom >= 0) {
+            ({ slop_map_put(NULL, data, &(int64_t){bottom}, NULL, 0); });
+            any = 1;
+        }
+        if (any) {
+            {
+                __auto_type _coll = triples;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type it = _coll.data[_i];
+                    decode_mark_data_uses(dict, sig, v, data, used, it);
+                }
+            }
+            while (changed) {
+                changed = 0;
+                {
+                    __auto_type _coll = triples;
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type it = _coll.data[_i];
+                        if (slop_map_has(data, &(int64_t){it.s}) && slop_map_has(data, &(int64_t){it.o})) {
+                            if ((((it.p == v.sub_property) || (it.p == v.equivalent))) && (slop_map_has(used, &(int64_t){it.s})) && (!(slop_map_has(used, &(int64_t){it.o})))) {
+                                ({ slop_map_put(NULL, used, &(int64_t){it.o}, NULL, 0); });
+                                changed = 1;
+                            }
+                            if (((it.p == v.equivalent)) && (slop_map_has(used, &(int64_t){it.o})) && (!(slop_map_has(used, &(int64_t){it.s})))) {
+                                ({ slop_map_put(NULL, used, &(int64_t){it.s}, NULL, 0); });
+                                changed = 1;
+                            }
+                        }
+                    }
+                }
+            }
+            {
+                __auto_type _coll = triples;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type it = _coll.data[_i];
+                    if (((it.p == v.rdf_type)) && ((it.o == v.data_property)) && (!(slop_map_has(used, &(int64_t){it.s})))) {
+                        ({ slop_map_put(NULL, idle, &(int64_t){it.s}, NULL, 0); });
+                    }
+                }
+            }
+            if ((bottom >= 0) && !(slop_map_has(used, &(int64_t){bottom}))) {
+                ({ slop_map_put(NULL, idle, &(int64_t){bottom}, NULL, 0); });
+            }
+            decode_collect_inert_trees(arena, dict, v, idle, tree, triples);
+        }
+        return ((decode_DataLemma){.data = data, .idle = idle, .tree = tree});
+    }
+}
+
+void decode_mark_data_uses(termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_map* data, slop_map* used, termstore_IdTriple it) {
+    {
+        __auto_type s = it.s;
+        __auto_type p = it.p;
+        __auto_type o = it.o;
+        if (p == v.rdf_type) {
+            if (slop_map_has(data, &(int64_t){o})) {
+                ({ slop_map_put(NULL, used, &(int64_t){o}, NULL, 0); });
+            }
+            if ((slop_map_has(data, &(int64_t){s})) && (!((o == v.data_property))) && (!((o == v.functional)))) {
+                ({ slop_map_put(NULL, used, &(int64_t){s}, NULL, 0); });
+            }
+        } else if (decode_predicate_is_annotation(dict, sig, p)) {
+        } else if ((p == v.domain) || (p == v.range)) {
+            if (slop_map_has(data, &(int64_t){o})) {
+                ({ slop_map_put(NULL, used, &(int64_t){o}, NULL, 0); });
+            }
+        } else if ((((p == v.sub_property) || ((p == v.equivalent) || (p == v.disjoint)))) && (slop_map_has(data, &(int64_t){s})) && (slop_map_has(data, &(int64_t){o}))) {
+        } else {
+            if (slop_map_has(data, &(int64_t){s})) {
+                ({ slop_map_put(NULL, used, &(int64_t){s}, NULL, 0); });
+            }
+            if (slop_map_has(data, &(int64_t){p})) {
+                ({ slop_map_put(NULL, used, &(int64_t){p}, NULL, 0); });
+            }
+            if (slop_map_has(data, &(int64_t){o})) {
+                ({ slop_map_put(NULL, used, &(int64_t){o}, NULL, 0); });
+            }
+        }
+    }
+}
+
+uint8_t decode_predicate_is_annotation(termstore_TermStore dict, owl2_Signature sig, int64_t p) {
+    __auto_type _mv_794 = decode_term_iri_value(termstore_term_of(dict, p));
+    if (_mv_794.has_value) {
+        __auto_type i = _mv_794.value;
+        return owl2_signature_has_annotation_property(sig, i);
+    } else if (!_mv_794.has_value) {
+        return 0;
+    }
+    SLOP_UNREACHABLE();
+}
+
+void decode_collect_inert_trees(slop_arena* arena, termstore_TermStore dict, decode_DataVocab v, slop_map* idle, slop_map* tree, slop_list_termstore_IdTriple triples) {
+    {
+        __auto_type once = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type twice = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type heads_two = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type heads = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type restricts = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type impure = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        uint8_t changed = 0;
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                if (decode_id_is_blank(dict, it.o)) {
+                    if (slop_map_has(once, &(int64_t){it.o})) {
+                        ({ slop_map_put(NULL, twice, &(int64_t){it.o}, NULL, 0); });
+                    } else {
+                        ({ slop_map_put(NULL, once, &(int64_t){it.o}, NULL, 0); });
+                    }
+                }
+                if (slop_map_has(heads, &(int64_t){it.s})) {
+                    ({ slop_map_put(NULL, heads_two, &(int64_t){it.s}, NULL, 0); });
+                } else {
+                    ({ slop_map_put(NULL, heads, &(int64_t){it.s}, NULL, 0); });
+                }
+                if (it.p == v.on_datatype) {
+                    ({ slop_map_put(NULL, restricts, &(int64_t){it.s}, NULL, 0); });
+                }
+            }
+        }
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                if (decode_id_is_blank(dict, it.s) && !(decode_filler_triple(termstore_triple_of(dict, it), slop_map_has(restricts, &(int64_t){it.s}), !(slop_map_has(heads_two, &(int64_t){it.s}))))) {
+                    ({ slop_map_put(NULL, impure, &(int64_t){it.s}, NULL, 0); });
+                }
+            }
+        }
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                if ((((it.p == v.domain) || (it.p == v.range))) && (slop_map_has(idle, &(int64_t){it.s})) && (slop_map_has(once, &(int64_t){it.o})) && (!(slop_map_has(twice, &(int64_t){it.o}))) && (!(slop_map_has(impure, &(int64_t){it.o})))) {
+                    ({ slop_map_put(NULL, tree, &(int64_t){it.o}, NULL, 0); });
+                    changed = 1;
+                }
+            }
+        }
+        while (changed) {
+            changed = 0;
+            {
+                __auto_type _coll = triples;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type it = _coll.data[_i];
+                    if ((slop_map_has(tree, &(int64_t){it.s})) && (!(slop_map_has(tree, &(int64_t){it.o}))) && (slop_map_has(once, &(int64_t){it.o})) && (!(slop_map_has(twice, &(int64_t){it.o}))) && (!(slop_map_has(impure, &(int64_t){it.o})))) {
+                        ({ slop_map_put(NULL, tree, &(int64_t){it.o}, NULL, 0); });
+                        changed = 1;
+                    }
+                }
+            }
+        }
+    }
+}
+
+uint8_t decode_filler_triple(rdf_Triple t, uint8_t restriction, uint8_t single) {
+    return (decode_structural_triple(t) || ({ __auto_type _mv = decode_term_iri_value(t.predicate); _mv.has_value ? ({ __auto_type p = _mv.value; ((canon_string_cmp(p.value, vocab_OWL_WITH_RESTRICTIONS) == 0) ? restriction : ((canon_string_cmp(p.value, vocab_RDF_LANG_RANGE) == 0) ? single : (strlib_starts_with(p.value, vocab_XSD_NS) ? single : ((canon_string_cmp(p.value, vocab_RDF_TYPE) == 0) ? ({ __auto_type _mv = decode_term_iri_value(t.object); _mv.has_value ? ({ __auto_type o = _mv.value; ((canon_string_cmp(o.value, vocab_RDFS_DATATYPE) == 0) || (canon_string_cmp(o.value, vocab_OWL_DATA_RANGE) == 0)); }) : (0); }) : 0)))); }) : (0); }));
+}
+
+uint8_t decode_id_is_blank(termstore_TermStore dict, int64_t id) {
+    __auto_type _mv_816 = termstore_term_of(dict, id);
+    switch (_mv_816.tag) {
+        case rdf_Term_term_blank:
+        {
+            __auto_type _ = _mv_816.data.term_blank;
+            return 1;
+        }
+        case rdf_Term_term_iri:
+        {
+            __auto_type _ = _mv_816.data.term_iri;
+            return 0;
+        }
+        case rdf_Term_term_literal:
+        {
+            __auto_type _ = _mv_816.data.term_literal;
+            return 0;
+        }
+        case rdf_Term_term_triple:
+        {
+            __auto_type _ = _mv_816.data.term_triple;
+            return 0;
+        }
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t decode_inert_data_axiom(decode_DataVocab v, decode_DataLemma lemma, termstore_IdTriple it) {
+    {
+        __auto_type s = it.s;
+        __auto_type p = it.p;
+        __auto_type o = it.o;
+        __auto_type data = lemma.data;
+        __auto_type idle = lemma.idle;
+        if ((p == v.domain) || (p == v.range)) {
+            return slop_map_has(idle, &(int64_t){s});
+        } else if (p == v.rdf_type) {
+            return ((o == v.functional) && slop_map_has(idle, &(int64_t){s}));
+        } else if (p == v.sub_property) {
+            return ((slop_map_has(data, &(int64_t){s})) && (slop_map_has(data, &(int64_t){o})) && ((slop_map_has(idle, &(int64_t){s}) || (o == v.top))));
+        } else if (p == v.equivalent) {
+            return (slop_map_has(idle, &(int64_t){s}) && slop_map_has(idle, &(int64_t){o}));
+        } else if (p == v.disjoint) {
+            return ((slop_map_has(data, &(int64_t){s})) && (slop_map_has(data, &(int64_t){o})) && (!((s == v.top))) && (!((o == v.top))) && ((slop_map_has(idle, &(int64_t){s}) || slop_map_has(idle, &(int64_t){o}))));
+        } else {
+            return 0;
+        }
     }
 }
 
@@ -2247,16 +2505,16 @@ slop_option_string decode_declaration_conflict(slop_arena* arena, owl2_Signature
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
                 if (it.p == type_pred) {
-                    __auto_type _mv_766 = decode_term_iri_value(termstore_term_of(dict, it.s));
-                    if (_mv_766.has_value) {
-                        __auto_type e = _mv_766.value;
+                    __auto_type _mv_832 = decode_term_iri_value(termstore_term_of(dict, it.s));
+                    if (_mv_832.has_value) {
+                        __auto_type e = _mv_832.value;
                         {
                             __auto_type np = (((owl2_signature_has_object_property(sig, e)) ? 1 : 0) + (((owl2_signature_has_data_property(sig, e)) ? 1 : 0) + ((owl2_signature_has_annotation_property(sig, e)) ? 1 : 0)));
                             if (np > 1) {
                                 bad = (slop_option_string){.has_value = 1, .value = string_concat(arena, SLOP_STR("IRI declared under two disjoint property kinds: "), e.value)};
                             }
                         }
-                    } else if (!_mv_766.has_value) {
+                    } else if (!_mv_832.has_value) {
                     }
                 }
             }

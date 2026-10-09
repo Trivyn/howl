@@ -111,6 +111,10 @@ owl2_Disposition owl2_disposition(types_Profile p, owl2_RawAxiom ax) {
         {
             return owl2_Disposition_d_inert;
         }
+        case owl2_RawAxiom_ra_inert_data:
+        {
+            return owl2_Disposition_d_inert;
+        }
         case owl2_RawAxiom_ra_inverse_properties:
         {
             return owl2_Disposition_d_out_of_profile;
@@ -477,6 +481,10 @@ uint8_t owl2_axiom_in_profile(types_Profile p, owl2_RawAxiom ax) {
                 return 0;
             }
             case owl2_RawAxiom_ra_annotation:
+            {
+                return 0;
+            }
+            case owl2_RawAxiom_ra_inert_data:
             {
                 return 0;
             }
@@ -1155,6 +1163,10 @@ slop_string owl2_render_axiom(slop_arena* arena, owl2_RawAxiom ax) {
         {
             return SLOP_STR("Annotation()");
         }
+        case owl2_RawAxiom_ra_inert_data:
+        {
+            return SLOP_STR("InertDataAxiom()");
+        }
         case owl2_RawAxiom_ra_inverse_properties:
         {
             __auto_type a = _mv_125.data.ra_inverse_properties.f0;
@@ -1462,6 +1474,10 @@ owl2_RawAxiom owl2_copy_raw_axiom(slop_arena* arena, owl2_RawAxiom ax) {
         case owl2_RawAxiom_ra_annotation:
         {
             return ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_annotation });
+        }
+        case owl2_RawAxiom_ra_inert_data:
+        {
+            return ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_inert_data });
         }
         case owl2_RawAxiom_ra_inverse_properties:
         {
