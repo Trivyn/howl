@@ -55,7 +55,7 @@
     RawAxiom Disposition
     Signature
     disposition concept-in-profile concepts-in-profile axiom-in-profile role-in-profile
-    is-el-plus-plus
+    is-el-plus-plus is-sriq
     concept-tag-rank concept-cmp concept-at sort-concepts
     render-concept render-axiom render-role render-omission
     copy-concept copy-raw-axiom copy-axioms copy-signature
@@ -68,6 +68,12 @@
   ;; ============================================================
 
   (type CardKind (enum card-min card-max card-exact))
+
+  ;; sriq's largest number in a number restriction (§5.5). Numbers are
+  ;; unary in [TGH21]'s clauses, so a ≤n clause has C(n+1, 2) equalities in
+  ;; its head; this is a resource guard, and a gate stricter than its proof
+  ;; is allowed (Constraint ae25e3d4).
+  (const SRIQ_MAX_COUNT Int 16)
 
   (type PropCharacteristic (enum
     prop-functional
@@ -229,13 +235,13 @@
       ((ra-annotation)                  'd-inert)
       ((ra-inert-data)                  'd-inert)
 
-      ((ra-inverse-properties _ _)      'd-out-of-profile)
-      ((ra-property-characteristic _ _) (when-el-plus-plus p))
-      ((ra-disjoint-properties _)       'd-out-of-profile)
-      ((ra-same-individual _)           (when-el-plus-plus p))
-      ((ra-different-individuals _)     (when-el-plus-plus p))
-      ((ra-negative-assertion _)        (when-el-plus-plus p))
-      ((ra-disjoint-union _)            'd-out-of-profile)
+      ((ra-inverse-properties _ _)      (when-sriq p))
+      ((ra-property-characteristic _ _) (when-el-plus-plus-or-sriq p))
+      ((ra-disjoint-properties _)       (when-sriq p))
+      ((ra-same-individual _)           (when-el-plus-plus-or-sriq p))
+      ((ra-different-individuals _)     (when-el-plus-plus-or-sriq p))
+      ((ra-negative-assertion _)        (when-el-plus-plus-or-sriq p))
+      ((ra-disjoint-union _)            (when-sriq p))
       ((ra-has-key _)                   'd-out-of-profile)
       ((ra-data-axiom _)                'd-out-of-profile)
       ((ra-builtin-role _)              'd-out-of-profile)
@@ -353,6 +359,33 @@
     (@post {(== $result 'd-in-profile) == (p == 'profile-el-plus-plus)})
     (if (is-el-plus-plus p) 'd-in-profile 'd-out-of-profile))
 
+  (fn is-sriq ((p Profile))
+    (@intent "Is this the sriq rung?")
+    (@spec ((Profile) -> Bool))
+    (@pure)
+    (@post {$result == (p == 'profile-sriq)})
+    ;; The true arm first: the verifier reads a match's last arm as its
+    ;; catch-all, so that arm must give the answer for every other rung.
+    (match p
+      ('profile-sriq         true)
+      ('profile-el           false)
+      ('profile-el-plus-plus false)
+      ('profile-horn-sriq    false)))
+
+  (fn when-sriq ((p Profile))
+    (@intent "In profile under sriq, out of profile under every other rung")
+    (@spec ((Profile) -> Disposition))
+    (@pure)
+    (@post {(== $result 'd-in-profile) == (p == 'profile-sriq)})
+    (if (is-sriq p) 'd-in-profile 'd-out-of-profile))
+
+  (fn when-el-plus-plus-or-sriq ((p Profile))
+    (@intent "In profile under el++ and sriq, out of profile under el")
+    (@spec ((Profile) -> Disposition))
+    (@pure)
+    (@post {(== $result 'd-in-profile) == (or (p == 'profile-el-plus-plus) (p == 'profile-sriq))})
+    (if (or (is-el-plus-plus p) (is-sriq p)) 'd-in-profile 'd-out-of-profile))
+
   (fn role-in-profile ((p Profile) (r RoleId))
     (@intent "Is this role inside the rung — an ordinary one, or a built-in the rung implements?")
     (@spec ((Profile RoleId) -> Bool))
@@ -375,14 +408,20 @@
     ;; position, `R ⊑ owl:topObjectProperty`, is a tautology the gate
     ;; drops before any role is asked about (`drop-top-role-tautologies`).
     ;;
-    ;; An inverse (ObjectInverseOf) is in no rung built so far: OWL 2 EL
-    ;; has none, and sriq (§5.5) takes it when its gate is built.
+    ;; An inverse (ObjectInverseOf) is sriq's alone (§5.5): OWL 2 EL has
+    ;; none. sriq also implements the empty role, as el++ does (§5.5's
+    ;; table, after §5.4 K0).
     (match r
       ((fresh-role _)   true)
-      ((inverse-role _) false)
+      ((inverse-role i)
+        (and (is-sriq p)
+             (not (== (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0))
+             (not (== (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0))
+             (not (== (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0))))
       ((named-role i)
         (cond
-          ((== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0) (is-el-plus-plus p))
+          ((== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0)
+            (or (is-el-plus-plus p) (is-sriq p)))
           ((== (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0)    false)
           ((== (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)      false)
           ((== (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)   false)
@@ -422,20 +461,25 @@
       ((rc-nothing)       true)
       ((rc-and cs)        (concepts-in-profile p cs))
       ((rc-some r f)      (and (role-in-profile p r) (concept-in-profile p (deref f))))
-      ((rc-or _)          false)
-      ;; ¬E is never a concept of the fragment. Where it is a superclass,
-      ;; domain or range (or a conjunct of one), the gate rewrites the
-      ;; AXIOM into ⊥ GCIs before asking (gate.slop, expand-negation).
-      ((rc-not _)         false)
-      ((rc-all _ _)       false)
+      ;; sriq (§5.5) takes union, full negation and ∀ anywhere. Under el
+      ;; and el++ ¬E is never a concept: where it is a superclass, domain
+      ;; or range (or a conjunct of one), the gate rewrites the AXIOM into
+      ;; ⊥ GCIs before asking (gate.slop, expand-negation).
+      ((rc-or cs)         (and (is-sriq p) (concepts-in-profile p cs)))
+      ((rc-not f)         (and (is-sriq p) (concept-in-profile p (deref f))))
+      ((rc-all r f)       (and (is-sriq p) (role-in-profile p r) (concept-in-profile p (deref f))))
       ;; el++ (§5.4): a nominal of ONE individual — more is a disjunction —
-      ;; a value restriction, and Self. Whether Self's role is simple is a
-      ;; whole-RBox question, so the gate asks it (`self-roles-simple`).
+      ;; and a value restriction. sriq takes no class nominal (§5.5); they
+      ;; are sroiq's. Self is el++'s and sriq's; whether its role is simple
+      ;; is a whole-RBox question, so the gate asks it.
       ((rc-oneof ns)       (and (is-el-plus-plus p) (== (list-len ns) 1)))
       ((rc-has-value r _)  (and (is-el-plus-plus p) (role-in-profile p r)))
-      ((rc-has-self r)     (and (is-el-plus-plus p) (role-in-profile p r)))
-      ((rc-card _ _ _)    false)
-      ((rc-qcard _ _ _ _) false)
+      ((rc-has-self r)     (and (or (is-el-plus-plus p) (is-sriq p)) (role-in-profile p r)))
+      ;; sriq's number restrictions, n ≤ 16: a resource guard, not a proof
+      ;; condition (§5.5). That the role is simple is the gate's question.
+      ((rc-card _ r n)    (and (is-sriq p) (<= n SRIQ_MAX_COUNT) (role-in-profile p r)))
+      ((rc-qcard _ r n f) (and (is-sriq p) (<= n SRIQ_MAX_COUNT) (role-in-profile p r)
+                               (concept-in-profile p (deref f))))
       ((rc-data _)        false)
       ((rc-anon _)        false)))
 
@@ -464,12 +508,12 @@
         ((ra-equivalent-properties rs)   (roles-in-profile p rs))
         ((ra-transitive-property r)      (role-in-profile p r))
         ((ra-object-property-assertion e) (role-in-profile p (. e role)))
-        ;; el++ only (the disposition is out of profile under every other
-        ;; rung, so the guard above has already answered for them):
-        ;; reflexivity is the one characteristic in OWL 2 EL; at least two
-        ;; individuals make an equality or inequality an axiom at all.
+        ;; el++ and sriq (the disposition is out of profile under el, so
+        ;; the guard above has already answered there): reflexivity is the
+        ;; one characteristic in OWL 2 EL, and sriq takes every one; at
+        ;; least two individuals make an equality or inequality an axiom.
         ((ra-property-characteristic c r)
-          (and (== c 'prop-reflexive) (role-in-profile p r)))
+          (and (or (is-sriq p) (== c 'prop-reflexive)) (role-in-profile p r)))
         ((ra-same-individual ns)         (>= (list-len ns) 2))
         ((ra-different-individuals ns)   (>= (list-len ns) 2))
         ((ra-negative-assertion e)       (role-in-profile p (. e role)))
@@ -479,9 +523,12 @@
         ((ra-declaration _)              false)
         ((ra-annotation)                 false)
         ((ra-inert-data)                 false)
-        ((ra-inverse-properties _ _)     false)
-        ((ra-disjoint-properties _)      false)
-        ((ra-disjoint-union _)           false)
+        ;; sriq only, by their dispositions. A disjoint union has at least
+        ;; two members in OWL 2, as a disjointness has two properties.
+        ((ra-inverse-properties a b)     (and (role-in-profile p a) (role-in-profile p b)))
+        ((ra-disjoint-properties rs)     (and (>= (list-len rs) 2) (roles-in-profile p rs)))
+        ((ra-disjoint-union du)          (and (>= (list-len (. du members)) 2)
+                                              (concepts-in-profile p (. du members))))
         ((ra-has-key _)                  false)
         ((ra-data-axiom _)               false)
         ((ra-builtin-role _)             false)

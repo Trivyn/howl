@@ -258,6 +258,107 @@ class ElPlusPlusTest(unittest.TestCase):
             census.signature(graph(""), "sroiq")
 
 
+class SriqTest(unittest.TestCase):
+    """SPEC.md §5.5's language, as the census implements it independently: the
+    rows of src/test.slop's three-rung gate table, as out-or-not per rung.
+    The two regularity rows are HOWL's alone: the census has no regularity
+    check (as for el), and conformance flags such a refusal by a missing
+    census-clean."""
+    DECL = ElPlusPlusTest.DECL
+    # (label, document, out under el, out under el++, out under sriq)
+    ROWS = [
+        ('plain EL stays in every rung',
+         ':C rdfs:subClassOf :D .', False, False, False),
+        ('InverseObjectProperties',
+         ':r owl:inverseOf :s .', True, True, False),
+        ('a restriction on an inverse',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :r ] ; owl:someValuesFrom :D ] .', True, True, False),
+        ('ObjectAllValuesFrom',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :D ] .', True, True, False),
+        ('ObjectUnionOf with a complement',
+         ':C rdfs:subClassOf [ owl:unionOf ( :D [ owl:complementOf :D ] ) ] .', True, True, False),
+        ('a complement on the left',
+         '[ owl:complementOf :C ] rdfs:subClassOf :D .', True, True, False),
+        ('a qualified cardinality, n = 16',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 16 ; owl:onClass :D ] .', True, True, False),
+        ('a qualified cardinality, n = 17',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 17 ; owl:onClass :D ] .', True, True, True),
+        ('an unqualified exact cardinality',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:cardinality 2 ] .', True, True, False),
+        ('a cardinality on a transitive role',
+         ':r a owl:TransitiveProperty .\n  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 1 ] .', True, True, True),
+        ('FunctionalObjectProperty',
+         ':r a owl:FunctionalProperty .', True, True, False),
+        ('a functional transitive role',
+         ':r a owl:TransitiveProperty , owl:FunctionalProperty .', True, True, True),
+        ('InverseFunctionalObjectProperty',
+         ':r a owl:InverseFunctionalProperty .', True, True, False),
+        ('irreflexive and asymmetric',
+         ':r a owl:IrreflexiveProperty , owl:AsymmetricProperty .', True, True, False),
+        ('Self on a simple role',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .', True, False, False),
+        ('Self on a transitive role',
+         ':r a owl:TransitiveProperty .\n  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] .', True, True, True),
+        ('symmetric and transitive: (R5) and (R4)',
+         ':r a owl:SymmetricProperty , owl:TransitiveProperty .', True, True, False),
+        ("RO's part_of/has_part: regular only after the collapse",
+         ':r a owl:TransitiveProperty . :s a owl:TransitiveProperty . :r owl:inverseOf :s .', True, True, False),
+        ('P and P- in one component',
+         ':r owl:inverseOf :r . :r a owl:TransitiveProperty .', True, True, False),
+        ('DisjointObjectProperties',
+         ':r owl:propertyDisjointWith :s .', True, True, False),
+        ('DisjointObjectProperties on a transitive role',
+         ':r a owl:TransitiveProperty . :r owl:propertyDisjointWith :s .', True, True, True),
+        ('DisjointUnion',
+         ':C owl:disjointUnionOf ( :D [ owl:complementOf :D ] ) .', True, True, False),
+        ('the top role as a super-role is a tautology',
+         ':r rdfs:subPropertyOf owl:topObjectProperty .', True, False, False),
+        ('an inverse into the top role is a tautology under sriq',
+         '[ owl:inverseOf :r ] rdfs:subPropertyOf owl:topObjectProperty .', True, True, False),
+        ('the top role elsewhere',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:topObjectProperty ; owl:someValuesFrom :D ] .', True, True, True),
+        ('the bottom role',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom :D ] .', True, False, False),
+        ('a cardinality on the bottom role',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:maxCardinality 1 ] .', True, True, True),
+        ('ObjectHasValue: a class nominal',
+         ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .', True, False, True),
+        ('ObjectOneOf: a class nominal',
+         ':C rdfs:subClassOf [ owl:oneOf ( :a ) ] .', True, False, True),
+        ('an anonymous individual',
+         '_:x :r :a .', True, True, True),
+        ('SameIndividual and DifferentIndividuals',
+         ':a owl:sameAs :b . :a owl:differentFrom :b .', True, False, False),
+        ('a negative object assertion',
+         '[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ] .', True, False, False),
+        ('a class assertion with a union',
+         ':a a [ owl:unionOf ( :C :D ) ] .', True, True, False),
+        ('no range condition under sriq',
+         ':s rdfs:range :C . :t rdfs:range :D .\n  :t owl:propertyChainAxiom ( :r :s ) .', True, True, False),
+        ('used data stays out',
+         ':d a owl:DatatypeProperty . :a :d 1 .', True, True, True),
+    ]
+
+    def out(self, text, profile):
+        _, _, out, _, _ = census.census(None, graph=graph(self.DECL + text), profile=profile)
+        return sum(out.values()) > 0
+
+    def test_no_chain_is_inadmissible_under_sriq(self):
+        # project.py asks inadmissible_chains directly, so sriq's answer
+        # must not depend on going through signature(): a chain el would
+        # omit for its range must stay in a sriq projection.
+        g = graph(self.DECL + ":s rdfs:range :C . :t rdfs:range :D .\n:t owl:propertyChainAxiom ( :r :s ) .")
+        self.assertNotEqual(census.inadmissible_chains(g, census.signature(g, "el")), {})
+        self.assertEqual(census.inadmissible_chains(g, census.signature(g, "sriq")), {})
+
+    def test_each_construct_under_three_rungs(self):
+        for label, text, el_out, elpp_out, sriq_out in self.ROWS:
+            with self.subTest(label):
+                self.assertEqual(self.out(text, "el"), el_out, "el")
+                self.assertEqual(self.out(text, "el++"), elpp_out, "el++")
+                self.assertEqual(self.out(text, "sriq"), sriq_out, "sriq")
+
+
 class DataLemmaTest(unittest.TestCase):
     """SPEC.md §5.2's data lemma, as the census implements it independently.
 
