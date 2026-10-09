@@ -102,9 +102,11 @@ howl --version
   | `el` (default) | ELH⊥R+: EL with role hierarchies, ⊥, transitive roles and property chains, domains and ranges, ABox assertions, and `¬` in a superclass, domain or range | built |
   | `el++` | the OWL 2 EL object fragment: `el` plus nominals, `hasValue`, `hasSelf`, reflexive roles, individual equality and inequality, and negative assertions | built |
   | `auto` | the cheapest built profile that covers the whole ontology (else the one omitting the fewest axioms) | built |
-  | `horn-sriq`, `sriq` | Horn-SRIQ, SRIQ | planned; asking for one exits 3, and HOWL never runs another profile in its place |
+  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | specified, not yet built; asking for it exits 3, and HOWL never runs another profile in its place |
 
-  The report names the profile that ran. Both built profiles run in polynomial time.
+  The report names the profile that ran. Both built profiles run in polynomial time. `horn-sriq`
+  was dropped from the plan, since `sriq` covers its language at the same cost; asking for it exits
+  3 with a message saying so.
 - **`--no-imports`** records that leaving the imports out is deliberate. It changes nothing in the
   result: an unattested import is still an omission, and the run still inconclusive.
 - **`--strict`** refuses to run at all if anything would be omitted (exit 2, no report).
@@ -131,7 +133,7 @@ howl --version
 - `HasKey`;
 - datatypes and data properties (a deliberate non-goal);
 - anything outside OWL 2 EL, such as unions, universal restrictions, cardinalities and inverse
-  properties. These belong to the planned `horn-sriq` and `sriq` profiles.
+  properties. These belong to the planned `sriq` profile.
 
 The construct-by-construct table, and the evidence behind each profile, is in
 [`docs/coverage.md`](docs/coverage.md).
@@ -231,7 +233,8 @@ ELK or HermiT over every pair of named classes. The protocol, history and memory
   HermiT) over every pair of named classes;
 - **generated ontologies:** compared with HermiT.
 
-Results are byte-identical across worker counts. `horn-sriq` is next. `howl classify` (Turtle output
+Results are byte-identical across worker counts. `sriq` is next
+([SPEC §5.5](SPEC.md#55-the-sriq-calculus)), with BFO and CCO as its target. `howl classify` (Turtle output
 of the inferred hierarchy with `--emit`, and `--reduce`) is planned; until then both flags are
 refused with exit 3.
 

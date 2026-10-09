@@ -7,7 +7,7 @@ as a whole is [SPEC §10](../SPEC.md#10-testing-strategy); the contracts' postur
 
 ## What `slop verify` can and cannot check
 
-`make verify` verifies **89 functions, 0 failing, 0 unknown**. Both round caps are proved:
+`make verify` verifies **90 functions, 0 failing, 0 unknown**. Both round caps are proved:
 `saturate`'s budget invariant and result (`iteration <= max-iterations`, el) and `run-ksc`'s
 (`rounds <= budget`, el++), each through a checked `@loop-invariant` and the one-round-per-call
 contract it rests on. Both loops are written so slop's loop analysis can follow them: cancel-ptr
@@ -15,7 +15,7 @@ is read through `cancel-requested`
 ([#280](https://github.com/slop-lang/slop/issues/280)), el's loop has no `break`, and the calls in
 it take counts, not the Saturation. The profile seam's contracts are among the verified: `select-profile` resolves an
 explicit request to exactly itself and leaves `auto` to the ontology, `profile-implemented` admits
-`el` and `el++` only, `choose-auto` proves `auto`'s three cases (`el` when it omits nothing, else the
+`el` and `el++` only, `profile-dropped` holds for `horn-sriq` alone, `choose-auto` proves `auto`'s three cases (`el` when it omits nothing, else the
 rung omitting fewer, ties to `el`), and `default-config` selects `el`; each was seen to fail under a
 mutation. Among the verified, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`

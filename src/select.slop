@@ -5,11 +5,18 @@
 ;; that logic and never registered under a wider label:
 ;;   el          ELH⊥R+ + domain/range + ABox (§5.2)    PTIME     implemented
 ;;   el++        the OWL 2 EL object fragment (§5.4)     PTIME     implemented
-;;   horn-sriq   Horn-SRIQ                               ExpTime
-;;   sriq        the SRIQ object fragment (non-Horn)     2ExpTime
-;; el ⊂ horn-sriq ⊂ sriq, and el ⊂ el++; el++ is incomparable with the
-;; two above it (nominals). The declaration order of `Profile` is the
-;; fixed tie-break order.
+;;   sriq        the SRIQ object fragment + ABox (§5.5)  2ExpTime  specified
+;;               (2ExpTime without an ABox; with one, §5.5 cites only a
+;;               triple-exponential bound in the chain-eliminated ontology)
+;; el ⊂ el++ and el ⊂ sriq; el++ and sriq are incomparable (nominals
+;; against inverses, unions and counting). The declaration order of
+;; `Profile` is the fixed tie-break order.
+;;
+;; `horn-sriq` WAS DROPPED (§5, 2026-10-08): on sriq's calculus it would
+;; run at the same cost, so it would only be a stricter gate. Its enum
+;; slot stays, so 0.1.0's C and Rust ABI is not renumbered, and a request
+;; for it is refused for good (`profile-dropped`), its message naming
+;; sriq.
 ;;
 ;; THE DEFAULT IS `explicit el`, not `auto` (types.slop,
 ;; default-config): a default run keeps one cost class and one theory
@@ -57,6 +64,8 @@
     select-profile
     choose-auto
     profile-implemented
+    profile-dropped
+    unavailable-message
     profile-name
     parse-profile)
 
@@ -103,6 +112,31 @@
       ('profile-el-plus-plus true)
       ('profile-horn-sriq    false)
       ('profile-sriq         false)))
+
+  (fn profile-dropped ((p Profile))
+    (@intent "Whether a rung was dropped from the ladder, so a request for it is refused for good")
+    (@spec ((Profile) -> Bool))
+    (@pure)
+    ;; Only horn-sriq (§5). A dropped rung is never implemented, so its
+    ;; refusal says what replaces it rather than "not implemented yet".
+    (@post {$result == (p == 'profile-horn-sriq)})
+    (match p
+      ('profile-el           false)
+      ('profile-el-plus-plus false)
+      ('profile-horn-sriq    true)
+      ('profile-sriq         false)))
+
+  (fn unavailable-message ((arena Arena) (p Profile))
+    (@intent "Why an explicit request for this rung is refused: dropped, or not built yet (§5.1, §9)")
+    (@spec ((Arena Profile) -> String))
+    (@alloc arena)
+    ;; The one source of the refusal's text, so the CLI and the C API
+    ;; (`howl_run_fault_message`) say the same. The Rust crate's `Fault`
+    ;; display mirrors it, and tests on both sides pin both texts.
+    (let ((named (string-concat arena "profile " (profile-name p))))
+      (if (profile-dropped p)
+        (string-concat arena named " was dropped; sriq covers its language")
+        (string-concat arena named " is not implemented yet (implemented: el, el++)"))))
 
   (fn profile-name ((p Profile))
     (@intent "A rung's name, as the CLI flag and the report spell it")

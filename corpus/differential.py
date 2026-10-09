@@ -60,6 +60,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import entdiff  # noqa: E402
+import profiles  # noqa: E402
 
 HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "howl"))
 ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
@@ -484,8 +485,8 @@ CORPUS_RECORD = os.path.join(HERE, "corpus-differential.txt")
 def set_profile(p):
     """Point the harness at one rung: HOWL's flag, the census, the records, the fixtures."""
     global PROFILE, CAPABILITIES, CORPUS_RECORD, OUT, FIXTURE_DIRS, PROBE_DIR
-    if p not in ("el", "el++"):
-        raise HarnessError(f"unknown profile {p} (el or el++)")
+    if p not in profiles.BUILT:
+        raise HarnessError(f"unknown profile {p} ({profiles.expected()})")
     PROFILE = p
     if p != "el":
         CAPABILITIES = os.path.join(HERE, f"oracle-capabilities-{p}.txt")

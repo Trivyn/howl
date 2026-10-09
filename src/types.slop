@@ -534,8 +534,8 @@
   (type Profile (enum
     profile-el            ; ELH⊥R+ + domain/range + ABox, exactly §5.2 (implemented)
     profile-el-plus-plus  ; the OWL 2 EL object fragment: + nominals, Self, reflexive roles
-    profile-horn-sriq     ; Horn-SRIQ: + inverses, functionality, ∀ on the right
-    profile-sriq))        ; SRIQ object fragment (non-Horn); not OWL 2 DL
+    profile-horn-sriq     ; dropped 2026-10-08 (§5): always unavailable; the slot keeps 0.1.0's ABI
+    profile-sriq))        ; SRIQ object fragment with ABox (§5.5); not OWL 2 DL
 
   ;; What the caller asks for. `auto` is NOT a Profile: it resolves to
   ;; one, per ontology. The DEFAULT is `explicit profile-el`, so a

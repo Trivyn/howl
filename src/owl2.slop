@@ -319,8 +319,9 @@
   ;;
   ;; `el++` adds nominals, Self, reflexive roles, equality, inequality,
   ;; negative assertions and the empty role. A rung that is not built
-  ;; (`horn-sriq`, `sriq`) never reaches the gate — prepare refuses it
-  ;; first — and is answered as `el`, which omits more, never less.
+  ;; (`sriq`) or was dropped (`horn-sriq`) never reaches the gate —
+  ;; prepare refuses it first — and is answered as `el`, which omits
+  ;; more, never less.
   ;; ============================================================
 
   (fn is-el-plus-plus ((p Profile))
