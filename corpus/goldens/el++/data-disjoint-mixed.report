@@ -7,7 +7,7 @@ inconsistent false
 omitted 3
 omission DataAxiom(<http://example.org/t#a> <http://example.org/t#u1> "1" .)
 omission DataAxiom(<http://example.org/t#a> <http://example.org/t#u2> "2" .)
-omission DisjointObjectProperties(http://example.org/t#u1 http://example.org/t#u2)
+omission DataAxiom(<http://example.org/t#u1> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <http://example.org/t#u2> .)
 unsatisfiable 0
 subsumptions 1
 sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing

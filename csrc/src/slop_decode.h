@@ -105,6 +105,11 @@ SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
+#define SLOP_OPTION_TYPES_ROLEID_DEFINED
+SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
 SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
@@ -128,11 +133,6 @@ SLOP_OPTION_DEFINE(types_EntityKind, slop_option_types_EntityKind)
 #ifndef SLOP_OPTION_OWL2_PROPCHARACTERISTIC_DEFINED
 #define SLOP_OPTION_OWL2_PROPCHARACTERISTIC_DEFINED
 SLOP_OPTION_DEFINE(owl2_PropCharacteristic, slop_option_owl2_PropCharacteristic)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
-#define SLOP_OPTION_TYPES_ROLEID_DEFINED
-SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
 typedef enum {
@@ -456,10 +456,15 @@ slop_string decode_list_fault_message(decode_ListFault f);
 uint8_t decode_has_pred(slop_arena* arena, termstore_TermStore g, rdf_Term s, slop_string pred_iri);
 slop_result_rdf_Term_decode_LookupFault decode_obj_of(slop_arena* arena, termstore_TermStore g, rdf_Term s, slop_string pred_iri);
 slop_result_types_RoleId_string decode_decode_role(slop_arena* arena, termstore_TermStore g, rdf_Term b);
-uint8_t decode_inverse_expression_term(slop_arena* arena, termstore_TermStore g, rdf_Term t);
-uint8_t decode_restriction_on_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term b);
-uint8_t decode_list_has_inverse(slop_arena* arena, termstore_TermStore g, rdf_Term head);
-uint8_t decode_property_axiom_on_inverse(slop_arena* arena, termstore_TermStore g, slop_string pv, rdf_Triple t);
+slop_option_types_RoleId decode_property_expression(slop_arena* arena, termstore_TermStore g, rdf_Term t);
+uint8_t decode_malformed_inverse(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
+uint8_t decode_data_property_term(slop_arena* arena, termstore_TermStore g, rdf_Term t);
+uint8_t decode_restriction_on_data(slop_arena* arena, termstore_TermStore g, rdf_Term b);
+slop_string decode_data_restriction_pred(slop_arena* arena, termstore_TermStore g, rdf_Term b);
+slop_string decode_data_restriction_name(slop_string pred);
+slop_string decode_filler_text(slop_arena* arena, rdf_Term t);
+owl2_RawConcept decode_nary_data_restriction(slop_arena* arena, termstore_TermStore g, rdf_Term b);
+owl2_RawConcept decode_data_restriction(slop_arena* arena, termstore_TermStore g, rdf_Term b);
 slop_result_int_string decode_literal_count(rdf_Term t);
 decode_IndividualTerm decode_individual_term(rdf_Term tm);
 slop_result_decode_NodeList_string decode_decode_node_list(slop_arena* arena, termstore_TermStore g, rdf_Term head);
@@ -481,6 +486,7 @@ slop_option_types_EntityKind decode_entity_kind_of(slop_string type_iri);
 slop_option_owl2_PropCharacteristic decode_characteristic_of(slop_string type_iri);
 slop_option_types_RoleId decode_role_of_term(rdf_Term t);
 slop_result_list_types_RoleId_string decode_decode_role_list(slop_arena* arena, termstore_TermStore g, rdf_Term head);
+uint8_t decode_list_has_data(slop_arena* arena, termstore_TermStore g, rdf_Term head);
 slop_result_list_owl2_RawConcept_string decode_binary_concepts(slop_arena* arena, termstore_TermStore g, rdf_Triple t);
 slop_option_rdf_Term decode_members_head(slop_arena* arena, termstore_TermStore g, rdf_Term s);
 slop_result_owl2_RawAxiom_string decode_decode_typed(slop_arena* arena, termstore_TermStore g, rdf_Triple t, rdf_IRI obj);
@@ -549,6 +555,11 @@ SLOP_OPTION_DEFINE(decode_Stage0, slop_option_decode_Stage0)
 SLOP_OPTION_DEFINE(decode_Rebuilt, slop_option_decode_Rebuilt)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
+#define SLOP_OPTION_TYPES_ROLEID_DEFINED
+SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
+#endif
+
 #ifndef SLOP_OPTION_DECODE_INDIVIDUALTERM_DEFINED
 #define SLOP_OPTION_DECODE_INDIVIDUALTERM_DEFINED
 SLOP_OPTION_DEFINE(decode_IndividualTerm, slop_option_decode_IndividualTerm)
@@ -587,11 +598,6 @@ SLOP_OPTION_DEFINE(types_EntityKind, slop_option_types_EntityKind)
 #ifndef SLOP_OPTION_OWL2_PROPCHARACTERISTIC_DEFINED
 #define SLOP_OPTION_OWL2_PROPCHARACTERISTIC_DEFINED
 SLOP_OPTION_DEFINE(owl2_PropCharacteristic, slop_option_owl2_PropCharacteristic)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_ROLEID_DEFINED
-#define SLOP_OPTION_TYPES_ROLEID_DEFINED
-SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
 #ifndef SLOP_OPTION_DECODE_DATAVOCAB_DEFINED

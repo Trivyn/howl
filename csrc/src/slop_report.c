@@ -8,21 +8,21 @@ slop_string report_termination_line(types_Termination t);
 slop_list_string report_report_lines(slop_arena* arena, types_Outcome o);
 
 slop_string report_node_text(slop_arena* arena, types_Node n) {
-    __auto_type _mv_1021 = n;
-    switch (_mv_1021.tag) {
+    __auto_type _mv_1037 = n;
+    switch (_mv_1037.tag) {
         case types_Node_class_node:
         {
-            __auto_type i = _mv_1021.data.class_node;
+            __auto_type i = _mv_1037.data.class_node;
             return i.value;
         }
         case types_Node_individual_node:
         {
-            __auto_type i = _mv_1021.data.individual_node;
+            __auto_type i = _mv_1037.data.individual_node;
             return string_concat(arena, SLOP_STR("{"), string_concat(arena, i.value, SLOP_STR("}")));
         }
         case types_Node_fresh_node:
         {
-            __auto_type k = _mv_1021.data.fresh_node;
+            __auto_type k = _mv_1037.data.fresh_node;
             return string_concat(arena, SLOP_STR("_:fresh"), int_to_string(arena, k));
         }
     }
@@ -34,27 +34,27 @@ slop_string report_keyed(slop_arena* arena, slop_string key, slop_string text) {
 }
 
 slop_string report_verdict_line(types_Outcome o) {
-    __auto_type _mv_1022 = types_verdict(o);
-    if (_mv_1022 == types_Verdict_verdict_coherent) {
+    __auto_type _mv_1038 = types_verdict(o);
+    if (_mv_1038 == types_Verdict_verdict_coherent) {
         return SLOP_STR("verdict coherent");
-    } else if (_mv_1022 == types_Verdict_verdict_incoherent) {
+    } else if (_mv_1038 == types_Verdict_verdict_incoherent) {
         return SLOP_STR("verdict incoherent");
-    } else if (_mv_1022 == types_Verdict_verdict_inconclusive) {
+    } else if (_mv_1038 == types_Verdict_verdict_inconclusive) {
         return SLOP_STR("verdict inconclusive");
     }
     SLOP_UNREACHABLE();
 }
 
 slop_string report_termination_line(types_Termination t) {
-    __auto_type _mv_1023 = t;
-    switch (_mv_1023.tag) {
+    __auto_type _mv_1039 = t;
+    switch (_mv_1039.tag) {
         case types_Termination_fixpoint:
         {
             return SLOP_STR("termination fixpoint");
         }
         case types_Termination_resource_limit:
         {
-            __auto_type _ = _mv_1023.data.resource_limit;
+            __auto_type _ = _mv_1039.data.resource_limit;
             return SLOP_STR("termination resource-limit");
         }
     }

@@ -222,8 +222,9 @@
     (@spec ((Arena RoleId) -> String))
     (@alloc arena)
     (match r
-      ((named-role i) (string-concat arena "<" (string-concat arena (. i value) ">")))
-      ((fresh-role k) (string-concat arena "_:r" (int-to-string arena k)))))
+      ((named-role i)   (string-concat arena "<" (string-concat arena (. i value) ">")))
+      ((fresh-role k)   (string-concat arena "_:r" (int-to-string arena k)))
+      ((inverse-role i) (string-concat arena "^<" (string-concat arena (. i value) ">")))))
 
   (fn prefix-text ((arena Arena) (conj (List RawConcept)) (upto Int))
     (@intent "The key of the first `upto` conjuncts, as one intersection")
@@ -263,22 +264,23 @@
     ;; two chains into one super keyed alike, shared ONE intermediate role,
     ;; and composed a chain neither states (hazards/chain-prefix-collision).
     ;; The super comes first, so every token after it is a prefix role.
-    (let ((mut out (string-concat arena "chain " (render-role-name super)))
+    (let ((mut out (string-concat arena "chain " (render-role-name arena super)))
           (mut i 0))
       (do
         (while (< i upto)
           (do
             (set! out (string-concat arena out
-                        (string-concat arena " " (render-role-name (role-at-n steps i)))))
+                        (string-concat arena " " (render-role-name arena (role-at-n steps i)))))
             (set! i (+ i 1))))
         out)))
 
-  (fn render-role-name ((r RoleId))
+  (fn render-role-name ((arena Arena) (r RoleId))
     (@intent "A stable textual key for a role")
-    (@spec ((RoleId) -> String))
-    (@pure)
+    (@spec ((Arena RoleId) -> String))
+    (@alloc arena)
     (match r
-      ((named-role i) (. i value))
-      ((fresh-role _) "_:fresh")))
+      ((named-role i)   (. i value))
+      ((fresh-role _)   "_:fresh")
+      ((inverse-role i) (string-concat arena "^" (. i value)))))
 
 )

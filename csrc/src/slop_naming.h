@@ -75,7 +75,7 @@ slop_string naming_role_key(slop_arena* arena, types_RoleId r);
 slop_string naming_prefix_text(slop_arena* arena, slop_list_owl2_RawConcept conj, int64_t upto);
 types_RoleId naming_role_at_n(slop_list_types_RoleId xs, int64_t i);
 slop_string naming_prefix_role_text(slop_arena* arena, slop_list_types_RoleId steps, int64_t upto, types_RoleId super);
-slop_string naming_render_role_name(types_RoleId r);
+slop_string naming_render_role_name(slop_arena* arena, types_RoleId r);
 
 #ifndef SLOP_OPTION_NAMING_REGISTRY_DEFINED
 #define SLOP_OPTION_NAMING_REGISTRY_DEFINED

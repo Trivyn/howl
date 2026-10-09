@@ -32,7 +32,8 @@
   (import normalize (NormOutput normalize-accepted))
   (import owl2 (RawConcept Signature signature-has-class render-omission
                 signature-has-object-property signature-has-annotation-property
-                RawAxiom Disposition disposition axiom-in-profile render-axiom))
+                RawAxiom Disposition disposition axiom-in-profile render-axiom
+                concept-cmp CardKind))
   (import ttl (parse-ttl-file parse-ttl-string))
   (import file (file-open file-close file-read-all))
   (import rdf (Graph))
@@ -2121,6 +2122,145 @@
         ":d a owl:DatatypeProperty ; rdfs:domain _:x .\n_:x owl:intersectionOf ( :C :D ) ; rdfs:subClassOf owl:Nothing ."
         ":d a owl:DatatypeProperty .\n[ owl:intersectionOf ( :C :D ) ] rdfs:subClassOf owl:Nothing .")))
 
+  ;; ============================================================
+  ;; sriq slice 4a: every ObjectInverseOf decodes whole, and data is data
+  ;; ============================================================
+
+  (fn inv-decls ()
+    (@intent "Declarations for the inverse and data decode rows, after eq-prefix")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:p a owl:ObjectProperty . :q a owl:ObjectProperty . :s a owl:ObjectProperty .\n:A a owl:Class . :B a owl:Class . :C a owl:Class .\n:d a owl:DatatypeProperty . :e a owl:DatatypeProperty .\n")
+
+  (fn test-inverses-decode-whole ((arena Arena))
+    (@intent "ObjectInverseOf decodes in every property position, and el/el++ omit it as written")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Before RoleId had an inverse arm, each of these was an opaque
+    ;; N-Triples fragment (or, in a restriction, one constant string for
+    ;; every inverse restriction). Now each renders as the axiom it is.
+    (and
+      (omits-exactly arena "an inverse sub-property"
+        (string-concat arena (inv-decls) ":q rdfs:subPropertyOf [ owl:inverseOf :p ] .")
+        "SubObjectPropertyOf(http://example.org/t#q ObjectInverseOf(http://example.org/t#p))\n")
+      (omits-exactly arena "an inverse chain step"
+        (string-concat arena (inv-decls) ":s owl:propertyChainAxiom ( [ owl:inverseOf :p ] :q ) .")
+        "SubObjectPropertyOf(ObjectPropertyChain(ObjectInverseOf(http://example.org/t#p) http://example.org/t#q) http://example.org/t#s)\n")
+      (omits-exactly arena "two restrictions on inverses stay apart"
+        (string-concat arena (inv-decls) ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :p ] ; owl:someValuesFrom :B ] .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :q ] ; owl:allValuesFrom :C ] .")
+        "SubClassOf(http://example.org/t#A ObjectAllValuesFrom(ObjectInverseOf(http://example.org/t#q) http://example.org/t#C))\nSubClassOf(http://example.org/t#A ObjectSomeValuesFrom(ObjectInverseOf(http://example.org/t#p) http://example.org/t#B))\n")
+      (omits-exactly arena "an inverse's domain"
+        (string-concat arena (inv-decls) "[ owl:inverseOf :p ] rdfs:domain :A .")
+        "ObjectPropertyDomain(ObjectInverseOf(http://example.org/t#p) http://example.org/t#A)\n")
+      (omits-exactly arena "an inverse's characteristic"
+        (string-concat arena (inv-decls) "[ owl:inverseOf :q ] a owl:FunctionalProperty .")
+        "FunctionalObjectProperty(ObjectInverseOf(http://example.org/t#q))\n")
+      (omits-exactly arena "an inverse of an inverse expression"
+        (string-concat arena (inv-decls) ":p owl:inverseOf [ owl:inverseOf :q ] .")
+        "InverseObjectProperties(http://example.org/t#p ObjectInverseOf(http://example.org/t#q))\n")
+      (omits-exactly arena "a negative assertion on an inverse"
+        (string-concat arena (inv-decls) "[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty [ owl:inverseOf :p ] ; owl:targetIndividual :b ] .")
+        "NegativeObjectPropertyAssertion(ObjectInverseOf(http://example.org/t#p) http://example.org/t#a http://example.org/t#b)\n")
+      (omits-exactly arena "disjoint properties with an inverse member"
+        (string-concat arena (inv-decls) "[ a owl:AllDisjointProperties ; owl:members ( :p [ owl:inverseOf :q ] ) ] .")
+        "DisjointObjectProperties(http://example.org/t#p ObjectInverseOf(http://example.org/t#q))\n")
+      (omits-exactly arena "a disjoint union, read whole"
+        (string-concat arena (inv-decls) ":C owl:disjointUnionOf ( :A :B ) .")
+        "DisjointUnion(http://example.org/t#C http://example.org/t#A http://example.org/t#B)\n")
+      ;; `_:x owl:inverseOf :r , :s` makes no ObjectInverseOf, and no axiom
+      ;; can read it. It was dropped with no omission, and the document
+      ;; came out coherent; each triple is now an omission.
+      (rungs-omit arena "an ambiguous inverse node is two omissions, not a silent drop"
+        "_:x owl:inverseOf :r , :s ." 2 2)
+      ;; An inverse-bearing RIA is omitted alone. Seen by el's §11.2
+      ;; check, `s ∘ r⁻ ⊑ t` with `t ⊑ s` is a hierarchy violation, and
+      ;; the whole RBox, `t ⊑ s` included, would be omitted with it.
+      ;; el++ drops `R ⊑ owl:topObjectProperty` for its own roles only; an
+      ;; inverse there is outside its language and omitted as written.
+      ;; An equivalence with an inverse is omitted whole, as written; its
+      ;; star split it, and an equivalence of one inverse with itself had
+      ;; no pieces at all.
+      (omits-exactly arena "an equivalence with an inverse, whole"
+        (string-concat arena (inv-decls) ":p owl:equivalentProperty [ owl:inverseOf :q ] .")
+        "EquivalentObjectProperties(http://example.org/t#p ObjectInverseOf(http://example.org/t#q))\n")
+      (rungs-omit arena "an inverse equivalent to itself is an omission, not a silent drop"
+        "_:x owl:inverseOf :r ; owl:equivalentProperty _:x ." 1 1)
+      (rungs-omit arena "an inverse into the universal role is omitted, not dropped"
+        "[ owl:inverseOf :r ] rdfs:subPropertyOf owl:topObjectProperty ." 1 1)
+      (rungs-omit arena "an inverse chain never reaches el's regularity check"
+        ":t rdfs:subPropertyOf :s . :t owl:propertyChainAxiom ( :s [ owl:inverseOf :r ] ) ." 1 1)))
+
+  (fn test-data-constructs-decode-as-data ((arena Arena))
+    (@intent "A data restriction or data property axiom decodes as data, never as its object twin")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; DataSomeValuesFrom read as rc-some was ACCEPTED by el and el++, its
+    ;; datatype taken for a class; EquivalentDataProperties was accepted
+    ;; as role inclusions; owl:onDataRange and owl:onProperties faulted
+    ;; the whole document.
+    (and
+      (omits-exactly arena "DataSomeValuesFrom"
+        (string-concat arena (inv-decls) ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :d ; owl:someValuesFrom xsd:integer ] .")
+        "SubClassOf(http://example.org/t#A DataRange(DataSomeValuesFrom(http://example.org/t#d http://www.w3.org/2001/XMLSchema#integer)))\n")
+      (omits-exactly arena "DataAllValuesFrom"
+        (string-concat arena (inv-decls) ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :d ; owl:allValuesFrom xsd:integer ] .")
+        "SubClassOf(http://example.org/t#A DataRange(DataAllValuesFrom(http://example.org/t#d http://www.w3.org/2001/XMLSchema#integer)))\n")
+      (omits-exactly arena "a data cardinality"
+        (string-concat arena (inv-decls) ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :d ; owl:maxCardinality 1 ] .")
+        "SubClassOf(http://example.org/t#A DataRange(DataMaxCardinality(http://example.org/t#d \"1\")))\n")
+      (omits-exactly arena "owl:onDataRange is data, not a fault"
+        (string-concat arena (inv-decls) ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :e ; owl:minQualifiedCardinality 1 ; owl:onDataRange xsd:integer ] .")
+        "SubClassOf(http://example.org/t#A DataRange(DataMinCardinality(http://example.org/t#e \"1\")))\n")
+      ;; Its owl:onProperties triple is not structural, so it also stays
+      ;; an omission of its own; two such restrictions stay apart.
+      (rungs-omit arena "owl:onProperties is data, not a fault"
+        ":d a owl:DatatypeProperty . :e a owl:DatatypeProperty .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperties ( :d ) ; owl:someValuesFrom <http://www.w3.org/2001/XMLSchema#integer> ] .\n:D rdfs:subClassOf [ a owl:Restriction ; owl:onProperties ( :e ) ; owl:allValuesFrom <http://www.w3.org/2001/XMLSchema#integer> ] ." 4 4)
+      (rungs-omit arena "a stray owl:onProperties is an omission, not a silent drop"
+        "_:x owl:onProperties ( :r ) ." 1 1)
+      (rungs-omit arena "a disjoint union with no member list is an omission, not a fault"
+        ":C owl:disjointUnionOf _:missing ." 1 1)
+      (rungs-omit arena "FunctionalDataProperty on a used property is data"
+        ":d a owl:DatatypeProperty , owl:FunctionalProperty . :a :d 1 ." 2 2)
+      (rungs-omit arena "EquivalentDataProperties is data, not role inclusions"
+        ":d a owl:DatatypeProperty . :e a owl:DatatypeProperty . :d owl:equivalentProperty :e . :a :d 1 ." 2 2)
+      (rungs-omit arena "a negative assertion on a data property is data"
+        ":d a owl:DatatypeProperty . :a :d 1 .\n[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :d ; owl:targetIndividual :b ] ." 2 2)
+      (rungs-omit arena "DisjointDataProperties on used properties is data"
+        ":d a owl:DatatypeProperty . :e a owl:DatatypeProperty .\n[ a owl:AllDisjointProperties ; owl:members ( :d :e ) ] . :a :d 1 ; :e 2 ." 3 3)))
+
+  (fn test-concept-order-is-total ((arena Arena))
+    (@intent "concept-cmp orders number restrictions and nominals by every payload")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; They tied before, so their order was input order; sriq admits them.
+    (let ((r (union-new RoleId named-role (record-new IRI (value "http://example.org/t#r"))))
+          (s (union-new RoleId named-role (record-new IRI (value "http://example.org/t#s"))))
+          (a (union-new Node individual-node (record-new IRI (value "http://example.org/t#a"))))
+          (b (union-new Node individual-node (record-new IRI (value "http://example.org/t#b"))))
+          (c (union-new RawConcept rc-name (union-new Node class-node (record-new IRI (value "http://example.org/t#C")))))
+          (d (union-new RawConcept rc-name (union-new Node class-node (record-new IRI (value "http://example.org/t#D")))))
+          (mut na (list-new arena Node))
+          (mut nb (list-new arena Node)))
+      (do
+        (list-push na a) (list-push nb a) (list-push nb b)
+        (and
+          (< (concept-cmp (union-new RawConcept rc-card 'card-min r 1) (union-new RawConcept rc-card 'card-min r 2)) 0)
+          (< (concept-cmp (union-new RawConcept rc-card 'card-min r 2) (union-new RawConcept rc-card 'card-max r 1)) 0)
+          (< (concept-cmp (union-new RawConcept rc-card 'card-min r 1) (union-new RawConcept rc-card 'card-min s 1)) 0)
+          (< (concept-cmp (union-new RawConcept rc-qcard 'card-max r 1 (box-test-concept arena c))
+                          (union-new RawConcept rc-qcard 'card-max r 1 (box-test-concept arena d))) 0)
+          (== (concept-cmp (union-new RawConcept rc-qcard 'card-max r 1 (box-test-concept arena c))
+                           (union-new RawConcept rc-qcard 'card-max r 1 (box-test-concept arena c))) 0)
+          (< (concept-cmp (union-new RawConcept rc-oneof na) (union-new RawConcept rc-oneof nb)) 0)
+          (> (concept-cmp (union-new RawConcept rc-oneof nb) (union-new RawConcept rc-oneof na)) 0)))))
+
+  (fn box-test-concept ((arena Arena) (c RawConcept))
+    (@intent "c, boxed for a test's concept payload")
+    (@spec ((Arena RawConcept) -> (Ptr RawConcept)))
+    (@alloc arena)
+    (let ((p (cast (Ptr RawConcept) (arena-alloc arena (sizeof RawConcept)))))
+      (do (set! (deref p) c) p)))
+
   (fn test-el-plus-plus-gate-table ((arena Arena))
     (@intent "Each el++ construct is omitted under el and accepted under el++, or omitted by both")
     (@spec ((Arena) -> Bool))
@@ -3245,9 +3385,16 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
     (@intent "owl:hasValue with a literal is DataHasValue, not an anonymous individual")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (omits-exactly arena "literal hasValue"
-      ":C a owl:Class . :d a owl:DatatypeProperty . :C owl:equivalentClass [ a owl:Restriction ; owl:onProperty :d ; owl:hasValue \"x\" ] ."
-      "SubClassOf(DataRange(owl:hasValue with a literal (DataHasValue)) http://example.org/t#C)\nSubClassOf(http://example.org/t#C DataRange(owl:hasValue with a literal (DataHasValue)))\n"))
+    ;; On a data property it is read as the restriction it is, naming the
+    ;; property and the value. On an object property a literal value is
+    ;; still data, and still no anonymous individual.
+    (and
+      (omits-exactly arena "literal hasValue"
+        ":C a owl:Class . :d a owl:DatatypeProperty . :C owl:equivalentClass [ a owl:Restriction ; owl:onProperty :d ; owl:hasValue \"x\" ] ."
+        "SubClassOf(DataRange(DataHasValue(http://example.org/t#d \"x\")) http://example.org/t#C)\nSubClassOf(http://example.org/t#C DataRange(DataHasValue(http://example.org/t#d \"x\")))\n")
+      (omits-exactly arena "literal hasValue on an object property"
+        ":C a owl:Class . :r a owl:ObjectProperty . :C owl:equivalentClass [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue \"x\" ] ."
+        "SubClassOf(DataRange(owl:hasValue with a literal (DataHasValue)) http://example.org/t#C)\nSubClassOf(http://example.org/t#C DataRange(owl:hasValue with a literal (DataHasValue)))\n")))
 
   ;; ============================================================
   ;; Negation in positive positions (§5.2's rewrite; SPEC §5.3 L0)
@@ -4698,8 +4845,9 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
     (match c
       ((rc-some r f)
         (and (match r
-               ((named-role i) (== (string-cmp (. i value) role-iri) 0))
-               ((fresh-role _) false))
+               ((named-role i)   (== (string-cmp (. i value) role-iri) 0))
+               ((fresh-role _)   false)
+               ((inverse-role _) false))
              (is-named-class (deref f) filler-iri)))
       (_ false)))
 
@@ -5329,6 +5477,18 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-literal-has-value-is-data arena)))
             (print-test-result "decode: a literal hasValue is data" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-inverses-decode-whole arena)))
+            (print-test-result "4a: ObjectInverseOf decodes in every property position" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-data-constructs-decode-as-data arena)))
+            (print-test-result "4a: data restrictions and data property axioms decode as data" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-concept-order-is-total arena)))
+            (print-test-result "4a: concept-cmp orders number restrictions and nominals" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-data-lemma arena)))

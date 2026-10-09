@@ -520,6 +520,22 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     ;
 }
 #endif
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
 static inline uint64_t slop_hash_types_RoleId(const void* key) {
     const types_RoleId* _k = (const types_RoleId*)key;
     switch (_k->tag) {
@@ -527,6 +543,8 @@ static inline uint64_t slop_hash_types_RoleId(const void* key) {
             return slop_hash_rdf_IRI(&_k->data.named_role);
         case types_RoleId_fresh_role:
             return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+        case types_RoleId_inverse_role:
+            return slop_hash_rdf_IRI(&_k->data.inverse_role);
     }
     return 0;
 }
@@ -539,6 +557,8 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
             return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
         case types_RoleId_fresh_role:
             return _a->data.fresh_role == _b->data.fresh_role;
+        case types_RoleId_inverse_role:
+            return slop_eq_rdf_IRI(&_a->data.inverse_role, &_b->data.inverse_role);
     }
     return false;
 }
@@ -733,6 +753,22 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     ;
 }
 #endif
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
 static inline uint64_t slop_hash_types_RoleId(const void* key) {
     const types_RoleId* _k = (const types_RoleId*)key;
     switch (_k->tag) {
@@ -740,6 +776,8 @@ static inline uint64_t slop_hash_types_RoleId(const void* key) {
             return slop_hash_rdf_IRI(&_k->data.named_role);
         case types_RoleId_fresh_role:
             return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+        case types_RoleId_inverse_role:
+            return slop_hash_rdf_IRI(&_k->data.inverse_role);
     }
     return 0;
 }
@@ -752,6 +790,8 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
             return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
         case types_RoleId_fresh_role:
             return _a->data.fresh_role == _b->data.fresh_role;
+        case types_RoleId_inverse_role:
+            return slop_eq_rdf_IRI(&_a->data.inverse_role, &_b->data.inverse_role);
     }
     return false;
 }
@@ -956,6 +996,11 @@ uint8_t test_gate_alike_under(slop_arena* arena, slop_string label, slop_string 
 uint8_t test_rungs_gate_alike(slop_arena* arena, slop_string label, slop_string ttl_a, slop_string ttl_b);
 uint8_t test_rungs_omit(slop_arena* arena, slop_string label, slop_string ttl, int64_t el_want, int64_t elpp_want);
 uint8_t test_test_data_lemma(slop_arena* arena);
+slop_string test_inv_decls(void);
+uint8_t test_test_inverses_decode_whole(slop_arena* arena);
+uint8_t test_test_data_constructs_decode_as_data(slop_arena* arena);
+uint8_t test_test_concept_order_is_total(slop_arena* arena);
+owl2_RawConcept* test_box_test_concept(slop_arena* arena, owl2_RawConcept c);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
 slop_string test_ksc_form_of_ttl(slop_arena* arena, slop_string ttl);

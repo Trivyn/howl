@@ -51,7 +51,7 @@
 
   (export
     CardKind PropCharacteristic
-    RawConcept RawChain RawEdge RawClassAssertion RawDeclaration
+    RawConcept RawChain RawEdge RawClassAssertion RawDeclaration RawDisjointUnion
     RawAxiom Disposition
     Signature
     disposition concept-in-profile concepts-in-profile axiom-in-profile role-in-profile
@@ -124,6 +124,12 @@
     (kind   EntityKind)
     (entity IRI)))
 
+  ;; DisjointUnion(C D1 … Dn): C ≡ D1 ⊔ … ⊔ Dn with the Di pairwise
+  ;; disjoint. C is a class name in OWL 2, never an expression.
+  (type RawDisjointUnion (record
+    (class   IRI)
+    (members (List RawConcept))))
+
   ;; ============================================================
   ;; The axiom AST
   ;; ============================================================
@@ -168,9 +174,8 @@
     (ra-same-individual       (List Node))
     (ra-different-individuals (List Node))
     (ra-negative-assertion    RawEdge)      ; ¬r(a, b): source, property, target
-    (ra-disjoint-union        InputRef)
+    (ra-disjoint-union        RawDisjointUnion)
     (ra-has-key               InputRef)
-    (ra-inverse-expression    InputRef)   ; ObjectInverseOf as an operand — v1
 
     ;; --- out-of-profile: built on vocabulary v0 has no types for ---
     (ra-data-axiom            InputRef)   ; the data side, but for what the data lemma sets aside (§5.2)
@@ -232,7 +237,6 @@
       ((ra-negative-assertion _)        (when-el-plus-plus p))
       ((ra-disjoint-union _)            'd-out-of-profile)
       ((ra-has-key _)                   'd-out-of-profile)
-      ((ra-inverse-expression _)        'd-out-of-profile)
       ((ra-data-axiom _)                'd-out-of-profile)
       ((ra-builtin-role _)              'd-out-of-profile)
       ((ra-anonymous-individual _)      'd-out-of-profile)
@@ -370,8 +374,12 @@
     ;; in that rung. The universal role never is, here: its one accepted
     ;; position, `R ⊑ owl:topObjectProperty`, is a tautology the gate
     ;; drops before any role is asked about (`drop-top-role-tautologies`).
+    ;;
+    ;; An inverse (ObjectInverseOf) is in no rung built so far: OWL 2 EL
+    ;; has none, and sriq (§5.5) takes it when its gate is built.
     (match r
-      ((fresh-role _) true)
+      ((fresh-role _)   true)
+      ((inverse-role _) false)
       ((named-role i)
         (cond
           ((== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0) (is-el-plus-plus p))
@@ -475,7 +483,6 @@
         ((ra-disjoint-properties _)      false)
         ((ra-disjoint-union _)           false)
         ((ra-has-key _)                  false)
-        ((ra-inverse-expression _)       false)
         ((ra-data-axiom _)               false)
         ((ra-builtin-role _)             false)
         ((ra-anonymous-individual _)     false)
@@ -586,16 +593,74 @@
               (_ 0)))
           ((rc-has-self ra2)
             (match b ((rc-has-self rb2) (role-cmp ra2 rb2)) (_ 0)))
-          ;; The remaining variants are either payload-free (rc-thing,
-          ;; rc-nothing) or carry payloads no canonical order is defined
-          ;; on yet (rc-oneof's node list, the cardinality counts, the
-          ;; InputRef strings). They are all OUT OF PROFILE, so they
-          ;; never reach a position where their relative order changes a
-          ;; classification — only an omission list, which sorts by
-          ;; omission-cmp rather than by this. Returning 0 makes them
-          ;; tie, and the sort is STABLE, so input order decides and the
-          ;; result stays input-determined.
+          ;; Nominals and number restrictions are in sriq (§5.5) or
+          ;; el++ (§5.4), where their order reaches a classification, so
+          ;; they are ordered by every payload: the kind, the role, the
+          ;; count, the filler.
+          ((rc-oneof na)
+            (match b ((rc-oneof nb) (node-list-cmp na nb)) (_ 0)))
+          ((rc-card ka ra2 na)
+            (match b
+              ((rc-card kb rb2 nb) (card-cmp ka ra2 na kb rb2 nb))
+              (_ 0)))
+          ((rc-qcard ka ra2 na fa)
+            (match b
+              ((rc-qcard kb rb2 nb fb)
+                (let ((cc (card-cmp ka ra2 na kb rb2 nb)))
+                  (if (!= cc 0) cc (concept-cmp (deref fa) (deref fb)))))
+              (_ 0)))
+          ;; The rest are payload-free (rc-thing, rc-nothing) or carry an
+          ;; InputRef (rc-data, rc-anon), which no rung admits: they reach
+          ;; only an omission list, which sorts by omission-cmp. Returning
+          ;; 0 makes them tie, and the sort is STABLE, so input order
+          ;; decides and the result stays input-determined.
           (_ 0)))))
+
+  (fn card-cmp ((ka CardKind) (ra RoleId) (na Int) (kb CardKind) (rb RoleId) (nb Int))
+    (@intent "Order two number restrictions' heads: kind, then role, then count")
+    (@spec ((CardKind RoleId Int CardKind RoleId Int) -> Int))
+    (@pure)
+    (let ((ka2 (card-rank ka)) (kb2 (card-rank kb)))
+      (if (!= ka2 kb2)
+        (if (< ka2 kb2) -1 1)
+        (let ((rr (role-cmp ra rb)))
+          (cond ((!= rr 0) rr)
+                ((< na nb) -1)
+                ((> na nb) 1)
+                (else 0))))))
+
+  (fn card-rank ((k CardKind))
+    (@intent "A CardKind's place in the canonical order")
+    (@spec ((CardKind) -> Int))
+    (@pure)
+    (match k
+      ('card-min   0)
+      ('card-max   1)
+      ('card-exact 2)))
+
+  (fn node-list-cmp ((a (List Node)) (b (List Node)))
+    (@intent "Lexicographic order on node lists, length as tiebreak")
+    (@spec (((List Node) (List Node)) -> Int))
+    (@pure)
+    (let ((alen (cast Int (list-len a)))
+          (blen (cast Int (list-len b)))
+          (n    (min alen blen))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do
+            (match (list-get a i)
+              ((some x)
+                (match (list-get b i)
+                  ((some y) (set! r (node-cmp x y)))
+                  ((none)   (do))))
+              ((none) (do)))
+            (set! i (+ i 1))))
+        (cond ((!= r 0) r)
+              ((< alen blen) -1)
+              ((> alen blen) 1)
+              (else 0)))))
 
   ;; ============================================================
   ;; Canonical rendering — OWL functional syntax
@@ -611,12 +676,13 @@
   ;; different axioms and must not collapse to one omission.
   ;; ============================================================
 
-  (fn render-role ((r RoleId))
+  (fn render-role ((arena Arena) (r RoleId))
     (@intent "A role in functional syntax")
-    (@spec ((RoleId) -> String))
-    (@pure)
+    (@spec ((Arena RoleId) -> String))
+    (@alloc arena)
     (match r
-      ((named-role i) (. i value))
+      ((named-role i)   (. i value))
+      ((inverse-role i) (wrap arena "ObjectInverseOf" (. i value)))
       ;; A fresh role cannot appear here: only ACCEPTED chains are
       ;; decomposed, so decomposition runs strictly after the gate and
       ;; no fresh-role ever reaches a rendered axiom.
@@ -678,7 +744,7 @@
         (for-each (r rs)
           (do
             (when (not first) (set! out (string-concat arena out " ")))
-            (set! out (string-concat arena out (render-role r)))
+            (set! out (string-concat arena out (render-role arena r)))
             (set! first false)))
         out)))
 
@@ -707,21 +773,21 @@
       ((rc-not f)   (wrap arena "ObjectComplementOf" (render-concept arena (deref f))))
       ((rc-some r f)
         (wrap arena "ObjectSomeValuesFrom"
-          (join2 arena (render-role r) (render-concept arena (deref f)))))
+          (join2 arena (render-role arena r) (render-concept arena (deref f)))))
       ((rc-all r f)
         (wrap arena "ObjectAllValuesFrom"
-          (join2 arena (render-role r) (render-concept arena (deref f)))))
+          (join2 arena (render-role arena r) (render-concept arena (deref f)))))
       ((rc-oneof ns) (wrap arena "ObjectOneOf" (render-node-list arena ns)))
       ((rc-has-value r n)
-        (wrap arena "ObjectHasValue" (join2 arena (render-role r) (render-node n))))
-      ((rc-has-self r) (wrap arena "ObjectHasSelf" (render-role r)))
+        (wrap arena "ObjectHasValue" (join2 arena (render-role arena r) (render-node n))))
+      ((rc-has-self r) (wrap arena "ObjectHasSelf" (render-role arena r)))
       ((rc-card k r n)
         (wrap arena (render-card-kind k)
-          (join2 arena (int-to-string arena n) (render-role r))))
+          (join2 arena (int-to-string arena n) (render-role arena r))))
       ((rc-qcard k r n f)
         (wrap arena (render-card-kind k)
           (join2 arena (int-to-string arena n)
-            (join2 arena (render-role r) (render-concept arena (deref f))))))
+            (join2 arena (render-role arena r) (render-concept arena (deref f))))))
       ;; An undecodable operand keeps the fragment it was decoded from,
       ;; so two different anonymous classes stay distinguishable.
       ((rc-data ref) (wrap arena "DataRange" (render-input-ref ref)))
@@ -779,49 +845,50 @@
       ((ra-disjoint-classes cs)
         (wrap arena "DisjointClasses" (render-concept-list arena cs)))
       ((ra-sub-object-property a b)
-        (wrap arena "SubObjectPropertyOf" (join2 arena (render-role a) (render-role b))))
+        (wrap arena "SubObjectPropertyOf" (join2 arena (render-role arena a) (render-role arena b))))
       ((ra-property-chain ch)
         (wrap arena "SubObjectPropertyOf"
           (join2 arena
             (wrap arena "ObjectPropertyChain" (render-role-list arena (. ch steps)))
-            (render-role (. ch super)))))
+            (render-role arena (. ch super)))))
       ((ra-equivalent-properties rs)
         (wrap arena "EquivalentObjectProperties" (render-role-list arena rs)))
       ((ra-transitive-property r)
-        (wrap arena "TransitiveObjectProperty" (render-role r)))
+        (wrap arena "TransitiveObjectProperty" (render-role arena r)))
       ((ra-object-property-domain r c)
         (wrap arena "ObjectPropertyDomain"
-          (join2 arena (render-role r) (render-concept arena (deref c)))))
+          (join2 arena (render-role arena r) (render-concept arena (deref c)))))
       ((ra-object-property-range r c)
         (wrap arena "ObjectPropertyRange"
-          (join2 arena (render-role r) (render-concept arena (deref c)))))
+          (join2 arena (render-role arena r) (render-concept arena (deref c)))))
       ((ra-class-assertion ca)
         (wrap arena "ClassAssertion"
           (join2 arena (render-concept arena (deref (. ca concept)))
                        (render-node (. ca subject)))))
       ((ra-object-property-assertion e)
         (wrap arena "ObjectPropertyAssertion"
-          (join2 arena (render-role (. e role))
+          (join2 arena (render-role arena (. e role))
             (join2 arena (render-node (. e from)) (render-node (. e to))))))
       ((ra-declaration d)
         (wrap arena "Declaration" (. (. d entity) value)))
       ((ra-annotation)                "Annotation()")
       ((ra-inert-data)                "InertDataAxiom()")
       ((ra-inverse-properties a b)
-        (wrap arena "InverseObjectProperties" (join2 arena (render-role a) (render-role b))))
+        (wrap arena "InverseObjectProperties" (join2 arena (render-role arena a) (render-role arena b))))
       ((ra-property-characteristic c r)
-        (wrap arena (render-characteristic c) (render-role r)))
+        (wrap arena (render-characteristic c) (render-role arena r)))
       ((ra-disjoint-properties rs)
         (wrap arena "DisjointObjectProperties" (render-role-list arena rs)))
       ((ra-same-individual ns)       (wrap arena "SameIndividual" (render-node-list arena ns)))
       ((ra-different-individuals ns) (wrap arena "DifferentIndividuals" (render-node-list arena ns)))
       ((ra-negative-assertion e)
         (wrap arena "NegativeObjectPropertyAssertion"
-          (join2 arena (render-role (. e role))
+          (join2 arena (render-role arena (. e role))
             (join2 arena (render-node (. e from)) (render-node (. e to))))))
-      ((ra-disjoint-union ref)       (wrap arena "DisjointUnion" (render-input-ref ref)))
+      ((ra-disjoint-union du)
+        (wrap arena "DisjointUnion"
+          (join2 arena (. (. du class) value) (render-concept-list arena (. du members)))))
       ((ra-has-key ref)              (wrap arena "HasKey" (render-input-ref ref)))
-      ((ra-inverse-expression ref)   (wrap arena "ObjectInverseOf" (render-input-ref ref)))
       ((ra-data-axiom ref)           (wrap arena "DataAxiom" (render-input-ref ref)))
       ((ra-builtin-role ref)         (wrap arena "BuiltinRole" (render-input-ref ref)))
       ((ra-anonymous-individual ref) (wrap arena "AnonymousIndividual" (render-input-ref ref)))
@@ -961,9 +1028,11 @@
           (record-new RawEdge (role (copy-role arena (. e role)))
                               (from (copy-node arena (. e from)))
                               (to   (copy-node arena (. e to))))))
-      ((ra-disjoint-union ref)       (union-new RawAxiom ra-disjoint-union (copy-input-ref arena ref)))
+      ((ra-disjoint-union du)
+        (union-new RawAxiom ra-disjoint-union
+          (record-new RawDisjointUnion (class (copy-iri arena (. du class)))
+                                       (members (copy-concepts arena (. du members))))))
       ((ra-has-key ref)              (union-new RawAxiom ra-has-key (copy-input-ref arena ref)))
-      ((ra-inverse-expression ref)   (union-new RawAxiom ra-inverse-expression (copy-input-ref arena ref)))
       ((ra-data-axiom ref)           (union-new RawAxiom ra-data-axiom (copy-input-ref arena ref)))
       ((ra-builtin-role ref)         (union-new RawAxiom ra-builtin-role (copy-input-ref arena ref)))
       ((ra-anonymous-individual ref) (union-new RawAxiom ra-anonymous-individual (copy-input-ref arena ref)))

@@ -2472,7 +2472,9 @@ GROWL's `Delta`.
 ;; representing here, not the class/individual split.
 (union RoleId
   (named-role IRI)
-  (fresh-role (Int 0 ..)))            ; binary-decomposition step (§6.3)
+  (fresh-role (Int 0 ..))             ; binary-decomposition step (§6.3)
+  (inverse-role IRI))                 ; ObjectInverseOf(P): sriq only (§5.5); every
+                                      ; other rung's gate refuses it
 
 ;; ⊤ and ⊥ are reserved NODES, not reserved IRIs.
 ;;   ⊤ = (class-node owl:Thing)      ⊥ = (class-node owl:Nothing)
@@ -2645,7 +2647,7 @@ GROWL's `Delta`.
 ;;   - Fresh-symbol allocation traverses in canonical AXIOM order (§6.2 AxiomRef order), and
 ;;     within an axiom by deterministic PREORDER, left operand before right. "First occurrence"
 ;;     is meaningless without both.
-;;   - RoleId: named-role < fresh-role, then by payload.
+;;   - RoleId: named-role < inverse-role < fresh-role, then by payload.
 ;;   - InputRef: owl-axiom < rdf-fragment < synthetic, then by payload.
 ;;   - Omission: out-of-profile < unresolved-import < missing-declaration, then by payload;
 ;;     missing-declaration compares (EntityKind, IRI, referring-list) with the list compared
