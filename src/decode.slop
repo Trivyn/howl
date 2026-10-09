@@ -119,9 +119,9 @@
                  OWL_ASYMMETRIC_PROPERTY OWL_REFLEXIVE_PROPERTY
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF
-                 OWL_WITH_RESTRICTIONS OWL_DATA_RANGE RDF_LANG_RANGE
+                 OWL_WITH_RESTRICTIONS OWL_DATA_RANGE RDF_LANG_RANGE OWL_ON_PROPERTIES
                  OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE))
-  (import owl2 (RawConcept CardKind Signature make-signature
+  (import owl2 (RawConcept CardKind Signature make-signature RawDisjointUnion
                 RawAxiom RawChain RawEdge RawClassAssertion
                 RawDeclaration PropCharacteristic Disposition disposition
                 signature-has-annotation-property
@@ -729,12 +729,11 @@
     (match (obj-of arena g b OWL_ON_PROPERTY)
       ((error _) (error "restriction without exactly one owl:onProperty"))
       ((ok pt)
-        (match (term-iri-value pt)
-          ((some i) (ok (union-new RoleId named-role i)))
-          ;; Not an ObjectInverseOf: `decode-anon` routes those to
-          ;; `rc-anon` before any restriction reaches here, so a blank
-          ;; onProperty that arrives names no property at all — malformed
-          ;; input, not an out-of-profile construct.
+        (match (property-expression arena g pt)
+          ((some r) (ok r))
+          ;; A blank onProperty that is no ObjectInverseOf names no
+          ;; property at all: malformed input, not an out-of-profile
+          ;; construct.
           ((none) (error "owl:onProperty is a blank node that is not an inverse property expression"))))))
 
   ;; ============================================================
@@ -748,62 +747,166 @@
   ;; same chains out-of-profile.
   ;; ============================================================
 
-  (fn inverse-expression-term ((arena Arena) (g TermStore) (t Term))
-    (@intent "Is this term an ObjectInverseOf: a blank node inverting exactly one named property?")
+  (fn property-expression ((arena Arena) (g TermStore) (t Term))
+    (@intent "An object property expression: a named property, or ObjectInverseOf of one")
+    (@spec ((Arena TermStore Term) -> (Option RoleId)))
+    (@alloc arena)
+    ;; `[ owl:inverseOf :p ]` inverts exactly one NAMED property: OWL 2's
+    ;; RDF mapping cannot nest an inverse. Anything else in a property
+    ;; position names no property, and its caller faults on it.
+    (match (term-iri-value t)
+      ((some i) (some (union-new RoleId named-role i)))
+      ((none)
+        (match t
+          ((term-blank _)
+            (match (obj-of arena g t OWL_INVERSE_OF)
+              ((ok pt)
+                (match (term-iri-value pt)
+                  ((some i) (some (union-new RoleId inverse-role i)))
+                  ((none)   (none))))
+              ((error _) (none))))
+          (_ (none))))))
+
+  (fn malformed-inverse ((arena Arena) (g TermStore) (t Triple))
+    (@intent "Is this a blank node's owl:inverseOf that makes no ObjectInverseOf?")
+    (@spec ((Arena TermStore Triple) -> Bool))
+    (@alloc arena)
+    ;; `structural-triple` skips every `_:x owl:inverseOf :p`, to be read
+    ;; through the axiom that uses `_:x`. When `_:x` carries two of them
+    ;; (or inverts no named property), no axiom can read it, and skipping
+    ;; it dropped both triples with no axiom and no omission.
+    (and (is-pred t OWL_INVERSE_OF)
+         (match (. t subject)
+           ((term-blank _)
+             (match (property-expression arena g (. t subject))
+               ((some _) false)
+               ((none)   true)))
+           (_ false))))
+
+  (fn data-property-term ((arena Arena) (g TermStore) (t Term))
+    (@intent "Is this term a data property: a declared one, or a built-in?")
     (@spec ((Arena TermStore Term) -> Bool))
     (@alloc arena)
-    (match t
-      ((term-blank _)
-        (match (obj-of arena g t OWL_INVERSE_OF)
-          ((ok pt)   (match (term-iri-value pt) ((some _) true) ((none) false)))
-          ((error _) false)))
-      (_ false)))
+    ;; As build-signature reads data-props: the subjects of
+    ;; `rdf:type owl:DatatypeProperty`, which decode-store keeps for this
+    ;; question, and owl:topDataProperty and owl:bottomDataProperty.
+    (match (term-iri-value t)
+      ((none) false)
+      ((some i)
+        (or (== (string-cmp (. i value) OWL_TOP_DATA_PROPERTY) 0)
+            (== (string-cmp (. i value) OWL_BOTTOM_DATA_PROPERTY) 0)
+            (store-contains g (record-new Triple
+                                (subject   t)
+                                (predicate (make-iri arena RDF_TYPE))
+                                (object    (make-iri arena OWL_DATATYPE_PROPERTY))))))))
 
-  (fn restriction-on-inverse ((arena Arena) (g TermStore) (b Term))
-    (@intent "Is this restriction's owl:onProperty an ObjectInverseOf?")
+  (fn restriction-on-data ((arena Arena) (g TermStore) (b Term))
+    (@intent "Is this restriction's owl:onProperty a data property?")
     (@spec ((Arena TermStore Term) -> Bool))
     (@alloc arena)
     (match (obj-of arena g b OWL_ON_PROPERTY)
-      ((ok pt)   (inverse-expression-term arena g pt))
+      ((ok pt)   (data-property-term arena g pt))
       ((error _) false)))
 
-  (fn list-has-inverse ((arena Arena) (g TermStore) (head Term))
-    (@intent "Does this RDF collection contain an ObjectInverseOf?")
-    (@spec ((Arena TermStore Term) -> Bool))
+  (fn data-restriction-pred ((arena Arena) (g TermStore) (b Term))
+    (@intent "The predicate that makes this node a restriction, or the empty string")
+    (@spec ((Arena TermStore Term) -> String))
     (@alloc arena)
-    ;; A MALFORMED list answers false, deliberately: the caller's own
-    ;; checked walk then reports it as the input-error it is, rather than
-    ;; this helper laundering it into an omission.
-    (match (rdf-list-checked arena g head)
-      ((error _) false)
-      ((ok terms)
-        (let ((mut found false))
-          (do
-            (for-each (tm terms)
-              (when (inverse-expression-term arena g tm) (set! found true)))
-            found)))))
-
-  (fn property-axiom-on-inverse ((arena Arena) (g TermStore) (pv String) (t Triple))
-    (@intent "Is this a property axiom with an ObjectInverseOf operand?")
-    (@spec ((Arena TermStore String Triple) -> Bool))
-    (@alloc arena)
-    ;; `_:b owl:inverseOf :p` — the expression's OWN defining triple — is
-    ;; not an axiom and never reaches here: `structural-triple` skips it,
-    ;; and it is read through its user instead.
     (cond
-      ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0)
-        (or (inverse-expression-term arena g (. t subject))
-            (list-has-inverse arena g (. t object))))
-      ((or (== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)
-           (== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
-           (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0))
-        (or (inverse-expression-term arena g (. t subject))
-            (inverse-expression-term arena g (. t object))))
-      ((== (string-cmp pv OWL_INVERSE_OF) 0)
-        (inverse-expression-term arena g (. t object)))
-      ((or (== (string-cmp pv RDFS_DOMAIN) 0) (== (string-cmp pv RDFS_RANGE) 0))
-        (inverse-expression-term arena g (. t subject)))
-      (else false)))
+      ((has-pred arena g b OWL_SOME_VALUES_FROM)          OWL_SOME_VALUES_FROM)
+      ((has-pred arena g b OWL_ALL_VALUES_FROM)           OWL_ALL_VALUES_FROM)
+      ((has-pred arena g b OWL_HAS_VALUE)                 OWL_HAS_VALUE)
+      ((has-pred arena g b OWL_HAS_SELF)                  OWL_HAS_SELF)
+      ((has-pred arena g b OWL_QUALIFIED_CARDINALITY)     OWL_QUALIFIED_CARDINALITY)
+      ((has-pred arena g b OWL_MIN_QUALIFIED_CARDINALITY) OWL_MIN_QUALIFIED_CARDINALITY)
+      ((has-pred arena g b OWL_MAX_QUALIFIED_CARDINALITY) OWL_MAX_QUALIFIED_CARDINALITY)
+      ((has-pred arena g b OWL_CARDINALITY)               OWL_CARDINALITY)
+      ((has-pred arena g b OWL_MIN_CARDINALITY)           OWL_MIN_CARDINALITY)
+      ((has-pred arena g b OWL_MAX_CARDINALITY)           OWL_MAX_CARDINALITY)
+      (else "")))
+
+  (fn data-restriction-name ((pred String))
+    (@intent "The OWL 2 name of a restriction on a data property, from its predicate")
+    (@spec ((String) -> String))
+    (@pure)
+    (cond
+      ((== (string-cmp pred OWL_SOME_VALUES_FROM) 0)          "DataSomeValuesFrom")
+      ((== (string-cmp pred OWL_ALL_VALUES_FROM) 0)           "DataAllValuesFrom")
+      ((== (string-cmp pred OWL_HAS_VALUE) 0)                 "DataHasValue")
+      ((== (string-cmp pred OWL_HAS_SELF) 0)                  "ObjectHasSelf on a data property")
+      ((== (string-cmp pred OWL_QUALIFIED_CARDINALITY) 0)     "DataExactCardinality")
+      ((== (string-cmp pred OWL_MIN_QUALIFIED_CARDINALITY) 0) "DataMinCardinality")
+      ((== (string-cmp pred OWL_MAX_QUALIFIED_CARDINALITY) 0) "DataMaxCardinality")
+      ((== (string-cmp pred OWL_CARDINALITY) 0)               "DataExactCardinality")
+      ((== (string-cmp pred OWL_MIN_CARDINALITY) 0)           "DataMinCardinality")
+      ((== (string-cmp pred OWL_MAX_CARDINALITY) 0)           "DataMaxCardinality")
+      (else "a restriction on a data property")))
+
+  (fn filler-text ((arena Arena) (t Term))
+    (@intent "A term as render-axiom writes it: an IRI bare, a literal quoted, a blank node as _")
+    (@spec ((Arena Term) -> String))
+    (@alloc arena)
+    ;; A blank node's label is not canonical (§6.8), so it never reaches
+    ;; omission text.
+    (match t
+      ((term-iri i)   (. i value))
+      ((term-blank _) "_")
+      (_              (render-term arena t))))
+
+  (fn nary-data-restriction ((arena Arena) (g TermStore) (b Term))
+    (@intent "An n-ary data restriction (owl:onProperties), named by kind, properties and filler")
+    (@spec ((Arena TermStore Term) -> RawConcept))
+    (@alloc arena)
+    (let ((pred  (data-restriction-pred arena g b))
+          (props (match (obj-of arena g b OWL_ON_PROPERTIES)
+                   ((error _) "?")
+                   ((ok ht)
+                     (match (rdf-list-checked arena g ht)
+                       ((error _) "?")
+                       ((ok terms)
+                         (let ((mut out "")
+                               (mut first true))
+                           (do
+                             (for-each (tm terms)
+                               (do
+                                 (when (not first) (set! out (string-concat arena out " ")))
+                                 (set! out (string-concat arena out (filler-text arena tm)))
+                                 (set! first false)))
+                             out)))))))
+          (fill (if (== (string-len pred) 0)
+                  ""
+                  (match (obj-of arena g b pred)
+                    ((ok ft)   (filler-text arena ft))
+                    ((error _) "?")))))
+      (union-new RawConcept rc-data
+        (union-new InputRef rdf-fragment
+          (string-concat arena (data-restriction-name pred)
+            (string-concat arena "(onProperties(" (string-concat arena props
+              (string-concat arena ") " (string-concat arena fill ")")))))))))
+
+  (fn data-restriction ((arena Arena) (g TermStore) (b Term))
+    (@intent "A restriction on a data property, as the data range it is: kind, property, filler")
+    (@spec ((Arena TermStore Term) -> RawConcept))
+    (@alloc arena)
+    ;; DATA, NOT AN OBJECT RESTRICTION. Read as rc-some, a
+    ;; DataSomeValuesFrom was an existential over a "role" whose filler
+    ;; was a datatype taken for a class, and el ACCEPTED it. The text
+    ;; names the property and the filler (a datatype IRI, a literal or a
+    ;; count), so two such omissions stay apart.
+    (let ((pred (data-restriction-pred arena g b))
+          (prop (match (obj-of arena g b OWL_ON_PROPERTY)
+                  ((ok pt)   (filler-text arena pt))
+                  ((error _) "?")))
+          (fill (if (== (string-len pred) 0)
+                  ""
+                  (match (obj-of arena g b pred)
+                    ((ok ft)   (filler-text arena ft))
+                    ((error _) "?")))))
+      (union-new RawConcept rc-data
+        (union-new InputRef rdf-fragment
+          (string-concat arena (data-restriction-name pred)
+            (string-concat arena "(" (string-concat arena prop
+              (string-concat arena " " (string-concat arena fill ")")))))))))
 
   (fn literal-count ((t Term))
     (@intent "A non-negative integer cardinality, from a literal term")
@@ -944,12 +1047,18 @@
     (@spec ((Arena TermStore Term Int) -> (Result RawConcept String)))
     (@alloc arena)
     (cond
-      ;; FIRST, because every restriction kind reads owl:onProperty: an
-      ;; inverse there is out-of-profile, and the enclosing axiom is
-      ;; omitted by the gate's operand check instead of faulting the run.
-      ((restriction-on-inverse arena g b)
-        (ok (union-new RawConcept rc-anon
-              (union-new InputRef rdf-fragment "restriction on an ObjectInverseOf property"))))
+      ;; FIRST, the restrictions that are data: an n-ary one
+      ;; (owl:onProperties), a qualified one over a data range
+      ;; (owl:onDataRange), and any on a data property. Each faulted the
+      ;; document or was read as an object restriction before; each is
+      ;; a data range, out of profile in every rung.
+      ;; Its owl:onProperties triple is NOT structural: a stray one, with
+      ;; no restriction to read it, must stay an omission, so it is
+      ;; decoded again at top level, as reserved vocabulary.
+      ((has-pred arena g b OWL_ON_PROPERTIES)
+        (ok (nary-data-restriction arena g b)))
+      ((or (restriction-on-data arena g b) (has-pred arena g b OWL_ON_DATA_RANGE))
+        (ok (data-restriction arena g b)))
 
       ((has-pred arena g b OWL_INTERSECTION_OF)
         (match (obj-of arena g b OWL_INTERSECTION_OF)
@@ -1338,7 +1447,7 @@
       ((none)   (none))))
 
   (fn decode-role-list ((arena Arena) (g TermStore) (head Term))
-    (@intent "An RDF collection of named roles, for owl:propertyChainAxiom")
+    (@intent "An RDF collection of property expressions: a chain's steps, or disjoint properties")
     (@spec ((Arena TermStore Term) -> (Result (List RoleId) String)))
     (@alloc arena)
     (match (rdf-list-checked arena g head)
@@ -1348,12 +1457,27 @@
               (mut fault (Option String) (none)))
           (do
             (for-each (tm terms)
-              (match (role-of-term tm)
+              (match (property-expression arena g tm)
                 ((some r) (list-push out r))
-                ((none)   (set! fault (some "property chain step is not a named property")))))
+                ((none)   (set! fault (some "property chain step is not a property expression")))))
             (match fault
               ((some m) (error m))
               ((none)   (ok out))))))))
+
+  (fn list-has-data ((arena Arena) (g TermStore) (head Term))
+    (@intent "Does this RDF collection name a data property?")
+    (@spec ((Arena TermStore Term) -> Bool))
+    (@alloc arena)
+    ;; A MALFORMED list answers false, deliberately: the caller's own
+    ;; checked walk then reports it as the input-error it is.
+    (match (rdf-list-checked arena g head)
+      ((error _) false)
+      ((ok terms)
+        (let ((mut found false))
+          (do
+            (for-each (tm terms)
+              (when (data-property-term arena g tm) (set! found true)))
+            found)))))
 
   (fn binary-concepts ((arena Arena) (g TermStore) (t Triple))
     (@intent "Both sides of a binary class axiom, decoded")
@@ -1410,24 +1534,27 @@
                 ((none)   (error "unreachable: declaration type vanished"))))
             ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))
 
+        ;; A CHARACTERISTIC OF A DATA PROPERTY IS DATA. FunctionalProperty
+        ;; is the one OWL 2 allows (FunctionalDataProperty); read as an
+        ;; object characteristic it rendered FunctionalObjectProperty, and
+        ;; transitivity on a data property became an accepted chain.
+        ((and (or (== (string-cmp ov OWL_TRANSITIVE_PROPERTY) 0)
+                  (match (characteristic-of ov) ((some _) true) ((none) false)))
+              (data-property-term arena g (. t subject)))
+          (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+
         ((== (string-cmp ov OWL_TRANSITIVE_PROPERTY) 0)
-          (match (role-of-term (. t subject))
+          (match (property-expression arena g (. t subject))
             ((some r) (ok (union-new RawAxiom ra-transitive-property r)))
-            ((none)
-              (if (inverse-expression-term arena g (. t subject))
-                (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
-                (error "owl:TransitiveProperty on a non-IRI subject")))))
+            ((none)   (error "owl:TransitiveProperty on a non-IRI subject"))))
 
         ((match (characteristic-of ov) ((some _) true) ((none) false))
-          (match (role-of-term (. t subject))
+          (match (property-expression arena g (. t subject))
             ((some r)
               (match (characteristic-of ov)
                 ((some c) (ok (union-new RawAxiom ra-property-characteristic c r)))
                 ((none)   (error "unreachable: characteristic vanished"))))
-            ((none)
-              (if (inverse-expression-term arena g (. t subject))
-                (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
-                (error "property characteristic on a non-IRI subject")))))
+            ((none) (error "property characteristic on a non-IRI subject"))))
 
         ;; THE MEMBERS MUST BE READ, NOT STUBBED. `ra-disjoint-classes`
         ;; is IN PROFILE, so an n-ary AllDisjointClasses decoded with an
@@ -1469,8 +1596,10 @@
           (match (members-head arena g (. t subject))
             ((none) (error "owl:AllDisjointProperties without owl:members"))
             ((some head)
-              (if (list-has-inverse arena g head)
-                (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
+              ;; DisjointDataProperties shares the spelling; any data
+              ;; member makes it data.
+              (if (list-has-data arena g head)
+                (ok (union-new RawAxiom ra-data-axiom (frag arena t)))
                 (match (decode-role-list arena g head)
                   ((error m) (error m))
                   ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs))))))))
@@ -1555,11 +1684,12 @@
                 (match (obj-of arena g x OWL_TARGET_INDIVIDUAL)
                   ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetIndividual"))
                   ((ok tt)
-                    (match (role-of-term pt)
-                      ((none)
-                        (if (inverse-expression-term arena g pt)
-                          (ok (union-new RawAxiom ra-inverse-expression (frag arena t)))
-                          (error "owl:assertionProperty is not a property")))
+                    ;; A data property with an individual target is
+                    ;; malformed data, never a negative OBJECT assertion.
+                    (if (data-property-term arena g pt)
+                    (ok (union-new RawAxiom ra-data-axiom (frag arena t)))
+                    (match (property-expression arena g pt)
+                      ((none) (error "owl:assertionProperty is not a property"))
                       ((some r)
                         (match (individual-term st)
                           ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
@@ -1575,7 +1705,7 @@
                                       (record-new RawEdge
                                         (role r)
                                         (from (union-new Node individual-node a))
-                                        (to   (union-new Node individual-node b)))))))))))))))))))))
+                                        (to   (union-new Node individual-node b))))))))))))))))))))))
 
   (fn decode-class-assertion ((arena Arena) (g TermStore) (t Triple))
     (@intent "`a rdf:type C` as ClassAssertion(C, a), for a named or an anonymous C")
@@ -1675,12 +1805,6 @@
                 ((term-blank _) (decode-class-assertion arena g t))
                 (_              (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
 
-            ;; Ahead of every property-axiom arm below, each of which
-            ;; faults on a non-IRI operand — correctly, for a blank node
-            ;; naming no property; wrongly, for an ObjectInverseOf.
-            ((property-axiom-on-inverse arena g pv t)
-              (ok (union-new RawAxiom ra-inverse-expression (frag arena t))))
-
             ((== (string-cmp pv RDFS_SUBCLASS_OF) 0)
               (match (decode-concept arena g (. t subject) CONCEPT_FUEL)
                 ((error m) (error m))
@@ -1701,8 +1825,11 @@
                 ((error m) (error m))
                 ((ok cs)   (ok (union-new RawAxiom ra-disjoint-classes cs)))))
 
+            ;; EVERY PROPERTY POSITION BELOW TAKES AN ObjectInverseOf
+            ;; (`property-expression`); a blank node that is none names no
+            ;; property, and faults.
             ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0)
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "owl:propertyChainAxiom on a non-IRI subject"))
                 ((some super)
                   (match (decode-role-list arena g (. t object))
@@ -1725,18 +1852,30 @@
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "rdfs:subPropertyOf on a non-IRI subject"))
                 ((some sub)
-                  (match (role-of-term (. t object))
+                  (match (property-expression arena g (. t object))
                     ((none) (error "rdfs:subPropertyOf with a non-IRI object"))
                     ((some sup) (ok (union-new RawAxiom ra-sub-object-property sub sup)))))))))
 
+            ;; The property axioms below share their spelling with the
+            ;; data side, and either data operand makes the axiom data:
+            ;; EquivalentDataProperties read as object inclusions was
+            ;; ACCEPTED, and DisjointDataProperties rendered as the object
+            ;; form.
+            ((and (or (== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
+                      (or (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)
+                          (== (string-cmp pv OWL_INVERSE_OF) 0)))
+                  (or (data-property-term arena g (. t subject))
+                      (data-property-term arena g (. t object))))
+              (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+
             ((== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "owl:equivalentProperty on a non-IRI subject"))
                 ((some a)
-                  (match (role-of-term (. t object))
+                  (match (property-expression arena g (. t object))
                     ((none) (error "owl:equivalentProperty with a non-IRI object"))
                     ((some b)
                       (let ((mut rs (list-new arena RoleId)))
@@ -1744,10 +1883,10 @@
                             (ok (union-new RawAxiom ra-equivalent-properties rs)))))))))
 
             ((== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "owl:propertyDisjointWith on a non-IRI subject"))
                 ((some a)
-                  (match (role-of-term (. t object))
+                  (match (property-expression arena g (. t object))
                     ((none) (error "owl:propertyDisjointWith with a non-IRI object"))
                     ((some b)
                       (let ((mut rs (list-new arena RoleId)))
@@ -1755,10 +1894,10 @@
                             (ok (union-new RawAxiom ra-disjoint-properties rs)))))))))
 
             ((== (string-cmp pv OWL_INVERSE_OF) 0)
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "owl:inverseOf on a non-IRI subject"))
                 ((some a)
-                  (match (role-of-term (. t object))
+                  (match (property-expression arena g (. t object))
                     ((none) (error "owl:inverseOf with a non-IRI object"))
                     ((some b) (ok (union-new RawAxiom ra-inverse-properties a b)))))))
 
@@ -1774,7 +1913,7 @@
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "rdfs:domain on a non-IRI subject"))
                 ((some r)
                   (match (decode-concept arena g (. t object) CONCEPT_FUEL)
@@ -1794,7 +1933,7 @@
                 ((== (property-axiom-kind sig (. t subject)) 2)
                   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
                 (else
-              (match (role-of-term (. t subject))
+              (match (property-expression arena g (. t subject))
                 ((none) (error "rdfs:range on a non-IRI subject"))
                 ((some r)
                   (match (decode-concept arena g (. t object) CONCEPT_FUEL)
@@ -1808,8 +1947,20 @@
             ((== (string-cmp pv OWL_DIFFERENT_FROM) 0)
               (decode-individual-pair arena t false))
 
+            ;; DisjointUnion(C D1 … Dn), read whole. C is a class name in
+            ;; OWL 2; anything else is kept as unrecognized, an omission.
             ((== (string-cmp pv OWL_DISJOINT_UNION_OF) 0)
-              (ok (union-new RawAxiom ra-disjoint-union (frag arena t))))
+              (match (term-iri-value (. t subject))
+                ((none) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
+                ((some c)
+                  ;; Out of profile in every rung but sriq, and an
+                  ;; omission before it was read whole: a member list that
+                  ;; does not decode is kept as unrecognized, not a fault.
+                  (match (decode-concept-list arena g (. t object) CONCEPT_FUEL)
+                    ((error _) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
+                    ((ok ds)
+                      (ok (union-new RawAxiom ra-disjoint-union
+                            (record-new RawDisjointUnion (class c) (members ds)))))))))
             ((== (string-cmp pv OWL_HAS_KEY) 0)
               (ok (union-new RawAxiom ra-has-key (frag arena t))))
 
@@ -1900,9 +2051,15 @@
         (for-each (iri (queried-predicates arena))
           (let ((id (vocab-id arena dict iri)))
             (when (>= id 0) (set-put keep id))))
-        (for-each (it triples)
-          (when (set-has keep (. it p))
-            (store-insert-ids arena st it)))
+        ;; And the data declarations, for `data-property-term`: one
+        ;; object of rdf:type, not every type triple, which on GO is
+        ;; every class declaration.
+        (let ((ty  (vocab-id arena dict RDF_TYPE))
+              (dtp (vocab-id arena dict OWL_DATATYPE_PROPERTY)))
+          (for-each (it triples)
+            (when (or (set-has keep (. it p))
+                      (and (>= dtp 0) (and (== (. it p) ty) (== (. it o) dtp))))
+              (store-insert-ids arena st it))))
         st)))
 
   (fn queried-predicates ((arena Arena))
@@ -1930,6 +2087,8 @@
         (list-push ps OWL_MIN_CARDINALITY)
         (list-push ps OWL_MAX_CARDINALITY)
         (list-push ps OWL_ON_CLASS)
+        (list-push ps OWL_ON_DATA_RANGE)
+        (list-push ps OWL_ON_PROPERTIES)
         (list-push ps OWL_MEMBERS)
         (list-push ps OWL_DISTINCT_MEMBERS)
         (list-push ps OWL_SOURCE_INDIVIDUAL)
@@ -1961,6 +2120,8 @@
               (lemma     (data-lemma arena dict sig dv triples)))
         (for-each (it triples)
           (let ((t (triple-of dict it)))
+            (if (malformed-inverse arena ig t)
+              (list-push out (union-new RawAxiom ra-unrecognized (frag arena t)))
             (when (and (not (structural-triple t))
                        (not (negative-assertion-part it npa-nodes npa-parts))
                        (not (set-has (. lemma tree) (. it s))))
@@ -1975,7 +2136,7 @@
                       ('d-inert          (set! inert (+ inert 1)))
                       ('d-consumed       (list-push out ax))
                       ('d-in-profile     (list-push out ax))
-                      ('d-out-of-profile (list-push out ax))))))))))
+                      ('d-out-of-profile (list-push out ax)))))))))))
         (match fault
           ((some m) (error (union-new Fault input-error m)))
           ((none)   (ok (record-new Stage1 (axioms out) (signature sig) (inert inert))))))))

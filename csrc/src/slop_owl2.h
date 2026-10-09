@@ -14,6 +14,7 @@ typedef struct owl2_RawChain owl2_RawChain;
 typedef struct owl2_RawEdge owl2_RawEdge;
 typedef struct owl2_RawClassAssertion owl2_RawClassAssertion;
 typedef struct owl2_RawDeclaration owl2_RawDeclaration;
+typedef struct owl2_RawDisjointUnion owl2_RawDisjointUnion;
 typedef struct owl2_RawAxiom owl2_RawAxiom;
 typedef struct owl2_Signature owl2_Signature;
 
@@ -203,6 +204,17 @@ SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
 SLOP_LIST_IMPL(owl2_RawConcept, slop_list_owl2_RawConcept)
 #endif
 
+struct owl2_RawDisjointUnion {
+    rdf_IRI class;
+    slop_list_owl2_RawConcept members;
+};
+typedef struct owl2_RawDisjointUnion owl2_RawDisjointUnion;
+
+#ifndef SLOP_OPTION_OWL2_RAWDISJOINTUNION_DEFINED
+#define SLOP_OPTION_OWL2_RAWDISJOINTUNION_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawDisjointUnion, slop_option_owl2_RawDisjointUnion)
+#endif
+
 typedef enum {
     owl2_RawAxiom_ra_sub_class_of,
     owl2_RawAxiom_ra_equivalent_classes,
@@ -226,7 +238,6 @@ typedef enum {
     owl2_RawAxiom_ra_negative_assertion,
     owl2_RawAxiom_ra_disjoint_union,
     owl2_RawAxiom_ra_has_key,
-    owl2_RawAxiom_ra_inverse_expression,
     owl2_RawAxiom_ra_data_axiom,
     owl2_RawAxiom_ra_builtin_role,
     owl2_RawAxiom_ra_anonymous_individual,
@@ -274,9 +285,8 @@ struct owl2_RawAxiom {
         slop_list_types_Node ra_same_individual;
         slop_list_types_Node ra_different_individuals;
         owl2_RawEdge ra_negative_assertion;
-        types_InputRef ra_disjoint_union;
+        owl2_RawDisjointUnion ra_disjoint_union;
         types_InputRef ra_has_key;
-        types_InputRef ra_inverse_expression;
         types_InputRef ra_data_axiom;
         types_InputRef ra_builtin_role;
         types_InputRef ra_anonymous_individual;
@@ -335,7 +345,10 @@ int64_t owl2_concept_tag_rank(owl2_RawConcept c);
 int64_t owl2_concept_list_cmp(slop_list_owl2_RawConcept a, slop_list_owl2_RawConcept b);
 owl2_RawConcept owl2_concept_at(slop_list_owl2_RawConcept xs, int64_t i);
 int64_t owl2_concept_cmp(owl2_RawConcept a, owl2_RawConcept b);
-slop_string owl2_render_role(types_RoleId r);
+int64_t owl2_card_cmp(owl2_CardKind ka, types_RoleId ra, int64_t na, owl2_CardKind kb, types_RoleId rb, int64_t nb);
+int64_t owl2_card_rank(owl2_CardKind k);
+int64_t owl2_node_list_cmp(slop_list_types_Node a, slop_list_types_Node b);
+slop_string owl2_render_role(slop_arena* arena, types_RoleId r);
 slop_string owl2_render_node(types_Node n);
 slop_string owl2_render_card_kind(owl2_CardKind k);
 slop_string owl2_render_concept_list(slop_arena* arena, slop_list_owl2_RawConcept cs);
@@ -393,6 +406,11 @@ SLOP_OPTION_DEFINE(owl2_RawClassAssertion, slop_option_owl2_RawClassAssertion)
 #ifndef SLOP_OPTION_OWL2_RAWDECLARATION_DEFINED
 #define SLOP_OPTION_OWL2_RAWDECLARATION_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawDeclaration, slop_option_owl2_RawDeclaration)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWDISJOINTUNION_DEFINED
+#define SLOP_OPTION_OWL2_RAWDISJOINTUNION_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawDisjointUnion, slop_option_owl2_RawDisjointUnion)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED

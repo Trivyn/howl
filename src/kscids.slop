@@ -109,7 +109,9 @@
     (@intent "Does r carry an IRI, so its id comes from the table?")
     (@spec ((RoleId) -> Bool))
     (@pure)
-    (match r ((fresh-role _) false) ((named-role _) true)))
+    ;; An inverse never reaches the el++ normaliser (the gate refuses it
+    ;; there); were one to, it would miss the table and stop, not alias.
+    (match r ((fresh-role _) false) ((named-role _) true) ((inverse-role _) true)))
 
   ;; Each `with-*` enters one value if it belongs in the table and is not
   ;; there yet, and returns the table with its Lists as they now stand (a
@@ -264,7 +266,8 @@
     (@spec ((KscIds RoleId) -> U32))
     (match r
       ((fresh-role i) (arith i 2 0))
-      ((named-role _) (table-id (map-get (. ids roles) r) 2 1 "a named role"))))
+      ((named-role _)   (table-id (map-get (. ids roles) r) 2 1 "a named role"))
+      ((inverse-role _) (table-id (map-get (. ids roles) r) 2 1 "an inverse role"))))
 
   (fn id-elem ((ids KscIds) (i U32))
     (@intent "The element an id stands for")

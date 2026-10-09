@@ -72,7 +72,7 @@
                  node-top node-bottom node-eq role-eq
                  Names empty-names intern-node intern-role copy-omissions))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
-                Signature make-signature copy-axioms copy-signature))
+                Signature make-signature copy-axioms copy-signature RawDisjointUnion))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
   (import decode (Stage0 Stage1 stage0-header stage0-encoded decode-axioms))
   (import termstore (Encoded encode-triples))
@@ -476,7 +476,7 @@
     ;; The key shares `fresh-index` with canonical concept texts, none of
     ;; which begins "range-elim ".
     (string-concat arena "range-elim "
-      (string-concat arena (render-role-name r)
+      (string-concat arena (render-role-name arena r)
         (string-concat arena " " (render-node-name arena d)))))
 
   (fn render-node-name ((arena Arena) (n Node))

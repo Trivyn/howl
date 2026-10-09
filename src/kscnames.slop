@@ -66,8 +66,9 @@
     (@spec ((RoleId Int) -> Int))
     (@pure)
     (match r
-      ((fresh-role n) (if (>= n m) (+ n 1) m))
-      ((named-role _) m)))
+      ((fresh-role n)   (if (>= n m) (+ n 1) m))
+      ((named-role _)   m)
+      ((inverse-role _) m)))
 
   (fn note-class ((arena Arena) (nm KscNames) (k KName))
     (@intent "Give a class IRI its id, unless it has one or keeps its IRI")
@@ -98,7 +99,10 @@
           ((none)
             (let ((id (+ (. nm role-base) (cast Int (map-len (. nm roles))))))
               (do (map-put (. nm roles) i id) true)))))
-      ((fresh-role _) false)))
+      ((fresh-role _)   false)
+      ;; Unreachable behind the gate; given no id, it misses role-id's
+      ;; table and stops rather than aliasing its property.
+      ((inverse-role _) false)))
 
   (fn note-term ((arena Arena) (nm KscNames) (t KTerm))
     (@intent "note-class, for a term in a class position")
@@ -178,7 +182,8 @@
         (match (map-get (. nm roles) i)
           ((some id) (union-new RoleId fresh-role (cast (Int 0 ..) id)))
           ((none)    r)))
-      ((fresh-role _) r)))
+      ((fresh-role _)   r)
+      ((inverse-role _) r)))
 
   (fn rename-axiom ((nm KscNames) (ax KscAxiom))
     (@intent "A normal-form axiom with its classes and roles renamed")

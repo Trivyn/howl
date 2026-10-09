@@ -30,6 +30,30 @@
   - `Profile::HornSriq` is deprecated.
   - `Fault::ProfileUnavailable`'s message for it says it was dropped.
 
+### Fixed
+
+- **Data restrictions and data property axioms on a property that *is* used are now data.**
+  - **Accepted as object axioms before.** `DataSomeValuesFrom`, and `owl:equivalentProperty`
+    between data properties, were accepted by `el` and `el++`: the first as an existential over a
+    "role" whose datatype was taken for a class, the second as role inclusions. Both are now
+    omissions. On OBI, 5 such `DataSomeValuesFrom` axioms move from accepted to omitted: 506 → 508
+    omissions, because the 3 MissingDeclaration lines they used to cause go away.
+  - **Mislabelled before.** `FunctionalDataProperty`, `DisjointDataProperties` and the data
+    cardinalities were labelled as their object twins.
+  - **Faulted before.** `owl:onDataRange` and `owl:onProperties` faulted the whole document
+    (exit 3). They are now omissions.
+- **An ambiguous `owl:inverseOf` node is no longer dropped silently.** `_:x owl:inverseOf :p , :q`
+  makes no ObjectInverseOf, and no axiom could read it. Both triples vanished, with no axiom and no
+  omission, and the document came out coherent. Each is now an omission.
+
+### Changed (reports)
+
+- **`ObjectInverseOf` is represented**: `RoleId` has an inverse arm (SPEC §6.2), for `sriq`. Every
+  rung built so far still omits it, but the omission now reads as the axiom it is. Before, it was an
+  N-Triples fragment with blank-node labels, and every restriction on an inverse rendered as the
+  same constant string. RO's 11 inverse omissions are re-rendered; their count is unchanged.
+- **`DisjointUnion`** is read whole and rendered `DisjointUnion(C D₁ … Dₙ)`. It is still an omission.
+
 ## 0.1.0 — 2026-10-06
 
 The first release. HOWL classifies OWL ontologies: the complete subsumption hierarchy, every

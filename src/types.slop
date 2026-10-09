@@ -108,9 +108,15 @@
   ;; with a real one. Role punning against a class or individual name
   ;; stays harmless — roles never share an index with nodes — so only
   ;; freshness needs representing here, not the class/individual split.
+  ;;
+  ;; `inverse-role` is ObjectInverseOf(P), P named: the whole of OWL 2's
+  ;; ObjectPropertyExpression, since its RDF mapping cannot nest an
+  ;; inverse. Only sriq (§5.5) admits one; every other rung's gate refuses
+  ;; it at `role-in-profile`, so no stage after the gate meets one there.
   (type RoleId (union
     (named-role IRI)
-    (fresh-role (Int 0 ..))))
+    (fresh-role (Int 0 ..))
+    (inverse-role IRI)))
 
   ;; ============================================================
 ;; MULTI-PAYLOAD UNION VARIANTS: FIXED IN SLOP 0.2.1, AND WHY THE DESIGN
@@ -653,12 +659,19 @@
     (match a
       ((named-role ai)
         (match b
-          ((named-role bi) (string-eq (. ai value) (. bi value)))
-          ((fresh-role _)  false)))
+          ((named-role bi)   (string-eq (. ai value) (. bi value)))
+          ((fresh-role _)    false)
+          ((inverse-role _)  false)))
       ((fresh-role ai)
         (match b
-          ((fresh-role bi) (== ai bi))
-          ((named-role _)  false)))))
+          ((fresh-role bi)   (== ai bi))
+          ((named-role _)    false)
+          ((inverse-role _)  false)))
+      ((inverse-role ai)
+        (match b
+          ((inverse-role bi) (string-eq (. ai value) (. bi value)))
+          ((named-role _)    false)
+          ((fresh-role _)    false)))))
 
   ;; ============================================================
   ;; el++ equality and the term constructors
@@ -895,8 +908,9 @@
     (@spec ((Arena RoleId) -> RoleId))
     (@alloc arena)
     (match r
-      ((named-role i) (union-new RoleId named-role (copy-iri arena i)))
-      ((fresh-role k) (union-new RoleId fresh-role k))))
+      ((named-role i)   (union-new RoleId named-role (copy-iri arena i)))
+      ((fresh-role k)   (union-new RoleId fresh-role k))
+      ((inverse-role i) (union-new RoleId inverse-role (copy-iri arena i)))))
 
   (fn copy-axiom-ref ((arena Arena) (a AxiomRef))
     (@intent "a, owning its strings in arena")
@@ -990,7 +1004,8 @@
         (match (map-get (. names roles) k)
           ((some o) o)
           ((none)   r)))
-      ((named-role _) r)))
+      ((named-role _)   r)
+      ((inverse-role _) r)))
 
     (fn make-context ((arena Arena) (root Node))
     (@intent "Create an empty context for a node, with S(root) initially EMPTY")
