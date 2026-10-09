@@ -270,7 +270,10 @@ types_DRole sriqnormal_role_name(slop_arena* arena, sriqnormal_S2State* p, types
 slop_string sriqnormal_dname_key(slop_arena* arena, sriqnormal_S2State* p, types_DName n);
 slop_string sriqnormal_filler_key(slop_arena* arena, sriqnormal_S2State* p, slop_option_types_DName b);
 slop_string sriqnormal_drole_key(slop_arena* arena, sriqnormal_S2State* p, types_DRole r);
+slop_string sriqnormal_key_of(slop_arena* arena, slop_string tag, slop_list_string parts);
+slop_string sriqnormal_srole_key(slop_arena* arena, sriqnormal_S2State* p, types_DRole s, slop_option_types_DName b);
 types_DRole sriqnormal_srole_of(slop_arena* arena, sriqnormal_S2State* p, types_DRole s, slop_option_types_DName b);
+int64_t sriqnormal_fn_id(slop_arena* arena, sriqnormal_S2State* p, slop_string key);
 slop_list_int sriqnormal_fn_ids(slop_arena* arena, sriqnormal_S2State* p, slop_string axkey, int64_t n);
 slop_list_sroiq_SConcept sriqnormal_nnf_list(slop_arena* arena, slop_list_sroiq_SConcept xs, uint8_t pos);
 sroiq_SConcept sriqnormal_nnf(slop_arena* arena, sroiq_SConcept c, uint8_t pos);
@@ -283,6 +286,9 @@ uint8_t sriqnormal_define_pos(slop_arena* arena, sriqnormal_S2State* p, types_DN
 uint8_t sriqnormal_define_dl2(slop_arena* arena, sriqnormal_S2State* p, types_DName x, types_RoleId r, int64_t n, sroiq_SConcept f);
 uint8_t sriqnormal_s2_gci(slop_arena* arena, sriqnormal_S2State* p, sroiq_SConcept l, sroiq_SConcept r);
 uint8_t sriqnormal_assert_top(slop_arena* arena, sriqnormal_S2State* p, sroiq_SConcept e);
+slop_option_rdf_IRI sriqnormal_role_prop(types_RoleId r);
+uint8_t sriqnormal_role_inverted(types_RoleId r);
+slop_result_u8_string sriqnormal_s2_inclusion(slop_arena* arena, sriqnormal_S2State* p, types_RoleId r, types_RoleId s);
 slop_result_u8_string sriqnormal_s2_ria(slop_arena* arena, sriqnormal_S2State* p, sroiq_SRia x);
 uint8_t sriqnormal_s2_dis(slop_arena* arena, sriqnormal_S2State* p, types_RoleId r, types_RoleId s);
 uint8_t sriqnormal_counts_ok(sroiq_SConcept c);
@@ -292,6 +298,10 @@ slop_string sriqnormal_render_dname(slop_arena* arena, sriqnormal_S2 s2, types_D
 slop_string sriqnormal_render_dfiller(slop_arena* arena, sriqnormal_S2 s2, slop_option_types_DName b);
 slop_string sriqnormal_render_drole(slop_arena* arena, sriqnormal_S2 s2, types_DRole r);
 slop_string sriqnormal_render_dnames(slop_arena* arena, sriqnormal_S2 s2, slop_list_types_DName ns, slop_string sep, slop_string empty);
+slop_string sriqnormal_inclusion(slop_arena* arena, slop_string form, slop_string lhs, slop_string rhs);
+slop_string sriqnormal_restriction_text(slop_arena* arena, slop_string op, slop_string role, slop_string filler);
+slop_string sriqnormal_count_op(slop_arena* arena, slop_string op, int64_t n);
+slop_string sriqnormal_braces(slop_arena* arena, rdf_IRI o);
 slop_string sriqnormal_render_dl(slop_arena* arena, sriqnormal_S2 s2, types_DlClause c);
 
 #ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED

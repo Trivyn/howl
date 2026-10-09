@@ -2487,6 +2487,42 @@
     (@pure)
     (match (list-get xs i) ((some v) v) ((none) "")))
 
+  (fn refusal-line ((arena Arena) (m String))
+    (@intent "A refusal, as one line")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (string-concat arena "refused: " (string-concat arena m "\n")))
+
+  (fn s2-text ((arena Arena) (r (Result S2 String)))
+    (@intent "S2's clauses, one per line, sorted; or S2's error")
+    (@spec ((Arena (Result S2 String)) -> String))
+    (@alloc arena)
+    (match r
+      ((error m) (string-concat arena "S2 error: " (string-concat arena m "\n")))
+      ((ok s2)
+        (let ((mut ls (list-new arena String))
+              (mut out ""))
+          (do
+            (for-each (c (. s2 clauses)) (list-push ls (render-dl arena s2 c)))
+            (for-each (l (sort-strings arena ls)) (set! out (string-concat arena out (string-concat arena l "\n"))))
+            out)))))
+
+  (fn s2-after-s1 ((arena Arena) (r (Result (List SAxiom) String)))
+    (@intent "S2 over S1's output, or S1's refusal")
+    (@spec ((Arena (Result (List SAxiom) String)) -> String))
+    (@alloc arena)
+    (match r
+      ((error m) (refusal-line arena m))
+      ((ok axs)  (s2-text arena (sriq-s2 arena axs)))))
+
+  (fn s2-after-s0 ((arena Arena) (r (Result S0 String)))
+    (@intent "S1 then S2 over S0's output, or S0's refusal")
+    (@spec ((Arena (Result S0 String)) -> String))
+    (@alloc arena)
+    (match r
+      ((error m) (refusal-line arena m))
+      ((ok s0)   (s2-after-s1 arena (sriq-s1 arena s0)))))
+
   (fn s2-of ((arena Arena) (ttl String))
     (@intent "S2's clauses for an inline document under sriq, one per line, sorted")
     (@spec ((Arena String) -> String))
@@ -2494,22 +2530,8 @@
     (match (gate-ttl-in arena (string-concat arena (s0-prefix) ttl) 'profile-sriq)
       ((none) "did not gate\n")
       ((some gr)
-        (match (sriq-s0 arena (. gr accepted))
-          ((error m) (string-concat arena "refused: " (string-concat arena m "\n")))
-          ((ok s0)
-            (match (sriq-s1 arena s0)
-              ((error m) (string-concat arena "refused: " (string-concat arena m "\n")))
-              ((ok axs)
-                (match (sriq-s2 arena axs)
-                  ((error m) (string-concat arena "S2 error: " (string-concat arena m "\n")))
-                  ((ok s2)
-                    (let ((mut ls (list-new arena String))
-                          (mut out (if (> (cast Int (list-len (. gr omissions))) 0) "OMITTED\n" "")))
-                      (do
-                        (for-each (c (. s2 clauses)) (list-push ls (render-dl arena s2 c)))
-                        (for-each (l (sort-strings arena ls))
-                          (set! out (string-concat arena out (string-concat arena l "\n"))))
-                        out)))))))))))
+        (string-concat arena (if (> (cast Int (list-len (. gr omissions))) 0) "OMITTED\n" "")
+                             (s2-after-s0 arena (sriq-s0 arena (. gr accepted)))))))
 
   (fn s2-is ((arena Arena) (label String) (ttl String) (want String))
     (@intent "Does S2 give exactly these clauses? Prints what it got when not")
@@ -2613,6 +2635,10 @@
         (when (not (s2-is arena "at most: DL4 with S_{r,B}"
                      ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 2 ; owl:onClass :B ] ."
                      "DL1 urn:x:A ⊑ A[≤2 urn:x:r.urn:x:B]\nDL4 A[≤2 urn:x:r.urn:x:B] ⊑ ≤2 urn:x:r.urn:x:B via S_{urn:x:r,urn:x:B}\n"))
+          (set! ok false))
+        (when (not (s2-is arena "two fillers on one role get two S roles"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass :B ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass :C ] ."
+                     "DL1 urn:x:A ⊑ A[≤1 urn:x:r.urn:x:B]\nDL1 urn:x:C ⊑ A[≤1 urn:x:r.urn:x:C]\nDL4 A[≤1 urn:x:r.urn:x:B] ⊑ ≤1 urn:x:r.urn:x:B via S_{urn:x:r,urn:x:B}\nDL4 A[≤1 urn:x:r.urn:x:C] ⊑ ≤1 urn:x:r.urn:x:C via S_{urn:x:r,urn:x:C}\n"))
           (set! ok false))
         (when (not (s2-is arena "at most over a union: the filler named above"
                      ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass [ owl:unionOf ( :B :C ) ] ] ."

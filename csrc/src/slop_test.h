@@ -901,6 +901,21 @@ typedef struct { bool is_ok; union { saturate_RoundResult ok; types_Fault err; }
 typedef struct { bool is_ok; union { decode_Stage1 ok; types_Fault err; } data; } slop_result_decode_Stage1_types_Fault;
 #endif
 
+#ifndef SLOP_RESULT_SRIQNORMAL_S2_STRING_DEFINED
+#define SLOP_RESULT_SRIQNORMAL_S2_STRING_DEFINED
+typedef struct { bool is_ok; union { sriqnormal_S2 ok; slop_string err; } data; } slop_result_sriqnormal_S2_string;
+#endif
+
+#ifndef SLOP_RESULT_LIST_SROIQ_SAXIOM_STRING_DEFINED
+#define SLOP_RESULT_LIST_SROIQ_SAXIOM_STRING_DEFINED
+typedef struct { bool is_ok; union { slop_list_sroiq_SAxiom ok; slop_string err; } data; } slop_result_list_sroiq_SAxiom_string;
+#endif
+
+#ifndef SLOP_RESULT_SRIQNORMAL_S0_STRING_DEFINED
+#define SLOP_RESULT_SRIQNORMAL_S0_STRING_DEFINED
+typedef struct { bool is_ok; union { sriqnormal_S0 ok; slop_string err; } data; } slop_result_sriqnormal_S0_string;
+#endif
+
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
 howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
@@ -1023,6 +1038,10 @@ uint8_t test_s1_is(slop_arena* arena, slop_string label, slop_string ttl, slop_s
 uint8_t test_test_sriq_s0_rows(slop_arena* arena);
 slop_list_string test_sort_strings(slop_arena* arena, slop_list_string xs);
 slop_string test_str_at_t(slop_list_string xs, int64_t i);
+slop_string test_refusal_line(slop_arena* arena, slop_string m);
+slop_string test_s2_text(slop_arena* arena, slop_result_sriqnormal_S2_string r);
+slop_string test_s2_after_s1(slop_arena* arena, slop_result_list_sroiq_SAxiom_string r);
+slop_string test_s2_after_s0(slop_arena* arena, slop_result_sriqnormal_S0_string r);
 slop_string test_s2_of(slop_arena* arena, slop_string ttl);
 uint8_t test_s2_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
 uint8_t test_test_sriq_s2_refuses_a_count_past_the_bound(slop_arena* arena);
