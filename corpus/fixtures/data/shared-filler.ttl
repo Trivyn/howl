@@ -1,0 +1,17 @@
+# The data lemma takes a filler's INTERNALS with its axiom, never the axioms
+# the filler heads. :d is idle, so its domain is inert; but the domain's
+# blank filler also heads a GCI, (C and D) SubClassOf Nothing, which keeps
+# the filler's structure. With D below C, D is UNSATISFIABLE: INCOHERENT
+# (exit 1). Consuming the filler whole dropped the GCI with no omission and
+# reported this document coherent (Codex, slice 3 review).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class .
+:D a owl:Class ; rdfs:subClassOf :C .
+:d a owl:DatatypeProperty ; rdfs:domain _:x .
+_:x owl:intersectionOf ( :C :D ) ; rdfs:subClassOf owl:Nothing .

@@ -217,6 +217,7 @@ typedef enum {
     owl2_RawAxiom_ra_object_property_assertion,
     owl2_RawAxiom_ra_declaration,
     owl2_RawAxiom_ra_annotation,
+    owl2_RawAxiom_ra_inert_data,
     owl2_RawAxiom_ra_inverse_properties,
     owl2_RawAxiom_ra_property_characteristic,
     owl2_RawAxiom_ra_disjoint_properties,

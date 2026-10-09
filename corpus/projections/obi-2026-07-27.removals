@@ -5,11 +5,11 @@
 # source                  obi-2026-07-27.owl
 # source_sha256           8874abcca971ee26b4e4442198387916d788d14af3519e1040474908ed12b946
 # source_triples          117,997
-# axioms_removed          383
-# triples_removed         5,828
+# axioms_removed          381
+# triples_removed         5,826
 # in_v0_swept_in          1,243   <- collateral from blank-node closures
-# projected_triples       112,169
-# projected_ground_sha256 db04e098e8ee908825869c31c9661a27b4dff3ef77ee30bd1a3fc26135ca7ed0
+# projected_triples       112,171
+# projected_ground_sha256 4224c5b27d5f59886a382f73548f6edf158003b25a462099417ea0015eb4c693
 # projected_bnode_triples 62,241
 # projected_bnode_sha256  423cd25e55c3cdd2c3d474a77c3ea75dc69f25c423de400b0b2842b2df224c1c
 #
@@ -30,8 +30,6 @@
 <http://purl.obolibrary.org/obo/CLO_0009829> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [22cfc8bb]  (+3 in blank-node closure)
 <http://purl.obolibrary.org/obo/CLO_0009829> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # qualified cardinality [81c08afd]  (+4 in blank-node closure)
 <http://purl.obolibrary.org/obo/CL_0000010> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectUnionOf [72d852da]  (+15 in blank-node closure)
-<http://purl.obolibrary.org/obo/COB_0000800> <http://www.w3.org/2000/01/rdf-schema#domain> <http://purl.obolibrary.org/obo/COB_0000011> .    # DataPropertyDomain/Range [32651ed8]
-<http://purl.obolibrary.org/obo/COB_0000801> <http://www.w3.org/2000/01/rdf-schema#domain> <http://purl.obolibrary.org/obo/BFO_0000040> .    # DataPropertyDomain/Range [1cf87d30]
 <http://purl.obolibrary.org/obo/GO_0005575> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectUnionOf [035ace05]  (+8 in blank-node closure)
 <http://purl.obolibrary.org/obo/GO_0042575> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [7b02549a]  (+6 in blank-node closure)
 <http://purl.obolibrary.org/obo/IAO_0000039> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [68e07252]

@@ -2954,7 +2954,10 @@ accepting it** — the gate can still enumerate an unsupported AST variant as ou
    `missing-declaration` omission on an unsupported data axiom *in addition to* its real
    out-of-profile disposition, changing both diagnostics and hashed verdict identity.
    **Implicitly declared is not supported** — these gate exactly as
-   [§5.2](#52-the-exact-v0-language) says, which for the data-side entries is out-of-profile ([§5.2](#52-the-exact-v0-language)). The signature — not the set of axioms — is what
+   [§5.2](#52-the-exact-v0-language) says, which for the data-side entries is out-of-profile
+   unless the data lemma sets them aside ([§5.2](#52-the-exact-v0-language)). That lemma is
+   decided here, in the decoder, so every rung inherits it. The signature — not the set of axioms
+   — is what
    "occurs in the input" means everywhere else in this document ([§6.2](#62-data-model)'s
    `unsatisfiable`, [§6.7](#67-output--classification)'s output projection).
 2. **Expand structural sugar the gates depend on, then gate the AST** against

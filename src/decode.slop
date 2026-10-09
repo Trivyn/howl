@@ -119,6 +119,7 @@
                  OWL_ASYMMETRIC_PROPERTY OWL_REFLEXIVE_PROPERTY
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF
+                 OWL_WITH_RESTRICTIONS OWL_DATA_RANGE RDF_LANG_RANGE
                  OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE))
   (import owl2 (RawConcept CardKind Signature make-signature
                 RawAxiom RawChain RawEdge RawClassAssertion
@@ -1129,9 +1130,10 @@
     ;; ontology that writes `rdfs:subClassOf owl:Thing` would collect a
     ;; missing-declaration omission for vocabulary the standard
     ;; declares, so a correct document would gate dirty. The data-side
-    ;; entries are included even though v0 rejects the data side: they
-    ;; must be RECOGNIZED to be reported as out-of-profile rather than
-    ;; as undeclared, which are different findings.
+    ;; entries are included even though no rung reasons over data: they
+    ;; must be RECOGNIZED to be reported as out-of-profile, or set aside
+    ;; by the data lemma, rather than as undeclared, which are different
+    ;; findings.
     (do
       (set-put (. sig classes) (record-new IRI (value OWL_THING)))
       (set-put (. sig classes) (record-new IRI (value OWL_NOTHING)))
@@ -1180,7 +1182,7 @@
   (type Stage1 (record
     (axioms    (List RawAxiom))
     (signature Signature)
-    (inert     Int)))       ; inert axioms recognized and dropped (annotations)
+    (inert     Int)))       ; inert axioms recognized and dropped (annotations, the data lemma's)
 
   ;; Deterministic N-Triples-ish rendering, for the InputRef an
   ;; out-of-profile or unrecognized axiom carries.
@@ -1633,8 +1635,9 @@
     (@intent "Which property kind a property axiom's SUBJECT is declared as")
     (@spec ((Signature Term) -> Int))
     (@pure)
-    ;; 0 = object (or undeclared, which the caller has already faulted
-    ;; on elsewhere), 1 = annotation, 2 = data.
+    ;; 0 = object or undeclared (an undeclared subject is read as an
+    ;; object property and gets a missing declaration), 1 = annotation,
+    ;; 2 = data.
     ;;
     ;; rdfs:subPropertyOf, rdfs:domain and rdfs:range are SHARED SPELLINGS:
     ;; the same predicate expresses SubObjectPropertyOf,
@@ -1948,24 +1951,285 @@
         ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
         ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the
         ;; decoded axioms. The count is what shows they were recognized
-        ;; as inert, rather than lost or misfiled out of profile.
+        ;; as inert, rather than lost or misfiled out of profile. The data
+        ;; lemma's axioms are among them (data-lemma, below); the triples
+        ;; of the trees set aside with them are skipped like a negative
+        ;; assertion's parts, read through the axiom that owns them.
         (let ((npa-nodes (negative-assertion-nodes arena dict triples))
-              (npa-parts (negative-assertion-parts arena dict)))
+              (npa-parts (negative-assertion-parts arena dict))
+              (dv        (data-vocab arena dict))
+              (lemma     (data-lemma arena dict sig dv triples)))
         (for-each (it triples)
           (let ((t (triple-of dict it)))
             (when (and (not (structural-triple t))
-                       (not (negative-assertion-part it npa-nodes npa-parts)))
-              (match (decode-axiom arena ig sig t)
-                ((error m) (set! fault (some m)))
-                ((ok ax)
-                  (match (disposition 'profile-el ax)
-                    ('d-inert          (set! inert (+ inert 1)))
-                    ('d-consumed       (list-push out ax))
-                    ('d-in-profile     (list-push out ax))
-                    ('d-out-of-profile (list-push out ax)))))))))
+                       (not (negative-assertion-part it npa-nodes npa-parts))
+                       (not (set-has (. lemma tree) (. it s))))
+              (if (inert-data-axiom dv lemma it)
+                (match (disposition 'profile-el (union-new RawAxiom ra-inert-data))
+                  ('d-inert (set! inert (+ inert 1)))
+                  (_        (list-push out (union-new RawAxiom ra-inert-data))))
+                (match (decode-axiom arena ig sig t)
+                  ((error m) (set! fault (some m)))
+                  ((ok ax)
+                    (match (disposition 'profile-el ax)
+                      ('d-inert          (set! inert (+ inert 1)))
+                      ('d-consumed       (list-push out ax))
+                      ('d-in-profile     (list-push out ax))
+                      ('d-out-of-profile (list-push out ax))))))))))
         (match fault
           ((some m) (error (union-new Fault input-error m)))
           ((none)   (ok (record-new Stage1 (axioms out) (signature sig) (inert inert))))))))
+
+;; ============================================================
+  ;; The data lemma (§5.2): the property axioms of an IDLE data property
+  ;; are inert, in every rung
+  ;; ============================================================
+  ;;
+  ;; A data property is idle when neither it nor any data property below
+  ;; it is USED. Used is read more strictly than §5.2's "in a class
+  ;; expression, an assertion or a key", which a gate may be (it is never
+  ;; looser than the lemma): ANY occurrence is a use except
+  ;;   - as the subject of its declaration, or of a functionality type,
+  ;;     domain or range triple;
+  ;;   - at either end of a sub-property, equivalence or disjointness
+  ;;     triple between two data properties;
+  ;;   - in an annotation, as its subject or its value.
+  ;; So a restriction, an assertion, a key, an owl:onProperties or
+  ;; owl:AllDisjointProperties list, and anything malformed are uses, and
+  ;; owl:topDataProperty is always used. The used set is then closed UP
+  ;; the told data hierarchy (equivalence both ways): a used sub-property
+  ;; makes its super-property used. Every other data property is idle.
+  ;;
+  ;; With that reading, an axiom outside the ones set aside can name an
+  ;; idle property only as a disjointness or an annotation, which is what
+  ;; the lemma's proof needs. The axioms are set aside here, before the
+  ;; gate, so every rung inherits them; and the internals of an inert
+  ;; domain's or range's blank filler go with its axiom. RO's idle range
+  ;; is a DatatypeRestriction, whose internals would otherwise leak as an
+  ;; anonymous individual and three reserved-vocabulary omissions.
+
+  (type DataVocab (record
+    (rdf-type      Int)
+    (data-property Int)     ; owl:DatatypeProperty
+    (functional    Int)     ; owl:FunctionalProperty
+    (domain        Int)
+    (range         Int)
+    (sub-property  Int)
+    (equivalent    Int)     ; owl:equivalentProperty
+    (disjoint      Int)     ; owl:propertyDisjointWith
+    (top           Int)     ; owl:topDataProperty
+    (on-datatype   Int)))   ; owl:onDatatype, which marks a DatatypeRestriction
+
+  (type DataLemma (record
+    (data (Set Int))        ; the declared data properties, built-ins included
+    (idle (Set Int))        ; the ones nothing uses, even below them
+    (tree (Set Int))))      ; blank nodes set aside with an inert domain or range
+
+  (fn data-vocab ((arena Arena) (dict TermStore))
+    (@intent "The ids of the vocabulary the data lemma reads; -1 where the document never uses it")
+    (@spec ((Arena TermStore) -> DataVocab))
+    (@alloc arena)
+    (record-new DataVocab
+      (rdf-type      (. dict rdf-type))
+      (data-property (vocab-id arena dict OWL_DATATYPE_PROPERTY))
+      (functional    (vocab-id arena dict OWL_FUNCTIONAL_PROPERTY))
+      (domain        (vocab-id arena dict RDFS_DOMAIN))
+      (range         (vocab-id arena dict RDFS_RANGE))
+      (sub-property  (vocab-id arena dict RDFS_SUBPROPERTY_OF))
+      (equivalent    (vocab-id arena dict OWL_EQUIVALENT_PROPERTY))
+      (disjoint      (vocab-id arena dict OWL_PROPERTY_DISJOINT_WITH))
+      (top           (vocab-id arena dict OWL_TOP_DATA_PROPERTY))
+      (on-datatype   (vocab-id arena dict OWL_ON_DATATYPE))))
+
+  (fn data-lemma ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (triples (List IdTriple)))
+    (@intent "§5.2's data lemma over a document: its data properties, the idle ones, and the trees set aside")
+    (@spec ((Arena TermStore Signature DataVocab (List IdTriple)) -> DataLemma))
+    (@alloc arena)
+    (let ((data (set-new arena Int))
+          (used (set-new arena Int))
+          (idle (set-new arena Int))
+          (tree (set-new arena Int))
+          (bottom (vocab-id arena dict OWL_BOTTOM_DATA_PROPERTY))
+          (mut any false)
+          (mut changed true))
+      (do
+        ;; The declared data properties, by id: what build-signature files
+        ;; under data-props, the built-ins included where the document
+        ;; names them. A document with none (GO, EL-GALEN) stops here.
+        (for-each (it triples)
+          (when (and (== (. it p) (. v rdf-type)) (== (. it o) (. v data-property)))
+            (do (set-put data (. it s)) (set! any true))))
+        (when (>= (. v top) 0)
+          (do (set-put data (. v top)) (set-put used (. v top)) (set! any true)))
+        (when (>= bottom 0)
+          (do (set-put data bottom) (set! any true)))
+        (when any
+          (do
+            (for-each (it triples)
+              (mark-data-uses dict sig v data used it))
+            ;; Up the told hierarchy, to a fixpoint: one pass per level.
+            (while changed
+              (do
+                (set! changed false)
+                (for-each (it triples)
+                  (when (and (set-has data (. it s)) (set-has data (. it o)))
+                    (do
+                      (when (and (or (== (. it p) (. v sub-property)) (== (. it p) (. v equivalent)))
+                                 (set-has used (. it s)) (not (set-has used (. it o))))
+                        (do (set-put used (. it o)) (set! changed true)))
+                      (when (and (== (. it p) (. v equivalent))
+                                 (set-has used (. it o)) (not (set-has used (. it s))))
+                        (do (set-put used (. it s)) (set! changed true))))))))
+            (for-each (it triples)
+              (when (and (== (. it p) (. v rdf-type)) (== (. it o) (. v data-property))
+                         (not (set-has used (. it s))))
+                (set-put idle (. it s))))
+            (when (and (>= bottom 0) (not (set-has used bottom)))
+              (set-put idle bottom))
+            (collect-inert-trees arena dict v idle tree triples)))
+        (record-new DataLemma (data data) (idle idle) (tree tree)))))
+
+  (fn mark-data-uses ((dict TermStore) (sig Signature) (v DataVocab) (data (Set Int)) (used (Set Int))
+                      (it IdTriple))
+    (@intent "Mark every data property this triple uses, in the data lemma's strict sense")
+    (@spec ((TermStore Signature DataVocab (Set Int) (Set Int) IdTriple) -> Unit))
+    (let ((s (. it s)) (p (. it p)) (o (. it o)))
+      (cond
+        ;; A declaration or functionality type is not a use; a data
+        ;; property as the object of rdf:type, or typed anything else
+        ;; (transitive, inverse-functional, ...), is.
+        ((== p (. v rdf-type))
+          (do
+            (when (set-has data o) (set-put used o))
+            (when (and (set-has data s) (not (== o (. v data-property))) (not (== o (. v functional))))
+              (set-put used s))))
+        ;; Annotations mention properties without constraining them.
+        ((predicate-is-annotation dict sig p) (do))
+        ;; A domain's or range's subject is not a use; a data property
+        ;; as the filler is (malformed).
+        ((or (== p (. v domain)) (== p (. v range)))
+          (when (set-has data o) (set-put used o)))
+        ;; Between two data properties these are the hierarchy and the
+        ;; disjointness the lemma reads; with one end not a data
+        ;; property, the data end is used.
+        ((and (or (== p (. v sub-property)) (or (== p (. v equivalent)) (== p (. v disjoint))))
+              (set-has data s) (set-has data o))
+          (do))
+        (else
+          (do
+            (when (set-has data s) (set-put used s))
+            (when (set-has data p) (set-put used p))
+            (when (set-has data o) (set-put used o)))))))
+
+  (fn predicate-is-annotation ((dict TermStore) (sig Signature) (p Int))
+    (@intent "Is this predicate id a built-in or declared annotation property?")
+    (@spec ((TermStore Signature Int) -> Bool))
+    ;; build-signature files both under annot-props: rdfs:label and the
+    ;; other built-ins, and whatever carries owl:AnnotationProperty.
+    (match (term-iri-value (term-of dict p))
+      ((some i) (signature-has-annotation-property sig i))
+      ((none)   false)))
+
+  (fn collect-inert-trees ((arena Arena) (dict TermStore) (v DataVocab) (idle (Set Int)) (tree (Set Int))
+                           (triples (List IdTriple)))
+    (@intent "The blank nodes under an inert domain's or range's filler that nothing else references")
+    (@spec ((Arena TermStore DataVocab (Set Int) (Set Int) (List IdTriple)) -> Unit))
+    (@alloc arena)
+    ;; A blank node goes with the axiom only if that is its one incoming
+    ;; reference, and only if every triple it heads is a filler's
+    ;; internals. A filler shared with anything else is decoded as today,
+    ;; and so is one that heads an axiom, an assertion or an annotation of
+    ;; its own: consuming `_:x owl:intersectionOf (:C :D) ; rdfs:subClassOf
+    ;; owl:Nothing` whole dropped the GCI with no omission.
+    (let ((once      (set-new arena Int))
+          (twice     (set-new arena Int))
+          (heads-two (set-new arena Int))   ; subjects of two triples or more
+          (heads     (set-new arena Int))
+          (restricts (set-new arena Int))   ; subjects of an owl:onDatatype
+          (impure    (set-new arena Int))
+          (mut changed false))
+      (do
+        (for-each (it triples)
+          (do
+            (when (id-is-blank dict (. it o))
+              (if (set-has once (. it o)) (set-put twice (. it o)) (set-put once (. it o))))
+            (if (set-has heads (. it s)) (set-put heads-two (. it s)) (set-put heads (. it s)))
+            (when (== (. it p) (. v on-datatype)) (set-put restricts (. it s)))))
+        (for-each (it triples)
+          (when (and (id-is-blank dict (. it s))
+                     (not (filler-triple (triple-of dict it) (set-has restricts (. it s))
+                                         (not (set-has heads-two (. it s))))))
+            (set-put impure (. it s))))
+        (for-each (it triples)
+          (when (and (or (== (. it p) (. v domain)) (== (. it p) (. v range)))
+                     (set-has idle (. it s))
+                     (set-has once (. it o)) (not (set-has twice (. it o)))
+                     (not (set-has impure (. it o))))
+            (do (set-put tree (. it o)) (set! changed true))))
+        (while changed
+          (do
+            (set! changed false)
+            (for-each (it triples)
+              (when (and (set-has tree (. it s)) (not (set-has tree (. it o)))
+                         (set-has once (. it o)) (not (set-has twice (. it o)))
+                         (not (set-has impure (. it o))))
+                (do (set-put tree (. it o)) (set! changed true)))))))))
+
+  (fn filler-triple ((t Triple) (restriction Bool) (single Bool))
+    (@intent "Is this triple part of a class expression's or a data range's internals?")
+    (@spec ((Triple Bool Bool) -> Bool))
+    (@pure)
+    ;; structural-triple's class-expression internals, plus a data
+    ;; range's, which no rung decodes, in the shape OWL 2's mapping gives
+    ;; a DatatypeRestriction: `[ a rdfs:Datatype ; owl:onDatatype D ;
+    ;; owl:withRestrictions ( [ xsd:minInclusive 0 ] ) ]`. So
+    ;; owl:withRestrictions counts only on a node with an owl:onDatatype
+    ;; (`restriction`), and a facet - an xsd predicate or rdf:langRange -
+    ;; only as its node's one triple (`single`). Anything else under an
+    ;; inert filler is malformed, and decodes as today: an omission.
+    (or (structural-triple t)
+        (match (term-iri-value (. t predicate))
+          ((none) false)
+          ((some p)
+            (cond
+              ((== (string-cmp (. p value) OWL_WITH_RESTRICTIONS) 0) restriction)
+              ((== (string-cmp (. p value) RDF_LANG_RANGE) 0) single)
+              ((starts-with (. p value) XSD_NS) single)
+              ((== (string-cmp (. p value) RDF_TYPE) 0)
+                (match (term-iri-value (. t object))
+                  ((some o) (or (== (string-cmp (. o value) RDFS_DATATYPE) 0)
+                                (== (string-cmp (. o value) OWL_DATA_RANGE) 0)))
+                  ((none)   false)))
+              (else false))))))
+
+  (fn id-is-blank ((dict TermStore) (id Int))
+    (@intent "Is this term id a blank node?")
+    (@spec ((TermStore Int) -> Bool))
+    (match (term-of dict id)
+      ((term-blank _)   true)
+      ((term-iri _)     false)
+      ((term-literal _) false)
+      ((term-triple _)  false)))
+
+  (fn inert-data-axiom ((v DataVocab) (lemma DataLemma) (it IdTriple))
+    (@intent "Is this triple an axiom §5.2's data lemma sets aside?")
+    (@spec ((DataVocab DataLemma IdTriple) -> Bool))
+    (let ((s (. it s)) (p (. it p)) (o (. it o))
+          (data (. lemma data)) (idle (. lemma idle)))
+      (cond
+        ((or (== p (. v domain)) (== p (. v range))) (set-has idle s))
+        ((== p (. v rdf-type)) (and (== o (. v functional)) (set-has idle s)))
+        ;; SubDataPropertyOf(P owl:topDataProperty) is a tautology.
+        ((== p (. v sub-property))
+          (and (set-has data s) (set-has data o) (or (set-has idle s) (== o (. v top)))))
+        ((== p (. v equivalent)) (and (set-has idle s) (set-has idle o)))
+        ;; owl:topDataProperty is never set aside but as a super-property
+        ;; (§5.2), so it never is in a disjointness either.
+        ((== p (. v disjoint))
+          (and (set-has data s) (set-has data o)
+               (not (== s (. v top))) (not (== o (. v top)))
+               (or (set-has idle s) (set-has idle o))))
+        (else false))))
 
   ;; A NegativePropertyAssertion's parts (owl:sourceIndividual,
   ;; owl:assertionProperty, owl:targetIndividual, owl:targetValue) are read

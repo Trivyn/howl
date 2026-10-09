@@ -131,7 +131,9 @@ howl --version
 
 **What HOWL reports as omitted instead:**
 - `HasKey`;
-- datatypes and data properties (a deliberate non-goal);
+- datatypes and data properties (a deliberate non-goal), except the domains, ranges and other
+  property axioms of a data property nothing uses, which provably change no answer and are set
+  aside (CCO's 16 data axioms are of that kind);
 - anything outside OWL 2 EL, such as unions, universal restrictions, cardinalities and inverse
   properties. These belong to the planned `sriq` profile.
 

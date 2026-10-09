@@ -2019,6 +2019,37 @@
       ((none)    -1)
       ((some gr) (cast Int (list-len (. gr omissions))))))
 
+  (fn accepted-under ((arena Arena) (ttl String) (p Profile))
+    (@intent "Axioms an inline document keeps under a rung, or -1 if it did not gate")
+    (@spec ((Arena String Profile) -> Int))
+    (@alloc arena)
+    (match (gate-ttl-in arena ttl p)
+      ((none)    -1)
+      ((some gr) (cast Int (list-len (. gr accepted))))))
+
+  (fn gate-alike-under ((arena Arena) (label String) (a String) (b String) (p Profile))
+    (@intent "Do two documents keep and omit the same number of axioms under a rung?")
+    (@spec ((Arena String String String Profile) -> Bool))
+    (@alloc arena)
+    (let ((ka (accepted-under arena a p)) (kb (accepted-under arena b p))
+          (oa (omissions-under arena a p)) (ob (omissions-under arena b p)))
+      (if (and (>= ka 0) (and (== ka kb) (== oa ob)))
+        true
+        (do
+          (println (string-concat arena "  [rungs] " label))
+          (print "    kept ") (print (int-to-string arena ka)) (print " vs ") (println (int-to-string arena kb))
+          (print "    omitted ") (print (int-to-string arena oa)) (print " vs ") (println (int-to-string arena ob))
+          false))))
+
+  (fn rungs-gate-alike ((arena Arena) (label String) (ttl-a String) (ttl-b String))
+    (@intent "Do two documents keep and omit the same number of axioms, under el and under el++?")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((a (string-concat arena (rung-prefix) ttl-a))
+          (b (string-concat arena (rung-prefix) ttl-b)))
+      (and (gate-alike-under arena label a b 'profile-el)
+           (gate-alike-under arena label a b 'profile-el-plus-plus))))
+
   (fn rungs-omit ((arena Arena) (label String) (ttl String) (el-want Int) (elpp-want Int))
     (@intent "Does the gate omit exactly this many axioms under el and under el++?")
     (@spec ((Arena String String Int Int) -> Bool))
@@ -2033,6 +2064,62 @@
             (print "    el omitted ") (println (int-to-string arena el))
             (print "    el++ omitted ") (println (int-to-string arena pp))
             false)))))
+
+  (fn test-data-lemma ((arena Arena))
+    (@intent "§5.2's data lemma: idle data properties' axioms are inert in both rungs, and nothing else is")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Each row's count is the omissions under el and under el++. The
+    ;; lemma is decided before the gate, so the two always agree. The rows
+    ;; that keep omissions are the ones a wrong lemma would set aside:
+    ;; a property used below (the hierarchy runs UP), a disjointness
+    ;; between used properties, a domain on owl:topDataProperty.
+    (and
+      (rungs-omit arena "idle: domain, range, functionality"
+        ":d a owl:DatatypeProperty , owl:FunctionalProperty ; rdfs:domain :C ; rdfs:range <http://www.w3.org/2001/XMLSchema#integer> ." 0 0)
+      (rungs-omit arena "idle: sub-property, equivalence, disjointness"
+        ":d a owl:DatatypeProperty . :e a owl:DatatypeProperty . :f a owl:DatatypeProperty .\n:d rdfs:subPropertyOf :e ; owl:equivalentProperty :f . :e owl:propertyDisjointWith :f ." 0 0)
+      (rungs-omit arena "used in an assertion: domain and assertion omitted"
+        ":d a owl:DatatypeProperty ; rdfs:domain :C . :a :d 1 ." 2 2)
+      (rungs-omit arena "used below: the super-property is not idle"
+        ":p a owl:DatatypeProperty ; rdfs:domain :C .\n:q a owl:DatatypeProperty ; rdfs:subPropertyOf :p . :a :q 1 ." 3 3)
+      (rungs-omit arena "used in a restriction: the range stays"
+        ":d a owl:DatatypeProperty ; rdfs:range <http://www.w3.org/2001/XMLSchema#integer> .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :d ; owl:someValuesFrom <http://www.w3.org/2001/XMLSchema#integer> ] ." 2 2)
+      (rungs-omit arena "disjointness: an idle member suffices, two used ones do not"
+        ":u a owl:DatatypeProperty . :v a owl:DatatypeProperty . :i a owl:DatatypeProperty .\n:u owl:propertyDisjointWith :i . :u owl:propertyDisjointWith :v . :a :u 1 ; :v 2 ." 3 3)
+      (rungs-omit arena "a DatatypeRestriction range goes with its axiom"
+        ":d a owl:DatatypeProperty ; rdfs:range [ a <http://www.w3.org/2000/01/rdf-schema#Datatype> ; owl:onDatatype <http://www.w3.org/2001/XMLSchema#short> ; owl:withRestrictions ( [ <http://www.w3.org/2001/XMLSchema#minInclusive> 0 ] ) ] ." 0 0)
+      (rungs-omit arena "a sub-property of owl:topDataProperty is a tautology"
+        ":d a owl:DatatypeProperty ; rdfs:subPropertyOf owl:topDataProperty ." 0 0)
+      (rungs-omit arena "a domain on owl:topDataProperty stays"
+        "owl:topDataProperty rdfs:domain :C ." 1 1)
+      ;; Declared, the built-in is among the data properties idleness is
+      ;; read over: only its standing use keeps it from being idle.
+      (rungs-omit arena "a declared owl:topDataProperty is still never idle"
+        "owl:topDataProperty a owl:DatatypeProperty ; rdfs:domain :C ." 1 1)
+      (rungs-omit arena "a disjointness with owl:topDataProperty stays"
+        ":d a owl:DatatypeProperty ; owl:propertyDisjointWith owl:topDataProperty ." 1 1)
+      (rungs-omit arena "an axiom annotation is not a use (RO annotates RO_0002029's range)"
+        ":d a owl:DatatypeProperty ; rdfs:range <http://www.w3.org/2001/XMLSchema#integer> .\n[ a owl:Axiom ; owl:annotatedSource :d ; owl:annotatedProperty rdfs:range ; owl:annotatedTarget <http://www.w3.org/2001/XMLSchema#integer> ; rdfs:comment \"why\" ] ." 0 0)
+      (rungs-omit arena "a filler shared with its own reification still goes with its axiom"
+        ":d a owl:DatatypeProperty ; rdfs:range _:x .\n_:x a <http://www.w3.org/2000/01/rdf-schema#Datatype> ; owl:onDatatype <http://www.w3.org/2001/XMLSchema#short> ; owl:withRestrictions ( [ <http://www.w3.org/2001/XMLSchema#minInclusive> 0 ] ) .\n[ a owl:Axiom ; owl:annotatedSource :d ; owl:annotatedProperty rdfs:range ; owl:annotatedTarget _:x ; rdfs:comment \"why\" ] ." 0 0)
+      (rungs-omit arena "a reified-only assertion is a use: it is rebuilt before the lemma"
+        ":d a owl:DatatypeProperty ; rdfs:domain :C .\n[ a owl:Axiom ; owl:annotatedSource :a ; owl:annotatedProperty :d ; owl:annotatedTarget \"x\" ] ." 2 2)
+      ;; The tree takes a filler's internals only. A domain filler that also
+      ;; heads a GCI keeps its structure for it, so the document gates as
+      ;; it does without the idle domain. Consuming the filler whole
+      ;; dropped the GCI with no omission (Codex, slice 3 review).
+      ;; Only a well-shaped data range goes: a malformed one decodes as
+      ;; today (Codex, slice 3 re-review).
+      (rungs-omit arena "owl:withRestrictions without owl:onDatatype is not swallowed"
+        ":d a owl:DatatypeProperty ; rdfs:domain _:x .\n_:x a owl:Class ; owl:withRestrictions ( [ <http://www.w3.org/2001/XMLSchema#minInclusive> 0 ] ) ." 2 2)
+      (rungs-omit arena "a facet node with a second triple is not swallowed"
+        ":d a owl:DatatypeProperty ; rdfs:range [ a <http://www.w3.org/2000/01/rdf-schema#Datatype> ; owl:onDatatype <http://www.w3.org/2001/XMLSchema#short> ; owl:withRestrictions ( [ <http://www.w3.org/2001/XMLSchema#minInclusive> 0 ; owl:someValuesFrom :C ] ) ] ." 1 1)
+      (rungs-omit arena "a reified-only declaration declares: stage 0 rebuilds it"
+        "[ a owl:Axiom ; owl:annotatedSource :d ; owl:annotatedProperty <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> ; owl:annotatedTarget owl:DatatypeProperty ] .\n:d rdfs:range <http://www.w3.org/2001/XMLSchema#integer> ." 0 0)
+      (rungs-gate-alike arena "a filler that heads an axiom keeps it"
+        ":d a owl:DatatypeProperty ; rdfs:domain _:x .\n_:x owl:intersectionOf ( :C :D ) ; rdfs:subClassOf owl:Nothing ."
+        ":d a owl:DatatypeProperty .\n[ owl:intersectionOf ( :C :D ) ] rdfs:subClassOf owl:Nothing .")))
 
   (fn test-el-plus-plus-gate-table ((arena Arena))
     (@intent "Each el++ construct is omitted under el and accepted under el++, or omitted by both")
@@ -5242,6 +5329,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-literal-has-value-is-data arena)))
             (print-test-result "decode: a literal hasValue is data" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-data-lemma arena)))
+            (print-test-result "§5.2: data axioms on idle data properties are inert in both rungs" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-el-plus-plus-gate-table arena)))
