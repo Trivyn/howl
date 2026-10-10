@@ -1,0 +1,170 @@
+;; ============================================================
+;; sriq's redundancy and commit  —  [TGH21] §2.1's ∈̂, Table 2's Elim,
+;; and SPEC.md §5.5 S6 step 3 (R1, R2)
+;;
+;; A set N contains Γ → Δ UP TO REDUNDANCY, Γ → Δ ∈̂ N, if (i) s ≈ s ∈ Δ
+;; for some s, or (ii) {s ≈ t, s ≉ t} ⊆ Δ, or (iii) some Γ′ → Δ′ ∈ N has
+;; Γ′ ⊆ Γ and Δ′ ⊆ Δ: plain set inclusion, with no substitution.
+;;
+;; THE COMMIT (S6 step 3). With W the context's current set, each
+;; candidate in turn: one ∈̂ W is skipped; otherwise every member it
+;; subsumes is deleted, and it is inserted. In whatever order the
+;; candidates come, that leaves min(W ∪ C), the non-tautologies no other
+;; member subsumes (R1), so they are taken as given, and the result is
+;; listed in content order. What is inserted AND survives forms the
+;; context's part of Δₙ₊₁: a candidate inserted and then subsumed by a
+;; later one is gone again, and Δₙ₊₁ ⊆ Sₙ₊₁.
+;;
+;; Clauses here are canonical (sriqclauses.slop): body and head are
+;; sorted by lit-cmp without repetition, and an equality's two a-terms are
+;; oriented. So inclusion is a merge walk and (ii) a field comparison.
+;; ============================================================
+
+(module sriqsubsume
+  (@doc "sriq's redundancy (TGH21 2.1's ∈̂) and the commit's min (SPEC 5.5 S6 step 3)")
+
+  (import types (AKind ATerm LitForm Lit Clause at-x atom1 lit-cmp lit-eq aterm-eq))
+  (import sriqclauses (clause-cmp clause-eq))
+  (import canon (sort-range))
+
+  (export lits-subset subsumes tautology in-hat Committed commit-min)
+
+  ;; A context's set after the commit, and what it gained.
+  (type Committed (record
+    (set   (List Clause))    ; min(W ∪ C), in content order
+    (added (List Clause))))  ; its members W lacked, in content order: Δₙ₊₁ here
+
+  ;; ============================================================
+  ;; Inclusion, and the three ways to be redundant
+  ;; ============================================================
+
+  (fn no-lit ()
+    (@intent "A placeholder literal")
+    (@spec (() -> Lit))
+    (@pure)
+    (atom1 (cast U32 0) (at-x)))
+
+  (fn lit-at ((xs (List Lit)) (i Int))
+    (@intent "Element i, or the placeholder")
+    (@spec (((List Lit) Int) -> Lit))
+    (@pure)
+    (match (list-get xs i) ((some l) l) ((none) (no-lit))))
+
+  (fn lits-subset ((a (List Lit)) (b (List Lit)))
+    (@intent "Is every literal of a in b? Both sorted by lit-cmp without repetition")
+    (@spec (((List Lit) (List Lit)) -> Bool))
+    (@pure)
+    ;; A merge walk: b's position passes every literal below a's next one,
+    ;; so a literal of a missing where it would sit is not in b.
+    (let ((na (cast Int (list-len a)))
+          (nb (cast Int (list-len b)))
+          (mut i 0)
+          (mut j 0)
+          (mut ok true))
+      (do
+        (while (and ok (< i na))
+          (let ((l (lit-at a i)))
+            (do
+              (while (and (< j nb) (< (lit-cmp (lit-at b j) l) 0)) (set! j (+ j 1)))
+              (if (and (< j nb) (lit-eq (lit-at b j) l))
+                (do (set! i (+ i 1)) (set! j (+ j 1)))
+                (set! ok false)))))
+        ok)))
+
+  (fn subsumes ((c Clause) (d Clause))
+    (@intent "(iii): c's body is within d's, and c's head within d's")
+    (@spec ((Clause Clause) -> Bool))
+    (@pure)
+    (and (lits-subset (. c body) (. d body)) (lits-subset (. c head) (. d head))))
+
+  (fn reflexive-eq ((l Lit))
+    (@intent "(i): is l of the form s ≈ s?")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (and (== (. l form) 'lf-eq) (aterm-eq (. l t1) (. l t2))))
+
+  (fn eq-of ((n Lit) (e Lit))
+    (@intent "(ii): are n and e the inequality and the equality of one pair, s ≉ t and s ≈ t?")
+    (@spec ((Lit Lit) -> Bool))
+    (@pure)
+    (and (== (. n form) 'lf-neq) (== (. e form) 'lf-eq)
+         (aterm-eq (. n t1) (. e t1)) (aterm-eq (. n t2) (. e t2))))
+
+  (fn has-eq-of ((head (List Lit)) (n Lit))
+    (@intent "Does head hold the equality n denies?")
+    (@spec (((List Lit) Lit) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (e head) (when (eq-of n e) (set! found true))) found)))
+
+  (fn tautology ((c Clause))
+    (@intent "Is c redundant in every set: (i) s ≈ s in its head, or (ii) s ≈ t and s ≉ t?")
+    (@spec ((Clause) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do
+        (for-each (l (. c head))
+          (when (or (reflexive-eq l) (has-eq-of (. c head) l)) (set! found true)))
+        found)))
+
+  (fn in-hat ((c Clause) (ws (List Clause)))
+    (@intent "c ∈̂ ws: a tautology, or subsumed by a member of ws")
+    (@spec ((Clause (List Clause)) -> Bool))
+    (@pure)
+    (@post (== $result (or (tautology c) (exists (w ws) (subsumes w c)))))
+    (let ((mut found (if (tautology c) true false)))
+      (do
+        (for-each (w ws)
+          (@loop-invariant (== found (or (tautology c) (exists (w2 (list-visited ws)) (subsumes w2 c)))))
+          (when (subsumes w c) (set! found true)))
+        found)))
+
+  ;; ============================================================
+  ;; The commit
+  ;; ============================================================
+
+  (fn clause-at ((xs (List Clause)) (i Int) (fallback Clause))
+    (@intent "Element i, or the fallback")
+    (@spec (((List Clause) Int Clause) -> Clause))
+    (@pure)
+    (match (list-get xs i) ((some c) c) ((none) fallback)))
+
+  (fn by-content ((arena Arena) (xs (List Clause)))
+    (@intent "xs sorted by clause-cmp")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((none-such (record-new Clause (body (list-new arena Lit)) (head (list-new arena Lit))))
+          (idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (clause-cmp (clause-at xs i none-such) (clause-at xs j none-such)))))
+          (mut out (list-new arena Clause)))
+      (do (for-each (k idx) (list-push out (clause-at xs k none-such))) out)))
+
+  (fn without-subsumed ((arena Arena) (ws (List Clause)) (c Clause))
+    (@intent "ws without every member c subsumes: Elim, for the one clause c")
+    (@spec ((Arena (List Clause) Clause) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (w ws) (when (not (subsumes c w)) (list-push out w))) out)))
+
+  (fn holds-clause ((xs (List Clause)) (c Clause))
+    (@intent "Is c a member of xs?")
+    (@spec (((List Clause) Clause) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (x xs) (when (clause-eq x c) (set! found true))) found)))
+
+  (fn commit-min ((arena Arena) (ws (List Clause)) (cs (List Clause)))
+    (@intent "S6 step 3 for one context: each candidate in turn is skipped if ∈̂ W, else deletes what it subsumes and is inserted")
+    (@spec ((Arena (List Clause) (List Clause)) -> Committed))
+    (@alloc arena)
+    (let ((mut w ws)
+          (mut added (list-new arena Clause)))
+      (do
+        (for-each (c cs)
+          (when (not (in-hat c w))
+            (do (set! w (without-subsumed arena w c))
+                (list-push w c))))
+        (for-each (x w) (when (not (holds-clause ws x)) (list-push added x)))
+        (record-new Committed (set (by-content arena w)) (added (by-content arena added))))))
+
+)

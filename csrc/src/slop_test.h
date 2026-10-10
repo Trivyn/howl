@@ -18,6 +18,7 @@
 #include "slop_sriqnames.h"
 #include "slop_sroiqfss.h"
 #include "slop_sriqclauses.h"
+#include "slop_sriqsubsume.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
@@ -135,6 +136,12 @@ SLOP_LIST_DEFINE(types_ATerm, slop_list_types_ATerm)
 SLOP_LIST_DEFINE(sriqorder_CTerm, slop_list_sriqorder_CTerm)
 #endif
 
+#ifndef SLOP_LIST_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_TYPES_CLAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
+#endif
+
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
@@ -243,6 +250,11 @@ SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
 #ifndef SLOP_OPTION_SRIQORDER_CTERM_DEFINED
 #define SLOP_OPTION_SRIQORDER_CTERM_DEFINED
 SLOP_OPTION_DEFINE(sriqorder_CTerm, slop_option_sriqorder_CTerm)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1302,6 +1314,25 @@ slop_list_types_Lit test_two_lits(slop_arena* arena, types_Lit a, types_Lit b);
 uint8_t test_test_sriq_max_flags_rows(slop_arena* arena);
 slop_list_types_Lit test_sample_lits(slop_arena* arena);
 uint8_t test_lits_strict(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_types_Lit ls);
+slop_list_types_Lit test_letter_atoms(slop_arena* arena, slop_string letters);
+types_Clause test_cl(slop_arena* arena, slop_string body, slop_string head);
+types_Clause test_with_lit(slop_arena* arena, types_Clause c, types_Lit l);
+slop_list_types_Clause test_clauses_of(slop_arena* arena, types_Clause a, types_Clause b);
+uint8_t test_test_sriq_inhat_rows(slop_arena* arena);
+slop_list_types_Clause test_reference_min(slop_arena* arena, slop_list_types_Clause xs);
+uint8_t test_in_list(slop_list_types_Clause xs, types_Clause c);
+uint8_t test_same_clause_set(slop_list_types_Clause a, slop_list_types_Clause b);
+slop_list_types_Clause test_commit_w(slop_arena* arena);
+slop_list_types_Clause test_commit_candidates(slop_arena* arena);
+types_Clause test_clause_list_at(slop_list_types_Clause xs, int64_t i, types_Clause fallback);
+slop_list_types_Clause test_permuted(slop_arena* arena, slop_list_types_Clause xs, int64_t code);
+slop_list_types_Clause test_appended(slop_arena* arena, slop_list_types_Clause a, slop_list_types_Clause b);
+slop_list_types_Clause test_new_members(slop_arena* arena, slop_list_types_Clause xs, slop_list_types_Clause ws);
+uint8_t test_order_ok(slop_arena* arena, slop_list_types_Clause ws, slop_list_types_Clause order, slop_list_types_Clause want, slop_list_types_Clause want_added);
+uint8_t test_test_sriq_commit_min_permutation(slop_arena* arena);
+uint8_t test_keeps_but_adds_not(slop_arena* arena);
+uint8_t test_test_sriq_commit_survivors(slop_arena* arena);
+uint8_t test_test_sriq_inhat_persists(slop_arena* arena);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1581,6 +1612,11 @@ SLOP_OPTION_DEFINE(sriqorder_CTerm, slop_option_sriqorder_CTerm)
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
@@ -1656,11 +1692,6 @@ SLOP_OPTION_DEFINE(sroiq_SConcept, slop_option_sroiq_SConcept)
 SLOP_OPTION_DEFINE(slop_option_types_DName, slop_option_option_types_DName)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
-#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
-SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
-#endif
-
 #ifndef SLOP_OPTION_SRIQORDER_CONSTENTRY_DEFINED
 #define SLOP_OPTION_SRIQORDER_CONSTENTRY_DEFINED
 SLOP_OPTION_DEFINE(sriqorder_ConstEntry, slop_option_sriqorder_ConstEntry)
@@ -1699,12 +1730,6 @@ SLOP_LIST_DEFINE(sroiq_SConcept, slop_list_sroiq_SConcept)
 #define SLOP_LIST_OPTION_TYPES_DNAME_DEFINED
 #define SLOP_LIST_OPTION_TYPES_DNAME_IMPL_DEFINED
 SLOP_LIST_DEFINE(slop_option_types_DName, slop_list_option_types_DName)
-#endif
-
-#ifndef SLOP_LIST_TYPES_CLAUSE_DEFINED
-#define SLOP_LIST_TYPES_CLAUSE_DEFINED
-#define SLOP_LIST_TYPES_CLAUSE_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
 #endif
 
 #ifndef SLOP_LIST_SRIQORDER_CONSTENTRY_DEFINED
