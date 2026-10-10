@@ -45,7 +45,7 @@
   (export ConstEntry SriqOrder CKind CTerm
           named-consts aux-const const-entry
           fn-gt const-gt aterm-gt pterm-gt cterm-gt
-          ct-true ct-a ct-p lit-ms lit-gt max-flags)
+          ct-true ct-a ct-p lit-ms lit-gt maximal-at max-flags)
 
   ;; A constant: a named individual (no label: its own base and parent),
   ;; or Nom's o_{ρ·S^i}, which hangs from o_ρ by the letter S^i.

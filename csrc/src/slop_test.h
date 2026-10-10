@@ -19,6 +19,7 @@
 #include "slop_sroiqfss.h"
 #include "slop_sriqclauses.h"
 #include "slop_sriqsubsume.h"
+#include "slop_sriq.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
@@ -142,6 +143,18 @@ SLOP_LIST_DEFINE(sriqorder_CTerm, slop_list_sriqorder_CTerm)
 SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
 #endif
 
+#ifndef SLOP_LIST_SRIQ_PREMISE_DEFINED
+#define SLOP_LIST_SRIQ_PREMISE_DEFINED
+#define SLOP_LIST_SRIQ_PREMISE_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriq_Premise, slop_list_sriq_Premise)
+#endif
+
+#ifndef SLOP_LIST_SRIQ_CANDS_DEFINED
+#define SLOP_LIST_SRIQ_CANDS_DEFINED
+#define SLOP_LIST_SRIQ_CANDS_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriq_Cands, slop_list_sriq_Cands)
+#endif
+
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
@@ -255,6 +268,16 @@ SLOP_OPTION_DEFINE(sriqorder_CTerm, slop_option_sriqorder_CTerm)
 #ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
 #define SLOP_OPTION_TYPES_CLAUSE_DEFINED
 SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
+#define SLOP_OPTION_SRIQ_PREMISE_DEFINED
+SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_CANDS_DEFINED
+#define SLOP_OPTION_SRIQ_CANDS_DEFINED
+SLOP_OPTION_DEFINE(sriq_Cands, slop_option_sriq_Cands)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1333,6 +1356,23 @@ uint8_t test_test_sriq_commit_min_permutation(slop_arena* arena);
 uint8_t test_keeps_but_adds_not(slop_arena* arena);
 uint8_t test_test_sriq_commit_survivors(slop_arena* arena);
 uint8_t test_test_sriq_inhat_persists(slop_arena* arena);
+types_Lit test_r_atom(int64_t c, types_ATerm t);
+types_Lit test_r_role(int64_t r, types_ATerm a, types_ATerm b);
+types_ATerm test_r_fx(int64_t f);
+types_Clause test_r_clause(slop_arena* arena, slop_list_types_Lit body, slop_list_types_Lit head);
+slop_list_sriq_Premise test_r_premises(slop_arena* arena, sriqorder_SriqOrder ord, types_Clause c);
+slop_list_sriq_Cands test_r_cands(slop_arena* arena, sriqorder_SriqOrder ord, int64_t atoms, slop_list_types_Clause cs);
+slop_list_types_Clause test_r_hyper(slop_arena* arena, sriq_HState start, types_Clause ont, slop_list_types_Clause cs);
+slop_list_types_Clause test_r_useful(slop_arena* arena, slop_list_types_Clause cs);
+slop_list_types_Clause test_r_one(slop_arena* arena, types_Clause c);
+uint8_t test_hyper_is(slop_arena* arena, slop_string label, slop_list_types_Clause got, slop_list_types_Clause want);
+sriq_Premise test_r_premise(slop_arena* arena, sriqorder_SriqOrder ord, types_Clause c, types_Lit l);
+uint8_t test_test_sriq_hyper_rows(slop_arena* arena);
+uint8_t test_test_sriq_hyper_dl4(slop_arena* arena);
+uint8_t test_test_sriq_hyper_root_rows(slop_arena* arena);
+uint8_t test_test_sriq_hyper_example1(slop_arena* arena);
+uint8_t test_test_sriq_ineq_factor_core_rows(slop_arena* arena);
+uint8_t test_test_sriq_factor_each_condition(slop_arena* arena);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1615,6 +1655,16 @@ SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
 #define SLOP_OPTION_TYPES_CLAUSE_DEFINED
 SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
+#define SLOP_OPTION_SRIQ_PREMISE_DEFINED
+SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_CANDS_DEFINED
+#define SLOP_OPTION_SRIQ_CANDS_DEFINED
+SLOP_OPTION_DEFINE(sriq_Cands, slop_option_sriq_Cands)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED

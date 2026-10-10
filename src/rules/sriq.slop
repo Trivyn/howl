@@ -1,0 +1,366 @@
+;; ============================================================
+;; sriq's single-context rules, part 1 — [TGH21] Table 2's Core, Hyper,
+;; Ineq and Factor (SPEC §5.5 S3)
+;;
+;; ONE FUNCTION PER RULE INSTANCE, loop-free, over premise VIEWS (the
+;; Constraint "sriq rule functions are loop-free"). A premise Γ → Δ ∨ L
+;; enters as its body Γ, its selected literal L, the rest of its head Δ,
+;; and whether Δ ⊁ L, all from `select`. A conclusion leaves as its parts
+;; (RConcl), and `assemble` makes the set clause. Each function carries
+;; `sound` (it fires only when the rule's side conditions hold) and
+;; `complete` (it fires whenever they do); Core always fires.
+;;
+;; HYPER has n + 1 premises, so it is a loop-free step and one
+;; combinator. `hyper-step` matches one body atom of the ontology clause
+;; against one premise's selected literal, extending σ and the parts;
+;; `hyper-join` takes every choice of premises, one per body atom, and
+;; `hyper-finish` applies σ to the clause's head. σ(x) is x away from the
+;; root. At the root it is a constant: the first matched atom binds it
+;; to the constant in its premise, and a bodiless clause takes it from
+;; the caller, which supplies each of O's individuals and each constant
+;; Nom has created (SPEC §5.5 S3, E4).
+;;
+;; A choice that repeats a neighbour (DL4's S_{B₂}(x, zᵢ), S_{B₂}(x, zⱼ)
+;; against one premise) makes zᵢ ≈ zⱼ a tautology. The rule still fires;
+;; ∈̂ (i) drops the conclusion, as it does any redundant one.
+;; ============================================================
+
+(module sriq
+  (@doc "sriq's single-context rules (TGH21 Table 2): Core, Hyper, Ineq, Factor")
+
+  (import types (AKind ATerm LitForm Lit Clause at-x at-fx at-fu atom1 atom2 eq-lit neq-lit aterm-eq lit-eq))
+  (import sriqclauses (make-clause))
+  (import sriqorder (SriqOrder aterm-gt maximal-at))
+
+  (export Premise RConcl Subst HState Cands
+          select assemble core-rule ineq-rule factor-rule
+          hyper-start hyper-step hyper-finish hyper-join
+          atom-matches apply-lit)
+
+  ;; Γ → Δ ∨ L, as a rule reads it.
+  (type Premise (record
+    (body  (List Lit))   ; Γ
+    (sel   Lit)          ; L
+    (rest  (List Lit))   ; Δ: the head without L
+    (maxed Bool)))       ; Δ ⊁ L
+
+  ;; A conclusion's parts, not yet a set.
+  (type RConcl (record
+    (fires Bool)
+    (body  (List Lit))
+    (head  (List Lit))))
+
+  ;; σ: x's image, and each bound zᵢ's image in the order bound.
+  (type Subst (record
+    (x      ATerm)
+    (xbound Bool)          ; false only at the root, before the first atom
+    (zs     (List Int))    ; i, for each bound zᵢ
+    (ts     (List ATerm))))
+
+  ;; One body atom's candidate premises. A record, not a bare list: the
+  ;; C generator orders a (List (List T)) before (List T) in the header.
+  (type Cands (record
+    (ps (List Premise))))
+
+  ;; Hyper part way: σ, and ⋀ Γᵢ and ⋁ Δᵢ over the premises so far.
+  (type HState (record
+    (fires Bool)
+    (sub   Subst)
+    (body  (List Lit))
+    (head  (List Lit))))
+
+  ;; ============================================================
+  ;; Views and assembly
+  ;; ============================================================
+
+  (fn lit-at ((xs (List Lit)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List Lit) Int) -> Lit))
+    (@pure)
+    (match (list-get xs i) ((some l) l) ((none) (atom1 (cast U32 0) (at-x)))))
+
+  (fn without-at ((arena Arena) (xs (List Lit)) (i Int))
+    (@intent "xs without element i")
+    (@spec ((Arena (List Lit) Int) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))
+          (mut k 0))
+      (do (for-each (x xs) (do (when (!= k i) (list-push out x)) (set! k (+ k 1)))) out)))
+
+  (fn select ((arena Arena) (ord SriqOrder) (c Clause) (i Int))
+    (@intent "Clause c as a premise with head literal i selected: Γ, L, Δ and whether Δ ⊁ L")
+    (@spec ((Arena SriqOrder Clause Int) -> Premise))
+    (@alloc arena)
+    (record-new Premise
+      (body  (. c body))
+      (sel   (lit-at (. c head) i))
+      (rest  (without-at arena (. c head) i))
+      (maxed (maximal-at arena ord (. c head) i))))
+
+  (fn assemble ((arena Arena) (r RConcl))
+    (@intent "The conclusion as a set clause")
+    (@spec ((Arena RConcl) -> Clause))
+    (@alloc arena)
+    (make-clause arena (. r body) (. r head)))
+
+  (fn appended ((arena Arena) (a (List Lit)) (b (List Lit)))
+    (@intent "a, then b")
+    (@spec ((Arena (List Lit) (List Lit)) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit)))
+      (do (for-each (l a) (list-push out l)) (for-each (l b) (list-push out l)) out)))
+
+  ;; ============================================================
+  ;; Core:  A ∈ core_v  ⟹  ⊤ → A
+  ;; ============================================================
+
+  (fn core-rule ((arena Arena) (a Lit))
+    (@intent "Core: an atom of the context's core gives ⊤ → A. The caller passes each atom of core_v")
+    (@spec ((Arena Lit) -> RConcl))
+    (@alloc arena)
+    (@property complete (== (. $result fires) true))
+    (let ((mut h (list-new arena Lit)))
+      (do (list-push h a)
+          (record-new RConcl (fires true) (body (list-new arena Lit)) (head h)))))
+
+  ;; ============================================================
+  ;; Ineq:  Γ → Δ ∨ t ≉ t  ⟹  Γ → Δ   (no maximality condition)
+  ;; ============================================================
+
+  (fn ineq-rule ((p Premise))
+    (@intent "Ineq: drop a selected t ≉ t")
+    (@spec ((Premise) -> RConcl))
+    (@pure)
+    (@property sound (or (not (. $result fires)) (and (== (. (. p sel) form) 'lf-neq) (aterm-eq (. (. p sel) t1) (. (. p sel) t2)))))
+    (@property complete (or (not (== (. (. p sel) form) 'lf-neq)) (not (aterm-eq (. (. p sel) t1) (. (. p sel) t2))) (. $result fires)))
+    (@property head (and (== (. $result body) (. p body)) (== (. $result head) (. p rest))))
+    (let ((l (. p sel)))
+      (record-new RConcl
+        (fires (and (== (. l form) 'lf-neq) (aterm-eq (. l t1) (. l t2))))
+        (body  (. p body))
+        (head  (. p rest)))))
+
+  ;; ============================================================
+  ;; Factor:  Γ → Δ ∨ s ≈ t₁ ∨ s ≈ t₂, t₂ ⊁ s, Δ ∨ s ≈ t₁ ⊁ s ≈ t₂
+  ;;          ⟹  Γ → Δ ∨ t₁ ≉ t₂ ∨ s ≈ t₂
+  ;; The selected literal is s ≈ t₂; l1, from the rest, is s ≈ t₁.
+  ;; ============================================================
+
+  (fn has-side ((l Lit) (s ATerm))
+    (@intent "Is l an equality with s on one side?")
+    (@spec ((Lit ATerm) -> Bool))
+    (@pure)
+    (and (== (. l form) 'lf-eq) (or (aterm-eq (. l t1) s) (aterm-eq (. l t2) s))))
+
+  (fn other-side ((l Lit) (s ATerm))
+    (@intent "The side of l that is not s (t₁ when s is t₂)")
+    (@spec ((Lit ATerm) -> ATerm))
+    (@pure)
+    (if (aterm-eq (. l t1) s) (. l t2) (. l t1)))
+
+  (fn holds-lit ((ls (List Lit)) (l Lit))
+    (@intent "Is l among ls?")
+    (@spec (((List Lit) Lit) -> Bool))
+    (@pure)
+    (let ((mut found false)) (do (for-each (x ls) (when (lit-eq x l) (set! found true))) found)))
+
+  (fn without-lit ((arena Arena) (ls (List Lit)) (l Lit))
+    (@intent "ls without l")
+    (@spec ((Arena (List Lit) Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (for-each (x ls) (when (not (lit-eq x l)) (list-push out x))) out)))
+
+  (fn factor-rule ((arena Arena) (ord SriqOrder) (p Premise) (l1 Lit) (s ATerm))
+    (@intent "Factor: s ≈ t₁ beside a maximal s ≈ t₂ becomes t₁ ≉ t₂")
+    (@spec ((Arena SriqOrder Premise Lit ATerm) -> RConcl))
+    (@alloc arena)
+    ;; s ≈ t₂ is selected (Δ ∨ s ≈ t₁ ⊁ s ≈ t₂), s ≈ t₁ is in Δ ∨ s ≈ t₁,
+    ;; and t₂ ⊁ s.
+    (@property sound
+      (or (not (. $result fires))
+          (and (. p maxed) (has-side (. p sel) s) (has-side l1 s) (holds-lit (. p rest) l1)
+               (not (aterm-gt ord (other-side (. p sel) s) s)))))
+    (@property complete
+      (or (not (. p maxed)) (not (has-side (. p sel) s)) (not (has-side l1 s)) (not (holds-lit (. p rest) l1))
+          (aterm-gt ord (other-side (. p sel) s) s)
+          (. $result fires)))
+    (let ((t1 (other-side l1 s))
+          (t2 (other-side (. p sel) s))
+          (mut h (without-lit arena (. p rest) l1)))
+      (do (list-push h (neq-lit t1 t2))
+          (list-push h (. p sel))
+          (record-new RConcl
+            (fires (and (. p maxed) (has-side (. p sel) s) (has-side l1 s) (holds-lit (. p rest) l1)
+                        (not (aterm-gt ord t2 s))))
+            (body (. p body))
+            (head h)))))
+
+  ;; ============================================================
+  ;; Hyper:  ⋀ᵢ Aᵢ → Δ ∈ O, Γᵢ → Δᵢ ∨ Aᵢσ with Δᵢ ⊁ Aᵢσ
+  ;;         ⟹  ⋀ Γᵢ → ⋁ Δᵢ ∨ Δσ
+  ;; ============================================================
+
+  (fn z-image ((sub Subst) (i Int))
+    (@intent "σ(zᵢ), and whether zᵢ is bound")
+    (@spec ((Subst Int) -> (Option ATerm)))
+    (@pure)
+    (let ((mut k 0)
+          (mut found (Option ATerm) (none)))
+      (do
+        (for-each (j (. sub zs))
+          (do (when (== j i)
+                (match (list-get (. sub ts) k) ((some t) (set! found (some t))) ((none) (do))))
+              (set! k (+ k 1))))
+        found)))
+
+  (fn term-matches ((sub Subst) (a ATerm) (l ATerm))
+    (@intent "Does a, an ontology clause's x or zᵢ, match the context term l under σ?")
+    (@spec ((Subst ATerm ATerm) -> Bool))
+    (@pure)
+    (match (. a kind)
+      ('ak-x  (if (. sub xbound) (aterm-eq (. sub x) l) (== (. l kind) 'ak-u)))
+      ('ak-z  (match (z-image sub (cast Int (. a zi))) ((some t) (aterm-eq t l)) ((none) true)))
+      ('ak-y  false)
+      ('ak-fx false)
+      ('ak-u  false)
+      ('ak-fu false)))
+
+  (fn bind-term ((arena Arena) (sub Subst) (a ATerm) (l ATerm))
+    (@intent "σ extended so that a maps to l (a match already checked, so a bound x already maps to l)")
+    (@spec ((Arena Subst ATerm ATerm) -> Subst))
+    (@alloc arena)
+    (match (. a kind)
+      ('ak-x (record-new Subst (x l) (xbound true) (zs (. sub zs)) (ts (. sub ts))))
+      ('ak-z (match (z-image sub (cast Int (. a zi)))
+               ((some _) sub)
+               ((none)   (let ((mut zs (list-new arena Int))
+                               (mut ts (list-new arena ATerm)))
+                           (do (for-each (j (. sub zs)) (list-push zs j))
+                               (for-each (t (. sub ts)) (list-push ts t))
+                               (list-push zs (cast Int (. a zi)))
+                               (list-push ts l)
+                               (record-new Subst (x (. sub x)) (xbound (. sub xbound)) (zs zs) (ts ts)))))))
+      ('ak-y  sub)
+      ('ak-fx sub)
+      ('ak-u  sub)
+      ('ak-fu sub)))
+
+  (fn atom-matches ((sub Subst) (a Lit) (l Lit))
+    (@intent "Is l, a premise's selected literal, the body atom a under σ? Both of a's arguments are matched, the second under σ as the first extends it")
+    (@spec ((Subst Lit Lit) -> Bool))
+    (@pure)
+    ;; σ extended by a's first argument is needed for its second only
+    ;; when both are one variable (S(x, x)) or both one zᵢ, which the
+    ;; first check then settles: the same variable must meet the same
+    ;; term twice.
+    (and (== (. a form) (. l form))
+         (== (. a pred) (. l pred))
+         (or (== (. a form) 'lf-unary) (== (. a form) 'lf-binary))
+         (term-matches sub (. a t1) (. l t1))
+         (or (== (. a form) 'lf-unary)
+             (and (term-matches sub (. a t2) (. l t2))
+                  (or (not (aterm-eq (. a t1) (. a t2))) (aterm-eq (. l t1) (. l t2)))))))
+
+  (fn bind-atom ((arena Arena) (sub Subst) (a Lit) (l Lit))
+    (@intent "σ extended by matching a against l")
+    (@spec ((Arena Subst Lit Lit) -> Subst))
+    (@alloc arena)
+    (let ((s1 (bind-term arena sub (. a t1) (. l t1))))
+      (if (== (. a form) 'lf-binary) (bind-term arena s1 (. a t2) (. l t2)) s1)))
+
+  (fn hyper-start ((arena Arena) (x ATerm) (bound Bool))
+    (@intent "Hyper before any premise: σ(x) = x away from the root; at the root unbound, or a given constant for a bodiless clause (E4)")
+    (@spec ((Arena ATerm Bool) -> HState))
+    (@alloc arena)
+    (record-new HState
+      (fires true)
+      (sub   (record-new Subst (x x) (xbound bound) (zs (list-new arena Int)) (ts (list-new arena ATerm))))
+      (body  (list-new arena Lit))
+      (head  (list-new arena Lit))))
+
+  (fn hyper-step ((arena Arena) (st HState) (a Lit) (p Premise))
+    (@intent "One body atom against one premise: it fires when the premise's L is maximal and is a under σ")
+    (@spec ((Arena HState Lit Premise) -> HState))
+    (@alloc arena)
+    (@property sound (or (not (. $result fires)) (and (. st fires) (. p maxed) (atom-matches (. st sub) a (. p sel)))))
+    (@property complete (or (not (and (. st fires) (. p maxed) (atom-matches (. st sub) a (. p sel)))) (. $result fires)))
+    (record-new HState
+      (fires (and (. st fires) (. p maxed) (atom-matches (. st sub) a (. p sel))))
+      (sub   (bind-atom arena (. st sub) a (. p sel)))
+      (body  (appended arena (. st body) (. p body)))
+      (head  (appended arena (. st head) (. p rest)))))
+
+  (fn apply-term ((sub Subst) (t ATerm))
+    (@intent "tσ: x and each bound zᵢ replaced, f(x) as f(σ(x))")
+    (@spec ((Subst ATerm) -> ATerm))
+    (@pure)
+    (match (. t kind)
+      ('ak-x  (. sub x))
+      ('ak-z  (match (z-image sub (cast Int (. t zi))) ((some v) v) ((none) t)))
+      ('ak-fx (if (== (. (. sub x) kind) 'ak-u) (at-fu (. t fsym) (. (. sub x) cst)) t))
+      ('ak-y  t)
+      ('ak-u  t)
+      ('ak-fu t)))
+
+  (fn apply-lit ((sub Subst) (l Lit))
+    (@intent "lσ, an equality re-oriented")
+    (@spec ((Subst Lit) -> Lit))
+    (@pure)
+    (let ((a (apply-term sub (. l t1)))
+          (b (apply-term sub (. l t2))))
+      (match (. l form)
+        ('lf-unary  (atom1 (. l pred) a))
+        ('lf-binary (atom2 (. l pred) a b))
+        ('lf-eq     (eq-lit a b))
+        ('lf-neq    (neq-lit a b)))))
+
+  (fn hyper-finish ((arena Arena) (st HState) (delta (List Lit)))
+    (@intent "The conclusion ⋀ Γᵢ → ⋁ Δᵢ ∨ Δσ")
+    (@spec ((Arena HState (List Lit)) -> RConcl))
+    (@alloc arena)
+    (@property sound (== (. $result fires) (. st fires)))
+    (let ((mut h (appended arena (. st head) (list-new arena Lit))))
+      (do (for-each (l delta) (list-push h (apply-lit (. st sub) l)))
+          (record-new RConcl (fires (. st fires)) (body (. st body)) (head h)))))
+
+  (fn extend-one ((arena Arena) (st HState) (a Lit) (ps (List Premise)))
+    (@intent "Every firing step from one state over one atom's candidate premises")
+    (@spec ((Arena HState Lit (List Premise)) -> (List HState)))
+    (@alloc arena)
+    (@post (forall (n $result) (. n fires)))
+    (let ((mut out (list-new arena HState)))
+      (do (for-each (p ps)
+            (@loop-invariant (forall (n out) (. n fires)))
+            (let ((n (hyper-step arena st a p)))
+              (when (. n fires) (list-push out n))))
+          out)))
+
+  (fn extend-all ((arena Arena) (sts (List HState)) (a Lit) (ps (List Premise)))
+    (@intent "extend-one from every state")
+    (@spec ((Arena (List HState) Lit (List Premise)) -> (List HState)))
+    (@alloc arena)
+    (let ((mut out (list-new arena HState)))
+      (do (for-each (st sts) (for-each (n (extend-one arena st a ps)) (list-push out n))) out)))
+
+  (fn hyper-join ((arena Arena) (start HState) (atoms (List Lit)) (cands (List Cands)) (delta (List Lit)))
+    (@intent "Hyper over every choice of premises, one from each atom's candidates: the firing conclusions")
+    (@spec ((Arena HState (List Lit) (List Cands) (List Lit)) -> (List RConcl)))
+    (@alloc arena)
+    ;; Owed: the fold over the body atoms is a loop over loops, which the
+    ;; verifier does not close. Each step is proved (hyper-step's sound
+    ;; and complete), and so is extend-one's filter (every state it keeps
+    ;; fires); that the fold reaches every choice and keeps only firing
+    ;; ones is held by the rows (test-sriq-hyper-rows).
+    (let ((mut sts (list-new arena HState))
+          (mut i 0)
+          (mut out (list-new arena RConcl)))
+      (do
+        (list-push sts start)
+        (for-each (a atoms)
+          (do (match (list-get cands i)
+                ((some c)  (set! sts (extend-all arena sts a (. c ps))))
+                ((none)    (set! sts (list-new arena HState))))
+              (set! i (+ i 1))))
+        (for-each (st sts) (list-push out (hyper-finish arena st delta)))
+        out)))
+)

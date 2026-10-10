@@ -2340,6 +2340,94 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
       `⊤ → C(o)`, gives (112), `D(o) → F(x)`.
   - [Bate+18] Table 1 prints DL9 as `S₁(z₁,x) ∧ S₂(z₂,x) → ⊥`. HOWL uses [TGH21] Table 1's
     `S₂(z₁,x)`.
+  - **E4. Hyper at the root takes σ(x) from O's individuals and the constants Nom has created.** Table 2's Hyper at
+    `v_r` takes `σ(x) ∈ Σ_u^O`, which is infinite whenever O has a constant and a role, since a
+    label may be any length. With a body, the premises fix `σ(x)` to a constant already in
+    `S_{v_r}`. With none (`n = 0`), nothing does. For a bodiless clause whose head mentions `x` (a
+    DL1 such as `⊤ → B(x)`), the rule read literally adds `⊤ → Δσ` for every constant of `Σ_u^O`,
+    so no finite structure is saturated unless every such instance is redundant (as it is once
+    `⊤ → ⊥ ∈ S_{v_r}`). That contradicts [TGH21]'s own finite derivations
+    (§4.1) and Theorems 5 and 6. A ground bodiless clause, DL10's `⊤ → B(o)`, gives one conclusion
+    whatever `σ` is.
+    - **HOWL's reading:** `σ(x)` ranges over `U_H`: every individual of O, whether or not a clause
+      mentions it, and each auxiliary constant from the round Nom creates it (S6: "a new constant
+      takes the root's Hyper conclusions"). Sequoia does the same: its nominal contexts, one per
+      constant, are added "whenever auxiliary constants are generated within the context
+      structure" ([TGH21] §7.2.2).
+    - **Pred into `v_r` has the same defect.** Table 3's Pred with `w = v_r` takes
+      `σ = {y ↦ u, x ↦ f(u)}` "for some `u ∈ Σ_u^O`". With no body atom `Cᵢ` and an empty core
+      (`v_⊤`), nothing fixes `u`: `⊤ → x ≈ o` in `v_⊤` would give `⊤ → f(u) ≈ o` for every `u`.
+      Its `u` ranges over `U_H` too. The labels of the edges `⟨v_r, v, u⟩` are not enough: Succ
+      at the root adds that edge only when it fires, and it does not fire for `f(u₂)` when an
+      `f`-edge it can reuse already exists from `f(u₁)`. (Table 3 is built in slices 8 and 9.)
+    - **The completeness proof, relativised.** Let D be the saturated structure, and
+      `U = Orig(O) ∪ consts(D)`, O's individuals and the constants in D's clauses, so
+      `U ⊆ U_H ⊆ Σ_u^O`, and U is finite. Two facts carry the argument:
+      - **F1. Only Nom introduces an auxiliary constant.** Every other rule takes its constants
+        from its premises or from O. The only premise-free instances, root Hyper with `n = 0`
+        and Pred into `v_r` with no premise, are limited by HOWL's reading to `U_H`.
+      - **F2. Every rewrite rule of every fragment is over U.** `N_t` grounds only `x` and `y`
+        (by `σ_t`), and `S_{v_r}` has no `x` (Definition 3). `R_{R_t}` comes from `R_c`
+        (D.4.1), and the default rule is `t ⇒ c`. So no rule names a constant of
+        `Σ_u^O \ U`.
+
+      Read Appendix D with `Σ_u^O` replaced by U, and its Herbrand universe by the ground terms
+      over `U ∪ {c}`, `Σ_f^O`, the predicates of O and Q, and `true`:
+      - Appendix C's Lemmas 3 to 6 are generic.
+      - D.2's `R_{R_t}`, `Δ_{R_t}`, L1 to L7, Definitions 10 to 12, O1 to O3 and `>_t` range over
+        U. They only bound `Γ_t`, `Δ_t` and the neighbourhood, which F2 keeps inside the universe.
+      - Lemmas 7 to 23 keep their proofs: each `u` they use is taken from a clause or a rule
+        (F2).
+      - Lemma 24 holds for `u ∈ U`, if Lemma 9 is applied to the clause of `S_v` that contains
+        Nom's conclusion up to redundancy, not to the conclusion itself. That clause's constants
+        occur in D. A child constant absent from D is never named. (Definition 6's clauses (82),
+        which do name such children, are not used to build the countermodel, which is a model of
+        O, not of `C_D`; a sound initial structure stays a hypothesis of the theorem. Every
+        inference HOWL makes is a Table 2 or Table 3 inference, so Theorem 1 is untouched.)
+      - Lemma 26 needs root Hyper with `n = 0` only for `σ(x) ∈ U_H`.
+      - Lemmas 27 to 31: the chain's constants `o₁, …, oₙ` occur in D, and `o₀` is in O. The
+        witnesses come from D's clauses, and "greatest" ranges over a finite set.
+      - D.4.1 builds fragments for `c`, for each `R_c`-irreducible `t ∈ U` and for each `f(t′)`.
+        A constant's fragment uses only `R_c`, and `f(t′)`'s only `R_{t′}`, so the induction never
+        uses a hypothesis about an absent constant.
+      - Lemma 32: the precedence is finite, so the path order is well-founded. On `Σ_u^O` the
+        proof's "since ≻m is a-admissible, it is well-founded" does not follow: `o_{S¹} ≻m o_{S²}
+        ≻m …` is a-admissible.
+      - Lemmas 33 to 38 hold with U for `Σ_u^O`.
+      - Lemma 39: for `t ∈ U`, the case `n = 0` needs `⊤ → Δ{x ↦ t} ∈̂ S_{v_r}`, which
+        saturation under HOWL's reading supplies, since `t ∈ U_H`.
+      - Lemma 40 is unchanged: `nf(c)` is `c` itself or a constant of U.
+
+      Then `R*` is a Herbrand model of O over this universe that refutes `Γ_Q → Δ_Q`, and its
+      quotient, expanded arbitrarily to the rest of the signature, shows `O ⊭ Γ_Q → Δ_Q`. The
+      paper restricts its universe the same way elsewhere: `c ∉ Σ_u^O` (D.1), and constants outside
+      `Σ_u^O` and terms over `Σ_f \ Σ_f^O` get no fragment, though Lemma 38's proof assumes every
+      irreducible term has one. The restriction needs `U_H ⊇ Orig(O)` even for an individual no
+      clause mentions, because the proof builds a root fragment for each.
+
+      **What this establishes:** every step of Appendix D that depends on which constants exist
+      goes through over U, so E4's reading opens no gap that the literal reading lacks. It does not
+      establish Theorem 2 outright: the printed proof has three open points of its own (below).
+      Two reviewers found them, and the literal reading has each of them too.
+  - **Open points in Theorem 2's printed proof.** None is caused by E4, and none has been shown
+    to make the calculus incomplete. HOWL's completeness rests on Theorem 2, so each is a gap in
+    the argument HOWL cites until it is closed (the owner's call, flagged with slice 7e).
+    - **G1. Lemma 27's descent chain can break at a premise-free inference.** Lemma 27 traces each
+      literal mentioning `o_j` back through Definition 15's descent to a premise literal
+      mentioning `o_j`, or to the Nom that created `o_j`. Root Hyper with `n = 0` and Pred into
+      `v_r` with no premise produce literals mentioning a constant no premise mentions, and r-Pred
+      with no `Cᵢ` carries such a root clause to a non-root context. So the chain can stop with
+      neither case holding. Lemmas 29 to 31 replay inferences along the chain, and a break leaves
+      fewer than Λ links for Lemma 31's pigeonhole. Only Lemma 24's case `|ρ| = Λ` uses Lemmas 27
+      to 31. HOWL's handling is proposed with `depth-limit` (slice 7f).
+    - **G2. `N_u` can hold rules outside `u`'s neighbourhood.** `N_u` takes every ground instance
+      of `S_{v_r}` whose body is in `Γ_u` (D.2.1), and such a clause can mention `f(u″)` for
+      `u″ ≠ u`. Definition 11's neighbourhood of `u` omits that term, and `>_u` is defined on the
+      neighbourhood. Lemma 33 assumes `f(t)`'s rules arise only in `R_t`.
+    - **G3. A reducible `c`.** When `c` is reducible in `R_c`, D.4.1 drops `R_c` from `R`, while a
+      default fragment can still add `f(t′) ⇒ c`. So `c` can be an irreducible term of `R`
+      without being irreducible in `R_c`, which Lemma 39 assumes ("if c appears, then it is
+      irreducible w.r.t. `R_c`").
 
 **S4 — queries, and what the report reads.**
 - **Initialisation** (Algorithm 1, steps A1–A2) creates:
@@ -2387,8 +2475,37 @@ is fixed here so that reports are input-determined.
   exactly one atom `B(f(x))` of `O` and `B(x) ∈ K1`, and `v_⊤` otherwise.
   - It is admissible: Definition 9, at most one context per class name.
   - It makes successor contexts and query contexts one family.
-  - With eager Hyper, it gives Proposition 12's linear correspondence on EL.
+  - It gives Proposition 12's linear correspondence on EL under S6's rounds, as the proof below
+    shows, although S6 gives Hyper no priority.
   - It is a pure function of `f` and `K1`.
+
+  **Proposition 12 under S6.** [Bate+18] Proposition 12 assumes that "the Hyper rule is applied
+  eagerly". Its proof uses that twice, in each direction of the correspondence, and for one reason:
+  for a DL2 axiom `B₁ ⊑ ∃S.B₂`, "both clauses are derived before the Succ rule is applied", so the
+  cautious strategy finds `B₂(x) ∈ K1` and picks `v_{B₂}`. S6 gives Hyper no priority, but it
+  supplies exactly that:
+  - The two clauses, `⊤ → B₂(f(x))` and `⊤ → S(x, f(x))` in `v_{B₁}`, are Hyper conclusions of the
+    DL2 axiom's two DL-clauses `B₁(x) → B₂(f(x))` and `B₁(x) → S(x, f(x))` from one premise, the
+    clause in which `B₁(x)` is maximal. So both instances run in the round after that premise
+    arrives, and both conclusions join one `Δₙ₊₁`, or were already in `Sₙ₊₁`.
+  - On EL, `f` occurs only in that axiom's clauses. So every Succ trigger for `f` is one of those
+    conclusions or descends from them, and Succ for `(v_{B₁}, f)` runs no earlier than round
+    `n + 1`, reading `Sₙ₊₁`, which holds both.
+  - What changes is the count of repeated instances, which stays within a constant factor:
+    - an instance with several premises in one `Δₙ` may run once per such premise, and an EL
+      DL-clause (DL1 or DL3) has at most two body atoms;
+    - Succ for `(v, f)` is re-checked whenever a clause contributing to its `K2` arrives (S6), and
+      on EL those are only the two clauses of `f`'s DL2 pair.
+
+    So the correspondence stays linear. The feasibility checkpoint measures inferences per class on
+    GO and EL-GALEN against `el++`.
+  - **One case is outside the argument: a context holding `⊤ → ⊥`.** There `∈̂` holds by
+    subsumption, the commit deletes the clauses `⊤ → ⊥` subsumes, and the DL2 pair may never be in
+    the store, so Succ does not fire where [BBL05]'s CR3 still adds the edge. [Bate+18]'s proof has
+    the same case: its invariant "`B₂ ∈ S(B₁)` implies `⊤ → B₂(x) ∈ S_{v_{B₁}}`" fails once Elim
+    removes that clause. The cost reading survives: `⊤ → ⊥` subsumes every clause, so once it is
+    committed it is the context's only clause and no candidate enters, and its only further
+    inferences are Pred's, which are [BBL05]'s CR5.
 
   Completeness holds for any admissible strategy (Theorem 2). Capped reports and `rounds` depend on
   which strategy runs, though, so the strategy is not a runtime option. The feasibility checkpoint
@@ -2561,8 +2678,8 @@ needs a complete run ([§6.2](#62-data-model)).
 - **Pay-as-you-go.**
   - On ELH input, the calculus is polynomial with the cautious strategy ([Bate+18] Proposition 11;
     [TGH21] Theorem 6).
-  - On EL input, with eager Hyper, its inferences correspond linearly to [BBL05]'s
-    (Proposition 12).
+  - On EL input, its inferences correspond linearly to [BBL05]'s ([Bate+18] Proposition 12). The
+    proposition assumes eager Hyper; S5 shows S6's rounds supply what its proof uses.
 - **Measured on the targets.** Sequoia, the published implementation, was run on 2026-10-07
   (Consequence 237dd717). Its saturation took 18 ms on BFO-core, 164 ms on CCO and 259 ms on RO.
   RO's 205 complex RIAs, of depth 12, compile in about 2 s.
@@ -3838,7 +3955,8 @@ row below sits on one side of that line.
 | **`sriq` clause boundary** — [TGH21] Table 1 is expanded exactly into DL-clauses, over dense ids from content | `src/sriqclauses.slop`: one function per Table 1 form, checked row by row against Table 1 (`test-sriq-table1-rows`, with DL2 over three symbols and over a ⊤ filler, and DL4 over three neighbours, over `n = 0` and with a shared `S_{B₂}` clause). On every tracked `sriq` fixture (`make test`), every clause is a DL-clause (§2.3) in its one canonical record, every id is in range and maps back, every table is in content order, and reordered input gives the same clauses. The shape, canonical-record, range, round-trip and order checks (not the reordering) also pass on all 18 vendored documents, run by hand (`howl-test sriq-dump clauses-check`). The checks themselves reject a malformed clause, record and table (`test-sriq-clause-checks-reject`). 56 mutants: 53 seen red; the other 3 each exposed a check that another already made, now removed | **Owed** — the expansions build lists in loops, whose lengths and contents the checker does not track (as `sort-range`); the tests stand in |
 | **`sriq` context order** — Sequoia's order (§5.5 S5) is implemented exactly, and is admissible | `src/sriqorder.slop`'s case table. Z3 proves [TGH21] §4.2's items 1 to 3 on a-terms, item 4 (everything else is above `true`), item 5 (a p-term is above `x` and `y`), that `x` and `y` are never compared with a constant, that no a-term is above a p-term, that distinct predicates are never compared, and that `⋗` on constants is irreflexive. `test-sriq-order-closure` builds the least order containing a literal LPO and items 1 to 7, by closure over a bounded universe of Definition 2's context terms (eight constants, labels up to length 2, every `f(u)`), and requires the table to equal it pair by pair. Over the same universe the table is irreflexive, asymmetric and transitive, and meets Definition 7 (1) to (3) and Theorem 2's C2. Maximality is checked row by row, and the literal order is strict. 25 mutants, all seen red | **Partly** — the items above are proved. Transitivity, asymmetry and irreflexivity beyond constants, the multiset extension and the label walk (loops) are held by the tests |
 | **`sriq` redundancy and commit** — `∈̂` is [TGH21] §2.1's, and S6's commit leaves `min(W ∪ C)` | `src/sriqsubsume.slop`. Z3 proves `in-hat` both ways through a checked `@loop-invariant` over `(list-visited ws)`, as `ksc-join`: it holds exactly when `c` is a tautology or some member subsumes it. `subsumes` and `tautology` (merge walks over canonical clauses) are held by rows of each case of `∈̂`, with no substitution. R1: in every one of the 720 orders of six candidates (a tautology, a subsumed and a subsuming candidate, and an insertion undone later in the same commit), the commit leaves `min(W ∪ C)` as its definition computes it, and adds exactly the new members. R2: whatever is `∈̂` before the commit is `∈̂` after it, though its subsumers are deleted. 15 mutants, all seen red | **Partly** — `in-hat` is proved relative to `subsumes` and `tautology`; those and the commit are held by the tests |
-| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`, planned), with `sound`, `complete` and `head` properties against the rule's line; Hyper and Pred split into a loop-free step and one join combinator with loop invariants, as `ksc-join`; a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Yes** — structural, once built |
+| **`sriq` single-context rules** — [TGH21] Table 2's Core, Hyper, Ineq and Factor are implemented exactly | `src/rules/sriq.slop`: one loop-free function per rule instance over premise views (`select` gives a clause's body Γ, the selected literal L, the rest of its head Δ, and whether `Δ ⊁ L`), returning the conclusion's parts and whether it fires. Z3 proves `sound` and `complete` for Ineq and Factor, each stating the rule's side conditions, and for Hyper's step (one body atom against one premise) relative to `atom-matches`, which decides whether the premise's literal is the atom under σ; `head` for Ineq; and `complete` for Core, which takes each atom of `core_v` from its caller. Hyper's fold over the body atoms (`hyper-join`) keeps the step's verdict (`hyper-finish`) and only firing steps (`extend-one`), both proved; that it reaches every choice of premises is held by rows: O1's (16) to (21) under HOWL's order, each from its premises and ontology clause, a premise's body carried, a literal that is not maximal, DL4 with a repeated neighbour (it fires, and ∈̂ (i) drops the conclusion), Example 1's root Hypers (117) and (118) (`x` bound to `o`, `z₁` to `y`), a bodiless clause on a given constant (E4), `f(x)` at the root as `f(u)`, and `S(x, x)` on one constant twice. Ineq fires on a `t ≉ t` that is not maximal. Factor is [TGH21] §3.1's example (whose order needs `f(x) ≻ g(x)`), and each side condition failing alone stops it. 37 mutants: 36 seen red; the other exposed a dead branch, now removed. Every contract was seen to fail under a mutation of its body: 16 mutants, each refuted by exactly the contract it targets | **Partly** — the per-instance functions are proved. The fold, the matching (`atom-matches`, `bind-atom`), `apply-lit` and the heads of Hyper, Factor and Core (lists built by pushes) are held by the tests |
+| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Core, Hyper, Ineq and Factor so far, in the row above; Eq, Join, Nom and Table 3's rules planned), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator; a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Planned** — structural once every rule and the reference are built |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK for `el`; [Krö10] for `el++`; [Sim12] then [TGH21] for `sriq`) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
