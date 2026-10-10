@@ -1,0 +1,414 @@
+;; ============================================================
+;; sriq's normaliser stages as OWL 2 functional syntax  —  SPEC.md §10
+;;
+;; For the normaliser differential (make diff-elim): the test binary prints
+;; a stage, the oracle converts it to Turtle, and HermiT classifies it.
+;; - Every IRI is written in full, and every entity is declared: the oracle
+;;   refuses a guessed declaration.
+;; - HOWL's own names get urn:howl: IRIs: S2/S5's A_k is urn:howl:a:k, and
+;;   P̄ is urn:howl:bar:k, k its place in the sorted bars.
+;; - A one-operand ⊓ or ⊔ is its operand; an empty ⊓ is ⊤, an empty ⊔ ⊥.
+;; - DL4 is its axiom, B₁ ⊑ ≤n S.B₂; S_{B₂} is the calculus's device, not
+;;   part of the theory.
+;; ============================================================
+
+(module sroiqfss
+  (@doc "sriq's normaliser stages as OWL 2 functional syntax, for the HermiT differential (SPEC 10)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_THING OWL_NOTHING))
+  (import types (RoleId DName DRole Dl1 Dl2 Dl4 DlClause))
+  (import sroiq (SConcept SAxiom SRia))
+  (import sriqnames (SriqNormal))
+  (import canon (sort-strings))
+  (import strlib (starts-with))
+
+  (export fss-axioms fss-normal)
+
+  (const OWL_NS_PREFIX String "http://www.w3.org/2002/07/owl#")
+
+  ;; ============================================================
+  ;; Text pieces
+  ;; ============================================================
+
+  (fn angle ((arena Arena) (v String))
+    (@intent "<v>")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (string-concat arena "<" (string-concat arena v ">")))
+
+  (fn call1 ((arena Arena) (f String) (a String))
+    (@intent "f(a)")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena f (string-concat arena "(" (string-concat arena a ")"))))
+
+  (fn call2 ((arena Arena) (f String) (a String) (b String))
+    (@intent "f(a b)")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (call1 arena f (string-concat arena a (string-concat arena " " b))))
+
+  (fn call3 ((arena Arena) (f String) (a String) (b String) (c String))
+    (@intent "f(a b c)")
+    (@spec ((Arena String String String String) -> String))
+    (@alloc arena)
+    (call2 arena f a (string-concat arena b (string-concat arena " " c))))
+
+  (fn joined ((arena Arena) (parts (List String)))
+    (@intent "Parts, space-separated")
+    (@spec ((Arena (List String)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (p parts)
+          (do (when (not first) (set! out (string-concat arena out " ")))
+              (set! out (string-concat arena out p))
+              (set! first false)))
+        out)))
+
+  (fn junction ((arena Arena) (f String) (parts (List String)) (empty String))
+    (@intent "f(p₁ … pₙ); one part is itself, none is the unit")
+    (@spec ((Arena String (List String) String) -> String))
+    (@alloc arena)
+    (cond
+      ((== (list-len parts) 0) empty)
+      ((== (list-len parts) 1) (match (list-get parts 0) ((some p) p) ((none) empty)))
+      (else (call1 arena f (joined arena parts)))))
+
+  (fn thing ((arena Arena))
+    (@intent "owl:Thing")
+    (@spec ((Arena) -> String))
+    (@alloc arena)
+    (angle arena OWL_THING))
+
+  (fn nothing ((arena Arena))
+    (@intent "owl:Nothing")
+    (@spec ((Arena) -> String))
+    (@alloc arena)
+    (angle arena OWL_NOTHING))
+
+  ;; ============================================================
+  ;; The SROIQ working form (S0, S1)
+  ;; ============================================================
+
+  (fn role-text ((arena Arena) (r RoleId))
+    (@intent "A role: <P>, or ObjectInverseOf(<P>)")
+    (@spec ((Arena RoleId) -> String))
+    (@alloc arena)
+    (match r
+      ((named-role i)   (angle arena (. i value)))
+      ((inverse-role i) (call1 arena "ObjectInverseOf" (angle arena (. i value))))
+      ((fresh-role k)   (angle arena (string-concat arena "urn:howl:role:" (int-to-string arena (cast Int k)))))))
+
+  (fn concepts-text ((arena Arena) (cs (List SConcept)))
+    (@intent "Each concept's text")
+    (@spec ((Arena (List SConcept)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (c cs) (list-push out (concept-text arena c))) out)))
+
+  (fn concept-text ((arena Arena) (c SConcept))
+    (@intent "A concept as an OWL class expression")
+    (@spec ((Arena SConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((sc-top)           (thing arena))
+      ((sc-bottom)        (nothing arena))
+      ((sc-name i)        (angle arena (. i value)))
+      ((sc-nominal i)     (call1 arena "ObjectOneOf" (angle arena (. i value))))
+      ((sc-not f)         (call1 arena "ObjectComplementOf" (concept-text arena (deref f))))
+      ((sc-and xs)        (junction arena "ObjectIntersectionOf" (concepts-text arena xs) (thing arena)))
+      ((sc-or xs)         (junction arena "ObjectUnionOf" (concepts-text arena xs) (nothing arena)))
+      ((sc-some r f)      (call2 arena "ObjectSomeValuesFrom" (role-text arena r) (concept-text arena (deref f))))
+      ((sc-all r f)       (call2 arena "ObjectAllValuesFrom" (role-text arena r) (concept-text arena (deref f))))
+      ((sc-atleast n r f) (call3 arena "ObjectMinCardinality" (int-to-string arena n) (role-text arena r) (concept-text arena (deref f))))
+      ((sc-atmost n r f)  (call3 arena "ObjectMaxCardinality" (int-to-string arena n) (role-text arena r) (concept-text arena (deref f))))
+      ((sc-self r)        (call1 arena "ObjectHasSelf" (role-text arena r)))))
+
+  (fn roles-text ((arena Arena) (rs (List RoleId)))
+    (@intent "Each role's text")
+    (@spec ((Arena (List RoleId)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (r rs) (list-push out (role-text arena r))) out)))
+
+  (fn ria-text ((arena Arena) (x SRia))
+    (@intent "R ⊑ S, or a chain R₁ ∘ … ∘ Rₙ ⊑ S")
+    (@spec ((Arena SRia) -> String))
+    (@alloc arena)
+    (let ((sub (if (== (list-len (. x word)) 1)
+                 (joined arena (roles-text arena (. x word)))
+                 (call1 arena "ObjectPropertyChain" (joined arena (roles-text arena (. x word)))))))
+      (call2 arena "SubObjectPropertyOf" sub (role-text arena (. x super)))))
+
+  (fn axiom-text ((arena Arena) (a SAxiom))
+    (@intent "An axiom of the working form as an OWL axiom")
+    (@spec ((Arena SAxiom) -> String))
+    (@alloc arena)
+    (match a
+      ((sa-gci l r) (call2 arena "SubClassOf" (concept-text arena (deref l)) (concept-text arena (deref r))))
+      ((sa-ria x)   (ria-text arena x))
+      ((sa-ref r)   (call1 arena "ReflexiveObjectProperty" (role-text arena r)))
+      ((sa-irr r)   (call1 arena "IrreflexiveObjectProperty" (role-text arena r)))
+      ((sa-dis r s) (call2 arena "DisjointObjectProperties" (role-text arena r) (role-text arena s)))))
+
+  ;; ------------------------------------------------------------
+  ;; Declarations: every class, property and individual named
+  ;; ------------------------------------------------------------
+
+  (fn declare ((arena Arena) (kind String) (v String))
+    (@intent "Declaration(kind(<v>)), or nothing for OWL's own vocabulary")
+    (@spec ((Arena String String) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (when (not (starts-with v OWL_NS_PREFIX))
+            (list-push out (call1 arena "Declaration" (call1 arena kind (angle arena v)))))
+          out)))
+
+  (fn role-decls ((arena Arena) (r RoleId))
+    (@intent "A role's property")
+    (@spec ((Arena RoleId) -> (List String)))
+    (@alloc arena)
+    (match r
+      ((named-role i)   (declare arena "ObjectProperty" (. i value)))
+      ((inverse-role i) (declare arena "ObjectProperty" (. i value)))
+      ((fresh-role k)   (declare arena "ObjectProperty" (string-concat arena "urn:howl:role:" (int-to-string arena (cast Int k)))))))
+
+  (fn concept-decls ((arena Arena) (c SConcept))
+    (@intent "Every name inside a concept")
+    (@spec ((Arena SConcept) -> (List String)))
+    (@alloc arena)
+    (match c
+      ((sc-top)           (list-new arena String))
+      ((sc-bottom)        (list-new arena String))
+      ((sc-name i)        (declare arena "Class" (. i value)))
+      ((sc-nominal i)     (declare arena "NamedIndividual" (. i value)))
+      ((sc-not f)         (concept-decls arena (deref f)))
+      ((sc-and xs)        (concepts-decls arena xs))
+      ((sc-or xs)         (concepts-decls arena xs))
+      ((sc-some r f)      (append2 arena (role-decls arena r) (concept-decls arena (deref f))))
+      ((sc-all r f)       (append2 arena (role-decls arena r) (concept-decls arena (deref f))))
+      ((sc-atleast _ r f) (append2 arena (role-decls arena r) (concept-decls arena (deref f))))
+      ((sc-atmost _ r f)  (append2 arena (role-decls arena r) (concept-decls arena (deref f))))
+      ((sc-self r)        (role-decls arena r))))
+
+  (fn concepts-decls ((arena Arena) (cs (List SConcept)))
+    (@intent "concept-decls over a list")
+    (@spec ((Arena (List SConcept)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (c cs) (for-each (d (concept-decls arena c)) (list-push out d))) out)))
+
+  (fn append2 ((arena Arena) (a (List String)) (b (List String)))
+    (@intent "a, then b")
+    (@spec ((Arena (List String) (List String)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (x a) (list-push out x)) (for-each (x b) (list-push out x)) out)))
+
+  (fn axiom-decls ((arena Arena) (a SAxiom))
+    (@intent "Every name an axiom uses")
+    (@spec ((Arena SAxiom) -> (List String)))
+    (@alloc arena)
+    (match a
+      ((sa-gci l r) (append2 arena (concept-decls arena (deref l)) (concept-decls arena (deref r))))
+      ((sa-ria x)
+        (let ((mut out (role-decls arena (. x super))))
+          (do (for-each (r (. x word)) (for-each (d (role-decls arena r)) (list-push out d))) out)))
+      ((sa-ref r)   (role-decls arena r))
+      ((sa-irr r)   (role-decls arena r))
+      ((sa-dis r s) (append2 arena (role-decls arena r) (role-decls arena s)))))
+
+  (fn unique-sorted ((arena Arena) (xs (List String)))
+    (@intent "Sorted, each once")
+    (@spec ((Arena (List String)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String))
+          (mut last ""))
+      (do
+        (for-each (x (sort-strings arena xs))
+          (when (or (== (list-len out) 0) (not (string-eq x last)))
+            (do (list-push out x) (set! last x))))
+        out)))
+
+  (fn document ((arena Arena) (decls (List String)) (axioms (List String)))
+    (@intent "The ontology document: declarations sorted and deduped, then the axioms")
+    (@spec ((Arena (List String) (List String)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (list-push out "Ontology(<urn:howl:dump>")
+        (for-each (d (unique-sorted arena decls)) (list-push out d))
+        (for-each (a axioms) (list-push out a))
+        (list-push out ")")
+        out)))
+
+  (fn class-decls ((arena Arena) (classes (List IRI)))
+    (@intent "The input's class names, declared, so every stage has the same signature")
+    (@spec ((Arena (List IRI)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (c classes) (for-each (d (declare arena "Class" (. c value))) (list-push out d))) out)))
+
+  (fn fss-axioms ((arena Arena) (classes (List IRI)) (axs (List SAxiom)))
+    (@intent "A SROIQ stage (S0, S1) as an OWL 2 functional-syntax document, one line each")
+    (@spec ((Arena (List IRI) (List SAxiom)) -> (List String)))
+    (@alloc arena)
+    (let ((mut decls (class-decls arena classes))
+          (mut lines (list-new arena String)))
+      (do
+        (for-each (a axs)
+          (do (for-each (d (axiom-decls arena a)) (list-push decls d))
+              (list-push lines (axiom-text arena a))))
+        (document arena decls lines))))
+  ;; ============================================================
+  ;; S2's clauses with S5's ids, as their Table 1 axioms
+  ;; ============================================================
+
+  (fn fresh-iri ((arena Arena) (k Int))
+    (@intent "A_k's IRI")
+    (@spec ((Arena Int) -> String))
+    (@alloc arena)
+    (string-concat arena "urn:howl:a:" (int-to-string arena k)))
+
+  (fn bar-index ((bars (List IRI)) (p IRI))
+    (@intent "P's place among the sorted bars, -1 if none")
+    (@spec (((List IRI) IRI) -> Int))
+    (@pure)
+    (let ((mut k 0)
+          (mut found -1))
+      (do (for-each (b bars) (do (when (string-eq (. b value) (. p value)) (set! found k)) (set! k (+ k 1))))
+          found)))
+
+  (fn bar-iri ((arena Arena) (bars (List IRI)) (p IRI))
+    (@intent "P̄'s IRI")
+    (@spec ((Arena (List IRI) IRI) -> String))
+    (@alloc arena)
+    (string-concat arena "urn:howl:bar:" (int-to-string arena (bar-index bars p))))
+
+  (fn dname-iri ((arena Arena) (n DName))
+    (@intent "A class name's IRI, a fresh one's urn:howl:a:k")
+    (@spec ((Arena DName) -> String))
+    (@alloc arena)
+    (match n ((dn-class i) (. i value)) ((dn-fresh k) (fresh-iri arena (cast Int k)))))
+
+  (fn dname-text ((arena Arena) (n DName))
+    (@intent "<iri>")
+    (@spec ((Arena DName) -> String))
+    (@alloc arena)
+    (angle arena (dname-iri arena n)))
+
+  (fn drole-iri ((arena Arena) (bars (List IRI)) (r DRole))
+    (@intent "A role name's IRI; S_{B₂} only appears in DL4, which is rendered without it")
+    (@spec ((Arena (List IRI) DRole) -> String))
+    (@alloc arena)
+    (match r
+      ((dr-prop i) (. i value))
+      ((dr-bar i)  (bar-iri arena bars i))
+      ((dr-sub k)  (string-concat arena "urn:howl:sub:" (int-to-string arena (cast Int k))))))
+
+  (fn drole-text ((arena Arena) (bars (List IRI)) (r DRole))
+    (@intent "<iri>")
+    (@spec ((Arena (List IRI) DRole) -> String))
+    (@alloc arena)
+    (angle arena (drole-iri arena bars r)))
+
+  (fn dnames-text ((arena Arena) (ns (List DName)))
+    (@intent "Each name's text")
+    (@spec ((Arena (List DName)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (n ns) (list-push out (dname-text arena n))) out)))
+
+  (fn filler-text ((arena Arena) (b (Option DName)))
+    (@intent "A filler, ⊤ for none")
+    (@spec ((Arena (Option DName)) -> String))
+    (@alloc arena)
+    (match b ((none) (thing arena)) ((some n) (dname-text arena n))))
+
+  (fn count-text ((arena Arena) (f String) (n Int) (role String) (filler String))
+    (@intent "ObjectMin/MaxCardinality(n R B)")
+    (@spec ((Arena String Int String String) -> String))
+    (@alloc arena)
+    (call3 arena f (int-to-string arena n) role filler))
+
+  (fn clause-text ((arena Arena) (bars (List IRI)) (c DlClause))
+    (@intent "A clause as the OWL axiom Table 1 gives it")
+    (@spec ((Arena (List IRI) DlClause) -> String))
+    (@alloc arena)
+    (match c
+      ((dl1 d)
+        (call2 arena "SubClassOf" (junction arena "ObjectIntersectionOf" (dnames-text arena (. d body)) (thing arena))
+                                  (junction arena "ObjectUnionOf" (dnames-text arena (. d head)) (nothing arena))))
+      ((dl2 d)
+        (call2 arena "SubClassOf" (dname-text arena (. d sub))
+          (count-text arena "ObjectMinCardinality" (. d count) (drole-text arena bars (. d role)) (filler-text arena (. d filler)))))
+      ((dl3 s b1 b2)
+        (call2 arena "SubClassOf" (call2 arena "ObjectSomeValuesFrom" (drole-text arena bars s) (dname-text arena b1)) (dname-text arena b2)))
+      ((dl4 d)
+        (call2 arena "SubClassOf" (dname-text arena (. d sub))
+          (count-text arena "ObjectMaxCardinality" (. d count) (drole-text arena bars (. d role)) (filler-text arena (. d filler)))))
+      ((dl5 b s)  (call2 arena "SubClassOf" (dname-text arena b) (call1 arena "ObjectHasSelf" (drole-text arena bars s))))
+      ((dl6 s b)  (call2 arena "SubClassOf" (call1 arena "ObjectHasSelf" (drole-text arena bars s)) (dname-text arena b)))
+      ((dl7 a b)  (call2 arena "SubObjectPropertyOf" (drole-text arena bars a) (drole-text arena bars b)))
+      ((dl8 a b)  (call2 arena "SubObjectPropertyOf" (drole-text arena bars a) (call1 arena "ObjectInverseOf" (drole-text arena bars b))))
+      ((dl9 a b)  (call2 arena "DisjointObjectProperties" (drole-text arena bars a) (drole-text arena bars b)))
+      ((dl10 o b) (call2 arena "SubClassOf" (call1 arena "ObjectOneOf" (angle arena (. o value))) (dname-text arena b)))
+      ((dl11 b o) (call2 arena "SubClassOf" (dname-text arena b) (call1 arena "ObjectOneOf" (angle arena (. o value)))))))
+
+  (fn dname-decls ((arena Arena) (n DName))
+    (@intent "A class name, declared")
+    (@spec ((Arena DName) -> (List String)))
+    (@alloc arena)
+    (declare arena "Class" (dname-iri arena n)))
+
+  (fn filler-decls ((arena Arena) (b (Option DName)))
+    (@intent "A filler's name, declared")
+    (@spec ((Arena (Option DName)) -> (List String)))
+    (@alloc arena)
+    (match b ((none) (list-new arena String)) ((some n) (dname-decls arena n))))
+
+  (fn drole-decls ((arena Arena) (bars (List IRI)) (r DRole))
+    (@intent "A role name's property, declared")
+    (@spec ((Arena (List IRI) DRole) -> (List String)))
+    (@alloc arena)
+    (declare arena "ObjectProperty" (drole-iri arena bars r)))
+
+  (fn dnames-decls ((arena Arena) (ns (List DName)))
+    (@intent "dname-decls over a list")
+    (@spec ((Arena (List DName)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (n ns) (for-each (d (dname-decls arena n)) (list-push out d))) out)))
+
+  (fn clause-decls ((arena Arena) (bars (List IRI)) (c DlClause))
+    (@intent "Every name a clause uses (DL4's S_{B₂} is not rendered, so not declared)")
+    (@spec ((Arena (List IRI) DlClause) -> (List String)))
+    (@alloc arena)
+    (match c
+      ((dl1 d)     (append2 arena (dnames-decls arena (. d body)) (dnames-decls arena (. d head))))
+      ((dl2 d)     (append2 arena (append2 arena (dname-decls arena (. d sub)) (drole-decls arena bars (. d role))) (filler-decls arena (. d filler))))
+      ((dl3 s a b) (append2 arena (drole-decls arena bars s) (append2 arena (dname-decls arena a) (dname-decls arena b))))
+      ((dl4 d)     (append2 arena (append2 arena (dname-decls arena (. d sub)) (drole-decls arena bars (. d role))) (filler-decls arena (. d filler))))
+      ((dl5 b s)   (append2 arena (dname-decls arena b) (drole-decls arena bars s)))
+      ((dl6 s b)   (append2 arena (drole-decls arena bars s) (dname-decls arena b)))
+      ((dl7 a b)   (append2 arena (drole-decls arena bars a) (drole-decls arena bars b)))
+      ((dl8 a b)   (append2 arena (drole-decls arena bars a) (drole-decls arena bars b)))
+      ((dl9 a b)   (append2 arena (drole-decls arena bars a) (drole-decls arena bars b)))
+      ((dl10 o b)  (append2 arena (declare arena "NamedIndividual" (. o value)) (dname-decls arena b)))
+      ((dl11 b o)  (append2 arena (dname-decls arena b) (declare arena "NamedIndividual" (. o value))))))
+
+  (fn fss-normal ((arena Arena) (n SriqNormal))
+    (@intent "S2's clauses with S5's ids as an OWL 2 functional-syntax document, one line each")
+    (@spec ((Arena SriqNormal) -> (List String)))
+    (@alloc arena)
+    (let ((mut decls (class-decls arena (. n classes)))
+          (mut lines (list-new arena String)))
+      (do
+        (for-each (c (. n clauses))
+          (do (for-each (d (clause-decls arena (. n bars) c)) (list-push decls d))
+              (list-push lines (clause-text arena (. n bars) c))))
+        (document arena decls lines))))
+)

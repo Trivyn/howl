@@ -42,7 +42,7 @@ ALL_SRCS    := $(wildcard $(CSRC)/*.c)
 SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
-.PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
+.PHONY: all cli lib test test-bin diff-elim diff-elim-corpus clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan golden-asan c-example crate-vendor crate-build crate-test crate-package crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-el++ bench-check abox-fuzz
@@ -99,10 +99,26 @@ cli: $(BIN)
 test: $(BIN)
 	@if grep -rnE 'now-ms|slop_now_ms|clock_gettime|gettimeofday|timespec_get|mach_absolute_time|\btime\(|\bclock\(' src/; then \
 	  echo "FAIL: a clock read under src/ -- the engine never consults a clock (SPEC.md §6.8)"; exit 1; fi
-	@echo "Building tests..."
-	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test
+	@$(MAKE) --no-print-directory test-bin
 	@echo "Running tests..."
 	$(BIN)/howl-test
+
+# The test binary alone. With `sriq-dump STAGE FILE` it prints one of sriq's
+# normaliser stages as OWL 2 functional syntax, for diff-elim below.
+test-bin: $(BIN)
+	@echo "Building tests..."
+	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test
+
+# The normaliser differential (SPEC.md §10): each of sriq's normaliser stages,
+# printed as OWL and classified by HermiT, must agree with the input over its
+# class names. diff-elim runs the tracked fixtures (CI); diff-elim-corpus runs
+# BFO-core, CCO and RO (local; `--record` writes corpus/elim-differential.txt).
+diff-elim: test-bin oracle
+	python3 -m unittest -q corpus/test_elimcheck.py
+	python3 corpus/elimcheck.py fixtures
+
+diff-elim-corpus: test-bin oracle
+	python3 corpus/elimcheck.py corpus --record
 
 # The test harness under AddressSanitizer. Saturation frees a scratch arena at
 # every barrier, so anything a round allocates there and the store keeps is a

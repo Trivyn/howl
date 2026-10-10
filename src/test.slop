@@ -38,6 +38,10 @@
   (import sroiq (SConcept SAxiom render-saxiom box-sc))
   (import sriqnormal (S0 sriq-s0 sriq-s1 S2 sriq-s2 render-dl))
   (import sriqnames (SriqNormal sriq-normalize sriq-names render-sriq-normal sriq-invariants))
+  (import sroiqfss (fss-axioms fss-normal))
+
+  (ffi "string.h"
+    (strlen ((s (Ptr U8))) U64))
   (import file (file-open file-close file-read-all))
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
@@ -6062,10 +6066,93 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
       (do (print "[PASS] ") (println name))
       (do (print "[FAIL] ") (println name))))
 
-  (fn main ()
+  ;; ------------------------------------------------------------
+  ;; sriq-dump: a normaliser stage as OWL 2 functional syntax, for the
+  ;; normaliser differential (SPEC §10, corpus/elimcheck.py). It prints
+  ;; one document to stdout; Python writes the file. With no arguments,
+  ;; main runs the suite as before.
+  ;; ------------------------------------------------------------
+
+  (fn arg-text ((argv (Ptr (Ptr U8))) (i Int))
+    (@intent "argv[i] as a String")
+    (@spec (((Ptr (Ptr U8)) Int) -> String))
+    (let ((ptr (@ argv i)))
+      (String ptr (strlen ptr))))
+
+  (fn dump-classes ((arena Arena) (sig Signature))
+    (@intent "The input's class names but ⊤ and ⊥, sorted: every stage's document declares them")
+    (@spec ((Arena Signature) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)))
+      (do
+        (for-each (c (set-elements (. sig classes)))
+          (when (not (or (string-eq (. c value) OWL_THING) (string-eq (. c value) OWL_NOTHING)))
+            (list-push out c)))
+        (sort-iris arena out))))
+
+  (fn print-lines ((ls (List String)))
+    (@intent "Each line to stdout; 0")
+    (@spec (((List String)) -> Int))
+    (do (for-each (l ls) (println l)) 0))
+
+  (fn dump-refused ((m String))
+    (@intent "A stage that has no document, and why; 2")
+    (@spec ((String) -> Int))
+    (do (print "refused: ") (println m) 2))
+
+  (fn dump-s1 ((arena Arena) (gr GateResult) (r (Result S0 String)))
+    (@intent "S1's output, after S0's")
+    (@spec ((Arena GateResult (Result S0 String)) -> Int))
+    (@alloc arena)
+    (match r
+      ((error m) (dump-refused m))
+      ((ok s0)
+        (match (sriq-s1 arena s0)
+          ((error m) (dump-refused m))
+          ((ok axs)  (print-lines (fss-axioms arena (dump-classes arena (. gr signature)) axs)))))))
+
+  (fn dump-stage ((arena Arena) (stage String) (gr GateResult))
+    (@intent "One stage of a gated document: info, s0, s1 or s2")
+    (@spec ((Arena String GateResult) -> Int))
+    (@alloc arena)
+    (cond
+      ((string-eq stage "info")
+        (do (print "omitted ") (println (int-to-string arena (cast Int (list-len (. gr omissions)))))
+            (print "accepted ") (println (int-to-string arena (cast Int (list-len (. gr accepted)))))
+            (for-each (c (dump-classes arena (. gr signature))) (do (print "class ") (println (. c value))))
+            0))
+      ((string-eq stage "s0")
+        (match (sriq-s0 arena (. gr accepted))
+          ((error m) (dump-refused m))
+          ((ok s0)   (print-lines (fss-axioms arena (dump-classes arena (. gr signature)) (. s0 axioms))))))
+      ((string-eq stage "s1") (dump-s1 arena gr (sriq-s0 arena (. gr accepted))))
+      ((string-eq stage "s2")
+        (match (sriq-normalize arena (. gr accepted) (. gr signature))
+          ((error m) (dump-refused m))
+          ((ok n)    (print-lines (fss-normal arena n)))))
+      (else (dump-refused "the stages are info, s0, s1 and s2"))))
+
+  (fn sriq-dump ((arena Arena) (stage String) (path String))
+    (@intent "A file, gated under sriq, then one stage of it")
+    (@spec ((Arena String String) -> Int))
+    (@alloc arena)
+    (match (gate-fixture-in arena path 'profile-sriq)
+      ((none)    (dump-refused "the file did not parse or gate"))
+      ((some gr) (dump-stage arena stage gr))))
+
+  (fn main ((argc Int) (argv (Ptr (Ptr U8))))
+    (@intent "Run the suite; or, as `sriq-dump STAGE FILE`, print a normaliser stage (SPEC §10)")
+    (@spec ((Int (Ptr (Ptr U8))) -> Int))
+    :c-name "main"
+    (cond
+      ((== argc 1) (run-suite))
+      ((and (== argc 4) (string-eq (arg-text argv 1) "sriq-dump"))
+        (with-arena 4194304 (sriq-dump arena (arg-text argv 2) (arg-text argv 3))))
+      (else (do (println "usage: howl-test [sriq-dump STAGE FILE]") 2))))
+
+  (fn run-suite ()
     (@intent "Run the verdict-discipline and structural-invariant tests")
     (@spec (() -> Int))
-    :c-name "main"
     (with-arena 4194304
       (let ((mut passed 0)
             (mut failed 0))

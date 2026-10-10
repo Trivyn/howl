@@ -30,13 +30,13 @@ slop_string sroiq_render_sconcept(slop_arena* arena, sroiq_SConcept c);
 slop_string sroiq_render_word(slop_arena* arena, slop_list_types_RoleId w);
 slop_string sroiq_render_saxiom(slop_arena* arena, sroiq_SAxiom a);
 
-typedef struct { slop_list_sroiq_SConcept xs; } sroiq__lambda_926_env_t;
+typedef struct { slop_list_sroiq_SConcept xs; } sroiq__lambda_380_env_t;
 
-static int64_t sroiq__lambda_926(sroiq__lambda_926_env_t* _env, int64_t i, int64_t j) { return sroiq_sc_cmp(sroiq_sc_at(_env->xs, i), sroiq_sc_at(_env->xs, j)); }
+static int64_t sroiq__lambda_380(sroiq__lambda_380_env_t* _env, int64_t i, int64_t j) { return sroiq_sc_cmp(sroiq_sc_at(_env->xs, i), sroiq_sc_at(_env->xs, j)); }
 
-typedef struct { slop_list_sroiq_SAxiom xs; } sroiq__lambda_931_env_t;
+typedef struct { slop_list_sroiq_SAxiom xs; } sroiq__lambda_385_env_t;
 
-static int64_t sroiq__lambda_931(sroiq__lambda_931_env_t* _env, int64_t i, int64_t j) { return sroiq_sa_cmp(sroiq_sa_at(_env->xs, i), sroiq_sa_at(_env->xs, j)); }
+static int64_t sroiq__lambda_385(sroiq__lambda_385_env_t* _env, int64_t i, int64_t j) { return sroiq_sa_cmp(sroiq_sa_at(_env->xs, i), sroiq_sa_at(_env->xs, j)); }
 
 sroiq_SConcept* sroiq_box_sc(slop_arena* arena, sroiq_SConcept c) {
     {
@@ -47,21 +47,21 @@ sroiq_SConcept* sroiq_box_sc(slop_arena* arena, sroiq_SConcept c) {
 }
 
 types_RoleId sroiq_inv_role(types_RoleId r) {
-    __auto_type _mv_902 = r;
-    switch (_mv_902.tag) {
+    __auto_type _mv_356 = r;
+    switch (_mv_356.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_902.data.named_role;
+            __auto_type i = _mv_356.data.named_role;
             return ((types_RoleId){ .tag = types_RoleId_inverse_role, .data.inverse_role = i });
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type i = _mv_902.data.inverse_role;
+            __auto_type i = _mv_356.data.inverse_role;
             return ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i });
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_902.data.fresh_role;
+            __auto_type _ = _mv_356.data.fresh_role;
             return r;
         }
     }
@@ -69,8 +69,8 @@ types_RoleId sroiq_inv_role(types_RoleId r) {
 }
 
 uint8_t sroiq_sc_top_p(sroiq_SConcept c) {
-    __auto_type _mv_903 = c;
-    switch (_mv_903.tag) {
+    __auto_type _mv_357 = c;
+    switch (_mv_357.tag) {
         case sroiq_SConcept_sc_top:
         {
             return 1;
@@ -82,8 +82,8 @@ uint8_t sroiq_sc_top_p(sroiq_SConcept c) {
 }
 
 int64_t sroiq_sc_rank(sroiq_SConcept c) {
-    __auto_type _mv_904 = c;
-    switch (_mv_904.tag) {
+    __auto_type _mv_358 = c;
+    switch (_mv_358.tag) {
         case sroiq_SConcept_sc_top:
         {
             return 0;
@@ -94,27 +94,27 @@ int64_t sroiq_sc_rank(sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_name:
         {
-            __auto_type _ = _mv_904.data.sc_name;
+            __auto_type _ = _mv_358.data.sc_name;
             return 2;
         }
         case sroiq_SConcept_sc_nominal:
         {
-            __auto_type _ = _mv_904.data.sc_nominal;
+            __auto_type _ = _mv_358.data.sc_nominal;
             return 3;
         }
         case sroiq_SConcept_sc_not:
         {
-            __auto_type _ = _mv_904.data.sc_not;
+            __auto_type _ = _mv_358.data.sc_not;
             return 4;
         }
         case sroiq_SConcept_sc_and:
         {
-            __auto_type _ = _mv_904.data.sc_and;
+            __auto_type _ = _mv_358.data.sc_and;
             return 5;
         }
         case sroiq_SConcept_sc_or:
         {
-            __auto_type _ = _mv_904.data.sc_or;
+            __auto_type _ = _mv_358.data.sc_or;
             return 6;
         }
         case sroiq_SConcept_sc_some:
@@ -135,7 +135,7 @@ int64_t sroiq_sc_rank(sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_self:
         {
-            __auto_type _ = _mv_904.data.sc_self;
+            __auto_type _ = _mv_358.data.sc_self;
             return 11;
         }
     }
@@ -145,11 +145,11 @@ int64_t sroiq_sc_rank(sroiq_SConcept c) {
 sroiq_SConcept sroiq_sc_at(slop_list_sroiq_SConcept xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_905 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_sroiq_SConcept _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_905.has_value) {
-        __auto_type v = _mv_905.value;
+    __auto_type _mv_359 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_sroiq_SConcept _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_359.has_value) {
+        __auto_type v = _mv_359.value;
         return v;
-    } else if (!_mv_905.has_value) {
+    } else if (!_mv_359.has_value) {
         return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_top });
     }
     SLOP_UNREACHABLE();
@@ -214,8 +214,8 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
         if (ka != kb) {
             return sroiq_int_cmp(ka, kb);
         } else {
-            __auto_type _mv_906 = a;
-            switch (_mv_906.tag) {
+            __auto_type _mv_360 = a;
+            switch (_mv_360.tag) {
                 case sroiq_SConcept_sc_top:
                 {
                     return 0;
@@ -226,12 +226,12 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_name:
                 {
-                    __auto_type ia = _mv_906.data.sc_name;
-                    __auto_type _mv_907 = b;
-                    switch (_mv_907.tag) {
+                    __auto_type ia = _mv_360.data.sc_name;
+                    __auto_type _mv_361 = b;
+                    switch (_mv_361.tag) {
                         case sroiq_SConcept_sc_name:
                         {
-                            __auto_type ib = _mv_907.data.sc_name;
+                            __auto_type ib = _mv_361.data.sc_name;
                             return canon_iri_cmp(ia, ib);
                         }
                         default: {
@@ -241,12 +241,12 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_nominal:
                 {
-                    __auto_type ia = _mv_906.data.sc_nominal;
-                    __auto_type _mv_908 = b;
-                    switch (_mv_908.tag) {
+                    __auto_type ia = _mv_360.data.sc_nominal;
+                    __auto_type _mv_362 = b;
+                    switch (_mv_362.tag) {
                         case sroiq_SConcept_sc_nominal:
                         {
-                            __auto_type ib = _mv_908.data.sc_nominal;
+                            __auto_type ib = _mv_362.data.sc_nominal;
                             return canon_iri_cmp(ia, ib);
                         }
                         default: {
@@ -256,12 +256,12 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_not:
                 {
-                    __auto_type fa = _mv_906.data.sc_not;
-                    __auto_type _mv_909 = b;
-                    switch (_mv_909.tag) {
+                    __auto_type fa = _mv_360.data.sc_not;
+                    __auto_type _mv_363 = b;
+                    switch (_mv_363.tag) {
                         case sroiq_SConcept_sc_not:
                         {
-                            __auto_type fb = _mv_909.data.sc_not;
+                            __auto_type fb = _mv_363.data.sc_not;
                             return sroiq_sc_cmp((*fa), (*fb));
                         }
                         default: {
@@ -271,12 +271,12 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_and:
                 {
-                    __auto_type xs = _mv_906.data.sc_and;
-                    __auto_type _mv_910 = b;
-                    switch (_mv_910.tag) {
+                    __auto_type xs = _mv_360.data.sc_and;
+                    __auto_type _mv_364 = b;
+                    switch (_mv_364.tag) {
                         case sroiq_SConcept_sc_and:
                         {
-                            __auto_type ys = _mv_910.data.sc_and;
+                            __auto_type ys = _mv_364.data.sc_and;
                             return sroiq_sc_list_cmp(xs, ys);
                         }
                         default: {
@@ -286,12 +286,12 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_or:
                 {
-                    __auto_type xs = _mv_906.data.sc_or;
-                    __auto_type _mv_911 = b;
-                    switch (_mv_911.tag) {
+                    __auto_type xs = _mv_360.data.sc_or;
+                    __auto_type _mv_365 = b;
+                    switch (_mv_365.tag) {
                         case sroiq_SConcept_sc_or:
                         {
-                            __auto_type ys = _mv_911.data.sc_or;
+                            __auto_type ys = _mv_365.data.sc_or;
                             return sroiq_sc_list_cmp(xs, ys);
                         }
                         default: {
@@ -301,14 +301,14 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_some:
                 {
-                    __auto_type ra = _mv_906.data.sc_some.f0;
-                    __auto_type fa = _mv_906.data.sc_some.f1;
-                    __auto_type _mv_912 = b;
-                    switch (_mv_912.tag) {
+                    __auto_type ra = _mv_360.data.sc_some.f0;
+                    __auto_type fa = _mv_360.data.sc_some.f1;
+                    __auto_type _mv_366 = b;
+                    switch (_mv_366.tag) {
                         case sroiq_SConcept_sc_some:
                         {
-                            __auto_type rb = _mv_912.data.sc_some.f0;
-                            __auto_type fb = _mv_912.data.sc_some.f1;
+                            __auto_type rb = _mv_366.data.sc_some.f0;
+                            __auto_type fb = _mv_366.data.sc_some.f1;
                             return sroiq_role_then(ra, rb, (*fa), (*fb));
                         }
                         default: {
@@ -318,14 +318,14 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_all:
                 {
-                    __auto_type ra = _mv_906.data.sc_all.f0;
-                    __auto_type fa = _mv_906.data.sc_all.f1;
-                    __auto_type _mv_913 = b;
-                    switch (_mv_913.tag) {
+                    __auto_type ra = _mv_360.data.sc_all.f0;
+                    __auto_type fa = _mv_360.data.sc_all.f1;
+                    __auto_type _mv_367 = b;
+                    switch (_mv_367.tag) {
                         case sroiq_SConcept_sc_all:
                         {
-                            __auto_type rb = _mv_913.data.sc_all.f0;
-                            __auto_type fb = _mv_913.data.sc_all.f1;
+                            __auto_type rb = _mv_367.data.sc_all.f0;
+                            __auto_type fb = _mv_367.data.sc_all.f1;
                             return sroiq_role_then(ra, rb, (*fa), (*fb));
                         }
                         default: {
@@ -335,16 +335,16 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_atleast:
                 {
-                    __auto_type na = _mv_906.data.sc_atleast.f0;
-                    __auto_type ra = _mv_906.data.sc_atleast.f1;
-                    __auto_type fa = _mv_906.data.sc_atleast.f2;
-                    __auto_type _mv_914 = b;
-                    switch (_mv_914.tag) {
+                    __auto_type na = _mv_360.data.sc_atleast.f0;
+                    __auto_type ra = _mv_360.data.sc_atleast.f1;
+                    __auto_type fa = _mv_360.data.sc_atleast.f2;
+                    __auto_type _mv_368 = b;
+                    switch (_mv_368.tag) {
                         case sroiq_SConcept_sc_atleast:
                         {
-                            __auto_type nb = _mv_914.data.sc_atleast.f0;
-                            __auto_type rb = _mv_914.data.sc_atleast.f1;
-                            __auto_type fb = _mv_914.data.sc_atleast.f2;
+                            __auto_type nb = _mv_368.data.sc_atleast.f0;
+                            __auto_type rb = _mv_368.data.sc_atleast.f1;
+                            __auto_type fb = _mv_368.data.sc_atleast.f2;
                             {
                                 __auto_type nn = sroiq_int_cmp(na, nb);
                                 if (nn != 0) {
@@ -361,16 +361,16 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_atmost:
                 {
-                    __auto_type na = _mv_906.data.sc_atmost.f0;
-                    __auto_type ra = _mv_906.data.sc_atmost.f1;
-                    __auto_type fa = _mv_906.data.sc_atmost.f2;
-                    __auto_type _mv_915 = b;
-                    switch (_mv_915.tag) {
+                    __auto_type na = _mv_360.data.sc_atmost.f0;
+                    __auto_type ra = _mv_360.data.sc_atmost.f1;
+                    __auto_type fa = _mv_360.data.sc_atmost.f2;
+                    __auto_type _mv_369 = b;
+                    switch (_mv_369.tag) {
                         case sroiq_SConcept_sc_atmost:
                         {
-                            __auto_type nb = _mv_915.data.sc_atmost.f0;
-                            __auto_type rb = _mv_915.data.sc_atmost.f1;
-                            __auto_type fb = _mv_915.data.sc_atmost.f2;
+                            __auto_type nb = _mv_369.data.sc_atmost.f0;
+                            __auto_type rb = _mv_369.data.sc_atmost.f1;
+                            __auto_type fb = _mv_369.data.sc_atmost.f2;
                             {
                                 __auto_type nn = sroiq_int_cmp(na, nb);
                                 if (nn != 0) {
@@ -387,12 +387,12 @@ int64_t sroiq_sc_cmp(sroiq_SConcept a, sroiq_SConcept b) {
                 }
                 case sroiq_SConcept_sc_self:
                 {
-                    __auto_type ra = _mv_906.data.sc_self;
-                    __auto_type _mv_916 = b;
-                    switch (_mv_916.tag) {
+                    __auto_type ra = _mv_360.data.sc_self;
+                    __auto_type _mv_370 = b;
+                    switch (_mv_370.tag) {
                         case sroiq_SConcept_sc_self:
                         {
-                            __auto_type rb = _mv_916.data.sc_self;
+                            __auto_type rb = _mv_370.data.sc_self;
                             return canon_role_cmp(ra, rb);
                         }
                         default: {
@@ -414,16 +414,16 @@ int64_t sroiq_role_list_cmp(slop_list_types_RoleId a, slop_list_types_RoleId b) 
         int64_t i = 0;
         int64_t r = 0;
         while ((i < n) && (r == 0)) {
-            __auto_type _mv_917 = ({ __auto_type _lst = a; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_917.has_value) {
-                __auto_type x = _mv_917.value;
-                __auto_type _mv_918 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (_mv_918.has_value) {
-                    __auto_type y = _mv_918.value;
+            __auto_type _mv_371 = ({ __auto_type _lst = a; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_371.has_value) {
+                __auto_type x = _mv_371.value;
+                __auto_type _mv_372 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                if (_mv_372.has_value) {
+                    __auto_type y = _mv_372.value;
                     r = canon_role_cmp(x, y);
-                } else if (!_mv_918.has_value) {
+                } else if (!_mv_372.has_value) {
                 }
-            } else if (!_mv_917.has_value) {
+            } else if (!_mv_371.has_value) {
             }
             i = (i + 1);
         }
@@ -440,25 +440,25 @@ int64_t sroiq_role_list_cmp(slop_list_types_RoleId a, slop_list_types_RoleId b) 
 }
 
 int64_t sroiq_sa_rank(sroiq_SAxiom a) {
-    __auto_type _mv_919 = a;
-    switch (_mv_919.tag) {
+    __auto_type _mv_373 = a;
+    switch (_mv_373.tag) {
         case sroiq_SAxiom_sa_gci:
         {
             return 0;
         }
         case sroiq_SAxiom_sa_ria:
         {
-            __auto_type _ = _mv_919.data.sa_ria;
+            __auto_type _ = _mv_373.data.sa_ria;
             return 1;
         }
         case sroiq_SAxiom_sa_ref:
         {
-            __auto_type _ = _mv_919.data.sa_ref;
+            __auto_type _ = _mv_373.data.sa_ref;
             return 2;
         }
         case sroiq_SAxiom_sa_irr:
         {
-            __auto_type _ = _mv_919.data.sa_irr;
+            __auto_type _ = _mv_373.data.sa_irr;
             return 3;
         }
         case sroiq_SAxiom_sa_dis:
@@ -476,18 +476,18 @@ int64_t sroiq_sa_cmp(sroiq_SAxiom a, sroiq_SAxiom b) {
         if (ka != kb) {
             return sroiq_int_cmp(ka, kb);
         } else {
-            __auto_type _mv_920 = a;
-            switch (_mv_920.tag) {
+            __auto_type _mv_374 = a;
+            switch (_mv_374.tag) {
                 case sroiq_SAxiom_sa_gci:
                 {
-                    __auto_type la = _mv_920.data.sa_gci.f0;
-                    __auto_type ra = _mv_920.data.sa_gci.f1;
-                    __auto_type _mv_921 = b;
-                    switch (_mv_921.tag) {
+                    __auto_type la = _mv_374.data.sa_gci.f0;
+                    __auto_type ra = _mv_374.data.sa_gci.f1;
+                    __auto_type _mv_375 = b;
+                    switch (_mv_375.tag) {
                         case sroiq_SAxiom_sa_gci:
                         {
-                            __auto_type lb = _mv_921.data.sa_gci.f0;
-                            __auto_type rb = _mv_921.data.sa_gci.f1;
+                            __auto_type lb = _mv_375.data.sa_gci.f0;
+                            __auto_type rb = _mv_375.data.sa_gci.f1;
                             {
                                 __auto_type l = sroiq_sc_cmp((*la), (*lb));
                                 if (l != 0) {
@@ -504,12 +504,12 @@ int64_t sroiq_sa_cmp(sroiq_SAxiom a, sroiq_SAxiom b) {
                 }
                 case sroiq_SAxiom_sa_ria:
                 {
-                    __auto_type x = _mv_920.data.sa_ria;
-                    __auto_type _mv_922 = b;
-                    switch (_mv_922.tag) {
+                    __auto_type x = _mv_374.data.sa_ria;
+                    __auto_type _mv_376 = b;
+                    switch (_mv_376.tag) {
                         case sroiq_SAxiom_sa_ria:
                         {
-                            __auto_type y = _mv_922.data.sa_ria;
+                            __auto_type y = _mv_376.data.sa_ria;
                             {
                                 __auto_type s = canon_role_cmp(x.super, y.super);
                                 if (s != 0) {
@@ -526,12 +526,12 @@ int64_t sroiq_sa_cmp(sroiq_SAxiom a, sroiq_SAxiom b) {
                 }
                 case sroiq_SAxiom_sa_ref:
                 {
-                    __auto_type r = _mv_920.data.sa_ref;
-                    __auto_type _mv_923 = b;
-                    switch (_mv_923.tag) {
+                    __auto_type r = _mv_374.data.sa_ref;
+                    __auto_type _mv_377 = b;
+                    switch (_mv_377.tag) {
                         case sroiq_SAxiom_sa_ref:
                         {
-                            __auto_type q = _mv_923.data.sa_ref;
+                            __auto_type q = _mv_377.data.sa_ref;
                             return canon_role_cmp(r, q);
                         }
                         default: {
@@ -541,12 +541,12 @@ int64_t sroiq_sa_cmp(sroiq_SAxiom a, sroiq_SAxiom b) {
                 }
                 case sroiq_SAxiom_sa_irr:
                 {
-                    __auto_type r = _mv_920.data.sa_irr;
-                    __auto_type _mv_924 = b;
-                    switch (_mv_924.tag) {
+                    __auto_type r = _mv_374.data.sa_irr;
+                    __auto_type _mv_378 = b;
+                    switch (_mv_378.tag) {
                         case sroiq_SAxiom_sa_irr:
                         {
-                            __auto_type q = _mv_924.data.sa_irr;
+                            __auto_type q = _mv_378.data.sa_irr;
                             return canon_role_cmp(r, q);
                         }
                         default: {
@@ -556,14 +556,14 @@ int64_t sroiq_sa_cmp(sroiq_SAxiom a, sroiq_SAxiom b) {
                 }
                 case sroiq_SAxiom_sa_dis:
                 {
-                    __auto_type r1 = _mv_920.data.sa_dis.f0;
-                    __auto_type r2 = _mv_920.data.sa_dis.f1;
-                    __auto_type _mv_925 = b;
-                    switch (_mv_925.tag) {
+                    __auto_type r1 = _mv_374.data.sa_dis.f0;
+                    __auto_type r2 = _mv_374.data.sa_dis.f1;
+                    __auto_type _mv_379 = b;
+                    switch (_mv_379.tag) {
                         case sroiq_SAxiom_sa_dis:
                         {
-                            __auto_type q1 = _mv_925.data.sa_dis.f0;
-                            __auto_type q2 = _mv_925.data.sa_dis.f1;
+                            __auto_type q1 = _mv_379.data.sa_dis.f0;
+                            __auto_type q2 = _mv_379.data.sa_dis.f1;
                             {
                                 __auto_type c1 = canon_role_cmp(r1, q1);
                                 if (c1 != 0) {
@@ -586,7 +586,7 @@ int64_t sroiq_sa_cmp(sroiq_SAxiom a, sroiq_SAxiom b) {
 
 slop_list_sroiq_SConcept sroiq_sort_sconcepts(slop_arena* arena, slop_list_sroiq_SConcept xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sroiq__lambda_926_env_t* sroiq__lambda_926_env = (sroiq__lambda_926_env_t*)slop_arena_alloc(arena, sizeof(sroiq__lambda_926_env_t)); *sroiq__lambda_926_env = (sroiq__lambda_926_env_t){ .xs = xs }; (slop_closure_t){ (void*)sroiq__lambda_926, (void*)sroiq__lambda_926_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sroiq__lambda_380_env_t* sroiq__lambda_380_env = (sroiq__lambda_380_env_t*)slop_arena_alloc(arena, sizeof(sroiq__lambda_380_env_t)); *sroiq__lambda_380_env = (sroiq__lambda_380_env_t){ .xs = xs }; (slop_closure_t){ (void*)sroiq__lambda_380, (void*)sroiq__lambda_380_env }; }));
         __auto_type out = ((slop_list_sroiq_SConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         uint8_t have = 0;
         __auto_type last = ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_top });
@@ -609,8 +609,8 @@ slop_list_sroiq_SConcept sroiq_sort_sconcepts(slop_arena* arena, slop_list_sroiq
 }
 
 sroiq_SConcept sroiq_sc_canon(slop_arena* arena, sroiq_SConcept c) {
-    __auto_type _mv_927 = c;
-    switch (_mv_927.tag) {
+    __auto_type _mv_381 = c;
+    switch (_mv_381.tag) {
         case sroiq_SConcept_sc_top:
         {
             return c;
@@ -621,46 +621,46 @@ sroiq_SConcept sroiq_sc_canon(slop_arena* arena, sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_name:
         {
-            __auto_type _ = _mv_927.data.sc_name;
+            __auto_type _ = _mv_381.data.sc_name;
             return c;
         }
         case sroiq_SConcept_sc_nominal:
         {
-            __auto_type _ = _mv_927.data.sc_nominal;
+            __auto_type _ = _mv_381.data.sc_nominal;
             return c;
         }
         case sroiq_SConcept_sc_not:
         {
-            __auto_type f = _mv_927.data.sc_not;
+            __auto_type f = _mv_381.data.sc_not;
             return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_not, .data.sc_not = sroiq_box_sc(arena, sroiq_sc_canon(arena, (*f))) });
         }
         case sroiq_SConcept_sc_and:
         {
-            __auto_type xs = _mv_927.data.sc_and;
+            __auto_type xs = _mv_381.data.sc_and;
             return sroiq_canon_junction(arena, xs, 1);
         }
         case sroiq_SConcept_sc_or:
         {
-            __auto_type xs = _mv_927.data.sc_or;
+            __auto_type xs = _mv_381.data.sc_or;
             return sroiq_canon_junction(arena, xs, 0);
         }
         case sroiq_SConcept_sc_some:
         {
-            __auto_type r = _mv_927.data.sc_some.f0;
-            __auto_type f = _mv_927.data.sc_some.f1;
+            __auto_type r = _mv_381.data.sc_some.f0;
+            __auto_type f = _mv_381.data.sc_some.f1;
             return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_some, .data.sc_some = { .f0 = r, .f1 = sroiq_box_sc(arena, sroiq_sc_canon(arena, (*f))) } });
         }
         case sroiq_SConcept_sc_all:
         {
-            __auto_type r = _mv_927.data.sc_all.f0;
-            __auto_type f = _mv_927.data.sc_all.f1;
+            __auto_type r = _mv_381.data.sc_all.f0;
+            __auto_type f = _mv_381.data.sc_all.f1;
             return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_all, .data.sc_all = { .f0 = r, .f1 = sroiq_box_sc(arena, sroiq_sc_canon(arena, (*f))) } });
         }
         case sroiq_SConcept_sc_atleast:
         {
-            __auto_type n = _mv_927.data.sc_atleast.f0;
-            __auto_type r = _mv_927.data.sc_atleast.f1;
-            __auto_type f = _mv_927.data.sc_atleast.f2;
+            __auto_type n = _mv_381.data.sc_atleast.f0;
+            __auto_type r = _mv_381.data.sc_atleast.f1;
+            __auto_type f = _mv_381.data.sc_atleast.f2;
             if (n == 1) {
                 return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_some, .data.sc_some = { .f0 = r, .f1 = sroiq_box_sc(arena, sroiq_sc_canon(arena, (*f))) } });
             } else {
@@ -669,19 +669,19 @@ sroiq_SConcept sroiq_sc_canon(slop_arena* arena, sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_atmost:
         {
-            __auto_type n = _mv_927.data.sc_atmost.f0;
-            __auto_type r = _mv_927.data.sc_atmost.f1;
-            __auto_type f = _mv_927.data.sc_atmost.f2;
+            __auto_type n = _mv_381.data.sc_atmost.f0;
+            __auto_type r = _mv_381.data.sc_atmost.f1;
+            __auto_type f = _mv_381.data.sc_atmost.f2;
             return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_atmost, .data.sc_atmost = { .f0 = n, .f1 = r, .f2 = sroiq_box_sc(arena, sroiq_sc_canon(arena, (*f))) } });
         }
         case sroiq_SConcept_sc_self:
         {
-            __auto_type r = _mv_927.data.sc_self;
-            __auto_type _mv_928 = r;
-            switch (_mv_928.tag) {
+            __auto_type r = _mv_381.data.sc_self;
+            __auto_type _mv_382 = r;
+            switch (_mv_382.tag) {
                 case types_RoleId_inverse_role:
                 {
-                    __auto_type i = _mv_928.data.inverse_role;
+                    __auto_type i = _mv_382.data.inverse_role;
                     return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_self, .data.sc_self = ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i }) });
                 }
                 default: {
@@ -703,8 +703,8 @@ sroiq_SConcept sroiq_canon_junction(slop_arena* arena, slop_list_sroiq_SConcept 
                 __auto_type x = _coll.data[_i];
                 {
                     __auto_type cx = sroiq_sc_canon(arena, x);
-                    __auto_type _mv_929 = cx;
-                    switch (_mv_929.tag) {
+                    __auto_type _mv_383 = cx;
+                    switch (_mv_383.tag) {
                         case sroiq_SConcept_sc_top:
                         {
                             if (!(conj)) {
@@ -721,7 +721,7 @@ sroiq_SConcept sroiq_canon_junction(slop_arena* arena, slop_list_sroiq_SConcept 
                         }
                         case sroiq_SConcept_sc_and:
                         {
-                            __auto_type ys = _mv_929.data.sc_and;
+                            __auto_type ys = _mv_383.data.sc_and;
                             if (conj) {
                                 {
                                     __auto_type _coll = ys;
@@ -737,7 +737,7 @@ sroiq_SConcept sroiq_canon_junction(slop_arena* arena, slop_list_sroiq_SConcept 
                         }
                         case sroiq_SConcept_sc_or:
                         {
-                            __auto_type ys = _mv_929.data.sc_or;
+                            __auto_type ys = _mv_383.data.sc_or;
                             if (conj) {
                                 ({ __auto_type _lst_p = &(flat); __auto_type _item = (cx); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             } else {
@@ -791,11 +791,11 @@ sroiq_SConcept sroiq_canon_junction(slop_arena* arena, slop_list_sroiq_SConcept 
 sroiq_SAxiom sroiq_sa_at(slop_list_sroiq_SAxiom xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_930 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_930.has_value) {
-        __auto_type v = _mv_930.value;
+    __auto_type _mv_384 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_384.has_value) {
+        __auto_type v = _mv_384.value;
         return v;
-    } else if (!_mv_930.has_value) {
+    } else if (!_mv_384.has_value) {
         return ((sroiq_SAxiom){ .tag = sroiq_SAxiom_sa_ref, .data.sa_ref = ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = 0 }) });
     }
     SLOP_UNREACHABLE();
@@ -803,7 +803,7 @@ sroiq_SAxiom sroiq_sa_at(slop_list_sroiq_SAxiom xs, int64_t i) {
 
 slop_list_sroiq_SAxiom sroiq_sort_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sroiq__lambda_931_env_t* sroiq__lambda_931_env = (sroiq__lambda_931_env_t*)slop_arena_alloc(arena, sizeof(sroiq__lambda_931_env_t)); *sroiq__lambda_931_env = (sroiq__lambda_931_env_t){ .xs = xs }; (slop_closure_t){ (void*)sroiq__lambda_931, (void*)sroiq__lambda_931_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sroiq__lambda_385_env_t* sroiq__lambda_385_env = (sroiq__lambda_385_env_t*)slop_arena_alloc(arena, sizeof(sroiq__lambda_385_env_t)); *sroiq__lambda_385_env = (sroiq__lambda_385_env_t){ .xs = xs }; (slop_closure_t){ (void*)sroiq__lambda_385, (void*)sroiq__lambda_385_env }; }));
         __auto_type out = ((slop_list_sroiq_SAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -837,21 +837,21 @@ slop_list_sroiq_SAxiom sroiq_dedupe_saxioms(slop_arena* arena, slop_list_sroiq_S
 }
 
 slop_string sroiq_role_key_s(slop_arena* arena, types_RoleId r) {
-    __auto_type _mv_932 = r;
-    switch (_mv_932.tag) {
+    __auto_type _mv_386 = r;
+    switch (_mv_386.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_932.data.named_role;
+            __auto_type i = _mv_386.data.named_role;
             return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type i = _mv_932.data.inverse_role;
+            __auto_type i = _mv_386.data.inverse_role;
             return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">^")));
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type k = _mv_932.data.fresh_role;
+            __auto_type k = _mv_386.data.fresh_role;
             return string_concat(arena, SLOP_STR("#"), int_to_string(arena, k));
         }
     }
@@ -882,8 +882,8 @@ slop_string sroiq_sc_key_r(slop_arena* arena, slop_string head, types_RoleId r, 
 }
 
 slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c) {
-    __auto_type _mv_933 = c;
-    switch (_mv_933.tag) {
+    __auto_type _mv_387 = c;
+    switch (_mv_387.tag) {
         case sroiq_SConcept_sc_top:
         {
             return SLOP_STR("T");
@@ -894,58 +894,58 @@ slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_name:
         {
-            __auto_type i = _mv_933.data.sc_name;
+            __auto_type i = _mv_387.data.sc_name;
             return string_concat(arena, SLOP_STR("<"), string_concat(arena, i.value, SLOP_STR(">")));
         }
         case sroiq_SConcept_sc_nominal:
         {
-            __auto_type i = _mv_933.data.sc_nominal;
+            __auto_type i = _mv_387.data.sc_nominal;
             return string_concat(arena, SLOP_STR("{<"), string_concat(arena, i.value, SLOP_STR(">}")));
         }
         case sroiq_SConcept_sc_not:
         {
-            __auto_type f = _mv_933.data.sc_not;
+            __auto_type f = _mv_387.data.sc_not;
             return string_concat(arena, SLOP_STR("not("), string_concat(arena, sroiq_sc_key(arena, (*f)), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_and:
         {
-            __auto_type xs = _mv_933.data.sc_and;
+            __auto_type xs = _mv_387.data.sc_and;
             return string_concat(arena, SLOP_STR("and("), string_concat(arena, sroiq_sc_keys(arena, xs), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_or:
         {
-            __auto_type xs = _mv_933.data.sc_or;
+            __auto_type xs = _mv_387.data.sc_or;
             return string_concat(arena, SLOP_STR("or("), string_concat(arena, sroiq_sc_keys(arena, xs), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_some:
         {
-            __auto_type r = _mv_933.data.sc_some.f0;
-            __auto_type f = _mv_933.data.sc_some.f1;
+            __auto_type r = _mv_387.data.sc_some.f0;
+            __auto_type f = _mv_387.data.sc_some.f1;
             return sroiq_sc_key_r(arena, SLOP_STR("some"), r, (*f));
         }
         case sroiq_SConcept_sc_all:
         {
-            __auto_type r = _mv_933.data.sc_all.f0;
-            __auto_type f = _mv_933.data.sc_all.f1;
+            __auto_type r = _mv_387.data.sc_all.f0;
+            __auto_type f = _mv_387.data.sc_all.f1;
             return sroiq_sc_key_r(arena, SLOP_STR("all"), r, (*f));
         }
         case sroiq_SConcept_sc_atleast:
         {
-            __auto_type n = _mv_933.data.sc_atleast.f0;
-            __auto_type r = _mv_933.data.sc_atleast.f1;
-            __auto_type f = _mv_933.data.sc_atleast.f2;
+            __auto_type n = _mv_387.data.sc_atleast.f0;
+            __auto_type r = _mv_387.data.sc_atleast.f1;
+            __auto_type f = _mv_387.data.sc_atleast.f2;
             return sroiq_sc_key_r(arena, string_concat(arena, SLOP_STR("ge"), int_to_string(arena, n)), r, (*f));
         }
         case sroiq_SConcept_sc_atmost:
         {
-            __auto_type n = _mv_933.data.sc_atmost.f0;
-            __auto_type r = _mv_933.data.sc_atmost.f1;
-            __auto_type f = _mv_933.data.sc_atmost.f2;
+            __auto_type n = _mv_387.data.sc_atmost.f0;
+            __auto_type r = _mv_387.data.sc_atmost.f1;
+            __auto_type f = _mv_387.data.sc_atmost.f2;
             return sroiq_sc_key_r(arena, string_concat(arena, SLOP_STR("le"), int_to_string(arena, n)), r, (*f));
         }
         case sroiq_SConcept_sc_self:
         {
-            __auto_type r = _mv_933.data.sc_self;
+            __auto_type r = _mv_387.data.sc_self;
             return string_concat(arena, SLOP_STR("self("), string_concat(arena, sroiq_role_key_s(arena, r), SLOP_STR(")")));
         }
     }
@@ -953,21 +953,21 @@ slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c) {
 }
 
 slop_string sroiq_render_srole(slop_arena* arena, types_RoleId r) {
-    __auto_type _mv_934 = r;
-    switch (_mv_934.tag) {
+    __auto_type _mv_388 = r;
+    switch (_mv_388.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_934.data.named_role;
+            __auto_type i = _mv_388.data.named_role;
             return i.value;
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type i = _mv_934.data.inverse_role;
+            __auto_type i = _mv_388.data.inverse_role;
             return string_concat(arena, i.value, SLOP_STR("⁻"));
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_934.data.fresh_role;
+            __auto_type _ = _mv_388.data.fresh_role;
             return SLOP_STR("_:fresh-role");
         }
     }
@@ -998,8 +998,8 @@ slop_string sroiq_render_restriction(slop_arena* arena, slop_string head, types_
 }
 
 slop_string sroiq_render_sconcept(slop_arena* arena, sroiq_SConcept c) {
-    __auto_type _mv_935 = c;
-    switch (_mv_935.tag) {
+    __auto_type _mv_389 = c;
+    switch (_mv_389.tag) {
         case sroiq_SConcept_sc_top:
         {
             return SLOP_STR("⊤");
@@ -1010,58 +1010,58 @@ slop_string sroiq_render_sconcept(slop_arena* arena, sroiq_SConcept c) {
         }
         case sroiq_SConcept_sc_name:
         {
-            __auto_type i = _mv_935.data.sc_name;
+            __auto_type i = _mv_389.data.sc_name;
             return i.value;
         }
         case sroiq_SConcept_sc_nominal:
         {
-            __auto_type i = _mv_935.data.sc_nominal;
+            __auto_type i = _mv_389.data.sc_nominal;
             return string_concat(arena, SLOP_STR("{"), string_concat(arena, i.value, SLOP_STR("}")));
         }
         case sroiq_SConcept_sc_not:
         {
-            __auto_type f = _mv_935.data.sc_not;
+            __auto_type f = _mv_389.data.sc_not;
             return string_concat(arena, SLOP_STR("¬"), sroiq_render_sconcept(arena, (*f)));
         }
         case sroiq_SConcept_sc_and:
         {
-            __auto_type xs = _mv_935.data.sc_and;
+            __auto_type xs = _mv_389.data.sc_and;
             return string_concat(arena, SLOP_STR("("), string_concat(arena, sroiq_render_sconcepts(arena, xs, SLOP_STR(" ⊓ ")), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_or:
         {
-            __auto_type xs = _mv_935.data.sc_or;
+            __auto_type xs = _mv_389.data.sc_or;
             return string_concat(arena, SLOP_STR("("), string_concat(arena, sroiq_render_sconcepts(arena, xs, SLOP_STR(" ⊔ ")), SLOP_STR(")")));
         }
         case sroiq_SConcept_sc_some:
         {
-            __auto_type r = _mv_935.data.sc_some.f0;
-            __auto_type f = _mv_935.data.sc_some.f1;
+            __auto_type r = _mv_389.data.sc_some.f0;
+            __auto_type f = _mv_389.data.sc_some.f1;
             return sroiq_render_restriction(arena, SLOP_STR("∃"), r, (*f));
         }
         case sroiq_SConcept_sc_all:
         {
-            __auto_type r = _mv_935.data.sc_all.f0;
-            __auto_type f = _mv_935.data.sc_all.f1;
+            __auto_type r = _mv_389.data.sc_all.f0;
+            __auto_type f = _mv_389.data.sc_all.f1;
             return sroiq_render_restriction(arena, SLOP_STR("∀"), r, (*f));
         }
         case sroiq_SConcept_sc_atleast:
         {
-            __auto_type n = _mv_935.data.sc_atleast.f0;
-            __auto_type r = _mv_935.data.sc_atleast.f1;
-            __auto_type f = _mv_935.data.sc_atleast.f2;
+            __auto_type n = _mv_389.data.sc_atleast.f0;
+            __auto_type r = _mv_389.data.sc_atleast.f1;
+            __auto_type f = _mv_389.data.sc_atleast.f2;
             return sroiq_render_restriction(arena, string_concat(arena, SLOP_STR("≥"), string_concat(arena, int_to_string(arena, n), SLOP_STR(" "))), r, (*f));
         }
         case sroiq_SConcept_sc_atmost:
         {
-            __auto_type n = _mv_935.data.sc_atmost.f0;
-            __auto_type r = _mv_935.data.sc_atmost.f1;
-            __auto_type f = _mv_935.data.sc_atmost.f2;
+            __auto_type n = _mv_389.data.sc_atmost.f0;
+            __auto_type r = _mv_389.data.sc_atmost.f1;
+            __auto_type f = _mv_389.data.sc_atmost.f2;
             return sroiq_render_restriction(arena, string_concat(arena, SLOP_STR("≤"), string_concat(arena, int_to_string(arena, n), SLOP_STR(" "))), r, (*f));
         }
         case sroiq_SConcept_sc_self:
         {
-            __auto_type r = _mv_935.data.sc_self;
+            __auto_type r = _mv_389.data.sc_self;
             return string_concat(arena, SLOP_STR("∃"), string_concat(arena, sroiq_render_srole(arena, r), SLOP_STR(".Self")));
         }
     }
@@ -1088,33 +1088,33 @@ slop_string sroiq_render_word(slop_arena* arena, slop_list_types_RoleId w) {
 }
 
 slop_string sroiq_render_saxiom(slop_arena* arena, sroiq_SAxiom a) {
-    __auto_type _mv_936 = a;
-    switch (_mv_936.tag) {
+    __auto_type _mv_390 = a;
+    switch (_mv_390.tag) {
         case sroiq_SAxiom_sa_gci:
         {
-            __auto_type l = _mv_936.data.sa_gci.f0;
-            __auto_type r = _mv_936.data.sa_gci.f1;
+            __auto_type l = _mv_390.data.sa_gci.f0;
+            __auto_type r = _mv_390.data.sa_gci.f1;
             return string_concat(arena, sroiq_render_sconcept(arena, (*l)), string_concat(arena, SLOP_STR(" ⊑ "), sroiq_render_sconcept(arena, (*r))));
         }
         case sroiq_SAxiom_sa_ria:
         {
-            __auto_type x = _mv_936.data.sa_ria;
+            __auto_type x = _mv_390.data.sa_ria;
             return string_concat(arena, sroiq_render_word(arena, x.word), string_concat(arena, SLOP_STR(" ⊑ "), sroiq_render_srole(arena, x.super)));
         }
         case sroiq_SAxiom_sa_ref:
         {
-            __auto_type r = _mv_936.data.sa_ref;
+            __auto_type r = _mv_390.data.sa_ref;
             return string_concat(arena, SLOP_STR("Ref("), string_concat(arena, sroiq_render_srole(arena, r), SLOP_STR(")")));
         }
         case sroiq_SAxiom_sa_irr:
         {
-            __auto_type r = _mv_936.data.sa_irr;
+            __auto_type r = _mv_390.data.sa_irr;
             return string_concat(arena, SLOP_STR("Irr("), string_concat(arena, sroiq_render_srole(arena, r), SLOP_STR(")")));
         }
         case sroiq_SAxiom_sa_dis:
         {
-            __auto_type r = _mv_936.data.sa_dis.f0;
-            __auto_type s = _mv_936.data.sa_dis.f1;
+            __auto_type r = _mv_390.data.sa_dis.f0;
+            __auto_type s = _mv_390.data.sa_dis.f1;
             return string_concat(arena, SLOP_STR("Dis("), string_concat(arena, sroiq_render_srole(arena, r), string_concat(arena, SLOP_STR(", "), string_concat(arena, sroiq_render_srole(arena, s), SLOP_STR(")")))));
         }
     }

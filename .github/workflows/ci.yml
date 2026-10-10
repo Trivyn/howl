@@ -131,6 +131,8 @@ jobs:
         run: python3 -m unittest corpus/test_project.py
       - name: Probes and fixture differential
         run: make probes diff-fixtures
+      - name: Normaliser differential (sriq's stages against HermiT)
+        run: make diff-elim
       # Pinned by commit and sha256 (corpus/conformance.sha256); a fetched
       # file that no longer matches its pin fails here, before anything runs.
       - name: External conformance (W3C OWL 2 EL, ELK classification)
