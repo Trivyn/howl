@@ -74,13 +74,13 @@ uint8_t gate_has_entity(slop_list_gate_EntityRef seen, gate_EntityRef e);
 types_Omission gate_missing_declaration_of(slop_arena* arena, gate_EntityRef e, slop_list_gate_EntityRef refs);
 slop_list_types_Omission gate_missing_declarations(slop_arena* arena, owl2_Signature sig, slop_list_gate_EntityRef refs);
 
-typedef struct { slop_list_string texts; } gate__lambda_885_env_t;
+typedef struct { slop_list_string texts; } gate__lambda_886_env_t;
 
-static int64_t gate__lambda_885(gate__lambda_885_env_t* _env, int64_t i, int64_t j) { return canon_string_cmp(canon_str_at(_env->texts, i), canon_str_at(_env->texts, j)); }
+static int64_t gate__lambda_886(gate__lambda_886_env_t* _env, int64_t i, int64_t j) { return canon_string_cmp(canon_str_at(_env->texts, i), canon_str_at(_env->texts, j)); }
 
-typedef struct { slop_list_types_RoleId xs; } gate__lambda_888_env_t;
+typedef struct { slop_list_types_RoleId xs; } gate__lambda_889_env_t;
 
-static int64_t gate__lambda_888(gate__lambda_888_env_t* _env, int64_t i, int64_t j) { return canon_role_cmp(gate_role_at(_env->xs, i), gate_role_at(_env->xs, j)); }
+static int64_t gate__lambda_889(gate__lambda_889_env_t* _env, int64_t i, int64_t j) { return canon_role_cmp(gate_role_at(_env->xs, i), gate_role_at(_env->xs, j)); }
 
 types_InputRef gate_axiom_input_ref(slop_arena* arena, owl2_RawAxiom ax) {
     {
@@ -96,11 +96,11 @@ slop_option_types_RoleId gate_least_role(slop_list_types_RoleId rs) {
             __auto_type _coll = rs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type r = _coll.data[_i];
-                __auto_type _mv_863 = best;
-                if (!_mv_863.has_value) {
+                __auto_type _mv_864 = best;
+                if (!_mv_864.has_value) {
                     best = (slop_option_types_RoleId){.has_value = 1, .value = r};
-                } else if (_mv_863.has_value) {
-                    __auto_type b = _mv_863.value;
+                } else if (_mv_864.has_value) {
+                    __auto_type b = _mv_864.value;
                     if (canon_role_cmp(r, b) < 0) {
                         best = (slop_option_types_RoleId){.has_value = 1, .value = r};
                     }
@@ -126,10 +126,10 @@ slop_list_owl2_RawAxiom gate_push_property_star(slop_list_owl2_RawAxiom out, owl
         if (gate_roles_have_inverse(rs)) {
             ({ __auto_type _lst_p = &(o); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         } else {
-            __auto_type _mv_864 = gate_least_role(rs);
-            if (!_mv_864.has_value) {
-            } else if (_mv_864.has_value) {
-                __auto_type hub = _mv_864.value;
+            __auto_type _mv_865 = gate_least_role(rs);
+            if (!_mv_865.has_value) {
+            } else if (_mv_865.has_value) {
+                __auto_type hub = _mv_865.value;
                 {
                     __auto_type _coll = rs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -210,29 +210,29 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_865 = ax;
-                switch (_mv_865.tag) {
+                __auto_type _mv_866 = ax;
+                switch (_mv_866.tag) {
                     case owl2_RawAxiom_ra_transitive_property:
                     {
-                        __auto_type r = _mv_865.data.ra_transitive_property;
+                        __auto_type r = _mv_866.data.ra_transitive_property;
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (gate_transitive_chain(arena, r)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         break;
                     }
                     case owl2_RawAxiom_ra_equivalent_properties:
                     {
-                        __auto_type rs = _mv_865.data.ra_equivalent_properties;
+                        __auto_type rs = _mv_866.data.ra_equivalent_properties;
                         out = gate_push_property_star(out, ax, rs);
                         break;
                     }
                     case owl2_RawAxiom_ra_equivalent_classes:
                     {
-                        __auto_type cs = _mv_865.data.ra_equivalent_classes;
+                        __auto_type cs = _mv_866.data.ra_equivalent_classes;
                         out = gate_push_class_star(arena, out, cs);
                         break;
                     }
                     case owl2_RawAxiom_ra_disjoint_classes:
                     {
-                        __auto_type cs = _mv_865.data.ra_disjoint_classes;
+                        __auto_type cs = _mv_866.data.ra_disjoint_classes;
                         out = gate_push_disjoint_pairs(arena, out, ax, cs);
                         break;
                     }
@@ -248,27 +248,27 @@ slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawA
 }
 
 uint8_t gate_has_negated_conjunct(owl2_RawConcept c) {
-    __auto_type _mv_866 = c;
-    switch (_mv_866.tag) {
+    __auto_type _mv_867 = c;
+    switch (_mv_867.tag) {
         case owl2_RawConcept_rc_not:
         {
-            __auto_type _ = _mv_866.data.rc_not;
+            __auto_type _ = _mv_867.data.rc_not;
             return 1;
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_866.data.rc_and;
+            __auto_type cs = _mv_867.data.rc_and;
             {
                 uint8_t found = 0;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type x = _coll.data[_i];
-                        __auto_type _mv_867 = x;
-                        switch (_mv_867.tag) {
+                        __auto_type _mv_868 = x;
+                        switch (_mv_868.tag) {
                             case owl2_RawConcept_rc_not:
                             {
-                                __auto_type _ = _mv_867.data.rc_not;
+                                __auto_type _ = _mv_868.data.rc_not;
                                 found = 1;
                                 break;
                             }
@@ -290,11 +290,11 @@ uint8_t gate_has_negated_conjunct(owl2_RawConcept c) {
 slop_list_owl2_RawConcept gate_conjuncts(slop_arena* arena, owl2_RawConcept c) {
     {
         __auto_type out = ((slop_list_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_868 = c;
-        switch (_mv_868.tag) {
+        __auto_type _mv_869 = c;
+        switch (_mv_869.tag) {
             case owl2_RawConcept_rc_and:
             {
-                __auto_type cs = _mv_868.data.rc_and;
+                __auto_type cs = _mv_869.data.rc_and;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -321,11 +321,11 @@ gate_NegSplit gate_negation_split(slop_arena* arena, owl2_RawConcept c) {
             __auto_type _coll = gate_conjuncts(arena, c);
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type x = _coll.data[_i];
-                __auto_type _mv_869 = x;
-                switch (_mv_869.tag) {
+                __auto_type _mv_870 = x;
+                switch (_mv_870.tag) {
                     case owl2_RawConcept_rc_not:
                     {
-                        __auto_type e = _mv_869.data.rc_not;
+                        __auto_type e = _mv_870.data.rc_not;
                         ({ __auto_type _lst_p = &(neg); __auto_type _item = ((*e)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         break;
                     }
@@ -454,43 +454,43 @@ slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, types_Profile p,
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_870 = ax;
-                switch (_mv_870.tag) {
+                __auto_type _mv_871 = ax;
+                switch (_mv_871.tag) {
                     case owl2_RawAxiom_ra_sub_class_of:
                     {
-                        __auto_type l = _mv_870.data.ra_sub_class_of.f0;
-                        __auto_type r = _mv_870.data.ra_sub_class_of.f1;
-                        __auto_type _mv_871 = gate_sub_negation_split(arena, p, (*l), (*r));
-                        if (!_mv_871.has_value) {
+                        __auto_type l = _mv_871.data.ra_sub_class_of.f0;
+                        __auto_type r = _mv_871.data.ra_sub_class_of.f1;
+                        __auto_type _mv_872 = gate_sub_negation_split(arena, p, (*l), (*r));
+                        if (!_mv_872.has_value) {
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        } else if (_mv_871.has_value) {
-                            __auto_type s = _mv_871.value;
+                        } else if (_mv_872.has_value) {
+                            __auto_type s = _mv_872.value;
                             out = gate_push_sub_pieces(arena, out, l, s);
                         }
                         break;
                     }
                     case owl2_RawAxiom_ra_object_property_domain:
                     {
-                        __auto_type r = _mv_870.data.ra_object_property_domain.f0;
-                        __auto_type c = _mv_870.data.ra_object_property_domain.f1;
-                        __auto_type _mv_872 = gate_role_negation_split(arena, p, r, (*c));
-                        if (!_mv_872.has_value) {
+                        __auto_type r = _mv_871.data.ra_object_property_domain.f0;
+                        __auto_type c = _mv_871.data.ra_object_property_domain.f1;
+                        __auto_type _mv_873 = gate_role_negation_split(arena, p, r, (*c));
+                        if (!_mv_873.has_value) {
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        } else if (_mv_872.has_value) {
-                            __auto_type s = _mv_872.value;
+                        } else if (_mv_873.has_value) {
+                            __auto_type s = _mv_873.value;
                             out = gate_push_domain_pieces(arena, out, r, s);
                         }
                         break;
                     }
                     case owl2_RawAxiom_ra_object_property_range:
                     {
-                        __auto_type r = _mv_870.data.ra_object_property_range.f0;
-                        __auto_type c = _mv_870.data.ra_object_property_range.f1;
-                        __auto_type _mv_873 = gate_role_negation_split(arena, p, r, (*c));
-                        if (!_mv_873.has_value) {
+                        __auto_type r = _mv_871.data.ra_object_property_range.f0;
+                        __auto_type c = _mv_871.data.ra_object_property_range.f1;
+                        __auto_type _mv_874 = gate_role_negation_split(arena, p, r, (*c));
+                        if (!_mv_874.has_value) {
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        } else if (_mv_873.has_value) {
-                            __auto_type s = _mv_873.value;
+                        } else if (_mv_874.has_value) {
+                            __auto_type s = _mv_874.value;
                             out = gate_push_range_pieces(arena, out, r, s);
                         }
                         break;
@@ -507,21 +507,21 @@ slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, types_Profile p,
 }
 
 uint8_t gate_is_top_role(types_RoleId r) {
-    __auto_type _mv_874 = r;
-    switch (_mv_874.tag) {
+    __auto_type _mv_875 = r;
+    switch (_mv_875.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_874.data.named_role;
+            __auto_type i = _mv_875.data.named_role;
             return (canon_string_cmp(i.value, vocab_OWL_TOP_OBJECT_PROPERTY) == 0);
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_874.data.fresh_role;
+            __auto_type _ = _mv_875.data.fresh_role;
             return 0;
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type _ = _mv_874.data.inverse_role;
+            __auto_type _ = _mv_875.data.inverse_role;
             return 0;
         }
     }
@@ -529,21 +529,21 @@ uint8_t gate_is_top_role(types_RoleId r) {
 }
 
 uint8_t gate_is_inverse_role(types_RoleId r) {
-    __auto_type _mv_875 = r;
-    switch (_mv_875.tag) {
+    __auto_type _mv_876 = r;
+    switch (_mv_876.tag) {
         case types_RoleId_inverse_role:
         {
-            __auto_type _ = _mv_875.data.inverse_role;
+            __auto_type _ = _mv_876.data.inverse_role;
             return 1;
         }
         case types_RoleId_named_role:
         {
-            __auto_type _ = _mv_875.data.named_role;
+            __auto_type _ = _mv_876.data.named_role;
             return 0;
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_875.data.fresh_role;
+            __auto_type _ = _mv_876.data.fresh_role;
             return 0;
         }
     }
@@ -567,37 +567,37 @@ uint8_t gate_roles_have_inverse(slop_list_types_RoleId rs) {
 }
 
 uint8_t gate_axiom_has_inverse(owl2_RawAxiom ax) {
-    __auto_type _mv_876 = ax;
-    switch (_mv_876.tag) {
+    __auto_type _mv_877 = ax;
+    switch (_mv_877.tag) {
         case owl2_RawAxiom_ra_sub_object_property:
         {
-            __auto_type a = _mv_876.data.ra_sub_object_property.f0;
-            __auto_type b = _mv_876.data.ra_sub_object_property.f1;
+            __auto_type a = _mv_877.data.ra_sub_object_property.f0;
+            __auto_type b = _mv_877.data.ra_sub_object_property.f1;
             return (gate_is_inverse_role(a) || gate_is_inverse_role(b));
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type ch = _mv_876.data.ra_property_chain;
+            __auto_type ch = _mv_877.data.ra_property_chain;
             return (gate_roles_have_inverse(ch.steps) || gate_is_inverse_role(ch.super));
         }
         case owl2_RawAxiom_ra_equivalent_properties:
         {
-            __auto_type rs = _mv_876.data.ra_equivalent_properties;
+            __auto_type rs = _mv_877.data.ra_equivalent_properties;
             return gate_roles_have_inverse(rs);
         }
         case owl2_RawAxiom_ra_transitive_property:
         {
-            __auto_type r = _mv_876.data.ra_transitive_property;
+            __auto_type r = _mv_877.data.ra_transitive_property;
             return gate_is_inverse_role(r);
         }
         case owl2_RawAxiom_ra_object_property_domain:
         {
-            __auto_type r = _mv_876.data.ra_object_property_domain.f0;
+            __auto_type r = _mv_877.data.ra_object_property_domain.f0;
             return gate_is_inverse_role(r);
         }
         case owl2_RawAxiom_ra_object_property_range:
         {
-            __auto_type r = _mv_876.data.ra_object_property_range.f0;
+            __auto_type r = _mv_877.data.ra_object_property_range.f0;
             return gate_is_inverse_role(r);
         }
         default: {
@@ -623,16 +623,16 @@ slop_list_owl2_RawAxiom gate_named_roles_only(slop_arena* arena, slop_list_owl2_
 }
 
 uint8_t gate_into_top_role(owl2_RawAxiom ax) {
-    __auto_type _mv_877 = ax;
-    switch (_mv_877.tag) {
+    __auto_type _mv_878 = ax;
+    switch (_mv_878.tag) {
         case owl2_RawAxiom_ra_sub_object_property:
         {
-            __auto_type sup = _mv_877.data.ra_sub_object_property.f1;
+            __auto_type sup = _mv_878.data.ra_sub_object_property.f1;
             return gate_is_top_role(sup);
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type ch = _mv_877.data.ra_property_chain;
+            __auto_type ch = _mv_878.data.ra_property_chain;
             return gate_is_top_role(ch.super);
         }
         default: {
@@ -686,11 +686,11 @@ slop_list_types_RoleId gate_non_simple_roles(slop_arena* arena, slop_list_owl2_R
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_878 = ax;
-                switch (_mv_878.tag) {
+                __auto_type _mv_879 = ax;
+                switch (_mv_879.tag) {
                     case owl2_RawAxiom_ra_property_chain:
                     {
-                        __auto_type ch = _mv_878.data.ra_property_chain;
+                        __auto_type ch = _mv_879.data.ra_property_chain;
                         if (!(gate_role_listed(out, ch.super))) {
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (ch.super); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
@@ -708,12 +708,12 @@ slop_list_types_RoleId gate_non_simple_roles(slop_arena* arena, slop_list_owl2_R
                 __auto_type _coll = axs;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type ax = _coll.data[_i];
-                    __auto_type _mv_879 = ax;
-                    switch (_mv_879.tag) {
+                    __auto_type _mv_880 = ax;
+                    switch (_mv_880.tag) {
                         case owl2_RawAxiom_ra_sub_object_property:
                         {
-                            __auto_type a = _mv_879.data.ra_sub_object_property.f0;
-                            __auto_type b = _mv_879.data.ra_sub_object_property.f1;
+                            __auto_type a = _mv_880.data.ra_sub_object_property.f0;
+                            __auto_type b = _mv_880.data.ra_sub_object_property.f1;
                             if (gate_role_listed(out, a) && !(gate_role_listed(out, b))) {
                                 ({ __auto_type _lst_p = &(out); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 changed = 1;
@@ -732,16 +732,16 @@ slop_list_types_RoleId gate_non_simple_roles(slop_arena* arena, slop_list_owl2_R
 }
 
 uint8_t gate_concept_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawConcept c) {
-    __auto_type _mv_880 = c;
-    switch (_mv_880.tag) {
+    __auto_type _mv_881 = c;
+    switch (_mv_881.tag) {
         case owl2_RawConcept_rc_has_self:
         {
-            __auto_type r = _mv_880.data.rc_has_self;
+            __auto_type r = _mv_881.data.rc_has_self;
             return !(gate_role_listed(nonsimple, r));
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_880.data.rc_and;
+            __auto_type cs = _mv_881.data.rc_and;
             {
                 uint8_t ok = 1;
                 {
@@ -758,7 +758,7 @@ uint8_t gate_concept_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_Ra
         }
         case owl2_RawConcept_rc_some:
         {
-            __auto_type f = _mv_880.data.rc_some.f1;
+            __auto_type f = _mv_881.data.rc_some.f1;
             return gate_concept_self_roles_simple(nonsimple, (*f));
         }
         default: {
@@ -768,17 +768,17 @@ uint8_t gate_concept_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_Ra
 }
 
 uint8_t gate_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawAxiom ax) {
-    __auto_type _mv_881 = ax;
-    switch (_mv_881.tag) {
+    __auto_type _mv_882 = ax;
+    switch (_mv_882.tag) {
         case owl2_RawAxiom_ra_sub_class_of:
         {
-            __auto_type l = _mv_881.data.ra_sub_class_of.f0;
-            __auto_type r = _mv_881.data.ra_sub_class_of.f1;
+            __auto_type l = _mv_882.data.ra_sub_class_of.f0;
+            __auto_type r = _mv_882.data.ra_sub_class_of.f1;
             return (gate_concept_self_roles_simple(nonsimple, (*l)) && gate_concept_self_roles_simple(nonsimple, (*r)));
         }
         case owl2_RawAxiom_ra_disjoint_classes:
         {
-            __auto_type cs = _mv_881.data.ra_disjoint_classes;
+            __auto_type cs = _mv_882.data.ra_disjoint_classes;
             {
                 uint8_t ok = 1;
                 {
@@ -795,17 +795,17 @@ uint8_t gate_self_roles_simple(slop_list_types_RoleId nonsimple, owl2_RawAxiom a
         }
         case owl2_RawAxiom_ra_object_property_domain:
         {
-            __auto_type c = _mv_881.data.ra_object_property_domain.f1;
+            __auto_type c = _mv_882.data.ra_object_property_domain.f1;
             return gate_concept_self_roles_simple(nonsimple, (*c));
         }
         case owl2_RawAxiom_ra_object_property_range:
         {
-            __auto_type c = _mv_881.data.ra_object_property_range.f1;
+            __auto_type c = _mv_882.data.ra_object_property_range.f1;
             return gate_concept_self_roles_simple(nonsimple, (*c));
         }
         case owl2_RawAxiom_ra_class_assertion:
         {
-            __auto_type ca = _mv_881.data.ra_class_assertion;
+            __auto_type ca = _mv_882.data.ra_class_assertion;
             return gate_concept_self_roles_simple(nonsimple, (*ca.concept));
         }
         default: {
@@ -839,15 +839,15 @@ slop_list_owl2_RawAxiom gate_admitted(slop_arena* arena, types_Profile p, slop_l
 }
 
 uint8_t gate_is_rbox_axiom(owl2_RawAxiom ax) {
-    __auto_type _mv_882 = ax;
-    switch (_mv_882.tag) {
+    __auto_type _mv_883 = ax;
+    switch (_mv_883.tag) {
         case owl2_RawAxiom_ra_sub_object_property:
         {
             return 1;
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type _ = _mv_882.data.ra_property_chain;
+            __auto_type _ = _mv_883.data.ra_property_chain;
             return 1;
         }
         default: {
@@ -857,11 +857,11 @@ uint8_t gate_is_rbox_axiom(owl2_RawAxiom ax) {
 }
 
 uint8_t gate_axiom_range_ok(slop_list_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles, owl2_RawAxiom ax) {
-    __auto_type _mv_883 = ax;
-    switch (_mv_883.tag) {
+    __auto_type _mv_884 = ax;
+    switch (_mv_884.tag) {
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type ch = _mv_883.data.ra_property_chain;
+            __auto_type ch = _mv_884.data.ra_property_chain;
             return gate_chain_range_ok(entries, told, n, roles, ch);
         }
         default: {
@@ -896,16 +896,16 @@ gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs,
                 __auto_type _coll = expanded;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type ax = _coll.data[_i];
-                    __auto_type _mv_884 = owl2_disposition(p, ax);
-                    if (_mv_884 == owl2_Disposition_d_consumed) {
-                    } else if (_mv_884 == owl2_Disposition_d_inert) {
-                    } else if (_mv_884 == owl2_Disposition_d_in_profile) {
+                    __auto_type _mv_885 = owl2_disposition(p, ax);
+                    if (_mv_885 == owl2_Disposition_d_consumed) {
+                    } else if (_mv_885 == owl2_Disposition_d_inert) {
+                    } else if (_mv_885 == owl2_Disposition_d_in_profile) {
                         if ((owl2_axiom_in_profile(p, ax)) && (!(gate_rbox_omits(sriq, rbox_bad, ax))) && (((sriq) ? sriqrbox_sriq_axiom_simple(srb, ax) : gate_self_roles_simple(nonsimple, ax))) && ((sriq || gate_axiom_range_ok(ranges, told, nr, rroles, ax)))) {
                             ({ __auto_type _lst_p = &(accepted); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         } else {
                             ({ __auto_type _lst_p = &(omitted); __auto_type _item = (((types_Omission){ .tag = types_Omission_out_of_profile, .data.out_of_profile = gate_axiom_input_ref(arena, ax) })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
-                    } else if (_mv_884 == owl2_Disposition_d_out_of_profile) {
+                    } else if (_mv_885 == owl2_Disposition_d_out_of_profile) {
                         ({ __auto_type _lst_p = &(omitted); __auto_type _item = (((types_Omission){ .tag = types_Omission_out_of_profile, .data.out_of_profile = gate_axiom_input_ref(arena, ax) })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
@@ -930,7 +930,7 @@ slop_list_owl2_RawAxiom gate_sort_axioms(slop_arena* arena, slop_list_owl2_RawAx
     {
         __auto_type texts = gate_axiom_texts(arena, xs);
         {
-            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ gate__lambda_885_env_t* gate__lambda_885_env = (gate__lambda_885_env_t*)slop_arena_alloc(arena, sizeof(gate__lambda_885_env_t)); *gate__lambda_885_env = (gate__lambda_885_env_t){ .texts = texts }; (slop_closure_t){ (void*)gate__lambda_885, (void*)gate__lambda_885_env }; }));
+            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ gate__lambda_886_env_t* gate__lambda_886_env = (gate__lambda_886_env_t*)slop_arena_alloc(arena, sizeof(gate__lambda_886_env_t)); *gate__lambda_886_env = (gate__lambda_886_env_t){ .texts = texts }; (slop_closure_t){ (void*)gate__lambda_886, (void*)gate__lambda_886_env }; }));
             __auto_type out = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
             {
                 __auto_type _coll = idx;
@@ -961,11 +961,11 @@ slop_list_string gate_axiom_texts(slop_arena* arena, slop_list_owl2_RawAxiom xs)
 owl2_RawAxiom gate_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_886 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_owl2_RawAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_886.has_value) {
-        __auto_type v = _mv_886.value;
+    __auto_type _mv_887 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_owl2_RawAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_887.has_value) {
+        __auto_type v = _mv_887.value;
         return v;
-    } else if (!_mv_886.has_value) {
+    } else if (!_mv_887.has_value) {
         return ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_unrecognized, .data.ra_unrecognized = ((types_InputRef){ .tag = types_InputRef_synthetic, .data.synthetic = SLOP_STR("unreachable: axiom index out of range") }) });
     }
     SLOP_UNREACHABLE();
@@ -1000,12 +1000,12 @@ slop_list_types_RoleId gate_collect_rbox_roles(slop_arena* arena, slop_list_owl2
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_887 = ax;
-                switch (_mv_887.tag) {
+                __auto_type _mv_888 = ax;
+                switch (_mv_888.tag) {
                     case owl2_RawAxiom_ra_sub_object_property:
                     {
-                        __auto_type a = _mv_887.data.ra_sub_object_property.f0;
-                        __auto_type b = _mv_887.data.ra_sub_object_property.f1;
+                        __auto_type a = _mv_888.data.ra_sub_object_property.f0;
+                        __auto_type b = _mv_888.data.ra_sub_object_property.f1;
                         if (gate_push_role_unique(rs, a)) {
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
@@ -1016,7 +1016,7 @@ slop_list_types_RoleId gate_collect_rbox_roles(slop_arena* arena, slop_list_owl2
                     }
                     case owl2_RawAxiom_ra_property_chain:
                     {
-                        __auto_type ch = _mv_887.data.ra_property_chain;
+                        __auto_type ch = _mv_888.data.ra_property_chain;
                         {
                             __auto_type _coll = ch.steps;
                             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1033,7 +1033,7 @@ slop_list_types_RoleId gate_collect_rbox_roles(slop_arena* arena, slop_list_owl2
                     }
                     case owl2_RawAxiom_ra_object_property_range:
                     {
-                        __auto_type r = _mv_887.data.ra_object_property_range.f0;
+                        __auto_type r = _mv_888.data.ra_object_property_range.f0;
                         if (gate_push_role_unique(rs, r)) {
                             ({ __auto_type _lst_p = &(rs); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
@@ -1051,7 +1051,7 @@ slop_list_types_RoleId gate_collect_rbox_roles(slop_arena* arena, slop_list_owl2
 
 slop_list_types_RoleId gate_sort_roles(slop_arena* arena, slop_list_types_RoleId xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ gate__lambda_888_env_t* gate__lambda_888_env = (gate__lambda_888_env_t*)slop_arena_alloc(arena, sizeof(gate__lambda_888_env_t)); *gate__lambda_888_env = (gate__lambda_888_env_t){ .xs = xs }; (slop_closure_t){ (void*)gate__lambda_888, (void*)gate__lambda_888_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ gate__lambda_889_env_t* gate__lambda_889_env = (gate__lambda_889_env_t*)slop_arena_alloc(arena, sizeof(gate__lambda_889_env_t)); *gate__lambda_889_env = (gate__lambda_889_env_t){ .xs = xs }; (slop_closure_t){ (void*)gate__lambda_889, (void*)gate__lambda_889_env }; }));
         __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -1067,11 +1067,11 @@ slop_list_types_RoleId gate_sort_roles(slop_arena* arena, slop_list_types_RoleId
 types_RoleId gate_role_at(slop_list_types_RoleId xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_889 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_889.has_value) {
-        __auto_type v = _mv_889.value;
+    __auto_type _mv_890 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_890.has_value) {
+        __auto_type v = _mv_890.value;
         return v;
-    } else if (!_mv_889.has_value) {
+    } else if (!_mv_890.has_value) {
         return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = 0 });
     }
     SLOP_UNREACHABLE();
@@ -1090,11 +1090,11 @@ slop_list_u8 gate_mat_new(slop_arena* arena, int64_t cells) {
 }
 
 uint8_t gate_mat_get(slop_list_u8 m, int64_t i) {
-    __auto_type _mv_890 = ({ __auto_type _lst = m; size_t _idx = (size_t)i; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_890.has_value) {
-        __auto_type v = _mv_890.value;
+    __auto_type _mv_891 = ({ __auto_type _lst = m; size_t _idx = (size_t)i; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_891.has_value) {
+        __auto_type v = _mv_891.value;
         return v;
-    } else if (!_mv_890.has_value) {
+    } else if (!_mv_891.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -1149,12 +1149,12 @@ slop_list_u8 gate_told_closure(slop_arena* arena, slop_list_owl2_RawAxiom axs, s
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_891 = ax;
-                switch (_mv_891.tag) {
+                __auto_type _mv_892 = ax;
+                switch (_mv_892.tag) {
                     case owl2_RawAxiom_ra_sub_object_property:
                     {
-                        __auto_type a = _mv_891.data.ra_sub_object_property.f0;
-                        __auto_type b = _mv_891.data.ra_sub_object_property.f1;
+                        __auto_type a = _mv_892.data.ra_sub_object_property.f0;
+                        __auto_type b = _mv_892.data.ra_sub_object_property.f1;
                         {
                             __auto_type ia = gate_role_idx(roles, a);
                             __auto_type ib = gate_role_idx(roles, b);
@@ -1313,11 +1313,11 @@ gate_RboxVerdict gate_check_regularity(slop_arena* arena, slop_list_owl2_RawAxio
                     __auto_type _coll = axs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type ax = _coll.data[_i];
-                        __auto_type _mv_892 = ax;
-                        switch (_mv_892.tag) {
+                        __auto_type _mv_893 = ax;
+                        switch (_mv_893.tag) {
                             case owl2_RawAxiom_ra_property_chain:
                             {
-                                __auto_type ch = _mv_892.data.ra_property_chain;
+                                __auto_type ch = _mv_893.data.ra_property_chain;
                                 gate_add_case_constraints(ch, roles, n, cmat);
                                 break;
                             }
@@ -1341,12 +1341,12 @@ slop_list_gate_RangeEntry gate_collect_ranges(slop_arena* arena, slop_list_owl2_
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_893 = ax;
-                switch (_mv_893.tag) {
+                __auto_type _mv_894 = ax;
+                switch (_mv_894.tag) {
                     case owl2_RawAxiom_ra_object_property_range:
                     {
-                        __auto_type r = _mv_893.data.ra_object_property_range.f0;
-                        __auto_type c = _mv_893.data.ra_object_property_range.f1;
+                        __auto_type r = _mv_894.data.ra_object_property_range.f0;
+                        __auto_type c = _mv_894.data.ra_object_property_range.f1;
                         {
                             __auto_type ir = gate_role_idx(roles, r);
                             if (ir >= 0) {
@@ -1421,27 +1421,27 @@ types_AxiomRef gate_axiom_ref_of(slop_arena* arena, owl2_RawAxiom ax) {
 slop_list_rdf_IRI gate_collect_concept_classes(slop_arena* arena, owl2_RawConcept c, slop_list_rdf_IRI acc) {
     {
         __auto_type out = acc;
-        __auto_type _mv_894 = c;
-        switch (_mv_894.tag) {
+        __auto_type _mv_895 = c;
+        switch (_mv_895.tag) {
             case owl2_RawConcept_rc_name:
             {
-                __auto_type n = _mv_894.data.rc_name;
-                __auto_type _mv_895 = n;
-                switch (_mv_895.tag) {
+                __auto_type n = _mv_895.data.rc_name;
+                __auto_type _mv_896 = n;
+                switch (_mv_896.tag) {
                     case types_Node_class_node:
                     {
-                        __auto_type i = _mv_895.data.class_node;
+                        __auto_type i = _mv_896.data.class_node;
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         break;
                     }
                     case types_Node_individual_node:
                     {
-                        __auto_type _ = _mv_895.data.individual_node;
+                        __auto_type _ = _mv_896.data.individual_node;
                         break;
                     }
                     case types_Node_fresh_node:
                     {
-                        __auto_type _ = _mv_895.data.fresh_node;
+                        __auto_type _ = _mv_896.data.fresh_node;
                         break;
                     }
                 }
@@ -1449,7 +1449,7 @@ slop_list_rdf_IRI gate_collect_concept_classes(slop_arena* arena, owl2_RawConcep
             }
             case owl2_RawConcept_rc_and:
             {
-                __auto_type cs = _mv_894.data.rc_and;
+                __auto_type cs = _mv_895.data.rc_and;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1461,13 +1461,13 @@ slop_list_rdf_IRI gate_collect_concept_classes(slop_arena* arena, owl2_RawConcep
             }
             case owl2_RawConcept_rc_some:
             {
-                __auto_type f = _mv_894.data.rc_some.f1;
+                __auto_type f = _mv_895.data.rc_some.f1;
                 out = gate_collect_concept_classes(arena, (*f), out);
                 break;
             }
             case owl2_RawConcept_rc_or:
             {
-                __auto_type cs = _mv_894.data.rc_or;
+                __auto_type cs = _mv_895.data.rc_or;
                 {
                     __auto_type _coll = cs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1479,19 +1479,19 @@ slop_list_rdf_IRI gate_collect_concept_classes(slop_arena* arena, owl2_RawConcep
             }
             case owl2_RawConcept_rc_not:
             {
-                __auto_type f = _mv_894.data.rc_not;
+                __auto_type f = _mv_895.data.rc_not;
                 out = gate_collect_concept_classes(arena, (*f), out);
                 break;
             }
             case owl2_RawConcept_rc_all:
             {
-                __auto_type f = _mv_894.data.rc_all.f1;
+                __auto_type f = _mv_895.data.rc_all.f1;
                 out = gate_collect_concept_classes(arena, (*f), out);
                 break;
             }
             case owl2_RawConcept_rc_qcard:
             {
-                __auto_type f = _mv_894.data.rc_qcard.f3;
+                __auto_type f = _mv_895.data.rc_qcard.f3;
                 out = gate_collect_concept_classes(arena, (*f), out);
                 break;
             }
@@ -1513,19 +1513,19 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                 {
                     __auto_type classes = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                     __auto_type roles = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-                    __auto_type _mv_896 = ax;
-                    switch (_mv_896.tag) {
+                    __auto_type _mv_897 = ax;
+                    switch (_mv_897.tag) {
                         case owl2_RawAxiom_ra_sub_class_of:
                         {
-                            __auto_type l = _mv_896.data.ra_sub_class_of.f0;
-                            __auto_type rr = _mv_896.data.ra_sub_class_of.f1;
+                            __auto_type l = _mv_897.data.ra_sub_class_of.f0;
+                            __auto_type rr = _mv_897.data.ra_sub_class_of.f1;
                             classes = gate_collect_concept_classes(arena, (*l), classes);
                             classes = gate_collect_concept_classes(arena, (*rr), classes);
                             break;
                         }
                         case owl2_RawAxiom_ra_equivalent_classes:
                         {
-                            __auto_type cs = _mv_896.data.ra_equivalent_classes;
+                            __auto_type cs = _mv_897.data.ra_equivalent_classes;
                             {
                                 __auto_type _coll = cs;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1537,7 +1537,7 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                         }
                         case owl2_RawAxiom_ra_disjoint_classes:
                         {
-                            __auto_type cs = _mv_896.data.ra_disjoint_classes;
+                            __auto_type cs = _mv_897.data.ra_disjoint_classes;
                             {
                                 __auto_type _coll = cs;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1549,37 +1549,37 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                         }
                         case owl2_RawAxiom_ra_object_property_domain:
                         {
-                            __auto_type rl = _mv_896.data.ra_object_property_domain.f0;
-                            __auto_type c = _mv_896.data.ra_object_property_domain.f1;
+                            __auto_type rl = _mv_897.data.ra_object_property_domain.f0;
+                            __auto_type c = _mv_897.data.ra_object_property_domain.f1;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (rl); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             classes = gate_collect_concept_classes(arena, (*c), classes);
                             break;
                         }
                         case owl2_RawAxiom_ra_object_property_range:
                         {
-                            __auto_type rl = _mv_896.data.ra_object_property_range.f0;
-                            __auto_type c = _mv_896.data.ra_object_property_range.f1;
+                            __auto_type rl = _mv_897.data.ra_object_property_range.f0;
+                            __auto_type c = _mv_897.data.ra_object_property_range.f1;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (rl); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             classes = gate_collect_concept_classes(arena, (*c), classes);
                             break;
                         }
                         case owl2_RawAxiom_ra_class_assertion:
                         {
-                            __auto_type ca = _mv_896.data.ra_class_assertion;
+                            __auto_type ca = _mv_897.data.ra_class_assertion;
                             classes = gate_collect_concept_classes(arena, (*ca.concept), classes);
                             break;
                         }
                         case owl2_RawAxiom_ra_sub_object_property:
                         {
-                            __auto_type a = _mv_896.data.ra_sub_object_property.f0;
-                            __auto_type b = _mv_896.data.ra_sub_object_property.f1;
+                            __auto_type a = _mv_897.data.ra_sub_object_property.f0;
+                            __auto_type b = _mv_897.data.ra_sub_object_property.f1;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             break;
                         }
                         case owl2_RawAxiom_ra_property_chain:
                         {
-                            __auto_type ch = _mv_896.data.ra_property_chain;
+                            __auto_type ch = _mv_897.data.ra_property_chain;
                             {
                                 __auto_type _coll = ch.steps;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1592,33 +1592,33 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                         }
                         case owl2_RawAxiom_ra_object_property_assertion:
                         {
-                            __auto_type e = _mv_896.data.ra_object_property_assertion;
+                            __auto_type e = _mv_897.data.ra_object_property_assertion;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (e.role); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             break;
                         }
                         case owl2_RawAxiom_ra_negative_assertion:
                         {
-                            __auto_type e = _mv_896.data.ra_negative_assertion;
+                            __auto_type e = _mv_897.data.ra_negative_assertion;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (e.role); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             break;
                         }
                         case owl2_RawAxiom_ra_property_characteristic:
                         {
-                            __auto_type rl = _mv_896.data.ra_property_characteristic.f1;
+                            __auto_type rl = _mv_897.data.ra_property_characteristic.f1;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (rl); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             break;
                         }
                         case owl2_RawAxiom_ra_inverse_properties:
                         {
-                            __auto_type a = _mv_896.data.ra_inverse_properties.f0;
-                            __auto_type b = _mv_896.data.ra_inverse_properties.f1;
+                            __auto_type a = _mv_897.data.ra_inverse_properties.f0;
+                            __auto_type b = _mv_897.data.ra_inverse_properties.f1;
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             ({ __auto_type _lst_p = &(roles); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             break;
                         }
                         case owl2_RawAxiom_ra_equivalent_properties:
                         {
-                            __auto_type rs = _mv_896.data.ra_equivalent_properties;
+                            __auto_type rs = _mv_897.data.ra_equivalent_properties;
                             {
                                 __auto_type _coll = rs;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1630,7 +1630,7 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                         }
                         case owl2_RawAxiom_ra_disjoint_properties:
                         {
-                            __auto_type rs = _mv_896.data.ra_disjoint_properties;
+                            __auto_type rs = _mv_897.data.ra_disjoint_properties;
                             {
                                 __auto_type _coll = rs;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1642,7 +1642,7 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                         }
                         case owl2_RawAxiom_ra_disjoint_union:
                         {
-                            __auto_type du = _mv_896.data.ra_disjoint_union;
+                            __auto_type du = _mv_897.data.ra_disjoint_union;
                             ({ __auto_type _lst_p = &(classes); __auto_type _item = (du.class); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             {
                                 __auto_type _coll = du.members;
@@ -1668,23 +1668,23 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
                         __auto_type _coll = roles;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type rl = _coll.data[_i];
-                            __auto_type _mv_897 = rl;
-                            switch (_mv_897.tag) {
+                            __auto_type _mv_898 = rl;
+                            switch (_mv_898.tag) {
                                 case types_RoleId_named_role:
                                 {
-                                    __auto_type i = _mv_897.data.named_role;
+                                    __auto_type i = _mv_898.data.named_role;
                                     ({ __auto_type _lst_p = &(out); __auto_type _item = (((gate_EntityRef){.kind = types_EntityKind_entity_object_property, .entity = i, .axiom = ax})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     break;
                                 }
                                 case types_RoleId_inverse_role:
                                 {
-                                    __auto_type i = _mv_897.data.inverse_role;
+                                    __auto_type i = _mv_898.data.inverse_role;
                                     ({ __auto_type _lst_p = &(out); __auto_type _item = (((gate_EntityRef){.kind = types_EntityKind_entity_object_property, .entity = i, .axiom = ax})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                     break;
                                 }
                                 case types_RoleId_fresh_role:
                                 {
-                                    __auto_type _ = _mv_897.data.fresh_role;
+                                    __auto_type _ = _mv_898.data.fresh_role;
                                     break;
                                 }
                             }
@@ -1698,18 +1698,18 @@ slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_o
 }
 
 uint8_t gate_entity_ref_declared(owl2_Signature sig, gate_EntityRef e) {
-    __auto_type _mv_898 = e.kind;
-    if (_mv_898 == types_EntityKind_entity_class) {
+    __auto_type _mv_899 = e.kind;
+    if (_mv_899 == types_EntityKind_entity_class) {
         return owl2_signature_has_class(sig, e.entity);
-    } else if (_mv_898 == types_EntityKind_entity_object_property) {
+    } else if (_mv_899 == types_EntityKind_entity_object_property) {
         return owl2_signature_has_object_property(sig, e.entity);
-    } else if (_mv_898 == types_EntityKind_entity_data_property) {
+    } else if (_mv_899 == types_EntityKind_entity_data_property) {
         return 1;
-    } else if (_mv_898 == types_EntityKind_entity_annotation_property) {
+    } else if (_mv_899 == types_EntityKind_entity_annotation_property) {
         return 1;
-    } else if (_mv_898 == types_EntityKind_entity_individual) {
+    } else if (_mv_899 == types_EntityKind_entity_individual) {
         return 1;
-    } else if (_mv_898 == types_EntityKind_entity_datatype) {
+    } else if (_mv_899 == types_EntityKind_entity_datatype) {
         return 1;
     }
     SLOP_UNREACHABLE();

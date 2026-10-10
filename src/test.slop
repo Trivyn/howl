@@ -6207,13 +6207,126 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
         (list-push ts (make-triple arena b1 f ea))
         (list-push ts (make-triple arena b1 f eb))
         (list-push ts (make-triple arena b1 r nil-t))
-        (match (rdf-list-checked arena (graph-to-indexed arena ts) b1)
-          ((ok _) false)
-          ((error e)
-            (match e
-              ((list-branching _) true)
-              ((list-truncated _) false)
-              ((list-cyclic _)    false)))))))
+        (and (list-branches arena ts b1)
+             ;; and two rdf:rest values, the same hazard one step on
+             (list-branches arena (rest-forked arena) b1)))))
+
+  (fn rest-forked ((arena Arena))
+    (@intent "A list cell with one rdf:first and two rdf:rest values")
+    (@spec ((Arena) -> (List Triple)))
+    (@alloc arena)
+    (let ((b1 (make-blank arena 1))
+          (b2 (make-blank arena 2))
+          (nil-t (make-iri arena RDF_NIL))
+          (f  (make-iri arena RDF_FIRST))
+          (r  (make-iri arena RDF_REST))
+          (mut ts (list-new arena Triple)))
+      (do
+        (list-push ts (make-triple arena b1 f (ex-iri arena "A")))
+        (list-push ts (make-triple arena b1 r nil-t))
+        (list-push ts (make-triple arena b1 r b2))
+        (list-push ts (make-triple arena b2 f (ex-iri arena "B")))
+        (list-push ts (make-triple arena b2 r nil-t))
+        ts)))
+
+  (fn list-branches ((arena Arena) (ts (List Triple)) (head Term))
+    (@intent "Does the list at head fault as branching?")
+    (@spec ((Arena (List Triple) Term) -> Bool))
+    (@alloc arena)
+    (match (rdf-list-checked arena (graph-to-indexed arena ts) head)
+      ((ok _) false)
+      ((error e)
+        (match e
+          ((list-branching _) true)
+          ((list-truncated _) false)
+          ((list-cyclic _)    false)))))
+
+  ;; ============================================================
+  ;; Decode, row by row: what one triple (or one malformed set of
+  ;; triples) decodes to, as text. These pin readings that no other test
+  ;; or golden saw: mutants of decode's restructure survived them.
+  ;; ============================================================
+
+  (fn decode-prefix ()
+    (@intent "The shared prefix block for the decode rows")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n:A a owl:Class . :r a owl:ObjectProperty . :s a owl:ObjectProperty .\n:d a owl:DatatypeProperty . :d2 a owl:DatatypeProperty .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n")
+
+  (fn decoded-text ((arena Arena) (ttl String))
+    (@intent "An inline document's decoded axioms but its declarations, one per line, or its fault")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    (match (parse-ttl-string arena ttl)
+      ((error _) "<did not parse>")
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error _) "<stage 0 faulted>")
+          ((ok s0)
+            (let ((mut out ""))
+              (do
+                (for-each (l (decode-rendered arena (decode-axioms arena (. s0 dict) (. s0 triples))))
+                  (when (not (starts-with l "Declaration("))
+                    (set! out (string-concat arena out (string-concat arena l "\n")))))
+                out)))))))
+
+  (fn decodes-exactly ((arena Arena) (label String) (ttl String) (want String))
+    (@intent "Does the document decode to exactly these lines? Prints what it got when not")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (let ((got (decoded-text arena (string-concat arena (decode-prefix) ttl))))
+      (if (string-eq got want)
+        true
+        (do
+          (println (string-concat arena (string-concat arena "  [decode row] " label) ": decoded"))
+          (println got)
+          false))))
+
+  (fn test-decode-rows ((arena Arena))
+    (@intent "Each reading below decodes exactly as written")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and
+      ;; An n-ary data restriction names its properties in list order.
+      (decodes-exactly arena "n-ary data restriction"
+        ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperties ( :d :d2 ) ; owl:allValuesFrom xsd:string ] ."
+        "ReservedVocabulary(_:b0 <http://www.w3.org/2002/07/owl#onProperties> _:b1 .)\nSubClassOf(http://example.org/t#A DataRange(DataAllValuesFrom(onProperties(http://example.org/t#d http://example.org/t#d2) http://www.w3.org/2001/XMLSchema#string)))\n")
+      ;; Data members make an AllDisjointProperties data, never roles.
+      (decodes-exactly arena "AllDisjointProperties over data properties"
+        "[ a owl:AllDisjointProperties ; owl:members ( :d :d2 ) ] ."
+        "DataAxiom(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#AllDisjointProperties> .)\n")
+      ;; A data property with an individual target is malformed data, never
+      ;; a negative object assertion.
+      (decodes-exactly arena "negative assertion on a data property, individual target"
+        "[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :d ; owl:targetIndividual :b ] ."
+        "DataAxiom(_:b0 <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#NegativePropertyAssertion> .)\n")
+      ;; A chain on a blank node that is no inverse names no property.
+      (decodes-exactly arena "chain on a blank subject"
+        "_:p owl:propertyChainAxiom ( :r :s ) ."
+        "owl:propertyChainAxiom on a non-IRI subject\n")
+      ;; Reserved vocabulary as an assertion's SOURCE, as for its target.
+      (decodes-exactly arena "reserved source of an assertion"
+        "owl:Thing :r :b ."
+        "ReservedVocabulary(<http://www.w3.org/2002/07/owl#Thing> <http://example.org/t#r> <http://example.org/t#b> .)\n")
+      ;; Of several malformed triples, the LAST in document order is the
+      ;; fault reported: a function of the document, and pinned.
+      (decodes-exactly arena "the last fault wins"
+        "_:p rdfs:domain :A . :r owl:inverseOf _:q ."
+        "owl:inverseOf with a non-IRI object\n")
+      ;; The data lemma (§5.2). A use climbs the told hierarchy to its top
+      ;; however the document orders it: written top-down, it takes a
+      ;; second pass, so d3 is used and its domain is no inert axiom.
+      (decodes-exactly arena "a use climbs every level of the data hierarchy"
+        ":d3 a owl:DatatypeProperty . :d2 rdfs:subPropertyOf :d3 . :d rdfs:subPropertyOf :d2 . :d3 rdfs:domain :A . :a :d \"x\" ."
+        "DataAxiom(<http://example.org/t#d2> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> <http://example.org/t#d3> .)\nDataAxiom(<http://example.org/t#d> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> <http://example.org/t#d2> .)\nDataAxiom(<http://example.org/t#d3> <http://www.w3.org/2000/01/rdf-schema#domain> <http://example.org/t#A> .)\nDataAxiom(<http://example.org/t#a> <http://example.org/t#d> \"x\" .)\n")
+      ;; An equivalence carries a use both ways.
+      (decodes-exactly arena "an equivalence carries a use both ways"
+        ":d owl:equivalentProperty :d2 . :d rdfs:domain :A . :a :d2 \"x\" ."
+        "DataAxiom(<http://example.org/t#d> <http://www.w3.org/2002/07/owl#equivalentProperty> <http://example.org/t#d2> .)\nDataAxiom(<http://example.org/t#d> <http://www.w3.org/2000/01/rdf-schema#domain> <http://example.org/t#A> .)\nDataAxiom(<http://example.org/t#a> <http://example.org/t#d2> \"x\" .)\n")
+      ;; owl:bottomDataProperty unused is idle: its domain is inert.
+      (decodes-exactly arena "an unused bottom data property is idle"
+        "owl:bottomDataProperty rdfs:domain :A ."
+        "")))
 
   (fn test-sort-is-stable ((arena Arena))
     (@intent "Ties keep their input order — what §6.8 determinism rests on")
@@ -6902,6 +7015,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-anonymous-members-are-omissions-not-faults arena)))
             (print-test-result "decode: an anonymous AllDifferent/oneOf member is an omission" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-decode-rows arena)))
+            (print-test-result "decode: each pinned reading decodes exactly as written" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negative-assertion-decodes-whole arena)))

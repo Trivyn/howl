@@ -222,6 +222,17 @@
     (list-branching String)   ; a cell with several rdf:first or rdf:rest
     (list-cyclic    String))) ; rdf:rest returns to a cell already seen
 
+  (fn cell-fault ((nf Int) (nr Int))
+    (@intent "What is wrong with a list cell, by its counts of rdf:first and rdf:rest; none for one of each")
+    (@spec ((Int Int) -> (Option ListFault)))
+    (@pure)
+    (cond
+      ((== nf 0) (some (union-new ListFault list-truncated "list cell has no rdf:first")))
+      ((> nf 1)  (some (union-new ListFault list-branching "list cell has several rdf:first values")))
+      ((== nr 0) (some (union-new ListFault list-truncated "list cell has no rdf:rest")))
+      ((> nr 1)  (some (union-new ListFault list-branching "list cell has several rdf:rest values")))
+      (else      (none))))
+
   (fn rdf-list-checked ((arena Arena) (g TermStore) (head Term))
     (@intent "Walk an RDF collection, distinguishing well-formed from malformed")
     (@spec ((Arena TermStore Term) -> (Result (List Term) ListFault)))
@@ -257,28 +268,10 @@
               (set-put visited current)
               (let ((firsts (store-objects arena g current first-pred))
                     (rests  (store-objects arena g current rest-pred)))
-                (let ((nf (cast Int (list-len firsts)))
-                      (nr (cast Int (list-len rests))))
-                  (cond
-                    ((== nf 0)
-                      (do (set! fault (some (union-new ListFault list-truncated
-                                              "list cell has no rdf:first")))
-                          (set! done true)))
-                    ((> nf 1)
-                      (do (set! fault (some (union-new ListFault list-branching
-                                              "list cell has several rdf:first values")))
-                          (set! done true)))
-                    ((== nr 0)
-                      (do (set! fault (some (union-new ListFault list-truncated
-                                              "list cell has no rdf:rest")))
-                          (set! done true)))
-                    ((> nr 1)
-                      (do (set! fault (some (union-new ListFault list-branching
-                                              "list cell has several rdf:rest values")))
-                          (set! done true)))
-                    (else
-                      (do (list-push out (term-at firsts 0))
-                          (set! current (term-at rests 0))))))))))
+                (match (cell-fault (cast Int (list-len firsts)) (cast Int (list-len rests)))
+                  ((some f) (do (set! fault (some f)) (set! done true)))
+                  ((none)   (do (list-push out (term-at firsts 0))
+                                (set! current (term-at rests 0)))))))))
         (match fault
           ((some f) (error f))
           ((none)   (ok out))))))
@@ -552,6 +545,24 @@
       ((some i) i)
       ((none)   -1)))
 
+  (fn rebuild-one ((arena Arena) (st TermStore) (a Term) (src-pred Term) (prop-pred Term) (tgt-pred Term))
+    (@intent "One owl:Axiom node's triple, or which of its parts is unusable")
+    (@spec ((Arena TermStore Term Term Term Term) -> (Result IdTriple String)))
+    (@alloc arena)
+    (match (one-object arena st a src-pred)
+      ((error _) (error "owl:Axiom node without a usable owl:annotatedSource"))
+      ((ok subj)
+        (match (one-object arena st a prop-pred)
+          ((error _) (error "owl:Axiom node without a usable owl:annotatedProperty"))
+          ((ok pred)
+            (match (one-object arena st a tgt-pred)
+              ((error _) (error "owl:Axiom node without a usable owl:annotatedTarget"))
+              ((ok obj)
+                (ok (record-new IdTriple
+                      (s (term-id st subj))
+                      (p (term-id st pred))
+                      (o (term-id st obj)))))))))))
+
   (fn rebuild-candidates ((arena Arena) (st TermStore) (ax-subjs (List Int)))
     (@intent "Each owl:Axiom node's rebuilt triple, from a store of the annotated* triples")
     (@spec ((Arena TermStore (List Int)) -> Rebuilt))
@@ -563,23 +574,9 @@
           (mut fault (Option String) (none)))
       (do
         (for-each (ai ax-subjs)
-          (let ((a (term-of st ai)))
-            (match (one-object arena st a src-pred)
-              ((error _)
-                (set! fault (some "owl:Axiom node without a usable owl:annotatedSource")))
-              ((ok subj)
-                (match (one-object arena st a prop-pred)
-                  ((error _)
-                    (set! fault (some "owl:Axiom node without a usable owl:annotatedProperty")))
-                  ((ok pred)
-                    (match (one-object arena st a tgt-pred)
-                      ((error _)
-                        (set! fault (some "owl:Axiom node without a usable owl:annotatedTarget")))
-                      ((ok obj)
-                        (list-push out (record-new IdTriple
-                                         (s (term-id st subj))
-                                         (p (term-id st pred))
-                                         (o (term-id st obj))))))))))))
+          (match (rebuild-one arena st (term-of st ai) src-pred prop-pred tgt-pred)
+            ((error m) (set! fault (some m)))
+            ((ok t)    (list-push out t))))
         (record-new Rebuilt (triples out) (fault fault)))))
 
   (fn asserted-among ((arena Arena) (candidates (List IdTriple)) (doc Encoded))
@@ -853,26 +850,45 @@
       ((term-blank _) "_")
       (_              (render-term arena t))))
 
+  (fn terms-text ((arena Arena) (terms (List Term)))
+    (@intent "Each term's filler text, separated by spaces")
+    (@spec ((Arena (List Term)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (tm terms)
+          (do
+            (when (not first) (set! out (string-concat arena out " ")))
+            (set! out (string-concat arena out (filler-text arena tm)))
+            (set! first false)))
+        out)))
+
+  (fn on-properties-text ((arena Arena) (g TermStore) (b Term))
+    (@intent "An n-ary data restriction's owl:onProperties as text, or ? when it cannot be read")
+    (@spec ((Arena TermStore Term) -> String))
+    (@alloc arena)
+    (match (obj-of arena g b OWL_ON_PROPERTIES)
+      ((error _) "?")
+      ((ok ht)
+        (match (rdf-list-checked arena g ht)
+          ((error _)  "?")
+          ((ok terms) (terms-text arena terms))))))
+
+  (fn nary-text ((arena Arena) (name String) (props String) (fill String))
+    (@intent "name(onProperties(props) fill)")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (string-concat arena name
+      (string-concat arena "(onProperties(" (string-concat arena props
+        (string-concat arena ") " (string-concat arena fill ")"))))))
+
   (fn nary-data-restriction ((arena Arena) (g TermStore) (b Term))
     (@intent "An n-ary data restriction (owl:onProperties), named by kind, properties and filler")
     (@spec ((Arena TermStore Term) -> RawConcept))
     (@alloc arena)
     (let ((pred  (data-restriction-pred arena g b))
-          (props (match (obj-of arena g b OWL_ON_PROPERTIES)
-                   ((error _) "?")
-                   ((ok ht)
-                     (match (rdf-list-checked arena g ht)
-                       ((error _) "?")
-                       ((ok terms)
-                         (let ((mut out "")
-                               (mut first true))
-                           (do
-                             (for-each (tm terms)
-                               (do
-                                 (when (not first) (set! out (string-concat arena out " ")))
-                                 (set! out (string-concat arena out (filler-text arena tm)))
-                                 (set! first false)))
-                             out)))))))
+          (props (on-properties-text arena g b))
           (fill (if (== (string-len pred) 0)
                   ""
                   (match (obj-of arena g b pred)
@@ -880,9 +896,7 @@
                     ((error _) "?")))))
       (union-new RawConcept rc-data
         (union-new InputRef rdf-fragment
-          (string-concat arena (data-restriction-name pred)
-            (string-concat arena "(onProperties(" (string-concat arena props
-              (string-concat arena ") " (string-concat arena fill ")")))))))))
+          (nary-text arena (data-restriction-name pred) props fill)))))
 
   (fn data-restriction ((arena Arena) (g TermStore) (b Term))
     (@intent "A restriction on a data property, as the data range it is: kind, property, filler")
@@ -1018,29 +1032,42 @@
                   (ok (union-new RawConcept rc-all  r (box-concept arena c)))
                   (ok (union-new RawConcept rc-some r (box-concept arena c))))))))))) 
 
+  (fn cardinality-count ((arena Arena) (g TermStore) (b Term) (count-pred String))
+    (@intent "A cardinality restriction's one count")
+    (@spec ((Arena TermStore Term String) -> (Result Int String)))
+    (@alloc arena)
+    (match (obj-of arena g b count-pred)
+      ((error _) (error "cardinality restriction without exactly one count"))
+      ((ok ct)   (literal-count ct))))
+
+  (fn qualified-cardinality ((arena Arena) (g TermStore) (b Term)
+                             (kind CardKind) (r RoleId) (n Int) (fuel Int))
+    (@intent "A qualified cardinality, once its role and count are read: its owl:onClass")
+    (@spec ((Arena TermStore Term CardKind RoleId Int Int) -> (Result RawConcept String)))
+    (@alloc arena)
+    (match (obj-of arena g b OWL_ON_CLASS)
+      ((error _) (error "qualified cardinality without exactly one owl:onClass"))
+      ((ok qt)
+        (match (decode-concept arena g qt (- fuel 1))
+          ((error m) (error m))
+          ((ok qc)   (ok (union-new RawConcept rc-qcard kind r n (box-concept arena qc))))))))
+
   (fn decode-cardinality ((arena Arena) (g TermStore) (b Term)
                           (kind CardKind) (count-pred String) (qualified Bool) (fuel Int))
     (@intent "Cardinality restrictions, qualified or not — out of profile, still decoded")
     (@spec ((Arena TermStore Term CardKind String Bool Int) -> (Result RawConcept String)))
     (@alloc arena)
+    ;; Role, then count, then the class: the first missing part is the
+    ;; fault reported.
     (match (decode-role arena g b)
       ((error m) (error m))
       ((ok r)
-        (match (obj-of arena g b count-pred)
-          ((error _) (error "cardinality restriction without exactly one count"))
-          ((ok ct)
-            (match (literal-count ct)
-              ((error m) (error m))
-              ((ok n)
-                (if (not qualified)
-                  (ok (union-new RawConcept rc-card kind r n))
-                  (match (obj-of arena g b OWL_ON_CLASS)
-                    ((error _) (error "qualified cardinality without exactly one owl:onClass"))
-                    ((ok qt)
-                      (match (decode-concept arena g qt (- fuel 1))
-                        ((error m) (error m))
-                        ((ok qc)
-                          (ok (union-new RawConcept rc-qcard kind r n (box-concept arena qc)))))))))))))))
+        (match (cardinality-count arena g b count-pred)
+          ((error m) (error m))
+          ((ok n)
+            (if (not qualified)
+              (ok (union-new RawConcept rc-card kind r n))
+              (qualified-cardinality arena g b kind r n fuel)))))))
 
   (fn decode-anon ((arena Arena) (g TermStore) (b Term) (fuel Int))
     (@intent "A blank node in a class position — dispatch on its vocabulary")
@@ -1506,6 +1533,75 @@
           ((ok h)    (some h))
           ((error _) (none))))))
 
+  (fn decode-declaration ((arena Arena) (t Triple) (k EntityKind))
+    (@intent "A declaration of kind k, unless its subject is anonymous or a reserved individual")
+    (@spec ((Arena Triple EntityKind) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (term-iri-value (. t subject))
+      ;; OWL 2 FORBIDS RESERVED IRIs AS NAMED INDIVIDUALS, and
+      ;; `owl:Nothing` as an individual is the case that matters: it is
+      ;; a distinct node from `class-node(⊥)` under tag-first
+      ;; comparison, so it would NOT collide with ⊥ and would instead be
+      ;; silently consumed as an ordinary declaration. Declaring
+      ;; `owl:Thing a owl:Class` stays legitimate — that one IS a class,
+      ;; and rejecting it would refuse ordinary documents.
+      ((some s)
+        (if (and (== k 'entity-individual) (is-reserved-iri (. s value)))
+          (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+          (ok (union-new RawAxiom ra-declaration
+                (record-new RawDeclaration (kind k) (entity s))))))
+      ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))
+
+  (fn decode-all-different ((arena Arena) (g TermStore) (t Triple))
+    (@intent "owl:AllDifferent as DifferentIndividuals over its members, or the fragment they make it")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (members-head arena g (. t subject))
+      ((none) (error "owl:AllDifferent without owl:members or owl:distinctMembers"))
+      ((some head)
+        (match (decode-node-list arena g head)
+          ((error m) (error m))
+          ((ok nl)
+            (match nl
+              ((all-named ns)  (ok (union-new RawAxiom ra-different-individuals ns)))
+              ((has-literal)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+              ((has-anonymous) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+              ((has-reserved)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))))))))
+
+  (fn decode-all-disjoint-classes ((arena Arena) (g TermStore) (t Triple))
+    (@intent "owl:AllDisjointClasses as DisjointClasses over its members")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (members-head arena g (. t subject))
+      ((none) (error "owl:AllDisjointClasses without owl:members"))
+      ((some head)
+        (match (decode-concept-list arena g head CONCEPT_FUEL)
+          ((error m) (error m))
+          ;; FEWER THAN TWO MEMBERS IS NO AXIOM. OWL 2's mapping requires
+          ;; at least two; read as DisjointClasses, one member became
+          ;; disjoint from itself (a false unsatisfiable) and none became
+          ;; ⊤ ⊑ ⊥ (a false inconsistent). It is kept as unrecognized, so
+          ;; it is omitted and the run is inconclusive
+          ;; (out-of-profile/disjoint-arity).
+          ((ok cs)   (if (< (list-len cs) 2)
+                       (ok (union-new RawAxiom ra-unrecognized (frag arena t)))
+                       (ok (union-new RawAxiom ra-disjoint-classes cs))))))))
+
+  (fn decode-all-disjoint-properties ((arena Arena) (g TermStore) (t Triple))
+    (@intent "owl:AllDisjointProperties as DisjointObjectProperties, or data when a member is")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (members-head arena g (. t subject))
+      ((none) (error "owl:AllDisjointProperties without owl:members"))
+      ((some head)
+        ;; DisjointDataProperties shares the spelling; any data member
+        ;; makes it data.
+        (if (list-has-data arena g head)
+          (ok (union-new RawAxiom ra-data-axiom (frag arena t)))
+          (match (decode-role-list arena g head)
+            ((error m) (error m))
+            ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs))))))))
+
   (fn decode-typed ((arena Arena) (g TermStore) (t Triple) (obj IRI))
     (@intent "An rdf:type triple — declaration, characteristic, or class assertion")
     (@spec ((Arena TermStore Triple IRI) -> (Result RawAxiom String)))
@@ -1515,24 +1611,9 @@
         ;; A declaration. CONSUMED, not in-profile: it yields no
         ;; NormAxiom but is READ, and dropping it loses acceptance (c).
         ((match (entity-kind-of ov) ((some _) true) ((none) false))
-          (match (term-iri-value (. t subject))
-            ((some s)
-              (match (entity-kind-of ov)
-                ;; OWL 2 FORBIDS RESERVED IRIs AS NAMED INDIVIDUALS, and
-                ;; `owl:Nothing` as an individual is the case that
-                ;; matters: it is a distinct node from `class-node(⊥)`
-                ;; under tag-first comparison, so it would NOT collide
-                ;; with ⊥ and would instead be silently consumed as an
-                ;; ordinary declaration. Declaring `owl:Thing a owl:Class`
-                ;; stays legitimate — that one IS a class, and rejecting
-                ;; it would refuse ordinary documents.
-                ((some k)
-                  (if (and (== k 'entity-individual) (is-reserved-iri (. s value)))
-                    (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
-                    (ok (union-new RawAxiom ra-declaration
-                          (record-new RawDeclaration (kind k) (entity s))))))
-                ((none)   (error "unreachable: declaration type vanished"))))
-            ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))))
+          (match (entity-kind-of ov)
+            ((some k) (decode-declaration arena t k))
+            ((none)   (error "unreachable: declaration type vanished"))))
 
         ;; A CHARACTERISTIC OF A DATA PROPERTY IS DATA. FunctionalProperty
         ;; is the one OWL 2 allows (FunctionalDataProperty); read as an
@@ -1564,45 +1645,9 @@
         ;; "never silently drop an axiom" violation this AST exists to
         ;; prevent, and it is invisible to a coverage check because the
         ;; axiom is still counted as handled.
-        ((== (string-cmp ov OWL_ALL_DIFFERENT) 0)
-          (match (members-head arena g (. t subject))
-            ((none) (error "owl:AllDifferent without owl:members or owl:distinctMembers"))
-            ((some head)
-              (match (decode-node-list arena g head)
-                ((error m) (error m))
-                ((ok nl)
-                  (match nl
-                    ((all-named ns)  (ok (union-new RawAxiom ra-different-individuals ns)))
-                    ((has-literal)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                    ((has-anonymous) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
-                    ((has-reserved)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))))))))
-        ((== (string-cmp ov OWL_ALL_DISJOINT_CLASSES) 0)
-          (match (members-head arena g (. t subject))
-            ((none) (error "owl:AllDisjointClasses without owl:members"))
-            ((some head)
-              (match (decode-concept-list arena g head CONCEPT_FUEL)
-                ((error m) (error m))
-                ;; FEWER THAN TWO MEMBERS IS NO AXIOM. OWL 2's mapping
-                ;; requires at least two; read as DisjointClasses, one
-                ;; member became disjoint from itself (a false
-                ;; unsatisfiable) and none became ⊤ ⊑ ⊥ (a false
-                ;; inconsistent). It is kept as unrecognized, so it is
-                ;; omitted and the run is inconclusive
-                ;; (out-of-profile/disjoint-arity).
-                ((ok cs)   (if (< (list-len cs) 2)
-                             (ok (union-new RawAxiom ra-unrecognized (frag arena t)))
-                             (ok (union-new RawAxiom ra-disjoint-classes cs))))))))
-        ((== (string-cmp ov OWL_ALL_DISJOINT_PROPERTIES) 0)
-          (match (members-head arena g (. t subject))
-            ((none) (error "owl:AllDisjointProperties without owl:members"))
-            ((some head)
-              ;; DisjointDataProperties shares the spelling; any data
-              ;; member makes it data.
-              (if (list-has-data arena g head)
-                (ok (union-new RawAxiom ra-data-axiom (frag arena t)))
-                (match (decode-role-list arena g head)
-                  ((error m) (error m))
-                  ((ok rs)   (ok (union-new RawAxiom ra-disjoint-properties rs))))))))
+        ((== (string-cmp ov OWL_ALL_DIFFERENT) 0)           (decode-all-different arena g t))
+        ((== (string-cmp ov OWL_ALL_DISJOINT_CLASSES) 0)    (decode-all-disjoint-classes arena g t))
+        ((== (string-cmp ov OWL_ALL_DISJOINT_PROPERTIES) 0) (decode-all-disjoint-properties arena g t))
         ((== (string-cmp ov OWL_NEGATIVE_PROPERTY_ASSERTION) 0)
           (decode-negative-assertion arena g t))
         ;; SWRL is out of profile at every rung and never to be
@@ -1647,6 +1692,55 @@
                   (ok (union-new RawAxiom ra-same-individual ns))
                   (ok (union-new RawAxiom ra-different-individuals ns))))))))))
 
+  (fn negative-object-assertion ((arena Arena) (t Triple) (r RoleId) (st Term) (tt Term))
+    (@intent "¬r(a, b) for an object property, by what its source and target individuals are")
+    (@spec ((Arena Triple RoleId Term Term) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (individual-term st)
+      ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+      ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+      ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
+      ((named-individual a)
+        (match (individual-term tt)
+          ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+          ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+          ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
+          ((named-individual b)
+            (ok (union-new RawAxiom ra-negative-assertion
+                  (record-new RawEdge
+                    (role r)
+                    (from (union-new Node individual-node a))
+                    (to   (union-new Node individual-node b))))))))))
+
+  (fn negative-target-individual ((arena Arena) (g TermStore) (t Triple) (pt Term) (st Term))
+    (@intent "A negative assertion with an owl:targetIndividual, by what its property is")
+    (@spec ((Arena TermStore Triple Term Term) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (obj-of arena g (. t subject) OWL_TARGET_INDIVIDUAL)
+      ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetIndividual"))
+      ((ok tt)
+        ;; A data property with an individual target is malformed data,
+        ;; never a negative OBJECT assertion.
+        (if (data-property-term arena g pt)
+          (ok (union-new RawAxiom ra-data-axiom (frag arena t)))
+          (match (property-expression arena g pt)
+            ((none)   (error "owl:assertionProperty is not a property"))
+            ((some r) (negative-object-assertion arena t r st tt)))))))
+
+  (fn negative-target ((arena Arena) (g TermStore) (t Triple) (pt Term) (st Term))
+    (@intent "A negative assertion's one target, a value or an individual, then what it asserts")
+    (@spec ((Arena TermStore Triple Term Term) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (let ((x (. t subject)))
+      (cond
+        ((and (has-pred arena g x OWL_TARGET_VALUE) (has-pred arena g x OWL_TARGET_INDIVIDUAL))
+          (error "owl:NegativePropertyAssertion with both owl:targetIndividual and owl:targetValue"))
+        ((has-pred arena g x OWL_TARGET_VALUE)
+          (match (obj-of arena g x OWL_TARGET_VALUE)
+            ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetValue"))
+            ((ok _)    (ok (union-new RawAxiom ra-data-axiom (frag arena t))))))
+        (else (negative-target-individual arena g t pt st)))))
+
   (fn decode-negative-assertion ((arena Arena) (g TermStore) (t Triple))
     (@intent "`_:x a owl:NegativePropertyAssertion` as ¬r(a, b), read from its node")
     (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
@@ -1666,46 +1760,15 @@
     ;; one property, one source, and exactly one target — an individual
     ;; or a value, never both. Classifying on owl:targetValue first let a
     ;; node with nothing else, or with both targets, pass as a data axiom.
+    ;; The parts are read in that order, property, source, then target,
+    ;; and the first one missing is the fault.
     (let ((x (. t subject)))
       (match (obj-of arena g x OWL_ASSERTION_PROPERTY)
         ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:assertionProperty"))
         ((ok pt)
           (match (obj-of arena g x OWL_SOURCE_INDIVIDUAL)
             ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:sourceIndividual"))
-            ((ok st)
-              (cond
-                ((and (has-pred arena g x OWL_TARGET_VALUE) (has-pred arena g x OWL_TARGET_INDIVIDUAL))
-                  (error "owl:NegativePropertyAssertion with both owl:targetIndividual and owl:targetValue"))
-                ((has-pred arena g x OWL_TARGET_VALUE)
-                  (match (obj-of arena g x OWL_TARGET_VALUE)
-                    ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetValue"))
-                    ((ok _)    (ok (union-new RawAxiom ra-data-axiom (frag arena t))))))
-                (else
-                (match (obj-of arena g x OWL_TARGET_INDIVIDUAL)
-                  ((error _) (error "owl:NegativePropertyAssertion without exactly one owl:targetIndividual"))
-                  ((ok tt)
-                    ;; A data property with an individual target is
-                    ;; malformed data, never a negative OBJECT assertion.
-                    (if (data-property-term arena g pt)
-                    (ok (union-new RawAxiom ra-data-axiom (frag arena t)))
-                    (match (property-expression arena g pt)
-                      ((none) (error "owl:assertionProperty is not a property"))
-                      ((some r)
-                        (match (individual-term st)
-                          ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                          ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
-                          ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
-                          ((named-individual a)
-                            (match (individual-term tt)
-                              ((literal-individual)   (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                              ((anonymous-individual) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
-                              ((reserved-individual)  (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t))))
-                              ((named-individual b)
-                                (ok (union-new RawAxiom ra-negative-assertion
-                                      (record-new RawEdge
-                                        (role r)
-                                        (from (union-new Node individual-node a))
-                                        (to   (union-new Node individual-node b))))))))))))))))))))))
+            ((ok st)   (negative-target arena g t pt st)))))))
 
   (fn decode-class-assertion ((arena Arena) (g TermStore) (t Triple))
     (@intent "`a rdf:type C` as ClassAssertion(C, a), for a named or an anonymous C")
@@ -1783,6 +1846,186 @@
           ((signature-has-data-property sig i)       2)
           (else                                       0)))))
 
+  (fn decode-sub-class-of ((arena Arena) (g TermStore) (t Triple))
+    (@intent "rdfs:subClassOf as SubClassOf, the subclass decoded first")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (decode-concept arena g (. t subject) CONCEPT_FUEL)
+      ((error m) (error m))
+      ((ok lhs)
+        (match (decode-concept arena g (. t object) CONCEPT_FUEL)
+          ((error m) (error m))
+          ((ok rhs)
+            (ok (union-new RawAxiom ra-sub-class-of
+                  (box-concept arena lhs) (box-concept arena rhs))))))))
+
+  (fn decode-property-chain ((arena Arena) (g TermStore) (t Triple))
+    (@intent "owl:propertyChainAxiom as a chain inclusion, as written")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (property-expression arena g (. t subject))
+      ((none) (error "owl:propertyChainAxiom on a non-IRI subject"))
+      ((some super)
+        (match (decode-role-list arena g (. t object))
+          ((error m) (error m))
+          ;; AS WRITTEN, any n >= 2. The RBox regularity and range gates
+          ;; read the chain before decomposition, so it must not be
+          ;; binarized here.
+          ((ok steps)
+            (ok (union-new RawAxiom ra-property-chain
+                  (record-new RawChain (steps steps) (super super)))))))))
+
+  (fn decode-sub-property ((arena Arena) (g TermStore) (sig Signature) (t Triple))
+    (@intent "rdfs:subPropertyOf: an annotation, data, or an object role inclusion")
+    (@spec ((Arena TermStore Signature Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; ANNOTATION AXIOMS ARE SEMANTICALLY INERT IN OWL 2. Decoding
+    ;; SubAnnotationPropertyOf as a role inclusion injects an edge into
+    ;; the TOLD HIERARCHY that both RBox gates read, and can reject a
+    ;; valid RBox.
+    (cond
+      ((== (property-axiom-kind sig (. t subject)) 1)
+        (ok (union-new RawAxiom ra-annotation)))
+      ((== (property-axiom-kind sig (. t subject)) 2)
+        (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+      (else
+        (match (property-expression arena g (. t subject))
+          ((none) (error "rdfs:subPropertyOf on a non-IRI subject"))
+          ((some sub)
+            (match (property-expression arena g (. t object))
+              ((none)     (error "rdfs:subPropertyOf with a non-IRI object"))
+              ((some sup) (ok (union-new RawAxiom ra-sub-object-property sub sup)))))))))
+
+  (fn property-pair ((arena Arena) (g TermStore) (t Triple) (pred String))
+    (@intent "A property triple's subject and object as roles, or the fault naming pred")
+    (@spec ((Arena TermStore Triple String) -> (Result (List RoleId) String)))
+    (@alloc arena)
+    (match (property-expression arena g (. t subject))
+      ((none) (error (string-concat arena pred " on a non-IRI subject")))
+      ((some a)
+        (match (property-expression arena g (. t object))
+          ((none) (error (string-concat arena pred " with a non-IRI object")))
+          ((some b)
+            (let ((mut rs (list-new arena RoleId)))
+              (do (list-push rs a) (list-push rs b) (ok rs))))))))
+
+  (fn decode-inverse-of ((arena Arena) (g TermStore) (t Triple))
+    (@intent "owl:inverseOf as InverseObjectProperties")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (property-expression arena g (. t subject))
+      ((none) (error "owl:inverseOf on a non-IRI subject"))
+      ((some a)
+        (match (property-expression arena g (. t object))
+          ((none)   (error "owl:inverseOf with a non-IRI object"))
+          ((some b) (ok (union-new RawAxiom ra-inverse-properties a b)))))))
+
+  (fn decode-domain ((arena Arena) (g TermStore) (sig Signature) (t Triple))
+    (@intent "rdfs:domain: an annotation, data, or ObjectPropertyDomain")
+    (@spec ((Arena TermStore Signature Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; AnnotationPropertyDomain has NO semantics in OWL 2. Decoding it as
+    ;; ObjectPropertyDomain injects the GCI `∃p.⊤ ⊑ C` — content the
+    ;; document does not state — so HOWL would derive subsumptions that
+    ;; do not hold. That is unsoundness, not incompleteness.
+    (cond
+      ((== (property-axiom-kind sig (. t subject)) 1)
+        (ok (union-new RawAxiom ra-annotation)))
+      ((== (property-axiom-kind sig (. t subject)) 2)
+        (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+      (else
+        (match (property-expression arena g (. t subject))
+          ((none) (error "rdfs:domain on a non-IRI subject"))
+          ((some r)
+            (match (decode-concept arena g (. t object) CONCEPT_FUEL)
+              ((error m) (error m))
+              ((ok c)    (ok (union-new RawAxiom ra-object-property-domain
+                               r (box-concept arena c))))))))))
+
+  (fn decode-range ((arena Arena) (g TermStore) (sig Signature) (t Triple))
+    (@intent "rdfs:range: an annotation, data, or ObjectPropertyRange")
+    (@spec ((Arena TermStore Signature Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; Same shared spelling: AnnotationPropertyRange and
+    ;; DataPropertyRange both write rdfs:range. Reading an annotation
+    ;; range as an object-property range is worse here than elsewhere,
+    ;; because ranges feed ran_T and are then eliminated into real GCIs.
+    (cond
+      ((== (property-axiom-kind sig (. t subject)) 1)
+        (ok (union-new RawAxiom ra-annotation)))
+      ((== (property-axiom-kind sig (. t subject)) 2)
+        (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
+      (else
+        (match (property-expression arena g (. t subject))
+          ((none) (error "rdfs:range on a non-IRI subject"))
+          ((some r)
+            (match (decode-concept arena g (. t object) CONCEPT_FUEL)
+              ((error m) (error m))
+              ((ok c)    (ok (union-new RawAxiom ra-object-property-range
+                               r (box-concept arena c))))))))))
+
+  (fn decode-disjoint-union ((arena Arena) (g TermStore) (t Triple))
+    (@intent "DisjointUnion(C D1 … Dn), read whole, over a class name C")
+    (@spec ((Arena TermStore Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    ;; C is a class name in OWL 2; anything else is kept as unrecognized,
+    ;; an omission. Out of profile in every rung but sriq, and an
+    ;; omission before it was read whole: a member list that does not
+    ;; decode is kept as unrecognized, not a fault.
+    (match (term-iri-value (. t subject))
+      ((none) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
+      ((some c)
+        (match (decode-concept-list arena g (. t object) CONCEPT_FUEL)
+          ((error _) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
+          ((ok ds)
+            (ok (union-new RawAxiom ra-disjoint-union
+                  (record-new RawDisjointUnion (class c) (members ds)))))))))
+
+  (fn assertion-between ((arena Arena) (t Triple) (r RoleId) (sfrom IRI) (sto IRI))
+    (@intent "r(a, b) between two named individuals, unless either is reserved vocabulary")
+    (@spec ((Arena Triple RoleId IRI IRI) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (if (or (is-reserved-iri (. sfrom value))
+            (is-reserved-iri (. sto value)))
+      (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
+      (ok (union-new RawAxiom ra-object-property-assertion
+            (record-new RawEdge
+              (role r)
+              (from (union-new Node individual-node sfrom))
+              (to   (union-new Node individual-node sto)))))))
+
+  (fn decode-property-assertion ((arena Arena) (t Triple))
+    (@intent "A triple on a declared object property as ObjectPropertyAssertion, or the fragment it makes")
+    (@spec ((Arena Triple) -> (Result RawAxiom String)))
+    (@alloc arena)
+    (match (role-of-term (. t predicate))
+      ((none) (error "unreachable: declared object property is not an IRI"))
+      ((some r)
+        (match (term-iri-value (. t subject))
+          ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+          ((some sfrom)
+            (match (term-iri-value (. t object))
+              ((none)     (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
+              ((some sto) (assertion-between arena t r sfrom sto))))))))
+
+  (fn list-axiom ((r (Result (List RawConcept) String)) (disjoint Bool))
+    (@intent "Two decoded classes as EquivalentClasses or DisjointClasses, or the fault")
+    (@spec (((Result (List RawConcept) String) Bool) -> (Result RawAxiom String)))
+    (match r
+      ((error m) (error m))
+      ((ok cs)   (if disjoint
+                   (ok (union-new RawAxiom ra-disjoint-classes cs))
+                   (ok (union-new RawAxiom ra-equivalent-classes cs))))))
+
+  (fn pair-axiom ((r (Result (List RoleId) String)) (disjoint Bool))
+    (@intent "Two decoded roles as EquivalentObjectProperties or DisjointObjectProperties, or the fault")
+    (@spec (((Result (List RoleId) String) Bool) -> (Result RawAxiom String)))
+    (match r
+      ((error m) (error m))
+      ((ok rs)   (if disjoint
+                   (ok (union-new RawAxiom ra-disjoint-properties rs))
+                   (ok (union-new RawAxiom ra-equivalent-properties rs))))))
+
   (fn decode-axiom ((arena Arena) (g TermStore) (sig Signature) (t Triple))
     (@intent "One triple → one RawAxiom, per §5.2's disposition table")
     (@spec ((Arena TermStore Signature Triple) -> (Result RawAxiom String)))
@@ -1805,59 +2048,15 @@
                 ((term-blank _) (decode-class-assertion arena g t))
                 (_              (ok (union-new RawAxiom ra-unrecognized (frag arena t))))))
 
-            ((== (string-cmp pv RDFS_SUBCLASS_OF) 0)
-              (match (decode-concept arena g (. t subject) CONCEPT_FUEL)
-                ((error m) (error m))
-                ((ok lhs)
-                  (match (decode-concept arena g (. t object) CONCEPT_FUEL)
-                    ((error m) (error m))
-                    ((ok rhs)
-                      (ok (union-new RawAxiom ra-sub-class-of
-                            (box-concept arena lhs) (box-concept arena rhs))))))))
-
-            ((== (string-cmp pv OWL_EQUIVALENT_CLASS) 0)
-              (match (binary-concepts arena g t)
-                ((error m) (error m))
-                ((ok cs)   (ok (union-new RawAxiom ra-equivalent-classes cs)))))
-
-            ((== (string-cmp pv OWL_DISJOINT_WITH) 0)
-              (match (binary-concepts arena g t)
-                ((error m) (error m))
-                ((ok cs)   (ok (union-new RawAxiom ra-disjoint-classes cs)))))
+            ((== (string-cmp pv RDFS_SUBCLASS_OF) 0)     (decode-sub-class-of arena g t))
+            ((== (string-cmp pv OWL_EQUIVALENT_CLASS) 0) (list-axiom (binary-concepts arena g t) false))
+            ((== (string-cmp pv OWL_DISJOINT_WITH) 0)    (list-axiom (binary-concepts arena g t) true))
 
             ;; EVERY PROPERTY POSITION BELOW TAKES AN ObjectInverseOf
             ;; (`property-expression`); a blank node that is none names no
             ;; property, and faults.
-            ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0)
-              (match (property-expression arena g (. t subject))
-                ((none) (error "owl:propertyChainAxiom on a non-IRI subject"))
-                ((some super)
-                  (match (decode-role-list arena g (. t object))
-                    ((error m) (error m))
-                    ((ok steps)
-                      ;; AS WRITTEN, any n >= 2. The RBox regularity and
-                      ;; range gates read the chain before decomposition,
-                      ;; so it must not be binarized here.
-                      (ok (union-new RawAxiom ra-property-chain
-                            (record-new RawChain (steps steps) (super super)))))))))
-
-            ((== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)
-              ;; ANNOTATION AXIOMS ARE SEMANTICALLY INERT IN OWL 2.
-              ;; Decoding SubAnnotationPropertyOf as a role inclusion
-              ;; injects an edge into the TOLD HIERARCHY that both RBox
-              ;; gates read, and can reject a valid RBox.
-              (cond
-                ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation)))
-                ((== (property-axiom-kind sig (. t subject)) 2)
-                  (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                (else
-              (match (property-expression arena g (. t subject))
-                ((none) (error "rdfs:subPropertyOf on a non-IRI subject"))
-                ((some sub)
-                  (match (property-expression arena g (. t object))
-                    ((none) (error "rdfs:subPropertyOf with a non-IRI object"))
-                    ((some sup) (ok (union-new RawAxiom ra-sub-object-property sub sup)))))))))
+            ((== (string-cmp pv OWL_PROPERTY_CHAIN_AXIOM) 0) (decode-property-chain arena g t))
+            ((== (string-cmp pv RDFS_SUBPROPERTY_OF) 0)      (decode-sub-property arena g sig t))
 
             ;; The property axioms below share their spelling with the
             ;; data side, and either data operand makes the axiom data:
@@ -1865,102 +2064,22 @@
             ;; ACCEPTED, and DisjointDataProperties rendered as the object
             ;; form.
             ((and (or (== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
-                      (or (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)
-                          (== (string-cmp pv OWL_INVERSE_OF) 0)))
+                      (== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)
+                      (== (string-cmp pv OWL_INVERSE_OF) 0))
                   (or (data-property-term arena g (. t subject))
                       (data-property-term arena g (. t object))))
               (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
 
             ((== (string-cmp pv OWL_EQUIVALENT_PROPERTY) 0)
-              (match (property-expression arena g (. t subject))
-                ((none) (error "owl:equivalentProperty on a non-IRI subject"))
-                ((some a)
-                  (match (property-expression arena g (. t object))
-                    ((none) (error "owl:equivalentProperty with a non-IRI object"))
-                    ((some b)
-                      (let ((mut rs (list-new arena RoleId)))
-                        (do (list-push rs a) (list-push rs b)
-                            (ok (union-new RawAxiom ra-equivalent-properties rs)))))))))
-
+              (pair-axiom (property-pair arena g t "owl:equivalentProperty") false))
             ((== (string-cmp pv OWL_PROPERTY_DISJOINT_WITH) 0)
-              (match (property-expression arena g (. t subject))
-                ((none) (error "owl:propertyDisjointWith on a non-IRI subject"))
-                ((some a)
-                  (match (property-expression arena g (. t object))
-                    ((none) (error "owl:propertyDisjointWith with a non-IRI object"))
-                    ((some b)
-                      (let ((mut rs (list-new arena RoleId)))
-                        (do (list-push rs a) (list-push rs b)
-                            (ok (union-new RawAxiom ra-disjoint-properties rs)))))))))
-
-            ((== (string-cmp pv OWL_INVERSE_OF) 0)
-              (match (property-expression arena g (. t subject))
-                ((none) (error "owl:inverseOf on a non-IRI subject"))
-                ((some a)
-                  (match (property-expression arena g (. t object))
-                    ((none) (error "owl:inverseOf with a non-IRI object"))
-                    ((some b) (ok (union-new RawAxiom ra-inverse-properties a b)))))))
-
-            ((== (string-cmp pv RDFS_DOMAIN) 0)
-              ;; AnnotationPropertyDomain has NO semantics in OWL 2.
-              ;; Decoding it as ObjectPropertyDomain injects the GCI
-              ;; `∃p.⊤ ⊑ C` — content the document does not state — so
-              ;; HOWL would derive subsumptions that do not hold. That
-              ;; is unsoundness, not incompleteness.
-              (cond
-                ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation)))
-                ((== (property-axiom-kind sig (. t subject)) 2)
-                  (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                (else
-              (match (property-expression arena g (. t subject))
-                ((none) (error "rdfs:domain on a non-IRI subject"))
-                ((some r)
-                  (match (decode-concept arena g (. t object) CONCEPT_FUEL)
-                    ((error m) (error m))
-                    ((ok c) (ok (union-new RawAxiom ra-object-property-domain
-                                  r (box-concept arena c))))))))))
-
-            ((== (string-cmp pv RDFS_RANGE) 0)
-              ;; Same shared spelling: AnnotationPropertyRange and
-              ;; DataPropertyRange both write rdfs:range. Reading an
-              ;; annotation range as an object-property range is worse
-              ;; here than elsewhere, because ranges feed ran_T and are
-              ;; then eliminated into real GCIs.
-              (cond
-                ((== (property-axiom-kind sig (. t subject)) 1)
-                  (ok (union-new RawAxiom ra-annotation)))
-                ((== (property-axiom-kind sig (. t subject)) 2)
-                  (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
-                (else
-              (match (property-expression arena g (. t subject))
-                ((none) (error "rdfs:range on a non-IRI subject"))
-                ((some r)
-                  (match (decode-concept arena g (. t object) CONCEPT_FUEL)
-                    ((error m) (error m))
-                    ((ok c) (ok (union-new RawAxiom ra-object-property-range
-                                  r (box-concept arena c))))))))))
-
-            ((== (string-cmp pv OWL_SAME_AS) 0)
-              (decode-individual-pair arena t true))
-
-            ((== (string-cmp pv OWL_DIFFERENT_FROM) 0)
-              (decode-individual-pair arena t false))
-
-            ;; DisjointUnion(C D1 … Dn), read whole. C is a class name in
-            ;; OWL 2; anything else is kept as unrecognized, an omission.
-            ((== (string-cmp pv OWL_DISJOINT_UNION_OF) 0)
-              (match (term-iri-value (. t subject))
-                ((none) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
-                ((some c)
-                  ;; Out of profile in every rung but sriq, and an
-                  ;; omission before it was read whole: a member list that
-                  ;; does not decode is kept as unrecognized, not a fault.
-                  (match (decode-concept-list arena g (. t object) CONCEPT_FUEL)
-                    ((error _) (ok (union-new RawAxiom ra-unrecognized (frag arena t))))
-                    ((ok ds)
-                      (ok (union-new RawAxiom ra-disjoint-union
-                            (record-new RawDisjointUnion (class c) (members ds)))))))))
+              (pair-axiom (property-pair arena g t "owl:propertyDisjointWith") true))
+            ((== (string-cmp pv OWL_INVERSE_OF) 0)     (decode-inverse-of arena g t))
+            ((== (string-cmp pv RDFS_DOMAIN) 0)        (decode-domain arena g sig t))
+            ((== (string-cmp pv RDFS_RANGE) 0)         (decode-range arena g sig t))
+            ((== (string-cmp pv OWL_SAME_AS) 0)        (decode-individual-pair arena t true))
+            ((== (string-cmp pv OWL_DIFFERENT_FROM) 0) (decode-individual-pair arena t false))
+            ((== (string-cmp pv OWL_DISJOINT_UNION_OF) 0) (decode-disjoint-union arena g t))
             ((== (string-cmp pv OWL_HAS_KEY) 0)
               (ok (union-new RawAxiom ra-has-key (frag arena t))))
 
@@ -1972,24 +2091,7 @@
             ((signature-has-annotation-property sig p)
               (ok (union-new RawAxiom ra-annotation)))
 
-            ((signature-has-object-property sig p)
-              (match (role-of-term (. t predicate))
-                ((none) (error "unreachable: declared object property is not an IRI"))
-                ((some r)
-                  (match (term-iri-value (. t subject))
-                    ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
-                    ((some sfrom)
-                      (match (term-iri-value (. t object))
-                        ((none) (ok (union-new RawAxiom ra-anonymous-individual (frag arena t))))
-                        ((some sto)
-                          (if (or (is-reserved-iri (. sfrom value))
-                                  (is-reserved-iri (. sto value)))
-                            (ok (union-new RawAxiom ra-reserved-vocabulary (frag arena t)))
-                            (ok (union-new RawAxiom ra-object-property-assertion
-                                  (record-new RawEdge
-                                    (role r)
-                                    (from (union-new Node individual-node sfrom))
-                                    (to   (union-new Node individual-node sto))))))))))))) 
+            ((signature-has-object-property sig p) (decode-property-assertion arena t))
 
             ;; Reserved vocabulary HOWL does not implement. NOT a
             ;; laziness catch-all: this is what lets a future profile's
@@ -2097,49 +2199,83 @@
         (list-push ps OWL_TARGET_VALUE)
         ps)))
 
+  ;; Stage 1's walk: what it reads for every triple, and what it has made
+  ;; so far (the axioms kept, the inert count, the fault), written through
+  ;; the pointer so that no triple copies the stores, as passing them by
+  ;; value would.
+  (type Decoding (record
+    (ig        TermStore)
+    (sig       Signature)
+    (dv        DataVocab)
+    (lemma     DataLemma)
+    (npa-nodes (Set Int))
+    (npa-parts (Set Int))
+    (out       (List RawAxiom))
+    (inert     Int)
+    (fault     (Option String))))
+
+  (fn keep-axiom ((c (Ptr Decoding)) (ax RawAxiom))
+    (@intent "A decoded axiom: counted when inert, kept for the gate otherwise")
+    (@spec (((Ptr Decoding) RawAxiom) -> Bool))
+    (do
+      (match (disposition 'profile-el ax)
+        ('d-inert          (set! (. (deref c) inert) (+ (. (deref c) inert) 1)))
+        ('d-consumed       (list-push (. (deref c) out) ax))
+        ('d-in-profile     (list-push (. (deref c) out) ax))
+        ('d-out-of-profile (list-push (. (deref c) out) ax)))
+      true))
+
+  (fn decode-triple ((arena Arena) (c (Ptr Decoding)) (it IdTriple) (t Triple))
+    (@intent "What stage 1 makes of one triple: an axiom kept or counted, nothing, or the fault")
+    (@spec ((Arena (Ptr Decoding) IdTriple Triple) -> Bool))
+    (@alloc arena)
+    (cond
+      ((malformed-inverse arena (. (deref c) ig) t)
+        (do (list-push (. (deref c) out) (union-new RawAxiom ra-unrecognized (frag arena t))) true))
+      ;; Read through another triple's axiom: structural, a negative
+      ;; assertion's part, or inside a tree the data lemma set aside.
+      ((or (structural-triple t)
+           (negative-assertion-part it (. (deref c) npa-nodes) (. (deref c) npa-parts))
+           (set-has (. (. (deref c) lemma) tree) (. it s)))
+        true)
+      ((inert-data-axiom (. (deref c) dv) (. (deref c) lemma) it)
+        (keep-axiom c (union-new RawAxiom ra-inert-data)))
+      (else
+        (match (decode-axiom arena (. (deref c) ig) (. (deref c) sig) t)
+          ((error m) (do (set! (. (deref c) fault) (some m)) true))
+          ((ok ax)   (keep-axiom c ax))))))
+
   (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)))
     (@intent "Stage 1 over a store built by the caller")
     (@spec ((Arena TermStore TermStore (List IdTriple)) -> (Result Stage1 Fault)))
     (@alloc arena)
+    ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
+    ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the decoded
+    ;; axioms. The count is what shows they were recognized as inert,
+    ;; rather than lost or misfiled out of profile. The data lemma's
+    ;; axioms are among them (data-lemma, below); the triples of the
+    ;; trees set aside with them are skipped like a negative assertion's
+    ;; parts, read through the axiom that owns them.
+    ;;
+    ;; THE LAST FAULT WINS: a declaration conflict first, then each
+    ;; malformed triple in document order replaces it.
     (let ((sig (build-signature arena dict triples))
-          (mut out (list-new arena RawAxiom))
-          (mut inert 0)
-          (mut fault (Option String) (none)))
+          (conflict (declaration-conflict arena sig dict triples))
+          (npa-nodes (negative-assertion-nodes arena dict triples))
+          (npa-parts (negative-assertion-parts arena dict))
+          (dv        (data-vocab arena dict))
+          (lemma     (data-lemma arena dict sig dv triples))
+          (c (cast (Ptr Decoding) (arena-alloc arena (sizeof Decoding)))))
       (do
-        (set! fault (declaration-conflict arena sig dict triples))
-        ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
-        ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the
-        ;; decoded axioms. The count is what shows they were recognized
-        ;; as inert, rather than lost or misfiled out of profile. The data
-        ;; lemma's axioms are among them (data-lemma, below); the triples
-        ;; of the trees set aside with them are skipped like a negative
-        ;; assertion's parts, read through the axiom that owns them.
-        (let ((npa-nodes (negative-assertion-nodes arena dict triples))
-              (npa-parts (negative-assertion-parts arena dict))
-              (dv        (data-vocab arena dict))
-              (lemma     (data-lemma arena dict sig dv triples)))
-        (for-each (it triples)
-          (let ((t (triple-of dict it)))
-            (if (malformed-inverse arena ig t)
-              (list-push out (union-new RawAxiom ra-unrecognized (frag arena t)))
-            (when (and (not (structural-triple t))
-                       (not (negative-assertion-part it npa-nodes npa-parts))
-                       (not (set-has (. lemma tree) (. it s))))
-              (if (inert-data-axiom dv lemma it)
-                (match (disposition 'profile-el (union-new RawAxiom ra-inert-data))
-                  ('d-inert (set! inert (+ inert 1)))
-                  (_        (list-push out (union-new RawAxiom ra-inert-data))))
-                (match (decode-axiom arena ig sig t)
-                  ((error m) (set! fault (some m)))
-                  ((ok ax)
-                    (match (disposition 'profile-el ax)
-                      ('d-inert          (set! inert (+ inert 1)))
-                      ('d-consumed       (list-push out ax))
-                      ('d-in-profile     (list-push out ax))
-                      ('d-out-of-profile (list-push out ax)))))))))))
-        (match fault
+        (set! (deref c) (record-new Decoding
+                          (ig ig) (sig sig) (dv dv) (lemma lemma)
+                          (npa-nodes npa-nodes) (npa-parts npa-parts)
+                          (out (list-new arena RawAxiom)) (inert 0) (fault conflict)))
+        (for-each (it triples) (decode-triple arena c it (triple-of dict it)))
+        (match (. (deref c) fault)
           ((some m) (error (union-new Fault input-error m)))
-          ((none)   (ok (record-new Stage1 (axioms out) (signature sig) (inert inert))))))))
+          ((none)   (ok (record-new Stage1 (axioms (. (deref c) out)) (signature sig)
+                          (inert (. (deref c) inert)))))))))
 
 ;; ============================================================
   ;; The data lemma (§5.2): the property axioms of an IDLE data property
@@ -2202,6 +2338,40 @@
       (top           (vocab-id arena dict OWL_TOP_DATA_PROPERTY))
       (on-datatype   (vocab-id arena dict OWL_ON_DATATYPE))))
 
+  (fn promote-use ((v DataVocab) (used (Set Int)) (it IdTriple))
+    (@intent "Carry a use up one hierarchy triple between data properties, both ways for an equivalence; did it move?")
+    (@spec ((DataVocab (Set Int) IdTriple) -> Bool))
+    (let ((mut changed false))
+      (do
+        (when (and (or (== (. it p) (. v sub-property)) (== (. it p) (. v equivalent)))
+                   (set-has used (. it s)) (not (set-has used (. it o))))
+          (do (set-put used (. it o)) (set! changed true)))
+        (when (and (== (. it p) (. v equivalent))
+                   (set-has used (. it o)) (not (set-has used (. it s))))
+          (do (set-put used (. it s)) (set! changed true)))
+        changed)))
+
+  (fn promote-uses ((v DataVocab) (data (Set Int)) (used (Set Int)) (triples (List IdTriple)))
+    (@intent "One pass up the told data hierarchy; did any use move?")
+    (@spec ((DataVocab (Set Int) (Set Int) (List IdTriple)) -> Bool))
+    (let ((mut changed false))
+      (do
+        (for-each (it triples)
+          (when (and (set-has data (. it s)) (set-has data (. it o)) (promote-use v used it))
+            (set! changed true)))
+        changed)))
+
+  (fn collect-idle ((v DataVocab) (used (Set Int)) (idle (Set Int)) (bottom Int) (triples (List IdTriple)))
+    (@intent "Into idle: every declared data property nothing uses, owl:bottomDataProperty included")
+    (@spec ((DataVocab (Set Int) (Set Int) Int (List IdTriple)) -> Unit))
+    (do
+      (for-each (it triples)
+        (when (and (== (. it p) (. v rdf-type)) (== (. it o) (. v data-property))
+                   (not (set-has used (. it s))))
+          (set-put idle (. it s))))
+      (when (and (>= bottom 0) (not (set-has used bottom)))
+        (set-put idle bottom))))
+
   (fn data-lemma ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (triples (List IdTriple)))
     (@intent "§5.2's data lemma over a document: its data properties, the idle ones, and the trees set aside")
     (@spec ((Arena TermStore Signature DataVocab (List IdTriple)) -> DataLemma))
@@ -2230,23 +2400,8 @@
               (mark-data-uses dict sig v data used it))
             ;; Up the told hierarchy, to a fixpoint: one pass per level.
             (while changed
-              (do
-                (set! changed false)
-                (for-each (it triples)
-                  (when (and (set-has data (. it s)) (set-has data (. it o)))
-                    (do
-                      (when (and (or (== (. it p) (. v sub-property)) (== (. it p) (. v equivalent)))
-                                 (set-has used (. it s)) (not (set-has used (. it o))))
-                        (do (set-put used (. it o)) (set! changed true)))
-                      (when (and (== (. it p) (. v equivalent))
-                                 (set-has used (. it o)) (not (set-has used (. it s))))
-                        (do (set-put used (. it s)) (set! changed true))))))))
-            (for-each (it triples)
-              (when (and (== (. it p) (. v rdf-type)) (== (. it o) (. v data-property))
-                         (not (set-has used (. it s))))
-                (set-put idle (. it s))))
-            (when (and (>= bottom 0) (not (set-has used bottom)))
-              (set-put idle bottom))
+              (set! changed (promote-uses v data used triples)))
+            (collect-idle v used idle bottom triples)
             (collect-inert-trees arena dict v idle tree triples)))
         (record-new DataLemma (data data) (idle idle) (tree tree)))))
 
@@ -2431,6 +2586,13 @@
     (@pure)
     (and (set-has parts (. it p)) (set-has nodes (. it s))))
 
+  (fn property-kinds ((sig Signature) (e IRI))
+    (@intent "Under how many of the three property kinds e is declared")
+    (@spec ((Signature IRI) -> Int))
+    (+ (if (signature-has-object-property sig e) 1 0)
+       (+ (if (signature-has-data-property sig e) 1 0)
+          (if (signature-has-annotation-property sig e) 1 0))))
+
   (fn declaration-conflict ((arena Arena) (sig Signature) (dict TermStore) (triples (List IdTriple)))
     (@intent "An IRI declared under two mutually exclusive kinds")
     (@spec ((Arena Signature TermStore (List IdTriple)) -> (Option String)))
@@ -2444,6 +2606,7 @@
     ;; `:a :p :b`, which is the same ambiguity an undeclared property
     ;; has and gets the same answer: input-error, not an omission,
     ;; because there is no determinate EntityKind to report.
+    ;; The last conflicting IRI in document order is the one named.
     (let ((type-pred (. dict rdf-type))
           (mut bad (Option String) (none)))
       (do
@@ -2451,13 +2614,10 @@
           (when (== (. it p) type-pred)
             (match (term-iri-value (term-of dict (. it s)))
               ((some e)
-                (let ((np (+ (if (signature-has-object-property sig e) 1 0)
-                          (+ (if (signature-has-data-property sig e) 1 0)
-                             (if (signature-has-annotation-property sig e) 1 0)))))
-                  (when (> np 1)
-                    (set! bad (some (string-concat arena
-                                      "IRI declared under two disjoint property kinds: "
-                                      (. e value)))))))
+                (when (> (property-kinds sig e) 1)
+                  (set! bad (some (string-concat arena
+                                    "IRI declared under two disjoint property kinds: "
+                                    (. e value))))))
               ((none) (do)))))
         bad)))
 )
