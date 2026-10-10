@@ -1,0 +1,21 @@
+# sriq: a QUALIFIED at-most (DL4 with a filler). A has at most one r-successor in B,
+# but r-successors in B ⊓ C and in B ⊓ D, with C and D disjoint: A is
+# unsatisfiable. Drop the qualification's filler and it is too (≤1 r.⊤), so the
+# second class F, which has a successor outside B as well, tells them apart:
+# F ⊑ ≤1 r.B ⊓ ∃r.(B ⊓ C) ⊓ ∃r.¬B stays satisfiable.
+# Expect: A unsatisfiable; F satisfiable.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :F a owl:Class .
+:r a owl:ObjectProperty .
+:C owl:disjointWith :D .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass :B ] ,
+                   [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B :C ) ] ] ,
+                   [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B :D ) ] ] .
+:F rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass :B ] ,
+                   [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:intersectionOf ( :B :C ) ] ] ,
+                   [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:complementOf :B ] ] .

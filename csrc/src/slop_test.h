@@ -15,6 +15,7 @@
 #include "slop_sroiq.h"
 #include "slop_sriqnormal.h"
 #include "slop_sriqnames.h"
+#include "slop_sroiqfss.h"
 #include "slop_file.h"
 #include "slop_types.h"
 #include "slop_canon.h"
@@ -32,6 +33,7 @@
 #include "slop_kscids.h"
 #include "slop_kscpremise.h"
 #include "slop_kscnames.h"
+#include <string.h>
 
 typedef struct test_KscFixture test_KscFixture;
 typedef struct test_RunAs test_RunAs;
@@ -93,6 +95,12 @@ SLOP_LIST_DEFINE(types_KFact, slop_list_types_KFact)
 #define SLOP_LIST_TYPES_ADDRESSED_DEFINED
 #define SLOP_LIST_TYPES_ADDRESSED_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
+#endif
+
+#ifndef SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
@@ -163,6 +171,11 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 #define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
+#endif
+
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
 struct test_KscFixture {
@@ -1205,7 +1218,15 @@ uint8_t test_test_rdf_list_branching_is_a_fault(slop_arena* arena);
 uint8_t test_test_sort_is_stable(slop_arena* arena);
 uint8_t test_test_sort_is_a_permutation(slop_arena* arena);
 void test_print_test_result(slop_string name, uint8_t passed);
+slop_string test_arg_text(uint8_t** argv, int64_t i);
+slop_list_rdf_IRI test_dump_classes(slop_arena* arena, owl2_Signature sig);
+int64_t test_print_lines(slop_list_string ls);
+int64_t test_dump_refused(slop_string m);
+int64_t test_dump_s1(slop_arena* arena, gate_GateResult gr, slop_result_sriqnormal_S0_string r);
+int64_t test_dump_stage(slop_arena* arena, slop_string stage, gate_GateResult gr);
+int64_t test_sriq_dump(slop_arena* arena, slop_string stage, slop_string path);
 int main(int argc, char** _c_argv);
+int64_t test_run_suite(void);
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
 #define SLOP_OPTION_TYPES_OUTCOME_DEFINED
@@ -1325,12 +1346,6 @@ SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 #define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
-#endif
-
-#ifndef SLOP_LIST_RDF_IRI_DEFINED
-#define SLOP_LIST_RDF_IRI_DEFINED
-#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
-SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
 #ifndef SLOP_LIST_TYPES_SUBPAIR_DEFINED

@@ -1,0 +1,10 @@
+# sriq: a UNION with a NEGATION. A ⊑ B ⊔ C and A ⊑ ¬B give A ⊑ C.
+# Expect: A ⊑ C.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:A rdfs:subClassOf [ owl:unionOf ( :B :C ) ] , [ owl:complementOf :B ] .
