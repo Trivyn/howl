@@ -36,7 +36,8 @@
                 concept-cmp CardKind))
   (import ttl (parse-ttl-file parse-ttl-string))
   (import sroiq (SConcept SAxiom render-saxiom box-sc))
-  (import sriqnormal (S0 sriq-s0 sriq-s1 S2 sriq-s2 render-dl))
+  (import sriqnormal (S0 sriq-s0 S2 sriq-s2 render-dl))
+  (import sriqelim (S1 sriq-s1 S1_BOUND sriq-s1-invariants))
   (import sriqnames (SriqNormal sriq-normalize sriq-names render-sriq-normal sriq-invariants))
   (import sroiqfss (fss-axioms fss-normal))
 
@@ -2320,9 +2321,9 @@
             ((error m) (string-concat arena lead (string-concat arena "refused: " (string-concat arena m "\n"))))
             ((ok s0)
               (if through-s1
-                (match (sriq-s1 arena s0)
+                (match (sriq-s1 arena s0 S1_BOUND)
                   ((error m) (string-concat arena lead (string-concat arena "refused: " (string-concat arena m "\n"))))
-                  ((ok axs)  (string-concat arena lead (render-saxioms arena axs))))
+                  ((ok s1)   (string-concat arena lead (render-saxioms arena (. s1 axioms)))))
                 (string-concat arena lead (render-saxioms arena (. s0 axioms))))))))))
 
   (fn s0-is ((arena Arena) (label String) (ttl String) (want String))
@@ -2471,9 +2472,9 @@
                      ":r rdfs:subPropertyOf :s .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ."
                      "urn:x:A ⊑ ∃urn:x:r.urn:x:B\nurn:x:r ⊑ urn:x:s\n"))
           (set! ok false))
-        (when (not (s1-is arena "S1's hook refuses a complex RIA"
+        (when (not (s1-is arena "transitivity alone is eliminated: nothing is left"
                      ":r a owl:TransitiveProperty ."
-                     "refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: urn:x:r ∘ urn:x:r ⊑ urn:x:r\n"))
+                     ""))
           (set! ok false))
         ok)))
 
@@ -2512,13 +2513,13 @@
             (for-each (l (sort-strings arena ls)) (set! out (string-concat arena out (string-concat arena l "\n"))))
             out)))))
 
-  (fn s2-after-s1 ((arena Arena) (r (Result (List SAxiom) String)))
+  (fn s2-after-s1 ((arena Arena) (r (Result S1 String)))
     (@intent "S2 over S1's output, or S1's refusal")
-    (@spec ((Arena (Result (List SAxiom) String)) -> String))
+    (@spec ((Arena (Result S1 String)) -> String))
     (@alloc arena)
     (match r
       ((error m) (refusal-line arena m))
-      ((ok axs)  (s2-text arena (sriq-s2 arena axs)))))
+      ((ok s1)   (s2-text arena (sriq-s2 arena (. s1 axioms))))))
 
   (fn s2-after-s0 ((arena Arena) (r (Result S0 String)))
     (@intent "S1 then S2 over S0's output, or S0's refusal")
@@ -2526,7 +2527,7 @@
     (@alloc arena)
     (match r
       ((error m) (refusal-line arena m))
-      ((ok s0)   (s2-after-s1 arena (sriq-s1 arena s0)))))
+      ((ok s0)   (s2-after-s1 arena (sriq-s1 arena s0 S1_BOUND)))))
 
   (fn s2-of ((arena Arena) (ttl String))
     (@intent "S2's clauses for an inline document under sriq, one per line, sorted")
@@ -2557,8 +2558,7 @@
   ;; input — must change no byte of the output, and the output must keep
   ;; S5's promises (sriq-invariants). Tracked fixtures only: `make test`
   ;; is what CI runs, and corpus/vendor/ is fetched locally (corpus/fetch.sh).
-  ;; A fixture with a complex RIA has it set aside, since S1 (slice 6)
-  ;; would refuse it.
+  ;; S1 mints names too, so its input is reversed as well.
   ;; ------------------------------------------------------------
 
   (fn sriq-fixtures ((arena Arena))
@@ -2583,6 +2583,19 @@
         (list-push ps "corpus/fixtures/hazards/role-hierarchy-deep.ttl")
         (list-push ps "corpus/fixtures/el++/ksc-22.ttl")
         (list-push ps "corpus/fixtures/el++/ksc-28.ttl")
+        ;; Chains and transitivity, for S1 (slice 6d).
+        (list-push ps "corpus/fixtures/v0/transitive.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain.ttl")
+        (list-push ps "corpus/fixtures/v0/property-chain-nary.ttl")
+        (list-push ps "corpus/fixtures/v0/negation-chain.ttl")
+        (list-push ps "corpus/fixtures/probes/chain-binary.ttl")
+        (list-push ps "corpus/fixtures/hazards/rbox-regularity-accept.ttl")
+        (list-push ps "corpus/fixtures/hazards/chain-prefix-collision.ttl")
+        (list-push ps "corpus/fixtures/hazards/abox-chain-mixed.ttl")
+        (list-push ps "corpus/fixtures/el++/ksc-05.ttl")
+        (list-push ps "corpus/fixtures/sriq/sim12-example1.ttl")
+        (list-push ps "corpus/fixtures/sriq/symmetric.ttl")
+        (list-push ps "corpus/fixtures/sriq/inverse-all.ttl")
         ps)))
 
   (fn gate-triples-in ((arena Arena) (ts (List Triple)) (p Profile))
@@ -2618,36 +2631,30 @@
           (do (match (list-get xs k) ((some x) (list-push out x)) ((none) (do))) (set! k (- k 1))))
         out)))
 
-  (fn simple-rias-only ((arena Arena) (axs (List SAxiom)))
-    (@intent "S0's output with its complex RIAs set aside, for the corpus until S1 exists")
-    (@spec ((Arena (List SAxiom)) -> (List SAxiom)))
-    (@alloc arena)
-    (let ((mut out (list-new arena SAxiom)))
-      (do
-        (for-each (a axs)
-          (match a
-            ((sa-ria x) (when (== (list-len (. x word)) 1) (list-push out a)))
-            (_ (list-push out a))))
-        out)))
-
-  (fn s2-to-names ((arena Arena) (axs (List SAxiom)) (flip Bool) (sig Signature))
+  (fn s2-to-names ((arena Arena) (s1 S1) (flip Bool) (sig Signature))
     (@intent "S2 then S5, S2's input reversed on request")
-    (@spec ((Arena (List SAxiom) Bool Signature) -> (Result SriqNormal String)))
+    (@spec ((Arena S1 Bool Signature) -> (Result SriqNormal String)))
     (@alloc arena)
-    (match (sriq-s2 arena (if flip (reversed-saxioms arena axs) axs))
+    (match (sriq-s2 arena (if flip (reversed-saxioms arena (. s1 axioms)) (. s1 axioms)))
       ((error m) (error m))
-      ((ok s2)   (ok (sriq-names arena s2 sig)))))
+      ((ok s2)   (ok (sriq-names arena s2 sig (. s1 omitted))))))
 
-  (fn sriq-nf ((arena Arena) (gr GateResult) (flip-accepted Bool) (flip-s2 Bool))
-    (@intent "A gated document's sriq normal form, its inputs reordered on request, complex RIAs set aside if S1 refuses")
-    (@spec ((Arena GateResult Bool Bool) -> (Result SriqNormal String)))
+  (fn reversed-s0 ((arena Arena) (s0 S0))
+    (@intent "S0's output with its axioms last first")
+    (@spec ((Arena S0) -> S0))
+    (@alloc arena)
+    (record-new S0 (axioms (reversed-saxioms arena (. s0 axioms))) (rbox (. s0 rbox))))
+
+  (fn sriq-nf ((arena Arena) (gr GateResult) (flip-accepted Bool) (flip-s0 Bool) (flip-s2 Bool))
+    (@intent "A gated document's sriq normal form, its inputs reordered on request at three stages")
+    (@spec ((Arena GateResult Bool Bool Bool) -> (Result SriqNormal String)))
     (@alloc arena)
     (match (sriq-s0 arena (if flip-accepted (reversed-raw arena (. gr accepted)) (. gr accepted)))
       ((error m) (error m))
       ((ok s0)
-        (match (sriq-s1 arena s0)
-          ((error _) (s2-to-names arena (simple-rias-only arena (. s0 axioms)) flip-s2 (. gr signature)))
-          ((ok axs)  (s2-to-names arena axs flip-s2 (. gr signature)))))))
+        (match (sriq-s1 arena (if flip-s0 (reversed-s0 arena s0) s0) S1_BOUND)
+          ((error m) (error m))
+          ((ok s1)   (s2-to-names arena s1 flip-s2 (. gr signature)))))))
 
   (fn nf-lines ((arena Arena) (r (Result SriqNormal String)))
     (@intent "The rendered output, or the refusal as its one line")
@@ -2672,7 +2679,7 @@
                 false))))))
 
   (fn sriq-order-independent ((arena Arena) (path String))
-    (@intent "One document: triples reversed, accepted reversed and S2's input reversed all give the same bytes")
+    (@intent "One document: triples, the accepted list, S1's input and S2's input reversed all give the same bytes")
     (@spec ((Arena String) -> Bool))
     (@alloc arena)
     (match (parse-ttl-file arena path)
@@ -2684,16 +2691,18 @@
             (match (gate-triples-in arena (reversed-triples arena (. g triples)) 'profile-sriq)
               ((none) false)
               ((some rev)
-                (let ((n0 (sriq-nf arena fwd false false))
+                (let ((n0 (sriq-nf arena fwd false false false))
                       (l0 (nf-lines arena n0))
-                      (l1 (nf-lines arena (sriq-nf arena rev false false)))
-                      (l2 (nf-lines arena (sriq-nf arena fwd true false)))
-                      (l3 (nf-lines arena (sriq-nf arena fwd false true)))
+                      (l1 (nf-lines arena (sriq-nf arena rev false false false)))
+                      (l2 (nf-lines arena (sriq-nf arena fwd true false false)))
+                      (l3 (nf-lines arena (sriq-nf arena fwd false false true)))
+                      (l4 (nf-lines arena (sriq-nf arena fwd false true false)))
                       (mut ok (nf-invariants-hold arena path n0)))
                   (do
                     (when (not (same-lines l0 l1)) (do (print "  [s5] triples reversed differ: ") (println path) (set! ok false)))
                     (when (not (same-lines l0 l2)) (do (print "  [s5] accepted reversed differs: ") (println path) (set! ok false)))
                     (when (not (same-lines l0 l3)) (do (print "  [s5] S2's input reversed differs: ") (println path) (set! ok false)))
+                    (when (not (same-lines l0 l4)) (do (print "  [s5] S1's input reversed differs: ") (println path) (set! ok false)))
                     ok)))))))))
 
   (fn test-sriq-ids-row ((arena Arena))
@@ -2775,19 +2784,26 @@
         ((error _) (println "?")))
       true))
 
+  (fn is-chain-axiom ((a RawAxiom))
+    (@intent "A property chain, transitivity included (expand-sugar makes it one)")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (match a ((ra-property-chain _) true) (_ false)))
+
   (fn yield-kind ((arena Arena) (a RawAxiom) (sig Signature))
-    (@intent "One axiom normalised alone: 0 it yields as it should, 1 a chain awaiting S1, 2 a fault (printed)")
+    (@intent "One axiom normalised alone: 0 it yields as it should, 1 a chain S1 eliminated, 2 a fault (printed)")
     (@spec ((Arena RawAxiom Signature) -> Int))
     (@alloc arena)
+    ;; A chain alone constrains nothing S1 keeps: it is eliminated, and its
+    ;; consequences arrive only through the ∀s it expands (§5.5 S1).
     (match (sriq-normalize arena (one-raw arena a) sig)
-      ((error m)
-        (if (starts-with m "complex role inclusions")
-          1
-          (do (print "  [s5] refused alone: ") (println m) 2)))
+      ((error m) (do (print "  [s5] refused alone: ") (println m) 2))
       ((ok n)
-        (if (and (== (list-len (. n clauses)) 0) (not (yields-nothing-by-design a)))
-          (do (print-alone arena a) 2)
-          0))))
+        (cond
+          ((> (list-len (. n clauses)) 0) 0)
+          ((is-chain-axiom a)            1)
+          ((yields-nothing-by-design a)  0)
+          (else (do (print-alone arena a) 2))))))
 
   (fn every-axiom-yields ((arena Arena) (path String))
     (@intent "Each accepted axiom, normalised alone, gives clauses or is one that yields nothing by design")
@@ -2805,7 +2821,7 @@
                     (when (== k 2) (set! ok false)))))
             (print "  [s5] ") (print path) (print ": ")
             (print (int-to-string arena (cast Int (list-len (. gr accepted))))) (print " accepted, ")
-            (print (int-to-string arena chains)) (println " awaiting S1")
+            (print (int-to-string arena chains)) (println " chains eliminated by S1")
             ok)))))
 
   (fn test-sriq-every-axiom-yields ((arena Arena))
@@ -2817,6 +2833,156 @@
       (do
         (for-each (p (sriq-fixtures arena)) (when (not (every-axiom-yields arena p)) (set! ok false)))
         ok)))
+
+  (fn s1-text ((arena Arena) (s1 S1))
+    (@intent "S1's axioms, then what its guard omitted")
+    (@spec ((Arena S1) -> String))
+    (@alloc arena)
+    (let ((mut out (render-saxioms arena (. s1 axioms))))
+      (do (for-each (a (. s1 omitted)) (set! out (string-concat arena out (string-concat arena "omitted " (string-concat arena (render-saxiom arena a) "\n")))))
+          out)))
+
+  (fn s1-bounded-of ((arena Arena) (ttl String) (bound Int))
+    (@intent "S1 under a given bound on distinct labelled concepts")
+    (@spec ((Arena String Int) -> String))
+    (@alloc arena)
+    (match (gate-ttl-in arena (string-concat arena (s0-prefix) ttl) 'profile-sriq)
+      ((none) "did not gate\n")
+      ((some gr)
+        (match (sriq-s0 arena (. gr accepted))
+          ((error m) (string-concat arena "refused: " (string-concat arena m "\n")))
+          ((ok s0)
+            (match (sriq-s1 arena s0 bound)
+              ((error m) (string-concat arena "refused: " (string-concat arena m "\n")))
+              ((ok s1)   (s1-text arena s1))))))))
+
+  (fn s1-bounded-is ((arena Arena) (label String) (ttl String) (bound Int) (want String))
+    (@intent "Does S1 under this bound give exactly this? Prints what it got when not")
+    (@spec ((Arena String String Int String) -> Bool))
+    (@alloc arena)
+    (let ((got (s1-bounded-of arena ttl bound)))
+      (if (string-eq got want)
+        true
+        (do (print "  [s1] ") (println label) (print got) false))))
+
+  (fn test-sriq-s1-rows ((arena Arena))
+    (@intent "§5.5 S1, row by row: [Sim12] §4 with the two errata read as the SPEC pins them")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Each row is S1's output, hand-checked against Definitions 4–6:
+    ;; item 1 I ⊑ ∀S.F; item 2 I ⊑ ∀w.F (R1); item 3 F ⊑ ∀w.F (R2);
+    ;; item 4 I ⊑ ∀w.I (R3); item 5 F ⊑ I (R4); ∃R.C on the left gives
+    ;; C ⊑ I and expand(I ⊑ ∀inv(R).F).
+    (let ((mut ok true))
+      (do
+        (when (not (s1-bounded-is arena "the guard: past the bound, S0 minus its chains, the chains omitted"
+                     ":r a owl:TransitiveProperty .\n:s rdfs:subPropertyOf :r .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     0 "urn:x:A ⊑ ∀urn:x:r.urn:x:B\nurn:x:s ⊑ urn:x:r\nomitted urn:x:r ∘ urn:x:r ⊑ urn:x:r\n"))
+          (set! ok false))
+        (when (not (s1-bounded-is arena "the guard: at the bound, S1 runs whole"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     1 "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a filler is canonical before it is keyed: the named ∀ sorts after ≥2"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom [ owl:intersectionOf ( [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] [ a owl:Restriction ; owl:onProperty :s ; owl:minQualifiedCardinality 2 ; owl:onClass :C ] ) ] ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.(≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.(≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])] ⊑ ∀urn:x:r.F[∀urn:x:r.(≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.(≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])] ⊑ (≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])\nF[∀urn:x:r.(≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])] ⊑ I[∀urn:x:r.(≥2 urn:x:s.urn:x:C ⊓ I[∀urn:x:r.urn:x:B])]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "transitive: a positive ∀ becomes I, F and the automaton (items 1, 5)"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a domain on a transitive role: a negative ∃ (Definition 6's ∃ case)"
+                     ":r a owl:TransitiveProperty ; rdfs:domain :A ."
+                     "⊤ ⊑ I[∃urn:x:r.⊤]\nI[∃urn:x:r.⊤] ⊑ ∀urn:x:r⁻.F[∃urn:x:r.⊤]\nF[∃urn:x:r.⊤] ⊑ urn:x:A\nF[∃urn:x:r.⊤] ⊑ I[∃urn:x:r.⊤]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a range on a transitive role: ⊤ ⊑ ∀r.A"
+                     ":r a owl:TransitiveProperty ; rdfs:range :A ."
+                     "⊤ ⊑ I[∀urn:x:r.urn:x:A]\nI[∀urn:x:r.urn:x:A] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:A]\nF[∀urn:x:r.urn:x:A] ⊑ urn:x:A\nF[∀urn:x:r.urn:x:A] ⊑ I[∀urn:x:r.urn:x:A]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "symmetric and transitive: expanded both ways, one pair"
+                     ":r a owl:TransitiveProperty , owl:SymmetricProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r⁻.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a negative assertion on a transitive role"
+                     ":r a owl:TransitiveProperty .\n[] a owl:NegativePropertyAssertion ; owl:sourceIndividual :a ; owl:assertionProperty :r ; owl:targetIndividual :b ."
+                     "{urn:x:a} ⊑ I[∀urn:x:r.¬{urn:x:b}]\nI[∀urn:x:r.¬{urn:x:b}] ⊑ ∀urn:x:r.F[∀urn:x:r.¬{urn:x:b}]\nF[∀urn:x:r.¬{urn:x:b}] ⊑ ¬{urn:x:b}\nF[∀urn:x:r.¬{urn:x:b}] ⊑ I[∀urn:x:r.¬{urn:x:b}]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "Ref on a transitive role is kept"
+                     ":r a owl:TransitiveProperty , owl:ReflexiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\nRef(urn:x:r)\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a sub-role into a transitive role: item 2 keeps it (R1, length 1)"
+                     ":r a owl:TransitiveProperty .\n:s rdfs:subPropertyOf :r .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:s.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a chain into its first role: item 3 (R2)"
+                     ":r owl:propertyChainAxiom ( :r :s ) .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:s.F[∀urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a chain into its last role: item 4 (R3)"
+                     ":r owl:propertyChainAxiom ( :s :r ) .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:s.I[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a chain into a third role: item 2 (R1)"
+                     ":t owl:propertyChainAxiom ( :r :s ) .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:t.urn:x:B]\nI[∀urn:x:t.urn:x:B] ⊑ ∀urn:x:r.∀urn:x:s.F[∀urn:x:t.urn:x:B]\nI[∀urn:x:t.urn:x:B] ⊑ ∀urn:x:t.F[∀urn:x:t.urn:x:B]\nF[∀urn:x:t.urn:x:B] ⊑ urn:x:B\n"))
+          (set! ok false))
+        (when (not (s1-is arena "≤n's filler is negative: its ∃ on a transitive role is labelled"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:maxQualifiedCardinality 1 ; owl:onClass [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ] ."
+                     "urn:x:A ⊑ ≤1 urn:x:s.F[∃urn:x:r.urn:x:B]\nurn:x:B ⊑ I[∃urn:x:r.urn:x:B]\nI[∃urn:x:r.urn:x:B] ⊑ ∀urn:x:r⁻.F[∃urn:x:r.urn:x:B]\nF[∃urn:x:r.urn:x:B] ⊑ I[∃urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "a positive ∃ on a transitive role is left alone"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ."
+                     "urn:x:A ⊑ ∃urn:x:r.urn:x:B\n"))
+          (set! ok false))
+        (when (not (s1-is arena "nested ∀∀: the inner one is named first"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.I[∀urn:x:r.urn:x:B]]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.I[∀urn:x:r.urn:x:B]] ⊑ ∀urn:x:r.F[∀urn:x:r.I[∀urn:x:r.urn:x:B]]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.I[∀urn:x:r.urn:x:B]] ⊑ I[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.I[∀urn:x:r.urn:x:B]] ⊑ I[∀urn:x:r.I[∀urn:x:r.urn:x:B]]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "one pair for a repeated labelled concept"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nurn:x:C ⊑ I[∀urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "∀ and ∃ on the same (r, B) get different names"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :C ."
+                     "urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nurn:x:B ⊑ I[∃urn:x:r.urn:x:B]\nI[∀urn:x:r.urn:x:B] ⊑ ∀urn:x:r.F[∀urn:x:r.urn:x:B]\nF[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nF[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\nI[∃urn:x:r.urn:x:B] ⊑ ∀urn:x:r⁻.F[∃urn:x:r.urn:x:B]\nF[∃urn:x:r.urn:x:B] ⊑ urn:x:C\nF[∃urn:x:r.urn:x:B] ⊑ I[∃urn:x:r.urn:x:B]\n"))
+          (set! ok false))
+        (when (not (s1-is arena "the bottom role's row is expanded like any other"
+                     ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty owl:bottomObjectProperty ; owl:someValuesFrom :B ] ."
+                     "⊤ ⊑ I[∃http://www.w3.org/2002/07/owl#bottomObjectProperty.⊤]\nurn:x:A ⊑ ∃http://www.w3.org/2002/07/owl#bottomObjectProperty.urn:x:B\nI[∃http://www.w3.org/2002/07/owl#bottomObjectProperty.⊤] ⊑ ∀http://www.w3.org/2002/07/owl#bottomObjectProperty⁻.F[∃http://www.w3.org/2002/07/owl#bottomObjectProperty.⊤]\nF[∃http://www.w3.org/2002/07/owl#bottomObjectProperty.⊤] ⊑ ⊥\n"))
+          (set! ok false))
+        ok)))
+
+  (fn s1-invariants-hold ((arena Arena) (path String))
+    (@intent "Does S1's output on this document keep S1's promises? Prints each failure")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (gate-fixture-in arena path 'profile-sriq)
+      ((none) (do (print "  [s1] did not gate: ") (println path) false))
+      ((some gr)
+        (match (sriq-s0 arena (. gr accepted))
+          ((error m) (do (print "  [s1] S0 refused: ") (println m) false))
+          ((ok s0)
+            (match (sriq-s1 arena s0 S1_BOUND)
+              ((error m) (do (print "  [s1] refused: ") (println m) false))
+              ((ok s1)   (print-problems path (sriq-s1-invariants arena (. s0 rbox) (. s0 axioms) s1)))))))))
+
+  (fn print-problems ((path String) (bad (List String)))
+    (@intent "True when there are none; otherwise each, under the document's name")
+    (@spec ((String (List String)) -> Bool))
+    (if (== (list-len bad) 0)
+      true
+      (do (print "  [s1] ") (println path)
+          (for-each (b bad) (do (print "    ") (println b)))
+          false)))
+
+  (fn test-sriq-s1-invariants ((arena Arena))
+    (@intent "§5.5 S1's promises on every fixture: no complex RIA, no labelled restriction but item 1, every atom's axioms")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
+      (do (for-each (p (sriq-fixtures arena)) (when (not (s1-invariants-hold arena p)) (set! ok false)))
+          ok)))
 
   (fn test-sriq-s2-refuses-a-count-past-the-bound ((arena Arena))
     (@intent "S2 refuses a number restriction above the gate's bound, which its NNF could not keep exact")
@@ -2908,6 +3074,10 @@
         (when (not (s2-is arena "at most: DL4 with S_{r,B}"
                      ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 2 ; owl:onClass :B ] ."
                      "DL1 urn:x:A ⊑ A[≤2 urn:x:r.urn:x:B]\nDL4 A[≤2 urn:x:r.urn:x:B] ⊑ ≤2 urn:x:r.urn:x:B via S_{urn:x:r,urn:x:B}\n"))
+          (set! ok false))
+        (when (not (s2-is arena "S1's names are S2's names, never defined"
+                     ":r a owl:TransitiveProperty .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+                     "DL1 F[∀urn:x:r.urn:x:B] ⊑ I[∀urn:x:r.urn:x:B]\nDL1 F[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nDL1 I[∀urn:x:r.urn:x:B] ⊑ A[∀urn:x:r.F[∀urn:x:r.urn:x:B]]\nDL1 urn:x:A ⊑ I[∀urn:x:r.urn:x:B]\nDL3 ∃bar(urn:x:r).A[∀urn:x:r.F[∀urn:x:r.urn:x:B]] ⊑ F[∀urn:x:r.urn:x:B]\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
           (set! ok false))
         (when (not (s2-is arena "two fillers on one role get two S roles"
                      ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass :B ] .\n:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxQualifiedCardinality 1 ; owl:onClass :C ] ."
@@ -6107,18 +6277,43 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
     (match r
       ((error m) (dump-refused m))
       ((ok s0)
-        (match (sriq-s1 arena s0)
+        (match (sriq-s1 arena s0 S1_BOUND)
           ((error m) (dump-refused m))
-          ((ok axs)  (print-lines (fss-axioms arena (dump-classes arena (. gr signature)) axs)))))))
+          ((ok s1)   (print-lines (fss-axioms arena (dump-classes arena (. gr signature)) (. s1 axioms))))))))
+
+  (fn s1-guarded ((arena Arena) (gr GateResult))
+    (@intent "Did S1's size guard trip on this input?")
+    (@spec ((Arena GateResult) -> Bool))
+    (@alloc arena)
+    (match (sriq-s0 arena (. gr accepted))
+      ((error _) false)
+      ((ok s0)
+        (match (sriq-s1 arena s0 S1_BOUND)
+          ((error _) false)
+          ((ok s1)   (> (list-len (. s1 omitted)) 0))))))
+
+  (fn uses-reserved ((arena Arena) (sig Signature))
+    (@intent "Does the input name anything under urn:howl:, which the dump uses for HOWL's own names?")
+    (@spec ((Arena Signature) -> Bool))
+    (@alloc arena)
+    (let ((mut found false))
+      (do
+        (for-each (c (set-elements (. sig classes)))     (when (starts-with (. c value) "urn:howl:") (set! found true)))
+        (for-each (r (set-elements (. sig obj-props)))   (when (starts-with (. r value) "urn:howl:") (set! found true)))
+        (for-each (i (set-elements (. sig individuals))) (when (starts-with (. i value) "urn:howl:") (set! found true)))
+        found)))
 
   (fn dump-stage ((arena Arena) (stage String) (gr GateResult))
     (@intent "One stage of a gated document: info, s0, s1 or s2")
     (@spec ((Arena String GateResult) -> Int))
     (@alloc arena)
     (cond
+      ((and (not (string-eq stage "info")) (uses-reserved arena (. gr signature)))
+        (dump-refused "reserved: the input names something under urn:howl:, which the dump uses for HOWL's own names"))
       ((string-eq stage "info")
         (do (print "omitted ") (println (int-to-string arena (cast Int (list-len (. gr omissions)))))
             (print "accepted ") (println (int-to-string arena (cast Int (list-len (. gr accepted)))))
+            (when (s1-guarded arena gr) (println "s1-guarded yes"))
             (for-each (c (dump-classes arena (. gr signature))) (do (print "class ") (println (. c value))))
             0))
       ((string-eq stage "s0")
@@ -6502,6 +6697,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-every-axiom-yields arena)))
             (print-test-result "5d: every accepted axiom yields clauses" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-s1-invariants arena)))
+            (print-test-result "6d: S1's promises hold on every fixture" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-s1-rows arena)))
+            (print-test-result "6d: sriq's S1, chain elimination, row by row" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-s2-refuses-a-count-past-the-bound arena)))

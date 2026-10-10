@@ -1,0 +1,593 @@
+;; ============================================================
+;; sriq's chain elimination  —  SPEC.md §5.5 S1, [Sim12] §4
+;;
+;; S1 takes S0's output to a theory with no complex RIA that is
+;; simple-conservative over it ([Sim12] Theorem 3): the two agree on the
+;; input's concept names, simple roles and individuals.
+;; - Initialisation (Definition 3): complex RIAs dropped; simple RIAs,
+;;   Ref, Irr and Dis kept; every positive ∀R.C and negative ∃R.C on a
+;;   non-simple R labelled. A label is acted on at once: the restriction is
+;;   replaced by its name (Definition 6), innermost first. On a simple role
+;;   it stays as it is (the closing optimisation).
+;; - Expansion (Definitions 4–6): each labelled concept once, by its key.
+;; - Names (§5.5 "What S1 fixes" 1–2): one I/F pair per labelled concept,
+;;   keyed by (∀ or ∃, role, canonical filler), as sroiq's sc-elim atoms.
+;; - The errata: item 2 is (R1) only; Fig. 1's shapes are not used.
+;; - The size guard: more distinct keys than the bound, and only the chains
+;;   are omitted instead (S0 minus its chains, unlabelled).
+;; ============================================================
+
+(module sriqelim
+  (@doc "sriq's chain elimination (SPEC 5.5 S1, Simancik DL 2012 section 4)")
+
+  (import types (RoleId))
+  (import canon (role-cmp))
+  (import sroiq (SConcept SAxiom SRia ElimKind sc-canon sc-key inv-role box-sc
+                 sort-saxioms dedupe-saxioms sa-cmp render-saxiom render-sconcept))
+  (import sriqrbox (SriqRbox sriq-role-simple))
+  (import sriqnormal (S0))
+
+  (export S1 sriq-s1 ria-complex S1_BOUND sriq-s1-invariants)
+
+  ;; PROVISIONAL. The bound on distinct labelled concepts is set in slice
+  ;; 6e, after the corpus is measured (§5.5 S1's size guard).
+  (const S1_BOUND Int 100000)
+
+  (type S1 (record
+    (axioms     (List SAxiom))   ; no complex RIA; canonical, sorted, deduped
+    (omitted    (List SAxiom))   ; the chains a tripped guard set aside, else none
+    (expansions (Int 0 ..))))    ; distinct labelled concepts expanded
+
+  (type Pending (record
+    (forall Bool)                ; a ∀-expansion, else an ∃-expansion
+    (role   RoleId)
+    (filler SConcept)))
+
+  (type S1State (record
+    (rb     SriqRbox)
+    (rc     (List SRia))         ; R^c's complex RIAs, each with its inverse
+    (out    (List SAxiom))
+    (seen   (Set String))        ; the keys of the labelled concepts named
+    (queue  (List Pending))
+    (count  Int)
+    (bound  Int)
+    (fault  (Option String))))
+
+  ;; ============================================================
+  ;; Roles and R^c
+  ;; ============================================================
+
+  (fn nonsimple ((rb SriqRbox) (r RoleId))
+    (@intent "Is r non-simple, as the gate judged?")
+    (@spec ((SriqRbox RoleId) -> Bool))
+    (@pure)
+    (not (sriq-role-simple rb r)))
+
+  (fn role-eq ((a RoleId) (b RoleId))
+    (@intent "The same role?")
+    (@spec ((RoleId RoleId) -> Bool))
+    (@pure)
+    (== (role-cmp a b) 0))
+
+  (fn ria-complex ((rb SriqRbox) (x SRia))
+    (@intent "Is this a complex RIA: a chain, or one step into a non-simple role?")
+    (@spec ((SriqRbox SRia) -> Bool))
+    (@pure)
+    (or (> (list-len (. x word)) 1) (nonsimple rb (. x super))))
+
+  (fn role-at ((w (List RoleId)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List RoleId) Int) -> RoleId))
+    (@pure)
+    (match (list-get w i) ((some r) r) ((none) (union-new RoleId fresh-role 0))))
+
+  (fn slice ((arena Arena) (w (List RoleId)) (from Int) (upto Int))
+    (@intent "w[from .. upto)")
+    (@spec ((Arena (List RoleId) Int Int) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RoleId))
+          (mut i from))
+      (do (while (< i upto) (do (list-push out (role-at w i)) (set! i (+ i 1))))
+          out)))
+
+  (fn inv-word ((arena Arena) (w (List RoleId)))
+    (@intent "inv(R₁·…·Rₙ) = inv(Rₙ)·…·inv(R₁)")
+    (@spec ((Arena (List RoleId)) -> (List RoleId)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RoleId))
+          (mut i (- (cast Int (list-len w)) 1)))
+      (do (while (>= i 0) (do (list-push out (inv-role (role-at w i))) (set! i (- i 1))))
+          out)))
+
+  (fn rc-of ((arena Arena) (rb SriqRbox) (a SAxiom))
+    (@intent "A complex RIA and its inverse, inv(w) ⊑ inv(R); anything else, nothing")
+    (@spec ((Arena SriqRbox SAxiom) -> (List SRia)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SRia)))
+      (do
+        (match a
+          ((sa-ria x)
+            (when (ria-complex rb x)
+              (do (list-push out x)
+                  (list-push out (record-new SRia (word (inv-word arena (. x word))) (super (inv-role (. x super))))))))
+          (_ (do)))
+        out)))
+
+  (fn build-rc ((arena Arena) (rb SriqRbox) (axs (List SAxiom)))
+    (@intent "R^c's complex RIAs: S0's, each with its inverse")
+    (@spec ((Arena SriqRbox (List SAxiom)) -> (List SRia)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SRia)))
+      (do (for-each (a axs) (for-each (x (rc-of arena rb a)) (list-push out x)))
+          out)))
+
+  (fn symmetric ((rc (List SRia)) (s RoleId))
+    (@intent "Is inv(S) ⊑ S in R^c?")
+    (@spec (((List SRia) RoleId) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do
+        (for-each (x rc)
+          (when (and (role-eq (. x super) s) (== (list-len (. x word)) 1)
+                     (role-eq (role-at (. x word) 0) (inv-role s)))
+            (set! found true)))
+        found)))
+
+  (fn holds-role ((w (List RoleId)) (s RoleId))
+    (@intent "Does the word hold S or inv(S)?")
+    (@spec (((List RoleId) RoleId) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (r w) (when (or (role-eq r s) (role-eq r (inv-role s))) (set! found true)))
+          found)))
+
+  ;; ============================================================
+  ;; The state, threaded by pointer
+  ;; ============================================================
+
+  (fn new-s1 ((arena Arena) (rb SriqRbox) (rc (List SRia)) (bound Int))
+    (@intent "An empty S1 state")
+    (@spec ((Arena SriqRbox (List SRia) Int) -> (Ptr S1State)))
+    (@alloc arena)
+    (let ((p (cast (Ptr S1State) (arena-alloc arena (sizeof S1State)))))
+      (do
+        (set! (deref p) (record-new S1State
+                          (rb    rb)
+                          (rc    rc)
+                          (out   (list-new arena SAxiom))
+                          (seen  (set-new arena String))
+                          (queue (list-new arena Pending))
+                          (count 0)
+                          (bound bound)
+                          (fault (none))))
+        p)))
+
+  (fn emit ((arena Arena) (p (Ptr S1State)) (a SAxiom))
+    (@intent "Append one axiom")
+    (@spec ((Arena (Ptr S1State) SAxiom) -> Bool))
+    (@alloc arena)
+    (let ((mut s (deref p)))
+      (do (list-push (. s out) a) (set! (deref p) s) true)))
+
+  (fn emit-gci ((arena Arena) (p (Ptr S1State)) (l SConcept) (r SConcept))
+    (@intent "Append l ⊑ r, both sides canonical")
+    (@spec ((Arena (Ptr S1State) SConcept SConcept) -> Bool))
+    (@alloc arena)
+    (emit arena p (union-new SAxiom sa-gci (box-sc arena (sc-canon arena l)) (box-sc arena (sc-canon arena r)))))
+
+  (fn fail ((p (Ptr S1State)) (m String))
+    (@intent "Record why S1 cannot go on")
+    (@spec (((Ptr S1State) String) -> Bool))
+    (let ((mut s (deref p)))
+      (do (set! (. s fault) (some m)) (set! (deref p) s) false)))
+
+  (fn going ((p (Ptr S1State)))
+    (@intent "No fault, and the guard not tripped?")
+    (@spec (((Ptr S1State)) -> Bool))
+    (and (<= (. (deref p) count) (. (deref p) bound))
+         (match (. (deref p) fault) ((none) true) ((some _) false))))
+
+  ;; ============================================================
+  ;; Names and labels
+  ;; ============================================================
+
+  (fn atom ((arena Arena) (k ElimKind) (r RoleId) (f SConcept))
+    (@intent "One of S1's names: kind, role and filler")
+    (@spec ((Arena ElimKind RoleId SConcept) -> SConcept))
+    (@alloc arena)
+    (union-new SConcept sc-elim k r (box-sc arena f)))
+
+  (fn label-name ((arena Arena) (forall Bool) (r RoleId) (f SConcept))
+    (@intent "What replaces a labelled concept: ∀R.F's I, or ∃R.F's F")
+    (@spec ((Arena Bool RoleId SConcept) -> SConcept))
+    (@alloc arena)
+    (if forall (atom arena 'ek-i-all r f) (atom arena 'ek-f-some r f)))
+
+  (fn label ((arena Arena) (p (Ptr S1State)) (forall Bool) (r RoleId) (f SConcept))
+    (@intent "A labelled ∀R.F or ∃R.F: its name, and its expansion queued once per key")
+    (@spec ((Arena (Ptr S1State) Bool RoleId SConcept) -> SConcept))
+    (@alloc arena)
+    (let ((name (label-name arena forall r f))
+          (key  (sc-key arena name)))
+      (do
+        (when (not (set-has (. (deref p) seen) key))
+          (let ((mut s (deref p)))
+            (do (set-put (. s seen) key)
+                (list-push (. s queue) (record-new Pending (forall forall) (role r) (filler f)))
+                (set! (. s count) (+ (. s count) 1))
+                (set! (deref p) s))))
+        name)))
+
+  ;; ------------------------------------------------------------
+  ;; Labelling by polarity ([Sim12] §2.1): kept under ⊓ ⊔ ∃ ∀ ≥n and on a
+  ;; GCI's right side; flipped under ¬, in ≤n's filler, and on its left.
+  ;; ------------------------------------------------------------
+
+  (fn rewrite ((arena Arena) (p (Ptr S1State)) (c SConcept) (pos Bool))
+    (@intent "c with every positive ∀ and negative ∃ on a non-simple role replaced by its name, innermost first")
+    (@spec ((Arena (Ptr S1State) SConcept Bool) -> SConcept))
+    (@alloc arena)
+    (match c
+      ((sc-not f)         (union-new SConcept sc-not (box-sc arena (rewrite arena p (deref f) (not pos)))))
+      ((sc-and xs)        (union-new SConcept sc-and (rewrite-each arena p xs pos)))
+      ((sc-or xs)         (union-new SConcept sc-or (rewrite-each arena p xs pos)))
+      ((sc-some r f)      (rewrite-some arena p r (deref f) pos))
+      ((sc-all r f)       (rewrite-all arena p r (deref f) pos))
+      ((sc-atleast n r f) (union-new SConcept sc-atleast n r (box-sc arena (rewrite arena p (deref f) pos))))
+      ((sc-atmost n r f)  (union-new SConcept sc-atmost n r (box-sc arena (rewrite arena p (deref f) (not pos)))))
+      (_                  c)))
+
+  (fn rewrite-each ((arena Arena) (p (Ptr S1State)) (xs (List SConcept)) (pos Bool))
+    (@intent "rewrite over a list")
+    (@spec ((Arena (Ptr S1State) (List SConcept) Bool) -> (List SConcept)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SConcept)))
+      (do (for-each (x xs) (list-push out (rewrite arena p x pos))) out)))
+
+  (fn rewrite-all ((arena Arena) (p (Ptr S1State)) (r RoleId) (f SConcept) (pos Bool))
+    (@intent "∀R.F: its filler first; then, positive on a non-simple R, its name")
+    (@spec ((Arena (Ptr S1State) RoleId SConcept Bool) -> SConcept))
+    (@alloc arena)
+    (let ((g (sc-canon arena (rewrite arena p f pos))))
+      (if (and pos (nonsimple (. (deref p) rb) r))
+        (label arena p true r g)
+        (union-new SConcept sc-all r (box-sc arena g)))))
+
+  (fn rewrite-some ((arena Arena) (p (Ptr S1State)) (r RoleId) (f SConcept) (pos Bool))
+    (@intent "∃R.F: its filler first; then, negative on a non-simple R, its name")
+    (@spec ((Arena (Ptr S1State) RoleId SConcept Bool) -> SConcept))
+    (@alloc arena)
+    (let ((g (sc-canon arena (rewrite arena p f pos))))
+      (if (and (not pos) (nonsimple (. (deref p) rb) r))
+        (label arena p false r g)
+        (union-new SConcept sc-some r (box-sc arena g)))))
+
+  ;; ============================================================
+  ;; Expansion ([Sim12] Definitions 4–6)
+  ;; ============================================================
+
+  (fn chain-all ((arena Arena) (w (List RoleId)) (x SConcept))
+    (@intent "∀w₁ … ∀wₙ.x")
+    (@spec ((Arena (List RoleId) SConcept) -> SConcept))
+    (@alloc arena)
+    (let ((mut c x)
+          (mut i (- (cast Int (list-len w)) 1)))
+      (do (while (>= i 0)
+            (do (set! c (union-new SConcept sc-all (role-at w i) (box-sc arena c)))
+                (set! i (- i 1))))
+          c)))
+
+  (fn item ((arena Arena) (p (Ptr S1State)) (lhs SConcept) (w (List RoleId)) (x SConcept) (s RoleId))
+    (@intent "Items 2–4: lhs ⊑ ∀^R w₁ … ∀^R wₙ.x, its labelled ∀s named; a word holding S or inv(S) refused")
+    (@spec ((Arena (Ptr S1State) SConcept (List RoleId) SConcept RoleId) -> Bool))
+    (@alloc arena)
+    (if (holds-role w s)
+      (fail p "an RBox the gate should have refused: a RIA into S whose word holds S or inv(S) where no form allows it")
+      (emit-gci arena p lhs (rewrite arena p (chain-all arena w x) true))))
+
+  (fn expand-ria ((arena Arena) (p (Ptr S1State)) (i SConcept) (s RoleId) (f SConcept) (w (List RoleId)))
+    (@intent "One RIA w ⊑ S of R^c, by its form: items 2–5 of expand′(I ⊑ ∀^R S.F)")
+    (@spec ((Arena (Ptr S1State) SConcept RoleId SConcept (List RoleId)) -> Bool))
+    (@alloc arena)
+    ;; (R5) inv(S) ⊑ S is expand's second call, never item 2 (erratum 1).
+    (let ((n (cast Int (list-len w))))
+      (cond
+        ((and (== n 1) (role-eq (role-at w 0) (inv-role s))) true)
+        ((and (== n 2) (role-eq (role-at w 0) s) (role-eq (role-at w 1) s)) (emit-gci arena p f i))
+        ((and (>= n 2) (role-eq (role-at w 0) s)) (item arena p f (slice arena w 1 n) f s))
+        ((and (>= n 2) (role-eq (role-at w (- n 1)) s)) (item arena p i (slice arena w 0 (- n 1)) i s))
+        (else (item arena p i w f s)))))
+
+  (fn expand1 ((arena Arena) (p (Ptr S1State)) (i SConcept) (s RoleId) (f SConcept))
+    (@intent "expand′(I ⊑ ∀^R S.F): item 1 unlabelled, then each RIA into S")
+    (@spec ((Arena (Ptr S1State) SConcept RoleId SConcept) -> Bool))
+    (@alloc arena)
+    (do
+      ;; Item 1 is unlabelled: it is emitted as it is, never rewritten.
+      (emit-gci arena p i (union-new SConcept sc-all s (box-sc arena f)))
+      (for-each (x (. (deref p) rc))
+        (when (role-eq (. x super) s) (expand-ria arena p i s f (. x word))))
+      true))
+
+  (fn expand ((arena Arena) (p (Ptr S1State)) (i SConcept) (s RoleId) (f SConcept))
+    (@intent "expand(I ⊑ ∀^R S.F): expand′ for S, and for inv(S) with the same I and F when S is symmetric")
+    (@spec ((Arena (Ptr S1State) SConcept RoleId SConcept) -> Bool))
+    (@alloc arena)
+    (do (expand1 arena p i s f)
+        (when (symmetric (. (deref p) rc) s) (expand1 arena p i (inv-role s) f))
+        true))
+
+  (fn expand-key ((arena Arena) (p (Ptr S1State)) (e Pending))
+    (@intent "Definition 6: ∀R.C gives F ⊑ C and expand(I ⊑ ∀R.F); ∃R.C gives C ⊑ I and expand(I ⊑ ∀inv(R).F)")
+    (@spec ((Arena (Ptr S1State) Pending) -> Bool))
+    (@alloc arena)
+    (let ((r (. e role))
+          (c (. e filler)))
+      (if (. e forall)
+        (let ((i (atom arena 'ek-i-all r c)) (f (atom arena 'ek-f-all r c)))
+          (do (emit-gci arena p f c) (expand arena p i r f)))
+        (let ((i (atom arena 'ek-i-some r c)) (f (atom arena 'ek-f-some r c)))
+          (do (emit-gci arena p c i) (expand arena p i (inv-role r) f))))))
+
+  (fn pending-at ((xs (List Pending)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List Pending) Int) -> Pending))
+    (@pure)
+    (match (list-get xs i)
+      ((some e) e)
+      ((none)   (record-new Pending (forall true) (role (union-new RoleId fresh-role 0)) (filler (union-new SConcept sc-top))))))
+
+  (fn drain ((arena Arena) (p (Ptr S1State)))
+    (@intent "Expand every queued key, those expansions queue included, while S1 is going")
+    (@spec ((Arena (Ptr S1State)) -> Bool))
+    (@alloc arena)
+    (let ((mut head 0))
+      (do
+        (while (and (going p) (< head (cast Int (list-len (. (deref p) queue)))))
+          (do (expand-key arena p (pending-at (. (deref p) queue) head))
+              (set! head (+ head 1))))
+        true)))
+
+  ;; ============================================================
+  ;; Initialisation, the guard, and S1
+  ;; ============================================================
+
+  (fn s1-init ((arena Arena) (p (Ptr S1State)) (axs (List SAxiom)))
+    (@intent "Definition 3: complex RIAs dropped, the rest kept, every GCI labelled by polarity")
+    (@spec ((Arena (Ptr S1State) (List SAxiom)) -> Bool))
+    (@alloc arena)
+    (do
+      (for-each (a axs)
+        (match a
+          ((sa-ria x)   (when (not (ria-complex (. (deref p) rb) x)) (emit arena p a)))
+          ((sa-gci l r) (emit-gci arena p (rewrite arena p (deref l) false) (rewrite arena p (deref r) true)))
+          (_            (emit arena p a))))
+      true))
+
+  (fn is-chain ((a SAxiom))
+    (@intent "A RIA of length ≥ 2: a chain, transitivity included")
+    (@spec ((SAxiom) -> Bool))
+    (@pure)
+    (match a ((sa-ria x) (> (list-len (. x word)) 1)) (_ false)))
+
+  (fn guarded ((arena Arena) (axs (List SAxiom)) (count Int))
+    (@intent "Over the bound: S0 minus its chains, unlabelled, the chains its witnesses (§5.5 S1's size guard)")
+    (@spec ((Arena (List SAxiom) Int) -> S1))
+    (@alloc arena)
+    (let ((mut kept (list-new arena SAxiom))
+          (mut omitted (list-new arena SAxiom)))
+      (do
+        (for-each (a axs) (if (is-chain a) (list-push omitted a) (list-push kept a)))
+        (record-new S1 (axioms kept) (omitted omitted) (expansions (cast (Int 0 ..) count))))))
+
+  (fn s1-result ((arena Arena) (s0 S0) (p (Ptr S1State)))
+    (@intent "What the run came to: a refusal, the guarded theory, or the eliminated one")
+    (@spec ((Arena S0 (Ptr S1State)) -> (Result S1 String)))
+    (@alloc arena)
+    (let ((st (deref p)))
+      (match (. st fault)
+        ((some m) (error m))
+        ((none)
+          (if (> (. st count) (. st bound))
+            (ok (guarded arena (. s0 axioms) (. st count)))
+            (ok (record-new S1
+                  (axioms     (dedupe-saxioms arena (sort-saxioms arena (. st out))))
+                  (omitted    (list-new arena SAxiom))
+                  (expansions (cast (Int 0 ..) (. st count))))))))))
+
+  (fn sriq-s1 ((arena Arena) (s0 S0) (bound Int))
+    (@intent "§5.5 S1: S0's output with its complex RIAs eliminated ([Sim12] §4), or guarded past the bound")
+    (@spec ((Arena S0 Int) -> (Result S1 String)))
+    (@alloc arena)
+    (let ((p (new-s1 arena (. s0 rbox) (build-rc arena (. s0 rbox) (. s0 axioms)) bound)))
+      (do
+        (s1-init arena p (. s0 axioms))
+        (drain arena p)
+        (s1-result arena s0 p))))
+
+  ;; ============================================================
+  ;; S1's promises, checked (on every fixture, by the tests)
+  ;; - no complex RIA is left;
+  ;; - no positive ∀ or negative ∃ on a non-simple role is left, but item 1,
+  ;;   `I ⊑ ∀S.F` with I and F atoms;
+  ;; - every atom has its axioms: ∀R.C's F ⊑ C and I ⊑ ∀R.F; ∃R.C's C ⊑ I
+  ;;   and I ⊑ ∀inv(R).F.
+  ;; ============================================================
+
+  (fn is-atom ((c SConcept))
+    (@intent "One of S1's names?")
+    (@spec ((SConcept) -> Bool))
+    (@pure)
+    (match c ((sc-elim _ _ _) true) (_ false)))
+
+  (fn item1-p ((l SConcept) (r SConcept))
+    (@intent "Is l ⊑ r an item 1, atom ⊑ ∀S.atom?")
+    (@spec ((SConcept SConcept) -> Bool))
+    (@pure)
+    (match r
+      ((sc-all _ f) (and (is-atom l) (is-atom (deref f))))
+      (_            false)))
+
+  (fn labelled-left ((rb SriqRbox) (c SConcept) (pos Bool))
+    (@intent "Is a positive ∀ or a negative ∃ on a non-simple role left in c (atoms are opaque)?")
+    (@spec ((SriqRbox SConcept Bool) -> Bool))
+    (@pure)
+    (match c
+      ((sc-not f)         (labelled-left rb (deref f) (not pos)))
+      ((sc-and xs)        (labelled-any rb xs pos))
+      ((sc-or xs)         (labelled-any rb xs pos))
+      ((sc-some r f)      (or (and (not pos) (nonsimple rb r)) (labelled-left rb (deref f) pos)))
+      ((sc-all r f)       (or (and pos (nonsimple rb r)) (labelled-left rb (deref f) pos)))
+      ((sc-atleast _ _ f) (labelled-left rb (deref f) pos))
+      ((sc-atmost _ _ f)  (labelled-left rb (deref f) (not pos)))
+      (_                  false)))
+
+  (fn labelled-any ((rb SriqRbox) (cs (List SConcept)) (pos Bool))
+    (@intent "labelled-left over a list")
+    (@spec ((SriqRbox (List SConcept) Bool) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (c cs) (when (labelled-left rb c pos) (set! found true))) found)))
+
+  (fn has-axiom ((axs (List SAxiom)) (a SAxiom))
+    (@intent "Is a in the sorted, deduped axioms? Binary search by sa-cmp")
+    (@spec (((List SAxiom) SAxiom) -> Bool))
+    (@pure)
+    (let ((mut lo 0)
+          (mut hi (- (cast Int (list-len axs)) 1))
+          (mut found false))
+      (do
+        (while (and (<= lo hi) (not found))
+          (let ((mid (/ (+ lo hi) 2)))
+            (match (list-get axs mid)
+              ((none) (set! hi -1))
+              ((some x)
+                (let ((d (sa-cmp x a)))
+                  (cond ((== d 0) (set! found true))
+                        ((< d 0)  (set! lo (+ mid 1)))
+                        (else     (set! hi (- mid 1)))))))))
+        found)))
+
+  (fn def-gci ((arena Arena) (l SConcept) (r SConcept))
+    (@intent "l ⊑ r, both sides canonical, as S1 emits it")
+    (@spec ((Arena SConcept SConcept) -> SAxiom))
+    (@alloc arena)
+    (union-new SAxiom sa-gci (box-sc arena (sc-canon arena l)) (box-sc arena (sc-canon arena r))))
+
+  (fn all-axioms ((arena Arena) (i SConcept) (r RoleId) (c SConcept))
+    (@intent "∀R.C's expansion must leave F ⊑ C and I ⊑ ∀R.F")
+    (@spec ((Arena SConcept RoleId SConcept) -> (List SAxiom)))
+    (@alloc arena)
+    (let ((f (atom arena 'ek-f-all r c))
+          (mut out (list-new arena SAxiom)))
+      (do (list-push out (def-gci arena f c))
+          (list-push out (def-gci arena i (union-new SConcept sc-all r (box-sc arena f))))
+          out)))
+
+  (fn some-axioms ((arena Arena) (f SConcept) (r RoleId) (c SConcept))
+    (@intent "∃R.C's expansion must leave C ⊑ I and I ⊑ ∀inv(R).F")
+    (@spec ((Arena SConcept RoleId SConcept) -> (List SAxiom)))
+    (@alloc arena)
+    (let ((i (atom arena 'ek-i-some r c))
+          (mut out (list-new arena SAxiom)))
+      (do (list-push out (def-gci arena c i))
+          (list-push out (def-gci arena i (union-new SConcept sc-all (inv-role r) (box-sc arena f))))
+          out)))
+
+  (fn atom-axioms ((arena Arena) (c SConcept))
+    (@intent "The axioms a replacing atom's expansion must have left (an I∀ or an F∃; the others are made by expansions)")
+    (@spec ((Arena SConcept) -> (List SAxiom)))
+    (@alloc arena)
+    (match c
+      ((sc-elim k r f)
+        (match k
+          ('ek-i-all  (all-axioms arena c r (deref f)))
+          ('ek-f-some (some-axioms arena c r (deref f)))
+          (_          (list-new arena SAxiom))))
+      (_ (list-new arena SAxiom))))
+
+  (fn atoms-of ((arena Arena) (c SConcept))
+    (@intent "The atoms a concept shows")
+    (@spec ((Arena SConcept) -> (List SConcept)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SConcept)))
+      (do
+        (match c
+          ((sc-elim _ _ _)    (list-push out c))
+          ((sc-not f)         (for-each (x (atoms-of arena (deref f))) (list-push out x)))
+          ((sc-and xs)        (for-each (y xs) (for-each (x (atoms-of arena y)) (list-push out x))))
+          ((sc-or xs)         (for-each (y xs) (for-each (x (atoms-of arena y)) (list-push out x))))
+          ((sc-some _ f)      (for-each (x (atoms-of arena (deref f))) (list-push out x)))
+          ((sc-all _ f)       (for-each (x (atoms-of arena (deref f))) (list-push out x)))
+          ((sc-atleast _ _ f) (for-each (x (atoms-of arena (deref f))) (list-push out x)))
+          ((sc-atmost _ _ f)  (for-each (x (atoms-of arena (deref f))) (list-push out x)))
+          (_                  (do)))
+        out)))
+
+  (fn append-atoms ((arena Arena) (a (List SConcept)) (b (List SConcept)))
+    (@intent "a, then b")
+    (@spec ((Arena (List SConcept) (List SConcept)) -> (List SConcept)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SConcept)))
+      (do (for-each (x a) (list-push out x)) (for-each (x b) (list-push out x)) out)))
+
+  (fn axiom-problems ((arena Arena) (rb SriqRbox) (axs (List SAxiom)) (a SAxiom))
+    (@intent "What one output axiom breaks of S1's promises")
+    (@spec ((Arena SriqRbox (List SAxiom) SAxiom) -> (List String)))
+    (@alloc arena)
+    (let ((mut bad (list-new arena String)))
+      (do
+        (match a
+          ((sa-ria x)
+            (when (ria-complex rb x) (list-push bad (string-concat arena "a complex RIA is left: " (render-saxiom arena a)))))
+          ((sa-gci l r)
+            (do
+              (when (and (not (item1-p (deref l) (deref r)))
+                         (or (labelled-left rb (deref l) false) (labelled-left rb (deref r) true)))
+                (list-push bad (string-concat arena "a labelled restriction is left: " (render-saxiom arena a))))
+              (for-each (c (append-atoms arena (atoms-of arena (deref l)) (atoms-of arena (deref r))))
+                (for-each (want (atom-axioms arena c))
+                  (when (not (has-axiom axs want))
+                    (list-push bad (string-concat arena "an atom without its axioms: " (render-sconcept arena c))))))))
+          (_ (do)))
+        bad)))
+
+  (fn same-axioms ((a (List SAxiom)) (b (List SAxiom)))
+    (@intent "The same axioms, in the same order?")
+    (@spec (((List SAxiom) (List SAxiom)) -> Bool))
+    (@pure)
+    (let ((mut ok (== (list-len a) (list-len b)))
+          (mut i 0))
+      (do
+        (while (and ok (< i (cast Int (list-len a))))
+          (do (match (list-get a i)
+                ((some x) (match (list-get b i) ((some y) (when (!= (sa-cmp x y) 0) (set! ok false))) ((none) (set! ok false))))
+                ((none) (set! ok false)))
+              (set! i (+ i 1))))
+        ok)))
+
+  (fn guarded-problems ((arena Arena) (s0-axioms (List SAxiom)) (s1 S1))
+    (@intent "A guarded run must be exactly S0 minus its chains, with exactly those chains omitted")
+    (@spec ((Arena (List SAxiom) S1) -> (List String)))
+    (@alloc arena)
+    (let ((want (guarded arena s0-axioms 0))
+          (mut bad (list-new arena String)))
+      (do
+        (when (not (same-axioms (. want axioms) (. s1 axioms)))
+          (list-push bad "a guarded run's axioms are not S0 minus its chains"))
+        (when (not (same-axioms (. want omitted) (. s1 omitted)))
+          (list-push bad "a guarded run's omissions are not S0's chains"))
+        bad)))
+
+  (fn sriq-s1-invariants ((arena Arena) (rb SriqRbox) (s0-axioms (List SAxiom)) (s1 S1))
+    (@intent "What S1 promises, as the list of what fails (empty: all hold)")
+    (@spec ((Arena SriqRbox (List SAxiom) S1) -> (List String)))
+    (@alloc arena)
+    (if (> (list-len (. s1 omitted)) 0)
+      (guarded-problems arena s0-axioms s1)
+      (let ((mut bad (list-new arena String)))
+        (do
+          (for-each (a (. s1 axioms))
+            (for-each (b (axiom-problems arena rb (. s1 axioms) a)) (list-push bad b)))
+          bad))))
+)

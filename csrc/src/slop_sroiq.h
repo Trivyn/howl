@@ -12,6 +12,13 @@ typedef struct sroiq_SConcept sroiq_SConcept;
 typedef struct sroiq_SRia sroiq_SRia;
 typedef struct sroiq_SAxiom sroiq_SAxiom;
 
+typedef enum {
+    sroiq_ElimKind_ek_i_all,
+    sroiq_ElimKind_ek_f_all,
+    sroiq_ElimKind_ek_i_some,
+    sroiq_ElimKind_ek_f_some
+} sroiq_ElimKind;
+
 #ifndef SLOP_LIST_TYPES_ROLEID_DEFINED
 #define SLOP_LIST_TYPES_ROLEID_DEFINED
 #define SLOP_LIST_TYPES_ROLEID_IMPL_DEFINED
@@ -88,7 +95,8 @@ typedef enum {
     sroiq_SConcept_sc_all,
     sroiq_SConcept_sc_atleast,
     sroiq_SConcept_sc_atmost,
-    sroiq_SConcept_sc_self
+    sroiq_SConcept_sc_self,
+    sroiq_SConcept_sc_elim
 } sroiq_SConcept_tag;
 
 struct sroiq_SConcept {
@@ -118,6 +126,11 @@ struct sroiq_SConcept {
             sroiq_SConcept* f2;
         } sc_atmost;
         types_RoleId sc_self;
+        struct {
+            sroiq_ElimKind f0;
+            types_RoleId f1;
+            sroiq_SConcept* f2;
+        } sc_elim;
     } data;
 };
 typedef struct sroiq_SConcept sroiq_SConcept;
@@ -136,6 +149,7 @@ sroiq_SConcept* sroiq_box_sc(slop_arena* arena, sroiq_SConcept c);
 types_RoleId sroiq_inv_role(types_RoleId r);
 uint8_t sroiq_sc_top_p(sroiq_SConcept c);
 int64_t sroiq_sc_rank(sroiq_SConcept c);
+int64_t sroiq_elim_rank(sroiq_ElimKind k);
 sroiq_SConcept sroiq_sc_at(slop_list_sroiq_SConcept xs, int64_t i);
 int64_t sroiq_sc_list_cmp(slop_list_sroiq_SConcept a, slop_list_sroiq_SConcept b);
 int64_t sroiq_int_cmp(int64_t a, int64_t b);
@@ -154,6 +168,8 @@ slop_string sroiq_role_key_s(slop_arena* arena, types_RoleId r);
 slop_string sroiq_sc_keys(slop_arena* arena, slop_list_sroiq_SConcept xs);
 slop_string sroiq_sc_key_r(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f);
 slop_string sroiq_sc_key(slop_arena* arena, sroiq_SConcept c);
+slop_string sroiq_elim_tag(sroiq_ElimKind k);
+slop_string sroiq_elim_head(sroiq_ElimKind k);
 slop_string sroiq_render_srole(slop_arena* arena, types_RoleId r);
 slop_string sroiq_render_sconcepts(slop_arena* arena, slop_list_sroiq_SConcept xs, slop_string sep);
 slop_string sroiq_render_restriction(slop_arena* arena, slop_string head, types_RoleId r, sroiq_SConcept f);

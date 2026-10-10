@@ -14,6 +14,7 @@
 #include "slop_ttl.h"
 #include "slop_sroiq.h"
 #include "slop_sriqnormal.h"
+#include "slop_sriqelim.h"
 #include "slop_sriqnames.h"
 #include "slop_sroiqfss.h"
 #include "slop_file.h"
@@ -920,9 +921,9 @@ typedef struct { bool is_ok; union { decode_Stage1 ok; types_Fault err; } data; 
 typedef struct { bool is_ok; union { sriqnormal_S2 ok; slop_string err; } data; } slop_result_sriqnormal_S2_string;
 #endif
 
-#ifndef SLOP_RESULT_LIST_SROIQ_SAXIOM_STRING_DEFINED
-#define SLOP_RESULT_LIST_SROIQ_SAXIOM_STRING_DEFINED
-typedef struct { bool is_ok; union { slop_list_sroiq_SAxiom ok; slop_string err; } data; } slop_result_list_sroiq_SAxiom_string;
+#ifndef SLOP_RESULT_SRIQELIM_S1_STRING_DEFINED
+#define SLOP_RESULT_SRIQELIM_S1_STRING_DEFINED
+typedef struct { bool is_ok; union { sriqelim_S1 ok; slop_string err; } data; } slop_result_sriqelim_S1_string;
 #endif
 
 #ifndef SLOP_RESULT_SRIQNORMAL_S0_STRING_DEFINED
@@ -1059,7 +1060,7 @@ slop_list_string test_sort_strings(slop_arena* arena, slop_list_string xs);
 slop_string test_str_at_t(slop_list_string xs, int64_t i);
 slop_string test_refusal_line(slop_arena* arena, slop_string m);
 slop_string test_s2_text(slop_arena* arena, slop_result_sriqnormal_S2_string r);
-slop_string test_s2_after_s1(slop_arena* arena, slop_result_list_sroiq_SAxiom_string r);
+slop_string test_s2_after_s1(slop_arena* arena, slop_result_sriqelim_S1_string r);
 slop_string test_s2_after_s0(slop_arena* arena, slop_result_sriqnormal_S0_string r);
 slop_string test_s2_of(slop_arena* arena, slop_string ttl);
 uint8_t test_s2_is(slop_arena* arena, slop_string label, slop_string ttl, slop_string want);
@@ -1067,9 +1068,9 @@ slop_list_string test_sriq_fixtures(slop_arena* arena);
 slop_option_gate_GateResult test_gate_triples_in(slop_arena* arena, slop_list_rdf_Triple ts, types_Profile p);
 slop_list_owl2_RawAxiom test_reversed_raw(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 slop_list_sroiq_SAxiom test_reversed_saxioms(slop_arena* arena, slop_list_sroiq_SAxiom xs);
-slop_list_sroiq_SAxiom test_simple_rias_only(slop_arena* arena, slop_list_sroiq_SAxiom axs);
-slop_result_sriqnames_SriqNormal_string test_s2_to_names(slop_arena* arena, slop_list_sroiq_SAxiom axs, uint8_t flip, owl2_Signature sig);
-slop_result_sriqnames_SriqNormal_string test_sriq_nf(slop_arena* arena, gate_GateResult gr, uint8_t flip_accepted, uint8_t flip_s2);
+slop_result_sriqnames_SriqNormal_string test_s2_to_names(slop_arena* arena, sriqelim_S1 s1, uint8_t flip, owl2_Signature sig);
+sriqnormal_S0 test_reversed_s0(slop_arena* arena, sriqnormal_S0 s0);
+slop_result_sriqnames_SriqNormal_string test_sriq_nf(slop_arena* arena, gate_GateResult gr, uint8_t flip_accepted, uint8_t flip_s0, uint8_t flip_s2);
 slop_list_string test_nf_lines(slop_arena* arena, slop_result_sriqnames_SriqNormal_string r);
 uint8_t test_nf_invariants_hold(slop_arena* arena, slop_string path, slop_result_sriqnames_SriqNormal_string r);
 uint8_t test_sriq_order_independent(slop_arena* arena, slop_string path);
@@ -1079,9 +1080,17 @@ uint8_t test_test_sriq_ids_from_content(slop_arena* arena);
 uint8_t test_yields_nothing_by_design(owl2_RawAxiom a);
 slop_list_owl2_RawAxiom test_one_raw(slop_arena* arena, owl2_RawAxiom a);
 uint8_t test_print_alone(slop_arena* arena, owl2_RawAxiom a);
+uint8_t test_is_chain_axiom(owl2_RawAxiom a);
 int64_t test_yield_kind(slop_arena* arena, owl2_RawAxiom a, owl2_Signature sig);
 uint8_t test_every_axiom_yields(slop_arena* arena, slop_string path);
 uint8_t test_test_sriq_every_axiom_yields(slop_arena* arena);
+slop_string test_s1_text(slop_arena* arena, sriqelim_S1 s1);
+slop_string test_s1_bounded_of(slop_arena* arena, slop_string ttl, int64_t bound);
+uint8_t test_s1_bounded_is(slop_arena* arena, slop_string label, slop_string ttl, int64_t bound, slop_string want);
+uint8_t test_test_sriq_s1_rows(slop_arena* arena);
+uint8_t test_s1_invariants_hold(slop_arena* arena, slop_string path);
+uint8_t test_print_problems(slop_string path, slop_list_string bad);
+uint8_t test_test_sriq_s1_invariants(slop_arena* arena);
 uint8_t test_test_sriq_s2_refuses_a_count_past_the_bound(slop_arena* arena);
 uint8_t test_test_sriq_s2_rows(slop_arena* arena);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
@@ -1223,6 +1232,8 @@ slop_list_rdf_IRI test_dump_classes(slop_arena* arena, owl2_Signature sig);
 int64_t test_print_lines(slop_list_string ls);
 int64_t test_dump_refused(slop_string m);
 int64_t test_dump_s1(slop_arena* arena, gate_GateResult gr, slop_result_sriqnormal_S0_string r);
+uint8_t test_s1_guarded(slop_arena* arena, gate_GateResult gr);
+uint8_t test_uses_reserved(slop_arena* arena, owl2_Signature sig);
 int64_t test_dump_stage(slop_arena* arena, slop_string stage, gate_GateResult gr);
 int64_t test_sriq_dump(slop_arena* arena, slop_string stage, slop_string path);
 int main(int argc, char** _c_argv);
