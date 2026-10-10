@@ -68,8 +68,8 @@
   (import strlib (starts-with parse-int is-digit char-at))
   (import select (profile-name parse-profile profile-dropped unavailable-message))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
-  (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq))
-  (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact store-facts store-holds))
+  (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq ind-elem name-term))
+  (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact store-facts store-holds RunResult))
   (import ksc (reference-closure reference-answer ksc-1 ksc-q))
   (import kscids (KscIds CFact build-ksc-ids encode-fact decode-fact))
   (import kscpremise (KscIndex build-ksc-index role-under))
@@ -3615,7 +3615,7 @@
     (@intent "How many el++ fixtures there are")
     (@spec (() -> Int))
     (@pure)
-    33)
+    38)
 
   (fn ksc-fixture-at ((i Int))
     (@intent "el++ fixture i: §5.4's constructs, alone and combined, as a file under corpus/fixtures/el++")
@@ -3657,7 +3657,100 @@
       (30 "corpus/fixtures/el++/ksc-30.ttl")
       (31 "corpus/fixtures/el++/ksc-31.ttl")
       (32 "corpus/fixtures/el++/ksc-32.ttl")
+      (33 "corpus/fixtures/el++/ksc-33.ttl")
+      (34 "corpus/fixtures/el++/ksc-34.ttl")
+      (35 "corpus/fixtures/el++/ksc-35.ttl")
+      (36 "corpus/fixtures/el++/ksc-36.ttl")
+      (37 "corpus/fixtures/el++/ksc-37.ttl")
       (_ "")))
+
+  ;; ------------------------------------------------------------
+  ;; Two engine properties no differential sees: the reference has no
+  ;; caps and no phases, and every worker count agrees on these.
+  ;; ------------------------------------------------------------
+
+  (fn cap-config ((cap Int))
+    (@intent "The default configuration under a round cap")
+    (@spec ((Int) -> ReasonerConfig))
+    (let ((mut cfg (default-config)))
+      (do (set! cfg max-iterations (cast (Int 0 .. 10000) cap)) cfg)))
+
+  (fn incomplete-answers ((r KscResult))
+    (@intent "How many of a result's answers the cap cut short")
+    (@spec ((KscResult) -> Int))
+    (let ((mut n 0))
+      (do (for-each (a (. r answers)) (when (not (. a complete)) (set! n (+ n 1)))) n)))
+
+  (fn says-resource-limit ((r KscResult))
+    (@intent "Does the result report that the cap stopped it?")
+    (@spec ((KscResult) -> Bool))
+    (match (. r termination)
+      ((resource-limit _) true)
+      ((fixpoint)         false)))
+
+  (fn capped-incomplete ((arena Arena) (fx KscFixture))
+    (@intent "Over every cap up to the uncapped run's rounds: incomplete answers seen, or -1 if one came without resource-limit")
+    (@spec ((Arena KscFixture) -> Int))
+    (@alloc arena)
+    (let ((full (ksc-run arena (. fx axioms) (. fx classes) (default-config)))
+          (mut seen 0)
+          (mut cap 0))
+      (do
+        (while (and (>= seen 0) (<= cap (. full rounds)))
+          (let ((r (ksc-run arena (. fx axioms) (. fx classes) (cap-config cap)))
+                (k (incomplete-answers r)))
+            (do
+              (if (and (> k 0) (not (says-resource-limit r)))
+                (set! seen -1)
+                (set! seen (+ seen k)))
+              (set! cap (+ cap 1)))))
+        seen)))
+
+  (fn test-ksc-cut-runs-say-resource-limit ((arena Arena))
+    (@intent "At every cap, an answer the cap cut short comes with resource-limit, and some cap cuts one")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Every worker count agrees on a capped report, so the determinism
+    ;; suite cannot see a cut class run reported as a fixpoint; and the
+    ;; uncapped goldens never cut one. This reads the flag directly.
+    (let ((mut ok true)
+          (mut seen 0)
+          (mut i 0))
+      (do
+        (while (< i (ksc-fixture-count))
+          (do
+            (match (ksc-fixture arena (ksc-fixture-at i))
+              ((none) (set! ok false))
+              ((some fx)
+                (let ((k (capped-incomplete arena fx)))
+                  (if (< k 0) (set! ok false) (set! seen (+ seen k))))))
+            (set! i (+ i 1))))
+        (and ok (> seen 0)))))
+
+  (fn ex-class-fact ((arena Arena) (ind String) (cls String))
+    (@intent "inst(ind, cls) over two http://example.org/t# names")
+    (@spec ((Arena String String) -> KFact))
+    (@alloc arena)
+    (union-new KFact f-inst
+      (ind-elem (record-new IRI (value (string-concat arena "http://example.org/t#" ind))))
+      (name-term (union-new KName k-class (record-new IRI (value (string-concat arena "http://example.org/t#" cls)))))))
+
+  (fn test-ksc-g-stops-at-bottom ((arena Arena))
+    (@intent "K3: phase G stops committing at a round's first ⊥: on ksc-37, inst(a, F) is stored and inst(a, G), after the ⊥, is not")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The facts G stores reach no report, so only this sees a G that
+    ;; commits past its ⊥.
+    (match (ksc-fixture arena "corpus/fixtures/el++/ksc-37.ttl")
+      ((none) false)
+      ((some fx)
+        (let ((idx (build-ksc-index arena (. fx axioms)))
+              (ids (build-ksc-ids arena (. fx axioms) (. fx classes) (. idx individuals)))
+              (g (run-ksc arena idx ids (none) (ksc-seeds arena idx (. fx classes) false) true 10000 0 1
+                   (list-new arena Arena))))
+          (and (. g unsat)
+               (store-holds (. g store) (none) (ex-class-fact arena "a" "F"))
+               (not (store-holds (. g store) (none) (ex-class-fact arena "a" "G"))))))))
 
   (fn test-ksc-engine-matches-reference ((arena Arena))
     (@intent "On every el++ fixture, the engine and the literal reference agree on every class")
@@ -6685,8 +6778,168 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
                 ((error f) (dump-fault arena f))
                 ((ok s1)   (dump-decoded arena s0 s1)))))))))
 
+  ;; ------------------------------------------------------------
+  ;; ksc-dump: el++'s engine on one file, gated under el++ with its
+  ;; omissions set aside, then normalised. At 1 and 4 workers: phase G's
+  ;; and phase W's runs, each run's counters and then its store fact by
+  ;; fact, and ksc-classify's result, every counter and every class's
+  ;; answer, uncapped and under caps of 0 to 3 rounds. The goldens see only
+  ;; the report, never a store, a phase's counters or a capped answer, so a
+  ;; restructure of kscsat is checked by this dump being byte-identical
+  ;; before and after (graph Lesson 7309657b).
+  ;; ------------------------------------------------------------
+
+  (fn yes-no ((b Bool))
+    (@intent "A flag as yes or no")
+    (@spec ((Bool) -> String))
+    (@pure)
+    (if b "yes" "no"))
+
+  (fn dump-num ((arena Arena) (tag String) (n Int))
+    (@intent "A tag, then a number, on the current line")
+    (@spec ((Arena String Int) -> Int))
+    (@alloc arena)
+    (do (print tag) (print (int-to-string arena n)) 0))
+
+  (fn dump-flag ((tag String) (b Bool))
+    (@intent "A tag, then a flag, on the current line")
+    (@spec ((String Bool) -> Int))
+    (do (print tag) (print (yes-no b)) 0))
+
+  (fn dump-cfact ((arena Arena) (c CFact))
+    (@intent "One stored fact as its encoding: kind, then three ids")
+    (@spec ((Arena CFact) -> Int))
+    (@alloc arena)
+    (do (dump-num arena "  fact " (cast Int (. c kind)))
+        (dump-num arena " " (cast Int (. c a)))
+        (dump-num arena " " (cast Int (. c b)))
+        (dump-num arena " " (cast Int (. c c)))
+        (println "")
+        0))
+
+  (fn dump-ksc-run ((arena Arena) (tag String) (r RunResult))
+    (@intent "One phase's counters, then its store fact by fact")
+    (@spec ((Arena String RunResult) -> Int))
+    (@alloc arena)
+    (do
+      (print tag)
+      (dump-num arena " rounds " (. r rounds))
+      (dump-num arena " facts " (. r facts))
+      (dump-flag " unsat " (. r unsat))
+      (dump-flag " capped " (. r capped))
+      (dump-flag " cancelled " (. r cancelled))
+      (println "")
+      (for-each (c (store-facts arena (. r store))) (dump-cfact arena c))
+      0))
+
+  (fn ksc-seeds ((arena Arena) (idx KscIndex) (classes (List KName)) (w-phase Bool))
+    (@intent "Phase G's seeds, the individuals; phase W's add owl:Thing and every class, as classify-phases does")
+    (@spec ((Arena KscIndex (List KName) Bool) -> (List KFact)))
+    (@alloc arena)
+    (let ((mut seeds (list-new arena KFact)))
+      (do
+        (for-each (a (. idx individuals)) (list-push seeds (. (ksc-1 a) fact)))
+        (when w-phase
+          (do
+            (list-push seeds (. (ksc-q (union-new KName k-class (record-new IRI (value OWL_THING)))) fact))
+            (for-each (q classes) (list-push seeds (. (ksc-q q) fact)))))
+        seeds)))
+
+  (fn dump-ksc-phases ((arena Arena) (idx KscIndex) (ids KscIds) (classes (List KName)) (w Int))
+    (@intent "Phases G and W at w workers, uncapped, each with its store")
+    (@spec ((Arena KscIndex KscIds (List KName) Int) -> Int))
+    (@alloc arena)
+    (let ((mut cas (list-new arena Arena))
+          (mut k 0))
+      (do
+        (when (> w 1)
+          (while (< k w) (do (list-push cas (arena-new 4096)) (set! k (+ k 1)))))
+        (dump-ksc-run arena (string-concat arena "G w=" (int-to-string arena w))
+          (run-ksc arena idx ids (none) (ksc-seeds arena idx classes false) true 10000 0 w cas))
+        (dump-ksc-run arena (string-concat arena "W w=" (int-to-string arena w))
+          (run-ksc arena idx ids (none) (ksc-seeds arena idx classes true) false 10000 0 w cas))
+        (for-each (a cas) (arena-free a))
+        0)))
+
+  (fn dump-answer ((arena Arena) (a ClassAnswer))
+    (@intent "One class's answer: its flags and counters, then its subsumers in order")
+    (@spec ((Arena ClassAnswer) -> Int))
+    (@alloc arena)
+    (do
+      (print "  answer ") (print (kname-label arena (. a cls)))
+      (dump-flag " shared " (. a shared))
+      (dump-flag " unsat " (. a unsat))
+      (dump-flag " complete " (. a complete))
+      (dump-num arena " rounds " (. a rounds))
+      (dump-num arena " facts " (. a facts))
+      (println "")
+      (for-each (s (. a subsumers)) (do (print "    sub ") (println (kname-label arena s))))
+      0))
+
+  (fn dump-ksc-result ((arena Arena) (r KscResult))
+    (@intent "ksc-classify's counters, its termination, then every answer in order")
+    (@spec ((Arena KscResult) -> Int))
+    (@alloc arena)
+    (do
+      (dump-flag "  inconsistent " (. r inconsistent))
+      (dump-num arena " rounds " (. r rounds))
+      (dump-num arena " g " (. r g-rounds))
+      (dump-num arena "/" (. r g-facts))
+      (dump-num arena " w " (. r w-rounds))
+      (dump-num arena "/" (. r w-facts))
+      (dump-num arena " unsafe " (. r unsafe-count))
+      (match (. r termination)
+        ((fixpoint)         (println " fixpoint"))
+        ((resource-limit n) (do (dump-num arena " resource-limit " n) (println ""))))
+      (for-each (a (. r answers)) (dump-answer arena a))
+      0))
+
+  (fn dump-ksc-classify ((arena Arena) (fx KscFixture) (w Int) (cap Int))
+    (@intent "ksc-classify at w workers under a cap: every counter and every answer, or its fault")
+    (@spec ((Arena KscFixture Int Int) -> Int))
+    (@alloc arena)
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg worker-count (cast (Int 1 .. 64) w))
+        (set! cfg max-iterations (cast (Int 0 .. 10000) cap))
+        (dump-num arena "classify w=" w)
+        (dump-num arena " cap " cap)
+        (println "")
+        (match (ksc-classify arena (. fx axioms) (. fx classes) cfg)
+          ((error f) (dump-fault arena f))
+          ((ok r)    (dump-ksc-result arena r))))))
+
+  (fn dump-ksc-caps ((arena Arena) (fx KscFixture) (w Int))
+    (@intent "ksc-classify at w workers, uncapped and under caps of 0 to 3 rounds")
+    (@spec ((Arena KscFixture Int) -> Int))
+    (@alloc arena)
+    (do
+      (dump-ksc-classify arena fx w 1000)
+      (dump-ksc-classify arena fx w 0)
+      (dump-ksc-classify arena fx w 1)
+      (dump-ksc-classify arena fx w 2)
+      (dump-ksc-classify arena fx w 3)))
+
+  (fn ksc-dump ((arena Arena) (path String))
+    (@intent "el++'s engine on one file, by phase and under caps, for a restructure's before and after")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (match (gate-fixture-in arena path 'profile-el-plus-plus)
+      ((none) (do (println "did not gate") 1))
+      ((some gr)
+        (let ((fx (record-new KscFixture
+                    (axioms  (. (normalize-ksc arena (. gr accepted)) axioms))
+                    (classes (input-classes arena (. gr signature)))))
+              (idx (build-ksc-index arena (. fx axioms)))
+              (ids (build-ksc-ids arena (. fx axioms) (. fx classes) (. idx individuals))))
+          (do
+            (dump-ksc-phases arena idx ids (. fx classes) 1)
+            (dump-ksc-phases arena idx ids (. fx classes) 4)
+            (dump-ksc-caps arena fx 1)
+            (dump-ksc-caps arena fx 4))))))
+
   (fn main ((argc Int) (argv (Ptr (Ptr U8))))
-    (@intent "Run the suite; or print a normaliser stage (`sriq-dump`, SPEC §10) or the front end (`front-dump`)")
+    (@intent "Run the suite; or print a normaliser stage (`sriq-dump`, SPEC §10), the front end (`front-dump`) or el++'s engine (`ksc-dump`)")
     (@spec ((Int (Ptr (Ptr U8))) -> Int))
     :c-name "main"
     (cond
@@ -6701,7 +6954,9 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (with-arena 4194304 (sriq-dump arena (arg-text argv 2) (arg-text argv 3) b)))))
       ((and (== argc 3) (string-eq (arg-text argv 1) "front-dump"))
         (with-arena 4194304 (front-dump arena (arg-text argv 2))))
-      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE]") 2))))
+      ((and (== argc 3) (string-eq (arg-text argv 1) "ksc-dump"))
+        (with-arena 4194304 (ksc-dump arena (arg-text argv 2))))
+      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE | ksc-dump FILE]") 2))))
 
   (fn run-suite ()
     (@intent "Run the verdict-discipline and structural-invariant tests")
@@ -7099,6 +7354,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-ksc-normal-form-rows arena)))
             (print-test-result "kscnormal: each translation row gives exactly its Definition 1 facts" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-cut-runs-say-resource-limit arena)))
+            (print-test-result "ksc: an answer the cap cut short says resource-limit" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-ksc-g-stops-at-bottom arena)))
+            (print-test-result "ksc: phase G stops committing at a round's first bottom (ksc-37)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-ksc-engine-matches-reference arena)))

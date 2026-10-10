@@ -96,7 +96,7 @@ slop_option_string ttl_prefix_map_lookup(ttl_PrefixMap pm, slop_string prefix) {
 }
 
 void ttl_blank_labels_add(slop_arena* arena, slop_map* ids, slop_string label, int64_t id) {
-    ({ slop_string _key_1058 = (strlib_substring(arena, label, 0, SLOP_RANGE(int64_t, string_len(label), 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:170:43"))); int64_t _val = id; slop_map_put(NULL, ids, &_key_1058, &_val, sizeof(_val)); });
+    ({ slop_string _key_1060 = (strlib_substring(arena, label, 0, SLOP_RANGE(int64_t, string_len(label), 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:170:43"))); int64_t _val = id; slop_map_put(NULL, ids, &_key_1060, &_val, sizeof(_val)); });
 }
 
 ttl_TtlParseContext ttl_make_ttl_context(slop_arena* arena, slop_string input) {
@@ -123,11 +123,11 @@ ttl_TtlParseContext ttl_ctx_with_state(ttl_TtlParseContext ctx, common_ParseStat
 }
 
 slop_string ttl_iri_string(rdf_Term t) {
-    __auto_type _mv_1059 = t;
-    switch (_mv_1059.tag) {
+    __auto_type _mv_1061 = t;
+    switch (_mv_1061.tag) {
         case rdf_Term_term_iri:
         {
-            __auto_type iri = _mv_1059.data.term_iri;
+            __auto_type iri = _mv_1061.data.term_iri;
             return iri.value;
         }
         default: {
@@ -271,11 +271,11 @@ slop_result_ttl_StringResult_common_ParseError ttl_parse_prefixed_name_string(sl
         __auto_type s3 = ttl_scan_pn_local(s2);
         __auto_type input = s0.input;
         __auto_type lookup = ttl_prefix_map_lookup(ctx.prefixes, ttl_input_slice(input, s0.offset, SLOP_RANGE(int64_t, (s1.offset - s0.offset), 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:373:54")));
-        __auto_type _mv_1060 = lookup;
-        if (_mv_1060.has_value) {
-            __auto_type base_iri = _mv_1060.value;
+        __auto_type _mv_1062 = lookup;
+        if (_mv_1062.has_value) {
+            __auto_type base_iri = _mv_1062.value;
             return ((slop_result_ttl_StringResult_common_ParseError){ .is_ok = true, .data.ok = ((ttl_StringResult){.value = ttl_concat_base_slice(arena, base_iri, input, SLOP_RANGE(int64_t, s2.offset, 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:377:60"), SLOP_RANGE(int64_t, (s3.offset - s2.offset), 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:377:74")), .ctx = ttl_ctx_with_state(ctx, s3)}) });
-        } else if (!_mv_1060.has_value) {
+        } else if (!_mv_1062.has_value) {
             return ((slop_result_ttl_StringResult_common_ParseError){ .is_ok = false, .data.err = common_make_parse_error(arena, common_ParseErrorKind_unknown_prefix, SLOP_STR("Unknown prefix"), ((common_Position){.line = s1.line, .column = s1.column, .offset = s1.offset})) });
         }
         SLOP_UNREACHABLE();
@@ -315,11 +315,11 @@ slop_result_ttl_TermTriplesResult_common_ParseError ttl_parse_blank_node_extende
                 __auto_type s4 = ttl_scan_pn_chars(s3);
                 __auto_type label = ttl_input_slice(s3.input, SLOP_RANGE(int64_t, s3.offset, 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:418:48"), SLOP_RANGE(int64_t, (s4.offset - s3.offset), 1, 0, 0, 0, "(Int 0 ..) at ttl.slop:418:62"));
                 __auto_type tbl = ctx.blank_labels;
-                __auto_type _mv_1062 = ({ void* _ptr = slop_map_get(tbl.ids, &(label)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
-                if (_mv_1062.has_value) {
-                    __auto_type existing_id = _mv_1062.value;
+                __auto_type _mv_1064 = ({ void* _ptr = slop_map_get(tbl.ids, &(label)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
+                if (_mv_1064.has_value) {
+                    __auto_type existing_id = _mv_1064.value;
                     return ((slop_result_ttl_TermTriplesResult_common_ParseError){ .is_ok = true, .data.ok = ((ttl_TermTriplesResult){.term = rdf_make_blank(arena, existing_id), .extra_triples = ((slop_list_rdf_Triple){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .ctx = ttl_ctx_with_state(ctx, s4)}) });
-                } else if (!_mv_1062.has_value) {
+                } else if (!_mv_1064.has_value) {
                     {
                         __auto_type gen = ttl_context_gen_blank_id(arena, ctx);
                         ttl_blank_labels_add(tbl.arena, tbl.ids, label, gen.id);
@@ -645,18 +645,18 @@ slop_result_ttl_TermTriplesResult_common_ParseError ttl_parse_collection(slop_ar
                     {
                         __auto_type cell_node = rdf_make_blank(arena, gen.id);
                         ({ __auto_type _lst_p = &(triples); __auto_type _item = (rdf_make_triple(arena, cell_node, rdf_first, er.term)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        __auto_type _mv_1063 = prev_node;
-                        if (_mv_1063.has_value) {
-                            __auto_type pn = _mv_1063.value;
+                        __auto_type _mv_1065 = prev_node;
+                        if (_mv_1065.has_value) {
+                            __auto_type pn = _mv_1065.value;
                             ({ __auto_type _lst_p = &(triples); __auto_type _item = (rdf_make_triple(arena, pn, rdf_rest, cell_node)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        } else if (!_mv_1063.has_value) {
+                        } else if (!_mv_1065.has_value) {
                             /* empty list */;
                         }
-                        __auto_type _mv_1064 = first_node;
-                        if (_mv_1064.has_value) {
-                            __auto_type _ = _mv_1064.value;
+                        __auto_type _mv_1066 = first_node;
+                        if (_mv_1066.has_value) {
+                            __auto_type _ = _mv_1066.value;
                             /* empty list */;
-                        } else if (!_mv_1064.has_value) {
+                        } else if (!_mv_1066.has_value) {
                             first_node = (slop_option_rdf_Term){.has_value = 1, .value = cell_node};
                         }
                         prev_node = (slop_option_rdf_Term){.has_value = 1, .value = cell_node};
@@ -665,11 +665,11 @@ slop_result_ttl_TermTriplesResult_common_ParseError ttl_parse_collection(slop_ar
                 }
             }
         }
-        __auto_type _mv_1065 = prev_node;
-        if (_mv_1065.has_value) {
-            __auto_type pn = _mv_1065.value;
+        __auto_type _mv_1067 = prev_node;
+        if (_mv_1067.has_value) {
+            __auto_type pn = _mv_1067.value;
             ({ __auto_type _lst_p = &(triples); __auto_type _item = (rdf_make_triple(arena, pn, rdf_rest, rdf_nil)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        } else if (!_mv_1065.has_value) {
+        } else if (!_mv_1067.has_value) {
             /* empty list */;
         }
         {
@@ -1103,24 +1103,24 @@ slop_result_int_common_ParseError ttl_parse_ttl_string_for_each_triple(slop_aren
             {
                 __auto_type c = common_state_peek(ctx.state);
                 if ((c == 64) || ((c == 80) || (c == 66))) {
-                    __auto_type _mv_1066 = ttl_parse_directive_any(arena, ctx);
-                    if (_mv_1066.is_ok) {
-                        __auto_type next = _mv_1066.data.ok;
+                    __auto_type _mv_1068 = ttl_parse_directive_any(arena, ctx);
+                    if (_mv_1068.is_ok) {
+                        __auto_type next = _mv_1068.data.ok;
                         ctx = next;
-                    } else if (!_mv_1066.is_ok) {
-                        __auto_type e = _mv_1066.data.err;
+                    } else if (!_mv_1068.is_ok) {
+                        __auto_type e = _mv_1068.data.err;
                         ({ slop_arena_free(scratch); free(scratch); });
                         return ((slop_result_int_common_ParseError){ .is_ok = false, .data.err = e });
                     }
                 } else {
-                    __auto_type _mv_1067 = ttl_parse_statement_for_each_triple(scratch, ctx, callback);
-                    if (_mv_1067.is_ok) {
-                        __auto_type r = _mv_1067.data.ok;
+                    __auto_type _mv_1069 = ttl_parse_statement_for_each_triple(scratch, ctx, callback);
+                    if (_mv_1069.is_ok) {
+                        __auto_type r = _mv_1069.data.ok;
                         count = (count + r.count);
                         ctx = r.ctx;
                         ttl_scratch_reset(scratch);
-                    } else if (!_mv_1067.is_ok) {
-                        __auto_type e = _mv_1067.data.err;
+                    } else if (!_mv_1069.is_ok) {
+                        __auto_type e = _mv_1069.data.err;
                         ({ slop_arena_free(scratch); free(scratch); });
                         return ((slop_result_int_common_ParseError){ .is_ok = false, .data.err = e });
                     }
@@ -1137,33 +1137,33 @@ slop_result_rdf_Graph_ttl_TtlFileError ttl_parse_ttl_file(slop_arena* arena, slo
     SLOP_PRE(((string_len(path) > 0)), "(> (string-len path) 0)");
     {
         __auto_type f = file_file_open(path, file_FileMode_read);
-        __auto_type _mv_1068 = f;
-        if (_mv_1068.is_ok) {
-            __auto_type handle = _mv_1068.data.ok;
+        __auto_type _mv_1070 = f;
+        if (_mv_1070.is_ok) {
+            __auto_type handle = _mv_1070.data.ok;
             {
                 __auto_type content = file_file_read_all(arena, (&handle));
-                __auto_type _mv_1069 = content;
-                if (_mv_1069.is_ok) {
-                    __auto_type text = _mv_1069.data.ok;
+                __auto_type _mv_1071 = content;
+                if (_mv_1071.is_ok) {
+                    __auto_type text = _mv_1071.data.ok;
                     file_file_close((&handle));
-                    __auto_type _mv_1070 = ttl_parse_ttl_string(arena, text);
-                    if (_mv_1070.is_ok) {
-                        __auto_type g = _mv_1070.data.ok;
+                    __auto_type _mv_1072 = ttl_parse_ttl_string(arena, text);
+                    if (_mv_1072.is_ok) {
+                        __auto_type g = _mv_1072.data.ok;
                         return ((slop_result_rdf_Graph_ttl_TtlFileError){ .is_ok = true, .data.ok = g });
-                    } else if (!_mv_1070.is_ok) {
-                        __auto_type e = _mv_1070.data.err;
+                    } else if (!_mv_1072.is_ok) {
+                        __auto_type e = _mv_1072.data.err;
                         return ((slop_result_rdf_Graph_ttl_TtlFileError){ .is_ok = false, .data.err = ((ttl_TtlFileError){ .tag = ttl_TtlFileError_parse_error, .data.parse_error = e }) });
                     }
                     SLOP_UNREACHABLE();
-                } else if (!_mv_1069.is_ok) {
-                    __auto_type e = _mv_1069.data.err;
+                } else if (!_mv_1071.is_ok) {
+                    __auto_type e = _mv_1071.data.err;
                     file_file_close((&handle));
                     return ((slop_result_rdf_Graph_ttl_TtlFileError){ .is_ok = false, .data.err = ((ttl_TtlFileError){ .tag = ttl_TtlFileError_file_error, .data.file_error = e }) });
                 }
                 SLOP_UNREACHABLE();
             }
-        } else if (!_mv_1068.is_ok) {
-            __auto_type e = _mv_1068.data.err;
+        } else if (!_mv_1070.is_ok) {
+            __auto_type e = _mv_1070.data.err;
             return ((slop_result_rdf_Graph_ttl_TtlFileError){ .is_ok = false, .data.err = ((ttl_TtlFileError){ .tag = ttl_TtlFileError_file_error, .data.file_error = e }) });
         }
         SLOP_UNREACHABLE();
@@ -1174,33 +1174,33 @@ slop_result_int_ttl_TtlFileError ttl_parse_ttl_file_for_each_triple(slop_arena* 
     SLOP_PRE(((string_len(path) > 0)), "(> (string-len path) 0)");
     {
         __auto_type f = file_file_open(path, file_FileMode_read);
-        __auto_type _mv_1071 = f;
-        if (_mv_1071.is_ok) {
-            __auto_type handle = _mv_1071.data.ok;
+        __auto_type _mv_1073 = f;
+        if (_mv_1073.is_ok) {
+            __auto_type handle = _mv_1073.data.ok;
             {
                 __auto_type content = file_file_read_all(arena, (&handle));
-                __auto_type _mv_1072 = content;
-                if (_mv_1072.is_ok) {
-                    __auto_type text = _mv_1072.data.ok;
+                __auto_type _mv_1074 = content;
+                if (_mv_1074.is_ok) {
+                    __auto_type text = _mv_1074.data.ok;
                     file_file_close((&handle));
-                    __auto_type _mv_1073 = ttl_parse_ttl_string_for_each_triple(arena, text, callback);
-                    if (_mv_1073.is_ok) {
-                        __auto_type count = _mv_1073.data.ok;
+                    __auto_type _mv_1075 = ttl_parse_ttl_string_for_each_triple(arena, text, callback);
+                    if (_mv_1075.is_ok) {
+                        __auto_type count = _mv_1075.data.ok;
                         return ((slop_result_int_ttl_TtlFileError){ .is_ok = true, .data.ok = count });
-                    } else if (!_mv_1073.is_ok) {
-                        __auto_type e = _mv_1073.data.err;
+                    } else if (!_mv_1075.is_ok) {
+                        __auto_type e = _mv_1075.data.err;
                         return ((slop_result_int_ttl_TtlFileError){ .is_ok = false, .data.err = ((ttl_TtlFileError){ .tag = ttl_TtlFileError_parse_error, .data.parse_error = e }) });
                     }
                     SLOP_UNREACHABLE();
-                } else if (!_mv_1072.is_ok) {
-                    __auto_type e = _mv_1072.data.err;
+                } else if (!_mv_1074.is_ok) {
+                    __auto_type e = _mv_1074.data.err;
                     file_file_close((&handle));
                     return ((slop_result_int_ttl_TtlFileError){ .is_ok = false, .data.err = ((ttl_TtlFileError){ .tag = ttl_TtlFileError_file_error, .data.file_error = e }) });
                 }
                 SLOP_UNREACHABLE();
             }
-        } else if (!_mv_1071.is_ok) {
-            __auto_type e = _mv_1071.data.err;
+        } else if (!_mv_1073.is_ok) {
+            __auto_type e = _mv_1073.data.err;
             return ((slop_result_int_ttl_TtlFileError){ .is_ok = false, .data.err = ((ttl_TtlFileError){ .tag = ttl_TtlFileError_file_error, .data.file_error = e }) });
         }
         SLOP_UNREACHABLE();
