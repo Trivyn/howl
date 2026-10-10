@@ -1175,52 +1175,41 @@
             ((none) (do))))
         n)))
 
-  (fn raises-unsat ((base (Option Base)) (f KFact))
-    (@intent "K3: is a new fact ⊥, or does it reach ⊥?")
-    (@spec (((Option Base) KFact) -> Bool))
-    (or (is-bottom-fact f) (reaches-bottom base f)))
-
-  ;; The serial commit's working state: what it reads and the round it
-  ;; builds, written through the pointer so no per-conclusion step copies a
-  ;; store.
-  (type Committing (record
-    (st    KStore)
-    (base  (Option Base))
-    (stop  Bool)                ; stop at ⊥
-    (next  (List KFact))
-    (added Int)
-    (unsat Bool)))
-
-  (fn serial-step ((arena Arena) (cm (Ptr Committing)) (c CFact))
-    (@intent "One conclusion committed, unless the round has reached ⊥ and stops there")
-    (@spec ((Arena (Ptr Committing) CFact) -> Bool))
+  ;; The commits loop over the conclusions in the function itself, as
+  ;; they did before flattening: clang inlines commit-coded and
+  ;; file-subject into a loop there, but not into a per-chunk helper, and
+  ;; the out-of-line call per conclusion cost up to 2.7 % of el-galen's
+  ;; instructions (Lesson de3c082d). Only the per-chunk match moves out.
+  (fn chunk-items ((arena Arena) (out (Map Int CFactList)))
+    (@intent "One worker's conclusions in its order: empty when it left none")
+    (@spec ((Arena (Map Int CFactList)) -> (List CFact)))
     (@alloc arena)
-    (if (and (. (deref cm) stop) (. (deref cm) unsat))
-      true
-      (match (commit-coded arena (. (deref cm) st) c)
-        ((some f)
-          (do
-            (list-push (. (deref cm) next) f)
-            (set! (. (deref cm) added) (+ (. (deref cm) added) 1))
-            (when (raises-unsat (. (deref cm) base) f) (set! (. (deref cm) unsat) true))
-            true))
-        ((none) true))))
+    (match (map-get out 0)
+      ((some cl) (. cl items))
+      ((none)    (list-new arena CFact))))
 
   (fn commit-serial ((arena Arena) (na Arena) (st KStore) (base (Option Base)) (d Derived)
                      (stop-at-bottom Bool) (unsat0 Bool))
     (@intent "The reference commit: every conclusion in Δₙ's order, on this thread, stopping at ⊥ if asked")
     (@spec ((Arena Arena KStore (Option Base) Derived Bool Bool) -> RoundOut))
     (@alloc arena)
-    (let ((cm (cast (Ptr Committing) (arena-alloc arena (sizeof Committing)))))
+    (let ((mut next (list-new na KFact))
+          (mut unsat unsat0)
+          (mut added 0))
       (do
-        (set! (deref cm) (record-new Committing (st st) (base base) (stop stop-at-bottom)
-                           (next (list-new na KFact)) (added 0) (unsat unsat0)))
         ;; Chunk by chunk, each in the order its worker derived.
         (for-each (out (. d outs))
-          (match (map-get out 0)
-            ((some cl) (for-each (c (. cl items)) (serial-step arena cm c)))
-            ((none)    (do))))
-        (record-new RoundOut (next (. (deref cm) next)) (added (. (deref cm) added)) (unsat (. (deref cm) unsat))))))
+          (for-each (c (chunk-items arena out))
+            (when (not (if stop-at-bottom unsat false))
+              (match (commit-coded arena st c)
+                ((some f)
+                  (do
+                    (list-push next f)
+                    (set! added (+ added 1))
+                    (when (is-bottom-fact f) (set! unsat true))
+                    (when (reaches-bottom base f) (set! unsat true))))
+                ((none) (do))))))
+        (record-new RoundOut (next next) (added added) (unsat unsat)))))
 
   ;; ============================================================
   ;; THE PARALLEL COMMIT (phases G and W, at W > 1): the serial commit's
@@ -1302,39 +1291,10 @@
     (@spec ((KStore U32 Int) -> Int))
     (% (shard-index k (shard-count st)) nc))
 
-  ;; Committer k's subject pass, in its own arena: what it reads, the
-  ;; positions and facts it keeps, and the position of the next conclusion
-  ;; in Δₙ's order, written through the pointer.
-  (type SubjectPass (record
-    (ca    Arena)
-    (st    KStore)
-    (k     Int)
-    (nc    Int)
-    (pos   (List Int))
-    (facts (List KFact))
-    (p     Int)))
-
-  (fn file-if-new ((ca Arena) (st KStore) (c CFact))
-    (@intent "c's subject half filed in its shard unless the shard has seen c: the decoded fact when new")
-    (@spec ((Arena KStore CFact) -> (Option KFact)))
-    (@alloc ca)
-    (let ((sh (shard-at st (. c a))))
-      (if (set-has (. sh seen) c)
-        (none)
-        (let ((f (decode-fact (. st ids) c)))
-          (do (file-subject ca sh f c) (some f))))))
-
-  (fn subject-step ((sp (Ptr SubjectPass)) (c CFact))
-    (@intent "One conclusion of the subject pass, kept when this committer owns it and it is new; the position moves on either way")
-    (@spec (((Ptr SubjectPass) CFact) -> Bool))
-    (do
-      (when (== (committer-of (. (deref sp) st) (. c a) (. (deref sp) nc)) (. (deref sp) k))
-        (match (file-if-new (. (deref sp) ca) (. (deref sp) st) c)
-          ((some f) (do (list-push (. (deref sp) pos) (. (deref sp) p))
-                        (list-push (. (deref sp) facts) f)))
-          ((none)   (do))))
-      (set! (. (deref sp) p) (+ (. (deref sp) p) 1))
-      true))
+  (fn seen-in ((st KStore) (c CFact))
+    (@intent "Has c's subject's shard seen c?")
+    (@spec ((KStore CFact) -> Bool))
+    (set-has (. (shard-at st (. c a)) seen) c))
 
   (fn commit-subjects ((ca Arena) (sa Arena) (st KStore) (d Derived) (k Int) (nc Int) (res (Map Int Fresh)))
     (@intent "Committer k's subject pass: dedup and file the subject's half of every conclusion its shards own, in Δₙ's order")
@@ -1345,15 +1305,22 @@
     ;; only the shards it owns (growing them in `ca`), and keeps its result
     ;; in `sa` and `res`, which no other thread sees. The position counts
     ;; EVERY conclusion, owned or not: merge-fresh reads it as Δₙ's order.
-    (let ((sp (cast (Ptr SubjectPass) (arena-alloc sa (sizeof SubjectPass)))))
+    (let ((mut pos (list-new sa Int))
+          (mut facts (list-new sa KFact))
+          (mut p 0))
       (do
-        (set! (deref sp) (record-new SubjectPass (ca ca) (st st) (k k) (nc nc)
-                           (pos (list-new sa Int)) (facts (list-new sa KFact)) (p 0)))
         (for-each (out (. d outs))
-          (match (map-get out 0)
-            ((some cl) (for-each (c (. cl items)) (subject-step sp c)))
-            ((none)    (do))))
-        (map-put res 0 (record-new Fresh (pos (. (deref sp) pos)) (facts (. (deref sp) facts))))
+          (for-each (c (chunk-items sa out))
+            (do
+              (when (and (== (committer-of st (. c a) nc) k) (not (seen-in st c)))
+                (let ((sh (shard-at st (. c a)))
+                      (f  (decode-fact (. st ids) c)))
+                  (do
+                    (file-subject ca sh f c)
+                    (list-push pos p)
+                    (list-push facts f))))
+              (set! p (+ p 1)))))
+        (map-put res 0 (record-new Fresh (pos pos) (facts facts)))
         0)))
 
   (fn commit-others ((ca Arena) (st KStore) (held (List Held)) (k Int) (nc Int))
@@ -1460,7 +1427,8 @@
     (do
       (list-push (. (deref m) next) f)
       (set! (. (deref m) added) (+ (. (deref m) added) 1))
-      (when (raises-unsat (. (deref m) base) f) (set! (. (deref m) unsat) true))
+      (when (or (is-bottom-fact f) (reaches-bottom (. (deref m) base) f))
+        (set! (. (deref m) unsat) true))
       (match (other-end (. (deref m) st) f c)
         ((some h) (list-push (. (deref m) held) (record-new Held (key h) (c c))))
         ((none)   (do)))

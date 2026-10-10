@@ -30,10 +30,8 @@ typedef struct kscsat_Deriving kscsat_Deriving;
 typedef struct kscsat_RoundOut kscsat_RoundOut;
 typedef struct kscsat_CFactList kscsat_CFactList;
 typedef struct kscsat_Derived kscsat_Derived;
-typedef struct kscsat_Committing kscsat_Committing;
 typedef struct kscsat_Fresh kscsat_Fresh;
 typedef struct kscsat_Held kscsat_Held;
-typedef struct kscsat_SubjectPass kscsat_SubjectPass;
 typedef struct kscsat_Merged kscsat_Merged;
 typedef struct kscsat_Merging kscsat_Merging;
 typedef struct kscsat_QRuns kscsat_QRuns;
@@ -351,21 +349,6 @@ typedef struct kscsat_Derived kscsat_Derived;
 SLOP_OPTION_DEFINE(kscsat_Derived, slop_option_kscsat_Derived)
 #endif
 
-struct kscsat_Committing {
-    kscsat_KStore st;
-    slop_option_kscsat_Base base;
-    uint8_t stop;
-    slop_list_types_KFact next;
-    int64_t added;
-    uint8_t unsat;
-};
-typedef struct kscsat_Committing kscsat_Committing;
-
-#ifndef SLOP_OPTION_KSCSAT_COMMITTING_DEFINED
-#define SLOP_OPTION_KSCSAT_COMMITTING_DEFINED
-SLOP_OPTION_DEFINE(kscsat_Committing, slop_option_kscsat_Committing)
-#endif
-
 struct kscsat_Fresh {
     slop_list_int pos;
     slop_list_types_KFact facts;
@@ -398,22 +381,6 @@ SLOP_OPTION_DEFINE(kscsat_Held, slop_option_kscsat_Held)
 #define SLOP_LIST_KSCSAT_HELD_DEFINED
 #define SLOP_LIST_KSCSAT_HELD_IMPL_DEFINED
 SLOP_LIST_DEFINE(kscsat_Held, slop_list_kscsat_Held)
-#endif
-
-struct kscsat_SubjectPass {
-    slop_arena* ca;
-    kscsat_KStore st;
-    int64_t k;
-    int64_t nc;
-    slop_list_int pos;
-    slop_list_types_KFact facts;
-    int64_t p;
-};
-typedef struct kscsat_SubjectPass kscsat_SubjectPass;
-
-#ifndef SLOP_OPTION_KSCSAT_SUBJECTPASS_DEFINED
-#define SLOP_OPTION_KSCSAT_SUBJECTPASS_DEFINED
-SLOP_OPTION_DEFINE(kscsat_SubjectPass, slop_option_kscsat_SubjectPass)
 #endif
 
 struct kscsat_Merged {
@@ -654,14 +621,12 @@ int64_t kscsat_round_workers(int64_t workers, int64_t n);
 kscsat_Derived kscsat_derive_round(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t workers);
 kscsat_RoundOut kscsat_ksc_round(slop_arena* arena, slop_arena* na, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, uint8_t stop_at_bottom, uint8_t unsat0, int64_t workers, slop_list_arena_ptr cas);
 int64_t kscsat_conclusion_count(kscsat_Derived d);
-uint8_t kscsat_raises_unsat(slop_option_kscsat_Base base, types_KFact f);
-uint8_t kscsat_serial_step(slop_arena* arena, kscsat_Committing* cm, kscids_CFact c);
+slop_list_kscids_CFact kscsat_chunk_items(slop_arena* arena, slop_map* out);
 kscsat_RoundOut kscsat_commit_serial(slop_arena* arena, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0);
 uint8_t kscsat_parallel_commit_ok(kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0, int64_t nc);
 uint8_t kscsat_any_bottom_coded(kscsat_KStore st, kscsat_Derived d);
 int64_t kscsat_committer_of(kscsat_KStore st, uint32_t k, int64_t nc);
-slop_option_types_KFact kscsat_file_if_new(slop_arena* ca, kscsat_KStore st, kscids_CFact c);
-uint8_t kscsat_subject_step(kscsat_SubjectPass* sp, kscids_CFact c);
+uint8_t kscsat_seen_in(kscsat_KStore st, kscids_CFact c);
 int64_t kscsat_commit_subjects(slop_arena* ca, slop_arena* sa, kscsat_KStore st, kscsat_Derived d, int64_t k, int64_t nc, slop_map* res);
 int64_t kscsat_commit_others(slop_arena* ca, kscsat_KStore st, slop_list_kscsat_Held held, int64_t k, int64_t nc);
 kscsat_RoundOut kscsat_commit_parallel(slop_arena* scratch, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, slop_list_arena_ptr cas, int64_t nc, uint8_t unsat0);
@@ -814,11 +779,6 @@ SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
 SLOP_OPTION_DEFINE(kscsat_Derived, slop_option_kscsat_Derived)
 #endif
 
-#ifndef SLOP_OPTION_KSCSAT_COMMITTING_DEFINED
-#define SLOP_OPTION_KSCSAT_COMMITTING_DEFINED
-SLOP_OPTION_DEFINE(kscsat_Committing, slop_option_kscsat_Committing)
-#endif
-
 #ifndef SLOP_OPTION_KSCSAT_FRESH_DEFINED
 #define SLOP_OPTION_KSCSAT_FRESH_DEFINED
 SLOP_OPTION_DEFINE(kscsat_Fresh, slop_option_kscsat_Fresh)
@@ -827,11 +787,6 @@ SLOP_OPTION_DEFINE(kscsat_Fresh, slop_option_kscsat_Fresh)
 #ifndef SLOP_OPTION_KSCSAT_HELD_DEFINED
 #define SLOP_OPTION_KSCSAT_HELD_DEFINED
 SLOP_OPTION_DEFINE(kscsat_Held, slop_option_kscsat_Held)
-#endif
-
-#ifndef SLOP_OPTION_KSCSAT_SUBJECTPASS_DEFINED
-#define SLOP_OPTION_KSCSAT_SUBJECTPASS_DEFINED
-SLOP_OPTION_DEFINE(kscsat_SubjectPass, slop_option_kscsat_SubjectPass)
 #endif
 
 #ifndef SLOP_OPTION_KSCSAT_MERGED_DEFINED

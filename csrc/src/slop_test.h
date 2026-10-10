@@ -1154,6 +1154,7 @@ uint8_t test_holds_under(kscpremise_KscIndex idx, slop_list_types_KFact fs, type
 uint8_t test_g_matches_reference(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes);
 uint8_t test_test_ksc_g_matches_reference(slop_arena* arena);
 uint8_t test_commit_agrees(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, uint8_t stop, uint8_t with_classes);
+uint8_t test_commit_shapes_agree(slop_arena* arena, test_KscFixture fx, int64_t i);
 uint8_t test_test_ksc_commit_identical(slop_arena* arena);
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap);
 uint8_t test_answers_equal(types_KscResult a, types_KscResult b);

@@ -4176,7 +4176,9 @@
     (@spec ((Arena (List KscAxiom) (List KName) Bool Bool) -> Bool))
     (@alloc arena)
     ;; G's shape (individuals, stopping at ⊥, which exercises the serial
-    ;; fallback) or W's (every class seeded too, never stopping).
+    ;; fallback), G's seeds never stopping (a ⊥ then raises K3's flag in
+    ;; the parallel merge), or W's (every class seeded too, never stopping;
+    ;; its flag is up from the seeds whenever owl:Nothing is a class).
     (let ((idx (build-ksc-index arena axioms))
           (ids (build-ksc-ids arena axioms classes (. idx individuals)))
           (cas (list-new arena Arena))
@@ -4204,8 +4206,25 @@
             (for-each (a cas) (arena-free a))
             ok)))))
 
+  (fn commit-shapes-agree ((arena Arena) (fx KscFixture) (i Int))
+    (@intent "Does fixture i commit on four threads what it does on one, in G's shape, unstopped G's and W's? Each shape that differs is printed")
+    (@spec ((Arena KscFixture Int) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
+      (do
+        (when (not (commit-agrees arena (. fx axioms) (. fx classes) true false))
+          (do (println (string-concat arena "  [ksc commit, G] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
+              (set! ok false)))
+        (when (not (commit-agrees arena (. fx axioms) (. fx classes) false false))
+          (do (println (string-concat arena "  [ksc commit, G unstopped] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
+              (set! ok false)))
+        (when (not (commit-agrees arena (. fx axioms) (. fx classes) false true))
+          (do (println (string-concat arena "  [ksc commit, W] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
+              (set! ok false)))
+        ok)))
+
   (fn test-ksc-commit-identical ((arena Arena))
-    (@intent "On every el++ fixture the parallel commit stores and counts exactly what the serial one does, in G's shape and W's")
+    (@intent "On every el++ fixture the parallel commit stores, counts and flags exactly what the serial one does, in G's shape, unstopped G's and W's")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     (let ((mut ok true)
@@ -4214,15 +4233,8 @@
         (while (< i (ksc-fixture-count))
           (do
             (match (ksc-fixture arena (ksc-fixture-at i))
-              ((some fx)
-                (do
-                  (when (not (commit-agrees arena (. fx axioms) (. fx classes) true false))
-                    (do (println (string-concat arena "  [ksc commit, G] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
-                        (set! ok false)))
-                  (when (not (commit-agrees arena (. fx axioms) (. fx classes) false true))
-                    (do (println (string-concat arena "  [ksc commit, W] W = 4 differs from W = 1, fixture " (int-to-string arena i)))
-                        (set! ok false)))))
-              ((none) (set! ok false)))
+              ((some fx) (when (not (commit-shapes-agree arena fx i)) (set! ok false)))
+              ((none)    (set! ok false)))
             (set! i (+ i 1))))
         ok)))
 
@@ -7401,7 +7413,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-ksc-commit-identical arena)))
-            (print-test-result "ksc: the parallel commit stores and counts what the serial one does" r)
+            (print-test-result "ksc: the parallel commit stores, counts and flags what the serial one does" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-negation-rewrites-to-bottom-gcis arena)))
