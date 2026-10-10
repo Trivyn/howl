@@ -4,6 +4,7 @@
     python3 corpus/elimcheck.py fixtures            # tracked fixtures (CI)
     python3 corpus/elimcheck.py guarded             # S1's guard tripped on purpose (CI)
     python3 corpus/elimcheck.py corpus [--record]   # BFO-core, CCO (local)
+    python3 corpus/elimcheck.py long                # RO and OBI, hours (local, overnight)
 
 For each input, HOWL's test binary prints each normaliser stage as an OWL 2
 functional-syntax document (`howl-test sriq-dump STAGE FILE`). The oracle
@@ -23,6 +24,8 @@ import os
 import re
 import subprocess
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -63,6 +66,14 @@ def invariant_lines():
             bad += 1
             lines.append(f"vendor-{n} s1-invariants: FAILED: {(p.stdout.strip().splitlines() or ['?'])[0]}")
     return lines, bad
+# The long run: the ontologies whose stages HermiT needs hours for. Each
+# document gets its own JVM and budget, two at a time, S0s first, so a slow S1
+# never holds up the rest. Recorded in corpus/elim-differential-long.txt.
+LONG = tuple(os.environ.get("ELIM_LONG_INPUTS", "ro-2025-12-17,obi-2026-07-27").split(","))
+LONG_TIMEOUT = int(os.environ.get("ELIM_LONG_TIMEOUT", str(6 * 3600)))  # seconds per document
+LONG_WORKERS = int(os.environ.get("ELIM_LONG_WORKERS", "2"))
+LONG_XMX = os.environ.get("ELIM_LONG_XMX", "24g")
+LONG_RECORD = os.path.join(HERE, "elim-differential-long.txt")
 # Fixtures whose S1 labels something, so a bound of 0 trips the guard.
 GUARDED = ("el++/ksc-04", "el++/ksc-05", "el++/ksc-14", "el++/ksc-21", "el++/ksc-22", "el++/ksc-23",
            "el++/ksc-27", "el++/ksc-28", "hazards/abox-chain-mixed", "hazards/abox-nary-chain",
@@ -266,12 +277,106 @@ def check(inputs, timeout=None):
     return lines, bad
 
 
+def oracle_one(ttl, out_dir, timeout):
+    """HermiT on one document in its own JVM and directory: (report or None, why not, seconds).
+
+    differential.run_oracle clears one shared output directory per call, so
+    concurrent documents each get their own here."""
+    os.makedirs(out_dir, exist_ok=True)
+    for stale in os.listdir(out_dir):
+        os.remove(os.path.join(out_dir, stale))
+    env = dict(os.environ, HOWL_ORACLE_XMX=LONG_XMX)
+    start = time.time()
+    try:
+        p = subprocess.run([differential.ORACLE, "report", "--reasoner", "hermit", "--out", out_dir, ttl],
+                           capture_output=True, text=True, timeout=timeout, env=env)
+    except subprocess.TimeoutExpired:
+        return None, f"hermit {NO_ORACLE} {timeout}s", time.time() - start
+    took = time.time() - start
+    if p.stderr.strip():
+        return None, f"hermit wrote to stderr: {p.stderr.strip().splitlines()[0]}", took
+    report = os.path.join(out_dir, differential.name_of(ttl) + ".report")
+    if p.returncode not in (0, 1) or not os.path.exists(report):
+        return None, (p.stdout.strip().splitlines() or [f"exit {p.returncode}"])[-1], took
+    return entdiff.parse(report), None, took
+
+
+def long_check():
+    """RO and OBI: S0~S1 and S1~S2, one JVM per document, two at a time."""
+    ofn_dir = os.path.join(WORK, "ofn")
+    os.makedirs(ofn_dir, exist_ok=True)
+    plan, docs = {}, []
+    for n in LONG:
+        path = os.path.join(ROOT, "corpus", "vendor", f"{n}.ttl")
+        meta, classes = info(path)
+        stages = {}
+        for stage in ("s0", "s1", "s2"):
+            out = os.path.join(ofn_dir, f"vendor-{n}.{stage}.ofn")
+            reason = dump(stage, path, out)
+            if reason is not None:
+                raise HarnessError(f"{n} {stage}: no document: {reason}")
+            stages[stage] = out
+            docs.append(out)
+        plan[n] = (classes, stages)
+    ttl = convert(docs)
+    for doc, (t, err) in ttl.items():
+        if t is None:
+            raise HarnessError(f"the oracle refused HOWL's document {doc}: {err}")
+    jobs = [plan[n][1][stage] for stage in ("s0", "s1", "s2") for n in LONG]
+    with ThreadPoolExecutor(max_workers=LONG_WORKERS) as pool:
+        futures = {doc: pool.submit(oracle_one, ttl[doc][0],
+                                    os.path.join(WORK, "oracle", os.path.basename(doc)), LONG_TIMEOUT)
+                   for doc in jobs}
+        results = {doc: f.result() for doc, f in futures.items()}
+    lines, bad = [], 0
+    for n in LONG:
+        classes, stages = plan[n]
+        for stage in ("s0", "s1", "s2"):
+            r, err, took = results[stages[stage]]
+            lines.append(f"vendor-{n} {stage}: hermit {took / 3600:.2f} h" + (f" ({err})" if err else ""))
+        for a, b in (("s0", "s1"), ("s1", "s2")):
+            ra, wa, _ = results[stages[a]]
+            rb, wb, _ = results[stages[b]]
+            if ra is None or rb is None:
+                lines.append(f"vendor-{n} {a}~{b}: no oracle ({wa or wb})")
+                bad += 1
+                continue
+            lost = classes - rb.signature if not rb.inconsistent else set()
+            diff = entdiff.compare(restrict(rb, classes), restrict(ra, classes))
+            if diff or lost:
+                bad += 1
+                lines.append(f"vendor-{n} {a}~{b}: MISMATCH")
+                for cat, items in sorted(diff.items()):
+                    for item in items[:50]:
+                        lines.append(f"  {cat.replace('HOWL', b)}: {item}")
+                if lost:
+                    lines.append(f"  {b} lost {len(lost)} input class(es), e.g. {sorted(lost)[0]}")
+            else:
+                lines.append(f"vendor-{n} {a}~{b}: ok")
+    return lines, bad
+
+
 def main(argv):
-    if len(argv) < 2 or argv[1] not in ("fixtures", "guarded", "corpus"):
+    if len(argv) < 2 or argv[1] not in ("fixtures", "guarded", "corpus", "long"):
         print(__doc__)
         return 3
     global WORK
     WORK = os.path.join(ROOT, "build", "elim", argv[1])  # one work tree per mode
+    if argv[1] == "long":
+        try:
+            lines, bad = long_check()
+        except (HarnessError, differential.HarnessError) as e:
+            print(f"harness: {e}")
+            return 3
+        for line in lines:
+            print(line)
+        if "--record" in argv:
+            with open(LONG_RECORD, "w", encoding="utf-8") as f:
+                f.write(f"# RO and OBI against HermiT, one JVM per document ({LONG_XMX}, "
+                        f"{LONG_TIMEOUT // 3600} h budget each); see `make diff-elim-long`.\n")
+                f.write("\n".join(lines) + "\n")
+        print(f"{sum(1 for l in lines if l.endswith(': ok'))} ok, {bad} failed, mismatched or no oracle")
+        return 1 if bad else 0
     if argv[1] == "fixtures":
         inputs = differential.fixtures(*differential.FIXTURE_DIRS, "el++", "out-of-profile", "sriq")
     elif argv[1] == "guarded":

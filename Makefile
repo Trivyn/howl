@@ -42,7 +42,7 @@ ALL_SRCS    := $(wildcard $(CSRC)/*.c)
 SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
-.PHONY: all cli lib test test-bin diff-elim diff-elim-corpus clean release dist csrc slop-build verify corpus census project project-verify example \
+.PHONY: all cli lib test test-bin diff-elim diff-elim-corpus diff-elim-long clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan golden-asan c-example crate-vendor crate-build crate-test crate-package crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-el++ bench-check abox-fuzz
@@ -120,6 +120,12 @@ diff-elim: test-bin oracle
 
 diff-elim-corpus: test-bin oracle
 	python3 corpus/elimcheck.py corpus --record
+
+# RO and OBI, whose S1 documents need HermiT for hours: one JVM per document,
+# two at a time (ELIM_LONG_TIMEOUT, default 6 h each). Local, overnight; it
+# writes corpus/elim-differential-long.txt.
+diff-elim-long: test-bin oracle
+	python3 corpus/elimcheck.py long --record
 
 # The test harness under AddressSanitizer. Saturation frees a scratch arena at
 # every barrier, so anything a round allocates there and the store keeps is a
