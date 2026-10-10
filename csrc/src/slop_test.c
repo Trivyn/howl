@@ -3125,6 +3125,9 @@ uint8_t test_test_sriq_gate_table(slop_arena* arena) {
         if (!(test_rungs3_omit(arena, SLOP_STR("a cardinality on a transitive role"), SLOP_STR(":r a owl:TransitiveProperty .\n  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 1 ] ."), 1, 1, 1))) {
             ok = 0;
         }
+        if (!(test_rungs3_omit(arena, SLOP_STR("a cardinality on the inverse of a transitive role"), SLOP_STR(":r a owl:TransitiveProperty .\n  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :r ] ; owl:maxCardinality 1 ] ."), 1, 1, 1))) {
+            ok = 0;
+        }
         if (!(test_rungs3_omit(arena, SLOP_STR("FunctionalObjectProperty"), SLOP_STR(":r a owl:FunctionalProperty ."), 1, 1, 0))) {
             ok = 0;
         }
@@ -4279,8 +4282,8 @@ uint8_t test_test_ksc_commit_identical(slop_arena* arena) {
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:3897:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:3898:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:3902:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:3903:57")));
         return cfg;
     }
 }

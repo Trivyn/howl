@@ -17,19 +17,36 @@ slop_list_types_RoleId sriqrbox_ria_roles(slop_arena* arena, owl2_RawAxiom ax);
 uint8_t sriqrbox_is_sriq_ria(owl2_RawAxiom ax);
 slop_list_types_RoleId sriqrbox_sriq_props(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 sriqrbox_Ria sriqrbox_ria_of(slop_arena* arena, int64_t x, int64_t y);
+slop_list_sriqrbox_Ria sriqrbox_no_rias(slop_arena* arena);
+slop_list_sriqrbox_Ria sriqrbox_rias_sub(slop_arena* arena, slop_list_types_RoleId props, types_RoleId a, types_RoleId b);
+slop_list_sriqrbox_Ria sriqrbox_rias_chain(slop_arena* arena, slop_list_types_RoleId props, owl2_RawChain ch);
+slop_list_sriqrbox_Ria sriqrbox_rias_equivalent(slop_arena* arena, slop_list_types_RoleId props, slop_list_types_RoleId rs);
+slop_list_sriqrbox_Ria sriqrbox_rias_inverse(slop_arena* arena, slop_list_types_RoleId props, types_RoleId a, types_RoleId b);
+slop_list_sriqrbox_Ria sriqrbox_rias_symmetric(slop_arena* arena, slop_list_types_RoleId props, owl2_PropCharacteristic c, types_RoleId r);
+slop_list_sriqrbox_Ria sriqrbox_rias_of(slop_arena* arena, slop_list_types_RoleId props, owl2_RawAxiom ax);
 slop_list_sriqrbox_Ria sriqrbox_sriq_rias(slop_arena* arena, slop_list_types_RoleId props, slop_list_owl2_RawAxiom axs);
 slop_list_int sriqrbox_sriq_nodes(slop_arena* arena, slop_list_types_RoleId props, slop_list_types_RoleId rs);
 uint8_t sriqrbox_all_nodes(slop_list_int ns);
 sriqrbox_Csr sriqrbox_csr_build(slop_arena* arena, int64_t n, slop_list_int src, slop_list_int dst);
+slop_list_int sriqrbox_targets(slop_arena* arena, sriqrbox_Csr g, int64_t v);
 slop_list_u8 sriqrbox_csr_reach(slop_arena* arena, sriqrbox_Csr g, int64_t n, slop_list_int starts);
+uint8_t sriqrbox_in_both(slop_list_u8 f, slop_list_u8 b, int64_t u);
+int64_t sriqrbox_least_prop_in(slop_list_u8 f, slop_list_u8 b, int64_t n);
+int64_t sriqrbox_component_rep(slop_list_u8 f, slop_list_u8 b, int64_t m);
+uint8_t sriqrbox_mark_component(slop_list_int rep, slop_list_u8 f, slop_list_u8 b, int64_t n, int64_t r);
+uint8_t sriqrbox_rep_component(slop_arena* arena, sriqrbox_Csr fwd, sriqrbox_Csr bwd, int64_t n, slop_list_int rep, int64_t v);
 slop_list_int sriqrbox_sriq_reps(slop_arena* arena, sriqrbox_Csr fwd, sriqrbox_Csr bwd, int64_t n);
 slop_list_int sriqrbox_word_slice(slop_arena* arena, slop_list_int w, int64_t from, int64_t upto);
 uint8_t sriqrbox_ints_subset(slop_list_int a, slop_list_int b);
 slop_list_int sriqrbox_ria_constraints(slop_arena* arena, slop_list_int w, int64_t s);
 slop_list_int sriqrbox_inv_word(slop_arena* arena, slop_list_int w);
 slop_list_int sriqrbox_rep_word(slop_arena* arena, slop_list_int w, slop_list_int rep);
+slop_list_int sriqrbox_indegrees(slop_arena* arena, sriqrbox_Csr g, int64_t n);
 uint8_t sriqrbox_csr_acyclic(slop_arena* arena, sriqrbox_Csr g, int64_t n);
 sriqrbox_SriqRbox sriqrbox_sriq_rbox_none(slop_arena* arena);
+sriqrbox_Edges sriqrbox_hierarchy_edges(slop_arena* arena, slop_list_sriqrbox_Ria rias);
+slop_list_int sriqrbox_composite_seeds(slop_arena* arena, slop_list_types_RoleId props, slop_list_sriqrbox_Ria rias);
+sriqrbox_Edges sriqrbox_constraint_edges(slop_arena* arena, slop_list_sriqrbox_Ria rias, slop_list_u8 nonsimple, slop_list_int rep);
 sriqrbox_SriqRbox sriqrbox_sriq_rbox(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 uint8_t sriqrbox_sriq_role_simple(sriqrbox_SriqRbox rb, types_RoleId r);
 uint8_t sriqrbox_is_bottom_role(types_RoleId r);
@@ -370,6 +387,120 @@ sriqrbox_Ria sriqrbox_ria_of(slop_arena* arena, int64_t x, int64_t y) {
     }
 }
 
+slop_list_sriqrbox_Ria sriqrbox_no_rias(slop_arena* arena) {
+    return ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+}
+
+slop_list_sriqrbox_Ria sriqrbox_rias_sub(slop_arena* arena, slop_list_types_RoleId props, types_RoleId a, types_RoleId b) {
+    {
+        __auto_type na = sriqrbox_sriq_node(props, a);
+        __auto_type nb = sriqrbox_sriq_node(props, b);
+        __auto_type out = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        if ((na >= 0) && (nb >= 0)) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, na, nb)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        }
+        return out;
+    }
+}
+
+slop_list_sriqrbox_Ria sriqrbox_rias_chain(slop_arena* arena, slop_list_types_RoleId props, owl2_RawChain ch) {
+    {
+        __auto_type ns = sriqrbox_sriq_nodes(arena, props, ch.steps);
+        __auto_type sup = sriqrbox_sriq_node(props, ch.super);
+        __auto_type out = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        if ((sup >= 0) && sriqrbox_all_nodes(ns)) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (((sriqrbox_Ria){.word = ns, .super = sup})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        }
+        return out;
+    }
+}
+
+slop_list_sriqrbox_Ria sriqrbox_rias_equivalent(slop_arena* arena, slop_list_types_RoleId props, slop_list_types_RoleId rs) {
+    {
+        __auto_type ns = sriqrbox_sriq_nodes(arena, props, rs);
+        __auto_type out = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        if (sriqrbox_all_nodes(ns)) {
+            {
+                __auto_type _coll = ns;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type x = _coll.data[_i];
+                    {
+                        __auto_type _coll = ns;
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type y = _coll.data[_i];
+                            if (x != y) {
+                                ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, x, y)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_sriqrbox_Ria sriqrbox_rias_inverse(slop_arena* arena, slop_list_types_RoleId props, types_RoleId a, types_RoleId b) {
+    {
+        __auto_type na = sriqrbox_sriq_node(props, a);
+        __auto_type nb = sriqrbox_sriq_node(props, b);
+        __auto_type out = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        if ((na >= 0) && (nb >= 0)) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, na, sriqrbox_inv_node(nb))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, sriqrbox_inv_node(nb), na)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        }
+        return out;
+    }
+}
+
+slop_list_sriqrbox_Ria sriqrbox_rias_symmetric(slop_arena* arena, slop_list_types_RoleId props, owl2_PropCharacteristic c, types_RoleId r) {
+    {
+        __auto_type nr = sriqrbox_sriq_node(props, r);
+        __auto_type out = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        if ((c == owl2_PropCharacteristic_prop_symmetric) && (nr >= 0)) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, sriqrbox_inv_node(nr), nr)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        }
+        return out;
+    }
+}
+
+slop_list_sriqrbox_Ria sriqrbox_rias_of(slop_arena* arena, slop_list_types_RoleId props, owl2_RawAxiom ax) {
+    __auto_type _mv_351 = ax;
+    switch (_mv_351.tag) {
+        case owl2_RawAxiom_ra_sub_object_property:
+        {
+            __auto_type a = _mv_351.data.ra_sub_object_property.f0;
+            __auto_type b = _mv_351.data.ra_sub_object_property.f1;
+            return sriqrbox_rias_sub(arena, props, a, b);
+        }
+        case owl2_RawAxiom_ra_property_chain:
+        {
+            __auto_type ch = _mv_351.data.ra_property_chain;
+            return sriqrbox_rias_chain(arena, props, ch);
+        }
+        case owl2_RawAxiom_ra_equivalent_properties:
+        {
+            __auto_type rs = _mv_351.data.ra_equivalent_properties;
+            return sriqrbox_rias_equivalent(arena, props, rs);
+        }
+        case owl2_RawAxiom_ra_inverse_properties:
+        {
+            __auto_type a = _mv_351.data.ra_inverse_properties.f0;
+            __auto_type b = _mv_351.data.ra_inverse_properties.f1;
+            return sriqrbox_rias_inverse(arena, props, a, b);
+        }
+        case owl2_RawAxiom_ra_property_characteristic:
+        {
+            __auto_type c = _mv_351.data.ra_property_characteristic.f0;
+            __auto_type r = _mv_351.data.ra_property_characteristic.f1;
+            return sriqrbox_rias_symmetric(arena, props, c, r);
+        }
+        default: {
+            return sriqrbox_no_rias(arena);
+        }
+    }
+}
+
 slop_list_sriqrbox_Ria sriqrbox_sriq_rias(slop_arena* arena, slop_list_types_RoleId props, slop_list_owl2_RawAxiom axs) {
     {
         __auto_type out = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -377,88 +508,11 @@ slop_list_sriqrbox_Ria sriqrbox_sriq_rias(slop_arena* arena, slop_list_types_Rol
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_351 = ax;
-                switch (_mv_351.tag) {
-                    case owl2_RawAxiom_ra_sub_object_property:
-                    {
-                        __auto_type a = _mv_351.data.ra_sub_object_property.f0;
-                        __auto_type b = _mv_351.data.ra_sub_object_property.f1;
-                        {
-                            __auto_type na = sriqrbox_sriq_node(props, a);
-                            __auto_type nb = sriqrbox_sriq_node(props, b);
-                            if ((na >= 0) && (nb >= 0)) {
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, na, nb)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                        }
-                        break;
-                    }
-                    case owl2_RawAxiom_ra_property_chain:
-                    {
-                        __auto_type ch = _mv_351.data.ra_property_chain;
-                        {
-                            __auto_type ns = sriqrbox_sriq_nodes(arena, props, ch.steps);
-                            __auto_type sup = sriqrbox_sriq_node(props, ch.super);
-                            if ((sup >= 0) && sriqrbox_all_nodes(ns)) {
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (((sriqrbox_Ria){.word = ns, .super = sup})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                        }
-                        break;
-                    }
-                    case owl2_RawAxiom_ra_equivalent_properties:
-                    {
-                        __auto_type rs = _mv_351.data.ra_equivalent_properties;
-                        {
-                            __auto_type ns = sriqrbox_sriq_nodes(arena, props, rs);
-                            if (sriqrbox_all_nodes(ns)) {
-                                {
-                                    __auto_type _coll = ns;
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type x = _coll.data[_i];
-                                        {
-                                            __auto_type _coll = ns;
-                                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                __auto_type y = _coll.data[_i];
-                                                if (x != y) {
-                                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, x, y)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case owl2_RawAxiom_ra_inverse_properties:
-                    {
-                        __auto_type a = _mv_351.data.ra_inverse_properties.f0;
-                        __auto_type b = _mv_351.data.ra_inverse_properties.f1;
-                        {
-                            __auto_type na = sriqrbox_sriq_node(props, a);
-                            __auto_type nb = sriqrbox_sriq_node(props, b);
-                            if ((na >= 0) && (nb >= 0)) {
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, na, sriqrbox_inv_node(nb))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, sriqrbox_inv_node(nb), na)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                        }
-                        break;
-                    }
-                    case owl2_RawAxiom_ra_property_characteristic:
-                    {
-                        __auto_type c = _mv_351.data.ra_property_characteristic.f0;
-                        __auto_type r = _mv_351.data.ra_property_characteristic.f1;
-                        if (c == owl2_PropCharacteristic_prop_symmetric) {
-                            {
-                                __auto_type nr = sriqrbox_sriq_node(props, r);
-                                if (nr >= 0) {
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqrbox_ria_of(arena, sriqrbox_inv_node(nr), nr)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    default: {
-                        break;
+                {
+                    __auto_type _coll = sriqrbox_rias_of(arena, props, ax);
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type r = _coll.data[_i];
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
@@ -536,6 +590,10 @@ sriqrbox_Csr sriqrbox_csr_build(slop_arena* arena, int64_t n, slop_list_int src,
     }
 }
 
+slop_list_int sriqrbox_targets(slop_arena* arena, sriqrbox_Csr g, int64_t v) {
+    return sriqrbox_word_slice(arena, g.adj, sriqrbox_int_at(g.off, v), sriqrbox_int_at(g.off, (v + 1)));
+}
+
 slop_list_u8 sriqrbox_csr_reach(slop_arena* arena, sriqrbox_Csr g, int64_t n, slop_list_int starts) {
     {
         __auto_type seen = sriqrbox_bools_new(arena, n);
@@ -553,25 +611,69 @@ slop_list_u8 sriqrbox_csr_reach(slop_arena* arena, sriqrbox_Csr g, int64_t n, sl
         }
         while (head < ((int64_t)(((int64_t)((queue).len))))) {
             {
-                __auto_type v = sriqrbox_int_at(queue, head);
-                head = (head + 1);
-                {
-                    int64_t e = sriqrbox_int_at(g.off, v);
-                    __auto_type stop = sriqrbox_int_at(g.off, (v + 1));
-                    while (e < stop) {
-                        {
-                            __auto_type w = sriqrbox_int_at(g.adj, e);
-                            if (!(sriqrbox_bool_at(seen, w))) {
-                                ({ __auto_type _set_lst = &(seen); size_t _set_idx = (size_t)(w); __auto_type _set_val = (1); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
-                                ({ __auto_type _lst_p = &(queue); __auto_type _item = (w); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                            e = (e + 1);
-                        }
+                __auto_type _coll = sriqrbox_targets(arena, g, sriqrbox_int_at(queue, head));
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type w = _coll.data[_i];
+                    if (!(sriqrbox_bool_at(seen, w))) {
+                        ({ __auto_type _set_lst = &(seen); size_t _set_idx = (size_t)(w); __auto_type _set_val = (1); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
+                        ({ __auto_type _lst_p = &(queue); __auto_type _item = (w); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
+            head = (head + 1);
         }
         return seen;
+    }
+}
+
+uint8_t sriqrbox_in_both(slop_list_u8 f, slop_list_u8 b, int64_t u) {
+    return (sriqrbox_bool_at(f, u) && sriqrbox_bool_at(b, u));
+}
+
+int64_t sriqrbox_least_prop_in(slop_list_u8 f, slop_list_u8 b, int64_t n) {
+    {
+        int64_t m = -1;
+        int64_t u = 0;
+        while (u < n) {
+            if (sriqrbox_in_both(f, b, u) && ((m < 0) || ((u / 2) < m))) {
+                m = (u / 2);
+            }
+            u = (u + 1);
+        }
+        return m;
+    }
+}
+
+int64_t sriqrbox_component_rep(slop_list_u8 f, slop_list_u8 b, int64_t m) {
+    if (sriqrbox_in_both(f, b, (2 * m))) {
+        return (2 * m);
+    } else {
+        return ((2 * m) + 1);
+    }
+}
+
+uint8_t sriqrbox_mark_component(slop_list_int rep, slop_list_u8 f, slop_list_u8 b, int64_t n, int64_t r) {
+    {
+        int64_t x = 0;
+        while (x < n) {
+            if (sriqrbox_in_both(f, b, x)) {
+                ({ __auto_type _set_lst = &(rep); size_t _set_idx = (size_t)(x); __auto_type _set_val = (r); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
+            }
+            x = (x + 1);
+        }
+        return 1;
+    }
+}
+
+uint8_t sriqrbox_rep_component(slop_arena* arena, sriqrbox_Csr fwd, sriqrbox_Csr bwd, int64_t n, slop_list_int rep, int64_t v) {
+    {
+        __auto_type one = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        ({ __auto_type _lst_p = &(one); __auto_type _item = (v); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        {
+            __auto_type f = sriqrbox_csr_reach(arena, fwd, n, one);
+            __auto_type b = sriqrbox_csr_reach(arena, bwd, n, one);
+            return sriqrbox_mark_component(rep, f, b, n, sriqrbox_component_rep(f, b, sriqrbox_least_prop_in(f, b, n)));
+        }
     }
 }
 
@@ -581,32 +683,7 @@ slop_list_int sriqrbox_sriq_reps(slop_arena* arena, sriqrbox_Csr fwd, sriqrbox_C
         int64_t v = 0;
         while (v < n) {
             if (sriqrbox_int_at(rep, v) < 0) {
-                {
-                    __auto_type one = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-                    ({ __auto_type _lst_p = &(one); __auto_type _item = (v); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    {
-                        __auto_type f = sriqrbox_csr_reach(arena, fwd, n, one);
-                        __auto_type b = sriqrbox_csr_reach(arena, bwd, n, one);
-                        int64_t m = -1;
-                        int64_t u = 0;
-                        int64_t x = 0;
-                        while (u < n) {
-                            if ((sriqrbox_bool_at(f, u)) && (sriqrbox_bool_at(b, u)) && (((m < 0) || ((u / 2) < m)))) {
-                                m = (u / 2);
-                            }
-                            u = (u + 1);
-                        }
-                        {
-                            __auto_type r = (((sriqrbox_bool_at(f, (2 * m)) && sriqrbox_bool_at(b, (2 * m)))) ? (2 * m) : ((2 * m) + 1));
-                            while (x < n) {
-                                if (sriqrbox_bool_at(f, x) && sriqrbox_bool_at(b, x)) {
-                                    ({ __auto_type _set_lst = &(rep); size_t _set_idx = (size_t)(x); __auto_type _set_val = (r); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
-                                }
-                                x = (x + 1);
-                            }
-                        }
-                    }
-                }
+                sriqrbox_rep_component(arena, fwd, bwd, n, rep, v);
             }
             v = (v + 1);
         }
@@ -719,13 +796,9 @@ slop_list_int sriqrbox_rep_word(slop_arena* arena, slop_list_int w, slop_list_in
     }
 }
 
-uint8_t sriqrbox_csr_acyclic(slop_arena* arena, sriqrbox_Csr g, int64_t n) {
+slop_list_int sriqrbox_indegrees(slop_arena* arena, sriqrbox_Csr g, int64_t n) {
     {
         __auto_type indeg = sriqrbox_ints_new(arena, n, 0);
-        __auto_type queue = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        int64_t head = 0;
-        int64_t done = 0;
-        int64_t v = 0;
         {
             __auto_type _coll = g.adj;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -733,6 +806,16 @@ uint8_t sriqrbox_csr_acyclic(slop_arena* arena, sriqrbox_Csr g, int64_t n) {
                 ({ __auto_type _set_lst = &(indeg); size_t _set_idx = (size_t)(w); __auto_type _set_val = ((sriqrbox_int_at(indeg, w) + 1)); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
             }
         }
+        return indeg;
+    }
+}
+
+uint8_t sriqrbox_csr_acyclic(slop_arena* arena, sriqrbox_Csr g, int64_t n) {
+    {
+        __auto_type indeg = sriqrbox_indegrees(arena, g, n);
+        __auto_type queue = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t head = 0;
+        int64_t v = 0;
         while (v < n) {
             if (sriqrbox_int_at(indeg, v) == 0) {
                 ({ __auto_type _lst_p = &(queue); __auto_type _item = (v); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -741,26 +824,18 @@ uint8_t sriqrbox_csr_acyclic(slop_arena* arena, sriqrbox_Csr g, int64_t n) {
         }
         while (head < ((int64_t)(((int64_t)((queue).len))))) {
             {
-                __auto_type u = sriqrbox_int_at(queue, head);
-                head = (head + 1);
-                done = (done + 1);
-                {
-                    int64_t e = sriqrbox_int_at(g.off, u);
-                    __auto_type stop = sriqrbox_int_at(g.off, (u + 1));
-                    while (e < stop) {
-                        {
-                            __auto_type w = sriqrbox_int_at(g.adj, e);
-                            ({ __auto_type _set_lst = &(indeg); size_t _set_idx = (size_t)(w); __auto_type _set_val = ((sriqrbox_int_at(indeg, w) - 1)); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
-                            if (sriqrbox_int_at(indeg, w) == 0) {
-                                ({ __auto_type _lst_p = &(queue); __auto_type _item = (w); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                            e = (e + 1);
-                        }
+                __auto_type _coll = sriqrbox_targets(arena, g, sriqrbox_int_at(queue, head));
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type w = _coll.data[_i];
+                    ({ __auto_type _set_lst = &(indeg); size_t _set_idx = (size_t)(w); __auto_type _set_val = ((sriqrbox_int_at(indeg, w) - 1)); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
+                    if (sriqrbox_int_at(indeg, w) == 0) {
+                        ({ __auto_type _lst_p = &(queue); __auto_type _item = (w); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
+            head = (head + 1);
         }
-        return (done == n);
+        return (head == n);
     }
 }
 
@@ -768,16 +843,10 @@ sriqrbox_SriqRbox sriqrbox_sriq_rbox_none(slop_arena* arena) {
     return ((sriqrbox_SriqRbox){.props = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .nonsimple = ((slop_list_u8){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .rep = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .rias = ((slop_list_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .regular = 1});
 }
 
-sriqrbox_SriqRbox sriqrbox_sriq_rbox(slop_arena* arena, slop_list_owl2_RawAxiom axs) {
+sriqrbox_Edges sriqrbox_hierarchy_edges(slop_arena* arena, slop_list_sriqrbox_Ria rias) {
     {
-        __auto_type props = sriqrbox_sriq_props(arena, axs);
-        __auto_type n = (2 * ((int64_t)(((int64_t)((props).len)))));
-        __auto_type rias = sriqrbox_sriq_rias(arena, props, axs);
         __auto_type fs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type fd = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type seeds = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type cs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type cd = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = rias;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -791,56 +860,83 @@ sriqrbox_SriqRbox sriqrbox_sriq_rbox(slop_arena* arena, slop_list_owl2_RawAxiom 
                         ({ __auto_type _lst_p = &(fs); __auto_type _item = (sriqrbox_inv_node(x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         ({ __auto_type _lst_p = &(fd); __auto_type _item = (sriqrbox_inv_node(s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
-                } else {
+                }
+            }
+        }
+        return ((sriqrbox_Edges){.src = fs, .dst = fd});
+    }
+}
+
+slop_list_int sriqrbox_composite_seeds(slop_arena* arena, slop_list_types_RoleId props, slop_list_sriqrbox_Ria rias) {
+    {
+        __auto_type bot = sriqrbox_sriq_node(props, ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = ((rdf_IRI){.value = vocab_OWL_BOTTOM_OBJECT_PROPERTY}) }));
+        __auto_type seeds = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = rias;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type ria = _coll.data[_i];
+                if (((int64_t)((ria.word).len)) != 1) {
                     ({ __auto_type _lst_p = &(seeds); __auto_type _item = (ria.super); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     ({ __auto_type _lst_p = &(seeds); __auto_type _item = (sriqrbox_inv_node(ria.super)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
             }
         }
-        {
-            __auto_type bot = sriqrbox_sriq_node(props, ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = ((rdf_IRI){.value = vocab_OWL_BOTTOM_OBJECT_PROPERTY}) }));
-            if (bot >= 0) {
-                ({ __auto_type _lst_p = &(seeds); __auto_type _item = (bot); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                ({ __auto_type _lst_p = &(seeds); __auto_type _item = (sriqrbox_inv_node(bot)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            }
+        if (bot >= 0) {
+            ({ __auto_type _lst_p = &(seeds); __auto_type _item = (bot); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(seeds); __auto_type _item = (sriqrbox_inv_node(bot)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         }
+        return seeds;
+    }
+}
+
+sriqrbox_Edges sriqrbox_constraint_edges(slop_arena* arena, slop_list_sriqrbox_Ria rias, slop_list_u8 nonsimple, slop_list_int rep) {
+    {
+        __auto_type cs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type cd = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
-            __auto_type fwd = sriqrbox_csr_build(arena, n, fs, fd);
-            __auto_type bwd = sriqrbox_csr_build(arena, n, fd, fs);
-            {
-                __auto_type nonsimple = sriqrbox_csr_reach(arena, fwd, n, seeds);
-                __auto_type rep = sriqrbox_sriq_reps(arena, fwd, bwd, n);
-                {
-                    __auto_type _coll = rias;
-                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                        __auto_type ria = _coll.data[_i];
-                        if ((((int64_t)((ria.word).len)) > 1) || sriqrbox_bool_at(nonsimple, ria.super)) {
-                            {
-                                __auto_type w = sriqrbox_rep_word(arena, ria.word, rep);
-                                __auto_type s = sriqrbox_int_at(rep, ria.super);
-                                {
-                                    __auto_type _coll = sriqrbox_ria_constraints(arena, w, s);
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type x = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(cs); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        ({ __auto_type _lst_p = &(cd); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    }
-                                }
-                                {
-                                    __auto_type _coll = sriqrbox_ria_constraints(arena, sriqrbox_inv_word(arena, w), sriqrbox_inv_node(s));
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type x = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(cs); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        ({ __auto_type _lst_p = &(cd); __auto_type _item = (sriqrbox_inv_node(s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    }
-                                }
+            __auto_type _coll = rias;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type ria = _coll.data[_i];
+                if ((((int64_t)((ria.word).len)) > 1) || sriqrbox_bool_at(nonsimple, ria.super)) {
+                    {
+                        __auto_type w = sriqrbox_rep_word(arena, ria.word, rep);
+                        __auto_type s = sriqrbox_int_at(rep, ria.super);
+                        {
+                            __auto_type _coll = sriqrbox_ria_constraints(arena, w, s);
+                            for (size_t _i = 0; _i < _coll.len; _i++) {
+                                __auto_type x = _coll.data[_i];
+                                ({ __auto_type _lst_p = &(cs); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(cd); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            }
+                        }
+                        {
+                            __auto_type _coll = sriqrbox_ria_constraints(arena, sriqrbox_inv_word(arena, w), sriqrbox_inv_node(s));
+                            for (size_t _i = 0; _i < _coll.len; _i++) {
+                                __auto_type x = _coll.data[_i];
+                                ({ __auto_type _lst_p = &(cs); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(cd); __auto_type _item = (sriqrbox_inv_node(s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
                         }
                     }
                 }
-                return ((sriqrbox_SriqRbox){.props = props, .nonsimple = nonsimple, .rep = rep, .rias = rias, .regular = sriqrbox_csr_acyclic(arena, sriqrbox_csr_build(arena, n, cs, cd), n)});
             }
         }
+        return ((sriqrbox_Edges){.src = cs, .dst = cd});
+    }
+}
+
+sriqrbox_SriqRbox sriqrbox_sriq_rbox(slop_arena* arena, slop_list_owl2_RawAxiom axs) {
+    {
+        __auto_type props = sriqrbox_sriq_props(arena, axs);
+        __auto_type n = (2 * ((int64_t)(((int64_t)((props).len)))));
+        __auto_type rias = sriqrbox_sriq_rias(arena, props, axs);
+        __auto_type h = sriqrbox_hierarchy_edges(arena, rias);
+        __auto_type fwd = sriqrbox_csr_build(arena, n, h.src, h.dst);
+        __auto_type bwd = sriqrbox_csr_build(arena, n, h.dst, h.src);
+        __auto_type nonsimple = sriqrbox_csr_reach(arena, fwd, n, sriqrbox_composite_seeds(arena, props, rias));
+        __auto_type rep = sriqrbox_sriq_reps(arena, fwd, bwd, n);
+        __auto_type c = sriqrbox_constraint_edges(arena, rias, nonsimple, rep);
+        return ((sriqrbox_SriqRbox){.props = props, .nonsimple = nonsimple, .rep = rep, .rias = rias, .regular = sriqrbox_csr_acyclic(arena, sriqrbox_csr_build(arena, n, c.src, c.dst), n)});
     }
 }
 

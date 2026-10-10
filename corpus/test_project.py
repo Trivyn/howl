@@ -287,6 +287,8 @@ class SriqTest(unittest.TestCase):
          ':C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:cardinality 2 ] .', True, True, False),
         ('a cardinality on a transitive role',
          ':r a owl:TransitiveProperty .\n  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 1 ] .', True, True, True),
+        ('a cardinality on the inverse of a transitive role',
+         ':r a owl:TransitiveProperty .\n  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :r ] ; owl:maxCardinality 1 ] .', True, True, True),
         ('FunctionalObjectProperty',
          ':r a owl:FunctionalProperty .', True, True, False),
         ('a functional transitive role',

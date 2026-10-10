@@ -3050,6 +3050,11 @@
   :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 1 ] ." 1 1 1))
           (set! ok false))
         (when (not
+      (rungs3-omit arena "a cardinality on the inverse of a transitive role"
+          ":r a owl:TransitiveProperty .
+  :C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :r ] ; owl:maxCardinality 1 ] ." 1 1 1))
+          (set! ok false))
+        (when (not
       (rungs3-omit arena "FunctionalObjectProperty"
           ":r a owl:FunctionalProperty ." 1 1 0))
           (set! ok false))
