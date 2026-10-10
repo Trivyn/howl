@@ -20,10 +20,16 @@
   (import canon (role-cmp iri-cmp sort-range))
 
   (export
-    SConcept SAxiom SRia
+    SConcept SAxiom SRia ElimKind
     sc-cmp sa-cmp sc-canon sc-top-p sort-saxioms dedupe-saxioms
     inv-role box-sc
     render-sconcept render-saxiom sc-key role-key-s)
+
+  ;; S1's fresh names (§5.5 S1, [Sim12] Definition 6): for a labelled
+  ;; ∀R.C, I = ∀^R R.C and F = ∃^R inv(R).∀^R R.C; for a labelled ∃R.C,
+  ;; I = ∀^R inv(R).∃^R R.C and F = ∃^R R.C. Each is an atom named by its
+  ;; kind, role and filler, so one labelled concept has one pair.
+  (type ElimKind (enum ek-i-all ek-f-all ek-i-some ek-f-some))
 
   (type SConcept (union
     (sc-top)
@@ -37,7 +43,8 @@
     (sc-all     RoleId (Ptr SConcept))
     (sc-atleast (Int 0 ..) RoleId (Ptr SConcept))  ; ≥n R.C
     (sc-atmost  (Int 0 ..) RoleId (Ptr SConcept))  ; ≤n R.C
-    (sc-self    RoleId)))
+    (sc-self    RoleId)
+    (sc-elim    ElimKind RoleId (Ptr SConcept))))  ; S1's I and F: an atom, named by content
 
   ;; A role inclusion R₁ ∘ … ∘ Rₙ ⊑ R. A record: a list beside another
   ;; field in one variant is past the transpiler (owl2.slop's note).
@@ -98,7 +105,14 @@
       ((sc-all _ _)        8)
       ((sc-atleast _ _ _)  9)
       ((sc-atmost _ _ _)   10)
-      ((sc-self _)         11)))
+      ((sc-self _)         11)
+      ((sc-elim _ _ _)     12)))
+
+  (fn elim-rank ((k ElimKind))
+    (@intent "An S1 name's kind, in order: I∀, F∀, I∃, F∃")
+    (@spec ((ElimKind) -> Int))
+    (@pure)
+    (match k ('ek-i-all 0) ('ek-f-all 1) ('ek-i-some 2) ('ek-f-some 3)))
 
   (fn sc-at ((xs (List SConcept)) (i Int))
     (@intent "Element i, where the caller has already bounds-checked")
@@ -177,7 +191,13 @@
                 (let ((nn (int-cmp na nb)))
                   (if (!= nn 0) nn (role-then ra rb (deref fa) (deref fb)))))
               (_ 0)))
-          ((sc-self ra)    (match b ((sc-self rb) (role-cmp ra rb)) (_ 0)))))))
+          ((sc-self ra)    (match b ((sc-self rb) (role-cmp ra rb)) (_ 0)))
+          ((sc-elim ka ra fa)
+            (match b
+              ((sc-elim kb rb fb)
+                (let ((kk (int-cmp (elim-rank ka) (elim-rank kb))))
+                  (if (!= kk 0) kk (role-then ra rb (deref fa) (deref fb)))))
+              (_ 0)))))))
 
   (fn role-list-cmp ((a (List RoleId)) (b (List RoleId)))
     (@intent "Lexicographic order on role words, length as tiebreak")
@@ -288,7 +308,9 @@
       ((sc-self r)
         (match r
           ((inverse-role i) (union-new SConcept sc-self (union-new RoleId named-role i)))
-          (_                c)))))
+          (_                c)))
+      ;; An S1 name is an atom; S1 canonicalises its filler before naming.
+      ((sc-elim _ _ _) c)))
 
   (fn canon-junction ((arena Arena) (xs (List SConcept)) (conj Bool))
     (@intent "A ⊓ (conj) or ⊔ of canonical operands: flattened, unit and zero laws applied, deduped, sorted")
@@ -406,7 +428,20 @@
       ((sc-all r f)      (sc-key-r arena "all" r (deref f)))
       ((sc-atleast n r f) (sc-key-r arena (string-concat arena "ge" (int-to-string arena n)) r (deref f)))
       ((sc-atmost n r f)  (sc-key-r arena (string-concat arena "le" (int-to-string arena n)) r (deref f)))
-      ((sc-self r)       (string-concat arena "self(" (string-concat arena (role-key-s arena r) ")")))))
+      ((sc-self r)       (string-concat arena "self(" (string-concat arena (role-key-s arena r) ")")))
+      ((sc-elim k r f)   (sc-key-r arena (elim-tag k) r (deref f)))))
+
+  (fn elim-tag ((k ElimKind))
+    (@intent "An S1 name's key tag; none starts as another key does")
+    (@spec ((ElimKind) -> String))
+    (@pure)
+    (match k ('ek-i-all "eia") ('ek-f-all "efa") ('ek-i-some "eis") ('ek-f-some "efs")))
+
+  (fn elim-head ((k ElimKind))
+    (@intent "An S1 name's rendering head: I[∀, F[∀, I[∃ or F[∃")
+    (@spec ((ElimKind) -> String))
+    (@pure)
+    (match k ('ek-i-all "I[∀") ('ek-f-all "F[∀") ('ek-i-some "I[∃") ('ek-f-some "F[∃")))
 
   ;; ============================================================
   ;; Rendering, in DL notation, for the row tests
@@ -461,7 +496,8 @@
         (render-restriction arena (string-concat arena "≥" (string-concat arena (int-to-string arena n) " ")) r (deref f)))
       ((sc-atmost n r f)
         (render-restriction arena (string-concat arena "≤" (string-concat arena (int-to-string arena n) " ")) r (deref f)))
-      ((sc-self r)       (string-concat arena "∃" (string-concat arena (render-srole arena r) ".Self")))))
+      ((sc-self r)       (string-concat arena "∃" (string-concat arena (render-srole arena r) ".Self")))
+      ((sc-elim k r f)   (string-concat arena (render-restriction arena (elim-head k) r (deref f)) "]"))))
 
   (fn render-word ((arena Arena) (w (List RoleId)))
     (@intent "A role word, joined by ∘")

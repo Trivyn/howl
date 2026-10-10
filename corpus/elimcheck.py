@@ -37,9 +37,12 @@ STAGES = ("s0", "s1", "s2")
 LEGS = (("input", "s0"), ("s0", "s1"), ("s1", "s2"))
 CORPUS = ("bfo-core-2024-02-07", "cco-2024-11-06", "ro-2025-12-17")
 RECORD = os.path.join(HERE, "elim-differential.txt")
+CORPUS_TIMEOUT = int(os.environ.get("ELIM_TIMEOUT", "3600"))  # seconds per ontology
 # S1's hook refuses a complex RIA until S1 is built (slice 6d); only that
 # refusal is a legitimate missing stage. Any other refusal is a HOWL failure.
 AWAITING_S1 = "refused: complex role inclusions need chain elimination"
+# An input that names something under urn:howl: is out of the dump's scope.
+RESERVED = "refused: reserved:"
 
 
 class HarnessError(Exception):
@@ -104,7 +107,10 @@ def convert(files):
     return out
 
 
-def check(inputs):
+NO_ORACLE = "did not finish within"
+
+
+def check(inputs, timeout=None):
     """Run every leg on every input; (results, mismatches) where results are lines."""
     ofn_dir = os.path.join(WORK, "ofn")
     os.makedirs(ofn_dir, exist_ok=True)
@@ -137,7 +143,7 @@ def check(inputs):
         if t:
             stage_faults.update({t: why for n, why in differential.hermit_faults([t]).items()})
     differential.OUT = os.path.join(WORK, "oracle")
-    reports, failures = differential.run_oracle("hermit", batch)
+    reports, failures = differential.run_oracle("hermit", batch, timeout=timeout)
 
     def report_of(path):
         n = differential.name_of(path)
@@ -162,7 +168,9 @@ def check(inputs):
                 side[stage] = (None, "refused document")
                 continue
             r, err = report_of(t)
-            if r is None and t not in stage_faults:
+            if r is None and NO_ORACLE in (err or ""):
+                pass  # the oracle's budget, not HOWL: reported as no oracle below
+            elif r is None and t not in stage_faults:
                 lines.append(f"{name} {stage}: FAILED: HermiT on HOWL's document: {err}")
                 bad += 1
             elif r is None:
@@ -174,7 +182,7 @@ def check(inputs):
             side[stage] = (r, err)
         for stage in STAGES:
             reason = why.get((name, stage))
-            if reason is not None and not reason.startswith(AWAITING_S1):
+            if reason is not None and not reason.startswith((AWAITING_S1, RESERVED)):
                 lines.append(f"{name} {stage}: FAILED: no document: {reason}")
                 bad += 1
         if int(meta.get("omitted", "0")) != 0:
@@ -185,7 +193,7 @@ def check(inputs):
             side["input"] = (None, faults[name])
         else:
             r, err = report_of(path)
-            if r is None:
+            if r is None and NO_ORACLE not in (err or ""):
                 # Not out of scope, yet HermiT gave no report: nothing certifies the input.
                 lines.append(f"{name} input: FAILED: HermiT on the input: {err}")
                 bad += 1
@@ -194,9 +202,22 @@ def check(inputs):
             ra, wa = side.get(a, (None, why.get((name, a), "not dumped")))
             rb, wb = side.get(b, (None, why.get((name, b), "not dumped")))
             if ra is None or rb is None:
-                lines.append(f"{name} {a}~{b}: n/a ({wa or wb})")
+                # A timeout on either side is reported as such, never hidden
+                # behind the other side's exclusion.
+                why_not = next((w for w in (wa, wb) if NO_ORACLE in (w or "")), None) or wa or wb
+                if NO_ORACLE in (why_not or ""):
+                    # As in differential.py: no oracle within the budget is a
+                    # failure, never a pass, though not a mismatch.
+                    lines.append(f"{name} {a}~{b}: no oracle ({why_not})")
+                    bad += 1
+                else:
+                    lines.append(f"{name} {a}~{b}: n/a ({why_not})")
                 continue
             diff = entdiff.compare(restrict(rb, classes), restrict(ra, classes))
+            if (a, b) == ("s0", "s1") and meta.get("s1-guarded") == "yes":
+                # A guarded S1 is S0 minus its chains (SPEC §5.5): weaker by
+                # design, so only what S0 does not entail is a mismatch.
+                diff = {k: v for k, v in diff.items() if "extra" in k}
             if diff:
                 bad += 1
                 lines.append(f"{name} {a}~{b}: MISMATCH")
@@ -212,6 +233,8 @@ def main(argv):
     if len(argv) < 2 or argv[1] not in ("fixtures", "corpus"):
         print(__doc__)
         return 3
+    global WORK
+    WORK = os.path.join(ROOT, "build", "elim", argv[1])  # one work tree per mode
     if argv[1] == "fixtures":
         inputs = differential.fixtures(*differential.FIXTURE_DIRS, "el++", "out-of-profile", "sriq")
     else:
@@ -221,7 +244,16 @@ def main(argv):
             print("MISSING " + " ".join(missing) + " (run ./corpus/fetch.sh)")
             return 3
     try:
-        lines, bad = check(inputs)
+        if argv[1] == "corpus":
+            # One ontology per oracle batch, each with a budget, so a slow one
+            # never holds the others hostage. A timeout is "no oracle", never a pass.
+            lines, bad = [], 0
+            for f in inputs:
+                l, b = check([f], timeout=CORPUS_TIMEOUT)
+                lines += l
+                bad += b
+        else:
+            lines, bad = check(inputs)
     except (HarnessError, differential.HarnessError) as e:
         print(f"harness: {e}")
         return 3
@@ -231,7 +263,7 @@ def main(argv):
         with open(RECORD, "w", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n")
     print(f"{sum(1 for l in lines if l.endswith(': ok'))} ok, {bad} failed or mismatched, "
-          f"{sum(1 for l in lines if ': n/a' in l)} n/a")
+          f"{sum(1 for l in lines if ': n/a' in l)} n/a, {sum(1 for l in lines if ': no oracle' in l)} no oracle")
     return 1 if bad else 0
 
 

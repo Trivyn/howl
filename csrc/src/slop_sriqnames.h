@@ -11,6 +11,7 @@
 #include "slop_canon.h"
 #include "slop_sroiq.h"
 #include "slop_sriqnormal.h"
+#include "slop_sriqelim.h"
 
 typedef struct sriqnames_SriqNormal sriqnames_SriqNormal;
 
@@ -47,6 +48,12 @@ SLOP_LIST_DEFINE(types_DRole, slop_list_types_DRole)
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
+#endif
+
+#ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
+#define SLOP_LIST_SROIQ_SAXIOM_DEFINED
+#define SLOP_LIST_SROIQ_SAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(sroiq_SAxiom, slop_list_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_LIST_TYPES_DNAME_DEFINED
@@ -86,6 +93,11 @@ SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
+#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
+#endif
+
 #ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
@@ -100,6 +112,7 @@ struct sriqnames_SriqNormal {
     int64_t fns;
     slop_list_rdf_IRI classes;
     slop_list_rdf_IRI individuals;
+    slop_list_sroiq_SAxiom omitted;
 };
 typedef struct sriqnames_SriqNormal sriqnames_SriqNormal;
 
@@ -151,9 +164,11 @@ slop_list_types_DlClause sriqnames_canonical_clauses(slop_arena* arena, slop_lis
 int64_t sriqnames_fn_total(slop_list_types_DlClause cs);
 slop_list_rdf_IRI sriqnames_input_classes(slop_arena* arena, owl2_Signature sig);
 slop_list_rdf_IRI sriqnames_input_individuals(slop_arena* arena, owl2_Signature sig);
-sriqnames_SriqNormal sriqnames_sriq_names(slop_arena* arena, sriqnormal_S2 s2, owl2_Signature sig);
+sriqnames_SriqNormal sriqnames_sriq_names(slop_arena* arena, sriqnormal_S2 s2, owl2_Signature sig, slop_list_sroiq_SAxiom omitted);
 types_DRole sriqnames_role_at(slop_list_types_DRole xs, int64_t i);
 slop_option_types_DName sriqnames_fill_at(slop_list_option_types_DName xs, int64_t i);
+slop_result_sriqnames_SriqNormal_string sriqnames_normalize_after_s1(slop_arena* arena, sriqelim_S1 s1, owl2_Signature sig);
+slop_result_sriqnames_SriqNormal_string sriqnames_normalize_after_s0(slop_arena* arena, sriqnormal_S0 s0, owl2_Signature sig);
 slop_result_sriqnames_SriqNormal_string sriqnames_sriq_normalize(slop_arena* arena, slop_list_owl2_RawAxiom accepted, owl2_Signature sig);
 slop_string sriqnames_rn(slop_arena* arena, types_DName n);
 slop_string sriqnames_rr(slop_arena* arena, types_DRole r);
@@ -208,6 +223,11 @@ SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_OPTION_SRIQNAMES_SRIQNORMAL_DEFINED

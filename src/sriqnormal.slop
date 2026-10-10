@@ -12,9 +12,7 @@
 ;; (sriqrbox.slop), drops the `R ⊑ R` it leaves, and keeps one `P⁻ ⊑ P`
 ;; for a component that holds both P and P⁻.
 ;;
-;; S1 IS SLICE 6. Until it is built, an input with a complex role
-;; inclusion (transitivity included) is refused with that reason, rather
-;; than normalised wrongly (§5.5's status note).
+;; S1, chain elimination, is sriqelim.slop; S2 reads its output.
 ;; ============================================================
 
 (module sriqnormal
@@ -32,7 +30,7 @@
                   neg-defined pos-defined))
   (import sriqrbox (SriqRbox sriq-rbox sriq-node node-role))
 
-  (export S0 sriq-s0 sriq-s1 S2 sriq-s2 render-dl)
+  (export S0 sriq-s0 S2 sriq-s2 render-dl)
 
   ;; S0's output, with the RBox analysis S1 will need.
   (type S0 (record
@@ -513,7 +511,8 @@
       ((sc-all r f)      (union-new SConcept sc-all (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
       ((sc-atleast n r f) (union-new SConcept sc-atleast n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
       ((sc-atmost n r f)  (union-new SConcept sc-atmost n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
-      ((sc-self r)       (union-new SConcept sc-self (collapse-role rb r)))))
+      ((sc-self r)       (union-new SConcept sc-self (collapse-role rb r)))
+      ((sc-elim _ _ _)   c)))
 
   (fn trivial-ria ((w (List RoleId)) (s RoleId))
     (@intent "Is this `R ⊑ R`, which the collapse leaves of an inclusion inside one component?")
@@ -588,7 +587,8 @@
       ((sc-all r f)        (or (is-bottom r) (concept-bottom-p (deref f))))
       ((sc-atleast _ r f)  (or (is-bottom r) (concept-bottom-p (deref f))))
       ((sc-atmost _ r f)   (or (is-bottom r) (concept-bottom-p (deref f))))
-      ((sc-self r)         (is-bottom r))))
+      ((sc-self r)         (is-bottom r))
+      ((sc-elim _ _ _)     false)))
 
   (fn concepts-bottom-p ((cs (List SConcept)))
     (@intent "concept-bottom-p over a list")
@@ -659,43 +659,6 @@
           ((none)
             (ok (record-new S0 (axioms (dedupe-saxioms arena (sort-saxioms arena out)))
                                (rbox rb))))))))
-
-  ;; ============================================================
-  ;; S1's hook (S1 is slice 6)
-  ;; ============================================================
-
-  (fn ria-complex ((rb SriqRbox) (x SRia))
-    (@intent "Is this a complex RIA: a chain, or one step into a non-simple role?")
-    (@spec ((SriqRbox SRia) -> Bool))
-    (@pure)
-    (if (> (list-len (. x word)) 1)
-      true
-      (let ((n (sriq-node (. rb props) (. x super))))
-        (if (< n 0)
-          false
-          (match (list-get (. rb nonsimple) n)
-            ((some v) v)
-            ((none)   false))))))
-
-  (fn sriq-s1 ((arena Arena) (s0 S0))
-    (@intent "§5.5 S1 until it is built: the identity without a complex RIA, a refusal with one")
-    (@spec ((Arena S0) -> (Result (List SAxiom) String)))
-    (@alloc arena)
-    (let ((mut first (Option SAxiom) (none)))
-      (do
-        (for-each (a (. s0 axioms))
-          (match a
-            ((sa-ria x)
-              (when (and (ria-complex (. s0 rbox) x)
-                         (match first ((none) true) ((some _) false)))
-                (set! first (some a))))
-            (_ (do))))
-        (match first
-          ((none)   (ok (. s0 axioms)))
-          ((some a)
-            (error (string-concat arena
-                     "complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: "
-                     (render-saxiom arena a))))))))
 
   ;; ============================================================
   ;; S2 — the normal form (§5.5 S2, [TGH21] Table 1)
@@ -898,6 +861,7 @@
         ((sc-name _)        c)
         ((sc-nominal _)     c)
         ((sc-self _)        c)
+        ((sc-elim _ _ _)    c)
         ((sc-not f)         (nnf arena (deref f) false))
         ((sc-and xs)        (union-new SConcept sc-and (nnf-list arena xs true)))
         ((sc-or xs)         (union-new SConcept sc-or (nnf-list arena xs true)))
@@ -911,6 +875,7 @@
         ((sc-name _)        (union-new SConcept sc-not (sc arena c)))
         ((sc-nominal _)     (union-new SConcept sc-not (sc arena c)))
         ((sc-self _)        (union-new SConcept sc-not (sc arena c)))
+        ((sc-elim _ _ _)    (union-new SConcept sc-not (sc arena c)))
         ((sc-not f)         (nnf arena (deref f) true))
         ((sc-and xs)        (union-new SConcept sc-or (nnf-list arena xs false)))
         ((sc-or xs)         (union-new SConcept sc-and (nnf-list arena xs false)))
@@ -935,6 +900,8 @@
     (match c
       ((sc-top)    (none))
       ((sc-name i) (some (union-new DName dn-class i)))
+      ;; S1's I and F are names: an id from content, no definition.
+      ((sc-elim _ _ _) (some (union-new DName dn-fresh (fresh-name arena p c))))
       (_
         (let ((key (sc-key arena c))
               (x (union-new DName dn-fresh (fresh-name arena p c))))
@@ -954,6 +921,8 @@
     (match c
       ((sc-top)    (none))
       ((sc-name i) (some (union-new DName dn-class i)))
+      ;; S1's I and F are names: an id from content, no definition.
+      ((sc-elim _ _ _) (some (union-new DName dn-fresh (fresh-name arena p c))))
       (_
         (let ((key (sc-key arena c))
               (x (union-new DName dn-fresh (fresh-name arena p c))))
@@ -1030,6 +999,7 @@
     (match e
       ((sc-top)        true)
       ((sc-name _)     (disjunction arena p (some x) (none) e))
+      ((sc-elim _ _ _) (disjunction arena p (some x) (none) e))
       ((sc-bottom)     (disjunction arena p (some x) (none) e))
       ((sc-not _)      (disjunction arena p (some x) (none) e))
       ((sc-or _)       (disjunction arena p (some x) (none) e))
@@ -1157,6 +1127,7 @@
       ((sc-name _)        true)
       ((sc-nominal _)     true)
       ((sc-self _)        true)
+      ((sc-elim _ _ _)    true)
       ((sc-not f)         (counts-ok (deref f)))
       ((sc-and xs)        (counts-list-ok xs))
       ((sc-or xs)         (counts-list-ok xs))
@@ -1232,8 +1203,16 @@
       ((dn-class i) (. i value))
       ((dn-fresh k)
         (match (list-get (. s2 concepts) k)
-          ((some c) (string-concat arena "A[" (string-concat arena (render-sconcept arena c) "]")))
+          ((some c) (render-fresh arena c))
           ((none)   "A[?]")))))
+
+  (fn render-fresh ((arena Arena) (c SConcept))
+    (@intent "A fresh name: S1's atom as itself, S2's A_E as A[E]")
+    (@spec ((Arena SConcept) -> String))
+    (@alloc arena)
+    (match c
+      ((sc-elim _ _ _) (render-sconcept arena c))
+      (_               (string-concat arena "A[" (string-concat arena (render-sconcept arena c) "]")))))
 
   (fn render-dfiller ((arena Arena) (s2 S2) (b (Option DName)))
     (@intent "A filler, ⊤ for none")

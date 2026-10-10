@@ -1,0 +1,26 @@
+# sriq: [Sim12] Example 1 (Simančík, DL 2012, p. 5), with AB ≡ A ⊓ B added so
+# that the example's entailment A ⊓ B ⊑ D is a subsumption between names.
+#   RBox: T ∘ S ⊑ T, T ∘ T ⊑ T, R ∘ S ⊑ S, P ⊑ R   (P ≺ R ≺ S ≺ T; P ⊑ R simple)
+#   TBox: A ⊑ D ⊔ ∀T.¬C,  B ⊑ ∃T.∃P.∃S.C
+# B's T-successor has a P-successor (so an R-successor) with an S-successor in C;
+# R ∘ S ⊑ S and T ∘ S ⊑ T make that C a T-successor of B, so an A ⊓ B is a D.
+# S1 (§5.5, [Sim12] §4) keeps only P ⊑ R and expands ∀T.¬C. Note the paper's (7)
+# is §3's first construction; §4 replaces the positive ∀T.¬C by I instead.
+# Expect: AB ⊑ D.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :AB a owl:Class .
+:P a owl:ObjectProperty . :R a owl:ObjectProperty . :S a owl:ObjectProperty . :T a owl:ObjectProperty .
+:T owl:propertyChainAxiom ( :T :S ) .
+:T a owl:TransitiveProperty .
+:S owl:propertyChainAxiom ( :R :S ) .
+:P rdfs:subPropertyOf :R .
+:A rdfs:subClassOf [ owl:unionOf ( :D [ a owl:Restriction ; owl:onProperty :T ; owl:allValuesFrom [ owl:complementOf :C ] ] ) ] .
+:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :T ; owl:someValuesFrom
+                     [ a owl:Restriction ; owl:onProperty :P ; owl:someValuesFrom
+                       [ a owl:Restriction ; owl:onProperty :S ; owl:someValuesFrom :C ] ] ] .
+:AB owl:equivalentClass [ owl:intersectionOf ( :A :B ) ] .

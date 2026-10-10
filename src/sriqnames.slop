@@ -22,8 +22,9 @@
   (import types (RoleId DName DRole Dl1 Dl2 Dl4 DlClause))
   (import owl2 (RawAxiom Signature))
   (import canon (iri-cmp sort-range sort-iris))
-  (import sroiq (SConcept sc-cmp render-sconcept))
-  (import sriqnormal (S0 S2 sriq-s0 sriq-s1 sriq-s2))
+  (import sroiq (SConcept SAxiom sc-cmp render-sconcept render-saxiom))
+  (import sriqnormal (S0 S2 sriq-s0 sriq-s2))
+  (import sriqelim (S1 sriq-s1 S1_BOUND))
 
   (export SriqNormal sriq-normalize sriq-names render-dl-ids render-sriq-normal sriq-invariants)
 
@@ -36,7 +37,8 @@
     (bars        (List IRI))               ; the P with a P̄, sorted
     (fns         (Int 0 ..))               ; function symbols: ids 0 .. fns−1
     (classes     (List IRI))               ; the input's class names but ⊤ and ⊥, sorted (S4)
-    (individuals (List IRI))))             ; the input signature's individuals, sorted
+    (individuals (List IRI))               ; the input signature's individuals, sorted
+    (omitted     (List SAxiom))))          ; the chains S1's guard set aside, else none
 
   ;; ============================================================
   ;; Small helpers
@@ -409,9 +411,9 @@
       (do (for-each (a (set-elements (. sig individuals))) (list-push out a))
           (sort-iris arena out))))
 
-  (fn sriq-names ((arena Arena) (s2 S2) (sig Signature))
+  (fn sriq-names ((arena Arena) (s2 S2) (sig Signature) (omitted (List SAxiom)))
     (@intent "§5.5 S5: every minted name renumbered by its content, the clauses sorted and deduped")
-    (@spec ((Arena S2 Signature) -> SriqNormal))
+    (@spec ((Arena S2 Signature (List SAxiom)) -> SriqNormal))
     (@alloc arena)
     ;; A_E by its concept; S_{B₂} by (S, B₂), its filler renamed first;
     ;; then the clauses, which hold both.
@@ -429,7 +431,8 @@
         (bars        (sort-iris arena (. s2 bars)))
         (fns         (cast (Int 0 ..) (fn-total clauses)))
         (classes     (input-classes arena sig))
-        (individuals (input-individuals arena sig)))))
+        (individuals (input-individuals arena sig))
+        (omitted     omitted))))
 
   (fn role-at ((xs (List DRole)) (i Int))
     (@intent "Element i, or a placeholder")
@@ -447,19 +450,29 @@
   ;; The normaliser's entry
   ;; ============================================================
 
+  (fn normalize-after-s1 ((arena Arena) (s1 S1) (sig Signature))
+    (@intent "S2 then S5 over S1's output, its guard's omissions carried")
+    (@spec ((Arena S1 Signature) -> (Result SriqNormal String)))
+    (@alloc arena)
+    (match (sriq-s2 arena (. s1 axioms))
+      ((error m) (error m))
+      ((ok s2)   (ok (sriq-names arena s2 sig (. s1 omitted))))))
+
+  (fn normalize-after-s0 ((arena Arena) (s0 S0) (sig Signature))
+    (@intent "S1, then the rest")
+    (@spec ((Arena S0 Signature) -> (Result SriqNormal String)))
+    (@alloc arena)
+    (match (sriq-s1 arena s0 S1_BOUND)
+      ((error m) (error m))
+      ((ok s1)   (normalize-after-s1 arena s1 sig))))
+
   (fn sriq-normalize ((arena Arena) (accepted (List RawAxiom)) (sig Signature))
-    (@intent "§5.5's normaliser: S0, S1 (its hook until slice 6), S2, then ids from content")
+    (@intent "§5.5's normaliser: S0, S1, S2, then ids from content")
     (@spec ((Arena (List RawAxiom) Signature) -> (Result SriqNormal String)))
     (@alloc arena)
     (match (sriq-s0 arena accepted)
       ((error m) (error m))
-      ((ok s0)
-        (match (sriq-s1 arena s0)
-          ((error m) (error m))
-          ((ok axs)
-            (match (sriq-s2 arena axs)
-              ((error m) (error m))
-              ((ok s2)   (ok (sriq-names arena s2 sig)))))))))
+      ((ok s0)   (normalize-after-s0 arena s0 sig))))
 
   ;; ============================================================
   ;; Rendering with ids, for the determinism tests
@@ -566,6 +579,7 @@
         (list-push out (string-concat arena "fns " (int-to-string arena (. n fns))))
         (for-each (l (prefixed arena "class " (. n classes))) (list-push out l))
         (for-each (l (prefixed arena "individual " (. n individuals))) (list-push out l))
+        (for-each (a (. n omitted)) (list-push out (string-concat arena "omitted " (render-saxiom arena a))))
         out)))
 
   ;; ============================================================

@@ -8,8 +8,8 @@
 #include "slop_vocab.h"
 #include "slop_types.h"
 #include "slop_sroiq.h"
-#include "slop_sriqnames.h"
 #include "slop_canon.h"
+#include "slop_sriqnames.h"
 #include "slop_strlib.h"
 
 #ifndef SLOP_LIST_SROIQ_SCONCEPT_DEFINED
@@ -24,16 +24,16 @@ SLOP_LIST_DEFINE(sroiq_SConcept, slop_list_sroiq_SConcept)
 SLOP_LIST_DEFINE(types_RoleId, slop_list_types_RoleId)
 #endif
 
-#ifndef SLOP_LIST_RDF_IRI_DEFINED
-#define SLOP_LIST_RDF_IRI_DEFINED
-#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
-SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
-#endif
-
 #ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
 #define SLOP_LIST_SROIQ_SAXIOM_DEFINED
 #define SLOP_LIST_SROIQ_SAXIOM_IMPL_DEFINED
 SLOP_LIST_DEFINE(sroiq_SAxiom, slop_list_sroiq_SAxiom)
+#endif
+
+#ifndef SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
 #ifndef SLOP_LIST_TYPES_DNAME_DEFINED
@@ -52,14 +52,14 @@ SLOP_OPTION_DEFINE(sroiq_SConcept, slop_option_sroiq_SConcept)
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
-#ifndef SLOP_OPTION_RDF_IRI_DEFINED
-#define SLOP_OPTION_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
-#endif
-
 #ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
 #define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
 SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
+#endif
+
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
@@ -76,17 +76,23 @@ slop_string sroiqfss_junction(slop_arena* arena, slop_string f, slop_list_string
 slop_string sroiqfss_thing(slop_arena* arena);
 slop_string sroiqfss_nothing(slop_arena* arena);
 slop_string sroiqfss_role_text(slop_arena* arena, types_RoleId r);
-slop_list_string sroiqfss_concepts_text(slop_arena* arena, slop_list_sroiq_SConcept cs);
-slop_string sroiqfss_concept_text(slop_arena* arena, sroiq_SConcept c);
+slop_list_string sroiqfss_concepts_text(slop_arena* arena, slop_list_sroiq_SConcept atoms, slop_list_sroiq_SConcept cs);
+slop_string sroiqfss_concept_text(slop_arena* arena, slop_list_sroiq_SConcept atoms, sroiq_SConcept c);
 slop_list_string sroiqfss_roles_text(slop_arena* arena, slop_list_types_RoleId rs);
 slop_string sroiqfss_ria_text(slop_arena* arena, sroiq_SRia x);
-slop_string sroiqfss_axiom_text(slop_arena* arena, sroiq_SAxiom a);
+slop_string sroiqfss_axiom_text(slop_arena* arena, slop_list_sroiq_SConcept atoms, sroiq_SAxiom a);
+slop_list_sroiq_SConcept sroiqfss_atoms_in(slop_arena* arena, sroiq_SConcept c);
+slop_list_sroiq_SConcept sroiqfss_atoms_in_all(slop_arena* arena, slop_list_sroiq_SConcept cs);
+sroiq_SConcept sroiqfss_atom_at(slop_list_sroiq_SConcept xs, int64_t i);
+slop_list_sroiq_SConcept sroiqfss_document_atoms(slop_arena* arena, slop_list_sroiq_SAxiom axs);
+int64_t sroiqfss_atom_index(slop_list_sroiq_SConcept atoms, sroiq_SConcept c);
+slop_string sroiqfss_atom_iri(slop_arena* arena, slop_list_sroiq_SConcept atoms, sroiq_SConcept c);
 slop_list_string sroiqfss_declare(slop_arena* arena, slop_string kind, slop_string v);
 slop_list_string sroiqfss_role_decls(slop_arena* arena, types_RoleId r);
-slop_list_string sroiqfss_concept_decls(slop_arena* arena, sroiq_SConcept c);
-slop_list_string sroiqfss_concepts_decls(slop_arena* arena, slop_list_sroiq_SConcept cs);
+slop_list_string sroiqfss_concept_decls(slop_arena* arena, slop_list_sroiq_SConcept atoms, sroiq_SConcept c);
+slop_list_string sroiqfss_concepts_decls(slop_arena* arena, slop_list_sroiq_SConcept atoms, slop_list_sroiq_SConcept cs);
 slop_list_string sroiqfss_append2(slop_arena* arena, slop_list_string a, slop_list_string b);
-slop_list_string sroiqfss_axiom_decls(slop_arena* arena, sroiq_SAxiom a);
+slop_list_string sroiqfss_axiom_decls(slop_arena* arena, slop_list_sroiq_SConcept atoms, sroiq_SAxiom a);
 slop_list_string sroiqfss_unique_sorted(slop_arena* arena, slop_list_string xs);
 slop_list_string sroiqfss_document(slop_arena* arena, slop_list_string decls, slop_list_string axioms);
 slop_list_string sroiqfss_class_decls(slop_arena* arena, slop_list_rdf_IRI classes);
@@ -119,14 +125,14 @@ SLOP_OPTION_DEFINE(sroiq_SConcept, slop_option_sroiq_SConcept)
 SLOP_OPTION_DEFINE(types_RoleId, slop_option_types_RoleId)
 #endif
 
-#ifndef SLOP_OPTION_RDF_IRI_DEFINED
-#define SLOP_OPTION_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
-#endif
-
 #ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
 #define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
 SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
+#endif
+
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
