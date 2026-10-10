@@ -2181,8 +2181,14 @@ the RBox's depth. That is exponential in the depth, and optimal.
   literally a subset of S0, so every finding stays sound (S7). The witnesses are the accepted
   chain axioms (a `TransitiveObjectProperty` is accepted as `R ∘ R ⊑ R`), and the run is
   inconclusive.
-- **The bound** is set in the chain-elimination slice, after RO (depth 12) and the rest of the
-  corpus are measured.
+- **The bound** is 100,000 distinct labelled concepts, set in slice 6e from the corpus. RO, whose
+  RBox is the deepest (12), needs 10,173 and GO 9,033; BFO-core, CCO and OBI need under 100. So
+  it is about ten times the worst, and every corpus entry runs whole.
+- **What it bounds:** the work an input can demand of a correct S1, which Theorem 3's argument
+  ties to the keys (a name nests at most the RBox's depth, plus one: 13 on RO). It is not a
+  defence against an S1 defect that nests names without end; keys alone do not bound that, and
+  S1's invariants and the normaliser differential catch it. The owner chose keys only
+  (2026-10-09), over a second cap on the names' total size.
 
 **S2 — normal form.** The structural transformation takes S1's output into [TGH21] Table 1's
 DL1–DL11:
@@ -4298,7 +4304,14 @@ the weaker, more useful condition.
        input and each stage.
      - Restricted to the input's class names, the classifications must agree. That is what S0's
        translation, [Sim12] Theorem 3 and S2's proof promise. A guarded S1 run is weaker by
-       design, so it is checked one way only: S0 must entail everything it entails.
+       design, so it is checked one way only: everything the guarded S1 entails, S0 must entail.
+       A second pass trips the guard on purpose (a bound of 0) on every chain fixture that labels
+       something.
+     - Locally, `make diff-elim-corpus` runs BFO-core and CCO against HermiT, and S1's invariants
+       on all five vendored ontologies. RO's and OBI's S1 documents are beyond HermiT (each
+       unclassified after an hour, 2026-10-09; HermiT classifies every class of a stage, fresh
+       names included), so for them S1's invariants are the check; S1's determinism is tested on
+       the fixtures.
      - The test binary already exists, so this adds no third binary.
    - **Capability probes** are `corpus/fixtures/probes/`: one ontology per v0 construct, with
      `# construct:` (a `corpus/census.py` label) and `# expect:` / `# expect-not:` lines.
