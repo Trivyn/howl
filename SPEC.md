@@ -1960,6 +1960,9 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
 > - **Amended 2026-10-09 (slice 5):** S2 pins [TGH21] Table 1 and the choices it leaves open, and S5
 >   lists `S_{B₂}`. Until S1 is built (slice 6), the normaliser refuses an input with a complex RIA,
 >   transitivity included, with that reason, rather than normalise it wrongly.
+> - **Amended 2026-10-09 (slice 6):** S1 pins what [Sim12] leaves open and corrects two errata in it
+>   (see "What S1 fixes"). The size guard omits only the chains, and a HermiT differential checks
+>   the normaliser's stages ([§10](#10-testing-strategy)).
 
 **Sources.**
 - **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for
@@ -2022,7 +2025,8 @@ The `{a}` in the assertion rows are the only nominals, and only assertions produ
   proof is allowed (Constraint ae25e3d4).
 - **Other data, `HasKey`, `DatatypeDefinition` and SWRL.** "Other data" means anything the data
   lemma does not set aside.
-- **RBoxes:** an RBox the gate below rejects, and the complex RIAs that S1's size guard omits.
+- **RBoxes:** an RBox the gate below rejects, and the property chains (transitivity included)
+  that S1's size guard omits.
 
 **Gate conditions.** They are [Sim12]'s preconditions, checked as written, so the gate is exactly
 as strict as the proof.
@@ -2082,20 +2086,71 @@ as strict as the proof.
 - **Punning** needs no special treatment. Classes, roles and individuals are separate sorts in
   [TGH21]'s signature, which is how OWL 2 DL's punning semantics treats them.
 
-**S1 — chain elimination.** [Sim12] §4, run on S0's output:
+**S1 — chain elimination.** [Sim12] §4, run on S0's output. `R^c` is S0's collapsed RIAs, each
+with its inverse `inv(w) ⊑ inv(R)` added. A role is simple exactly when the gate says so.
 1. **Initialisation** (Definition 3):
    - drop every complex RIA;
    - keep the simple RIAs and the role assertions `Ref`, `Irr` and `Dis`;
    - label every positive `∀R.C` and every negative `∃R.C`.
+
+   Polarity is [Sim12] §2.1's, read on the un-normalised GCI:
+
+   | Position | Polarity |
+   |---|---|
+   | a GCI's right side; inside `⊓`, `⊔`, `∃R.·`, `∀R.·`, `≥n R.·` | kept |
+   | a GCI's left side; inside `¬·` and `≤n R.·` | flipped |
 2. **Expansion** (Definitions 4–6), repeated until nothing is labelled:
-   - a labelled `∀^R R.C` is replaced by a fresh `I`, with `F ⊑ C` and `expand(I ⊑ ∀^R R.F)` added;
-   - a labelled `∃^R R.C` is replaced by a fresh `F`, with `C ⊑ I` and
+   - a labelled `∀^R R.C` is replaced by `I`, with `F ⊑ C` and `expand(I ⊑ ∀^R R.F)` added;
+   - a labelled `∃^R R.C` is replaced by `F`, with `C ⊑ I` and
      `expand(I ⊑ ∀^R inv(R).F)` added.
 
-   `expand`'s items 1–5 encode the two-state automaton of `R`'s RIAs in `R^c`. A symmetric role is
-   expanded in both directions.
+   `expand′(I ⊑ ∀^R S.F)` (Definition 4) reads the RIAs into `S` in `R^c`, by form:
+   - item 1: `I ⊑ ∀S.F`, **unlabelled**, and never labelled again;
+   - item 2: `I ⊑ ∀^R R₁ … ∀^R Rₙ.F` for each (R1)-form `R₁·…·Rₙ ⊑ S`, length 1 included;
+   - item 3: `F ⊑ ∀^R R₁ … ∀^R Rₙ.F` for each (R2) `S·R₁·…·Rₙ ⊑ S`;
+   - item 4: `I ⊑ ∀^R R₁ … ∀^R Rₙ.I` for each (R3) `R₁·…·Rₙ·S ⊑ S`;
+   - item 5: `F ⊑ I` if `S·S ⊑ S`.
+
+   `expand` is `expand′` for `S`, and also for `inv(S)` with the same `I` and `F` when
+   `inv(S) ⊑ S ∈ R^c`, so a symmetric role is expanded in both directions. A word in items 2–4
+   that holds `S` or `inv(S)` fits no form; it is refused as an RBox the gate should have refused,
+   never looped on.
 3. **Simple roles are not expanded.** This is [Sim12]'s closing optimisation: a labelled
    restriction on a simple role is unlabelled in place.
+
+**Two errata in [Sim12].** Both are read as the paper's own definitions and example require:
+- **Definition 4 item 2 ranges over (R1)-form RIAs only.** Read literally ("each `Rᵢ` distinct
+  from `R`"), it also matches (R5) `inv(S) ⊑ S`: its item 2 is `I ⊑ ∀^R inv(S).F`, whose expansion
+  matches `S ⊑ inv(S)` in turn, without end. That reading also contradicts the paper's own claim
+  (pp. 7, 9) that `expand` uses only roles `≺ S`, since `inv(S) ≺ S` holds under no regular order.
+  §3's (E1), "of form (R1)", is the intended reading. Symmetry is `expand`'s second call.
+- **Fig. 1 (p. 10) swaps the word shapes of its I-exp and F-exp rules.** Definition 4, §3's
+  (E2)/(E3) and Example 1 agree with each other, and the paper's sentence pairing I-exp with
+  (E1)/(E3) does too; they are what S1 implements.
+
+**What S1 fixes that [Sim12] leaves open.** The owner approved these on 2026-10-09.
+1. **One pair of names per labelled concept, reused.** `I` and `F` are keyed by what they name:
+   (`∀` or `∃`, the role, and the filler, canonical, after its own labelled concepts are
+   replaced). A labelled concept that recurs reuses its pair.
+
+   Definition 6 asks for names fresh at each expansion, so this needs an argument. Take the run
+   with fresh names: it terminates, by Theorem 3's bound. Map each of its names to its key's pair
+   (σ).
+   - From the output to the input: a model of S1's output, read through σ, is a model of that
+     run's output, and Theorem 3 gives the input's model.
+   - From the input to the output: Theorem 2's construction interprets every name as its labelled
+     concept, `I := ∀^R R.C` and `F := ∃^R inv(R).∀^R R.C` (for `∃`: `I := ∀^R inv(R).∃^R R.C`,
+     `F := ∃^R R.C`). Names that σ identifies therefore agree, so the model is well defined.
+2. **The names are atoms of the working form,** written `I[∀R.C]`, `F[∀R.C]`, `I[∃R.C]` and
+   `F[∃R.C]`. S2 treats them as class names, and S5 gives them ids from their content.
+3. **Order cannot matter.** Labelled concepts are replaced innermost first, which is one of the
+   sequences Theorem 3 allows. The output is canonical, sorted and deduped, so it is a function of
+   S0's output.
+4. **The bottom role is not special-cased.** The gate counts it as non-simple, as under el++,
+   whether or not it is in an inclusion, and so does its component's representative. So
+   `∃N.⊤ ⊑ ⊥` is a negative `∃` on a non-simple role, and is expanded like any other.
+5. **A chain is eliminated, not lost.** It yields no clause of its own; its consequences arrive
+   through the expansions.
 
 **What survives.** [Sim12] Theorem 3: the result is **simple-conservative** over the input. Their
 models coincide on the input's concept names, simple roles and individuals, so consistency, unsatisfiability and
@@ -2107,7 +2162,10 @@ derived through a chain. The report states neither.
 The output has no complex RIA. What remains:
 - the simple RIAs;
 - `Ref`, `Irr` and `Dis`;
-- GCIs, whose new axioms have the form `I ⊑ ∀R.F`, over possibly inverse roles.
+- GCIs. The new ones are `I ⊑ ∀R.F` (item 1, over possibly inverse roles), `F ⊑ C′` and
+  `C′ ⊑ I` (Definition 6), `F ⊑ I` (item 5), and items 2–4's chains `I ⊑ ∀R₁ … ∀Rₙ.F`,
+  `F ⊑ ∀R₁ … ∀Rₙ.F` and `I ⊑ ∀R₁ … ∀Rₙ.I`, in which a `∀` over a simple role stays in place. [Sim12]'s "only `I ⊑ ∀R.F`" is for the algorithm without the
+  closing optimisation.
 
 That is an ALCHOIQ+ TBox whose nominals all come from assertions.
 
@@ -2115,10 +2173,16 @@ The negative assertion `{a} ⊑ ∀R.¬{b}` is a positive `∀`, so a negative a
 role is expanded like any other. It then constrains every chain from `a` to `b`, as it must.
 
 **Size guard.** [Sim12] Theorem 3 bounds the number of expansions by `‖T‖·(2‖R‖)^d`, where `d` is
-the RBox's depth. That is exponential in the depth, and optimal. If S1's output would exceed a fixed
-bound, every complex RIA is omitted instead, witnessed as a set, and the run is inconclusive. The
-bound is set in the chain-elimination slice, where RO (depth 12) is measured. The guard is
-deterministic, and it only ever weakens the theory, so its findings stay sound (S7).
+the RBox's depth. That is exponential in the depth, and optimal.
+- **What it counts:** distinct labelled concepts, that is, keys. They form a set, so whether the
+  guard trips does not depend on the order of expansion.
+- **What it omits:** over a fixed bound, the property chains (transitivity included, which arrives
+  as `R ∘ R ⊑ R`) are omitted instead. S1's output is then S0's axioms minus its chains, unlabelled:
+  literally a subset of S0, so every finding stays sound (S7). The witnesses are the accepted
+  chain axioms (a `TransitiveObjectProperty` is accepted as `R ∘ R ⊑ R`), and the run is
+  inconclusive.
+- **The bound** is set in the chain-elimination slice, after RO (depth 12) and the rest of the
+  corpus are measured.
 
 **S2 — normal form.** The structural transformation takes S1's output into [TGH21] Table 1's
 DL1–DL11:
@@ -4210,7 +4274,8 @@ the weaker, more useful condition.
      - ELK's warning capture is proven live by a tripwire: `out-of-profile/allvalues.ttl` must make
        ELK warn both before the first file and after the last.
    - **The comparison reads HOWL's canonical report** ([§6.7](#67-output--classification))
-     directly. There is no separate dump format. The oracle writes the same bottom-compressed
+     directly. There is no separate dump format for reports. (The normaliser differential below
+     prints a normaliser stage, not a report.) The oracle writes the same bottom-compressed
      grammar, so `corpus/entdiff.py` compares sets and decides `entails-sub` for every ordered
      pair in time linear in the report. It **refuses** a HOWL report that didn't reach a fixpoint
      or omitted anything: such a report is a lower bound over a different theory.
@@ -4223,6 +4288,18 @@ the weaker, more useful condition.
      Only a *well-formed* incomplete report is skipped; a malformed one fails. A test in
      `src/test.slop` holds `entails-sub` equal to the report's answer on every pair, so the
      function the port serves is the one the differential certifies.
+   - **The normaliser differential** (`make diff-elim`, slice 6) checks `sriq`'s normaliser
+     against HermiT rather than HOWL's report.
+     - HOWL's test binary prints a stage as an OWL 2 functional-syntax document, with every
+       entity declared. S0 and S1 print their axioms. S2 prints its normal form with S5's ids,
+       each clause as the [TGH21] Table 1 axiom it encodes (DL4 without its `S_{B₂}`), since
+       Skolem terms are not OWL.
+     - `corpus/elimcheck.py` converts each document with the oracle. HermiT then classifies the
+       input and each stage.
+     - Restricted to the input's class names, the classifications must agree. That is what S0's
+       translation, [Sim12] Theorem 3 and S2's proof promise. A guarded S1 run is weaker by
+       design, so it is checked one way only: S0 must entail everything it entails.
+     - The test binary already exists, so this adds no third binary.
    - **Capability probes** are `corpus/fixtures/probes/`: one ontology per v0 construct, with
      `# construct:` (a `corpus/census.py` label) and `# expect:` / `# expect-not:` lines.
      - Each probe's construct is load-bearing, **checked on every run**. The probe is rerun with
