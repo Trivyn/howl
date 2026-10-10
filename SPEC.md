@@ -4309,9 +4309,10 @@ the weaker, more useful condition.
        something.
      - Locally, `make diff-elim-corpus` runs BFO-core and CCO against HermiT, and S1's invariants
        on all five vendored ontologies. RO's and OBI's S1 documents are beyond HermiT (each
-       unclassified after an hour, 2026-10-09; HermiT classifies every class of a stage, fresh
-       names included), so for them S1's invariants are the check; S1's determinism is tested on
-       the fixtures.
+       unclassified after six hours in its own 24 GB JVM, 2026-10-10, recorded in
+       `corpus/elim-differential-long.txt` by `make diff-elim-long`; HermiT classifies every
+       class of a stage, fresh names included), so for them S1's invariants are the check; S1's
+       determinism is tested on the fixtures.
      - The test binary already exists, so this adds no third binary.
    - **Capability probes** are `corpus/fixtures/probes/`: one ontology per v0 construct, with
      `# construct:` (a `corpus/census.py` label) and `# expect:` / `# expect-not:` lines.

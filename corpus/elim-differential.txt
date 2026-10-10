@@ -1,4 +1,4 @@
-# RO and OBI are not run against HermiT: it did not classify their S1 documents within an hour (2026-10-09); see CORPUS in corpus/elimcheck.py. S1's invariants run on every vendored ontology below.
+# RO and OBI are not run against HermiT: it did not classify their S1 documents within six hours (2026-10-10, corpus/elim-differential-long.txt); see CORPUS in corpus/elimcheck.py. S1's invariants run on every vendored ontology below.
 vendor-bfo-core-2024-02-07 input~s0: ok
 vendor-bfo-core-2024-02-07 s0~s1: ok
 vendor-bfo-core-2024-02-07 s1~s2: ok
