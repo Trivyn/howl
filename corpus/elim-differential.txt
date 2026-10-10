@@ -1,9 +1,12 @@
+# RO and OBI are not run against HermiT: it did not classify their S1 documents within an hour (2026-10-09); see CORPUS in corpus/elimcheck.py. S1's invariants run on every vendored ontology below.
 vendor-bfo-core-2024-02-07 input~s0: ok
-vendor-bfo-core-2024-02-07 s0~s1: n/a (refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: http://purl.obolibrary.org/obo/BFO_0000062 ∘ http://purl.obolibrary.org/obo/BFO_0000062 ⊑ http://purl.obolibrary.org/obo/BFO_0000062)
-vendor-bfo-core-2024-02-07 s1~s2: n/a (refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: http://purl.obolibrary.org/obo/BFO_0000062 ∘ http://purl.obolibrary.org/obo/BFO_0000062 ⊑ http://purl.obolibrary.org/obo/BFO_0000062)
+vendor-bfo-core-2024-02-07 s0~s1: ok
+vendor-bfo-core-2024-02-07 s1~s2: ok
 vendor-cco-2024-11-06 input~s0: ok
-vendor-cco-2024-11-06 s0~s1: n/a (refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: http://purl.obolibrary.org/obo/BFO_0000062 ∘ http://purl.obolibrary.org/obo/BFO_0000062 ⊑ http://purl.obolibrary.org/obo/BFO_0000062)
-vendor-cco-2024-11-06 s1~s2: n/a (refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: http://purl.obolibrary.org/obo/BFO_0000062 ∘ http://purl.obolibrary.org/obo/BFO_0000062 ⊑ http://purl.obolibrary.org/obo/BFO_0000062)
-vendor-ro-2025-12-17 input~s0: n/a (the gate omitted 498)
-vendor-ro-2025-12-17 s0~s1: n/a (refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: http://purl.obolibrary.org/obo/BFO_0000050 ∘ http://purl.obolibrary.org/obo/BFO_0000050 ⊑ http://purl.obolibrary.org/obo/BFO_0000050)
-vendor-ro-2025-12-17 s1~s2: n/a (refused: complex role inclusions need chain elimination (SPEC 5.5 S1), not yet built; first: http://purl.obolibrary.org/obo/BFO_0000050 ∘ http://purl.obolibrary.org/obo/BFO_0000050 ⊑ http://purl.obolibrary.org/obo/BFO_0000050)
+vendor-cco-2024-11-06 s0~s1: ok
+vendor-cco-2024-11-06 s1~s2: ok
+vendor-bfo-core-2024-02-07 s1-invariants: ok
+vendor-cco-2024-11-06 s1-invariants: ok
+vendor-ro-2025-12-17 s1-invariants: ok
+vendor-obi-2026-07-27 s1-invariants: ok
+vendor-go-2026-07-26 s1-invariants: ok

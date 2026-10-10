@@ -487,7 +487,7 @@ sriqelim_S1 sriqelim_guarded(slop_arena* arena, slop_list_sroiq_SAxiom axs, int6
                 }
             }
         }
-        return ((sriqelim_S1){.axioms = kept, .omitted = omitted, .expansions = ((int64_t)(SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at sriqelim.slop:381:85")))});
+        return ((sriqelim_S1){.axioms = kept, .omitted = omitted, .expansions = ((int64_t)(SLOP_RANGE(int64_t, count, 1, 0, 0, 0, "(Int 0 ..) at sriqelim.slop:382:85")))});
     }
 }
 
@@ -502,7 +502,7 @@ slop_result_sriqelim_S1_string sriqelim_s1_result(slop_arena* arena, sriqnormal_
             if (st.count > st.bound) {
                 return ((slop_result_sriqelim_S1_string){ .is_ok = true, .data.ok = sriqelim_guarded(arena, s0.axioms, st.count) });
             } else {
-                return ((slop_result_sriqelim_S1_string){ .is_ok = true, .data.ok = ((sriqelim_S1){.axioms = sroiq_dedupe_saxioms(arena, sroiq_sort_saxioms(arena, st.out)), .omitted = ((slop_list_sroiq_SAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .expansions = ((int64_t)(SLOP_RANGE(int64_t, st.count, 1, 0, 0, 0, "(Int 0 ..) at sriqelim.slop:396:48")))}) });
+                return ((slop_result_sriqelim_S1_string){ .is_ok = true, .data.ok = ((sriqelim_S1){.axioms = sroiq_dedupe_saxioms(arena, sroiq_sort_saxioms(arena, st.out)), .omitted = ((slop_list_sroiq_SAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .expansions = ((int64_t)(SLOP_RANGE(int64_t, st.count, 1, 0, 0, 0, "(Int 0 ..) at sriqelim.slop:397:48")))}) });
             }
         }
         SLOP_UNREACHABLE();

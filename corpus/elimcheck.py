@@ -2,7 +2,8 @@
 """The normaliser differential: sriq's normaliser against HermiT (SPEC.md §10).
 
     python3 corpus/elimcheck.py fixtures            # tracked fixtures (CI)
-    python3 corpus/elimcheck.py corpus [--record]   # BFO-core, CCO, RO (local)
+    python3 corpus/elimcheck.py guarded             # S1's guard tripped on purpose (CI)
+    python3 corpus/elimcheck.py corpus [--record]   # BFO-core, CCO (local)
 
 For each input, HOWL's test binary prints each normaliser stage as an OWL 2
 functional-syntax document (`howl-test sriq-dump STAGE FILE`). The oracle
@@ -35,7 +36,38 @@ OWL = "http://www.w3.org/2002/07/owl#"
 THING, NOTHING = OWL + "Thing", OWL + "Nothing"
 STAGES = ("s0", "s1", "s2")
 LEGS = (("input", "s0"), ("s0", "s1"), ("s1", "s2"))
-CORPUS = ("bfo-core-2024-02-07", "cco-2024-11-06", "ro-2025-12-17")
+# The ontologies HermiT can decide at every stage. RO and OBI are not: each
+# one's S1 document was still unclassified after an hour of HermiT
+# (2026-10-09), so their S1 is checked by the invariants and the determinism
+# tests, not by HermiT. HermiT classifies every class of a stage document,
+# fresh names included, which is what grows.
+CORPUS = ("bfo-core-2024-02-07", "cco-2024-11-06")
+RECORD_NOTE = ("# RO and OBI are not run against HermiT: it did not classify their S1 documents "
+               "within an hour (2026-10-09); see CORPUS in corpus/elimcheck.py. S1's invariants "
+               "run on every vendored ontology below.")
+# S1's invariants (sriq-s1-invariants) run on every vendored ontology, the ones
+# beyond HermiT included.
+INVARIANT_CORPUS = ("bfo-core-2024-02-07", "cco-2024-11-06", "ro-2025-12-17",
+                    "obi-2026-07-27", "go-2026-07-26")
+
+
+def invariant_lines():
+    """S1's invariants on each vendored ontology: (lines, failures)."""
+    lines, bad = [], 0
+    for n in INVARIANT_CORPUS:
+        path = os.path.join(ROOT, "corpus", "vendor", f"{n}.ttl")
+        p = subprocess.run([TEST_BIN, "sriq-dump", "s1-invariants", path], capture_output=True, text=True)
+        if p.returncode == 0:
+            lines.append(f"vendor-{n} s1-invariants: ok")
+        else:
+            bad += 1
+            lines.append(f"vendor-{n} s1-invariants: FAILED: {(p.stdout.strip().splitlines() or ['?'])[0]}")
+    return lines, bad
+# Fixtures whose S1 labels something, so a bound of 0 trips the guard.
+GUARDED = ("el++/ksc-04", "el++/ksc-05", "el++/ksc-14", "el++/ksc-21", "el++/ksc-22", "el++/ksc-23",
+           "el++/ksc-27", "el++/ksc-28", "hazards/abox-chain-mixed", "hazards/abox-nary-chain",
+           "hazards/chain-prefix-collision", "hazards/role-hierarchy-deep", "probes/chain-binary",
+           "probes/chain-nary", "probes/transitive", "sriq/sim12-example1", "v0/negation-chain")
 RECORD = os.path.join(HERE, "elim-differential.txt")
 CORPUS_TIMEOUT = int(os.environ.get("ELIM_TIMEOUT", "3600"))  # seconds per ontology
 # S1's hook refuses a complex RIA until S1 is built (slice 6d); only that
@@ -49,9 +81,12 @@ class HarnessError(Exception):
     pass
 
 
+BOUND = []  # S1's guard bound for the dump, empty for the default
+
+
 def dump(stage, path, out):
     """Write one stage's document; None, or why the stage has no document."""
-    p = subprocess.run([TEST_BIN, "sriq-dump", stage, path], capture_output=True, text=True)
+    p = subprocess.run([TEST_BIN, "sriq-dump", stage, path] + BOUND, capture_output=True, text=True)
     if p.returncode != 0:
         return (p.stdout.strip().splitlines() or [p.stderr.strip() or f"exit {p.returncode}"])[-1]
     with open(out, "w", encoding="utf-8") as f:
@@ -64,7 +99,7 @@ def info(path):
 
     The class names never come from a stage's own document: a document that
     dropped its declarations would otherwise shrink the comparison to nothing."""
-    p = subprocess.run([TEST_BIN, "sriq-dump", "info", path], capture_output=True, text=True)
+    p = subprocess.run([TEST_BIN, "sriq-dump", "info", path] + BOUND, capture_output=True, text=True)
     if p.returncode != 0:
         raise HarnessError(f"sriq-dump info {path}: {p.stdout.strip() or p.stderr.strip()}")
     out, classes = {}, set()
@@ -118,6 +153,8 @@ def check(inputs, timeout=None):
     for path in inputs:
         name = differential.name_of(path)
         meta, classes = info(path)
+        if BOUND and meta.get("s1-guarded") != "yes":
+            raise HarnessError(f"{path}: S1's guard did not trip at bound {BOUND[0]}")
         stages = {}
         for stage in STAGES:
             out = os.path.join(ofn_dir, f"{name}.{stage}.ofn")
@@ -230,13 +267,17 @@ def check(inputs, timeout=None):
 
 
 def main(argv):
-    if len(argv) < 2 or argv[1] not in ("fixtures", "corpus"):
+    if len(argv) < 2 or argv[1] not in ("fixtures", "guarded", "corpus"):
         print(__doc__)
         return 3
     global WORK
     WORK = os.path.join(ROOT, "build", "elim", argv[1])  # one work tree per mode
     if argv[1] == "fixtures":
         inputs = differential.fixtures(*differential.FIXTURE_DIRS, "el++", "out-of-profile", "sriq")
+    elif argv[1] == "guarded":
+        # S1's guard tripped on purpose: S0~S1 is then checked one way.
+        BOUND.append("0")
+        inputs = [os.path.join(ROOT, "corpus", "fixtures", f + ".ttl") for f in GUARDED]
     else:
         inputs = [os.path.join(ROOT, "corpus", "vendor", f"{n}.ttl") for n in CORPUS]
         missing = [f for f in inputs if not os.path.exists(f)]
@@ -252,6 +293,9 @@ def main(argv):
                 l, b = check([f], timeout=CORPUS_TIMEOUT)
                 lines += l
                 bad += b
+            l, b = invariant_lines()
+            lines += l
+            bad += b
         else:
             lines, bad = check(inputs)
     except (HarnessError, differential.HarnessError) as e:
@@ -261,7 +305,7 @@ def main(argv):
         print(line)
     if argv[1] == "corpus" and "--record" in argv:
         with open(RECORD, "w", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
+            f.write(RECORD_NOTE + "\n" + "\n".join(lines) + "\n")
     print(f"{sum(1 for l in lines if l.endswith(': ok'))} ok, {bad} failed or mismatched, "
           f"{sum(1 for l in lines if ': n/a' in l)} n/a, {sum(1 for l in lines if ': no oracle' in l)} no oracle")
     return 1 if bad else 0

@@ -112,10 +112,11 @@ test-bin: $(BIN)
 # The normaliser differential (SPEC.md §10): each of sriq's normaliser stages,
 # printed as OWL and classified by HermiT, must agree with the input over its
 # class names. diff-elim runs the tracked fixtures (CI); diff-elim-corpus runs
-# BFO-core, CCO and RO (local; `--record` writes corpus/elim-differential.txt).
+# BFO-core and CCO (local; `--record` writes corpus/elim-differential.txt).
 diff-elim: test-bin oracle
 	python3 -m unittest -q corpus/test_elimcheck.py
 	python3 corpus/elimcheck.py fixtures
+	python3 corpus/elimcheck.py guarded
 
 diff-elim-corpus: test-bin oracle
 	python3 corpus/elimcheck.py corpus --record

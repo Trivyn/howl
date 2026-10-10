@@ -29,8 +29,9 @@
 
   (export S1 sriq-s1 ria-complex S1_BOUND sriq-s1-invariants)
 
-  ;; PROVISIONAL. The bound on distinct labelled concepts is set in slice
-  ;; 6e, after the corpus is measured (§5.5 S1's size guard).
+  ;; The bound on distinct labelled concepts (§5.5 S1's size guard), set in
+  ;; slice 6e from the corpus: RO needs 10,173 and GO 9,033, the rest under
+  ;; 100, so 100,000 is about ten times the worst. Owner-approved 2026-10-09.
   (const S1_BOUND Int 100000)
 
   (type S1 (record
