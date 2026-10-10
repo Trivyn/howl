@@ -68,6 +68,12 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #endif
 
+#ifndef SLOP_LIST_TYPES_AXIOMREF_DEFINED
+#define SLOP_LIST_TYPES_AXIOMREF_DEFINED
+#define SLOP_LIST_TYPES_AXIOMREF_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_AxiomRef, slop_list_types_AxiomRef)
+#endif
+
 #ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
 #define SLOP_LIST_SROIQ_SAXIOM_DEFINED
 #define SLOP_LIST_SROIQ_SAXIOM_IMPL_DEFINED
@@ -104,6 +110,12 @@ SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
+#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
 #define SLOP_OPTION_TYPES_OUTCOME_DEFINED
 SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
@@ -132,6 +144,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_AXIOMREF_DEFINED
+#define SLOP_OPTION_TYPES_AXIOMREF_DEFINED
+SLOP_OPTION_DEFINE(types_AxiomRef, slop_option_types_AxiomRef)
 #endif
 
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
@@ -177,6 +194,11 @@ SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 struct test_KscFixture {
@@ -1023,6 +1045,9 @@ uint8_t test_test_out_of_profile_corpus_is_caught(slop_arena* arena);
 uint8_t test_test_annotation_heavy_decodes_clean(slop_arena* arena);
 uint8_t test_test_litmus_decodes_clean(slop_arena* arena);
 uint8_t test_test_missing_class_declaration_is_reported(slop_arena* arena);
+slop_string test_cites_lines(slop_arena* arena, slop_list_types_AxiomRef refs);
+slop_string test_cited_text(slop_arena* arena, gate_GateResult gr, slop_string iri);
+uint8_t test_test_missing_declaration_cites_its_axioms(slop_arena* arena);
 uint8_t test_test_undeclared_individual_is_not_reported(slop_arena* arena);
 int64_t test_accepted_count_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_test_reserved_iri_as_individual_is_out_of_profile(slop_arena* arena);
@@ -1239,6 +1264,19 @@ uint8_t test_uses_reserved(slop_arena* arena, owl2_Signature sig);
 int64_t test_dump_stage(slop_arena* arena, slop_string stage, gate_GateResult gr, int64_t bound);
 int64_t test_sriq_dump(slop_arena* arena, slop_string stage, slop_string path, int64_t bound);
 int64_t test_bound_arg(slop_string s);
+int64_t test_dump_tagged(slop_string tag, slop_string text);
+int64_t test_dump_axiom_list(slop_arena* arena, slop_string tag, slop_list_owl2_RawAxiom axs);
+int64_t test_dump_axiom_ref(slop_string tag, types_AxiomRef r);
+int64_t test_dump_cited(slop_string tag, types_Omission o);
+int64_t test_dump_omission_list(slop_arena* arena, slop_string tag, slop_list_types_Omission os);
+int64_t test_dump_fault(slop_arena* arena, types_Fault f);
+int64_t test_dump_signature(slop_arena* arena, owl2_Signature sig);
+int64_t test_dump_triple(slop_arena* arena, termstore_IdTriple t);
+int64_t test_dump_stage0(slop_arena* arena, decode_Stage0 s0);
+int64_t test_dump_regularity(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+int64_t test_dump_rung(slop_arena* arena, decode_Stage0 s0, decode_Stage1 s1, types_Profile p, slop_string tag);
+int64_t test_dump_decoded(slop_arena* arena, decode_Stage0 s0, decode_Stage1 s1);
+int64_t test_front_dump(slop_arena* arena, slop_string path);
 int main(int argc, char** _c_argv);
 int64_t test_run_suite(void);
 
@@ -1270,6 +1308,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_AXIOMREF_DEFINED
+#define SLOP_OPTION_TYPES_AXIOMREF_DEFINED
+SLOP_OPTION_DEFINE(types_AxiomRef, slop_option_types_AxiomRef)
 #endif
 
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
@@ -1332,14 +1375,14 @@ SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
-#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
-SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
-#endif
-
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #endif
 
 #ifndef SLOP_OPTION_ARENA_PTR_DEFINED
@@ -1366,12 +1409,6 @@ SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
 #define SLOP_LIST_TYPES_SUBPAIR_DEFINED
 #define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
-#endif
-
-#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
-#define SLOP_LIST_TYPES_OMISSION_DEFINED
-#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED
