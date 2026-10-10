@@ -21,14 +21,15 @@
   (@doc "Verdict-discipline and structural-invariant tests")
 
   (import rdf (IRI Triple Term make-iri make-blank make-literal make-triple make-triple-term term-eq))
-  (import termstore (encode-triples build-store store-objects store-typed store-contains store-has-any triple-of
+  (import termstore (IdTriple encode-triples build-store store-objects store-typed store-contains store-has-any triple-of
                      store-over store-insert-ids))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
                  OWL_THING OWL_NOTHING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
   (import decode (graph-to-indexed rdf-list-checked term-at stage0-header Stage0
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms decode-axioms-with decode-store Stage1))
-  (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity))
+  (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity
+                expand-negation drop-top-role-tautologies missing-declarations collect-entity-refs))
   (import normalize (NormOutput normalize-accepted))
   (import owl2 (RawConcept Signature signature-has-class render-omission
                 signature-has-object-property signature-has-annotation-property
@@ -47,7 +48,7 @@
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
-                 Omission Coverage Termination SubPair Findings Outcome Evidence Fault
+                 Omission Coverage Termination SubPair Findings Outcome Evidence Fault AxiomRef
                  ReasonerConfig Profile ProfileSelection
                  default-config emit-edge make-context make-queue
                  Names empty-names intern-node intern-role renamed-node original-node original-role
@@ -1755,6 +1756,46 @@
            ;; reports a missing declaration for every class in existence.
            (== (gate-omissions-of-ttl arena (string-concat arena pre
                  ":A a owl:Class . :B a owl:Class . :A rdfs:subClassOf :B .")) 0))))
+
+  (fn cites-lines ((arena Arena) (refs (List AxiomRef)))
+    (@intent "Each cited axiom's text on its own line")
+    (@spec ((Arena (List AxiomRef)) -> String))
+    (@alloc arena)
+    (let ((mut out ""))
+      (do
+        (for-each (r refs) (set! out (string-concat arena out (string-concat arena (. r text) "\n"))))
+        out)))
+
+  (fn cited-text ((arena Arena) (gr GateResult) (iri String))
+    (@intent "The axioms the missing declaration of iri cites, one per line; none when iri is not missing")
+    (@spec ((Arena GateResult String) -> String))
+    (@alloc arena)
+    (let ((mut out "none"))
+      (do
+        (for-each (o (. gr omissions))
+          (match o
+            ((missing-declaration md)
+              (when (string-eq (. (. md entity) value) iri)
+                (set! out (cites-lines arena (. md referring)))))
+            (_ (do))))
+        out)))
+
+  (fn test-missing-declaration-cites-its-axioms ((arena Arena))
+    (@intent "A missing declaration cites exactly the accepted axioms that name the entity")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; `referring` is not in the report's text, so only a direct read sees
+    ;; it: citing every accepted axiom passed every other test.
+    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:A a owl:Class . :B a owl:Class .\n"))
+      (match (gate-ttl arena (string-concat arena pre
+               ":A rdfs:subClassOf :D . :B rdfs:subClassOf :D . :A rdfs:subClassOf :E . :A rdfs:subClassOf :B ."))
+        ((none)    false)
+        ((some gr)
+          (and (string-eq (cited-text arena gr "http://example.org/t#D")
+                          "SubClassOf(http://example.org/t#A http://example.org/t#D)\nSubClassOf(http://example.org/t#B http://example.org/t#D)\n")
+               (string-eq (cited-text arena gr "http://example.org/t#E")
+                          "SubClassOf(http://example.org/t#A http://example.org/t#E)\n")
+               (string-eq (cited-text arena gr "http://example.org/t#B") "none"))))))
 
   (fn test-undeclared-individual-is-not-reported ((arena Arena))
     (@intent "Named-individual declarations are OPTIONAL in OWL 2 DL")
@@ -4561,9 +4602,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           ":r rdfs:range [ owl:intersectionOf ( :A [ owl:complementOf [ owl:unionOf ( :B :C ) ] ] ) ] ." "")
         (== (gate-omissions-of-ttl arena (string-concat arena pre
               ":r rdfs:range [ owl:intersectionOf ( :A [ owl:complementOf [ owl:unionOf ( :B :C ) ] ] ) ] .")) 1)
-        ;; an out-of-profile subclass
+        ;; an out-of-profile subclass, omitted as the user wrote it: the
+        ;; rewritten piece C ⊓ B ⊑ ⊥ would be omitted too, one for one
         (accepts-exactly arena "C out of profile"
           "[ owl:unionOf ( :A :C ) ] rdfs:subClassOf [ owl:complementOf :B ] ." "")
+        (== (string-cmp (omissions-of-ttl arena (string-concat arena pre
+                          "[ owl:unionOf ( :A :C ) ] rdfs:subClassOf [ owl:complementOf :B ] ."))
+                        "SubClassOf(ObjectUnionOf(http://example.org/t#A http://example.org/t#C) ObjectComplementOf(http://example.org/t#B))\n")
+            0)
         ;; ¬E under ∃ is not a positive position at all
         (accepts-exactly arena "under an existential"
           ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:complementOf :B ] ] ." ""))))
@@ -6386,8 +6432,148 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           -1
           (match (parse-int s) ((ok n) (cast Int n)) ((error _) -1))))))
 
+  ;; ------------------------------------------------------------
+  ;; front-dump: the front end on one file, stage by stage, each in its
+  ;; own order: stage 0's triples and omissions, stage 1's axioms and
+  ;; signature (or its fault), the regularity check, and under each rung
+  ;; the gate's rewrites, accepted axioms, omissions and missing
+  ;; declarations. The goldens see only sorted reports, never an order, a
+  ;; fault's text or a rewrite, so a restructure of decode or the gate is
+  ;; checked by this dump being byte-identical before and after, over
+  ;; every fixture and the vendored corpus (graph Lesson 7309657b).
+  ;; ------------------------------------------------------------
+
+  (fn dump-tagged ((tag String) (text String))
+    (@intent "One line: a tag, then the text; 0")
+    (@spec ((String String) -> Int))
+    (do (print tag) (println text) 0))
+
+  (fn dump-axiom-list ((arena Arena) (tag String) (axs (List RawAxiom)))
+    (@intent "Each axiom rendered on its own line, in the list's order")
+    (@spec ((Arena String (List RawAxiom)) -> Int))
+    (@alloc arena)
+    (do (for-each (ax axs) (dump-tagged tag (render-axiom arena ax))) 0))
+
+  (fn dump-axiom-ref ((tag String) (r AxiomRef))
+    (@intent "A cited axiom's text, then its source ontology when it has one")
+    (@spec ((String AxiomRef) -> Int))
+    (match (. r source)
+      ((some i) (do (dump-tagged tag (. r text)) (dump-tagged "  from " (. i value))))
+      ((none)   (dump-tagged tag (. r text)))))
+
+  (fn dump-cited ((tag String) (o Omission))
+    (@intent "The axioms a missing declaration cites, in order: the report's line leaves them out")
+    (@spec ((String Omission) -> Int))
+    (match o
+      ((missing-declaration md) (do (for-each (r (. md referring)) (dump-axiom-ref tag r)) 0))
+      (_ 0)))
+
+  (fn dump-omission-list ((arena Arena) (tag String) (os (List Omission)))
+    (@intent "Each omission rendered on its own line, in the list's order, with what it cites")
+    (@spec ((Arena String (List Omission)) -> Int))
+    (@alloc arena)
+    (let ((cites (string-concat arena tag "cites ")))
+      (do
+        (for-each (o os)
+          (do (dump-tagged tag (render-omission arena o))
+              (dump-cited cites o)))
+        0)))
+
+  (fn dump-fault ((arena Arena) (f Fault))
+    (@intent "A fault as text; 1")
+    (@spec ((Arena Fault) -> Int))
+    (@alloc arena)
+    (match f
+      ((input-error m) (do (dump-tagged "fault input-error " m) 1))
+      ((refused os)    (do (dump-omission-list arena "fault refused " os) 1))
+      ((cancelled)     (do (println "fault cancelled") 1))
+      ((unavailable _) (do (println "fault unavailable") 1))))
+
+  (fn dump-signature ((arena Arena) (sig Signature))
+    (@intent "The signature's sets, each in its own iteration order")
+    (@spec ((Arena Signature) -> Int))
+    (@alloc arena)
+    (do
+      (for-each (x (set-elements (. sig classes)))     (dump-tagged "sig class " (. x value)))
+      (for-each (x (set-elements (. sig obj-props)))   (dump-tagged "sig obj-prop " (. x value)))
+      (for-each (x (set-elements (. sig data-props)))  (dump-tagged "sig data-prop " (. x value)))
+      (for-each (x (set-elements (. sig annot-props))) (dump-tagged "sig annot-prop " (. x value)))
+      (for-each (x (set-elements (. sig individuals))) (dump-tagged "sig individual " (. x value)))
+      (for-each (x (set-elements (. sig datatypes)))   (dump-tagged "sig datatype " (. x value)))
+      0))
+
+  (fn dump-triple ((arena Arena) (t IdTriple))
+    (@intent "One stage-0 triple as its three term ids")
+    (@spec ((Arena IdTriple) -> Int))
+    (@alloc arena)
+    (do (print "triple ") (print (int-to-string arena (. t s)))
+        (print " ") (print (int-to-string arena (. t p)))
+        (print " ") (println (int-to-string arena (. t o)))
+        0))
+
+  (fn dump-stage0 ((arena Arena) (s0 Stage0))
+    (@intent "Stage 0's triples in order, its declared imports and its omissions")
+    (@spec ((Arena Stage0) -> Int))
+    (@alloc arena)
+    (do
+      (for-each (t (. s0 triples)) (dump-triple arena t))
+      (for-each (i (. s0 imports-declared)) (dump-tagged "import " (. i value)))
+      (dump-omission-list arena "stage0 omitted " (. s0 omissions))))
+
+  (fn dump-regularity ((arena Arena) (axs (List RawAxiom)))
+    (@intent "el's regularity check on the sugar-expanded axioms, as its own test reads it")
+    (@spec ((Arena (List RawAxiom)) -> Int))
+    (@alloc arena)
+    (match (check-regularity arena (expand-sugar arena axs))
+      ((rbox-regular)     (do (println "regularity regular") 0))
+      ((rbox-irregular m) (dump-tagged "regularity irregular " m))))
+
+  (fn dump-rung ((arena Arena) (s0 Stage0) (s1 Stage1) (p Profile) (tag String))
+    (@intent "Under one rung: the gate's rewrites, accepted axioms, omissions and missing declarations")
+    (@spec ((Arena Stage0 Stage1 Profile String) -> Int))
+    (@alloc arena)
+    (let ((expanded (drop-top-role-tautologies arena p
+                      (expand-negation arena p (expand-sugar arena (. s1 axioms)))))
+          (gr (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions) p))
+          (missing (missing-declarations arena (. s1 signature)
+                     (collect-entity-refs arena (. gr accepted)))))
+      (do
+        (dump-axiom-list arena (string-concat arena tag " expanded ") expanded)
+        (dump-axiom-list arena (string-concat arena tag " accepted ") (. gr accepted))
+        (dump-omission-list arena (string-concat arena tag " omitted ") (. gr omissions))
+        (dump-omission-list arena (string-concat arena tag " missing ") missing))))
+
+  (fn dump-decoded ((arena Arena) (s0 Stage0) (s1 Stage1))
+    (@intent "Stage 1's axioms, inert count and signature, then regularity and each rung")
+    (@spec ((Arena Stage0 Stage1) -> Int))
+    (@alloc arena)
+    (do
+      (dump-axiom-list arena "decoded " (. s1 axioms))
+      (dump-tagged "inert " (int-to-string arena (. s1 inert)))
+      (dump-signature arena (. s1 signature))
+      (dump-regularity arena (. s1 axioms))
+      (dump-rung arena s0 s1 'profile-el "el")
+      (dump-rung arena s0 s1 'profile-el-plus-plus "el++")
+      (dump-rung arena s0 s1 'profile-sriq "sriq")))
+
+  (fn front-dump ((arena Arena) (path String))
+    (@intent "The front end's stages on one file, for a restructure's before and after")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((error _) (do (println "parse error") 1))
+      ((ok g)
+        (match (stage0-header arena (. g triples) (list-new arena IRI))
+          ((error f) (dump-fault arena f))
+          ((ok s0)
+            (do
+              (dump-stage0 arena s0)
+              (match (decode-axioms arena (. s0 dict) (. s0 triples))
+                ((error f) (dump-fault arena f))
+                ((ok s1)   (dump-decoded arena s0 s1)))))))))
+
   (fn main ((argc Int) (argv (Ptr (Ptr U8))))
-    (@intent "Run the suite; or, as `sriq-dump STAGE FILE`, print a normaliser stage (SPEC §10)")
+    (@intent "Run the suite; or print a normaliser stage (`sriq-dump`, SPEC §10) or the front end (`front-dump`)")
     (@spec ((Int (Ptr (Ptr U8))) -> Int))
     :c-name "main"
     (cond
@@ -6400,7 +6586,9 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           (if (< b 0)
             (do (println "the bound is a whole number") 2)
             (with-arena 4194304 (sriq-dump arena (arg-text argv 2) (arg-text argv 3) b)))))
-      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND]]") 2))))
+      ((and (== argc 3) (string-eq (arg-text argv 1) "front-dump"))
+        (with-arena 4194304 (front-dump arena (arg-text argv 2))))
+      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE]") 2))))
 
   (fn run-suite ()
     (@intent "Run the verdict-discipline and structural-invariant tests")
@@ -6862,6 +7050,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-missing-class-declaration-is-reported arena)))
             (print-test-result "declarations: an undeclared CLASS is a missing-declaration" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-missing-declaration-cites-its-axioms arena)))
+            (print-test-result "declarations: a missing declaration cites exactly the axioms naming it" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-undeclared-individual-is-not-reported arena)))

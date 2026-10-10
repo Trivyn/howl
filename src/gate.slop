@@ -90,84 +90,112 @@
             ((some b) (when (< (role-cmp r b) 0) (set! best (some r))))))
         best)))
 
+  (fn transitive-chain ((arena Arena) (r RoleId))
+    (@intent "TransitiveObjectProperty(r) as r ∘ r ⊑ r")
+    (@spec ((Arena RoleId) -> RawAxiom))
+    (@alloc arena)
+    (let ((mut steps (list-new arena RoleId)))
+      (do
+        (list-push steps r)
+        (list-push steps r)
+        (union-new RawAxiom ra-property-chain (record-new RawChain (steps steps) (super r))))))
+
+  (fn push-property-star ((out (List RawAxiom)) (ax RawAxiom) (rs (List RoleId)))
+    (@intent "EquivalentObjectProperties(r₀ … rₙ) onto out, as a star through the least")
+    (@spec (((List RawAxiom) RawAxiom (List RoleId)) -> (List RawAxiom)))
+    ;; One naming an ObjectInverseOf is kept whole: no rung built so far
+    ;; admits it, so it is omitted as written, one axiom. Its star could
+    ;; split it in pieces, or, when its members coincide, into nothing.
+    (let ((mut o out))
+      (do
+        (if (roles-have-inverse rs)
+          (list-push o ax)
+          (match (least-role rs)
+            ((none) (do))
+            ((some hub)
+              (for-each (r rs)
+                (when (!= (role-cmp r hub) 0)
+                  (do
+                    (list-push o (union-new RawAxiom ra-sub-object-property hub r))
+                    (list-push o (union-new RawAxiom ra-sub-object-property r hub))))))))
+        o)))
+
+  (fn push-class-star ((arena Arena) (out (List RawAxiom)) (cs (List RawConcept)))
+    (@intent "EquivalentClasses(C₀ … Cₙ) onto out, as a star through the least")
+    (@spec ((Arena (List RawAxiom) (List RawConcept)) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((sorted (sort-concepts arena cs))
+          (n (cast Int (list-len cs)))
+          (mut o out)
+          (mut i 1))
+      (do
+        (while (< i n)
+          (let ((hub (concept-at sorted 0))
+                (c (concept-at sorted i)))
+            (do
+              (list-push o (union-new RawAxiom ra-sub-class-of (box-c arena hub) (box-c arena c)))
+              (list-push o (union-new RawAxiom ra-sub-class-of (box-c arena c) (box-c arena hub)))
+              (set! i (+ i 1)))))
+        o)))
+
+  (fn push-pairs-from ((arena Arena) (out (List RawAxiom)) (sorted (List RawConcept)) (i Int) (n Int))
+    (@intent "DisjointClasses(Cᵢ, Cⱼ) for every j > i, onto out")
+    (@spec ((Arena (List RawAxiom) (List RawConcept) Int Int) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut o out)
+          (mut j (+ i 1)))
+      (do
+        (while (< j n)
+          (let ((mut pair (list-new arena RawConcept)))
+            (do
+              (list-push pair (concept-at sorted i))
+              (list-push pair (concept-at sorted j))
+              (list-push o (union-new RawAxiom ra-disjoint-classes pair))
+              (set! j (+ j 1)))))
+        o)))
+
+  (fn push-disjoint-pairs ((arena Arena) (out (List RawAxiom)) (ax RawAxiom) (cs (List RawConcept)))
+    (@intent "DisjointClasses(C₁ … Cₙ) onto out: as written up to two classes, else every pair i<j")
+    (@spec ((Arena (List RawAxiom) RawAxiom (List RawConcept)) -> (List RawAxiom)))
+    (@alloc arena)
+    ;; n(n−1)/2 pairs — 3 classes give 3 pairs, not 6 and not 1. Sorting
+    ;; first is what makes the pair list a function of content rather
+    ;; than of write order.
+    (let ((n (cast Int (list-len cs)))
+          (mut o out))
+      (if (<= n 2)
+        (do (list-push o ax) o)
+        (let ((sorted (sort-concepts arena cs))
+              (mut i 0))
+          (do
+            (while (< i n)
+              (do
+                (set! o (push-pairs-from arena o sorted i n))
+                (set! i (+ i 1))))
+            o)))))
+
   (fn expand-sugar ((arena Arena) (axs (List RawAxiom)))
     (@intent "Rewrite the four sugar forms the RBox gates depend on")
     (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
     (@alloc arena)
-    ;; Everything is pushed into ONE local list rather than through
-    ;; helper functions that append. A `(List T)` is a value struct and
+    ;; A form's helper takes the list and RETURNS it grown, and the loop
+    ;; keeps what comes back. A `(List T)` is a value struct and
     ;; `list-push` reallocates, so a helper that pushed into a passed-in
-    ;; list would grow its own copy and lose it on return — the hazard
-    ;; canon.slop's merge documents from the other side, where
+    ;; list without returning it would grow its own copy and lose it —
+    ;; the hazard canon.slop's merge documents from the other side, where
     ;; `list-set` is safe precisely because it never reallocates.
     (let ((mut out (list-new arena RawAxiom)))
       (do
         (for-each (ax axs)
           (match ax
             ;; TransitiveObjectProperty(r)  ⇒  r ∘ r ⊑ r
-            ((ra-transitive-property r)
-              (let ((mut steps (list-new arena RoleId)))
-                (do
-                  (list-push steps r)
-                  (list-push steps r)
-                  (list-push out (union-new RawAxiom ra-property-chain
-                                   (record-new RawChain (steps steps) (super r)))))))
-
-            ;; EquivalentObjectProperties(r₀ … rₙ) ⇒ a star through the least.
-            ;; One naming an ObjectInverseOf is kept whole: no rung built so
-            ;; far admits it, so it is omitted as written, one axiom. Its
-            ;; star could split it in pieces, or, when its members coincide,
-            ;; into nothing at all.
-            ((ra-equivalent-properties rs)
-              (if (roles-have-inverse rs)
-                (list-push out ax)
-                (match (least-role rs)
-                  ((none) (do))
-                  ((some hub)
-                    (for-each (r rs)
-                      (when (!= (role-cmp r hub) 0)
-                        (do
-                          (list-push out (union-new RawAxiom ra-sub-object-property hub r))
-                          (list-push out (union-new RawAxiom ra-sub-object-property r hub)))))))))
-
+            ((ra-transitive-property r)    (list-push out (transitive-chain arena r)))
+            ;; EquivalentObjectProperties(r₀ … rₙ) ⇒ a star through the least
+            ((ra-equivalent-properties rs) (set! out (push-property-star out ax rs)))
             ;; EquivalentClasses(C₀ … Cₙ) ⇒ a star through the least
-            ((ra-equivalent-classes cs)
-              (let ((sorted (sort-concepts arena cs))
-                    (n (cast Int (list-len cs))))
-                (when (> n 0)
-                  (let ((hub (concept-at sorted 0))
-                        (mut i 1))
-                    (while (< i n)
-                      (let ((c (concept-at sorted i)))
-                        (do
-                          (list-push out (union-new RawAxiom ra-sub-class-of
-                                           (box-c arena hub) (box-c arena c)))
-                          (list-push out (union-new RawAxiom ra-sub-class-of
-                                           (box-c arena c) (box-c arena hub)))
-                          (set! i (+ i 1)))))))))
-
+            ((ra-equivalent-classes cs)    (set! out (push-class-star arena out cs)))
             ;; DisjointClasses(C₁ … Cₙ) ⇒ every pair i<j, canonically ordered
-            ((ra-disjoint-classes cs)
-              (let ((n (cast Int (list-len cs))))
-                (if (<= n 2)
-                  (list-push out ax)
-                  ;; n(n−1)/2 pairs — 3 classes give 3 pairs, not 6 and
-                  ;; not 1. Sorting first is what makes the pair list a
-                  ;; function of content rather than of write order.
-                  (let ((sorted (sort-concepts arena cs))
-                        (mut i 0))
-                    (while (< i n)
-                      (let ((mut j (+ i 1)))
-                        (do
-                          (while (< j n)
-                            (let ((mut pair (list-new arena RawConcept)))
-                              (do
-                                (list-push pair (concept-at sorted i))
-                                (list-push pair (concept-at sorted j))
-                                (list-push out (union-new RawAxiom ra-disjoint-classes pair))
-                                (set! j (+ j 1)))))
-                          (set! i (+ i 1)))))))))
-
+            ((ra-disjoint-classes cs)      (set! out (push-disjoint-pairs arena out ax cs)))
             (_ (list-push out ax))))
         out)))
 
@@ -280,62 +308,87 @@
     (union-new RawAxiom ra-sub-class-of
       (box-c arena c) (box-c arena (union-new RawConcept rc-nothing))))
 
+  (fn sub-negation-split ((arena Arena) (p Profile) (l RawConcept) (r RawConcept))
+    (@intent "C ⊑ P ⊓ ¬E's split, when it is to be rewritten: a negation, every piece in the rung")
+    (@spec ((Arena Profile RawConcept RawConcept) -> (Option NegSplit)))
+    (@alloc arena)
+    ;; has-negated-conjunct first: the cheap test that keeps every other
+    ;; axiom allocation-free.
+    (if (not (has-negated-conjunct r))
+      (none)
+      (let ((s (negation-split arena r)))
+        (if (and (concept-in-profile p l) (split-rewritable p s)) (some s) (none)))))
+
+  (fn role-negation-split ((arena Arena) (p Profile) (r RoleId) (c RawConcept))
+    (@intent "A domain's or range's split, when it is to be rewritten: a negation, every piece in the rung")
+    (@spec ((Arena Profile RoleId RawConcept) -> (Option NegSplit)))
+    (@alloc arena)
+    (if (not (has-negated-conjunct c))
+      (none)
+      (let ((s (negation-split arena c)))
+        (if (and (role-in-profile p r) (split-rewritable p s)) (some s) (none)))))
+
+  (fn push-sub-pieces ((arena Arena) (out (List RawAxiom)) (l (Ptr RawConcept)) (s NegSplit))
+    (@intent "C ⊑ P ⊓ ¬E onto out as C ⊑ P and C ⊓ E ⊑ ⊥")
+    (@spec ((Arena (List RawAxiom) (Ptr RawConcept) NegSplit) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut o out))
+      (do
+        (when (> (list-len (. s pos)) 0)
+          (list-push o (union-new RawAxiom ra-sub-class-of l (box-c arena (conjunction (. s pos))))))
+        (for-each (e (. s neg))
+          (list-push o (empty-axiom arena (with-conjunct arena (deref l) e))))
+        o)))
+
+  (fn push-domain-pieces ((arena Arena) (out (List RawAxiom)) (r RoleId) (s NegSplit))
+    (@intent "dom(r) ⊑ P ⊓ ¬E onto out as dom(r) ⊑ P and ∃r.⊤ ⊓ E ⊑ ⊥")
+    (@spec ((Arena (List RawAxiom) RoleId NegSplit) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((some-r (union-new RawConcept rc-some r (box-c arena (union-new RawConcept rc-thing))))
+          (mut o out))
+      (do
+        (when (> (list-len (. s pos)) 0)
+          (list-push o (union-new RawAxiom ra-object-property-domain r (box-c arena (conjunction (. s pos))))))
+        (for-each (e (. s neg))
+          (list-push o (empty-axiom arena (with-conjunct arena some-r e))))
+        o)))
+
+  (fn push-range-pieces ((arena Arena) (out (List RawAxiom)) (r RoleId) (s NegSplit))
+    (@intent "ran(r) ⊑ P ⊓ ¬E onto out as ran(r) ⊑ P and ∃r.E ⊑ ⊥")
+    (@spec ((Arena (List RawAxiom) RoleId NegSplit) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut o out))
+      (do
+        (when (> (list-len (. s pos)) 0)
+          (list-push o (union-new RawAxiom ra-object-property-range r (box-c arena (conjunction (. s pos))))))
+        (for-each (e (. s neg))
+          (list-push o (empty-axiom arena (union-new RawConcept rc-some r (box-c arena e)))))
+        o)))
+
   (fn expand-negation ((arena Arena) (p Profile) (axs (List RawAxiom)))
     (@intent "Rewrite ¬E in a superclass, domain or range into ⊥ GCIs (§5.2)")
     (@spec ((Arena Profile (List RawAxiom)) -> (List RawAxiom)))
     (@alloc arena)
-    ;; One local list, as in expand-sugar and for its reason.
+    ;; Helpers return the list grown, as in expand-sugar and for its reason.
     (let ((mut out (list-new arena RawAxiom)))
       (do
         (for-each (ax axs)
           (match ax
             ;; C ⊑ P ⊓ ¬E  ⇒  C ⊑ P,  C ⊓ E ⊑ ⊥
             ((ra-sub-class-of l r)
-              (if (not (has-negated-conjunct (deref r)))
-                (list-push out ax)
-                (let ((s (negation-split arena (deref r))))
-                  (if (not (and (concept-in-profile p (deref l)) (split-rewritable p s)))
-                    (list-push out ax)
-                    (do
-                      (when (> (list-len (. s pos)) 0)
-                        (list-push out (union-new RawAxiom ra-sub-class-of
-                                         l (box-c arena (conjunction (. s pos))))))
-                      (for-each (e (. s neg))
-                        (list-push out (empty-axiom arena
-                                         (with-conjunct arena (deref l) e)))))))))
-
+              (match (sub-negation-split arena p (deref l) (deref r))
+                ((none)   (list-push out ax))
+                ((some s) (set! out (push-sub-pieces arena out l s)))))
             ;; dom(r) ⊑ P ⊓ ¬E  ⇒  dom(r) ⊑ P,  ∃r.⊤ ⊓ E ⊑ ⊥
             ((ra-object-property-domain r c)
-              (if (not (has-negated-conjunct (deref c)))
-                (list-push out ax)
-                (let ((s (negation-split arena (deref c))))
-                  (if (not (and (role-in-profile p r) (split-rewritable p s)))
-                    (list-push out ax)
-                    (let ((some-r (union-new RawConcept rc-some r
-                                    (box-c arena (union-new RawConcept rc-thing)))))
-                      (do
-                        (when (> (list-len (. s pos)) 0)
-                          (list-push out (union-new RawAxiom ra-object-property-domain
-                                           r (box-c arena (conjunction (. s pos))))))
-                        (for-each (e (. s neg))
-                          (list-push out (empty-axiom arena
-                                           (with-conjunct arena some-r e))))))))))
-
+              (match (role-negation-split arena p r (deref c))
+                ((none)   (list-push out ax))
+                ((some s) (set! out (push-domain-pieces arena out r s)))))
             ;; ran(r) ⊑ P ⊓ ¬E  ⇒  ran(r) ⊑ P,  ∃r.E ⊑ ⊥
             ((ra-object-property-range r c)
-              (if (not (has-negated-conjunct (deref c)))
-                (list-push out ax)
-                (let ((s (negation-split arena (deref c))))
-                  (if (not (and (role-in-profile p r) (split-rewritable p s)))
-                    (list-push out ax)
-                    (do
-                      (when (> (list-len (. s pos)) 0)
-                        (list-push out (union-new RawAxiom ra-object-property-range
-                                         r (box-c arena (conjunction (. s pos))))))
-                      (for-each (e (. s neg))
-                        (list-push out (empty-axiom arena
-                                         (union-new RawConcept rc-some r (box-c arena e))))))))))
-
+              (match (role-negation-split arena p r (deref c))
+                ((none)   (list-push out ax))
+                ((some s) (set! out (push-range-pieces arena out r s)))))
             (_ (list-push out ax))))
         out)))
 
@@ -596,7 +649,8 @@
               ;; axioms and shared by the closure, the range table and the
               ;; per-axiom check — it had been recomputed for each.
               (rroles (collect-rbox-roles arena rview))
-              (told   (told-closure arena rview rroles (cast Int (list-len rroles))))
+              (nr     (cast Int (list-len rroles)))
+              (told   (told-closure arena rview rroles nr))
               (ranges (collect-ranges arena rview rroles))
               ;; Self is only ever in el++, so only el++ pays for the
               ;; simple-role closure.
@@ -617,8 +671,7 @@
             ('d-inert    (do))
             ('d-in-profile
               (if (and (axiom-in-profile p ax)
-                       (not (and rbox-bad
-                                 (if sriq (is-sriq-ria ax) (is-rbox-axiom ax))))
+                       (not (rbox-omits sriq rbox-bad ax))
                        ;; Self only on a simple role (§5.4), and under sriq
                        ;; every restriction OWL 2 §11.2 puts on simple
                        ;; roles: per axiom, like the range condition.
@@ -630,9 +683,7 @@
                        ;; is omitted alone rather than collapsing the
                        ;; whole RBox the way non-regularity does. sriq has
                        ;; no range condition: [TGH21] needs none.
-                       (or sriq
-                           (axiom-range-ok ranges told
-                             (cast Int (list-len rroles)) rroles ax)))
+                       (or sriq (axiom-range-ok ranges told nr rroles ax)))
                 (list-push accepted ax)
                 ;; In-profile FORM with out-of-profile operands, or an
                 ;; RBox axiom in an RBox that failed regularity.
@@ -653,6 +704,13 @@
           (accepted  (sort-axioms arena accepted))
           (omissions (sort-omissions arena omitted))
           (signature sig)))))
+
+  (fn rbox-omits ((sriq Bool) (rbox-bad Bool) (ax RawAxiom))
+    (@intent "Is ax an RBox axiom that a collective RBox failure omits?")
+    (@spec ((Bool Bool RawAxiom) -> Bool))
+    (@pure)
+    ;; sriq's failure omits its complex RIAs; el's and el++'s the whole RBox.
+    (and rbox-bad (if sriq (is-sriq-ria ax) (is-rbox-axiom ax))))
 
   ;; ACCEPTED AXIOMS LEAVE THE GATE IN CANONICAL ORDER, or fresh ids do
   ;; not. §6.3 assigns fresh-node ids "in order of first occurrence under
@@ -806,26 +864,41 @@
       ((some v) v)
       ((none)   false)))
 
+  (fn mat-or-row ((m (List Bool)) (n Int) (k Int) (i Int))
+    (@intent "Row i gains every cell of row k")
+    (@spec (((List Bool) Int Int Int) -> Bool))
+    (let ((mut j 0))
+      (do
+        (while (< j n)
+          (do
+            (when (mat-get m (+ (* k n) j))
+              (list-set m (+ (* i n) j) true))
+            (set! j (+ j 1))))
+        true)))
+
+  (fn mat-close-through ((m (List Bool)) (n Int) (k Int))
+    (@intent "One Warshall step: every row reaching k gains row k")
+    (@spec (((List Bool) Int Int) -> Bool))
+    (let ((mut i 0))
+      (do
+        (while (< i n)
+          (do
+            (when (mat-get m (+ (* i n) k))
+              (mat-or-row m n k i))
+            (set! i (+ i 1))))
+        true)))
+
   (fn mat-close ((m (List Bool)) (n Int))
     (@intent "Transitive closure in place, Warshall")
     (@spec (((List Bool) Int) -> Bool))
     ;; `list-set` writes through the caller's buffer because it never
-    ;; reallocates; `list-push` here would grow a copy and lose it.
+    ;; reallocates, so the steps below may write m; `list-push` would
+    ;; grow a copy and lose it.
     (let ((mut k 0))
       (do
         (while (< k n)
           (do
-            (let ((mut i 0))
-              (while (< i n)
-                (do
-                  (when (mat-get m (+ (* i n) k))
-                    (let ((mut j 0))
-                      (while (< j n)
-                        (do
-                          (when (mat-get m (+ (* k n) j))
-                            (list-set m (+ (* i n) j) true))
-                          (set! j (+ j 1))))))
-                  (set! i (+ i 1)))))
+            (mat-close-through m n k)
             (set! k (+ k 1))))
         true)))
 
@@ -868,17 +941,23 @@
       (do
         (while (<= i to)
           (do
-            (let ((mut dup false)
-                  (mut j from))
-              (do
-                (while (< j i)
-                  (do
-                    (when (== (role-cmp (role-at steps j) (role-at steps i)) 0)
-                      (set! dup true))
-                    (set! j (+ j 1))))
-                (when (not dup) (set! count (+ count 1)))))
+            (when (not (seen-before steps from i)) (set! count (+ count 1)))
             (set! i (+ i 1))))
         count)))
+
+  (fn seen-before ((steps (List RoleId)) (from Int) (i Int))
+    (@intent "Does the role at position i also stand somewhere in [from, i)?")
+    (@spec (((List RoleId) Int Int) -> Bool))
+    (@pure)
+    (let ((mut dup false)
+          (mut j from))
+      (do
+        (while (< j i)
+          (do
+            (when (== (role-cmp (role-at steps j) (role-at steps i)) 0)
+              (set! dup true))
+            (set! j (+ j 1))))
+        dup)))
 
   (fn add-chain-constraints ((ch RawChain) (roles (List RoleId)) (n Int)
                              (cmat (List Bool)) (from Int) (to Int))
@@ -909,6 +988,78 @@
                 (string-concat arena " sub-property-of "
                   (render-role arena (role-at roles i))))))))))
 
+  (fn add-dominant-case ((ch RawChain) (roles (List RoleId)) (n Int) (cmat (List Bool))
+                         (len Int) (left-ok Bool) (right-ok Bool))
+    (@intent "Add the ≺ edges of the ⊆-least case the chain matches: left-, right-recursive or generic")
+    (@spec ((RawChain (List RoleId) Int (List Bool) Int Bool Bool) -> Bool))
+    ;; CANDIDATES ARE WHOLE CASES, never independently-skipped end
+    ;; positions. `t ∘ a ∘ t ⊑ t` matches left-recursion with {a≺t, t≺t}
+    ;; and right-recursion with {t≺t, a≺t}; skipping both ends
+    ;; independently would give {a≺t} and wrongly accept it. Every real
+    ;; case match here carries `t ≺ t`, which the closure check then
+    ;; rejects.
+    (let ((gen (candidate-size ch 0 (- len 1)))
+          (lft (if left-ok  (candidate-size ch 1 (- len 1)) 1000000))
+          (rgt (if right-ok (candidate-size ch 0 (- len 2)) 1000000)))
+      (cond
+        ((and (<= lft rgt) (<= lft gen)) (add-chain-constraints ch roles n cmat 1 (- len 1)))
+        ((<= rgt gen)                    (add-chain-constraints ch roles n cmat 0 (- len 2)))
+        (else                            (add-chain-constraints ch roles n cmat 0 (- len 1))))))
+
+  (fn add-case-constraints ((ch RawChain) (roles (List RoleId)) (n Int) (cmat (List Bool)))
+    (@intent "Add the ≺ edges a chain of length ≥ 2 generates under §11.2's cases")
+    (@spec ((RawChain (List RoleId) Int (List Bool)) -> Bool))
+    (let ((steps (. ch steps))
+          (len (cast Int (list-len (. ch steps))))
+          (sup (. ch super)))
+      (if (< len 2)
+        true
+        (let ((left-ok  (== (role-cmp (role-at steps 0) sup) 0))
+              (right-ok (== (role-cmp (role-at steps (- len 1)) sup) 0)))
+          ;; Transitivity `t ∘ t ⊑ t` generates NOTHING. It also matches
+          ;; the generic case, which would yield `t ≺ t` and falsely
+          ;; reject — dominance picks the ⊆-least set, and ∅ wins.
+          (if (and (== len 2) left-ok right-ok)
+            true
+            (add-dominant-case ch roles n cmat len left-ok right-ok))))))
+
+  (fn row-violation ((cmat (List Bool)) (told (List Bool)) (n Int) (i Int))
+    (@intent "The least j with i ≺ j where the told hierarchy has j ⊑* i, or -1")
+    (@spec (((List Bool) (List Bool) Int Int) -> Int))
+    (@pure)
+    (let ((mut found -1)
+          (mut j 0))
+      (do
+        (while (< j n)
+          (do
+            (when (and (< found 0)
+                       (mat-get cmat (+ (* i n) j))
+                       (mat-get told (+ (* j n) i)))
+              (set! found j))
+            (set! j (+ j 1))))
+        found)))
+
+  (fn regularity-verdict ((arena Arena) (roles (List RoleId)) (cmat (List Bool)) (told (List Bool)) (n Int))
+    (@intent "Regular, or irregular naming the first violated pair in row order")
+    (@spec ((Arena (List RoleId) (List Bool) (List Bool) Int) -> RboxVerdict))
+    (@alloc arena)
+    ;; A pair (x,y) is violated when told y ⊑* x. This subsumes cycle
+    ;; detection: a cycle puts (x,x) in the closure, and ⊑* is reflexive,
+    ;; so x ⊑* x makes it a violation — which is exactly the `r ≺ r`
+    ;; self-edge the conventional "non-trivial SCC" reading drops.
+    (let ((mut vi -1)
+          (mut vj -1)
+          (mut i 0))
+      (do
+        (while (and (< vi 0) (< i n))
+          (let ((j (row-violation cmat told n i)))
+            (do
+              (when (>= j 0) (do (set! vi i) (set! vj j)))
+              (set! i (+ i 1)))))
+        (if (< vi 0)
+          (union-new RboxVerdict rbox-regular)
+          (union-new RboxVerdict rbox-irregular (describe-violation arena roles vi vj))))))
+
   (fn check-regularity ((arena Arena) (axs (List RawAxiom)))
     (@intent "OWL 2 §11.2 regularity over the RBox AS WRITTEN")
     (@spec ((Arena (List RawAxiom)) -> RboxVerdict))
@@ -923,75 +1074,19 @@
       (if (== n 0)
         (union-new RboxVerdict rbox-regular)
         (let ((told (told-closure arena axs roles n))
-              (cmat (mat-new arena (* n n)))
-              (mut msg (Option String) (none)))
+              (cmat (mat-new arena (* n n))))
           (do
             (for-each (ax axs)
               (match ax
-                ((ra-property-chain ch)
-                  (let ((steps (. ch steps))
-                        (len (cast Int (list-len (. ch steps))))
-                        (sup (. ch super)))
-                    (when (>= len 2)
-                      (let ((left-ok  (== (role-cmp (role-at steps 0) sup) 0))
-                            (right-ok (== (role-cmp (role-at steps (- len 1)) sup) 0)))
-                        (cond
-                          ;; Transitivity `t ∘ t ⊑ t` generates NOTHING.
-                          ;; It also matches the generic case, which
-                          ;; would yield `t ≺ t` and falsely reject —
-                          ;; dominance picks the ⊆-least set, and ∅ wins.
-                          ((and (== len 2) left-ok right-ok) (do))
-                          (else
-                            ;; CANDIDATES ARE WHOLE CASES, never
-                            ;; independently-skipped end positions.
-                            ;; `t ∘ a ∘ t ⊑ t` matches left-recursion
-                            ;; with {a≺t, t≺t} and right-recursion with
-                            ;; {t≺t, a≺t}; skipping both ends
-                            ;; independently would give {a≺t} and
-                            ;; wrongly accept it. Every real case match
-                            ;; here carries `t ≺ t`, which the closure
-                            ;; check then rejects.
-                            (let ((gen (candidate-size ch 0 (- len 1)))
-                                  (lft (if left-ok  (candidate-size ch 1 (- len 1)) 1000000))
-                                  (rgt (if right-ok (candidate-size ch 0 (- len 2)) 1000000)))
-                              (cond
-                                ((and (<= lft rgt) (<= lft gen))
-                                  (add-chain-constraints ch roles n cmat 1 (- len 1)))
-                                ((<= rgt gen)
-                                  (add-chain-constraints ch roles n cmat 0 (- len 2)))
-                                (else
-                                  (add-chain-constraints ch roles n cmat 0 (- len 1)))))))))))
+                ((ra-property-chain ch) (add-case-constraints ch roles n cmat))
                 (_ (do))))
-
             ;; ≺ IS TRANSITIVE, so compatibility must hold for every
             ;; pair the order IMPLIES, not only for generated edges.
             ;; Given a ≺ b, b ≺ c and told c ⊑ a, every generated edge
             ;; passes and the graph is acyclic — but transitivity forces
             ;; a ≺ c, which c ⊑* a forbids.
             (mat-close cmat n)
-
-            ;; A pair (x,y) is violated when told y ⊑* x. This subsumes
-            ;; cycle detection: a cycle puts (x,x) in the closure, and
-            ;; ⊑* is reflexive, so x ⊑* x makes it a violation — which
-            ;; is exactly the `r ≺ r` self-edge the conventional
-            ;; "non-trivial SCC" reading drops.
-            (let ((mut i 0))
-              (while (< i n)
-                (do
-                  (let ((mut j 0))
-                    (while (< j n)
-                      (do
-                        (when (and (mat-get cmat (+ (* i n) j))
-                                   (mat-get told (+ (* j n) i)))
-                          (match msg
-                            ((none)   (set! msg (some (describe-violation arena roles i j))))
-                            ((some _) (do))))
-                        (set! j (+ j 1)))))
-                  (set! i (+ i 1)))))
-
-            (match msg
-              ((some m) (union-new RboxVerdict rbox-irregular m))
-              ((none)   (union-new RboxVerdict rbox-regular))))))))
+            (regularity-verdict arena roles cmat told n))))))
 
   ;; ============================================================
   ;; RBox gate 2 — the range/composition condition (§5.2)
@@ -1216,6 +1311,31 @@
     (and (== (. a kind) (. b kind))
          (== (iri-cmp (. a entity) (. b entity)) 0)))
 
+  (fn has-entity ((seen (List EntityRef)) (e EntityRef))
+    (@intent "Does seen already hold e's kind and IRI?")
+    (@spec (((List EntityRef) EntityRef) -> Bool))
+    (@pure)
+    (let ((mut dup false))
+      (do (for-each (s2 seen) (when (same-entity s2 e) (set! dup true))) dup)))
+
+  (fn missing-declaration-of ((arena Arena) (e EntityRef) (refs (List EntityRef)))
+    (@intent "e's missing-declaration omission, citing every axiom that refers to it")
+    (@spec ((Arena EntityRef (List EntityRef)) -> Omission))
+    (@alloc arena)
+    ;; EVERY referring axiom, canonically sorted. The field invariant
+    ;; types.slop states is that `referring` is sorted, and
+    ;; `missing-declaration-cmp` compares the lists ELEMENT-WISE —
+    ;; comparing two unsorted lists element-wise is not an order at all.
+    (let ((mut refs-for (list-new arena AxiomRef)))
+      (do
+        (for-each (f refs)
+          (when (same-entity f e) (list-push refs-for (axiom-ref-of arena (. f axiom)))))
+        (union-new Omission missing-declaration
+          (record-new MissingDeclaration
+            (kind      (. e kind))
+            (entity    (. e entity))
+            (referring (sort-axiom-refs arena refs-for)))))))
+
   (fn missing-declarations ((arena Arena) (sig Signature) (refs (List EntityRef)))
     (@intent "One missing-declaration omission per undeclared entity")
     (@spec ((Arena Signature (List EntityRef)) -> (List Omission)))
@@ -1224,27 +1344,9 @@
           (mut seen (list-new arena EntityRef)))
       (do
         (for-each (e refs)
-          (when (not (entity-ref-declared sig e))
-            (let ((mut dup false))
-              (do
-                (for-each (s2 seen) (when (same-entity s2 e) (set! dup true)))
-                (when (not dup)
-                  (let ((mut refs-for (list-new arena AxiomRef)))
-                    (do
-                      (list-push seen e)
-                      ;; EVERY referring axiom, canonically sorted. The
-                      ;; field invariant types.slop states is that
-                      ;; `referring` is sorted, and
-                      ;; `missing-declaration-cmp` compares the lists
-                      ;; ELEMENT-WISE — comparing two unsorted lists
-                      ;; element-wise is not an order at all.
-                      (for-each (f refs)
-                        (when (same-entity f e) (list-push refs-for (axiom-ref-of arena (. f axiom)))))
-                      (list-push out
-                        (union-new Omission missing-declaration
-                          (record-new MissingDeclaration
-                            (kind      (. e kind))
-                            (entity    (. e entity))
-                            (referring (sort-axiom-refs arena refs-for))))))))))))
+          (when (and (not (entity-ref-declared sig e)) (not (has-entity seen e)))
+            (do
+              (list-push seen e)
+              (list-push out (missing-declaration-of arena e refs)))))
         out)))
 )

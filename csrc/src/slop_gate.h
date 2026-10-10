@@ -161,6 +161,11 @@ SLOP_LIST_DEFINE(gate_EntityRef, slop_list_gate_EntityRef)
 
 types_InputRef gate_axiom_input_ref(slop_arena* arena, owl2_RawAxiom ax);
 slop_option_types_RoleId gate_least_role(slop_list_types_RoleId rs);
+owl2_RawAxiom gate_transitive_chain(slop_arena* arena, types_RoleId r);
+slop_list_owl2_RawAxiom gate_push_property_star(slop_list_owl2_RawAxiom out, owl2_RawAxiom ax, slop_list_types_RoleId rs);
+slop_list_owl2_RawAxiom gate_push_class_star(slop_arena* arena, slop_list_owl2_RawAxiom out, slop_list_owl2_RawConcept cs);
+slop_list_owl2_RawAxiom gate_push_pairs_from(slop_arena* arena, slop_list_owl2_RawAxiom out, slop_list_owl2_RawConcept sorted, int64_t i, int64_t n);
+slop_list_owl2_RawAxiom gate_push_disjoint_pairs(slop_arena* arena, slop_list_owl2_RawAxiom out, owl2_RawAxiom ax, slop_list_owl2_RawConcept cs);
 slop_list_owl2_RawAxiom gate_expand_sugar(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 uint8_t gate_has_negated_conjunct(owl2_RawConcept c);
 slop_list_owl2_RawConcept gate_conjuncts(slop_arena* arena, owl2_RawConcept c);
@@ -169,6 +174,11 @@ uint8_t gate_split_rewritable(types_Profile p, gate_NegSplit s);
 owl2_RawConcept gate_conjunction(slop_list_owl2_RawConcept cs);
 owl2_RawConcept gate_with_conjunct(slop_arena* arena, owl2_RawConcept c, owl2_RawConcept e);
 owl2_RawAxiom gate_empty_axiom(slop_arena* arena, owl2_RawConcept c);
+slop_option_gate_NegSplit gate_sub_negation_split(slop_arena* arena, types_Profile p, owl2_RawConcept l, owl2_RawConcept r);
+slop_option_gate_NegSplit gate_role_negation_split(slop_arena* arena, types_Profile p, types_RoleId r, owl2_RawConcept c);
+slop_list_owl2_RawAxiom gate_push_sub_pieces(slop_arena* arena, slop_list_owl2_RawAxiom out, owl2_RawConcept* l, gate_NegSplit s);
+slop_list_owl2_RawAxiom gate_push_domain_pieces(slop_arena* arena, slop_list_owl2_RawAxiom out, types_RoleId r, gate_NegSplit s);
+slop_list_owl2_RawAxiom gate_push_range_pieces(slop_arena* arena, slop_list_owl2_RawAxiom out, types_RoleId r, gate_NegSplit s);
 slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, types_Profile p, slop_list_owl2_RawAxiom axs);
 uint8_t gate_is_top_role(types_RoleId r);
 uint8_t gate_is_inverse_role(types_RoleId r);
@@ -186,6 +196,7 @@ slop_list_owl2_RawAxiom gate_admitted(slop_arena* arena, types_Profile p, slop_l
 uint8_t gate_is_rbox_axiom(owl2_RawAxiom ax);
 uint8_t gate_axiom_range_ok(slop_list_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_types_RoleId roles, owl2_RawAxiom ax);
 gate_GateResult gate_gate_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, owl2_Signature sig, slop_list_types_Omission carried, types_Profile p);
+uint8_t gate_rbox_omits(uint8_t sriq, uint8_t rbox_bad, owl2_RawAxiom ax);
 slop_list_owl2_RawAxiom gate_sort_axioms(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 slop_list_string gate_axiom_texts(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 owl2_RawAxiom gate_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i);
@@ -196,11 +207,18 @@ slop_list_types_RoleId gate_sort_roles(slop_arena* arena, slop_list_types_RoleId
 types_RoleId gate_role_at(slop_list_types_RoleId xs, int64_t i);
 slop_list_u8 gate_mat_new(slop_arena* arena, int64_t cells);
 uint8_t gate_mat_get(slop_list_u8 m, int64_t i);
+uint8_t gate_mat_or_row(slop_list_u8 m, int64_t n, int64_t k, int64_t i);
+uint8_t gate_mat_close_through(slop_list_u8 m, int64_t n, int64_t k);
 uint8_t gate_mat_close(slop_list_u8 m, int64_t n);
 slop_list_u8 gate_told_closure(slop_arena* arena, slop_list_owl2_RawAxiom axs, slop_list_types_RoleId roles, int64_t n);
 int64_t gate_candidate_size(owl2_RawChain ch, int64_t from, int64_t to);
+uint8_t gate_seen_before(slop_list_types_RoleId steps, int64_t from, int64_t i);
 uint8_t gate_add_chain_constraints(owl2_RawChain ch, slop_list_types_RoleId roles, int64_t n, slop_list_u8 cmat, int64_t from, int64_t to);
 slop_string gate_describe_violation(slop_arena* arena, slop_list_types_RoleId roles, int64_t i, int64_t j);
+uint8_t gate_add_dominant_case(owl2_RawChain ch, slop_list_types_RoleId roles, int64_t n, slop_list_u8 cmat, int64_t len, uint8_t left_ok, uint8_t right_ok);
+uint8_t gate_add_case_constraints(owl2_RawChain ch, slop_list_types_RoleId roles, int64_t n, slop_list_u8 cmat);
+int64_t gate_row_violation(slop_list_u8 cmat, slop_list_u8 told, int64_t n, int64_t i);
+gate_RboxVerdict gate_regularity_verdict(slop_arena* arena, slop_list_types_RoleId roles, slop_list_u8 cmat, slop_list_u8 told, int64_t n);
 gate_RboxVerdict gate_check_regularity(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 slop_list_gate_RangeEntry gate_collect_ranges(slop_arena* arena, slop_list_owl2_RawAxiom axs, slop_list_types_RoleId roles);
 uint8_t gate_has_inherited_range(slop_list_gate_RangeEntry entries, slop_list_u8 told, int64_t n, int64_t base, owl2_RawConcept c);
@@ -210,6 +228,8 @@ slop_list_rdf_IRI gate_collect_concept_classes(slop_arena* arena, owl2_RawConcep
 slop_list_gate_EntityRef gate_collect_entity_refs(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 uint8_t gate_entity_ref_declared(owl2_Signature sig, gate_EntityRef e);
 uint8_t gate_same_entity(gate_EntityRef a, gate_EntityRef b);
+uint8_t gate_has_entity(slop_list_gate_EntityRef seen, gate_EntityRef e);
+types_Omission gate_missing_declaration_of(slop_arena* arena, gate_EntityRef e, slop_list_gate_EntityRef refs);
 slop_list_types_Omission gate_missing_declarations(slop_arena* arena, owl2_Signature sig, slop_list_gate_EntityRef refs);
 
 #ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
