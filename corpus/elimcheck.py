@@ -41,12 +41,14 @@ STAGES = ("s0", "s1", "s2")
 LEGS = (("input", "s0"), ("s0", "s1"), ("s1", "s2"))
 # The ontologies HermiT can decide at every stage. RO and OBI are not: each
 # one's S1 document was still unclassified after an hour of HermiT
-# (2026-10-09), so their S1 is checked by the invariants and the determinism
+# (2026-10-09), and after six hours in its own JVM (2026-10-10, the `long`
+# mode below), so their S1 is checked by the invariants and the determinism
 # tests, not by HermiT. HermiT classifies every class of a stage document,
 # fresh names included, which is what grows.
 CORPUS = ("bfo-core-2024-02-07", "cco-2024-11-06")
 RECORD_NOTE = ("# RO and OBI are not run against HermiT: it did not classify their S1 documents "
-               "within an hour (2026-10-09); see CORPUS in corpus/elimcheck.py. S1's invariants "
+               "within six hours (2026-10-10, corpus/elim-differential-long.txt); see CORPUS in "
+               "corpus/elimcheck.py. S1's invariants "
                "run on every vendored ontology below.")
 # S1's invariants (sriq-s1-invariants) run on every vendored ontology, the ones
 # beyond HermiT included.
@@ -68,7 +70,8 @@ def invariant_lines():
     return lines, bad
 # The long run: the ontologies whose stages HermiT needs hours for. Each
 # document gets its own JVM and budget, two at a time, S0s first, so a slow S1
-# never holds up the rest. Recorded in corpus/elim-differential-long.txt.
+# never holds up the rest; an S2 runs only once its S1 has a report.
+# Recorded in corpus/elim-differential-long.txt.
 LONG = tuple(os.environ.get("ELIM_LONG_INPUTS", "ro-2025-12-17,obi-2026-07-27").split(","))
 LONG_TIMEOUT = int(os.environ.get("ELIM_LONG_TIMEOUT", str(6 * 3600)))  # seconds per document
 LONG_WORKERS = int(os.environ.get("ELIM_LONG_WORKERS", "2"))
@@ -322,17 +325,30 @@ def long_check():
     for doc, (t, err) in ttl.items():
         if t is None:
             raise HarnessError(f"the oracle refused HOWL's document {doc}: {err}")
-    jobs = [plan[n][1][stage] for stage in ("s0", "s1", "s2") for n in LONG]
+    def run(doc):
+        return oracle_one(ttl[doc][0], os.path.join(WORK, "oracle", os.path.basename(doc)), LONG_TIMEOUT)
+
+    def s1_then_s2(stages):
+        # S2 serves only the s1~s2 leg: without S1's report it would spend its budget for nothing.
+        s1 = run(stages["s1"])
+        return s1, run(stages["s2"]) if s1[0] is not None else (None, "s1 has no oracle", None)
+
     with ThreadPoolExecutor(max_workers=LONG_WORKERS) as pool:
-        futures = {doc: pool.submit(oracle_one, ttl[doc][0],
-                                    os.path.join(WORK, "oracle", os.path.basename(doc)), LONG_TIMEOUT)
-                   for doc in jobs}
-        results = {doc: f.result() for doc, f in futures.items()}
+        s0 = {n: pool.submit(run, plan[n][1]["s0"]) for n in LONG}
+        rest = {n: pool.submit(s1_then_s2, plan[n][1]) for n in LONG}
+        results = {}
+        for n in LONG:
+            stages = plan[n][1]
+            results[stages["s0"]] = s0[n].result()
+            results[stages["s1"]], results[stages["s2"]] = rest[n].result()
     lines, bad = [], 0
     for n in LONG:
         classes, stages = plan[n]
         for stage in ("s0", "s1", "s2"):
             r, err, took = results[stages[stage]]
+            if took is None:
+                lines.append(f"vendor-{n} {stage}: not run ({err})")
+                continue
             lines.append(f"vendor-{n} {stage}: hermit {took / 3600:.2f} h" + (f" ({err})" if err else ""))
         for a, b in (("s0", "s1"), ("s1", "s2")):
             ra, wa, _ = results[stages[a]]

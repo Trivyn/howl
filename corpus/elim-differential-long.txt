@@ -1,0 +1,12 @@
+# RO and OBI against HermiT, one JVM per document (24g, 6 h budget each); see `make diff-elim-long`.
+# Run 2026-10-09 23:00 to 2026-10-10 05:01. Each s2 JVM was stopped as it started (exit 143), because its s1 had timed out and s1~s2 needs s1's report; elimcheck now skips such an s2 itself.
+vendor-ro-2025-12-17 s0: hermit 0.00 h
+vendor-ro-2025-12-17 s1: hermit 6.00 h (hermit did not finish within 21600s)
+vendor-ro-2025-12-17 s2: hermit 0.00 h (exit 143)
+vendor-ro-2025-12-17 s0~s1: no oracle (hermit did not finish within 21600s)
+vendor-ro-2025-12-17 s1~s2: no oracle (hermit did not finish within 21600s)
+vendor-obi-2026-07-27 s0: hermit 0.01 h
+vendor-obi-2026-07-27 s1: hermit 6.00 h (hermit did not finish within 21600s)
+vendor-obi-2026-07-27 s2: hermit 0.00 h (exit 143)
+vendor-obi-2026-07-27 s0~s1: no oracle (hermit did not finish within 21600s)
+vendor-obi-2026-07-27 s1~s2: no oracle (hermit did not finish within 21600s)
