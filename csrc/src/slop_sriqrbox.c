@@ -54,9 +54,9 @@ uint8_t sriqrbox_sriq_concept_simple(sriqrbox_SriqRbox rb, owl2_RawConcept c);
 uint8_t sriqrbox_sriq_concepts_simple(sriqrbox_SriqRbox rb, slop_list_owl2_RawConcept cs);
 uint8_t sriqrbox_sriq_axiom_simple(sriqrbox_SriqRbox rb, owl2_RawAxiom ax);
 
-typedef struct { slop_list_types_RoleId xs; } sriqrbox__lambda_342_env_t;
+typedef struct { slop_list_types_RoleId xs; } sriqrbox__lambda_344_env_t;
 
-static int64_t sriqrbox__lambda_342(sriqrbox__lambda_342_env_t* _env, int64_t i, int64_t j) { return canon_role_cmp(sriqrbox_prop_at(_env->xs, i), sriqrbox_prop_at(_env->xs, j)); }
+static int64_t sriqrbox__lambda_344(sriqrbox__lambda_344_env_t* _env, int64_t i, int64_t j) { return canon_role_cmp(sriqrbox_prop_at(_env->xs, i), sriqrbox_prop_at(_env->xs, j)); }
 
 int64_t sriqrbox_prop_idx(slop_list_types_RoleId props, types_RoleId r) {
     {
@@ -83,11 +83,11 @@ uint8_t sriqrbox_prop_new(slop_list_types_RoleId props, types_RoleId r) {
 types_RoleId sriqrbox_prop_at(slop_list_types_RoleId xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_341 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_341.has_value) {
-        __auto_type v = _mv_341.value;
+    __auto_type _mv_343 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_343.has_value) {
+        __auto_type v = _mv_343.value;
         return v;
-    } else if (!_mv_341.has_value) {
+    } else if (!_mv_343.has_value) {
         return ((types_RoleId){ .tag = types_RoleId_fresh_role, .data.fresh_role = 0 });
     }
     SLOP_UNREACHABLE();
@@ -95,7 +95,7 @@ types_RoleId sriqrbox_prop_at(slop_list_types_RoleId xs, int64_t i) {
 
 slop_list_types_RoleId sriqrbox_sort_props(slop_arena* arena, slop_list_types_RoleId xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sriqrbox__lambda_342_env_t* sriqrbox__lambda_342_env = (sriqrbox__lambda_342_env_t*)slop_arena_alloc(arena, sizeof(sriqrbox__lambda_342_env_t)); *sriqrbox__lambda_342_env = (sriqrbox__lambda_342_env_t){ .xs = xs }; (slop_closure_t){ (void*)sriqrbox__lambda_342, (void*)sriqrbox__lambda_342_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sriqrbox__lambda_344_env_t* sriqrbox__lambda_344_env = (sriqrbox__lambda_344_env_t*)slop_arena_alloc(arena, sizeof(sriqrbox__lambda_344_env_t)); *sriqrbox__lambda_344_env = (sriqrbox__lambda_344_env_t){ .xs = xs }; (slop_closure_t){ (void*)sriqrbox__lambda_344, (void*)sriqrbox__lambda_344_env }; }));
         __auto_type out = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -121,11 +121,11 @@ slop_list_u8 sriqrbox_bools_new(slop_arena* arena, int64_t n) {
 }
 
 uint8_t sriqrbox_bool_at(slop_list_u8 m, int64_t i) {
-    __auto_type _mv_343 = ({ __auto_type _lst = m; size_t _idx = (size_t)i; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_343.has_value) {
-        __auto_type v = _mv_343.value;
+    __auto_type _mv_345 = ({ __auto_type _lst = m; size_t _idx = (size_t)i; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_345.has_value) {
+        __auto_type v = _mv_345.value;
         return v;
-    } else if (!_mv_343.has_value) {
+    } else if (!_mv_345.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -138,21 +138,21 @@ types_RoleId sriqrbox_node_role(slop_list_types_RoleId props, int64_t n) {
         if ((n % 2) == 0) {
             return p;
         } else {
-            __auto_type _mv_344 = p;
-            switch (_mv_344.tag) {
+            __auto_type _mv_346 = p;
+            switch (_mv_346.tag) {
                 case types_RoleId_named_role:
                 {
-                    __auto_type i = _mv_344.data.named_role;
+                    __auto_type i = _mv_346.data.named_role;
                     return ((types_RoleId){ .tag = types_RoleId_inverse_role, .data.inverse_role = i });
                 }
                 case types_RoleId_inverse_role:
                 {
-                    __auto_type i = _mv_344.data.inverse_role;
+                    __auto_type i = _mv_346.data.inverse_role;
                     return ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i });
                 }
                 case types_RoleId_fresh_role:
                 {
-                    __auto_type _ = _mv_344.data.fresh_role;
+                    __auto_type _ = _mv_346.data.fresh_role;
                     return p;
                 }
             }
@@ -174,11 +174,11 @@ slop_list_int sriqrbox_ints_new(slop_arena* arena, int64_t n, int64_t v) {
 }
 
 int64_t sriqrbox_int_at(slop_list_int xs, int64_t i) {
-    __auto_type _mv_345 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_345.has_value) {
-        __auto_type v = _mv_345.value;
+    __auto_type _mv_347 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_347.has_value) {
+        __auto_type v = _mv_347.value;
         return v;
-    } else if (!_mv_345.has_value) {
+    } else if (!_mv_347.has_value) {
         return -1;
     }
     SLOP_UNREACHABLE();
@@ -200,11 +200,11 @@ int64_t sriqrbox_inv_node(int64_t n) {
 }
 
 int64_t sriqrbox_sriq_node(slop_list_types_RoleId props, types_RoleId r) {
-    __auto_type _mv_346 = r;
-    switch (_mv_346.tag) {
+    __auto_type _mv_348 = r;
+    switch (_mv_348.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type _ = _mv_346.data.named_role;
+            __auto_type _ = _mv_348.data.named_role;
             {
                 __auto_type k = sriqrbox_prop_idx(props, r);
                 if (k < 0) {
@@ -216,7 +216,7 @@ int64_t sriqrbox_sriq_node(slop_list_types_RoleId props, types_RoleId r) {
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type i = _mv_346.data.inverse_role;
+            __auto_type i = _mv_348.data.inverse_role;
             {
                 __auto_type k = sriqrbox_prop_idx(props, ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i }));
                 if (k < 0) {
@@ -228,7 +228,7 @@ int64_t sriqrbox_sriq_node(slop_list_types_RoleId props, types_RoleId r) {
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_346.data.fresh_role;
+            __auto_type _ = _mv_348.data.fresh_role;
             return -1;
         }
     }
@@ -236,21 +236,21 @@ int64_t sriqrbox_sriq_node(slop_list_types_RoleId props, types_RoleId r) {
 }
 
 slop_option_types_RoleId sriqrbox_property_of(types_RoleId r) {
-    __auto_type _mv_347 = r;
-    switch (_mv_347.tag) {
+    __auto_type _mv_349 = r;
+    switch (_mv_349.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type _ = _mv_347.data.named_role;
+            __auto_type _ = _mv_349.data.named_role;
             return (slop_option_types_RoleId){.has_value = 1, .value = r};
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type i = _mv_347.data.inverse_role;
+            __auto_type i = _mv_349.data.inverse_role;
             return (slop_option_types_RoleId){.has_value = 1, .value = ((types_RoleId){ .tag = types_RoleId_named_role, .data.named_role = i })};
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_347.data.fresh_role;
+            __auto_type _ = _mv_349.data.fresh_role;
             return (slop_option_types_RoleId){.has_value = false};
         }
     }
@@ -260,19 +260,19 @@ slop_option_types_RoleId sriqrbox_property_of(types_RoleId r) {
 slop_list_types_RoleId sriqrbox_ria_roles(slop_arena* arena, owl2_RawAxiom ax) {
     {
         __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_348 = ax;
-        switch (_mv_348.tag) {
+        __auto_type _mv_350 = ax;
+        switch (_mv_350.tag) {
             case owl2_RawAxiom_ra_sub_object_property:
             {
-                __auto_type a = _mv_348.data.ra_sub_object_property.f0;
-                __auto_type b = _mv_348.data.ra_sub_object_property.f1;
+                __auto_type a = _mv_350.data.ra_sub_object_property.f0;
+                __auto_type b = _mv_350.data.ra_sub_object_property.f1;
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
             case owl2_RawAxiom_ra_property_chain:
             {
-                __auto_type ch = _mv_348.data.ra_property_chain;
+                __auto_type ch = _mv_350.data.ra_property_chain;
                 {
                     __auto_type _coll = ch.steps;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -285,7 +285,7 @@ slop_list_types_RoleId sriqrbox_ria_roles(slop_arena* arena, owl2_RawAxiom ax) {
             }
             case owl2_RawAxiom_ra_equivalent_properties:
             {
-                __auto_type xs = _mv_348.data.ra_equivalent_properties;
+                __auto_type xs = _mv_350.data.ra_equivalent_properties;
                 {
                     __auto_type _coll = xs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -297,16 +297,16 @@ slop_list_types_RoleId sriqrbox_ria_roles(slop_arena* arena, owl2_RawAxiom ax) {
             }
             case owl2_RawAxiom_ra_inverse_properties:
             {
-                __auto_type a = _mv_348.data.ra_inverse_properties.f0;
-                __auto_type b = _mv_348.data.ra_inverse_properties.f1;
+                __auto_type a = _mv_350.data.ra_inverse_properties.f0;
+                __auto_type b = _mv_350.data.ra_inverse_properties.f1;
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (b); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
             case owl2_RawAxiom_ra_property_characteristic:
             {
-                __auto_type c = _mv_348.data.ra_property_characteristic.f0;
-                __auto_type r = _mv_348.data.ra_property_characteristic.f1;
+                __auto_type c = _mv_350.data.ra_property_characteristic.f0;
+                __auto_type r = _mv_350.data.ra_property_characteristic.f1;
                 if (c == owl2_PropCharacteristic_prop_symmetric) {
                     ({ __auto_type _lst_p = &(rs); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
@@ -321,20 +321,20 @@ slop_list_types_RoleId sriqrbox_ria_roles(slop_arena* arena, owl2_RawAxiom ax) {
 }
 
 uint8_t sriqrbox_is_sriq_ria(owl2_RawAxiom ax) {
-    __auto_type _mv_349 = ax;
-    switch (_mv_349.tag) {
+    __auto_type _mv_351 = ax;
+    switch (_mv_351.tag) {
         case owl2_RawAxiom_ra_sub_object_property:
         {
             return 1;
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type _ = _mv_349.data.ra_property_chain;
+            __auto_type _ = _mv_351.data.ra_property_chain;
             return 1;
         }
         case owl2_RawAxiom_ra_equivalent_properties:
         {
-            __auto_type _ = _mv_349.data.ra_equivalent_properties;
+            __auto_type _ = _mv_351.data.ra_equivalent_properties;
             return 1;
         }
         case owl2_RawAxiom_ra_inverse_properties:
@@ -343,7 +343,7 @@ uint8_t sriqrbox_is_sriq_ria(owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_property_characteristic:
         {
-            __auto_type c = _mv_349.data.ra_property_characteristic.f0;
+            __auto_type c = _mv_351.data.ra_property_characteristic.f0;
             return (c == owl2_PropCharacteristic_prop_symmetric);
         }
         default: {
@@ -363,13 +363,13 @@ slop_list_types_RoleId sriqrbox_sriq_props(slop_arena* arena, slop_list_owl2_Raw
                     __auto_type _coll = sriqrbox_ria_roles(arena, ax);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type r = _coll.data[_i];
-                        __auto_type _mv_350 = sriqrbox_property_of(r);
-                        if (_mv_350.has_value) {
-                            __auto_type pr = _mv_350.value;
+                        __auto_type _mv_352 = sriqrbox_property_of(r);
+                        if (_mv_352.has_value) {
+                            __auto_type pr = _mv_352.value;
                             if (sriqrbox_prop_new(ps, pr)) {
                                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (pr); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
-                        } else if (!_mv_350.has_value) {
+                        } else if (!_mv_352.has_value) {
                         }
                     }
                 }
@@ -465,34 +465,34 @@ slop_list_sriqrbox_Ria sriqrbox_rias_symmetric(slop_arena* arena, slop_list_type
 }
 
 slop_list_sriqrbox_Ria sriqrbox_rias_of(slop_arena* arena, slop_list_types_RoleId props, owl2_RawAxiom ax) {
-    __auto_type _mv_351 = ax;
-    switch (_mv_351.tag) {
+    __auto_type _mv_353 = ax;
+    switch (_mv_353.tag) {
         case owl2_RawAxiom_ra_sub_object_property:
         {
-            __auto_type a = _mv_351.data.ra_sub_object_property.f0;
-            __auto_type b = _mv_351.data.ra_sub_object_property.f1;
+            __auto_type a = _mv_353.data.ra_sub_object_property.f0;
+            __auto_type b = _mv_353.data.ra_sub_object_property.f1;
             return sriqrbox_rias_sub(arena, props, a, b);
         }
         case owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type ch = _mv_351.data.ra_property_chain;
+            __auto_type ch = _mv_353.data.ra_property_chain;
             return sriqrbox_rias_chain(arena, props, ch);
         }
         case owl2_RawAxiom_ra_equivalent_properties:
         {
-            __auto_type rs = _mv_351.data.ra_equivalent_properties;
+            __auto_type rs = _mv_353.data.ra_equivalent_properties;
             return sriqrbox_rias_equivalent(arena, props, rs);
         }
         case owl2_RawAxiom_ra_inverse_properties:
         {
-            __auto_type a = _mv_351.data.ra_inverse_properties.f0;
-            __auto_type b = _mv_351.data.ra_inverse_properties.f1;
+            __auto_type a = _mv_353.data.ra_inverse_properties.f0;
+            __auto_type b = _mv_353.data.ra_inverse_properties.f1;
             return sriqrbox_rias_inverse(arena, props, a, b);
         }
         case owl2_RawAxiom_ra_property_characteristic:
         {
-            __auto_type c = _mv_351.data.ra_property_characteristic.f0;
-            __auto_type r = _mv_351.data.ra_property_characteristic.f1;
+            __auto_type c = _mv_353.data.ra_property_characteristic.f0;
+            __auto_type r = _mv_353.data.ra_property_characteristic.f1;
             return sriqrbox_rias_symmetric(arena, props, c, r);
         }
         default: {
@@ -944,11 +944,11 @@ uint8_t sriqrbox_sriq_role_simple(sriqrbox_SriqRbox rb, types_RoleId r) {
     {
         __auto_type nd = sriqrbox_sriq_node(rb.props, r);
         if (nd < 0) {
-            __auto_type _mv_352 = sriqrbox_property_of(r);
-            if (_mv_352.has_value) {
-                __auto_type pr = _mv_352.value;
+            __auto_type _mv_354 = sriqrbox_property_of(r);
+            if (_mv_354.has_value) {
+                __auto_type pr = _mv_354.value;
                 return !(sriqrbox_is_bottom_role(pr));
-            } else if (!_mv_352.has_value) {
+            } else if (!_mv_354.has_value) {
                 return 1;
             }
             SLOP_UNREACHABLE();
@@ -959,21 +959,21 @@ uint8_t sriqrbox_sriq_role_simple(sriqrbox_SriqRbox rb, types_RoleId r) {
 }
 
 uint8_t sriqrbox_is_bottom_role(types_RoleId r) {
-    __auto_type _mv_353 = r;
-    switch (_mv_353.tag) {
+    __auto_type _mv_355 = r;
+    switch (_mv_355.tag) {
         case types_RoleId_named_role:
         {
-            __auto_type i = _mv_353.data.named_role;
+            __auto_type i = _mv_355.data.named_role;
             return (canon_string_cmp(i.value, vocab_OWL_BOTTOM_OBJECT_PROPERTY) == 0);
         }
         case types_RoleId_inverse_role:
         {
-            __auto_type i = _mv_353.data.inverse_role;
+            __auto_type i = _mv_355.data.inverse_role;
             return (canon_string_cmp(i.value, vocab_OWL_BOTTOM_OBJECT_PROPERTY) == 0);
         }
         case types_RoleId_fresh_role:
         {
-            __auto_type _ = _mv_353.data.fresh_role;
+            __auto_type _ = _mv_355.data.fresh_role;
             return 0;
         }
     }
@@ -981,47 +981,47 @@ uint8_t sriqrbox_is_bottom_role(types_RoleId r) {
 }
 
 uint8_t sriqrbox_sriq_concept_simple(sriqrbox_SriqRbox rb, owl2_RawConcept c) {
-    __auto_type _mv_354 = c;
-    switch (_mv_354.tag) {
+    __auto_type _mv_356 = c;
+    switch (_mv_356.tag) {
         case owl2_RawConcept_rc_card:
         {
-            __auto_type r = _mv_354.data.rc_card.f1;
+            __auto_type r = _mv_356.data.rc_card.f1;
             return sriqrbox_sriq_role_simple(rb, r);
         }
         case owl2_RawConcept_rc_qcard:
         {
-            __auto_type r = _mv_354.data.rc_qcard.f1;
-            __auto_type f = _mv_354.data.rc_qcard.f3;
+            __auto_type r = _mv_356.data.rc_qcard.f1;
+            __auto_type f = _mv_356.data.rc_qcard.f3;
             return (sriqrbox_sriq_role_simple(rb, r) && sriqrbox_sriq_concept_simple(rb, (*f)));
         }
         case owl2_RawConcept_rc_has_self:
         {
-            __auto_type r = _mv_354.data.rc_has_self;
+            __auto_type r = _mv_356.data.rc_has_self;
             return sriqrbox_sriq_role_simple(rb, r);
         }
         case owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_354.data.rc_and;
+            __auto_type cs = _mv_356.data.rc_and;
             return sriqrbox_sriq_concepts_simple(rb, cs);
         }
         case owl2_RawConcept_rc_or:
         {
-            __auto_type cs = _mv_354.data.rc_or;
+            __auto_type cs = _mv_356.data.rc_or;
             return sriqrbox_sriq_concepts_simple(rb, cs);
         }
         case owl2_RawConcept_rc_not:
         {
-            __auto_type f = _mv_354.data.rc_not;
+            __auto_type f = _mv_356.data.rc_not;
             return sriqrbox_sriq_concept_simple(rb, (*f));
         }
         case owl2_RawConcept_rc_some:
         {
-            __auto_type f = _mv_354.data.rc_some.f1;
+            __auto_type f = _mv_356.data.rc_some.f1;
             return sriqrbox_sriq_concept_simple(rb, (*f));
         }
         case owl2_RawConcept_rc_all:
         {
-            __auto_type f = _mv_354.data.rc_all.f1;
+            __auto_type f = _mv_356.data.rc_all.f1;
             return sriqrbox_sriq_concept_simple(rb, (*f));
         }
         default: {
@@ -1047,48 +1047,48 @@ uint8_t sriqrbox_sriq_concepts_simple(sriqrbox_SriqRbox rb, slop_list_owl2_RawCo
 }
 
 uint8_t sriqrbox_sriq_axiom_simple(sriqrbox_SriqRbox rb, owl2_RawAxiom ax) {
-    __auto_type _mv_355 = ax;
-    switch (_mv_355.tag) {
+    __auto_type _mv_357 = ax;
+    switch (_mv_357.tag) {
         case owl2_RawAxiom_ra_sub_class_of:
         {
-            __auto_type l = _mv_355.data.ra_sub_class_of.f0;
-            __auto_type r = _mv_355.data.ra_sub_class_of.f1;
+            __auto_type l = _mv_357.data.ra_sub_class_of.f0;
+            __auto_type r = _mv_357.data.ra_sub_class_of.f1;
             return (sriqrbox_sriq_concept_simple(rb, (*l)) && sriqrbox_sriq_concept_simple(rb, (*r)));
         }
         case owl2_RawAxiom_ra_equivalent_classes:
         {
-            __auto_type cs = _mv_355.data.ra_equivalent_classes;
+            __auto_type cs = _mv_357.data.ra_equivalent_classes;
             return sriqrbox_sriq_concepts_simple(rb, cs);
         }
         case owl2_RawAxiom_ra_disjoint_classes:
         {
-            __auto_type cs = _mv_355.data.ra_disjoint_classes;
+            __auto_type cs = _mv_357.data.ra_disjoint_classes;
             return sriqrbox_sriq_concepts_simple(rb, cs);
         }
         case owl2_RawAxiom_ra_object_property_domain:
         {
-            __auto_type c = _mv_355.data.ra_object_property_domain.f1;
+            __auto_type c = _mv_357.data.ra_object_property_domain.f1;
             return sriqrbox_sriq_concept_simple(rb, (*c));
         }
         case owl2_RawAxiom_ra_object_property_range:
         {
-            __auto_type c = _mv_355.data.ra_object_property_range.f1;
+            __auto_type c = _mv_357.data.ra_object_property_range.f1;
             return sriqrbox_sriq_concept_simple(rb, (*c));
         }
         case owl2_RawAxiom_ra_class_assertion:
         {
-            __auto_type ca = _mv_355.data.ra_class_assertion;
+            __auto_type ca = _mv_357.data.ra_class_assertion;
             return sriqrbox_sriq_concept_simple(rb, (*ca.concept));
         }
         case owl2_RawAxiom_ra_disjoint_union:
         {
-            __auto_type du = _mv_355.data.ra_disjoint_union;
+            __auto_type du = _mv_357.data.ra_disjoint_union;
             return sriqrbox_sriq_concepts_simple(rb, du.members);
         }
         case owl2_RawAxiom_ra_property_characteristic:
         {
-            __auto_type c = _mv_355.data.ra_property_characteristic.f0;
-            __auto_type r = _mv_355.data.ra_property_characteristic.f1;
+            __auto_type c = _mv_357.data.ra_property_characteristic.f0;
+            __auto_type r = _mv_357.data.ra_property_characteristic.f1;
             if ((c == owl2_PropCharacteristic_prop_functional) || ((c == owl2_PropCharacteristic_prop_inverse_functional) || ((c == owl2_PropCharacteristic_prop_irreflexive) || (c == owl2_PropCharacteristic_prop_asymmetric)))) {
                 return sriqrbox_sriq_role_simple(rb, r);
             } else {
@@ -1097,7 +1097,7 @@ uint8_t sriqrbox_sriq_axiom_simple(sriqrbox_SriqRbox rb, owl2_RawAxiom ax) {
         }
         case owl2_RawAxiom_ra_disjoint_properties:
         {
-            __auto_type rs = _mv_355.data.ra_disjoint_properties;
+            __auto_type rs = _mv_357.data.ra_disjoint_properties;
             {
                 uint8_t ok = 1;
                 {

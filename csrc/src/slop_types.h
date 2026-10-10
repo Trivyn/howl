@@ -20,6 +20,9 @@ typedef struct types_Dl1 types_Dl1;
 typedef struct types_Dl2 types_Dl2;
 typedef struct types_Dl4 types_Dl4;
 typedef struct types_DlClause types_DlClause;
+typedef struct types_ATerm types_ATerm;
+typedef struct types_Lit types_Lit;
+typedef struct types_Clause types_Clause;
 typedef struct types_KElem types_KElem;
 typedef struct types_KFact types_KFact;
 typedef struct types_Derived types_Derived;
@@ -45,6 +48,22 @@ typedef struct types_Fault types_Fault;
 typedef struct types_ProfileSelection types_ProfileSelection;
 typedef struct types_ReasonerConfig types_ReasonerConfig;
 typedef struct types_Names types_Names;
+
+typedef enum {
+    types_AKind_ak_x,
+    types_AKind_ak_y,
+    types_AKind_ak_z,
+    types_AKind_ak_fx,
+    types_AKind_ak_u,
+    types_AKind_ak_fu
+} types_AKind;
+
+typedef enum {
+    types_LitForm_lf_unary,
+    types_LitForm_lf_binary,
+    types_LitForm_lf_eq,
+    types_LitForm_lf_neq
+} types_LitForm;
 
 typedef enum {
     types_EntityKind_entity_class,
@@ -458,6 +477,49 @@ typedef struct types_DlClause types_DlClause;
 #ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
 #define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
 SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
+#endif
+
+struct types_ATerm {
+    types_AKind kind;
+    uint32_t fsym;
+    uint32_t cst;
+    uint32_t zi;
+};
+typedef struct types_ATerm types_ATerm;
+
+#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+struct types_Lit {
+    types_LitForm form;
+    uint32_t pred;
+    types_ATerm t1;
+    types_ATerm t2;
+};
+typedef struct types_Lit types_Lit;
+
+#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
+#define SLOP_OPTION_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#endif
+
+#ifndef SLOP_LIST_TYPES_LIT_DEFINED
+#define SLOP_LIST_TYPES_LIT_DEFINED
+#define SLOP_LIST_TYPES_LIT_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Lit, slop_list_types_Lit)
+#endif
+
+struct types_Clause {
+    slop_list_types_Lit body;
+    slop_list_types_Lit head;
+};
+typedef struct types_Clause types_Clause;
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
 #endif
 
 typedef enum {
@@ -1075,6 +1137,24 @@ types_KElem types_aux_elem(int64_t w);
 types_KElem types_class_elem(types_KName q);
 types_KTerm types_thing_term(void);
 types_KTerm types_nothing_term(void);
+types_ATerm types_at_x(void);
+types_ATerm types_at_y(void);
+types_ATerm types_at_z(uint32_t i);
+types_ATerm types_at_fx(uint32_t f);
+types_ATerm types_at_u(uint32_t u);
+types_ATerm types_at_fu(uint32_t f, uint32_t u);
+int64_t types_ord_int(int64_t a, int64_t b);
+int64_t types_akind_rank(types_AKind k);
+int64_t types_aterm_cmp(types_ATerm a, types_ATerm b);
+uint8_t types_aterm_eq(types_ATerm a, types_ATerm b);
+types_Lit types_atom1(uint32_t b, types_ATerm t);
+types_Lit types_atom2(uint32_t s, types_ATerm l, types_ATerm r);
+types_Lit types_oriented(types_LitForm form, types_ATerm s, types_ATerm t);
+types_Lit types_eq_lit(types_ATerm s, types_ATerm t);
+types_Lit types_neq_lit(types_ATerm s, types_ATerm t);
+int64_t types_lit_form_rank(types_LitForm f);
+int64_t types_lit_cmp(types_Lit a, types_Lit b);
+uint8_t types_lit_eq(types_Lit a, types_Lit b);
 types_Names types_empty_names(slop_arena* arena);
 types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n);
 types_RoleId types_intern_role(slop_arena* arena, types_Names names, types_RoleId r);
@@ -1163,6 +1243,21 @@ SLOP_OPTION_DEFINE(types_Dl4, slop_option_types_Dl4)
 #ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
 #define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
 SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
+#define SLOP_OPTION_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KELEM_DEFINED
