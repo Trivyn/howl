@@ -1,0 +1,382 @@
+;; ============================================================
+;; sriq's context order  —  SPEC.md §5.5 S5; [TGH21] Definition 7, §4.2
+;; and Appendix A
+;;
+;; ONE ORDER FOR EVERY CONTEXT: Sequoia's. It is the least order on
+;; context terms containing the lexicographic path order induced by ⋗ on
+;; a-terms and §4.2's seven comparisons:
+;;   1. x ≻ y;
+;;   2. f(x) ≻ g(x) when f ⋗ g;
+;;   3. f(x) ≻ s for each constant s, and for x and y;
+;;   4. s ≻ true for every context term s other than true;
+;;   5. A ≻ x and A ≻ y for every p-term A;
+;;   6. A ≻ s when some proper subterm of A is ⪰ s;
+;;   7. A₁ ≻ A₂ when A₂ is A₁ with a-terms replaced by smaller ones.
+;; Appendix A shows that set is already transitive, so the order is a
+;; finite case table over the flat a-term shapes, written out below. Two
+;; things follow from it and are relied on: x and y are never compared
+;; with a constant (Def. 7(3)), and two p-terms are compared only when
+;; one is the other with smaller a-terms, so distinct class names are
+;; never ordered against each other (S5).
+;;
+;; ⋗ on Σf ∪ Σu (S5; "the greater id is the greater" throughout):
+;;   - every function symbol is above every constant;
+;;   - function symbols by id;
+;;   - constants by label length, then base individual (whose ids are in
+;;     IRI order), then label, lexicographically from the base, a letter
+;;     S^i by S's id and then by i.
+;; That is a-admissible (Def. 7): a longer label is greater.
+;;
+;; Literals compare as multisets (§2.1): A as {A, true}, s ≈ t as
+;; {s, t}, s ≉ t as {s, s, t, t}, under the multiset extension. L is
+;; maximal in Γ → Δ ∨ L when Δ ⊁ L: no literal of Δ is ≻ L (Table 2;
+;; the text extraction loses the symbol, the PDF reads ⊁).
+;;
+;; The test binary checks the table against the definition: it builds
+;; the least order by closure over a bounded universe of context terms
+;; (test-sriq-order-closure) and requires the table to equal it.
+;; ============================================================
+
+(module sriqorder
+  (@doc "sriq's context order: Sequoia's, as a case table (SPEC 5.5 S5, TGH21 Def. 7 and 4.2)")
+
+  (import types (AKind ATerm LitForm Lit at-x atom1))
+
+  (export ConstEntry SriqOrder CKind CTerm
+          named-consts aux-const const-entry
+          fn-gt const-gt aterm-gt pterm-gt cterm-gt
+          ct-true ct-a ct-p lit-ms lit-gt max-flags)
+
+  ;; A constant: a named individual (no label: its own base and parent),
+  ;; or Nom's o_{ρ·S^i}, which hangs from o_ρ by the letter S^i.
+  (type ConstEntry (record
+    (base   U32)     ; the individual the label hangs from
+    (parent U32)     ; o_ρ, for o_{ρ·S^i}; the constant itself when named
+    (srole  U32)     ; the letter's S, an S_{B₂}'s role id
+    (i      U32)     ; the letter's index
+    (len    U32)))   ; |ρ·S^i|; 0 when named
+
+  ;; What the order reads beyond the a-terms themselves: the constants.
+  (type SriqOrder (record
+    (consts (List ConstEntry))))   ; by constant id
+
+  ;; ============================================================
+  ;; The constants and ⋗
+  ;; ============================================================
+
+  (fn named-consts ((arena Arena) (n Int))
+    (@intent "The order's table for n named constants, ids 0 .. n − 1, none of them labelled")
+    (@spec ((Arena Int) -> SriqOrder))
+    (@alloc arena)
+    (let ((mut cs (list-new arena ConstEntry))
+          (mut k 0))
+      (do
+        (while (< k n)
+          (do (list-push cs (record-new ConstEntry (base (cast U32 k)) (parent (cast U32 k)) (srole (cast U32 0))
+                                                   (i (cast U32 0)) (len (cast U32 0))))
+              (set! k (+ k 1))))
+        (record-new SriqOrder (consts cs)))))
+
+  (fn aux-const ((p ConstEntry) (pid U32) (s U32) (i U32))
+    (@intent "o_{ρ·S^i} for the constant pid, o_ρ, whose entry is p")
+    (@spec ((ConstEntry U32 U32 U32) -> ConstEntry))
+    (@pure)
+    (record-new ConstEntry (base (. p base)) (parent pid) (srole s) (i i) (len (+ (. p len) (cast U32 1)))))
+
+  (fn const-entry ((ord SriqOrder) (u U32))
+    (@intent "Constant u's entry; an unlabelled one of its own when u is past the table")
+    (@spec ((SriqOrder U32) -> ConstEntry))
+    (@pure)
+    (match (list-get (. ord consts) (cast Int u))
+      ((some e) e)
+      ((none)   (record-new ConstEntry (base u) (parent u) (srole (cast U32 0)) (i (cast U32 0)) (len (cast U32 0))))))
+
+  (fn fn-gt ((f U32) (g U32))
+    (@intent "f ⋗ g on function symbols: the greater id")
+    (@spec ((U32 U32) -> Bool))
+    (@pure)
+    (@post (== $result (> f g)))
+    (> f g))
+
+  (fn cmp-u32 ((a U32) (b U32))
+    (@intent "-1, 0 or 1")
+    (@spec ((U32 U32) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn letter-cmp ((a ConstEntry) (b ConstEntry))
+    (@intent "Two labels' last letters S^i: by S, then by i")
+    (@spec ((ConstEntry ConstEntry) -> Int))
+    (@pure)
+    (if (!= (. a srole) (. b srole)) (cmp-u32 (. a srole) (. b srole)) (cmp-u32 (. a i) (. b i))))
+
+  (fn label-cmp ((ord SriqOrder) (a U32) (b U32))
+    (@intent "Two equally long labels on one base, lexicographically from the base")
+    (@spec ((SriqOrder U32 U32) -> Int))
+    (@pure)
+    ;; Walking both chains up from the last letter in lockstep, the last
+    ;; difference seen is the one nearest the base, which decides. A
+    ;; named constant is its own parent, so the walk stops there.
+    (let ((mut x a)
+          (mut y b)
+          (mut r 0)
+          (mut k (cast Int (. (const-entry ord a) len))))
+      (do
+        (while (> k 0)
+          (let ((ex (const-entry ord x))
+                (ey (const-entry ord y))
+                (c  (letter-cmp ex ey)))
+            (do (when (!= c 0) (set! r c))
+                (set! x (. ex parent))
+                (set! y (. ey parent))
+                (set! k (- k 1)))))
+        r)))
+
+  (fn const-gt ((ord SriqOrder) (a U32) (b U32))
+    (@intent "a ⋗ b on constants: the longer label, then the later base, then the later label")
+    (@spec ((SriqOrder U32 U32) -> Bool))
+    (@pure)
+    (@post (implies (== a b) (not $result)))
+    (if (== a b)
+      false
+      (let ((ea (const-entry ord a))
+            (eb (const-entry ord b)))
+        (cond
+          ((!= (. ea len) (. eb len))   (> (. ea len) (. eb len)))
+          ((!= (. ea base) (. eb base)) (> (. ea base) (. eb base)))
+          (else                         (> (label-cmp ord a b) 0))))))
+
+  ;; ============================================================
+  ;; a-terms: LPO induced by ⋗, with items 1 to 3. zᵢ is an ontology
+  ;; clause's variable and is never compared.
+  ;; ============================================================
+
+  (fn fx-over ((ord SriqOrder) (f U32) (b ATerm))
+    (@intent "f(x) ≻ b: above x, y, every constant and g(x) or g(u) for g below f")
+    (@spec ((SriqOrder U32 ATerm) -> Bool))
+    (@post (implies (or (== (. b kind) 'ak-x) (== (. b kind) 'ak-y) (== (. b kind) 'ak-u)) $result))
+    (@post (implies (== (. b kind) 'ak-fx) (== $result (> f (. b fsym)))))
+    (@post (implies (== (. b kind) 'ak-z) (not $result)))
+    (match (. b kind)
+      ('ak-x  true)
+      ('ak-y  true)
+      ('ak-z  false)
+      ('ak-fx (fn-gt f (. b fsym)))
+      ('ak-u  true)
+      ('ak-fu (fn-gt f (. b fsym)))))
+
+  (fn fu-over ((ord SriqOrder) (f U32) (u U32) (b ATerm))
+    (@intent "f(u) ≻ b: above every constant, and g(u′) for g below f or g = f and u ⋗ u′")
+    (@spec ((SriqOrder U32 U32 ATerm) -> Bool))
+    (@post (implies (or (== (. b kind) 'ak-x) (== (. b kind) 'ak-y) (== (. b kind) 'ak-z) (== (. b kind) 'ak-fx)) (not $result)))
+    (match (. b kind)
+      ('ak-x  false)
+      ('ak-y  false)
+      ('ak-z  false)
+      ('ak-fx false)
+      ('ak-u  true)
+      ('ak-fu (or (fn-gt f (. b fsym)) (and (== f (. b fsym)) (const-gt ord u (. b cst)))))))
+
+  (fn aterm-gt ((ord SriqOrder) (a ATerm) (b ATerm))
+    (@intent "a ≻ b on context a-terms")
+    (@spec ((SriqOrder ATerm ATerm) -> Bool))
+    ;; Irreflexivity is proved for ⋗ on constants (const-gt). Here the
+    ;; solver does not use fu-over's matching @post at the call, so the
+    ;; strictness test checks it over the whole universe instead.
+    (@post (implies (and (== (. a kind) 'ak-x) (== (. b kind) 'ak-y)) $result))
+    (@post (implies (and (== (. a kind) 'ak-fx) (or (== (. b kind) 'ak-x) (== (. b kind) 'ak-y) (== (. b kind) 'ak-u))) $result))
+    (@post (implies (and (== (. a kind) 'ak-fx) (== (. b kind) 'ak-fx)) (== $result (> (. a fsym) (. b fsym)))))
+    (@post (implies (or (== (. a kind) 'ak-y) (== (. a kind) 'ak-z) (== (. b kind) 'ak-z)) (not $result)))
+    (@post (implies (and (or (== (. a kind) 'ak-x) (== (. a kind) 'ak-y)) (or (== (. b kind) 'ak-u) (== (. b kind) 'ak-fu))) (not $result)))
+    (@post (implies (and (or (== (. a kind) 'ak-u) (== (. a kind) 'ak-fu)) (or (== (. b kind) 'ak-x) (== (. b kind) 'ak-y))) (not $result)))
+    (match (. a kind)
+      ('ak-x  (== (. b kind) 'ak-y))
+      ('ak-y  false)
+      ('ak-z  false)
+      ('ak-fx (fx-over ord (. a fsym) b))
+      ('ak-u  (and (== (. b kind) 'ak-u) (const-gt ord (. a cst) (. b cst))))
+      ('ak-fu (fu-over ord (. a fsym) (. a cst) b))))
+
+  (fn aterm-same ((a ATerm) (b ATerm))
+    (@intent "The same a-term, field by field")
+    (@spec ((ATerm ATerm) -> Bool))
+    (@pure)
+    (and (== (. a kind) (. b kind)) (== (. a fsym) (. b fsym)) (== (. a cst) (. b cst)) (== (. a zi) (. b zi))))
+
+  (fn aterm-ge ((ord SriqOrder) (a ATerm) (b ATerm))
+    (@intent "a ⪰ b")
+    (@spec ((SriqOrder ATerm ATerm) -> Bool))
+    (or (aterm-same a b) (aterm-gt ord a b)))
+
+  ;; ============================================================
+  ;; p-terms (an atom B(t) or S(s, t), read as a term of sort p)
+  ;; ============================================================
+
+  (fn pterm-gt ((ord SriqOrder) (a Lit) (b Lit))
+    (@intent "Item 7: b is a with a-terms replaced by smaller ones; so the same predicate, never equal")
+    (@spec ((SriqOrder Lit Lit) -> Bool))
+    (@post (implies (!= (. a pred) (. b pred)) (not $result)))
+    (@post (implies (!= (. a form) (. b form)) (not $result)))
+    (cond
+      ((or (!= (. a form) (. b form)) (!= (. a pred) (. b pred))) false)
+      ((== (. a form) 'lf-unary) (aterm-gt ord (. a t1) (. b t1)))
+      (else (and (aterm-ge ord (. a t1) (. b t1))
+                 (aterm-ge ord (. a t2) (. b t2))
+                 (not (and (aterm-same (. a t1) (. b t1)) (aterm-same (. a t2) (. b t2))))))))
+
+  (fn pterm-over-aterm ((ord SriqOrder) (a Lit) (s ATerm))
+    (@intent "Items 5 and 6: A ≻ x, A ≻ y, and A ≻ s when an argument of A is ⪰ s")
+    (@spec ((SriqOrder Lit ATerm) -> Bool))
+    (@post (implies (or (== (. s kind) 'ak-x) (== (. s kind) 'ak-y)) $result))
+    (or (== (. s kind) 'ak-x)
+        (== (. s kind) 'ak-y)
+        (aterm-ge ord (. a t1) s)
+        (and (== (. a form) 'lf-binary) (aterm-ge ord (. a t2) s))))
+
+  ;; ============================================================
+  ;; Context terms: true, an a-term, or a p-term
+  ;; ============================================================
+
+  (type CKind (enum ck-true ck-a ck-p))
+
+  ;; ck-a: a holds it, p is a placeholder; ck-p: p holds it, a is x;
+  ;; ck-true: both are placeholders.
+  (type CTerm (record
+    (ck CKind)
+    (a  ATerm)
+    (p  Lit)))
+
+  (fn ct-true ()
+    (@intent "true")
+    (@spec (() -> CTerm))
+    (@pure)
+    (record-new CTerm (ck 'ck-true) (a (at-x)) (p (atom1 (cast U32 0) (at-x)))))
+
+  (fn ct-a ((s ATerm))
+    (@intent "The a-term s as a context term")
+    (@spec ((ATerm) -> CTerm))
+    (@pure)
+    (record-new CTerm (ck 'ck-a) (a s) (p (atom1 (cast U32 0) (at-x)))))
+
+  (fn ct-p ((l Lit))
+    (@intent "The atom l as a p-term")
+    (@spec ((Lit) -> CTerm))
+    (@pure)
+    (record-new CTerm (ck 'ck-p) (a (at-x)) (p l)))
+
+  (fn cterm-gt ((ord SriqOrder) (s CTerm) (t CTerm))
+    (@intent "s ≻ t on context terms")
+    (@spec ((SriqOrder CTerm CTerm) -> Bool))
+    (@post (implies (== (. s ck) 'ck-true) (not $result)))
+    (@post (implies (and (!= (. s ck) 'ck-true) (== (. t ck) 'ck-true)) $result))
+    (@post (implies (and (== (. s ck) 'ck-a) (== (. t ck) 'ck-p)) (not $result)))
+    (match (. s ck)
+      ('ck-true false)
+      ('ck-a (match (. t ck)
+               ('ck-true true)
+               ('ck-a    (aterm-gt ord (. s a) (. t a)))
+               ('ck-p    false)))
+      ('ck-p (match (. t ck)
+               ('ck-true true)
+               ('ck-a    (pterm-over-aterm ord (. s p) (. t a)))
+               ('ck-p    (pterm-gt ord (. s p) (. t p)))))))
+
+  (fn cterm-same ((s CTerm) (t CTerm))
+    (@intent "The same context term")
+    (@spec ((CTerm CTerm) -> Bool))
+    (@pure)
+    (and (== (. s ck) (. t ck))
+         (match (. s ck)
+           ('ck-true true)
+           ('ck-a    (aterm-same (. s a) (. t a)))
+           ('ck-p    (and (== (. (. s p) form) (. (. t p) form)) (== (. (. s p) pred) (. (. t p) pred))
+                          (aterm-same (. (. s p) t1) (. (. t p) t1)) (aterm-same (. (. s p) t2) (. (. t p) t2)))))))
+
+  ;; ============================================================
+  ;; Literals, by the multiset extension
+  ;; ============================================================
+
+  (fn lit-ms ((arena Arena) (l Lit))
+    (@intent "A as {A, true}; s ≈ t as {s, t}; s ≉ t as {s, s, t, t}")
+    (@spec ((Arena Lit) -> (List CTerm)))
+    (@alloc arena)
+    (let ((mut out (list-new arena CTerm)))
+      (do
+        (match (. l form)
+          ('lf-unary  (do (list-push out (ct-p l)) (list-push out (ct-true))))
+          ('lf-binary (do (list-push out (ct-p l)) (list-push out (ct-true))))
+          ('lf-eq     (do (list-push out (ct-a (. l t1))) (list-push out (ct-a (. l t2)))))
+          ('lf-neq    (do (list-push out (ct-a (. l t1))) (list-push out (ct-a (. l t1)))
+                          (list-push out (ct-a (. l t2))) (list-push out (ct-a (. l t2))))))
+        out)))
+
+  (fn take-one ((arena Arena) (xs (List CTerm)) (y CTerm))
+    (@intent "xs without its first element equal to y, if any")
+    (@spec ((Arena (List CTerm) CTerm) -> (List CTerm)))
+    (@alloc arena)
+    (let ((mut out (list-new arena CTerm))
+          (mut taken false))
+      (do
+        (for-each (x xs)
+          (if (and (not taken) (cterm-same x y))
+            (set! taken true)
+            (list-push out x)))
+        out)))
+
+  (fn ms-minus ((arena Arena) (xs (List CTerm)) (ys (List CTerm)))
+    (@intent "The multiset difference xs \\ ys")
+    (@spec ((Arena (List CTerm) (List CTerm)) -> (List CTerm)))
+    (@alloc arena)
+    (let ((mut out xs))
+      (do (for-each (y ys) (set! out (take-one arena out y))) out)))
+
+  (fn dominated ((ord SriqOrder) (bs (List CTerm)) (a CTerm))
+    (@intent "Is some element of bs ≻ a?")
+    (@spec ((SriqOrder (List CTerm) CTerm) -> Bool))
+    (let ((mut found false))
+      (do (for-each (b bs) (when (cterm-gt ord b a) (set! found true))) found)))
+
+  (fn mul-gt ((arena Arena) (ord SriqOrder) (m1 (List CTerm)) (m2 (List CTerm)))
+    (@intent "m1 ≻ m2 under the multiset extension: they differ, and each of m2 \\ m1 is below some of m1 \\ m2")
+    (@spec ((Arena SriqOrder (List CTerm) (List CTerm)) -> Bool))
+    (@alloc arena)
+    (let ((d1 (ms-minus arena m1 m2))
+          (d2 (ms-minus arena m2 m1))
+          (mut ok (or (> (list-len d1) 0) (> (list-len d2) 0))))
+      (do (for-each (a d2) (when (not (dominated ord d1 a)) (set! ok false))) ok)))
+
+  (fn lit-gt ((arena Arena) (ord SriqOrder) (l1 Lit) (l2 Lit))
+    (@intent "l1 ≻ l2: their multisets under the extension")
+    (@spec ((Arena SriqOrder Lit Lit) -> Bool))
+    (@alloc arena)
+    (mul-gt arena ord (lit-ms arena l1) (lit-ms arena l2)))
+
+  (fn maximal-at ((arena Arena) (ord SriqOrder) (ls (List Lit)) (i Int))
+    (@intent "Is literal i of ls maximal: no other literal of ls ≻ it (Table 2's Δ ⊁ L)?")
+    (@spec ((Arena SriqOrder (List Lit) Int) -> Bool))
+    (@alloc arena)
+    (match (list-get ls i)
+      ((none) false)
+      ((some l)
+        (let ((mut ok true)
+              (mut j 0))
+          (do
+            (for-each (m ls)
+              (do (when (and (!= j i) (lit-gt arena ord m l)) (set! ok false))
+                  (set! j (+ j 1))))
+            ok)))))
+
+  (fn max-flags ((arena Arena) (ord SriqOrder) (ls (List Lit)))
+    (@intent "For each literal of a head, whether it is maximal in it")
+    (@spec ((Arena SriqOrder (List Lit)) -> (List Bool)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Bool))
+          (mut i 0))
+      (do
+        (for-each (l ls)
+          (do (list-push out (maximal-at arena ord ls i))
+              (set! i (+ i 1))))
+        out)))
+)
