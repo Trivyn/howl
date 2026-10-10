@@ -23,6 +23,8 @@ uint8_t kscsat_file_other(slop_arena* arena, kscsat_KStore st, kscids_CFact c, u
 slop_option_list_u32 kscsat_id_items(slop_map* m, uint32_t k);
 slop_map* kscsat_field_map(kscsat_Shard sh, kscsat_Field fd);
 uint8_t kscsat_keyed_by_subject(kscsat_Field fd);
+slop_list_types_KFact kscsat_subject_items(slop_arena* arena, kscids_KscIds ids, types_KElem k, slop_list_u32 is);
+slop_list_types_KFact kscsat_holder_items(slop_arena* arena, kscids_KscIds ids, types_KElem k, slop_list_u32 is);
 slop_list_types_KFact kscsat_field_items(slop_arena* arena, kscsat_KStore st, kscsat_Field fd, types_KElem k);
 slop_list_types_KFact kscsat_safe_facts(slop_arena* arena, kscsat_Base b, slop_list_types_KFact xs);
 slop_list_types_KFact kscsat_w_items(slop_arena* arena, kscsat_Base b, uint8_t by_subject, types_KElem k, slop_list_types_KFact xs);
@@ -30,11 +32,35 @@ slop_list_list_types_KFact kscsat_partners(slop_arena* arena, kscsat_KStore st, 
 slop_list_types_KFact kscsat_leg_facts(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, uint32_t e, slop_list_u32 is);
 slop_list_list_types_KFact kscsat_all_ins(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, types_KElem k);
 slop_map* kscsat_side_map(kscsat_Shard sh, uint8_t outward);
+slop_list_kscsat_RoleLegs kscsat_legs_every_role(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf);
+slop_list_kscsat_RoleLegs kscsat_legs_stored_under(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf, kscsat_Under u);
+slop_list_kscsat_RoleLegs kscsat_legs_of_subs(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf, slop_list_types_RoleId subs);
+slop_list_kscsat_RoleLegs kscsat_legs_under(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf, kscsat_Under u);
 slop_list_kscsat_RoleLegs kscsat_legs_in_store(slop_arena* arena, kscsat_KStore st, uint8_t outward, types_KElem k, slop_option_kscsat_Under under);
+slop_list_kscsat_RoleLegs kscsat_push_w_legs(slop_arena* arena, slop_list_kscsat_RoleLegs out, kscsat_Base b, uint8_t outward, types_KElem k, slop_option_kscsat_Under u);
 slop_list_kscsat_RoleLegs kscsat_role_legs(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, uint8_t outward, types_KElem k, types_RoleId v);
 slop_list_list_u32 kscsat_inst_id_lists(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, types_KElem x);
 slop_list_kscsat_Match kscsat_partner_matches(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, types_KElem x, kscpremise_KPartners p);
-slop_list_types_KFact kscsat_derive(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, types_KFact f);
+uint8_t kscsat_emit_concl(kscsat_Deriving* d, ksc_Concl c);
+uint8_t kscsat_emit_facts(kscsat_Deriving* d, slop_list_types_KFact xs);
+uint8_t kscsat_emit_joins(slop_arena* arena, kscsat_Deriving* d, ksc_JoinRule j, types_KFact f, slop_list_list_types_KFact pss, types_KscAxiom ax);
+slop_list_kscsat_RoleLegs kscsat_legs_at(slop_arena* arena, kscsat_Deriving* d, uint8_t outward, types_KElem k, types_RoleId v);
+uint8_t kscsat_holds_now(kscsat_Deriving* d, types_KFact f);
+slop_list_list_types_KFact kscsat_partners_at(slop_arena* arena, kscsat_Deriving* d, kscsat_Field fd, types_KElem k);
+slop_list_kscsat_Match kscsat_matches_at(slop_arena* arena, kscsat_Deriving* d, types_KElem x, kscpremise_KPartners p);
+types_KscAxiom kscsat_no_axiom(void);
+uint8_t kscsat_inst_some_lhs(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_KTerm y, types_RoleId v, types_KName a, types_KName z);
+uint8_t kscsat_inst_and_pairs(slop_arena* arena, kscsat_Deriving* d, types_KElem x, types_KTerm y, kscpremise_KPartners p);
+uint8_t kscsat_inst_equality(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_KTerm y);
+uint8_t kscsat_derive_inst(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_KTerm y);
+uint8_t kscsat_chain_first(slop_arena* arena, kscsat_Deriving* d, types_KFact fv, types_KElem x, types_RoleId v, types_KElem x1, types_RoleId u, types_RoleId v2, types_RoleId w);
+uint8_t kscsat_chain_second(slop_arena* arena, kscsat_Deriving* d, types_KFact fv, types_KElem x, types_RoleId v, types_KElem x1, types_RoleId u, types_RoleId v2, types_RoleId w);
+uint8_t kscsat_triple_under(slop_arena* arena, kscsat_Deriving* d, types_KElem x, types_RoleId v, types_KElem x1);
+uint8_t kscsat_derive_triple(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId e, types_KElem x1);
+uint8_t kscsat_self_chain_first(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId v, types_RoleId u, types_RoleId v2, types_RoleId w);
+uint8_t kscsat_self_chain_second(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId v, types_RoleId u, types_RoleId v2, types_RoleId w);
+uint8_t kscsat_derive_self(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId v);
+slop_list_types_KFact kscsat_derive(slop_arena* arena, kscsat_Deriving* d, types_KFact f);
 types_RoleId kscsat_ksc_dummy_role(void);
 uint8_t kscsat_is_bottom_fact(types_KFact f);
 uint8_t kscsat_reaches_bottom(slop_option_kscsat_Base base, types_KFact f);
@@ -43,25 +69,34 @@ int64_t kscsat_round_workers(int64_t workers, int64_t n);
 kscsat_Derived kscsat_derive_round(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t workers);
 kscsat_RoundOut kscsat_ksc_round(slop_arena* arena, slop_arena* na, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, uint8_t stop_at_bottom, uint8_t unsat0, int64_t workers, slop_list_arena_ptr cas);
 int64_t kscsat_conclusion_count(kscsat_Derived d);
+slop_list_kscids_CFact kscsat_chunk_items(slop_arena* arena, slop_map* out);
 kscsat_RoundOut kscsat_commit_serial(slop_arena* arena, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0);
 uint8_t kscsat_parallel_commit_ok(kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0, int64_t nc);
 uint8_t kscsat_any_bottom_coded(kscsat_KStore st, kscsat_Derived d);
 int64_t kscsat_committer_of(kscsat_KStore st, uint32_t k, int64_t nc);
+uint8_t kscsat_seen_in(kscsat_KStore st, kscids_CFact c);
 int64_t kscsat_commit_subjects(slop_arena* ca, slop_arena* sa, kscsat_KStore st, kscsat_Derived d, int64_t k, int64_t nc, slop_map* res);
 int64_t kscsat_commit_others(slop_arena* ca, kscsat_KStore st, slop_list_kscsat_Held held, int64_t k, int64_t nc);
 kscsat_RoundOut kscsat_commit_parallel(slop_arena* scratch, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, slop_list_arena_ptr cas, int64_t nc, uint8_t unsat0);
 slop_arena* kscsat_committer_arena(slop_list_arena_ptr cas, int64_t k);
+slop_option_types_KFact kscsat_kept_at(kscsat_Merging* m, int64_t k);
+int64_t kscsat_cursor_at(slop_list_int cur, int64_t k);
+uint8_t kscsat_take_fact(kscsat_Merging* m, types_KFact f, kscids_CFact c);
+uint8_t kscsat_merge_step(kscsat_Merging* m, kscids_CFact c);
 kscsat_Merged kscsat_merge_fresh(slop_arena* scratch, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, slop_list_map_ptr ress, int64_t nc, uint8_t unsat0);
 kscsat_RunResult kscsat_run_ksc(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, slop_option_kscsat_Base base, slop_list_types_KFact seeds, uint8_t stop_at_bottom, int64_t budget, int64_t cancel, int64_t workers, slop_list_arena_ptr cas);
 kscsat_RunResult kscsat_run_result(kscsat_KStore st, int64_t rounds, uint8_t unsat, uint8_t capped, uint8_t cancelled, int64_t facts);
 kscsat_RoundOut kscsat_seed_run(slop_arena* arena, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact seeds);
 slop_list_types_KName kscsat_answer_subsumers(slop_arena* arena, kscsat_KStore st, types_KName q);
+slop_list_u32 kscsat_queue_ins(kscsat_KStore w, slop_map* seen, slop_map* out, slop_list_u32 work, uint32_t xi);
 slop_map* kscsat_backward_closure(slop_arena* arena, kscsat_KStore w, slop_list_types_KElem start);
 slop_option_types_ClassAnswer kscsat_class_run(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, int64_t budget, int64_t cancel, types_KName q);
 types_ClassAnswer kscsat_shared_answer(slop_arena* arena, kscsat_Base base, uint8_t g_unsat, types_KName q);
 slop_option_types_ClassAnswer kscsat_class_answer(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, uint8_t g_unsat, int64_t budget, int64_t cancel, types_KName q);
 slop_result_types_KscResult_types_Fault kscsat_classify_renamed(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
 slop_list_arena_ptr kscsat_ksc_commit_arenas(slop_arena* arena, int64_t w);
+types_KscResult kscsat_w_capped(slop_arena* arena, kscsat_RunResult g, kscsat_RunResult w, int64_t n);
+slop_result_types_KscResult_types_Fault kscsat_phase_w(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, kscsat_RunResult g, slop_list_types_KFact wseeds, slop_list_types_KElem tainted, types_KName thing, slop_list_types_KName classes, types_ReasonerConfig config, slop_list_arena_ptr cas, int64_t n);
 slop_result_types_KscResult_types_Fault kscsat_classify_phases(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config, slop_list_arena_ptr cas);
 slop_result_types_KscResult_types_Fault kscsat_ksc_classify(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
 types_KscResult kscsat_unrename_result(slop_arena* arena, kscnames_KscNames nm, types_KscResult r);
@@ -70,6 +105,13 @@ types_ClassAnswer kscsat_copy_answer(slop_arena* arena, types_ClassAnswer a);
 int64_t kscsat_run_chunk(slop_arena* wa, kscpremise_KscIndex idx, kscsat_Base base, int64_t budget, int64_t cancel, slop_list_types_KName classes, slop_list_int todo, slop_map* out);
 slop_list_int kscsat_index_chunk(slop_arena* arena, slop_list_int xs, int64_t lo, int64_t hi);
 int64_t kscsat_worker_count_for(int64_t workers, int64_t jobs);
+kscsat_Base kscsat_over_w_base(slop_arena* arena, kscsat_RunResult g, kscsat_RunResult w, slop_list_types_KElem tainted);
+slop_list_int kscsat_split_safe(slop_arena* arena, kscsat_Base base, slop_list_types_KName classes, slop_map* shared);
+kscsat_QRuns kscsat_run_unsafe(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, int64_t budget, int64_t cancel, slop_list_types_KName classes, slop_list_int todo, int64_t workers);
+kscsat_QAnswers kscsat_copy_unsafe(slop_arena* arena, kscsat_QAnswers qa, slop_list_map_ptr outs, int64_t i);
+kscsat_QAnswers kscsat_collect_answers(slop_arena* arena, slop_list_types_KName classes, slop_map* shared, slop_list_map_ptr outs, uint8_t complete0);
+types_KscResult kscsat_over_w_result(kscsat_RunResult g, kscsat_RunResult w, types_ClassAnswer thing_answer, kscsat_QAnswers qa, int64_t jobs);
+slop_result_types_KscResult_types_Fault kscsat_answer_over_w(slop_arena* arena, kscpremise_KscIndex idx, kscsat_RunResult g, kscsat_RunResult w, kscsat_Base base, types_ClassAnswer thing_answer, slop_list_types_KName classes, int64_t budget, int64_t workers, int64_t cancel);
 slop_result_types_KscResult_types_Fault kscsat_classify_over_w(slop_arena* arena, kscpremise_KscIndex idx, kscsat_RunResult g, kscsat_RunResult w, slop_list_types_KElem tainted, types_KName thing, slop_list_types_KName classes, int64_t budget, int64_t workers, int64_t cancel);
 int64_t kscsat_max_rounds(slop_list_types_ClassAnswer answers);
 uint8_t kscsat_answer_holds(types_ClassAnswer a, types_KName b);
@@ -79,17 +121,17 @@ typedef struct { slop_arena* wa; slop_arena* ra; kscpremise_KscIndex idx; kscsat
 
 static int64_t kscsat__lambda_958(kscsat__lambda_958_env_t* _env) { return kscsat_derive_chunk(_env->wa, _env->ra, _env->idx, _env->st, _env->base, _env->delta, _env->lo, _env->hi, _env->out); }
 
-typedef struct { slop_arena* ca; slop_arena* sa; kscsat_KStore st; kscsat_Derived d; int64_t kk; int64_t nc; slop_map* res; } kscsat__lambda_971_env_t;
+typedef struct { slop_arena* ca; slop_arena* sa; kscsat_KStore st; kscsat_Derived d; int64_t kk; int64_t nc; slop_map* res; } kscsat__lambda_969_env_t;
 
-static int64_t kscsat__lambda_971(kscsat__lambda_971_env_t* _env) { return kscsat_commit_subjects(_env->ca, _env->sa, _env->st, _env->d, _env->kk, _env->nc, _env->res); }
+static int64_t kscsat__lambda_969(kscsat__lambda_969_env_t* _env) { return kscsat_commit_subjects(_env->ca, _env->sa, _env->st, _env->d, _env->kk, _env->nc, _env->res); }
 
-typedef struct { slop_arena* ca; kscsat_KStore st; slop_list_kscsat_Held held; int64_t jj; int64_t nc; } kscsat__lambda_972_env_t;
+typedef struct { slop_arena* ca; kscsat_KStore st; slop_list_kscsat_Held held; int64_t jj; int64_t nc; } kscsat__lambda_970_env_t;
 
-static int64_t kscsat__lambda_972(kscsat__lambda_972_env_t* _env) { return kscsat_commit_others(_env->ca, _env->st, _env->held, _env->jj, _env->nc); }
+static int64_t kscsat__lambda_970(kscsat__lambda_970_env_t* _env) { return kscsat_commit_others(_env->ca, _env->st, _env->held, _env->jj, _env->nc); }
 
-typedef struct { slop_arena* wa; kscpremise_KscIndex idx; kscsat_Base base; int64_t budget; int64_t cancel; slop_list_types_KName classes; slop_list_int chunk; slop_map* out; } kscsat__lambda_1003_env_t;
+typedef struct { slop_arena* wa; kscpremise_KscIndex idx; kscsat_Base base; int64_t budget; int64_t cancel; slop_list_types_KName classes; slop_list_int chunk; slop_map* out; } kscsat__lambda_1001_env_t;
 
-static int64_t kscsat__lambda_1003(kscsat__lambda_1003_env_t* _env) { return kscsat_run_chunk(_env->wa, _env->idx, _env->base, _env->budget, _env->cancel, _env->classes, _env->chunk, _env->out); }
+static int64_t kscsat__lambda_1001(kscsat__lambda_1001_env_t* _env) { return kscsat_run_chunk(_env->wa, _env->idx, _env->base, _env->budget, _env->cancel, _env->classes, _env->chunk, _env->out); }
 
 kscsat_Shard kscsat_new_shard(slop_arena* arena) {
     return ((kscsat_Shard){.seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(kscids_CFact, slop_hash_kscids_CFact, slop_eq_kscids_CFact, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .insts = ({ static const slop_map_desc _d = SLOP_MAP_DESC(uint32_t, slop_hash_u32, slop_eq_u32, SLOP_KEY_BITS, kscsat_IdList); slop_map_new_ptr(arena, 0, &_d); }), .noms = ({ static const slop_map_desc _d = SLOP_MAP_DESC(uint32_t, slop_hash_u32, slop_eq_u32, SLOP_KEY_BITS, kscsat_IdList); slop_map_new_ptr(arena, 0, &_d); }), .holders = ({ static const slop_map_desc _d = SLOP_MAP_DESC(uint32_t, slop_hash_u32, slop_eq_u32, SLOP_KEY_BITS, kscsat_IdList); slop_map_new_ptr(arena, 0, &_d); }), .outs = ({ static const slop_map_desc _d = SLOP_MAP_DESC(uint32_t, slop_hash_u32, slop_eq_u32, SLOP_KEY_BITS, kscsat_RoleIds); slop_map_new_ptr(arena, 0, &_d); }), .ins = ({ static const slop_map_desc _d = SLOP_MAP_DESC(uint32_t, slop_hash_u32, slop_eq_u32, SLOP_KEY_BITS, kscsat_RoleIds); slop_map_new_ptr(arena, 0, &_d); }), .noms_at = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_KElem, slop_hash_types_KElem, slop_eq_types_KElem, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); }), .bots = ({ static const slop_map_desc _d = SLOP_SET_DESC(types_KElem, slop_hash_types_KElem, slop_eq_types_KElem, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); })});
@@ -381,53 +423,70 @@ uint8_t kscsat_keyed_by_subject(kscsat_Field fd) {
     SLOP_UNREACHABLE();
 }
 
-slop_list_types_KFact kscsat_field_items(slop_arena* arena, kscsat_KStore st, kscsat_Field fd, types_KElem k) {
+slop_list_types_KFact kscsat_subject_items(slop_arena* arena, kscids_KscIds ids, types_KElem k, slop_list_u32 is) {
     {
         __auto_type out = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_923 = ({ __auto_type ki = kscids_elem_id(st.ids, k); kscsat_id_items(kscsat_field_map(kscsat_shard_at(st, ki), fd), ki); });
-        if (_mv_923.has_value) {
-            __auto_type is = _mv_923.value;
-            if (kscsat_keyed_by_subject(fd)) {
-                {
-                    __auto_type _coll = is;
-                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                        __auto_type i = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_KFact){ .tag = types_KFact_f_inst, .data.f_inst = { .f0 = k, .f1 = kscids_id_term(st.ids, i) } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    }
-                }
-            } else {
-                __auto_type _mv_924 = k;
-                switch (_mv_924.tag) {
-                    case types_KElem_e_ind:
-                    {
-                        __auto_type a = _mv_924.data.e_ind;
-                        {
-                            __auto_type y = types_nominal_term(a);
-                            {
-                                __auto_type _coll = is;
-                                for (size_t _i = 0; _i < _coll.len; _i++) {
-                                    __auto_type i = _coll.data[_i];
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_KFact){ .tag = types_KFact_f_inst, .data.f_inst = { .f0 = kscids_id_elem(st.ids, i), .f1 = y } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                }
-                            }
-                        }
-                        break;
-                    }
-                    case types_KElem_e_aux:
-                    {
-                        __auto_type _ = _mv_924.data.e_aux;
-                        break;
-                    }
-                    case types_KElem_e_class:
-                    {
-                        __auto_type _ = _mv_924.data.e_class;
-                        break;
-                    }
-                }
+        {
+            __auto_type _coll = is;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type i = _coll.data[_i];
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_KFact){ .tag = types_KFact_f_inst, .data.f_inst = { .f0 = k, .f1 = kscids_id_term(ids, i) } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
-        } else if (!_mv_923.has_value) {
         }
         return out;
+    }
+}
+
+slop_list_types_KFact kscsat_holder_items(slop_arena* arena, kscids_KscIds ids, types_KElem k, slop_list_u32 is) {
+    {
+        __auto_type out = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type _mv_923 = k;
+        switch (_mv_923.tag) {
+            case types_KElem_e_ind:
+            {
+                __auto_type a = _mv_923.data.e_ind;
+                {
+                    __auto_type y = types_nominal_term(a);
+                    {
+                        __auto_type _coll = is;
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type i = _coll.data[_i];
+                            ({ __auto_type _lst_p = &(out); __auto_type _item = (((types_KFact){ .tag = types_KFact_f_inst, .data.f_inst = { .f0 = kscids_id_elem(ids, i), .f1 = y } })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        }
+                    }
+                }
+                break;
+            }
+            case types_KElem_e_aux:
+            {
+                __auto_type _ = _mv_923.data.e_aux;
+                break;
+            }
+            case types_KElem_e_class:
+            {
+                __auto_type _ = _mv_923.data.e_class;
+                break;
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_types_KFact kscsat_field_items(slop_arena* arena, kscsat_KStore st, kscsat_Field fd, types_KElem k) {
+    {
+        __auto_type ki = kscids_elem_id(st.ids, k);
+        __auto_type _mv_924 = kscsat_id_items(kscsat_field_map(kscsat_shard_at(st, ki), fd), ki);
+        if (_mv_924.has_value) {
+            __auto_type is = _mv_924.value;
+            if (kscsat_keyed_by_subject(fd)) {
+                return kscsat_subject_items(arena, st.ids, k, is);
+            } else {
+                return kscsat_holder_items(arena, st.ids, k, is);
+            }
+        } else if (!_mv_924.has_value) {
+            return ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        }
+        SLOP_UNREACHABLE();
     }
 }
 
@@ -534,70 +593,111 @@ slop_map* kscsat_side_map(kscsat_Shard sh, uint8_t outward) {
     }
 }
 
-slop_list_kscsat_RoleLegs kscsat_legs_in_store(slop_arena* arena, kscsat_KStore st, uint8_t outward, types_KElem k, slop_option_kscsat_Under under) {
+slop_list_kscsat_RoleLegs kscsat_legs_every_role(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf) {
     {
         __auto_type out = ((slop_list_kscsat_RoleLegs){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type ids = st.ids;
         {
-            __auto_type kid = kscids_elem_id(ids, k);
-            __auto_type _mv_928 = ({ void* _ptr = slop_map_get(kscsat_side_map(kscsat_shard_at(st, kid), outward), &(uint32_t){kid}); _ptr ? (slop_option_kscsat_RoleIds){ .has_value = true, .value = *(kscsat_RoleIds*)_ptr } : (slop_option_kscsat_RoleIds){ .has_value = false }; });
-            if (_mv_928.has_value) {
-                __auto_type rf = _mv_928.value;
-                __auto_type _mv_929 = under;
-                if (!_mv_929.has_value) {
-                    {
-                        slop_map* _coll = (slop_map*)rf.by_role;
-                        for (size_t _i = 0; _i < _coll->len; _i++) {
-                            {
-                                uint32_t e = *(uint32_t*)slop_map_key_at(_coll, _i);
-                                kscsat_IdList il = *(kscsat_IdList*)slop_map_value_at(_coll, _i);
-                                ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = kscids_id_role(ids, e), .facts = kscsat_leg_facts(arena, ids, outward, k, e, il.items)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                        }
-                    }
-                } else if (_mv_929.has_value) {
-                    __auto_type u = _mv_929.value;
-                    {
-                        __auto_type subs = kscpremise_role_subs(arena, u.idx, u.v);
-                        if (((int64_t)(rf.by_role)->len) <= ((int64_t)((subs).len))) {
-                            {
-                                slop_map* _coll = (slop_map*)rf.by_role;
-                                for (size_t _i = 0; _i < _coll->len; _i++) {
-                                    {
-                                        uint32_t e = *(uint32_t*)slop_map_key_at(_coll, _i);
-                                        kscsat_IdList il = *(kscsat_IdList*)slop_map_value_at(_coll, _i);
-                                        {
-                                            __auto_type r = kscids_id_role(ids, e);
-                                            if (kscpremise_role_under(u.idx, r, u.v)) {
-                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = r, .facts = kscsat_leg_facts(arena, ids, outward, k, e, il.items)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            {
-                                __auto_type _coll = subs;
-                                for (size_t _i = 0; _i < _coll.len; _i++) {
-                                    __auto_type r = _coll.data[_i];
-                                    {
-                                        __auto_type e = kscids_role_id(ids, r);
-                                        __auto_type _mv_931 = ({ void* _ptr = slop_map_get(rf.by_role, &(uint32_t){e}); _ptr ? (slop_option_kscsat_IdList){ .has_value = true, .value = *(kscsat_IdList*)_ptr } : (slop_option_kscsat_IdList){ .has_value = false }; });
-                                        if (_mv_931.has_value) {
-                                            __auto_type il = _mv_931.value;
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = r, .facts = kscsat_leg_facts(arena, ids, outward, k, e, il.items)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        } else if (!_mv_931.has_value) {
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            slop_map* _coll = (slop_map*)rf.by_role;
+            for (size_t _i = 0; _i < _coll->len; _i++) {
+                {
+                    uint32_t e = *(uint32_t*)slop_map_key_at(_coll, _i);
+                    kscsat_IdList il = *(kscsat_IdList*)slop_map_value_at(_coll, _i);
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = kscids_id_role(ids, e), .facts = kscsat_leg_facts(arena, ids, outward, k, e, il.items)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
-            } else if (!_mv_928.has_value) {
             }
         }
         return out;
+    }
+}
+
+slop_list_kscsat_RoleLegs kscsat_legs_stored_under(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf, kscsat_Under u) {
+    {
+        __auto_type out = ((slop_list_kscsat_RoleLegs){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            slop_map* _coll = (slop_map*)rf.by_role;
+            for (size_t _i = 0; _i < _coll->len; _i++) {
+                {
+                    uint32_t e = *(uint32_t*)slop_map_key_at(_coll, _i);
+                    kscsat_IdList il = *(kscsat_IdList*)slop_map_value_at(_coll, _i);
+                    {
+                        __auto_type r = kscids_id_role(ids, e);
+                        if (kscpremise_role_under(u.idx, r, u.v)) {
+                            ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = r, .facts = kscsat_leg_facts(arena, ids, outward, k, e, il.items)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        }
+                    }
+                }
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_kscsat_RoleLegs kscsat_legs_of_subs(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf, slop_list_types_RoleId subs) {
+    {
+        __auto_type out = ((slop_list_kscsat_RoleLegs){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = subs;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type r = _coll.data[_i];
+                {
+                    __auto_type e = kscids_role_id(ids, r);
+                    __auto_type _mv_928 = ({ void* _ptr = slop_map_get(rf.by_role, &(uint32_t){e}); _ptr ? (slop_option_kscsat_IdList){ .has_value = true, .value = *(kscsat_IdList*)_ptr } : (slop_option_kscsat_IdList){ .has_value = false }; });
+                    if (_mv_928.has_value) {
+                        __auto_type il = _mv_928.value;
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = r, .facts = kscsat_leg_facts(arena, ids, outward, k, e, il.items)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    } else if (!_mv_928.has_value) {
+                    }
+                }
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_kscsat_RoleLegs kscsat_legs_under(slop_arena* arena, kscids_KscIds ids, uint8_t outward, types_KElem k, kscsat_RoleIds rf, kscsat_Under u) {
+    {
+        __auto_type subs = kscpremise_role_subs(arena, u.idx, u.v);
+        if (((int64_t)(rf.by_role)->len) <= ((int64_t)((subs).len))) {
+            return kscsat_legs_stored_under(arena, ids, outward, k, rf, u);
+        } else {
+            return kscsat_legs_of_subs(arena, ids, outward, k, rf, subs);
+        }
+    }
+}
+
+slop_list_kscsat_RoleLegs kscsat_legs_in_store(slop_arena* arena, kscsat_KStore st, uint8_t outward, types_KElem k, slop_option_kscsat_Under under) {
+    {
+        __auto_type ids = st.ids;
+        __auto_type kid = kscids_elem_id(ids, k);
+        __auto_type _mv_930 = ({ void* _ptr = slop_map_get(kscsat_side_map(kscsat_shard_at(st, kid), outward), &(uint32_t){kid}); _ptr ? (slop_option_kscsat_RoleIds){ .has_value = true, .value = *(kscsat_RoleIds*)_ptr } : (slop_option_kscsat_RoleIds){ .has_value = false }; });
+        if (!_mv_930.has_value) {
+            return ((slop_list_kscsat_RoleLegs){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        } else if (_mv_930.has_value) {
+            __auto_type rf = _mv_930.value;
+            __auto_type _mv_931 = under;
+            if (!_mv_931.has_value) {
+                return kscsat_legs_every_role(arena, ids, outward, k, rf);
+            } else if (_mv_931.has_value) {
+                __auto_type u = _mv_931.value;
+                return kscsat_legs_under(arena, ids, outward, k, rf, u);
+            }
+            SLOP_UNREACHABLE();
+        }
+        SLOP_UNREACHABLE();
+    }
+}
+
+slop_list_kscsat_RoleLegs kscsat_push_w_legs(slop_arena* arena, slop_list_kscsat_RoleLegs out, kscsat_Base b, uint8_t outward, types_KElem k, slop_option_kscsat_Under u) {
+    {
+        __auto_type o = out;
+        {
+            __auto_type _coll = kscsat_legs_in_store(arena, b.w, outward, k, u);
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type lg = _coll.data[_i];
+                ({ __auto_type _lst_p = &(o); __auto_type _item = (((kscsat_RoleLegs){.role = lg.role, .facts = kscsat_w_items(arena, b, outward, k, lg.facts)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            }
+        }
+        return o;
     }
 }
 
@@ -616,13 +716,7 @@ slop_list_kscsat_RoleLegs kscsat_role_legs(slop_arena* arena, kscpremise_KscInde
                 }
             }
             if (kscsat_is_safe(b, k)) {
-                {
-                    __auto_type _coll = kscsat_legs_in_store(arena, b.w, outward, k, u);
-                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                        __auto_type lg = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (((kscsat_RoleLegs){.role = lg.role, .facts = kscsat_w_items(arena, b, outward, k, lg.facts)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    }
-                }
+                out = kscsat_push_w_legs(arena, out, b, outward, k, u);
             }
         } else if (!_mv_932.has_value) {
         }
@@ -722,753 +816,615 @@ slop_list_kscsat_Match kscsat_partner_matches(slop_arena* arena, kscsat_KStore s
     }
 }
 
-slop_list_types_KFact kscsat_derive(slop_arena* arena, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, types_KFact f) {
+uint8_t kscsat_emit_concl(kscsat_Deriving* d, ksc_Concl c) {
+    if (c.fires) {
+        ({ __auto_type _lst_p = &((*d).out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+    }
+    return 1;
+}
+
+uint8_t kscsat_emit_facts(kscsat_Deriving* d, slop_list_types_KFact xs) {
     {
-        __auto_type out = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_939 = f;
-        switch (_mv_939.tag) {
-            case types_KFact_f_inst:
+        __auto_type _coll = xs;
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type g = _coll.data[_i];
+            ({ __auto_type _lst_p = &((*d).out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        }
+    }
+    return 1;
+}
+
+uint8_t kscsat_emit_joins(slop_arena* arena, kscsat_Deriving* d, ksc_JoinRule j, types_KFact f, slop_list_list_types_KFact pss, types_KscAxiom ax) {
+    {
+        __auto_type _coll = pss;
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type ps = _coll.data[_i];
+            kscsat_emit_facts(d, ksc_ksc_join(arena, j, f, ps, ax));
+        }
+    }
+    return 1;
+}
+
+slop_list_kscsat_RoleLegs kscsat_legs_at(slop_arena* arena, kscsat_Deriving* d, uint8_t outward, types_KElem k, types_RoleId v) {
+    return kscsat_role_legs(arena, (*d).idx, (*d).st, (*d).base, outward, k, v);
+}
+
+uint8_t kscsat_holds_now(kscsat_Deriving* d, types_KFact f) {
+    return kscsat_store_holds((*d).st, (*d).base, f);
+}
+
+slop_list_list_types_KFact kscsat_partners_at(slop_arena* arena, kscsat_Deriving* d, kscsat_Field fd, types_KElem k) {
+    return kscsat_partners(arena, (*d).st, (*d).base, fd, k);
+}
+
+slop_list_kscsat_Match kscsat_matches_at(slop_arena* arena, kscsat_Deriving* d, types_KElem x, kscpremise_KPartners p) {
+    return kscsat_partner_matches(arena, (*d).st, (*d).base, x, p);
+}
+
+types_KscAxiom kscsat_no_axiom(void) {
+    return ((types_KscAxiom){ .tag = types_KscAxiom_k_role, .data.k_role = { .f0 = kscsat_ksc_dummy_role(), .f1 = kscsat_ksc_dummy_role() } });
+}
+
+uint8_t kscsat_inst_some_lhs(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_KTerm y, types_RoleId v, types_KName a, types_KName z) {
+    {
+        __auto_type _coll = kscsat_legs_at(arena, d, 0, x, v);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type lg = _coll.data[_i];
+            kscsat_emit_facts(d, ksc_ksc_join(arena, ksc_JoinRule_j7_inst, f, lg.facts, ((types_KscAxiom){ .tag = types_KscAxiom_k_some_lhs, .data.k_some_lhs = { .f0 = lg.role, .f1 = a, .f2 = z } })));
+        }
+    }
+    if (kscsat_holds_now(d, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = v } }))) {
+        kscsat_emit_concl(d, ksc_ksc_8(v, a, z, x, v, x, y));
+    }
+    return 1;
+}
+
+uint8_t kscsat_inst_and_pairs(slop_arena* arena, kscsat_Deriving* d, types_KElem x, types_KTerm y, kscpremise_KPartners p) {
+    {
+        __auto_type _coll = kscsat_matches_at(arena, d, x, p);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type m = _coll.data[_i];
             {
-                __auto_type x = _mv_939.data.f_inst.f0;
-                __auto_type y = _mv_939.data.f_inst.f1;
-                {
-                    __auto_type c = ksc_ksc_3(x, y);
-                    if (c.fires) {
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    }
-                }
-                __auto_type _mv_940 = kscpremise_term_bucket(idx, y);
-                if (_mv_940.has_value) {
-                    __auto_type bucket = _mv_940.value;
-                    {
-                        __auto_type _coll = bucket.items;
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type ax = _coll.data[_i];
-                            __auto_type _mv_941 = ax;
-                            switch (_mv_941.tag) {
-                                case types_KscAxiom_k_sub:
-                                {
-                                    __auto_type sy = _mv_941.data.k_sub.f0;
-                                    __auto_type sz = _mv_941.data.k_sub.f1;
-                                    {
-                                        __auto_type c = ksc_ksc_5(sy, sz, x, y);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_and:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_some_lhs:
-                                {
-                                    __auto_type v = _mv_941.data.k_some_lhs.f0;
-                                    __auto_type a = _mv_941.data.k_some_lhs.f1;
-                                    __auto_type z = _mv_941.data.k_some_lhs.f2;
-                                    {
-                                        __auto_type _coll = kscsat_role_legs(arena, idx, st, base, 0, x, v);
-                                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                                            __auto_type lg = _coll.data[_i];
-                                            {
-                                                __auto_type axe = ((types_KscAxiom){ .tag = types_KscAxiom_k_some_lhs, .data.k_some_lhs = { .f0 = lg.role, .f1 = a, .f2 = z } });
-                                                {
-                                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j7_inst, f, lg.facts, axe);
-                                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                        __auto_type g = _coll.data[_i];
-                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (kscsat_store_holds(st, base, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = v } }))) {
-                                        {
-                                            __auto_type c = ksc_ksc_8(v, a, z, x, v, x, y);
-                                            if (c.fires) {
-                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                            }
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_some_rhs:
-                                {
-                                    __auto_type a = _mv_941.data.k_some_rhs.f0;
-                                    __auto_type v = _mv_941.data.k_some_rhs.f1;
-                                    __auto_type b = _mv_941.data.k_some_rhs.f2;
-                                    __auto_type w = _mv_941.data.k_some_rhs.f3;
-                                    {
-                                        __auto_type c = ksc_ksc_9(a, v, b, w, x, y);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    {
-                                        __auto_type c = ksc_ksc_10(a, v, b, w, x, y);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_role_assert:
-                                {
-                                    __auto_type a = _mv_941.data.k_role_assert.f0;
-                                    __auto_type v = _mv_941.data.k_role_assert.f1;
-                                    __auto_type b = _mv_941.data.k_role_assert.f2;
-                                    {
-                                        __auto_type c = ksc_ksc_9_assert(a, v, b, x, y);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    {
-                                        __auto_type c = ksc_ksc_10_assert(a, v, b, x, y);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_self_rhs:
-                                {
-                                    __auto_type a = _mv_941.data.k_self_rhs.f0;
-                                    __auto_type v = _mv_941.data.k_self_rhs.f1;
-                                    {
-                                        __auto_type c = ksc_ksc_12(a, v, x, y);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_self_lhs:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_role:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_chain:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_range:
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                } else if (!_mv_940.has_value) {
-                }
-                __auto_type _mv_942 = kscpremise_and_partners(idx, y);
-                if (_mv_942.has_value) {
-                    __auto_type p = _mv_942.value;
-                    {
-                        __auto_type _coll = kscsat_partner_matches(arena, st, base, x, p);
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type m = _coll.data[_i];
-                            {
-                                __auto_type _coll = m.axioms.items;
-                                for (size_t _i = 0; _i < _coll.len; _i++) {
-                                    __auto_type ax = _coll.data[_i];
-                                    __auto_type _mv_943 = ax;
-                                    switch (_mv_943.tag) {
-                                        case types_KscAxiom_k_and:
-                                        {
-                                            __auto_type a = _mv_943.data.k_and.f0;
-                                            __auto_type b = _mv_943.data.k_and.f1;
-                                            __auto_type z = _mv_943.data.k_and.f2;
-                                            if (ksc_is_name(y, a)) {
-                                                if (types_kterm_eq(m.other, types_name_term(b))) {
-                                                    {
-                                                        __auto_type c = ksc_ksc_6(a, b, z, x, y, x, m.other);
-                                                        if (c.fires) {
-                                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            if (ksc_is_name(y, b)) {
-                                                if (types_kterm_eq(m.other, types_name_term(a))) {
-                                                    {
-                                                        __auto_type c = ksc_ksc_6(a, b, z, x, m.other, x, y);
-                                                        if (c.fires) {
-                                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_sub:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_some_lhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_some_rhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_self_lhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_self_rhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_role:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_chain:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_range:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_role_assert:
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (!_mv_942.has_value) {
-                }
-                {
-                    __auto_type noax = ((types_KscAxiom){ .tag = types_KscAxiom_k_role, .data.k_role = { .f0 = kscsat_ksc_dummy_role(), .f1 = kscsat_ksc_dummy_role() } });
-                    if (ksc_is_nominal(y)) {
+                __auto_type _coll = m.axioms.items;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type ax = _coll.data[_i];
+                    __auto_type _mv_939 = ax;
+                    switch (_mv_939.tag) {
+                        case types_KscAxiom_k_and:
                         {
-                            __auto_type _coll = kscsat_partners(arena, st, base, kscsat_Field_fd_insts, x);
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type ps = _coll.data[_i];
-                                {
-                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j27_nom, f, ps, noax);
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type g = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    }
-                                }
+                            __auto_type a = _mv_939.data.k_and.f0;
+                            __auto_type b = _mv_939.data.k_and.f1;
+                            __auto_type z = _mv_939.data.k_and.f2;
+                            if (ksc_is_name(y, a) && types_kterm_eq(m.other, types_name_term(b))) {
+                                kscsat_emit_concl(d, ksc_ksc_6(a, b, z, x, y, x, m.other));
                             }
+                            if (ksc_is_name(y, b) && types_kterm_eq(m.other, types_name_term(a))) {
+                                kscsat_emit_concl(d, ksc_ksc_6(a, b, z, x, m.other, x, y));
+                            }
+                            break;
                         }
+                        case types_KscAxiom_k_sub:
                         {
-                            __auto_type _coll = kscsat_partners(arena, st, base, kscsat_Field_fd_insts, ksc_term_elem(y));
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type ps = _coll.data[_i];
-                                {
-                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j28_nom, f, ps, noax);
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type g = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    }
-                                }
-                            }
+                            break;
                         }
+                        case types_KscAxiom_k_some_lhs:
                         {
-                            __auto_type _coll = kscsat_all_ins(arena, st, base, x);
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type ps = _coll.data[_i];
-                                {
-                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j29_nom, f, ps, noax);
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type g = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    }
-                                }
-                            }
+                            break;
                         }
-                    }
-                    {
-                        __auto_type _coll = kscsat_partners(arena, st, base, kscsat_Field_fd_noms, x);
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type ps = _coll.data[_i];
-                            {
-                                __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j27_other, f, ps, noax);
-                                for (size_t _i = 0; _i < _coll.len; _i++) {
-                                    __auto_type g = _coll.data[_i];
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                }
-                            }
-                        }
-                    }
-                    if (ksc_is_individual(x)) {
+                        case types_KscAxiom_k_some_rhs:
                         {
-                            __auto_type _coll = kscsat_partners(arena, st, base, kscsat_Field_fd_holders, x);
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type ps = _coll.data[_i];
-                                {
-                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j28_ind, f, ps, noax);
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type g = _coll.data[_i];
-                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    }
-                                }
-                            }
+                            break;
                         }
-                    }
-                }
-                break;
-            }
-            case types_KFact_f_triple:
-            {
-                __auto_type x = _mv_939.data.f_triple.f0;
-                __auto_type e = _mv_939.data.f_triple.f1;
-                __auto_type x1 = _mv_939.data.f_triple.f2;
-                {
-                    __auto_type c = ksc_ksc_2(x, e, x1);
-                    if (c.fires) {
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    }
-                }
-                {
-                    __auto_type _coll = kscpremise_role_sups(arena, idx, e);
-                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                        __auto_type v = _coll.data[_i];
+                        case types_KscAxiom_k_self_lhs:
                         {
-                            __auto_type fv = ((types_KFact){ .tag = types_KFact_f_triple, .data.f_triple = { .f0 = x, .f1 = v, .f2 = x1 } });
-                            __auto_type _mv_944 = kscpremise_role_bucket(idx, v);
-                            if (_mv_944.has_value) {
-                                __auto_type bucket = _mv_944.value;
-                                {
-                                    __auto_type _coll = bucket.items;
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type ax = _coll.data[_i];
-                                        __auto_type _mv_945 = ax;
-                                        switch (_mv_945.tag) {
-                                            case types_KscAxiom_k_some_lhs:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_role:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_chain:
-                                            {
-                                                __auto_type u = _mv_945.data.k_chain.f0;
-                                                __auto_type v2 = _mv_945.data.k_chain.f1;
-                                                __auto_type w = _mv_945.data.k_chain.f2;
-                                                if (types_role_eq(u, v)) {
-                                                    {
-                                                        __auto_type _coll = kscsat_role_legs(arena, idx, st, base, 1, x1, v2);
-                                                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                            __auto_type lg = _coll.data[_i];
-                                                            {
-                                                                __auto_type ax2 = ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = u, .f1 = lg.role, .f2 = w } });
-                                                                {
-                                                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j15_first, fv, lg.facts, ax2);
-                                                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                                        __auto_type g = _coll.data[_i];
-                                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    if (kscsat_store_holds(st, base, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x1, .f1 = v2 } }))) {
-                                                        {
-                                                            __auto_type c = ksc_ksc_17(u, v2, w, x, v, x1, x1, v2);
-                                                            if (c.fires) {
-                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                if (types_role_eq(v2, v)) {
-                                                    {
-                                                        __auto_type _coll = kscsat_role_legs(arena, idx, st, base, 0, x, u);
-                                                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                            __auto_type lg = _coll.data[_i];
-                                                            {
-                                                                __auto_type ax1 = ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = lg.role, .f1 = v2, .f2 = w } });
-                                                                {
-                                                                    __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j15_second, fv, lg.facts, ax1);
-                                                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                                        __auto_type g = _coll.data[_i];
-                                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    if (kscsat_store_holds(st, base, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = u } }))) {
-                                                        {
-                                                            __auto_type c = ksc_ksc_16(u, v2, w, x, u, x, v, x1);
-                                                            if (c.fires) {
-                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_range:
-                                            {
-                                                __auto_type v2 = _mv_945.data.k_range.f0;
-                                                __auto_type d = _mv_945.data.k_range.f1;
-                                                {
-                                                    __auto_type c = ksc_ksc_23(v2, d, x, v, x1);
-                                                    if (c.fires) {
-                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                    }
-                                                }
-                                                {
-                                                    __auto_type c = ksc_ksc_25(v2, d, x, v, x1);
-                                                    if (c.fires) {
-                                                        ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                    }
-                                                }
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_sub:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_and:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_some_rhs:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_self_lhs:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_self_rhs:
-                                            {
-                                                break;
-                                            }
-                                            case types_KscAxiom_k_role_assert:
-                                            {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (!_mv_944.has_value) {
-                            }
-                            __auto_type _mv_946 = kscpremise_ex_partners(idx, v);
-                            if (_mv_946.has_value) {
-                                __auto_type p = _mv_946.value;
-                                {
-                                    __auto_type _coll = kscsat_partner_matches(arena, st, base, x1, p);
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type m = _coll.data[_i];
-                                        {
-                                            __auto_type _coll = m.axioms.items;
-                                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                __auto_type ax = _coll.data[_i];
-                                                __auto_type _mv_947 = ax;
-                                                switch (_mv_947.tag) {
-                                                    case types_KscAxiom_k_some_lhs:
-                                                    {
-                                                        __auto_type v2 = _mv_947.data.k_some_lhs.f0;
-                                                        __auto_type a = _mv_947.data.k_some_lhs.f1;
-                                                        __auto_type z = _mv_947.data.k_some_lhs.f2;
-                                                        {
-                                                            __auto_type c = ksc_ksc_7(v2, a, z, x, v, x1, x1, m.other);
-                                                            if (c.fires) {
-                                                                ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                            }
-                                                        }
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_sub:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_and:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_some_rhs:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_self_lhs:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_self_rhs:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_role:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_chain:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_range:
-                                                    {
-                                                        break;
-                                                    }
-                                                    case types_KscAxiom_k_role_assert:
-                                                    {
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            } else if (!_mv_946.has_value) {
-                            }
+                            break;
+                        }
+                        case types_KscAxiom_k_self_rhs:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_role:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_chain:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_range:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_role_assert:
+                        {
+                            break;
                         }
                     }
                 }
-                {
-                    __auto_type noax = ((types_KscAxiom){ .tag = types_KscAxiom_k_role, .data.k_role = { .f0 = kscsat_ksc_dummy_role(), .f1 = kscsat_ksc_dummy_role() } });
-                    {
-                        __auto_type _coll = kscsat_partners(arena, st, base, kscsat_Field_fd_noms, x1);
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type ps = _coll.data[_i];
-                            {
-                                __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j29_triple, f, ps, noax);
-                                for (size_t _i = 0; _i < _coll.len; _i++) {
-                                    __auto_type g = _coll.data[_i];
-                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                }
-                            }
-                        }
-                    }
-                }
-                break;
-            }
-            case types_KFact_f_self:
-            {
-                __auto_type x = _mv_939.data.f_self.f0;
-                __auto_type v = _mv_939.data.f_self.f1;
-                __auto_type _mv_948 = kscpremise_role_bucket(idx, v);
-                if (_mv_948.has_value) {
-                    __auto_type bucket = _mv_948.value;
-                    {
-                        __auto_type _coll = bucket.items;
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type ax = _coll.data[_i];
-                            __auto_type _mv_949 = ax;
-                            switch (_mv_949.tag) {
-                                case types_KscAxiom_k_some_lhs:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_self_lhs:
-                                {
-                                    __auto_type v2 = _mv_949.data.k_self_lhs.f0;
-                                    __auto_type z = _mv_949.data.k_self_lhs.f1;
-                                    {
-                                        __auto_type c = ksc_ksc_11(v2, z, x, v);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_role:
-                                {
-                                    __auto_type v2 = _mv_949.data.k_role.f0;
-                                    __auto_type w = _mv_949.data.k_role.f1;
-                                    {
-                                        __auto_type c = ksc_ksc_14(v2, w, x, v);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_chain:
-                                {
-                                    __auto_type u = _mv_949.data.k_chain.f0;
-                                    __auto_type v2 = _mv_949.data.k_chain.f1;
-                                    __auto_type w = _mv_949.data.k_chain.f2;
-                                    if (types_role_eq(u, v)) {
-                                        {
-                                            __auto_type _coll = kscsat_role_legs(arena, idx, st, base, 1, x, v2);
-                                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                __auto_type lg = _coll.data[_i];
-                                                {
-                                                    __auto_type ax2 = ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = u, .f1 = lg.role, .f2 = w } });
-                                                    {
-                                                        __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j16_self, f, lg.facts, ax2);
-                                                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                            __auto_type g = _coll.data[_i];
-                                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (kscsat_store_holds(st, base, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = v2 } }))) {
-                                            {
-                                                __auto_type c = ksc_ksc_18(u, v2, w, x, v, x, v2);
-                                                if (c.fires) {
-                                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if (types_role_eq(v2, v)) {
-                                        {
-                                            __auto_type _coll = kscsat_role_legs(arena, idx, st, base, 0, x, u);
-                                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                __auto_type lg = _coll.data[_i];
-                                                {
-                                                    __auto_type ax1 = ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = lg.role, .f1 = v2, .f2 = w } });
-                                                    {
-                                                        __auto_type _coll = ksc_ksc_join(arena, ksc_JoinRule_j17_self, f, lg.facts, ax1);
-                                                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                                                            __auto_type g = _coll.data[_i];
-                                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (g); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        if (kscsat_store_holds(st, base, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = u } }))) {
-                                            {
-                                                __auto_type c = ksc_ksc_18(u, v2, w, x, u, x, v);
-                                                if (c.fires) {
-                                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                }
-                                            }
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_range:
-                                {
-                                    __auto_type v2 = _mv_949.data.k_range.f0;
-                                    __auto_type d = _mv_949.data.k_range.f1;
-                                    {
-                                        __auto_type c = ksc_ksc_24(v2, d, x, v);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    {
-                                        __auto_type c = ksc_ksc_26(v2, d, x, v);
-                                        if (c.fires) {
-                                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                    break;
-                                }
-                                case types_KscAxiom_k_sub:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_and:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_some_rhs:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_self_rhs:
-                                {
-                                    break;
-                                }
-                                case types_KscAxiom_k_role_assert:
-                                {
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                } else if (!_mv_948.has_value) {
-                }
-                __auto_type _mv_950 = kscpremise_ex_partners(idx, v);
-                if (_mv_950.has_value) {
-                    __auto_type p = _mv_950.value;
-                    {
-                        __auto_type _coll = kscsat_partner_matches(arena, st, base, x, p);
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type m = _coll.data[_i];
-                            {
-                                __auto_type _coll = m.axioms.items;
-                                for (size_t _i = 0; _i < _coll.len; _i++) {
-                                    __auto_type ax = _coll.data[_i];
-                                    __auto_type _mv_951 = ax;
-                                    switch (_mv_951.tag) {
-                                        case types_KscAxiom_k_some_lhs:
-                                        {
-                                            __auto_type v2 = _mv_951.data.k_some_lhs.f0;
-                                            __auto_type a = _mv_951.data.k_some_lhs.f1;
-                                            __auto_type z = _mv_951.data.k_some_lhs.f2;
-                                            {
-                                                __auto_type c = ksc_ksc_8(v2, a, z, x, v, x, m.other);
-                                                if (c.fires) {
-                                                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c.fact); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                }
-                                            }
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_sub:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_and:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_some_rhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_self_lhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_self_rhs:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_role:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_chain:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_range:
-                                        {
-                                            break;
-                                        }
-                                        case types_KscAxiom_k_role_assert:
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (!_mv_950.has_value) {
-                }
-                break;
             }
         }
-        return out;
     }
+    return 1;
+}
+
+uint8_t kscsat_inst_equality(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_KTerm y) {
+    {
+        __auto_type noax = kscsat_no_axiom();
+        if (ksc_is_nominal(y)) {
+            kscsat_emit_joins(arena, d, ksc_JoinRule_j27_nom, f, kscsat_partners_at(arena, d, kscsat_Field_fd_insts, x), noax);
+            kscsat_emit_joins(arena, d, ksc_JoinRule_j28_nom, f, kscsat_partners_at(arena, d, kscsat_Field_fd_insts, ksc_term_elem(y)), noax);
+            kscsat_emit_joins(arena, d, ksc_JoinRule_j29_nom, f, kscsat_all_ins(arena, (*d).st, (*d).base, x), noax);
+        }
+        kscsat_emit_joins(arena, d, ksc_JoinRule_j27_other, f, kscsat_partners_at(arena, d, kscsat_Field_fd_noms, x), noax);
+        if (ksc_is_individual(x)) {
+            kscsat_emit_joins(arena, d, ksc_JoinRule_j28_ind, f, kscsat_partners_at(arena, d, kscsat_Field_fd_holders, x), noax);
+        }
+        return 1;
+    }
+}
+
+uint8_t kscsat_derive_inst(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_KTerm y) {
+    kscsat_emit_concl(d, ksc_ksc_3(x, y));
+    __auto_type _mv_940 = kscpremise_term_bucket((*d).idx, y);
+    if (_mv_940.has_value) {
+        __auto_type bucket = _mv_940.value;
+        {
+            __auto_type _coll = bucket.items;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type ax = _coll.data[_i];
+                __auto_type _mv_941 = ax;
+                switch (_mv_941.tag) {
+                    case types_KscAxiom_k_sub:
+                    {
+                        __auto_type sy = _mv_941.data.k_sub.f0;
+                        __auto_type sz = _mv_941.data.k_sub.f1;
+                        kscsat_emit_concl(d, ksc_ksc_5(sy, sz, x, y));
+                        break;
+                    }
+                    case types_KscAxiom_k_and:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_some_lhs:
+                    {
+                        __auto_type v = _mv_941.data.k_some_lhs.f0;
+                        __auto_type a = _mv_941.data.k_some_lhs.f1;
+                        __auto_type z = _mv_941.data.k_some_lhs.f2;
+                        kscsat_inst_some_lhs(arena, d, f, x, y, v, a, z);
+                        break;
+                    }
+                    case types_KscAxiom_k_some_rhs:
+                    {
+                        __auto_type a = _mv_941.data.k_some_rhs.f0;
+                        __auto_type v = _mv_941.data.k_some_rhs.f1;
+                        __auto_type b = _mv_941.data.k_some_rhs.f2;
+                        __auto_type w = _mv_941.data.k_some_rhs.f3;
+                        kscsat_emit_concl(d, ksc_ksc_9(a, v, b, w, x, y));
+                        kscsat_emit_concl(d, ksc_ksc_10(a, v, b, w, x, y));
+                        break;
+                    }
+                    case types_KscAxiom_k_role_assert:
+                    {
+                        __auto_type a = _mv_941.data.k_role_assert.f0;
+                        __auto_type v = _mv_941.data.k_role_assert.f1;
+                        __auto_type b = _mv_941.data.k_role_assert.f2;
+                        kscsat_emit_concl(d, ksc_ksc_9_assert(a, v, b, x, y));
+                        kscsat_emit_concl(d, ksc_ksc_10_assert(a, v, b, x, y));
+                        break;
+                    }
+                    case types_KscAxiom_k_self_rhs:
+                    {
+                        __auto_type a = _mv_941.data.k_self_rhs.f0;
+                        __auto_type v = _mv_941.data.k_self_rhs.f1;
+                        kscsat_emit_concl(d, ksc_ksc_12(a, v, x, y));
+                        break;
+                    }
+                    case types_KscAxiom_k_self_lhs:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_role:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_chain:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_range:
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    } else if (!_mv_940.has_value) {
+    }
+    __auto_type _mv_942 = kscpremise_and_partners((*d).idx, y);
+    if (_mv_942.has_value) {
+        __auto_type p = _mv_942.value;
+        kscsat_inst_and_pairs(arena, d, x, y, p);
+    } else if (!_mv_942.has_value) {
+        1;
+    }
+    return kscsat_inst_equality(arena, d, f, x, y);
+}
+
+uint8_t kscsat_chain_first(slop_arena* arena, kscsat_Deriving* d, types_KFact fv, types_KElem x, types_RoleId v, types_KElem x1, types_RoleId u, types_RoleId v2, types_RoleId w) {
+    {
+        __auto_type _coll = kscsat_legs_at(arena, d, 1, x1, v2);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type lg = _coll.data[_i];
+            kscsat_emit_facts(d, ksc_ksc_join(arena, ksc_JoinRule_j15_first, fv, lg.facts, ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = u, .f1 = lg.role, .f2 = w } })));
+        }
+    }
+    if (kscsat_holds_now(d, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x1, .f1 = v2 } }))) {
+        kscsat_emit_concl(d, ksc_ksc_17(u, v2, w, x, v, x1, x1, v2));
+    }
+    return 1;
+}
+
+uint8_t kscsat_chain_second(slop_arena* arena, kscsat_Deriving* d, types_KFact fv, types_KElem x, types_RoleId v, types_KElem x1, types_RoleId u, types_RoleId v2, types_RoleId w) {
+    {
+        __auto_type _coll = kscsat_legs_at(arena, d, 0, x, u);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type lg = _coll.data[_i];
+            kscsat_emit_facts(d, ksc_ksc_join(arena, ksc_JoinRule_j15_second, fv, lg.facts, ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = lg.role, .f1 = v2, .f2 = w } })));
+        }
+    }
+    if (kscsat_holds_now(d, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = u } }))) {
+        kscsat_emit_concl(d, ksc_ksc_16(u, v2, w, x, u, x, v, x1));
+    }
+    return 1;
+}
+
+uint8_t kscsat_triple_under(slop_arena* arena, kscsat_Deriving* d, types_KElem x, types_RoleId v, types_KElem x1) {
+    {
+        __auto_type fv = ((types_KFact){ .tag = types_KFact_f_triple, .data.f_triple = { .f0 = x, .f1 = v, .f2 = x1 } });
+        __auto_type _mv_943 = kscpremise_role_bucket((*d).idx, v);
+        if (_mv_943.has_value) {
+            __auto_type bucket = _mv_943.value;
+            {
+                __auto_type _coll = bucket.items;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type ax = _coll.data[_i];
+                    __auto_type _mv_944 = ax;
+                    switch (_mv_944.tag) {
+                        case types_KscAxiom_k_some_lhs:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_role:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_chain:
+                        {
+                            __auto_type u = _mv_944.data.k_chain.f0;
+                            __auto_type v2 = _mv_944.data.k_chain.f1;
+                            __auto_type w = _mv_944.data.k_chain.f2;
+                            if (types_role_eq(u, v)) {
+                                kscsat_chain_first(arena, d, fv, x, v, x1, u, v2, w);
+                            }
+                            if (types_role_eq(v2, v)) {
+                                kscsat_chain_second(arena, d, fv, x, v, x1, u, v2, w);
+                            }
+                            break;
+                        }
+                        case types_KscAxiom_k_range:
+                        {
+                            __auto_type v2 = _mv_944.data.k_range.f0;
+                            __auto_type d2 = _mv_944.data.k_range.f1;
+                            kscsat_emit_concl(d, ksc_ksc_23(v2, d2, x, v, x1));
+                            kscsat_emit_concl(d, ksc_ksc_25(v2, d2, x, v, x1));
+                            break;
+                        }
+                        case types_KscAxiom_k_sub:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_and:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_some_rhs:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_self_lhs:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_self_rhs:
+                        {
+                            break;
+                        }
+                        case types_KscAxiom_k_role_assert:
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+        } else if (!_mv_943.has_value) {
+        }
+        __auto_type _mv_945 = kscpremise_ex_partners((*d).idx, v);
+        if (_mv_945.has_value) {
+            __auto_type p = _mv_945.value;
+            {
+                __auto_type _coll = kscsat_matches_at(arena, d, x1, p);
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type m = _coll.data[_i];
+                    {
+                        __auto_type _coll = m.axioms.items;
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type ax = _coll.data[_i];
+                            __auto_type _mv_946 = ax;
+                            switch (_mv_946.tag) {
+                                case types_KscAxiom_k_some_lhs:
+                                {
+                                    __auto_type v2 = _mv_946.data.k_some_lhs.f0;
+                                    __auto_type a = _mv_946.data.k_some_lhs.f1;
+                                    __auto_type z = _mv_946.data.k_some_lhs.f2;
+                                    kscsat_emit_concl(d, ksc_ksc_7(v2, a, z, x, v, x1, x1, m.other));
+                                    break;
+                                }
+                                case types_KscAxiom_k_sub:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_and:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_some_rhs:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_self_lhs:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_self_rhs:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_role:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_chain:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_range:
+                                {
+                                    break;
+                                }
+                                case types_KscAxiom_k_role_assert:
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (!_mv_945.has_value) {
+        }
+        return 1;
+    }
+}
+
+uint8_t kscsat_derive_triple(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId e, types_KElem x1) {
+    kscsat_emit_concl(d, ksc_ksc_2(x, e, x1));
+    {
+        __auto_type _coll = kscpremise_role_sups(arena, (*d).idx, e);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type v = _coll.data[_i];
+            kscsat_triple_under(arena, d, x, v, x1);
+        }
+    }
+    return kscsat_emit_joins(arena, d, ksc_JoinRule_j29_triple, f, kscsat_partners_at(arena, d, kscsat_Field_fd_noms, x1), kscsat_no_axiom());
+}
+
+uint8_t kscsat_self_chain_first(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId v, types_RoleId u, types_RoleId v2, types_RoleId w) {
+    {
+        __auto_type _coll = kscsat_legs_at(arena, d, 1, x, v2);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type lg = _coll.data[_i];
+            kscsat_emit_facts(d, ksc_ksc_join(arena, ksc_JoinRule_j16_self, f, lg.facts, ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = u, .f1 = lg.role, .f2 = w } })));
+        }
+    }
+    if (kscsat_holds_now(d, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = v2 } }))) {
+        kscsat_emit_concl(d, ksc_ksc_18(u, v2, w, x, v, x, v2));
+    }
+    return 1;
+}
+
+uint8_t kscsat_self_chain_second(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId v, types_RoleId u, types_RoleId v2, types_RoleId w) {
+    {
+        __auto_type _coll = kscsat_legs_at(arena, d, 0, x, u);
+        for (size_t _i = 0; _i < _coll.len; _i++) {
+            __auto_type lg = _coll.data[_i];
+            kscsat_emit_facts(d, ksc_ksc_join(arena, ksc_JoinRule_j17_self, f, lg.facts, ((types_KscAxiom){ .tag = types_KscAxiom_k_chain, .data.k_chain = { .f0 = lg.role, .f1 = v2, .f2 = w } })));
+        }
+    }
+    if (kscsat_holds_now(d, ((types_KFact){ .tag = types_KFact_f_self, .data.f_self = { .f0 = x, .f1 = u } }))) {
+        kscsat_emit_concl(d, ksc_ksc_18(u, v2, w, x, u, x, v));
+    }
+    return 1;
+}
+
+uint8_t kscsat_derive_self(slop_arena* arena, kscsat_Deriving* d, types_KFact f, types_KElem x, types_RoleId v) {
+    __auto_type _mv_947 = kscpremise_role_bucket((*d).idx, v);
+    if (_mv_947.has_value) {
+        __auto_type bucket = _mv_947.value;
+        {
+            __auto_type _coll = bucket.items;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type ax = _coll.data[_i];
+                __auto_type _mv_948 = ax;
+                switch (_mv_948.tag) {
+                    case types_KscAxiom_k_some_lhs:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_self_lhs:
+                    {
+                        __auto_type v2 = _mv_948.data.k_self_lhs.f0;
+                        __auto_type z = _mv_948.data.k_self_lhs.f1;
+                        kscsat_emit_concl(d, ksc_ksc_11(v2, z, x, v));
+                        break;
+                    }
+                    case types_KscAxiom_k_role:
+                    {
+                        __auto_type v2 = _mv_948.data.k_role.f0;
+                        __auto_type w = _mv_948.data.k_role.f1;
+                        kscsat_emit_concl(d, ksc_ksc_14(v2, w, x, v));
+                        break;
+                    }
+                    case types_KscAxiom_k_chain:
+                    {
+                        __auto_type u = _mv_948.data.k_chain.f0;
+                        __auto_type v2 = _mv_948.data.k_chain.f1;
+                        __auto_type w = _mv_948.data.k_chain.f2;
+                        if (types_role_eq(u, v)) {
+                            kscsat_self_chain_first(arena, d, f, x, v, u, v2, w);
+                        }
+                        if (types_role_eq(v2, v)) {
+                            kscsat_self_chain_second(arena, d, f, x, v, u, v2, w);
+                        }
+                        break;
+                    }
+                    case types_KscAxiom_k_range:
+                    {
+                        __auto_type v2 = _mv_948.data.k_range.f0;
+                        __auto_type d2 = _mv_948.data.k_range.f1;
+                        kscsat_emit_concl(d, ksc_ksc_24(v2, d2, x, v));
+                        kscsat_emit_concl(d, ksc_ksc_26(v2, d2, x, v));
+                        break;
+                    }
+                    case types_KscAxiom_k_sub:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_and:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_some_rhs:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_self_rhs:
+                    {
+                        break;
+                    }
+                    case types_KscAxiom_k_role_assert:
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    } else if (!_mv_947.has_value) {
+    }
+    __auto_type _mv_949 = kscpremise_ex_partners((*d).idx, v);
+    if (_mv_949.has_value) {
+        __auto_type p = _mv_949.value;
+        {
+            __auto_type _coll = kscsat_matches_at(arena, d, x, p);
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type m = _coll.data[_i];
+                {
+                    __auto_type _coll = m.axioms.items;
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type ax = _coll.data[_i];
+                        __auto_type _mv_950 = ax;
+                        switch (_mv_950.tag) {
+                            case types_KscAxiom_k_some_lhs:
+                            {
+                                __auto_type v2 = _mv_950.data.k_some_lhs.f0;
+                                __auto_type a = _mv_950.data.k_some_lhs.f1;
+                                __auto_type z = _mv_950.data.k_some_lhs.f2;
+                                kscsat_emit_concl(d, ksc_ksc_8(v2, a, z, x, v, x, m.other));
+                                break;
+                            }
+                            case types_KscAxiom_k_sub:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_and:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_some_rhs:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_self_lhs:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_self_rhs:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_role:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_chain:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_range:
+                            {
+                                break;
+                            }
+                            case types_KscAxiom_k_role_assert:
+                            {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (!_mv_949.has_value) {
+    }
+    return 1;
+}
+
+slop_list_types_KFact kscsat_derive(slop_arena* arena, kscsat_Deriving* d, types_KFact f) {
+    (*d).out = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+    __auto_type _mv_951 = f;
+    switch (_mv_951.tag) {
+        case types_KFact_f_inst:
+        {
+            __auto_type x = _mv_951.data.f_inst.f0;
+            __auto_type y = _mv_951.data.f_inst.f1;
+            kscsat_derive_inst(arena, d, f, x, y);
+            break;
+        }
+        case types_KFact_f_triple:
+        {
+            __auto_type x = _mv_951.data.f_triple.f0;
+            __auto_type e = _mv_951.data.f_triple.f1;
+            __auto_type x1 = _mv_951.data.f_triple.f2;
+            kscsat_derive_triple(arena, d, f, x, e, x1);
+            break;
+        }
+        case types_KFact_f_self:
+        {
+            __auto_type x = _mv_951.data.f_self.f0;
+            __auto_type v = _mv_951.data.f_self.f1;
+            kscsat_derive_self(arena, d, f, x, v);
+            break;
+        }
+    }
+    return (*d).out;
 }
 
 types_RoleId kscsat_ksc_dummy_role(void) {
@@ -1545,17 +1501,20 @@ uint8_t kscsat_reaches_bottom(slop_option_kscsat_Base base, types_KFact f) {
 int64_t kscsat_derive_chunk(slop_arena* wa, slop_arena* ra, kscpremise_KscIndex idx, kscsat_KStore st, slop_option_kscsat_Base base, slop_list_types_KFact delta, int64_t lo, int64_t hi, slop_map* out) {
     {
         __auto_type items = ((slop_list_kscids_CFact){ .data = NULL, .len = 0, .cap = 0, .arena = wa });
+        __auto_type ids = st.ids;
+        __auto_type d = ((kscsat_Deriving*)(({ __auto_type _alloc = (kscsat_Deriving*)slop_arena_alloc(wa, sizeof(kscsat_Deriving)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
         int64_t i = lo;
+        (*d) = ((kscsat_Deriving){.idx = idx, .st = st, .base = base, .out = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = wa })});
         while (i < hi) {
             __auto_type _mv_956 = ({ __auto_type _lst = delta; size_t _idx = (size_t)i; slop_option_types_KFact _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
             if (_mv_956.has_value) {
                 __auto_type f = _mv_956.value;
                 {
-                    __auto_type _coll = kscsat_derive(ra, idx, st, base, f);
+                    __auto_type _coll = kscsat_derive(ra, d, f);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type c = _coll.data[_i];
                         if (!(kscsat_store_holds(st, base, c))) {
-                            ({ __auto_type _lst_p = &(items); __auto_type _item = (kscids_encode_fact(st.ids, c)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            ({ __auto_type _lst_p = &(items); __auto_type _item = (kscids_encode_fact(ids, c)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         }
                     }
                 }
@@ -1653,6 +1612,17 @@ int64_t kscsat_conclusion_count(kscsat_Derived d) {
     }
 }
 
+slop_list_kscids_CFact kscsat_chunk_items(slop_arena* arena, slop_map* out) {
+    __auto_type _mv_962 = ({ void* _ptr = slop_map_get(out, &(int64_t){0}); _ptr ? (slop_option_kscsat_CFactList){ .has_value = true, .value = *(kscsat_CFactList*)_ptr } : (slop_option_kscsat_CFactList){ .has_value = false }; });
+    if (_mv_962.has_value) {
+        __auto_type cl = _mv_962.value;
+        return cl.items;
+    } else if (!_mv_962.has_value) {
+        return ((slop_list_kscids_CFact){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+    }
+    SLOP_UNREACHABLE();
+}
+
 kscsat_RoundOut kscsat_commit_serial(slop_arena* arena, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, uint8_t stop_at_bottom, uint8_t unsat0) {
     {
         __auto_type next = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = na });
@@ -1662,31 +1632,26 @@ kscsat_RoundOut kscsat_commit_serial(slop_arena* arena, slop_arena* na, kscsat_K
             __auto_type _coll = d.outs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type out = _coll.data[_i];
-                __auto_type _mv_962 = ({ void* _ptr = slop_map_get(out, &(int64_t){0}); _ptr ? (slop_option_kscsat_CFactList){ .has_value = true, .value = *(kscsat_CFactList*)_ptr } : (slop_option_kscsat_CFactList){ .has_value = false }; });
-                if (_mv_962.has_value) {
-                    __auto_type cl = _mv_962.value;
-                    {
-                        __auto_type _coll = cl.items;
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type c = _coll.data[_i];
-                            if (!(((stop_at_bottom) ? unsat : 0))) {
-                                __auto_type _mv_963 = kscsat_commit_coded(arena, st, c);
-                                if (_mv_963.has_value) {
-                                    __auto_type f = _mv_963.value;
-                                    ({ __auto_type _lst_p = &(next); __auto_type _item = (f); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                    added = (added + 1);
-                                    if (kscsat_is_bottom_fact(f)) {
-                                        unsat = 1;
-                                    }
-                                    if (kscsat_reaches_bottom(base, f)) {
-                                        unsat = 1;
-                                    }
-                                } else if (!_mv_963.has_value) {
+                {
+                    __auto_type _coll = kscsat_chunk_items(arena, out);
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type c = _coll.data[_i];
+                        if (!(((stop_at_bottom) ? unsat : 0))) {
+                            __auto_type _mv_963 = kscsat_commit_coded(arena, st, c);
+                            if (_mv_963.has_value) {
+                                __auto_type f = _mv_963.value;
+                                ({ __auto_type _lst_p = &(next); __auto_type _item = (f); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                added = (added + 1);
+                                if (kscsat_is_bottom_fact(f)) {
+                                    unsat = 1;
                                 }
+                                if (kscsat_reaches_bottom(base, f)) {
+                                    unsat = 1;
+                                }
+                            } else if (!_mv_963.has_value) {
                             }
                         }
                     }
-                } else if (!_mv_962.has_value) {
                 }
             }
         }
@@ -1751,6 +1716,10 @@ int64_t kscsat_committer_of(kscsat_KStore st, uint32_t k, int64_t nc) {
     return (kscsat_shard_index(k, kscsat_shard_count(st)) % nc);
 }
 
+uint8_t kscsat_seen_in(kscsat_KStore st, kscids_CFact c) {
+    return slop_map_has(kscsat_shard_at(st, c.a).seen, &(c));
+}
+
 int64_t kscsat_commit_subjects(slop_arena* ca, slop_arena* sa, kscsat_KStore st, kscsat_Derived d, int64_t k, int64_t nc, slop_map* res) {
     {
         __auto_type pos = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = sa });
@@ -1760,30 +1729,21 @@ int64_t kscsat_commit_subjects(slop_arena* ca, slop_arena* sa, kscsat_KStore st,
             __auto_type _coll = d.outs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type out = _coll.data[_i];
-                __auto_type _mv_968 = ({ void* _ptr = slop_map_get(out, &(int64_t){0}); _ptr ? (slop_option_kscsat_CFactList){ .has_value = true, .value = *(kscsat_CFactList*)_ptr } : (slop_option_kscsat_CFactList){ .has_value = false }; });
-                if (_mv_968.has_value) {
-                    __auto_type cl = _mv_968.value;
-                    {
-                        __auto_type _coll = cl.items;
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type c = _coll.data[_i];
-                            if (kscsat_committer_of(st, c.a, nc) == k) {
-                                {
-                                    __auto_type sh = kscsat_shard_at(st, c.a);
-                                    if (!(slop_map_has(sh.seen, &(c)))) {
-                                        {
-                                            __auto_type f = kscids_decode_fact(st.ids, c);
-                                            kscsat_file_subject(ca, sh, f, c);
-                                            ({ __auto_type _lst_p = &(pos); __auto_type _item = (p); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                            ({ __auto_type _lst_p = &(facts); __auto_type _item = (f); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                }
+                {
+                    __auto_type _coll = kscsat_chunk_items(sa, out);
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type c = _coll.data[_i];
+                        if ((kscsat_committer_of(st, c.a, nc) == k) && !(kscsat_seen_in(st, c))) {
+                            {
+                                __auto_type sh = kscsat_shard_at(st, c.a);
+                                __auto_type f = kscids_decode_fact(st.ids, c);
+                                kscsat_file_subject(ca, sh, f, c);
+                                ({ __auto_type _lst_p = &(pos); __auto_type _item = (p); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                ({ __auto_type _lst_p = &(facts); __auto_type _item = (f); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
-                            p = (p + 1);
                         }
+                        p = (p + 1);
                     }
-                } else if (!_mv_968.has_value) {
                 }
             }
         }
@@ -1819,7 +1779,7 @@ kscsat_RoundOut kscsat_commit_parallel(slop_arena* scratch, slop_arena* na, kscs
                 __auto_type kk = k;
                 ({ __auto_type _lst_p = &(sas); __auto_type _item = (sa); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ress); __auto_type _item = (res); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                ({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (scratch); slop_closure_t _spawn_cl = ({ kscsat__lambda_971_env_t* kscsat__lambda_971_env = (kscsat__lambda_971_env_t*)slop_arena_alloc(_spawn_a, sizeof(kscsat__lambda_971_env_t)); *kscsat__lambda_971_env = (kscsat__lambda_971_env_t){ .ca = ca, .sa = sa, .st = st, .d = d, .kk = kk, .nc = nc, .res = res }; (slop_closure_t){ (void*)kscsat__lambda_971, (void*)kscsat__lambda_971_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (scratch); slop_closure_t _spawn_cl = ({ kscsat__lambda_969_env_t* kscsat__lambda_969_env = (kscsat__lambda_969_env_t*)slop_arena_alloc(_spawn_a, sizeof(kscsat__lambda_969_env_t)); *kscsat__lambda_969_env = (kscsat__lambda_969_env_t){ .ca = ca, .sa = sa, .st = st, .d = d, .kk = kk, .nc = nc, .res = res }; (slop_closure_t){ (void*)kscsat__lambda_969, (void*)kscsat__lambda_969_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 k = (k + 1);
             }
         }
@@ -1846,7 +1806,7 @@ kscsat_RoundOut kscsat_commit_parallel(slop_arena* scratch, slop_arena* na, kscs
                     __auto_type ca = kscsat_committer_arena(cas, j);
                     __auto_type held = merged.held;
                     __auto_type jj = j;
-                    ({ __auto_type _lst_p = &(others); __auto_type _item = (({ slop_arena* _spawn_a = (scratch); slop_closure_t _spawn_cl = ({ kscsat__lambda_972_env_t* kscsat__lambda_972_env = (kscsat__lambda_972_env_t*)slop_arena_alloc(_spawn_a, sizeof(kscsat__lambda_972_env_t)); *kscsat__lambda_972_env = (kscsat__lambda_972_env_t){ .ca = ca, .st = st, .held = held, .jj = jj, .nc = nc }; (slop_closure_t){ (void*)kscsat__lambda_972, (void*)kscsat__lambda_972_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ __auto_type _lst_p = &(others); __auto_type _item = (({ slop_arena* _spawn_a = (scratch); slop_closure_t _spawn_cl = ({ kscsat__lambda_970_env_t* kscsat__lambda_970_env = (kscsat__lambda_970_env_t*)slop_arena_alloc(_spawn_a, sizeof(kscsat__lambda_970_env_t)); *kscsat__lambda_970_env = (kscsat__lambda_970_env_t){ .ca = ca, .st = st, .held = held, .jj = jj, .nc = nc }; (slop_closure_t){ (void*)kscsat__lambda_970, (void*)kscsat__lambda_970_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     j = (j + 1);
                 }
             }
@@ -1863,16 +1823,16 @@ kscsat_RoundOut kscsat_commit_parallel(slop_arena* scratch, slop_arena* na, kscs
 }
 
 slop_arena* kscsat_committer_arena(slop_list_arena_ptr cas, int64_t k) {
-    __auto_type _mv_973 = ({ __auto_type _lst = cas; size_t _idx = (size_t)k; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_973.has_value) {
-        __auto_type a = _mv_973.value;
+    __auto_type _mv_971 = ({ __auto_type _lst = cas; size_t _idx = (size_t)k; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_971.has_value) {
+        __auto_type a = _mv_971.value;
         return a;
-    } else if (!_mv_973.has_value) {
-        __auto_type _mv_974 = ({ __auto_type _lst = cas; size_t _idx = (size_t)0; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-        if (_mv_974.has_value) {
-            __auto_type a = _mv_974.value;
+    } else if (!_mv_971.has_value) {
+        __auto_type _mv_972 = ({ __auto_type _lst = cas; size_t _idx = (size_t)0; slop_option_arena_ptr _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+        if (_mv_972.has_value) {
+            __auto_type a = _mv_972.value;
             return a;
-        } else if (!_mv_974.has_value) {
+        } else if (!_mv_972.has_value) {
             return ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(4096); _new_arena; });
         }
         SLOP_UNREACHABLE();
@@ -1880,89 +1840,116 @@ slop_arena* kscsat_committer_arena(slop_list_arena_ptr cas, int64_t k) {
     SLOP_UNREACHABLE();
 }
 
+slop_option_types_KFact kscsat_kept_at(kscsat_Merging* m, int64_t k) {
+    __auto_type _mv_973 = ({ __auto_type _lst = (*m).frs; size_t _idx = (size_t)k; slop_option_kscsat_Fresh _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (!_mv_973.has_value) {
+        return (slop_option_types_KFact){.has_value = false};
+    } else if (_mv_973.has_value) {
+        __auto_type fr = _mv_973.value;
+        __auto_type _mv_974 = ({ __auto_type _lst = (*m).cur; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+        if (!_mv_974.has_value) {
+            return (slop_option_types_KFact){.has_value = false};
+        } else if (_mv_974.has_value) {
+            __auto_type i = _mv_974.value;
+            __auto_type _mv_975 = ({ __auto_type _lst = fr.pos; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_975.has_value) {
+                __auto_type q = _mv_975.value;
+                if (q == (*m).p) {
+                    return ({ __auto_type _lst = fr.facts; size_t _idx = (size_t)i; slop_option_types_KFact _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                } else {
+                    return (slop_option_types_KFact){.has_value = false};
+                }
+            } else if (!_mv_975.has_value) {
+                return (slop_option_types_KFact){.has_value = false};
+            }
+            SLOP_UNREACHABLE();
+        }
+        SLOP_UNREACHABLE();
+    }
+    SLOP_UNREACHABLE();
+}
+
+int64_t kscsat_cursor_at(slop_list_int cur, int64_t k) {
+    __auto_type _mv_976 = ({ __auto_type _lst = cur; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_976.has_value) {
+        __auto_type i = _mv_976.value;
+        return i;
+    } else if (!_mv_976.has_value) {
+        return 0;
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t kscsat_take_fact(kscsat_Merging* m, types_KFact f, kscids_CFact c) {
+    ({ __auto_type _lst_p = &((*m).next); __auto_type _item = (f); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+    (*m).added = ((*m).added + 1);
+    if (kscsat_is_bottom_fact(f) || kscsat_reaches_bottom((*m).base, f)) {
+        (*m).unsat = 1;
+    }
+    __auto_type _mv_977 = kscsat_other_end((*m).st, f, c);
+    if (_mv_977.has_value) {
+        __auto_type h = _mv_977.value;
+        ({ __auto_type _lst_p = &((*m).held); __auto_type _item = (((kscsat_Held){.key = h, .c = c})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+    } else if (!_mv_977.has_value) {
+    }
+    return 1;
+}
+
+uint8_t kscsat_merge_step(kscsat_Merging* m, kscids_CFact c) {
+    {
+        __auto_type k = kscsat_committer_of((*m).st, c.a, (*m).nc);
+        __auto_type _mv_978 = kscsat_kept_at(m, k);
+        if (_mv_978.has_value) {
+            __auto_type f = _mv_978.value;
+            kscsat_take_fact(m, f, c);
+            ({ __auto_type _set_lst = &((*m).cur); size_t _set_idx = (size_t)(k); __auto_type _set_val = ((kscsat_cursor_at((*m).cur, k) + 1)); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
+        } else if (!_mv_978.has_value) {
+        }
+        (*m).p = ((*m).p + 1);
+        return 1;
+    }
+}
+
 kscsat_Merged kscsat_merge_fresh(slop_arena* scratch, slop_arena* na, kscsat_KStore st, slop_option_kscsat_Base base, kscsat_Derived d, slop_list_map_ptr ress, int64_t nc, uint8_t unsat0) {
     {
+        __auto_type m = ((kscsat_Merging*)(({ __auto_type _alloc = (kscsat_Merging*)slop_arena_alloc(scratch, sizeof(kscsat_Merging)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
         __auto_type frs = ((slop_list_kscsat_Fresh){ .data = NULL, .len = 0, .cap = 0, .arena = scratch });
         __auto_type cur = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = scratch });
-        __auto_type next = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = na });
-        __auto_type held = ((slop_list_kscsat_Held){ .data = NULL, .len = 0, .cap = 0, .arena = scratch });
-        uint8_t unsat = unsat0;
-        int64_t added = 0;
-        int64_t p = 0;
         {
             __auto_type _coll = ress;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type r = _coll.data[_i];
-                __auto_type _mv_976 = ({ void* _ptr = slop_map_get(r, &(int64_t){0}); _ptr ? (slop_option_kscsat_Fresh){ .has_value = true, .value = *(kscsat_Fresh*)_ptr } : (slop_option_kscsat_Fresh){ .has_value = false }; });
-                if (_mv_976.has_value) {
-                    __auto_type fr = _mv_976.value;
+                __auto_type _mv_980 = ({ void* _ptr = slop_map_get(r, &(int64_t){0}); _ptr ? (slop_option_kscsat_Fresh){ .has_value = true, .value = *(kscsat_Fresh*)_ptr } : (slop_option_kscsat_Fresh){ .has_value = false }; });
+                if (_mv_980.has_value) {
+                    __auto_type fr = _mv_980.value;
                     ({ __auto_type _lst_p = &(frs); __auto_type _item = (fr); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     ({ __auto_type _lst_p = &(cur); __auto_type _item = (0); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                } else if (!_mv_976.has_value) {
+                } else if (!_mv_980.has_value) {
                     ({ __auto_type _lst_p = &(frs); __auto_type _item = (((kscsat_Fresh){.pos = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = scratch }), .facts = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = scratch })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     ({ __auto_type _lst_p = &(cur); __auto_type _item = (0); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
             }
         }
+        (*m) = ((kscsat_Merging){.st = st, .base = base, .nc = nc, .frs = frs, .cur = cur, .next = ((slop_list_types_KFact){ .data = NULL, .len = 0, .cap = 0, .arena = na }), .held = ((slop_list_kscsat_Held){ .data = NULL, .len = 0, .cap = 0, .arena = scratch }), .added = 0, .unsat = unsat0, .p = 0});
         {
             __auto_type _coll = d.outs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type out = _coll.data[_i];
-                __auto_type _mv_978 = ({ void* _ptr = slop_map_get(out, &(int64_t){0}); _ptr ? (slop_option_kscsat_CFactList){ .has_value = true, .value = *(kscsat_CFactList*)_ptr } : (slop_option_kscsat_CFactList){ .has_value = false }; });
-                if (_mv_978.has_value) {
-                    __auto_type cl = _mv_978.value;
+                __auto_type _mv_982 = ({ void* _ptr = slop_map_get(out, &(int64_t){0}); _ptr ? (slop_option_kscsat_CFactList){ .has_value = true, .value = *(kscsat_CFactList*)_ptr } : (slop_option_kscsat_CFactList){ .has_value = false }; });
+                if (_mv_982.has_value) {
+                    __auto_type cl = _mv_982.value;
                     {
                         __auto_type _coll = cl.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type c = _coll.data[_i];
-                            {
-                                __auto_type k = kscsat_committer_of(st, c.a, nc);
-                                __auto_type _mv_979 = ({ __auto_type _lst = frs; size_t _idx = (size_t)k; slop_option_kscsat_Fresh _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                                if (_mv_979.has_value) {
-                                    __auto_type fr = _mv_979.value;
-                                    __auto_type _mv_980 = ({ __auto_type _lst = cur; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                                    if (_mv_980.has_value) {
-                                        __auto_type i = _mv_980.value;
-                                        __auto_type _mv_981 = ({ __auto_type _lst = fr.pos; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                                        if (_mv_981.has_value) {
-                                            __auto_type q = _mv_981.value;
-                                            if (q == p) {
-                                                __auto_type _mv_982 = ({ __auto_type _lst = fr.facts; size_t _idx = (size_t)i; slop_option_types_KFact _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                                                if (_mv_982.has_value) {
-                                                    __auto_type f = _mv_982.value;
-                                                    ({ __auto_type _lst_p = &(next); __auto_type _item = (f); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                    added = (added + 1);
-                                                    if (kscsat_is_bottom_fact(f)) {
-                                                        unsat = 1;
-                                                    }
-                                                    if (kscsat_reaches_bottom(base, f)) {
-                                                        unsat = 1;
-                                                    }
-                                                    __auto_type _mv_983 = kscsat_other_end(st, f, c);
-                                                    if (_mv_983.has_value) {
-                                                        __auto_type h = _mv_983.value;
-                                                        ({ __auto_type _lst_p = &(held); __auto_type _item = (((kscsat_Held){.key = h, .c = c})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                                    } else if (!_mv_983.has_value) {
-                                                    }
-                                                    ({ __auto_type _set_lst = &(cur); size_t _set_idx = (size_t)(k); __auto_type _set_val = ((i + 1)); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; });
-                                                } else if (!_mv_982.has_value) {
-                                                }
-                                            }
-                                        } else if (!_mv_981.has_value) {
-                                        }
-                                    } else if (!_mv_980.has_value) {
-                                    }
-                                } else if (!_mv_979.has_value) {
-                                }
-                            }
-                            p = (p + 1);
+                            kscsat_merge_step(m, c);
                         }
                     }
-                } else if (!_mv_978.has_value) {
+                } else if (!_mv_982.has_value) {
                 }
             }
         }
-        return ((kscsat_Merged){.out = ((kscsat_RoundOut){.next = next, .added = added, .unsat = unsat}), .held = held});
+        return ((kscsat_Merged){.out = ((kscsat_RoundOut){.next = (*m).next, .added = (*m).added, .unsat = (*m).unsat}), .held = (*m).held});
     }
 }
 
@@ -2056,22 +2043,22 @@ slop_list_types_KName kscsat_answer_subsumers(slop_arena* arena, kscsat_KStore s
             __auto_type _coll = kscsat_field_items(arena, st, kscsat_Field_fd_insts, types_class_elem(q));
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type f = _coll.data[_i];
-                __auto_type _mv_984 = f;
-                switch (_mv_984.tag) {
+                __auto_type _mv_983 = f;
+                switch (_mv_983.tag) {
                     case types_KFact_f_inst:
                     {
-                        __auto_type y = _mv_984.data.f_inst.f1;
-                        __auto_type _mv_985 = y;
-                        switch (_mv_985.tag) {
+                        __auto_type y = _mv_983.data.f_inst.f1;
+                        __auto_type _mv_984 = y;
+                        switch (_mv_984.tag) {
                             case types_KTerm_k_name:
                             {
-                                __auto_type n = _mv_985.data.k_name;
+                                __auto_type n = _mv_984.data.k_name;
                                 ({ __auto_type _lst_p = &(out); __auto_type _item = (kscnormal_copy_kname(arena, n)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                 break;
                             }
                             case types_KTerm_k_nominal:
                             {
-                                __auto_type _ = _mv_985.data.k_nominal;
+                                __auto_type _ = _mv_984.data.k_nominal;
                                 break;
                             }
                         }
@@ -2089,6 +2076,39 @@ slop_list_types_KName kscsat_answer_subsumers(slop_arena* arena, kscsat_KStore s
             }
         }
         return out;
+    }
+}
+
+slop_list_u32 kscsat_queue_ins(kscsat_KStore w, slop_map* seen, slop_map* out, slop_list_u32 work, uint32_t xi) {
+    {
+        __auto_type ids = w.ids;
+        __auto_type wk = work;
+        __auto_type _mv_986 = ({ void* _ptr = slop_map_get(kscsat_shard_at(w, xi).ins, &(uint32_t){xi}); _ptr ? (slop_option_kscsat_RoleIds){ .has_value = true, .value = *(kscsat_RoleIds*)_ptr } : (slop_option_kscsat_RoleIds){ .has_value = false }; });
+        if (_mv_986.has_value) {
+            __auto_type rf = _mv_986.value;
+            {
+                slop_map* _coll = (slop_map*)rf.by_role;
+                for (size_t _i = 0; _i < _coll->len; _i++) {
+                    {
+                        uint32_t v = *(uint32_t*)slop_map_key_at(_coll, _i);
+                        kscsat_IdList il = *(kscsat_IdList*)slop_map_value_at(_coll, _i);
+                        {
+                            __auto_type _coll = il.items;
+                            for (size_t _i = 0; _i < _coll.len; _i++) {
+                                __auto_type pi = _coll.data[_i];
+                                if (!(slop_map_has(seen, &(uint32_t){pi}))) {
+                                    ({ slop_map_put(NULL, seen, &(uint32_t){pi}, NULL, 0); });
+                                    ({ types_KElem _key_989 = (kscids_id_elem(ids, pi)); slop_map_put(NULL, out, &_key_989, NULL, 0); });
+                                    ({ __auto_type _lst_p = &(wk); __auto_type _item = (pi); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (!_mv_986.has_value) {
+        }
+        return wk;
     }
 }
 
@@ -2114,35 +2134,11 @@ slop_map* kscsat_backward_closure(slop_arena* arena, kscsat_KStore w, slop_list_
             }
         }
         while (i < ((int64_t)(((int64_t)((work).len))))) {
-            __auto_type _mv_989 = ({ __auto_type _lst = work; size_t _idx = (size_t)i; slop_option_u32 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_989.has_value) {
-                __auto_type xi = _mv_989.value;
-                __auto_type _mv_991 = ({ void* _ptr = slop_map_get(kscsat_shard_at(w, xi).ins, &(uint32_t){xi}); _ptr ? (slop_option_kscsat_RoleIds){ .has_value = true, .value = *(kscsat_RoleIds*)_ptr } : (slop_option_kscsat_RoleIds){ .has_value = false }; });
-                if (_mv_991.has_value) {
-                    __auto_type rf = _mv_991.value;
-                    {
-                        slop_map* _coll = (slop_map*)rf.by_role;
-                        for (size_t _i = 0; _i < _coll->len; _i++) {
-                            {
-                                uint32_t v = *(uint32_t*)slop_map_key_at(_coll, _i);
-                                kscsat_IdList il = *(kscsat_IdList*)slop_map_value_at(_coll, _i);
-                                {
-                                    __auto_type _coll = il.items;
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type pi = _coll.data[_i];
-                                        if (!(slop_map_has(seen, &(uint32_t){pi}))) {
-                                            ({ slop_map_put(NULL, seen, &(uint32_t){pi}, NULL, 0); });
-                                            ({ types_KElem _key_994 = (kscids_id_elem(ids, pi)); slop_map_put(NULL, out, &_key_994, NULL, 0); });
-                                            ({ __auto_type _lst_p = &(work); __auto_type _item = (pi); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if (!_mv_991.has_value) {
-                }
-            } else if (!_mv_989.has_value) {
+            __auto_type _mv_993 = ({ __auto_type _lst = work; size_t _idx = (size_t)i; slop_option_u32 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_993.has_value) {
+                __auto_type xi = _mv_993.value;
+                work = kscsat_queue_ins(w, seen, out, work, xi);
+            } else if (!_mv_993.has_value) {
             }
             i = (i + 1);
         }
@@ -2170,7 +2166,7 @@ slop_option_types_ClassAnswer kscsat_class_run(slop_arena* arena, kscpremise_Ksc
 
 types_ClassAnswer kscsat_shared_answer(slop_arena* arena, kscsat_Base base, uint8_t g_unsat, types_KName q) {
     types_ClassAnswer _retval = {0};
-    _retval = ((types_ClassAnswer){.cls = q, .shared = 1, .unsat = ((g_unsat) ? 1 : ({ types_KElem _key_995 = (types_class_elem(q)); slop_map_has(base.botreach, &_key_995); })), .subsumers = kscsat_answer_subsumers(arena, base.w, q), .complete = 1, .rounds = 0, .facts = 0});
+    _retval = ((types_ClassAnswer){.cls = q, .shared = 1, .unsat = ((g_unsat) ? 1 : ({ types_KElem _key_994 = (types_class_elem(q)); slop_map_has(base.botreach, &_key_994); })), .subsumers = kscsat_answer_subsumers(arena, base.w, q), .complete = 1, .rounds = 0, .facts = 0});
     goto _slop_post;
     _slop_post: ;
     SLOP_POST(((_retval.shared == 1)), "(== (. $result shared) true)");
@@ -2215,6 +2211,23 @@ slop_list_arena_ptr kscsat_ksc_commit_arenas(slop_arena* arena, int64_t w) {
     }
 }
 
+types_KscResult kscsat_w_capped(slop_arena* arena, kscsat_RunResult g, kscsat_RunResult w, int64_t n) {
+    return ((types_KscResult){.inconsistent = 0, .termination = ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = n }), .rounds = (g.rounds + w.rounds), .g_rounds = g.rounds, .g_facts = g.facts, .w_rounds = w.rounds, .w_facts = w.facts, .unsafe_count = 0, .answers = ((slop_list_types_ClassAnswer){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
+}
+
+slop_result_types_KscResult_types_Fault kscsat_phase_w(slop_arena* arena, kscpremise_KscIndex idx, kscids_KscIds ids, kscsat_RunResult g, slop_list_types_KFact wseeds, slop_list_types_KElem tainted, types_KName thing, slop_list_types_KName classes, types_ReasonerConfig config, slop_list_arena_ptr cas, int64_t n) {
+    {
+        __auto_type w = kscsat_run_ksc(arena, idx, ids, ((slop_option_kscsat_Base){.has_value = false}), wseeds, 0, (n - g.rounds), config.cancel_ptr, ((int64_t)(config.worker_count)), cas);
+        if (w.cancelled) {
+            return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
+        } else if (w.capped) {
+            return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_w_capped(arena, g, w, n) });
+        } else {
+            return kscsat_classify_over_w(arena, idx, g, w, tainted, thing, classes, (n - (g.rounds + w.rounds)), ((int64_t)(config.worker_count)), config.cancel_ptr);
+        }
+    }
+}
+
 slop_result_types_KscResult_types_Fault kscsat_classify_phases(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config, slop_list_arena_ptr cas) {
     {
         __auto_type idx = kscpremise_build_ksc_index(arena, axioms);
@@ -2245,27 +2258,12 @@ slop_result_types_KscResult_types_Fault kscsat_classify_phases(slop_arena* arena
             __auto_type g = kscsat_run_ksc(arena, idx, ids, ((slop_option_kscsat_Base){.has_value = false}), gseeds, 1, n, config.cancel_ptr, ((int64_t)(config.worker_count)), cas);
             if (g.cancelled) {
                 return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
+            } else if (g.unsat) {
+                return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_g_only(arena, g, 1) });
+            } else if (g.capped) {
+                return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_g_only(arena, g, 0) });
             } else {
-                if (g.unsat) {
-                    return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_g_only(arena, g, 1) });
-                } else {
-                    if (g.capped) {
-                        return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_g_only(arena, g, 0) });
-                    } else {
-                        {
-                            __auto_type w = kscsat_run_ksc(arena, idx, ids, ((slop_option_kscsat_Base){.has_value = false}), wseeds, 0, (n - g.rounds), config.cancel_ptr, ((int64_t)(config.worker_count)), cas);
-                            if (w.cancelled) {
-                                return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
-                            } else {
-                                if (w.capped) {
-                                    return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = ((types_KscResult){.inconsistent = 0, .termination = ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = n }), .rounds = (g.rounds + w.rounds), .g_rounds = g.rounds, .g_facts = g.facts, .w_rounds = w.rounds, .w_facts = w.facts, .unsafe_count = 0, .answers = ((slop_list_types_ClassAnswer){ .data = NULL, .len = 0, .cap = 0, .arena = arena })}) });
-                                } else {
-                                    return kscsat_classify_over_w(arena, idx, g, w, tainted, thing, classes, (n - (g.rounds + w.rounds)), ((int64_t)(config.worker_count)), config.cancel_ptr);
-                                }
-                            }
-                        }
-                    }
-                }
+                return kscsat_phase_w(arena, idx, ids, g, wseeds, tainted, thing, classes, config, cas, n);
             }
         }
     }
@@ -2274,12 +2272,12 @@ slop_result_types_KscResult_types_Fault kscsat_classify_phases(slop_arena* arena
 slop_result_types_KscResult_types_Fault kscsat_ksc_classify(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config) {
     {
         __auto_type nm = kscnames_build_ksc_names(arena, axioms, classes);
-        __auto_type _mv_996 = kscsat_classify_renamed(arena, kscnames_rename_ksc_axioms(arena, nm, axioms), kscnames_rename_classes(arena, nm, classes), config);
-        if (!_mv_996.is_ok) {
-            __auto_type f = _mv_996.data.err;
+        __auto_type _mv_995 = kscsat_classify_renamed(arena, kscnames_rename_ksc_axioms(arena, nm, axioms), kscnames_rename_classes(arena, nm, classes), config);
+        if (!_mv_995.is_ok) {
+            __auto_type f = _mv_995.data.err;
             return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = f });
-        } else if (_mv_996.is_ok) {
-            __auto_type r = _mv_996.data.ok;
+        } else if (_mv_995.is_ok) {
+            __auto_type r = _mv_995.data.ok;
             return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_unrename_result(arena, nm, r) });
         }
         SLOP_UNREACHABLE();
@@ -2329,17 +2327,17 @@ int64_t kscsat_run_chunk(slop_arena* wa, kscpremise_KscIndex idx, kscsat_Base ba
                     cancelled = 1;
                 }
                 if (!(cancelled)) {
-                    __auto_type _mv_997 = ({ __auto_type _lst = classes; size_t _idx = (size_t)i; slop_option_types_KName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                    if (_mv_997.has_value) {
-                        __auto_type q = _mv_997.value;
-                        __auto_type _mv_998 = kscsat_class_run(wa, idx, base, 0, budget, cancel, q);
-                        if (_mv_998.has_value) {
-                            __auto_type a = _mv_998.value;
+                    __auto_type _mv_996 = ({ __auto_type _lst = classes; size_t _idx = (size_t)i; slop_option_types_KName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                    if (_mv_996.has_value) {
+                        __auto_type q = _mv_996.value;
+                        __auto_type _mv_997 = kscsat_class_run(wa, idx, base, 0, budget, cancel, q);
+                        if (_mv_997.has_value) {
+                            __auto_type a = _mv_997.value;
                             ({ types_ClassAnswer _val = a; slop_map_put(NULL, out, &(int64_t){i}, &_val, sizeof(_val)); });
-                        } else if (!_mv_998.has_value) {
+                        } else if (!_mv_997.has_value) {
                             cancelled = 1;
                         }
-                    } else if (!_mv_997.has_value) {
+                    } else if (!_mv_996.has_value) {
                     }
                 }
             }
@@ -2357,11 +2355,11 @@ slop_list_int kscsat_index_chunk(slop_arena* arena, slop_list_int xs, int64_t lo
         __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t j = lo;
         while (j < hi) {
-            __auto_type _mv_1000 = ({ __auto_type _lst = xs; size_t _idx = (size_t)j; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_1000.has_value) {
-                __auto_type x = _mv_1000.value;
+            __auto_type _mv_999 = ({ __auto_type _lst = xs; size_t _idx = (size_t)j; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_999.has_value) {
+                __auto_type x = _mv_999.value;
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            } else if (!_mv_1000.has_value) {
+            } else if (!_mv_999.has_value) {
             }
             j = (j + 1);
         }
@@ -2393,12 +2391,9 @@ int64_t kscsat_worker_count_for(int64_t workers, int64_t jobs) {
     return _retval;
 }
 
-slop_result_types_KscResult_types_Fault kscsat_classify_over_w(slop_arena* arena, kscpremise_KscIndex idx, kscsat_RunResult g, kscsat_RunResult w, slop_list_types_KElem tainted, types_KName thing, slop_list_types_KName classes, int64_t budget, int64_t workers, int64_t cancel) {
+kscsat_Base kscsat_over_w_base(slop_arena* arena, kscsat_RunResult g, kscsat_RunResult w, slop_list_types_KElem tainted) {
     {
         __auto_type taint = ((slop_list_types_KElem){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type answers = ((slop_list_types_ClassAnswer){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        uint8_t complete = 1;
-        int64_t cancelled = 0;
         {
             __auto_type _coll = tainted;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -2419,118 +2414,149 @@ slop_result_types_KscResult_types_Fault kscsat_classify_over_w(slop_arena* arena
                 }
             }
         }
+        return ((kscsat_Base){.g = g.store, .w = w.store, .unsafe = kscsat_backward_closure(arena, w.store, taint), .botreach = kscsat_backward_closure(arena, w.store, kscsat_store_bots(arena, w.store))});
+    }
+}
+
+slop_list_int kscsat_split_safe(slop_arena* arena, kscsat_Base base, slop_list_types_KName classes, slop_map* shared) {
+    {
+        __auto_type todo = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t i = 0;
         {
-            __auto_type base = ((kscsat_Base){.g = g.store, .w = w.store, .unsafe = kscsat_backward_closure(arena, w.store, taint), .botreach = kscsat_backward_closure(arena, w.store, kscsat_store_bots(arena, w.store))});
-            __auto_type thing_run = kscsat_class_answer(arena, idx, base, 0, budget, cancel, thing);
-            __auto_type shared = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, types_ClassAnswer); slop_map_new_ptr(arena, 0, &_d); });
-            __auto_type todo = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-            int64_t i = 0;
-            __auto_type _mv_1001 = thing_run;
-            if (!_mv_1001.has_value) {
-                return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
-            } else if (_mv_1001.has_value) {
-                __auto_type thing_answer = _mv_1001.value;
-                if (!(thing_answer.complete)) {
-                    complete = 0;
+            __auto_type _coll = classes;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type q = _coll.data[_i];
+                if (kscsat_is_safe(base, types_class_elem(q))) {
+                    ({ types_ClassAnswer _val = kscsat_shared_answer(arena, base, 0, q); slop_map_put(NULL, shared, &(int64_t){i}, &_val, sizeof(_val)); });
+                } else {
+                    ({ __auto_type _lst_p = &(todo); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
-                {
-                    __auto_type _coll = classes;
-                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                        __auto_type q = _coll.data[_i];
-                        if (kscsat_is_safe(base, types_class_elem(q))) {
-                            ({ types_ClassAnswer _val = kscsat_shared_answer(arena, base, 0, q); slop_map_put(NULL, shared, &(int64_t){i}, &_val, sizeof(_val)); });
-                        } else {
-                            ({ __auto_type _lst_p = &(todo); __auto_type _item = (i); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        }
-                        i = (i + 1);
-                    }
+                i = (i + 1);
+            }
+        }
+        return todo;
+    }
+}
+
+kscsat_QRuns kscsat_run_unsafe(slop_arena* arena, kscpremise_KscIndex idx, kscsat_Base base, int64_t budget, int64_t cancel, slop_list_types_KName classes, slop_list_int todo, int64_t workers) {
+    {
+        __auto_type nw = kscsat_worker_count_for(workers, ((int64_t)(((int64_t)((todo).len)))));
+        __auto_type per = ((((int64_t)(((int64_t)((todo).len)))) + (nw - 1)) / nw);
+        __auto_type was = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type outs = ((slop_list_map_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type threads = ((slop_list_thread_int_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t cancelled = 0;
+        int64_t k = 0;
+        while (k < nw) {
+            {
+                __auto_type wa = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; });
+                __auto_type out = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, types_ClassAnswer); slop_map_new_ptr(wa, 0, &_d); });
+                __auto_type chunk = kscsat_index_chunk(wa, todo, (k * per), ((k + 1) * per));
+                ({ __auto_type _lst_p = &(was); __auto_type _item = (wa); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(outs); __auto_type _item = (out); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                if (nw <= 1) {
+                    cancelled = (cancelled + kscsat_run_chunk(wa, idx, base, budget, cancel, classes, chunk, out));
+                } else {
+                    ({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (arena); slop_closure_t _spawn_cl = ({ kscsat__lambda_1001_env_t* kscsat__lambda_1001_env = (kscsat__lambda_1001_env_t*)slop_arena_alloc(_spawn_a, sizeof(kscsat__lambda_1001_env_t)); *kscsat__lambda_1001_env = (kscsat__lambda_1001_env_t){ .wa = wa, .idx = idx, .base = base, .budget = budget, .cancel = cancel, .classes = classes, .chunk = chunk, .out = out }; (slop_closure_t){ (void*)kscsat__lambda_1001, (void*)kscsat__lambda_1001_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
-                {
-                    __auto_type jobs = ((int64_t)(((int64_t)((todo).len))));
-                    __auto_type nw = kscsat_worker_count_for(workers, ((int64_t)(((int64_t)((todo).len)))));
-                    __auto_type per = ((((int64_t)(((int64_t)((todo).len)))) + (kscsat_worker_count_for(workers, ((int64_t)(((int64_t)((todo).len))))) - 1)) / kscsat_worker_count_for(workers, ((int64_t)(((int64_t)((todo).len))))));
-                    __auto_type was = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-                    __auto_type outs = ((slop_list_map_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-                    __auto_type threads = ((slop_list_thread_int_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-                    int64_t k = 0;
-                    while (k < nw) {
-                        {
-                            __auto_type wa = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; });
-                            __auto_type out = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, types_ClassAnswer); slop_map_new_ptr(wa, 0, &_d); });
-                            __auto_type chunk = kscsat_index_chunk(wa, todo, (k * per), ((k + 1) * per));
-                            ({ __auto_type _lst_p = &(was); __auto_type _item = (wa); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            ({ __auto_type _lst_p = &(outs); __auto_type _item = (out); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            if (nw <= 1) {
-                                cancelled = (cancelled + kscsat_run_chunk(wa, idx, base, budget, cancel, classes, chunk, out));
-                            } else {
-                                ({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (arena); slop_closure_t _spawn_cl = ({ kscsat__lambda_1003_env_t* kscsat__lambda_1003_env = (kscsat__lambda_1003_env_t*)slop_arena_alloc(_spawn_a, sizeof(kscsat__lambda_1003_env_t)); *kscsat__lambda_1003_env = (kscsat__lambda_1003_env_t){ .wa = wa, .idx = idx, .base = base, .budget = budget, .cancel = cancel, .classes = classes, .chunk = chunk, .out = out }; (slop_closure_t){ (void*)kscsat__lambda_1003, (void*)kscsat__lambda_1003_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            }
-                            k = (k + 1);
-                        }
+                k = (k + 1);
+            }
+        }
+        {
+            __auto_type _coll = threads;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type t = _coll.data[_i];
+                cancelled = (cancelled + thread_join(t));
+            }
+        }
+        return ((kscsat_QRuns){.was = was, .outs = outs, .cancelled = cancelled});
+    }
+}
+
+kscsat_QAnswers kscsat_copy_unsafe(slop_arena* arena, kscsat_QAnswers qa, slop_list_map_ptr outs, int64_t i) {
+    {
+        __auto_type r = qa;
+        {
+            __auto_type _coll = outs;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type out = _coll.data[_i];
+                __auto_type _mv_1003 = ({ void* _ptr = slop_map_get(out, &(int64_t){i}); _ptr ? (slop_option_types_ClassAnswer){ .has_value = true, .value = *(types_ClassAnswer*)_ptr } : (slop_option_types_ClassAnswer){ .has_value = false }; });
+                if (_mv_1003.has_value) {
+                    __auto_type a = _mv_1003.value;
+                    if (!(a.complete)) {
+                        r.complete = 0;
                     }
-                    {
-                        __auto_type _coll = threads;
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type t = _coll.data[_i];
-                            cancelled = (cancelled + thread_join(t));
-                        }
-                    }
-                    i = 0;
-                    {
-                        __auto_type _coll = classes;
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type q = _coll.data[_i];
-                            __auto_type _mv_1005 = ({ void* _ptr = slop_map_get(shared, &(int64_t){i}); _ptr ? (slop_option_types_ClassAnswer){ .has_value = true, .value = *(types_ClassAnswer*)_ptr } : (slop_option_types_ClassAnswer){ .has_value = false }; });
-                            if (_mv_1005.has_value) {
-                                __auto_type a = _mv_1005.value;
-                                ({ __auto_type _lst_p = &(answers); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            } else if (!_mv_1005.has_value) {
-                                {
-                                    __auto_type _coll = outs;
-                                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                                        __auto_type out = _coll.data[_i];
-                                        __auto_type _mv_1007 = ({ void* _ptr = slop_map_get(out, &(int64_t){i}); _ptr ? (slop_option_types_ClassAnswer){ .has_value = true, .value = *(types_ClassAnswer*)_ptr } : (slop_option_types_ClassAnswer){ .has_value = false }; });
-                                        if (_mv_1007.has_value) {
-                                            __auto_type a = _mv_1007.value;
-                                            if (!(a.complete)) {
-                                                complete = 0;
-                                            }
-                                            ({ __auto_type _lst_p = &(answers); __auto_type _item = (kscsat_copy_answer(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                                        } else if (!_mv_1007.has_value) {
-                                        }
-                                    }
-                                }
-                            }
-                            i = (i + 1);
-                        }
-                    }
-                    if (cancelled > 0) {
-                        {
-                            __auto_type _coll = was;
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type wa = _coll.data[_i];
-                                ({ slop_arena_free(wa); free(wa); });
-                            }
-                        }
-                        return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
-                    } else {
-                        {
-                            __auto_type _coll = was;
-                            for (size_t _i = 0; _i < _coll.len; _i++) {
-                                __auto_type wa = _coll.data[_i];
-                                ({ slop_arena_free(wa); free(wa); });
-                            }
-                        }
-                        {
-                            __auto_type qrounds = (((thing_answer.rounds > kscsat_max_rounds(answers))) ? thing_answer.rounds : kscsat_max_rounds(answers));
-                            __auto_type total = (g.rounds + (w.rounds + qrounds));
-                            return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = ((types_KscResult){.inconsistent = thing_answer.unsat, .termination = ((complete) ? ((types_Termination){ .tag = types_Termination_fixpoint }) : ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = total })), .rounds = total, .g_rounds = g.rounds, .g_facts = g.facts, .w_rounds = w.rounds, .w_facts = w.facts, .unsafe_count = jobs, .answers = answers}) });
-                        }
-                    }
+                    ({ __auto_type _lst_p = &(r.answers); __auto_type _item = (kscsat_copy_answer(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                } else if (!_mv_1003.has_value) {
                 }
             }
-            SLOP_UNREACHABLE();
         }
+        return r;
+    }
+}
+
+kscsat_QAnswers kscsat_collect_answers(slop_arena* arena, slop_list_types_KName classes, slop_map* shared, slop_list_map_ptr outs, uint8_t complete0) {
+    {
+        __auto_type qa = ((kscsat_QAnswers){.answers = ((slop_list_types_ClassAnswer){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .complete = complete0});
+        int64_t i = 0;
+        {
+            __auto_type _coll = classes;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type q = _coll.data[_i];
+                __auto_type _mv_1005 = ({ void* _ptr = slop_map_get(shared, &(int64_t){i}); _ptr ? (slop_option_types_ClassAnswer){ .has_value = true, .value = *(types_ClassAnswer*)_ptr } : (slop_option_types_ClassAnswer){ .has_value = false }; });
+                if (_mv_1005.has_value) {
+                    __auto_type a = _mv_1005.value;
+                    ({ __auto_type _lst_p = &(qa.answers); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                } else if (!_mv_1005.has_value) {
+                    qa = kscsat_copy_unsafe(arena, qa, outs, i);
+                }
+                i = (i + 1);
+            }
+        }
+        return qa;
+    }
+}
+
+types_KscResult kscsat_over_w_result(kscsat_RunResult g, kscsat_RunResult w, types_ClassAnswer thing_answer, kscsat_QAnswers qa, int64_t jobs) {
+    {
+        __auto_type qrounds = (((thing_answer.rounds > kscsat_max_rounds(qa.answers))) ? thing_answer.rounds : kscsat_max_rounds(qa.answers));
+        __auto_type total = (g.rounds + (w.rounds + qrounds));
+        return ((types_KscResult){.inconsistent = thing_answer.unsat, .termination = ((qa.complete) ? ((types_Termination){ .tag = types_Termination_fixpoint }) : ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = total })), .rounds = total, .g_rounds = g.rounds, .g_facts = g.facts, .w_rounds = w.rounds, .w_facts = w.facts, .unsafe_count = jobs, .answers = qa.answers});
+    }
+}
+
+slop_result_types_KscResult_types_Fault kscsat_answer_over_w(slop_arena* arena, kscpremise_KscIndex idx, kscsat_RunResult g, kscsat_RunResult w, kscsat_Base base, types_ClassAnswer thing_answer, slop_list_types_KName classes, int64_t budget, int64_t workers, int64_t cancel) {
+    {
+        __auto_type shared = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, types_ClassAnswer); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type todo = kscsat_split_safe(arena, base, classes, shared);
+        __auto_type runs = kscsat_run_unsafe(arena, idx, base, budget, cancel, classes, todo, workers);
+        __auto_type qa = kscsat_collect_answers(arena, classes, shared, runs.outs, thing_answer.complete);
+        {
+            __auto_type _coll = runs.was;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type wa = _coll.data[_i];
+                ({ slop_arena_free(wa); free(wa); });
+            }
+        }
+        if (runs.cancelled > 0) {
+            return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
+        } else {
+            return ((slop_result_types_KscResult_types_Fault){ .is_ok = true, .data.ok = kscsat_over_w_result(g, w, thing_answer, qa, ((int64_t)(((int64_t)((todo).len))))) });
+        }
+    }
+}
+
+slop_result_types_KscResult_types_Fault kscsat_classify_over_w(slop_arena* arena, kscpremise_KscIndex idx, kscsat_RunResult g, kscsat_RunResult w, slop_list_types_KElem tainted, types_KName thing, slop_list_types_KName classes, int64_t budget, int64_t workers, int64_t cancel) {
+    {
+        __auto_type base = kscsat_over_w_base(arena, g, w, tainted);
+        __auto_type _mv_1006 = kscsat_class_answer(arena, idx, base, 0, budget, cancel, thing);
+        if (!_mv_1006.has_value) {
+            return ((slop_result_types_KscResult_types_Fault){ .is_ok = false, .data.err = ((types_Fault){ .tag = types_Fault_cancelled }) });
+        } else if (_mv_1006.has_value) {
+            __auto_type thing_answer = _mv_1006.value;
+            return kscsat_answer_over_w(arena, idx, g, w, base, thing_answer, classes, budget, workers, cancel);
+        }
+        SLOP_UNREACHABLE();
     }
 }
 

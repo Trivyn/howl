@@ -1,0 +1,19 @@
+# el++ engine fixture 37 (src/test.slop: test-ksc-g-stops-at-bottom).
+# K3: phase G stops committing at a round's first ⊥. a is an A after round 1,
+# a B and a C after round 2. In round 3 the conclusions arrive in this order:
+# from inst(a, B), inst(a, F) and then ⊥ (B ⊓ C ⊑ ⊥, with inst(a, C) already
+# stored); from inst(a, C), inst(a, G). G stores inst(a, F) and stops at the
+# ⊥, so inst(a, G) is never stored.
+# Expect: inconsistent.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :F a owl:Class . :G a owl:Class .
+:a a owl:NamedIndividual , :A .
+:A rdfs:subClassOf :B , :C .
+:B rdfs:subClassOf :F .
+:C rdfs:subClassOf :G .
+[ owl:intersectionOf ( :B :C ) ] rdfs:subClassOf owl:Nothing .

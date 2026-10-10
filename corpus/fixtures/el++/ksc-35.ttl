@@ -1,0 +1,20 @@
+# el++ engine fixture 35 (src/test.slop: test-ksc-engine-matches-reference).
+# Rule (17) from its triple premise: b is a B, so self(b, s) holds in G from
+# the start. A's run (A reaches the nominal {b}, so it is unsafe and runs on
+# its own) derives triple(x, r, b); that self fact is G's, never a fact of
+# A's run, so only the triple's side can join r ∘ s ⊑ t: x t→ b, and with
+# ∃t.B ⊑ D, A ⊑ D.
+# Expect: A ⊑ D.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+:A a owl:Class . :B a owl:Class . :D a owl:Class .
+:b a owl:NamedIndividual , :B .
+:t owl:propertyChainAxiom ( :r :s ) .
+:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:hasSelf true ] .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:oneOf ( :b ) ] ] .
+[ a owl:Restriction ; owl:onProperty :t ; owl:someValuesFrom :B ] rdfs:subClassOf :D .
