@@ -366,6 +366,7 @@ uint8_t test_root_rows(slop_arena* arena, sriqctx_Strategy s);
 uint8_t test_not_dl4_row(slop_arena* arena, sriqctx_Strategy s);
 uint8_t test_test_sriq_ref_e4_rows(slop_arena* arena);
 slop_list_test_Expect test_expects(slop_arena* arena);
+slop_list_test_Expect test_abox_expects(slop_arena* arena);
 uint32_t test_class_named(slop_arena* arena, sriqclauses_SriqIds ids, slop_string name);
 uint8_t test_expect_holds(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, test_Expect e);
 slop_string test_fixture_path(slop_arena* arena, slop_string name);
@@ -7135,6 +7136,31 @@ slop_list_test_Expect test_expects(slop_arena* arena) {
         ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("sim12-example1"), .kind = 0, .a = SLOP_STR("AB"), .b = SLOP_STR("D")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("symmetric"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("C")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("union-negation"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("C")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("tgh21-o1"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("D")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        {
+            __auto_type _coll = test_abox_expects(arena);
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type e = _coll.data[_i];
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_test_Expect test_abox_expects(slop_arena* arena) {
+    {
+        __auto_type out = ((slop_list_test_Expect){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = test_strs(arena, SLOP_STR("abox-functional abox-negative-transitive abox-inverse-functional abox-root-successor abox-top"));
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type n = _coll.data[_i];
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = string_concat(arena, n, SLOP_STR("-clash")), .kind = 3, .a = SLOP_STR(""), .b = SLOP_STR("")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = string_concat(arena, n, SLOP_STR("-ok")), .kind = 4, .a = SLOP_STR(""), .b = SLOP_STR("")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            }
+        }
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("abox-root-successor-ok"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("C")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("abox-top-ok"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("X")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         return out;
     }
 }
@@ -7157,7 +7183,11 @@ uint32_t test_class_named(slop_arena* arena, sriqclauses_SriqIds ids, slop_strin
 uint8_t test_expect_holds(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, test_Expect e) {
     {
         __auto_type a = test_class_named(arena, ids, e.a);
-        if (e.kind == 1) {
+        if (e.kind == 3) {
+            return sriqctx_q_inconsistent(arena, st);
+        } else if (e.kind == 4) {
+            return !(sriqctx_q_inconsistent(arena, st));
+        } else if (e.kind == 1) {
             return sriqctx_q_unsat(arena, st, a);
         } else if (e.kind == 2) {
             return !(sriqctx_q_unsat(arena, st, a));
@@ -7932,7 +7962,7 @@ slop_string test_ksc_fixture_at(int64_t i) {
 types_ReasonerConfig test_cap_config(int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:6699:59")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:6716:59")));
         return cfg;
     }
 }
@@ -8852,8 +8882,8 @@ uint8_t test_test_ksc_commit_identical(slop_arena* arena) {
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:7269:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7270:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:7286:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7287:57")));
         return cfg;
     }
 }
@@ -11970,7 +12000,7 @@ int64_t test_bound_arg(slop_string s) {
         uint8_t ok = ((string_len(s) > 0) && (string_len(s) <= 9));
         int64_t i = 0;
         while (ok && (i < string_len(s))) {
-            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:9700:47"))))) {
+            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:9717:47"))))) {
                 ok = 0;
             }
             i = (i + 1);
@@ -12379,8 +12409,8 @@ int64_t test_dump_ksc_result(slop_arena* arena, types_KscResult r) {
 int64_t test_dump_ksc_classify(slop_arena* arena, test_KscFixture fx, int64_t w, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:9967:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:9968:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:9984:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:9985:57")));
         test_dump_num(arena, SLOP_STR("classify w="), w);
         test_dump_num(arena, SLOP_STR(" cap "), cap);
         printf("%s\n", "");

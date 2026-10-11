@@ -6016,7 +6016,8 @@
           ok)))
 
   ;; The fixtures, and what each entails (their `# Expect:` lines, read
-  ;; by hand): kind 0 sub A B, 1 unsat A, 2 satisfiable A.
+  ;; by hand): kind 0 sub A B, 1 unsat A, 2 satisfiable A, 3 inconsistent,
+  ;; 4 consistent.
   (type Expect (record (file String) (kind Int) (a String) (b String)))
 
   (fn expects ((arena Arena))
@@ -6035,6 +6036,20 @@
           (list-push out (record-new Expect (file "sim12-example1") (kind 0) (a "AB") (b "D")))
           (list-push out (record-new Expect (file "symmetric") (kind 0) (a "A") (b "C")))
           (list-push out (record-new Expect (file "union-negation") (kind 0) (a "A") (b "C")))
+          (list-push out (record-new Expect (file "tgh21-o1") (kind 0) (a "A") (b "D")))
+          (for-each (e (abox-expects arena)) (list-push out e))
+          out)))
+
+  (fn abox-expects ((arena Arena))
+    (@intent "The ABox fixtures (SPEC §10): each clash inconsistent, each control consistent, and the controls' subsumptions")
+    (@spec ((Arena) -> (List Expect)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Expect)))
+      (do (for-each (n (strs arena "abox-functional abox-negative-transitive abox-inverse-functional abox-root-successor abox-top"))
+            (do (list-push out (record-new Expect (file (string-concat arena n "-clash")) (kind 3) (a "") (b "")))
+                (list-push out (record-new Expect (file (string-concat arena n "-ok")) (kind 4) (a "") (b "")))))
+          (list-push out (record-new Expect (file "abox-root-successor-ok") (kind 0) (a "A") (b "C")))
+          (list-push out (record-new Expect (file "abox-top-ok") (kind 0) (a "A") (b "X")))
           out)))
 
   (fn class-named ((arena Arena) (ids SriqIds) (name String))
@@ -6052,7 +6067,9 @@
     (@spec ((Arena SriqIds Structure Expect) -> Bool))
     (@alloc arena)
     (let ((a (class-named arena ids (. e a))))
-      (cond ((== (. e kind) 1) (q-unsat arena st a))
+      (cond ((== (. e kind) 3) (q-inconsistent arena st))
+            ((== (. e kind) 4) (not (q-inconsistent arena st)))
+            ((== (. e kind) 1) (q-unsat arena st a))
             ((== (. e kind) 2) (not (q-unsat arena st a)))
             (else (q-holds arena st a (class-named arena ids (. e b)))))))
 
