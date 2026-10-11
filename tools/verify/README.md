@@ -18,7 +18,9 @@ ln -s "$PWD/corpus/vendor" "$T/corpus/vendor"
 ```
 
 `mutate.py` first checks that the unmutated copy passes `make test` and `make golden`, and stops
-if it does not. A verdict from a copy that was already red would mean nothing.
+if it does not: a verdict from a copy that was already red would mean nothing. It also reports a
+mutant whose generated C does not change as NO-OP, not SURVIVED. That catches a mutant that never
+reached the build, such as one applied to a stray second copy of a module.
 
 | Script | What it shows |
 |---|---|

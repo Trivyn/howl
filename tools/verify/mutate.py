@@ -4,7 +4,7 @@
 # it does not compile or either target fails; SURVIVED means the tests miss it.
 # TREE is a scratch copy of the repository, never the working tree; SLOP_HOME must name the
 # toolchain that generates the committed C.
-import sys, subprocess, runpy, time
+import hashlib, os, sys, subprocess, runpy, time
 tree, spec, log = sys.argv[1:4]
 muts = runpy.run_path(spec)["MUTANTS"]
 out = open(log, "a")
@@ -16,6 +16,15 @@ def run(cmd, t):
     except subprocess.TimeoutExpired:
         return 124, "timeout"
 
+def csrc_digest():
+    # The generated C, so a mutant that never reaches the build (a stray copy of its module, the
+    # wrong file) shows as NO-OP rather than as a survivor.
+    h = hashlib.sha256()
+    for root, _, files in sorted(os.walk(f"{tree}/csrc/src")):
+        for name in sorted(files):
+            h.update(name.encode()); h.update(open(os.path.join(root, name), "rb").read())
+    return h.hexdigest()
+
 def failing(text):
     # The tests a red run failed, so each verdict says what caught the mutant.
     names = [l[len("[FAIL] "):] for l in text.splitlines() if l.startswith("[FAIL] ")]
@@ -25,6 +34,7 @@ rc, tail = run("make csrc && make test && make golden", 6000)
 if rc != 0:
     out.write("ABORT: the unmutated tree is not green, so no verdict would mean anything\n" + tail[-400:] + "\n")
     sys.exit(1)
+base = csrc_digest()
 
 for name, f, old, new in muts:
     path = f"{tree}/{f}"
@@ -37,6 +47,8 @@ for name, f, old, new in muts:
         rc, tail = run("make csrc", 1800)
         if rc != 0:
             verdict = "red (does not compile)"
+        elif csrc_digest() == base:
+            verdict = "NO-OP (the generated C did not change)"
         else:
             rc, tail = run("make test", 3000)
             if rc != 0 or "Failed: 0" not in tail:

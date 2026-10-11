@@ -2332,6 +2332,34 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
   - Cautious is the engine's (S5). Trivial and eager serve the reference evaluator and the
     feasibility checkpoint.
 
+**[TGH21] Table 3, pinned** (AIJ 298, §4.1, p. 15, read from the rendered page, since the text
+extraction scrambles it). It is transcribed as printed. HOWL's readings follow it as bullets.
+`v` and `w` are contexts, `σ` is fixed in each row, and `Δ ⊁_v L` is S5's maximality. The caption
+omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ → Δ` is the conclusion.
+
+| Rule | If | Then |
+|---|---|---|
+| Succ | `Γ → Δ ∨ A ∈ S_v` with `Δ ⊁_v A`; A contains `f(x)` if `v ≠ v_r`, else `f(u)` for some `u ∈ Σ_u^O`; and there is no `⟨v, w, f⟩ ∈ E` with `A′ → A′ ∈̂ S_w` for each `A′ ∈ K₂ \ core_w` | Let `⟨w, core′, ≻′⟩ = strat(f, K₁, D)`. If `w ∉ V`, add `w` with `core_w = core′`, `≻_w = ≻′`, `S_w = ∅`. Add `⟨v, w, f⟩` to E if absent, and, if `v = v_r`, `⟨v, w, u⟩` if absent. Add `A′ → A′` to `S_w` for each `A′ ∈ K₂ \ core_w` |
+| | where `σ = {y ↦ x, x ↦ f(x)}` if `v ≠ v_r`, else `{y ↦ u, x ↦ f(u)}`; `K₁ = {A′ ∈ Su(O) \| A′ mentions xσ and ⊤ → A′σ ∈ S_v}`; `K₂ = {A′ ∈ Su(O) \| Γ′ → Δ′ ∨ A′σ ∈ S_v, Δ′ ⊁_v A′σ}` | |
+| Pred | `v ≠ v_r` and `⟨w, v, f⟩ ∈ E`; `⋀ᵢ₌₁ᵐ Aᵢ ∧ ⋀ᵢ₌₁ⁿ Cᵢ → ⋁ᵢ₌₁ᵏ Lᵢ ∈ S_v`, where each non-ground `Lᵢ` is in Pr(O) if `w ≠ v_r`, and in Pr(O) or of the form `S(x, u)` or `S(u, x)` if `w = v_r`; each `Aᵢ` is ground; and `Γᵢ → Δᵢ ∨ Cᵢσ ∈ S_w` with `Δᵢ ⊁_w Cᵢσ` for `1 ≤ i ≤ n′` | Add `⋀ᵢ₌₁ⁿ′ Γᵢ ∧ ⋀ᵢ₌₁ᵐ Aᵢ → ⋁ᵢ₌₁ⁿ′ Δᵢ ∨ ⋁ᵢ₌₁ᵏ Lᵢσ` to `S_w` |
+| | where, if `w ≠ v_r`, `σ = {y ↦ x, x ↦ f(x)}` and `n′ = n`; else `σ = {y ↦ u, x ↦ f(u)}` for some `u ∈ Σ_u^O` (E4: `u ∈ U_H`) and `{C_{n+1}, …, C_{n′}} = core_v` | |
+| r-Succ | `v ≠ v_r`; `Γ → Δ ∨ Aσ ∈ S_v` with `Δ ⊁_v Aσ`, `σ = {y ↦ x}`, and `A ∈ Suʳ(O)` containing `u ∈ Σ_u^O`; and there is no `⟨v, v_r, u⟩ ∈ E` with `A → A ∈̂ S_{v_r}` | Add `⟨v, v_r, u⟩` to E, and `A → A` to `S_{v_r}` |
+| r-Pred | `⋀ᵢ₌₁ⁿ Cᵢ → ⋁ᵢ₌₁ᵏ Lᵢ ∈ S_{v_r}`; `Lᵢ ∈ Prʳ(O)` for each non-ground `Lᵢ`; `Cᵢ ∈ Suʳ(O)`, with `uᵢ` the named individual in `Cᵢ`; and for each `uᵢ` there is `⟨v, v_r, uᵢ⟩ ∈ E` such that `Γᵢ → Δᵢ ∨ Cᵢσ ∈ S_v` with `Δᵢ ⊁_v Cᵢσ` and `σ(y) = x` | Add `⋀ᵢ₌₁ⁿ Γᵢ ∧ ⋀ᵢ₌₁ᵐ Aᵢ → ⋁ᵢ₌₁ⁿ Δᵢ ∨ ⋁ᵢ₌₁ᵏ Lᵢσ` to `S_v` |
+
+- **K₁ is read as "A′ mentions x"** (above): "xσ" is `f(x)` or `f(u)`, which no atom of Su(O)
+  contains.
+- **Pred's precondition is on its own target,** `S_w`. The caption names `S_v`, the set of Table
+  2's rules, whose conclusions go to `v`.
+- **r-Pred's `Aᵢ` are read by E3, and its conclusion is restricted by E5** (below).
+- **r-Pred's `v` is not `v_r`,** though the table does not print it:
+  - with a `Cᵢ`, its edge `⟨v, v_r, u⟩` comes from r-Succ, which requires `v ≠ v_r`;
+  - with a non-ground `Lᵢ`, the conclusion has `x`, which `S_{v_r}` may not hold (Definition 3);
+  - with neither, the conclusion into `v_r` would be the premise itself, which is `∈̂`.
+- **Succ's trigger is any maximal atom with `f(x)`** (`f(u)` at the root), as printed. The rule
+  does not ask that it lie in `Su(O)σ`; `K₁` and `K₂` read only Su(O)'s atoms.
+- **r-Succ makes one instance per constant** of an atom with two, `S(u₁, u₂)` or `u₁ ≈ u₂`, since
+  the table says only "contains `u`".
+
 - **Nom is in.** It introduces auxiliary constants when "an inverse role, an at-most number
   restriction, and a nominal" interact ([TGH21] §4.1). [TGH18] adds that the rule "does not apply if
   the input ontology lacks either inverse roles, or nominals, or number restrictions."
@@ -2462,6 +2490,72 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
       goes through over U, so E4's reading opens no gap that the literal reading lacks. It does not
       establish Theorem 2 outright: the printed proof has three open points of its own (below).
       Two reviewers found them, and the literal reading has each of them too.
+  - **E5. r-Pred carries no term `f(u)` into a context.**
+    - **The defect.** Table 3 restricts only r-Pred's non-ground head literals (`Lᵢ ∈ Prʳ(O)`), and
+      E3 carries every ground body atom as an `Aᵢ`. Either can mention `f(u)`:
+      - root Hyper on a DL2 clause `B₁(x) → S(x, f(x))`, with `⊤ → B₁(o)` in `v_r`, gives
+        `⊤ → S(o, f(o))`, and r-Pred with no `Cᵢ` adds it to every context where it is `∉̂`;
+      - from a sound structure with `B(f(o)) → B(o)` in `v_r`, which Definitions 2 and 3 allow,
+        r-Pred carries `B(f(o))`.
+
+      Definition 3 forbids every context but `v_r` a clause with a term `f(u)`. So the printed rule
+      can build a structure that is not a context structure, and Theorem 1's claim fails for it.
+      Appendix B's r-Pred case checks only "an arbitrary element in Prʳ(O) … A{y ↦ x} is a context
+      term", and never a ground literal.
+    - **HOWL's r-Pred** also requires that no literal of the conclusion mention a term `f(u)`:
+      neither an `Lᵢ` nor a carried `Aᵢ`. The `Γᵢ` and `Δᵢ` come from `S_v`, which holds none.
+      - Every non-ground `Lᵢ` is still in `Prʳ(O)`. A ground literal is then `B(u)`, `S(u₁, u₂)`,
+        `u₁ ≈ u₂` or `u₁ ≉ u₂`.
+      - In HOWL's runs the body half never refuses an instance. A1 starts `S_{v_r}` empty, and no
+        rule writes `f(u)` into a root body. This goes by a joint induction with "no other context
+        holds `f(u)`": Core's root core is empty; Hyper, Ineq, Factor, Join and Pred into `v_r`
+        copy or drop premise bodies; Eq rewrites heads only; Nom needs `x`; Succ never targets
+        `v_r`; and r-Succ adds `A → A` with `A ∈ Suʳ(O)`, which is function-free. The half is
+        there so that the claim holds of every sound structure, as Theorem 1 states.
+    - **Sound.** E5 only removes instances, so each conclusion is still entailed by Appendix B's
+      argument. Each is now a context clause that `v` may hold: `Lσ` for `L ∈ Prʳ(O)` is a context
+      literal (Appendix B), and a function-free ground literal is one in every context. r-Pred is
+      the only rule that could write `f(u)` into another context. Hyper's and Pred's substitutions
+      (Table B.5), Eq's guard ("if s₂|p = x then s₂ contains no f ∈ Σ_f^O and no y"), Succ and Nom
+      never do.
+    - **Complete.**
+      - Every instance E5 keeps is a printed instance, so HOWL's derivations are derivations of the
+        printed calculus: Theorem 2's "derivable", and D.3's Definitions 13 to 15 and Lemma 25, hold
+        of them as they stand.
+      - Only "no rule can be applied" changes. So every place the proof needs an r-Pred instance to
+        be applied must need one that E5 keeps. These are all of them:
+        - **D.4.1, condition L6, the case `t ∈ Σ_u^O`** (p. 59). The main premise is a root clause
+          `Γ′ → Δ′` with `Γ′ ⊆ Γ_Rt` and `Δ′ ⊆ Δ_Rt`. The paper writes `Γ′ → ⊥`, its image in
+          `N_t`, but `Δ′` is carried into the conclusion. Both sets are function-free (D.2.1).
+          HOWL reaches the conclusion through E3's carry and then Join.
+        - **Lemma 39, the case of a DL3, DL4a, DL7, DL8 or DL9 clause** (p. 64). These are the
+          clauses whose body has an atom `S(z₁, x)`, so DL4a is DL4's first clause,
+          `S(z₁, x) ∧ B₂(x) → S_{B₂}(z₁, x)`. The main premise is `A″₁ ∧ … ∧ A″ₙ → Δ′{x ↦ y}`: the
+          clause with `x` a constant `t` and `z₁` read as `y`.
+          - Its body atoms are of the forms `B(t)` and `S(y, t)`.
+          - Its head is `B₂(y)`, `S_{B₂}(y, t)`, `S₂(y, t)`, `S₂(t, y)` or `⊥` (Table 1).
+
+          Both are function-free. The paper's next sentence says those clauses' heads "consist
+          exclusively of equalities", which fits only DL4's at-most clause. If the case is meant to
+          cover that clause too, its head `zᵢ ≈ zⱼ` becomes `y ≈ t` or `t ≈ t′`, still function-free.
+        - **Lemma 26's r-Pred case, and the replays of Lemmas 27, 29, 30 and 31** (pp. 53–57).
+          These apply r-Pred to a subsumer of an instance's premises, or replay a derivation's own
+          steps on subsumers or on ground-decomposition nodes. A subsumer's body and head are
+          included in the original's, and a node's `Γ^Rt_w`, `Δ^Rt_w` are included in `Rt`, which is
+          function-free (Definitions 10 and 16). So each replayed instance is one E5 keeps.
+          Lemmas 27 to 31 serve only Lemma 24's case `|ρ| = Λ`, which the stored Λ rules out (G1).
+
+        Lemmas 7 to 23, 32 to 38 and 40, and Corollary 19, use no r-Pred. Appendix E is Algorithm
+        2's, which HOWL does not run.
+    - **Rejected: every `Lᵢ ∈ Prʳ(O)`,** as Appendix B's wording suggests. It is too strong:
+      `Prʳ(O)` has no inequalities, and L6's `Δ′ ⊆ Δ_Rt` can hold `u₁ ≉ u₂` (condition L1).
+    - **Other support.** The paper defines a derivation step as one whose result "is a context
+      structure for O" (p. 14), which is the filter E5 makes explicit. Sequoia's nominal contexts
+      "prevent the derivation of literals containing both constants and function symbols"
+      (§7.2.2), so the implementation never meets the case.
+    - **Status.** The owner chose the head reading on 2026-10-11 (AD ec7a6eaf, S8-1). Review
+      extended it to the carried atoms: the head alone leaves the second case above. Proposed AD
+      4bb4d611, for ratification.
   - **Open points in Theorem 2's printed proof.** None is caused by E4, and none has been shown
     to make the calculus incomplete. HOWL's completeness rests on Theorem 2, so each is a gap in
     the argument HOWL cites until it is closed. **Decided** (the owner, 2026-10-10; AD 3f465834):
@@ -4040,7 +4134,19 @@ Z3 also proves that `apply-lit`, `with-arg`, `replace-at` and `replace-all` keep
 - `stored-lambda` (`src/rules/sriq.slop`) is at least 10,001, and equals `depth-limit` from 10,001 up.
 
 Rows: Definition 4 item by item on [TGH21] Figure 1's O1, on DL6's `S(x, x)` and on Table 1's DL4 (`test-sriq-triggers-rows`); on every fixture, each body atom's triggers are in Su and Pr; Definition 5 on O1's Figures 2 and 3 (eager K₁, cautious `{B(x)}`, trivial ∅, and cautious falling back to ∅ without the atom); ω, ω_D and the stored Λ; A1–A2's structure; and Definitions 2 and 3 on one clause of each kind. 24 test mutants: 22 seen red. One exposed redundant code in `side-x`, now removed. The other (`ctx-by-core` considering id 0) changes nothing a test can see, since id 0 is always `v_r`, and `ctx-by-core`'s contract refutes it. 21 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — the flags' read-off, `ctx-clause-ok`'s shape table, and that `core-of`'s ∅ and `{B(x)}` have no and one member are held by the rows |
-| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's rules, in the two rows above; Table 3's rules planned), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. Still to come: a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Planned** — structural once every rule and the reference are built |
+| **`sriq` multi-context rules** — [TGH21] Table 3's Succ, Pred, r-Succ and r-Pred are implemented exactly, as pinned in §5.5 S3, with E3 and E5 | `src/rules/sriq.slop`, loop-free per rule instance over premise views, as Table 2's rules are. σ (`csub-term`, `csub-lit`) replaces x and y and keeps every other term. Z3 proves:
+- `succ-step`: `sound` and `complete` (it fires exactly when its premise's atom is maximal, contains the successor term, and no f-edge's target covers K₂), and `head` (its core is the strategy's choice for K₁);
+- `rsucc-rule`: `sound`, `complete` and `head` (in a context other than `v_r`, a maximal `Aσ` with `A ∈ Suʳ(O)` containing `u`, no `y`, and not held);
+- `pred-step` (`sound`, `complete`: the slot's edge exists and the side premise's selected literal is a maximal `Cᵢσ`), `pred-start`, `pred-finish` and `rpred-finish` (they fire exactly when every step did and the heads pass), and `pred-extend-one` keeps only firing states;
+- `pred-heads-ok` and `rpred-heads-ok` are their conditions over every `Lᵢ` (E5 for r-Pred), `covers` is "each `A′ ∈ K₂` is in the core or `A′ → A′ ∈̂ S_w`", and `unit-held` is that `∈̂` (each through a loop invariant);
+- `succ-pre` gives an atom when it gives one, and `rsucc-lit` keeps the form.
+
+Owed, with the rows that stand in:
+- `k-sets`, a fold over the clauses, held by `test-sriq-succ-rows` and, in 8c, by a forward computation over every final context;
+- `pred-join`'s fold, as `hyper-join`'s;
+- the conclusions' assembly: `succ-step`'s added atoms (K₂ outside the core), and the body and head that `pred-step`, `pred-finish` and `rpred-finish` build. The contracts fix when each rule fires and which core it chooses, and the rows fix what it concludes;
+- that `succ-pre` inverts σ exactly, which `test-sriq-succ-pre-inverts` checks over every Su(O) shape at and away from the root (the constructors post only their form, so the checker does not see a rebuilt ground literal come back). Rows: Succ on O1's Figures 2 and 3 (K₁ and K₂, each strategy's core and adds (31), (39)–(40), (43), covered targets, a ground atom, the root's `f(u)`); r-Succ on Example 1's (114)–(116), one instance per constant; Pred on O1's (24) and (27), Example 1's (113), Example 2's (147), and into `v_r` for `u = a` but not `b` (E4, with the core as a side premise); r-Pred on Example 1's (118) carrying its ground atoms (E3), with no `Cᵢ`, and E5's refusal. 29 test mutants, all seen red, eight of them only after filling the test gaps they exposed: a non-maximal image, a non-unit clause in K₁, another constant's `f(u)` at the root, Succ on an equality, a non-maximal side premise, a slot outside Suʳ(O) that v could meet, two candidates for one slot, and a ground `f(u)` given to `succ-pre`. 27 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — `k-sets`, `pred-join`'s fold, the conclusions' assembly and `succ-pre`'s exact inversion are held by the rows |
+| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's and Table 3's rules, in the rows above), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. Still to come: a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Planned** — structural once every rule and the reference are built |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK for `el`; [Krö10] for `el++`; [Sim12] then [TGH21] for `sriq`) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
