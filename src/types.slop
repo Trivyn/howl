@@ -900,6 +900,9 @@
   ;; ------------------------------------------------------------
   ;; sriq's a-terms and literals: constructors, and a structural order.
   ;; The order only sorts and orients; it is never the context order ≻.
+  ;; A literal's constructor posts its form and nothing more: posts on
+  ;; every field (kind, pred, t1, t2) left Z3 timing out on the rule
+  ;; contracts' counterexamples, so mutated rules came back unknown.
   ;; ------------------------------------------------------------
 
   (fn at-x ()
@@ -976,18 +979,21 @@
     (@intent "B(t); the unused second slot is x")
     (@spec ((U32 ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) 'lf-unary))
     (record-new Lit (form 'lf-unary) (pred b) (t1 t) (t2 (at-x))))
 
   (fn atom2 ((s U32) (l ATerm) (r ATerm))
     (@intent "S(l, r)")
     (@spec ((U32 ATerm ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) 'lf-binary))
     (record-new Lit (form 'lf-binary) (pred s) (t1 l) (t2 r)))
 
   (fn oriented ((form LitForm) (s ATerm) (t ATerm))
     (@intent "s ⋈ t with the larger a-term first: one record whichever way round it is written")
     (@spec ((LitForm ATerm ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) form))
     ;; No orientation @post. In another function's contract the solver
     ;; reads aterm-cmp as uninterpreted, so the antisymmetry it would need
     ;; is out of reach (it refutes `t1 ≥ t2` with aterm-cmp ≡ -1).
@@ -1001,12 +1007,14 @@
     (@intent "s ≈ t, oriented")
     (@spec ((ATerm ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) 'lf-eq))
     (oriented 'lf-eq s t))
 
   (fn neq-lit ((s ATerm) (t ATerm))
     (@intent "s ≉ t, oriented")
     (@spec ((ATerm ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) 'lf-neq))
     (oriented 'lf-neq s t))
 
   (fn lit-form-rank ((f LitForm))

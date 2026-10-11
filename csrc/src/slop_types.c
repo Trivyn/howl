@@ -618,27 +618,53 @@ uint8_t types_aterm_eq(types_ATerm a, types_ATerm b) {
 }
 
 types_Lit types_atom1(uint32_t b, types_ATerm t) {
-    return ((types_Lit){.form = types_LitForm_lf_unary, .pred = b, .t1 = t, .t2 = types_at_x()});
+    types_Lit _retval = {0};
+    _retval = ((types_Lit){.form = types_LitForm_lf_unary, .pred = b, .t1 = t, .t2 = types_at_x()});
+    goto _slop_post;
+    _slop_post: ;
+    SLOP_POST(((_retval.form == types_LitForm_lf_unary)), "(== (. $result form) (quote lf-unary))");
+    return _retval;
 }
 
 types_Lit types_atom2(uint32_t s, types_ATerm l, types_ATerm r) {
-    return ((types_Lit){.form = types_LitForm_lf_binary, .pred = s, .t1 = l, .t2 = r});
+    types_Lit _retval = {0};
+    _retval = ((types_Lit){.form = types_LitForm_lf_binary, .pred = s, .t1 = l, .t2 = r});
+    goto _slop_post;
+    _slop_post: ;
+    SLOP_POST(((_retval.form == types_LitForm_lf_binary)), "(== (. $result form) (quote lf-binary))");
+    return _retval;
 }
 
 types_Lit types_oriented(types_LitForm form, types_ATerm s, types_ATerm t) {
+    types_Lit _retval = {0};
     if (types_aterm_cmp(s, t) >= 0) {
-        return ((types_Lit){.form = form, .pred = ((uint32_t)(0)), .t1 = s, .t2 = t});
+        _retval = ((types_Lit){.form = form, .pred = ((uint32_t)(0)), .t1 = s, .t2 = t});
+        goto _slop_post;
     } else {
-        return ((types_Lit){.form = form, .pred = ((uint32_t)(0)), .t1 = t, .t2 = s});
+        _retval = ((types_Lit){.form = form, .pred = ((uint32_t)(0)), .t1 = t, .t2 = s});
+        goto _slop_post;
     }
+    _slop_post: ;
+    SLOP_POST(((_retval.form == form)), "(== (. $result form) form)");
+    return _retval;
 }
 
 types_Lit types_eq_lit(types_ATerm s, types_ATerm t) {
-    return types_oriented(types_LitForm_lf_eq, s, t);
+    types_Lit _retval = {0};
+    _retval = types_oriented(types_LitForm_lf_eq, s, t);
+    goto _slop_post;
+    _slop_post: ;
+    SLOP_POST(((_retval.form == types_LitForm_lf_eq)), "(== (. $result form) (quote lf-eq))");
+    return _retval;
 }
 
 types_Lit types_neq_lit(types_ATerm s, types_ATerm t) {
-    return types_oriented(types_LitForm_lf_neq, s, t);
+    types_Lit _retval = {0};
+    _retval = types_oriented(types_LitForm_lf_neq, s, t);
+    goto _slop_post;
+    _slop_post: ;
+    SLOP_POST(((_retval.form == types_LitForm_lf_neq)), "(== (. $result form) (quote lf-neq))");
+    return _retval;
 }
 
 int64_t types_lit_form_rank(types_LitForm f) {

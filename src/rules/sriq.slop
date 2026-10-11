@@ -348,6 +348,7 @@
     (@intent "lσ, an equality re-oriented")
     (@spec ((Subst Lit) -> Lit))
     (@pure)
+    (@post (== (. $result form) (. l form)))
     (let ((a (apply-term sub (. l t1)))
           (b (apply-term sub (. l t2))))
       (match (. l form)
@@ -468,11 +469,7 @@
     (@intent "l with argument or side k replaced by t, an equality re-oriented")
     (@spec ((Lit U32 ATerm) -> Lit))
     (@pure)
-    ;; Owed: that the form is kept, here and in replace-at, replace-all and
-    ;; apply-lit. slop verify finds the axioms of a match on an enum whose
-    ;; arms call functions with posts contradictory (an upstream verifier
-    ;; defect, reproduced outside HOWL on slop main 6beae3d), so the claim
-    ;; is held by the rows instead.
+    (@post (== (. $result form) (. l form)))
     (let ((a (if (== k (cast U32 1)) t (. l t1)))
           (b (if (== k (cast U32 1)) (. l t2) t)))
       (match (. l form)
@@ -485,6 +482,7 @@
     (@intent "l[t]p")
     (@spec ((Lit Pos ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) (. l form)))
     (let ((a (arg-term l (. p arg))))
       (with-arg l (. p arg) (if (. p inner) (with-inner a t) t))))
 
@@ -501,6 +499,7 @@
     (@intent "s₂[s/t] ⋈ t₂: in an atom, every occurrence of s; in an (in)equality, those in side p only")
     (@spec ((Lit Pos ATerm ATerm) -> Lit))
     (@pure)
+    (@post (== (. $result form) (. l form)))
     (match (. l form)
       ('lf-unary  (atom1 (. l pred) (replace-const (. l t1) s t)))
       ('lf-binary (atom2 (. l pred) (replace-const (. l t1) s t) (replace-const (. l t2) s t)))
@@ -687,11 +686,12 @@
     (@intent "⋁ x ≈ o_{ρ·S^i} over the children")
     (@spec ((Arena (List U32)) -> (List Lit)))
     (@alloc arena)
-    ;; Owed: that each literal is an equality would rest on eq-lit's own
-    ;; post, which the verifier defect noted at with-arg keeps out of
-    ;; types.slop. The rows hold it.
+    (@post (forall (y $result) (== (. y form) 'lf-eq)))
     (let ((mut out (list-new arena Lit)))
-      (do (for-each (k kids) (list-push out (eq-lit (at-x) (at-u k)))) out)))
+      (do (for-each (k kids)
+            (@loop-invariant (forall (y out) (== (. y form) 'lf-eq)))
+            (list-push out (eq-lit (at-x) (at-u k))))
+          out)))
 
   (fn nom-premises ((p1 Premise) (p2 Premise) (b1 U32) (sb2 U32))
     (@intent "B₁(o) and S_{B₂}(o, x) selected, for one constant o")

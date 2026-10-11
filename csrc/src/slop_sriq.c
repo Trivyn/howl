@@ -390,21 +390,29 @@ types_ATerm sriq_apply_term(sriq_Subst sub, types_ATerm t) {
 }
 
 types_Lit sriq_apply_lit(sriq_Subst sub, types_Lit l) {
+    types_Lit _retval = {0};
     {
         __auto_type a = sriq_apply_term(sub, l.t1);
         __auto_type b = sriq_apply_term(sub, l.t2);
         __auto_type _mv_1378 = l.form;
         if (_mv_1378 == types_LitForm_lf_unary) {
-            return types_atom1(l.pred, a);
+            _retval = types_atom1(l.pred, a);
+            goto _slop_post;
         } else if (_mv_1378 == types_LitForm_lf_binary) {
-            return types_atom2(l.pred, a, b);
+            _retval = types_atom2(l.pred, a, b);
+            goto _slop_post;
         } else if (_mv_1378 == types_LitForm_lf_eq) {
-            return types_eq_lit(a, b);
+            _retval = types_eq_lit(a, b);
+            goto _slop_post;
         } else if (_mv_1378 == types_LitForm_lf_neq) {
-            return types_neq_lit(a, b);
+            _retval = types_neq_lit(a, b);
+            goto _slop_post;
         }
         SLOP_UNREACHABLE();
     }
+    _slop_post: ;
+    SLOP_POST(((_retval.form == l.form)), "(== (. $result form) (. l form))");
+    return _retval;
 }
 
 sriq_RConcl sriq_hyper_finish(slop_arena* arena, sriq_HState st, slop_list_types_Lit delta) {
@@ -568,28 +576,41 @@ types_ATerm sriq_with_inner(types_ATerm a, types_ATerm t) {
 }
 
 types_Lit sriq_with_arg(types_Lit l, uint32_t k, types_ATerm t) {
+    types_Lit _retval = {0};
     {
         __auto_type a = (((k == ((uint32_t)(1)))) ? t : l.t1);
         __auto_type b = (((k == ((uint32_t)(1)))) ? l.t2 : t);
         __auto_type _mv_1385 = l.form;
         if (_mv_1385 == types_LitForm_lf_unary) {
-            return types_atom1(l.pred, a);
+            _retval = types_atom1(l.pred, a);
+            goto _slop_post;
         } else if (_mv_1385 == types_LitForm_lf_binary) {
-            return types_atom2(l.pred, a, b);
+            _retval = types_atom2(l.pred, a, b);
+            goto _slop_post;
         } else if (_mv_1385 == types_LitForm_lf_eq) {
-            return types_eq_lit(a, b);
+            _retval = types_eq_lit(a, b);
+            goto _slop_post;
         } else if (_mv_1385 == types_LitForm_lf_neq) {
-            return types_neq_lit(a, b);
+            _retval = types_neq_lit(a, b);
+            goto _slop_post;
         }
         SLOP_UNREACHABLE();
     }
+    _slop_post: ;
+    SLOP_POST(((_retval.form == l.form)), "(== (. $result form) (. l form))");
+    return _retval;
 }
 
 types_Lit sriq_replace_at(types_Lit l, sriq_Pos p, types_ATerm t) {
+    types_Lit _retval = {0};
     {
         __auto_type a = sriq_arg_term(l, p.arg);
-        return sriq_with_arg(l, p.arg, ((p.inner) ? sriq_with_inner(a, t) : t));
+        _retval = sriq_with_arg(l, p.arg, ((p.inner) ? sriq_with_inner(a, t) : t));
+        goto _slop_post;
     }
+    _slop_post: ;
+    SLOP_POST(((_retval.form == l.form)), "(== (. $result form) (. l form))");
+    return _retval;
 }
 
 types_ATerm sriq_replace_const(types_ATerm a, types_ATerm s, types_ATerm t) {
@@ -609,17 +630,25 @@ types_ATerm sriq_replace_const(types_ATerm a, types_ATerm s, types_ATerm t) {
 }
 
 types_Lit sriq_replace_all(types_Lit l, sriq_Pos p, types_ATerm s, types_ATerm t) {
+    types_Lit _retval = {0};
     __auto_type _mv_1386 = l.form;
     if (_mv_1386 == types_LitForm_lf_unary) {
-        return types_atom1(l.pred, sriq_replace_const(l.t1, s, t));
+        _retval = types_atom1(l.pred, sriq_replace_const(l.t1, s, t));
+        goto _slop_post;
     } else if (_mv_1386 == types_LitForm_lf_binary) {
-        return types_atom2(l.pred, sriq_replace_const(l.t1, s, t), sriq_replace_const(l.t2, s, t));
+        _retval = types_atom2(l.pred, sriq_replace_const(l.t1, s, t), sriq_replace_const(l.t2, s, t));
+        goto _slop_post;
     } else if (_mv_1386 == types_LitForm_lf_eq) {
-        return sriq_with_arg(l, p.arg, sriq_replace_const(sriq_arg_term(l, p.arg), s, t));
+        _retval = sriq_with_arg(l, p.arg, sriq_replace_const(sriq_arg_term(l, p.arg), s, t));
+        goto _slop_post;
     } else if (_mv_1386 == types_LitForm_lf_neq) {
-        return sriq_with_arg(l, p.arg, sriq_replace_const(sriq_arg_term(l, p.arg), s, t));
+        _retval = sriq_with_arg(l, p.arg, sriq_replace_const(sriq_arg_term(l, p.arg), s, t));
+        goto _slop_post;
     }
     SLOP_UNREACHABLE();
+    _slop_post: ;
+    SLOP_POST(((_retval.form == l.form)), "(== (. $result form) (. l form))");
+    return _retval;
 }
 
 uint8_t sriq_side_ok(sriqorder_SriqOrder ord, types_Lit l, uint32_t k) {
@@ -737,6 +766,7 @@ uint8_t sriq_kids_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t
 }
 
 slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids) {
+    slop_list_types_Lit _retval = {0};
     {
         __auto_type out = ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
@@ -746,8 +776,11 @@ slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids) {
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (types_eq_lit(types_at_x(), types_at_u(k))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
-        return out;
+        _retval = out;
+        goto _slop_post;
     }
+    _slop_post: ;
+    return _retval;
 }
 
 uint8_t sriq_nom_premises(sriq_Premise p1, sriq_Premise p2, uint32_t b1, uint32_t sb2) {
