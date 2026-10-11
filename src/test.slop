@@ -41,7 +41,8 @@
   (import sriqelim (S1 sriq-s1 S1_BOUND sriq-s1-invariants))
   (import sriqnames (SriqNormal sriq-normalize sriq-normalize-bounded guard-witnesses sriq-names render-sriq-normal sriq-invariants))
   (import sroiqfss (fss-axioms fss-normal))
-  (import sriqclauses (SriqIds SriqClauses sriq-clauses build-sriq-ids make-clause dl-clause-shape clause-canonical ids-dense render-clauses))
+  (import sriqclauses (SriqIds SriqClauses sriq-clauses build-sriq-ids make-clause clause-eq dl-clause-shape clause-canonical ids-dense render-clauses))
+  (import sriqsubsume (Committed in-hat subsumes tautology commit-min))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt max-flags))
 
   (ffi "string.h"
@@ -4319,6 +4320,234 @@
                   (do (println "  [max] two literals above each other") (set! ok false))))))
         ok)))
 
+  ;; ------------------------------------------------------------
+  ;; Slice 7d: redundancy and the commit (sriqsubsume.slop). Unary atoms
+  ;; over x, classes A = 0, B = 1, C = 2, D = 3 by their letter.
+  ;; ------------------------------------------------------------
+
+  (fn letter-atoms ((arena Arena) (letters String))
+    (@intent "B(x) for each letter A to D of a space-separated list")
+    (@spec ((Arena String) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit)))
+      (do
+        (for-each (w (strs arena letters))
+          (list-push out (atom1 (cast U32 (- (cast Int (char-at w 0)) 65)) (at-x))))
+        out)))
+
+  (fn cl ((arena Arena) (body String) (head String))
+    (@intent "body → head over the letters, as a canonical clause")
+    (@spec ((Arena String String) -> Clause))
+    (@alloc arena)
+    (make-clause arena (letter-atoms arena body) (letter-atoms arena head)))
+
+  (fn with-lit ((arena Arena) (c Clause) (l Lit))
+    (@intent "c with l added to its head")
+    (@spec ((Arena Clause Lit) -> Clause))
+    (@alloc arena)
+    (let ((mut h (list-new arena Lit)))
+      (do (for-each (x (. c head)) (list-push h x)) (list-push h l)
+          (make-clause arena (. c body) h))))
+
+  (fn clauses-of ((arena Arena) (a Clause) (b Clause))
+    (@intent "[a, b]")
+    (@spec ((Arena Clause Clause) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause))) (do (list-push out a) (list-push out b) out)))
+
+  (fn test-sriq-inhat-rows ((arena Arena))
+    (@intent "§2.1's ∈̂, case by case: (i) s ≈ s, (ii) s ≈ t with s ≉ t, (iii) inclusion of body and head, without substitution")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (y (at-y)) (fx (at-fx (cast U32 0)))
+          (none-set (list-new arena Clause))
+          (w (clauses-of arena (cl arena "A" "B C") (cl arena "D" "C")))
+          (ay (make-clause arena (one-lit arena (atom1 (cast U32 0) y)) (one-lit arena (atom1 (cast U32 1) y)))))
+      (and
+        ;; (i) and (ii), in an empty set.
+        (in-hat (with-lit arena (cl arena "A" "B") (eq-lit fx fx)) none-set)
+        (in-hat (with-lit arena (with-lit arena (cl arena "A" "") (eq-lit fx x)) (neq-lit x fx)) none-set)
+        (not (in-hat (with-lit arena (cl arena "A" "B") (neq-lit fx fx)) none-set))
+        (not (in-hat (with-lit arena (cl arena "A" "") (eq-lit fx x)) none-set))
+        (not (in-hat (with-lit arena (with-lit arena (cl arena "A" "") (eq-lit fx x)) (neq-lit y fx)) none-set))
+        ;; (iii): a larger body and a larger head are subsumed; anything else is not.
+        (in-hat (cl arena "A" "B C") w)
+        (in-hat (cl arena "A B" "B C D") w)
+        (in-hat (cl arena "D A" "C") w)
+        (not (in-hat (cl arena "" "B C") w))
+        (not (in-hat (cl arena "A" "B") w))
+        (not (in-hat (cl arena "B" "C") w))
+        ;; No substitution: A(x) → B(x) does not subsume A(y) → B(y).
+        (not (in-hat ay (clauses-of arena (cl arena "A" "B") (cl arena "C" "D")))))))
+
+  (fn reference-min ((arena Arena) (xs (List Clause)))
+    (@intent "min(X) from its definition: the members that are no tautology and that no other member subsumes")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do
+        (for-each (c xs)
+          (let ((mut keep (not (tautology c))))
+            (do (for-each (d xs) (when (and (not (clause-eq c d)) (subsumes d c)) (set! keep false)))
+                (when (and keep (not (in-list out c))) (list-push out c)))))
+        out)))
+
+  (fn in-list ((xs (List Clause)) (c Clause))
+    (@intent "Is c in xs?")
+    (@spec (((List Clause) Clause) -> Bool))
+    (@pure)
+    (let ((mut found false)) (do (for-each (x xs) (when (clause-eq x c) (set! found true))) found)))
+
+  (fn same-clause-set ((a (List Clause)) (b (List Clause)))
+    (@intent "The same clauses, in any order: equally many, and each list's within the other")
+    (@spec (((List Clause) (List Clause)) -> Bool))
+    (@pure)
+    (let ((mut ok (== (list-len a) (list-len b))))
+      (do (for-each (c a) (when (not (in-list b c)) (set! ok false)))
+          (for-each (c b) (when (not (in-list a c)) (set! ok false)))
+          ok)))
+
+  (fn commit-w ((arena Arena))
+    (@intent "The context's set before the commit: A → B ∨ C and D → C")
+    (@spec ((Arena) -> (List Clause)))
+    (@alloc arena)
+    (clauses-of arena (cl arena "A" "B C") (cl arena "D" "C")))
+
+  (fn commit-candidates ((arena Arena))
+    (@intent "Six candidates: one subsumed, one subsuming, a tautology, chains both ways")
+    (@spec ((Arena) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do
+        (list-push out (cl arena "A" "B"))                                  ; subsumes A → B ∨ C
+        (list-push out (cl arena "A D" "B"))                                ; subsumed by A → B
+        (list-push out (with-lit arena (cl arena "B" "") (eq-lit (at-x) (at-x))))  ; a tautology
+        (list-push out (cl arena "D" "C B"))                                ; subsumed by D → C
+        (list-push out (cl arena "" "C"))                                   ; subsumes D → C and more
+        (list-push out (cl arena "A B" "C"))                                ; inserted, then subsumed by ⊤ → C
+        out)))
+
+  (fn clause-list-at ((xs (List Clause)) (i Int) (fallback Clause))
+    (@intent "Element i, or the fallback")
+    (@spec (((List Clause) Int Clause) -> Clause))
+    (@pure)
+    (match (list-get xs i) ((some c) c) ((none) fallback)))
+
+  (fn permuted ((arena Arena) (xs (List Clause)) (code Int))
+    (@intent "xs in the order a base-6 code gives, or empty when the code repeats a position")
+    (@spec ((Arena (List Clause) Int) -> (List Clause)))
+    (@alloc arena)
+    (let ((n (cast Int (list-len xs)))
+          (fallback (cl arena "" ""))
+          (mut out (list-new arena Clause))
+          (mut used (list-new arena Bool))
+          (mut c code)
+          (mut ok true)
+          (mut k 0))
+      (do
+        (while (< k n) (do (list-push used false) (set! k (+ k 1))))
+        (set! k 0)
+        (while (< k n)
+          (let ((p (% c n)))
+            (do (if (match (list-get used p) ((some b) b) ((none) true))
+                  (set! ok false)
+                  (do (list-set used p true) (list-push out (clause-list-at xs p fallback))))
+                (set! c (/ c n))
+                (set! k (+ k 1)))))
+        (if ok out (list-new arena Clause)))))
+
+  (fn appended ((arena Arena) (a (List Clause)) (b (List Clause)))
+    (@intent "a, then b")
+    (@spec ((Arena (List Clause) (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (c a) (list-push out c)) (for-each (c b) (list-push out c)) out)))
+
+  (fn new-members ((arena Arena) (xs (List Clause)) (ws (List Clause)))
+    (@intent "The members of xs that ws lacks")
+    (@spec ((Arena (List Clause) (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (c xs) (when (not (in-list ws c)) (list-push out c))) out)))
+
+  (fn order-ok ((arena Arena) (ws (List Clause)) (order (List Clause)) (want (List Clause)) (want-added (List Clause)))
+    (@intent "Does committing in this order leave want, having added want-added?")
+    (@spec ((Arena (List Clause) (List Clause) (List Clause) (List Clause)) -> Bool))
+    (@alloc arena)
+    (let ((r (commit-min arena ws order)))
+      (and (same-clause-set (. r set) want) (same-clause-set (. r added) want-added))))
+
+  (fn test-sriq-commit-min-permutation ((arena Arena))
+    (@intent "R1: in each of the 720 orders of six candidates, the commit leaves min(W ∪ C) and adds exactly its new members")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((ws (commit-w arena))
+          (cs (commit-candidates arena))
+          (want (reference-min arena (appended arena ws cs)))
+          (want-added (new-members arena want ws))
+          (expected (clauses-of arena (cl arena "A" "B") (cl arena "" "C")))
+          (mut orders 0)
+          (mut bad 0)
+          (mut code 0))
+      (do
+        (while (< code 46656)
+          (let ((order (permuted arena cs code)))
+            (do (when (> (list-len order) 0)
+                  (do (set! orders (+ orders 1))
+                      (when (not (order-ok arena ws order want want-added)) (set! bad (+ bad 1)))))
+                (set! code (+ code 1)))))
+        (when (!= orders 720) (println "  [commit] not 720 orders"))
+        (when (> bad 0) (do (print "  [commit] orders that differ: ") (println (int-to-string arena bad))))
+        ;; min(W ∪ C) is A → B and ⊤ → C, both new.
+        (when (not (same-clause-set want expected)) (println "  [commit] min(W ∪ C) is not {A → B, ⊤ → C}"))
+        (and (== orders 720) (== bad 0) (same-clause-set want expected) (same-clause-set want-added expected)))))
+
+  (fn keeps-but-adds-not ((arena Arena))
+    (@intent "W's A → B survives a commit of C → D: both are in the set, and only C → D was added")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ws (list-new arena Clause))
+          (mut cs (list-new arena Clause)))
+      (do
+        (list-push ws (cl arena "A" "B"))
+        (list-push cs (cl arena "C" "D"))
+        (let ((r (commit-min arena ws cs)))
+          (and (== (list-len (. r set)) 2)
+               (in-list (. r set) (cl arena "A" "B"))
+               (== (list-len (. r added)) 1)
+               (in-list (. r added) (cl arena "C" "D")))))))
+
+  (fn test-sriq-commit-survivors ((arena Arena))
+    (@intent "Δₙ₊₁ is what is inserted and survives: a candidate inserted, then subsumed by a later one, is not added")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((r (commit-min arena (list-new arena Clause) (clauses-of arena (cl arena "A B" "C") (cl arena "" "C"))))
+          (m (commit-min arena (commit-w arena) (commit-candidates arena))))
+      (and (in-list (. r added) (cl arena "" "C"))
+           (== (list-len (. r added)) 1)
+           ;; A member of W that survives is in the set but was not added.
+           (keeps-but-adds-not arena)
+           (same-clause-set (. m set) (clauses-of arena (cl arena "A" "B") (cl arena "" "C"))))))
+
+  (fn test-sriq-inhat-persists ((arena Arena))
+    (@intent "R2: whatever is ∈̂ W before the commit is ∈̂ its result, though its subsumers are deleted")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((ws (commit-w arena))
+          (after (. (commit-min arena ws (commit-candidates arena)) set))
+          (mut samples (list-new arena Clause))
+          (mut ok true))
+      (do
+        (list-push samples (cl arena "A B" "B C"))
+        (list-push samples (cl arena "A D" "C"))
+        (list-push samples (cl arena "A" "B C D"))
+        (list-push samples (cl arena "D" "C"))
+        (list-push samples (with-lit arena (cl arena "C" "") (eq-lit (at-y) (at-y))))
+        (for-each (c samples)
+          (when (and (in-hat c ws) (not (in-hat c after))) (set! ok false)))
+        ;; And the commit deleted both of W's clauses.
+        (and ok (not (in-list after (cl arena "A" "B C"))) (not (in-list after (cl arena "D" "C")))))))
+
   (fn test-sriq-gate-table ((arena Arena))
     (@intent "§5.5's language and gate conditions, row by row, against el and el++")
     (@spec ((Arena) -> Bool))
@@ -8492,6 +8721,22 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-max-flags-rows arena)))
             (print-test-result "7c: maximality (Δ ⊁ L), row by row" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-inhat-rows arena)))
+            (print-test-result "7d: ∈̂ by tautology (i), (ii), and by inclusion (iii), without substitution" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-commit-min-permutation arena)))
+            (print-test-result "7d: R1, the commit leaves min(W ∪ C) in every order of its candidates" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-commit-survivors arena)))
+            (print-test-result "7d: what the commit adds is what it inserts and keeps" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-inhat-persists arena)))
+            (print-test-result "7d: R2, ∈̂ persists through the commit" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-clauses-on-fixtures arena)))
