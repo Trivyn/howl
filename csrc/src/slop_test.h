@@ -21,6 +21,7 @@
 #include "slop_sriqsubsume.h"
 #include "slop_sriq.h"
 #include "slop_sriqctx.h"
+#include "slop_sriqref.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
@@ -41,6 +42,7 @@
 #include "slop_kscnames.h"
 #include <string.h>
 
+typedef struct test_Expect test_Expect;
 typedef struct test_KscFixture test_KscFixture;
 typedef struct test_RunAs test_RunAs;
 
@@ -166,6 +168,12 @@ SLOP_LIST_DEFINE(sriq_Cands, slop_list_sriq_Cands)
 #define SLOP_LIST_SRIQ_SUCCSIG_DEFINED
 #define SLOP_LIST_SRIQ_SUCCSIG_IMPL_DEFINED
 SLOP_LIST_DEFINE(sriq_SuccSig, slop_list_sriq_SuccSig)
+#endif
+
+#ifndef SLOP_LIST_SRIQCTX_STRATEGY_DEFINED
+#define SLOP_LIST_SRIQCTX_STRATEGY_DEFINED
+#define SLOP_LIST_SRIQCTX_STRATEGY_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqctx_Strategy, slop_list_sriqctx_Strategy)
 #endif
 
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
@@ -303,6 +311,11 @@ SLOP_OPTION_DEFINE(sriqclauses_SriqClauses, slop_option_sriqclauses_SriqClauses)
 SLOP_OPTION_DEFINE(sriq_SuccSig, slop_option_sriq_SuccSig)
 #endif
 
+#ifndef SLOP_OPTION_SRIQCTX_STRATEGY_DEFINED
+#define SLOP_OPTION_SRIQCTX_STRATEGY_DEFINED
+SLOP_OPTION_DEFINE(sriqctx_Strategy, slop_option_sriqctx_Strategy)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
@@ -336,6 +349,25 @@ SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+struct test_Expect {
+    slop_string file;
+    int64_t kind;
+    slop_string a;
+    slop_string b;
+};
+typedef struct test_Expect test_Expect;
+
+#ifndef SLOP_OPTION_TEST_EXPECT_DEFINED
+#define SLOP_OPTION_TEST_EXPECT_DEFINED
+SLOP_OPTION_DEFINE(test_Expect, slop_option_test_Expect)
+#endif
+
+#ifndef SLOP_LIST_TEST_EXPECT_DEFINED
+#define SLOP_LIST_TEST_EXPECT_DEFINED
+#define SLOP_LIST_TEST_EXPECT_IMPL_DEFINED
+SLOP_LIST_DEFINE(test_Expect, slop_list_test_Expect)
 #endif
 
 struct test_KscFixture {
@@ -1427,6 +1459,7 @@ uint8_t test_body_triggers_ok(sriqctx_Triggers tr, types_Clause c);
 uint8_t test_test_sriq_triggers_on_fixtures(slop_arena* arena);
 slop_option_sriqclauses_SriqClauses test_fixture_sc(slop_arena* arena, slop_string path);
 slop_list_types_Clause test_o3_clauses(slop_arena* arena);
+slop_list_types_Clause test_o3_fixed_clauses(slop_arena* arena);
 sriqctx_Triggers test_o3_triggers(slop_arena* arena);
 uint8_t test_lits_same_set(slop_list_types_Lit a, slop_list_types_Lit b);
 sriq_SuccSig test_sig_of(int64_t f);
@@ -1451,6 +1484,50 @@ slop_list_types_Clause test_rpred_concls(slop_arena* arena, sriqorder_SriqOrder 
 uint8_t test_slot_has_edge(types_Lit l, slop_list_u32 edges);
 uint8_t test_test_sriq_rpred_rows(slop_arena* arena);
 slop_list_u32 test_r_u32s(slop_arena* arena, int64_t u);
+sriqref_RefConfig test_ref_cfg(sriqctx_Strategy s);
+sriqref_RefIn test_ref_in(slop_list_types_Clause onto, int64_t nclass, int64_t nquery, int64_t nrole, int64_t nfn, int64_t nconst);
+slop_list_sriqctx_Strategy test_strategies(slop_arena* arena);
+slop_string test_strat_name(sriqctx_Strategy s);
+uint8_t test_complete_run(sriqref_RefResult r);
+uint8_t test_ref_says(slop_string label, sriqctx_Strategy s, uint8_t got, uint8_t expected);
+uint8_t test_run_checks(slop_arena* arena, slop_string label, sriqref_RefIn in, sriqctx_Strategy s, sriqref_RefResult r);
+uint8_t test_all_ctx_clauses(slop_arena* arena, sriqctx_Structure st);
+uint8_t test_all_min(slop_arena* arena, sriqctx_Structure st);
+uint8_t test_set_min(slop_list_types_Clause cs);
+slop_list_types_Clause test_o4_clauses(slop_arena* arena);
+uint8_t test_test_sriq_ref_papers(slop_arena* arena);
+uint8_t test_papers_under(slop_arena* arena, sriqref_RefIn o1, sriqref_RefIn o3, sriqref_RefIn o3p, sriqref_RefIn o4, sriqctx_Strategy s);
+uint8_t test_o1_holds(slop_arena* arena, sriqref_RefIn o1, sriqctx_Strategy s, sriqref_RefResult r1);
+uint8_t test_o3_holds(slop_arena* arena, sriqref_RefIn o3, sriqref_RefIn o3p, sriqctx_Strategy s, sriqref_RefResult r3, sriqref_RefResult r3p);
+uint8_t test_o4_holds(slop_arena* arena, sriqref_RefIn o4, sriqctx_Strategy s, sriqref_RefResult r4);
+slop_list_types_Clause test_e4_clauses(slop_arena* arena);
+slop_list_types_Clause test_core_row_clauses(slop_arena* arena);
+slop_list_types_Clause test_thing_row_clauses(slop_arena* arena);
+slop_list_types_Clause test_rsucc_row_clauses(slop_arena* arena);
+slop_list_types_Clause test_not_dl4_clauses(slop_arena* arena);
+uint8_t test_root_rows(slop_arena* arena, sriqctx_Strategy s);
+uint8_t test_not_dl4_row(slop_arena* arena, sriqctx_Strategy s);
+uint8_t test_test_sriq_ref_e4_rows(slop_arena* arena);
+slop_list_test_Expect test_expects(slop_arena* arena);
+uint32_t test_class_named(slop_arena* arena, sriqclauses_SriqIds ids, slop_string name);
+uint8_t test_expect_holds(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, test_Expect e);
+slop_string test_fixture_path(slop_arena* arena, slop_string name);
+slop_list_u8 test_raw_answers(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st);
+uint8_t test_same_bools(slop_list_u8 a, slop_list_u8 b);
+uint8_t test_fixture_ref(slop_arena* arena, slop_string name);
+uint8_t test_fixture_ref_sc(slop_arena* arena, slop_string name, sriqclauses_SriqClauses sc);
+uint8_t test_expects_met(slop_arena* arena, slop_string name, sriqclauses_SriqIds ids, sriqctx_Strategy s, sriqref_RefResult r);
+uint8_t test_test_sriq_ref_fixtures(slop_arena* arena);
+uint8_t test_test_sriq_ref_limits(slop_arena* arena);
+slop_list_u8 test_o4_answers(slop_arena* arena, sriqctx_Structure st);
+slop_list_types_Clause test_reversed_clauses(slop_arena* arena, slop_list_types_Clause cs);
+slop_option_sriqctx_Strategy test_parse_strategy(slop_string name);
+slop_string test_status_name(sriqref_RefStatus s);
+int64_t test_print_ref_report(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, sriqctx_Strategy s, int64_t rounds);
+int64_t test_print_thing_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, slop_string thing);
+int64_t test_print_class_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, uint32_t b, slop_string thing, slop_string nothing);
+int64_t test_sriq_ref(slop_arena* arena, slop_string path, slop_string strat);
+int64_t test_ref_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1753,6 +1830,16 @@ SLOP_OPTION_DEFINE(sriqclauses_SriqClauses, slop_option_sriqclauses_SriqClauses)
 #ifndef SLOP_OPTION_SRIQ_SUCCSIG_DEFINED
 #define SLOP_OPTION_SRIQ_SUCCSIG_DEFINED
 SLOP_OPTION_DEFINE(sriq_SuccSig, slop_option_sriq_SuccSig)
+#endif
+
+#ifndef SLOP_OPTION_SRIQCTX_STRATEGY_DEFINED
+#define SLOP_OPTION_SRIQCTX_STRATEGY_DEFINED
+SLOP_OPTION_DEFINE(sriqctx_Strategy, slop_option_sriqctx_Strategy)
+#endif
+
+#ifndef SLOP_OPTION_TEST_EXPECT_DEFINED
+#define SLOP_OPTION_TEST_EXPECT_DEFINED
+SLOP_OPTION_DEFINE(test_Expect, slop_option_test_Expect)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED

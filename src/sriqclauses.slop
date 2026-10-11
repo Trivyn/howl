@@ -38,7 +38,7 @@
 
   (export SriqIds SriqClauses sriq-clauses build-sriq-ids class-id role-id const-id
           expand-clause make-clause lit-set clause-cmp clause-eq dl-clause-shape clause-canonical ids-dense
-          render-aterm render-lit render-clause render-clauses)
+          render-aterm render-lit render-clause render-clauses class-text)
 
   ;; The tables, both ways. Maps are pointers, so copies share them.
   (type SriqIds (record
