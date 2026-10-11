@@ -18,6 +18,7 @@
 #include "slop_sriqnames.h"
 #include "slop_sroiqfss.h"
 #include "slop_sriqclauses.h"
+#include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
 #include "slop_canon.h"
@@ -39,6 +40,12 @@
 
 typedef struct test_KscFixture test_KscFixture;
 typedef struct test_RunAs test_RunAs;
+
+#ifndef SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
+#endif
 
 #ifndef SLOP_OPTION_U32_DEFINED
 #define SLOP_OPTION_U32_DEFINED
@@ -120,6 +127,12 @@ SLOP_LIST_DEFINE(types_DRole, slop_list_types_DRole)
 #define SLOP_LIST_TYPES_ATERM_DEFINED
 #define SLOP_LIST_TYPES_ATERM_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_ATerm, slop_list_types_ATerm)
+#endif
+
+#ifndef SLOP_LIST_SRIQORDER_CTERM_DEFINED
+#define SLOP_LIST_SRIQORDER_CTERM_DEFINED
+#define SLOP_LIST_SRIQORDER_CTERM_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqorder_CTerm, slop_list_sriqorder_CTerm)
 #endif
 
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
@@ -225,6 +238,11 @@ SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
 #ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
 #define SLOP_OPTION_TYPES_ATERM_DEFINED
 SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+#ifndef SLOP_OPTION_SRIQORDER_CTERM_DEFINED
+#define SLOP_OPTION_SRIQORDER_CTERM_DEFINED
+SLOP_OPTION_DEFINE(sriqorder_CTerm, slop_option_sriqorder_CTerm)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1240,6 +1258,50 @@ uint8_t test_test_sriq_eq_orientation(slop_arena* arena);
 slop_list_string test_clause_lines(slop_arena* arena, slop_result_sriqnames_SriqNormal_string r);
 uint8_t test_fixture_clauses_ok(slop_arena* arena, slop_string path);
 uint8_t test_test_sriq_clauses_on_fixtures(slop_arena* arena);
+sriqorder_SriqOrder test_ord_table(slop_arena* arena);
+slop_list_int test_ord_label(slop_arena* arena, sriqorder_SriqOrder ord, uint32_t u);
+int64_t test_ord_ints_cmp(slop_list_int a, slop_list_int b);
+uint8_t test_ref_const_gt(slop_arena* arena, sriqorder_SriqOrder ord, uint32_t a, uint32_t b);
+uint8_t test_ref_is_var(types_ATerm t);
+uint8_t test_ref_has_arg(types_ATerm t);
+types_ATerm test_ref_arg(types_ATerm t);
+uint8_t test_ref_prec_gt(slop_arena* arena, sriqorder_SriqOrder ord, types_ATerm a, types_ATerm b);
+uint8_t test_ref_same_head(types_ATerm a, types_ATerm b);
+uint8_t test_ref_lpo(slop_arena* arena, sriqorder_SriqOrder ord, types_ATerm s, types_ATerm t);
+uint8_t test_ord_aterm_same(types_ATerm a, types_ATerm b);
+slop_list_types_ATerm test_ord_aterms(slop_arena* arena);
+slop_list_sriqorder_CTerm test_ord_push_binary(slop_arena* arena, slop_list_sriqorder_CTerm out, types_ATerm l, types_ATerm r);
+slop_list_sriqorder_CTerm test_ord_universe(slop_arena* arena);
+sriqorder_CTerm test_ord_ct_at(slop_list_sriqorder_CTerm xs, int64_t i);
+uint8_t test_ord_get(slop_list_u8 m, int64_t n, int64_t i, int64_t j);
+uint8_t test_ord_ge(slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, int64_t i, int64_t j);
+int64_t test_ord_index(slop_list_sriqorder_CTerm u, types_ATerm t);
+uint8_t test_ord_arg_ge(slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, types_ATerm arg, int64_t j);
+uint8_t test_ord_p_args_le(slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, types_Lit a, types_Lit b);
+uint8_t test_ord_generated(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, int64_t i, int64_t j);
+uint8_t test_ord_items_1_3(slop_arena* arena, sriqorder_SriqOrder ord, types_ATerm s, types_ATerm t);
+slop_list_u8 test_ord_step(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u);
+slop_list_u8 test_ord_close(slop_list_u8 m, int64_t n);
+uint8_t test_ord_close_row(slop_list_u8 m, int64_t n, int64_t i, int64_t k);
+int64_t test_ord_count(slop_list_u8 m);
+slop_list_u8 test_ord_least(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u);
+slop_string test_ct_text(slop_arena* arena, sriqorder_CTerm c);
+slop_string test_aterm_code(slop_arena* arena, types_ATerm t);
+int64_t test_akind_code(types_AKind k);
+uint8_t test_test_sriq_order_closure(slop_arena* arena);
+int64_t test_ord_row_mismatches(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u, slop_list_u8 m, int64_t i, int64_t seen);
+uint8_t test_test_sriq_order_strict_and_admissible(slop_arena* arena);
+uint8_t test_ord_pair_ok(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u, sriqorder_CTerm s, sriqorder_CTerm t);
+uint8_t test_test_sriq_order_c2(slop_arena* arena);
+uint8_t test_ord_c2_exempt(sriqorder_CTerm s);
+uint8_t test_test_sriq_const_order(slop_arena* arena);
+uint8_t test_const_row_ok(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_int ranks, int64_t a);
+slop_string test_flags_text(slop_arena* arena, slop_list_u8 fs);
+uint8_t test_flags_are(slop_arena* arena, slop_string label, slop_list_types_Lit head, slop_string want);
+slop_list_types_Lit test_two_lits(slop_arena* arena, types_Lit a, types_Lit b);
+uint8_t test_test_sriq_max_flags_rows(slop_arena* arena);
+slop_list_types_Lit test_sample_lits(slop_arena* arena);
+uint8_t test_lits_strict(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_types_Lit ls);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1509,6 +1571,16 @@ SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
 SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
 #endif
 
+#ifndef SLOP_OPTION_SRIQORDER_CTERM_DEFINED
+#define SLOP_OPTION_SRIQORDER_CTERM_DEFINED
+SLOP_OPTION_DEFINE(sriqorder_CTerm, slop_option_sriqorder_CTerm)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
@@ -1542,11 +1614,6 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_TEST_RUNAS_DEFINED
 #define SLOP_OPTION_TEST_RUNAS_DEFINED
 SLOP_OPTION_DEFINE(test_RunAs, slop_option_test_RunAs)
-#endif
-
-#ifndef SLOP_OPTION_U8_DEFINED
-#define SLOP_OPTION_U8_DEFINED
-SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
@@ -1594,6 +1661,11 @@ SLOP_OPTION_DEFINE(slop_option_types_DName, slop_option_option_types_DName)
 SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
 #endif
 
+#ifndef SLOP_OPTION_SRIQORDER_CONSTENTRY_DEFINED
+#define SLOP_OPTION_SRIQORDER_CONSTENTRY_DEFINED
+SLOP_OPTION_DEFINE(sriqorder_ConstEntry, slop_option_sriqorder_ConstEntry)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 #define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
@@ -1635,16 +1707,16 @@ SLOP_LIST_DEFINE(slop_option_types_DName, slop_list_option_types_DName)
 SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
 #endif
 
+#ifndef SLOP_LIST_SRIQORDER_CONSTENTRY_DEFINED
+#define SLOP_LIST_SRIQORDER_CONSTENTRY_DEFINED
+#define SLOP_LIST_SRIQORDER_CONSTENTRY_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqorder_ConstEntry, slop_list_sriqorder_ConstEntry)
+#endif
+
 #ifndef SLOP_LIST_TYPES_CLASSANSWER_DEFINED
 #define SLOP_LIST_TYPES_CLASSANSWER_DEFINED
 #define SLOP_LIST_TYPES_CLASSANSWER_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_ClassAnswer, slop_list_types_ClassAnswer)
-#endif
-
-#ifndef SLOP_LIST_U8_DEFINED
-#define SLOP_LIST_U8_DEFINED
-#define SLOP_LIST_U8_IMPL_DEFINED
-SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #endif
 
 
