@@ -12,7 +12,20 @@ typedef struct sriq_Premise sriq_Premise;
 typedef struct sriq_RConcl sriq_RConcl;
 typedef struct sriq_Subst sriq_Subst;
 typedef struct sriq_Cands sriq_Cands;
+typedef struct sriq_Pos sriq_Pos;
+typedef struct sriq_BodyView sriq_BodyView;
 typedef struct sriq_HState sriq_HState;
+
+#ifndef SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint32_t, slop_list_u32)
+#endif
+
+#ifndef SLOP_OPTION_U32_DEFINED
+#define SLOP_OPTION_U32_DEFINED
+SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
 
 #ifndef SLOP_LIST_TYPES_LIT_DEFINED
 #define SLOP_LIST_TYPES_LIT_DEFINED
@@ -102,6 +115,29 @@ SLOP_OPTION_DEFINE(sriq_Cands, slop_option_sriq_Cands)
 SLOP_LIST_DEFINE(sriq_Cands, slop_list_sriq_Cands)
 #endif
 
+struct sriq_Pos {
+    uint32_t arg;
+    uint8_t inner;
+};
+typedef struct sriq_Pos sriq_Pos;
+
+#ifndef SLOP_OPTION_SRIQ_POS_DEFINED
+#define SLOP_OPTION_SRIQ_POS_DEFINED
+SLOP_OPTION_DEFINE(sriq_Pos, slop_option_sriq_Pos)
+#endif
+
+struct sriq_BodyView {
+    types_Lit lit;
+    slop_list_types_Lit rest;
+    slop_list_types_Lit head;
+};
+typedef struct sriq_BodyView sriq_BodyView;
+
+#ifndef SLOP_OPTION_SRIQ_BODYVIEW_DEFINED
+#define SLOP_OPTION_SRIQ_BODYVIEW_DEFINED
+SLOP_OPTION_DEFINE(sriq_BodyView, slop_option_sriq_BodyView)
+#endif
+
 struct sriq_HState {
     uint8_t fires;
     sriq_Subst sub;
@@ -146,6 +182,34 @@ sriq_RConcl sriq_hyper_finish(slop_arena* arena, sriq_HState st, slop_list_types
 slop_list_sriq_HState sriq_extend_one(slop_arena* arena, sriq_HState st, types_Lit a, slop_list_sriq_Premise ps);
 slop_list_sriq_HState sriq_extend_all(slop_arena* arena, slop_list_sriq_HState sts, types_Lit a, slop_list_sriq_Premise ps);
 slop_list_sriq_RConcl sriq_hyper_join(slop_arena* arena, sriq_HState start, slop_list_types_Lit atoms, slop_list_sriq_Cands cands, slop_list_types_Lit delta);
+uint32_t sriq_other_arg(uint32_t k);
+types_ATerm sriq_arg_term(types_Lit l, uint32_t k);
+uint8_t sriq_has_arg(types_Lit l, uint32_t k);
+slop_option_types_ATerm sriq_inner_of(types_ATerm a);
+slop_option_types_ATerm sriq_subterm_at(types_Lit l, sriq_Pos p);
+types_ATerm sriq_with_inner(types_ATerm a, types_ATerm t);
+types_Lit sriq_with_arg(types_Lit l, uint32_t k, types_ATerm t);
+types_Lit sriq_replace_at(types_Lit l, sriq_Pos p, types_ATerm t);
+types_ATerm sriq_replace_const(types_ATerm a, types_ATerm s, types_ATerm t);
+types_Lit sriq_replace_all(types_Lit l, sriq_Pos p, types_ATerm s, types_ATerm t);
+uint8_t sriq_side_ok(sriqorder_SriqOrder ord, types_Lit l, uint32_t k);
+uint8_t sriq_kinds_are(types_ATerm a, types_ATerm b, types_AKind p, types_AKind q);
+uint8_t sriq_eq_usable(types_ATerm s1, types_ATerm t1);
+uint8_t sriq_plain(types_ATerm a);
+uint8_t sriq_s2_plain(types_Lit l, sriq_Pos p);
+uint8_t sriq_x_ok(types_Lit l, sriq_Pos p, types_ATerm s1);
+uint8_t sriq_at_is(slop_option_types_ATerm o, types_ATerm s);
+sriq_RConcl sriq_eq_rule(slop_arena* arena, sriqorder_SriqOrder ord, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2, sriq_Pos p);
+sriq_BodyView sriq_body_at(slop_arena* arena, types_Clause c, int64_t i);
+uint8_t sriq_ground(types_ATerm a);
+uint8_t sriq_joinable(types_Lit a);
+sriq_RConcl sriq_join_rule(slop_arena* arena, sriq_Premise p1, sriq_BodyView b);
+uint8_t sriq_kid_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t i, uint32_t k);
+uint8_t sriq_kids_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t n, slop_list_u32 kids);
+slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids);
+uint8_t sriq_nom_premises(sriq_Premise p1, sriq_Premise p2, uint32_t b1, uint32_t sb2);
+sriq_RConcl sriq_nom_rule(slop_arena* arena, sriqorder_SriqOrder ord, int64_t lam, uint32_t b1, uint32_t sb2, uint32_t n, sriq_Premise p1, sriq_Premise p2, slop_list_u32 kids);
+int64_t sriq_depth_limit(int64_t tsu, int64_t tpr, int64_t omega, int64_t omega_d);
 
 #ifndef SLOP_OPTION_TYPES_LIT_DEFINED
 #define SLOP_OPTION_TYPES_LIT_DEFINED
@@ -177,9 +241,24 @@ SLOP_OPTION_DEFINE(sriq_Subst, slop_option_sriq_Subst)
 SLOP_OPTION_DEFINE(sriq_Cands, slop_option_sriq_Cands)
 #endif
 
+#ifndef SLOP_OPTION_SRIQ_POS_DEFINED
+#define SLOP_OPTION_SRIQ_POS_DEFINED
+SLOP_OPTION_DEFINE(sriq_Pos, slop_option_sriq_Pos)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_BODYVIEW_DEFINED
+#define SLOP_OPTION_SRIQ_BODYVIEW_DEFINED
+SLOP_OPTION_DEFINE(sriq_BodyView, slop_option_sriq_BodyView)
+#endif
+
 #ifndef SLOP_OPTION_SRIQ_HSTATE_DEFINED
 #define SLOP_OPTION_SRIQ_HSTATE_DEFINED
 SLOP_OPTION_DEFINE(sriq_HState, slop_option_sriq_HState)
+#endif
+
+#ifndef SLOP_OPTION_U32_DEFINED
+#define SLOP_OPTION_U32_DEFINED
+SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
 #endif
 
 

@@ -43,7 +43,8 @@
   (import sroiqfss (fss-axioms fss-normal))
   (import sriqclauses (SriqIds SriqClauses sriq-clauses build-sriq-ids make-clause clause-eq dl-clause-shape clause-canonical ids-dense render-clauses))
   (import sriqsubsume (Committed in-hat subsumes tautology commit-min))
-  (import sriq (Premise RConcl HState Cands select assemble core-rule ineq-rule factor-rule hyper-start hyper-join))
+  (import sriq (Premise RConcl HState Cands Pos BodyView select assemble core-rule ineq-rule factor-rule hyper-start hyper-join
+                eq-rule body-at join-rule nom-rule depth-limit))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt max-flags))
 
   (ffi "string.h"
@@ -73,7 +74,7 @@
   (import select (profile-name parse-profile profile-dropped unavailable-message))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
   (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq ind-elem name-term))
-  (import types (DName DRole Dl1 Dl2 Dl4 DlClause AKind ATerm LitForm Lit Clause at-x at-y at-z at-fx at-u at-fu aterm-cmp atom1 atom2 eq-lit neq-lit lit-eq))
+  (import types (DName DRole Dl1 Dl2 Dl4 DlClause AKind ATerm LitForm Lit Clause at-x at-y at-z at-fx at-u at-fu aterm-cmp aterm-eq atom1 atom2 eq-lit neq-lit lit-eq))
   (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact store-facts store-holds RunResult))
   (import ksc (reference-closure reference-answer ksc-1 ksc-q))
   (import kscids (KscIds CFact build-ksc-ids encode-fact decode-fact))
@@ -4832,6 +4833,251 @@
         (clause-eq (assemble arena (factor-rule arena ord p-uy (eq-lit x y) y))
           (r-clause arena nolits (two-lits arena (neq-lit x u0) (eq-lit u0 y)))))))
 
+  ;; ------------------------------------------------------------
+  ;; Slice 7f: Eq, Join, Nom and Λ (rules/sriq.slop). The class, role and
+  ;; function-symbol ids are 7e's; each row names the clauses it is.
+  ;; ------------------------------------------------------------
+
+  (fn r-pos ((k Int) (inner Bool))
+    (@intent "Position k, or the x or u under its f")
+    (@spec ((Int Bool) -> Pos))
+    (@pure)
+    (record-new Pos (arg (cast U32 k)) (inner inner)))
+
+  (fn r-top ((arena Arena) (head (List Lit)))
+    (@intent "⊤ → head")
+    (@spec ((Arena (List Lit)) -> Clause))
+    (@alloc arena)
+    (r-clause arena (list-new arena Lit) head))
+
+  (fn r-eq ((arena Arena) (root Bool) (c1 Clause) (l1 Lit) (k1 Int) (c2 Clause) (l2 Lit) (p Pos))
+    (@intent "Eq from c1 at l1's side k1 into c2 at l2's position p")
+    (@spec ((Arena Bool Clause Lit Int Clause Lit Pos) -> RConcl))
+    (@alloc arena)
+    (let ((ord (named-consts arena 3)))
+      (eq-rule arena ord root (r-premise arena ord c1 l1) (cast U32 k1) (r-premise arena ord c2 l2) p)))
+
+  (fn eq-gives ((arena Arena) (label String) (r RConcl) (want Clause))
+    (@intent "Eq fires and concludes want")
+    (@spec ((Arena String RConcl Clause) -> Bool))
+    (@alloc arena)
+    (if (and (. r fires) (clause-eq (assemble arena r) want))
+      true
+      (do (print "  [eq] ") (println label) false)))
+
+  (fn test-sriq-eq-rows ((arena Arena))
+    (@intent "Eq, row by row: O1's (21) and (19) give (22), Example 1's (95) and (94) give (96), Example 2's (148) and (147) give (149), and the root rewrites a constant everywhere")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (f0x (r-fx 0)) (f1x (r-fx 1)) (f2x (r-fx 2))
+          (o (at-u (cast U32 0))) (u1 (at-u (cast U32 1)))
+          (c21 (r-top arena (two-lits arena (r-atom 3 x) (eq-lit f1x f0x))))
+          (c19 (r-top arena (two-lits arena (r-atom 3 x) (r-atom 2 f1x))))
+          (c95 (r-top arena (two-lits arena (r-atom 6 x) (eq-lit x o))))
+          (c94 (r-top arena (two-lits arena (r-atom 6 x) (r-atom 3 x))))
+          (c148 (r-top arena (one-lit arena (eq-lit f2x o))))
+          (c147 (r-top arena (one-lit arena (r-role 2 f2x x))))
+          (root-eq (r-top arena (one-lit arena (eq-lit u1 o))))
+          (root-s (r-top arena (one-lit arena (r-role 1 u1 u1))))
+          (root-f (r-top arena (one-lit arena (r-atom 1 (at-fu (cast U32 0) (cast U32 1)))))))
+      (and
+        ;; g is f1 and f is f0, so g(x) ≈ f(x) is stored f1(x) ≈ f0(x).
+        (eq-gives arena "(21) and (19) give (22)"
+          (r-eq arena false c21 (eq-lit f1x f0x) (side-of (eq-lit f1x f0x) f1x) c19 (r-atom 2 f1x) (r-pos 1 false))
+          (r-top arena (two-lits arena (r-atom 3 x) (r-atom 2 f0x))))
+        ;; x ≈ o rewrites x in D(x): x and o are never compared.
+        (eq-gives arena "(95) and (94) give (96)"
+          (r-eq arena false c95 (eq-lit x o) (side-of (eq-lit x o) x) c94 (r-atom 3 x) (r-pos 1 false))
+          (r-top arena (two-lits arena (r-atom 6 x) (r-atom 3 o))))
+        ;; S₂ is role 2 and h is f2.
+        (eq-gives arena "(148) and (147) give (149)"
+          (r-eq arena false c148 (eq-lit f2x o) (side-of (eq-lit f2x o) f2x) c147 (r-role 2 f2x x) (r-pos 1 false))
+          (r-top arena (one-lit arena (r-role 2 o x))))
+        ;; At the root a constant goes everywhere in s₂: both arguments, and under f.
+        (eq-gives arena "the root rewrites u1 in both arguments"
+          (r-eq arena true root-eq (eq-lit u1 o) (side-of (eq-lit u1 o) u1) root-s (r-role 1 u1 u1) (r-pos 1 false))
+          (r-top arena (one-lit arena (r-role 1 o o))))
+        (eq-gives arena "away from the root, only at p"
+          (r-eq arena false root-eq (eq-lit u1 o) (side-of (eq-lit u1 o) u1) root-s (r-role 1 u1 u1) (r-pos 1 false))
+          (r-top arena (one-lit arena (r-role 1 o u1))))
+        (eq-gives arena "the root rewrites u1 under f"
+          (r-eq arena true root-eq (eq-lit u1 o) (side-of (eq-lit u1 o) u1) root-f (r-atom 1 (at-fu (cast U32 0) (cast U32 1))) (r-pos 1 true))
+          (r-top arena (one-lit arena (r-atom 1 (at-fu (cast U32 0) (cast U32 0))))))
+        (test-sriq-eq-excluded arena))))
+
+  (fn side-of ((l Lit) (s ATerm))
+    (@intent "Which side of l is s: 1 or 2")
+    (@spec ((Lit ATerm) -> Int))
+    (@pure)
+    (if (aterm-eq (. l t1) s) 1 2))
+
+  (fn test-sriq-eq-excluded ((arena Arena))
+    (@intent "Eq does not fire on x ≈ y or y ≈ u, on x inside an f or beside a y, with t₁ ≻ s₁, with t₂ ≻ s₂, off its position, or when either literal is not maximal")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (y (at-y)) (f0x (r-fx 0)) (f1x (r-fx 1)) (o (at-u (cast U32 0)))
+          (cxy (r-top arena (one-lit arena (eq-lit x y))))
+          (cyu (r-top arena (one-lit arena (eq-lit y o))))
+          (cxo (r-top arena (one-lit arena (eq-lit x o))))
+          (bx (r-top arena (one-lit arena (r-atom 1 x))))
+          (bo (r-top arena (one-lit arena (r-atom 1 o))))
+          (syx (r-top arena (one-lit arena (r-role 1 y x))))
+          (bfx (r-top arena (one-lit arena (r-atom 1 f0x))))
+          (cf (r-top arena (one-lit arena (eq-lit f1x f0x))))
+          (bf1 (r-top arena (one-lit arena (r-atom 1 f1x))))
+          (bf0 (r-top arena (one-lit arena (r-atom 1 f0x))))
+          (e2 (r-top arena (one-lit arena (eq-lit f1x x))))
+          ;; f0(x) ≻ y, so in ⊤ → f1(x) ≈ y ∨ f1(x) ≈ f0(x) the first is not maximal.
+          (low (r-top arena (two-lits arena (eq-lit f1x y) (eq-lit f1x f0x)))))
+      (and
+        (not (. (r-eq arena false cxy (eq-lit x y) (side-of (eq-lit x y) x) bx (r-atom 1 x) (r-pos 1 false)) fires))
+        (not (. (r-eq arena false cyu (eq-lit y o) (side-of (eq-lit y o) o) bo (r-atom 1 o) (r-pos 1 false)) fires))
+        (. (r-eq arena false cxo (eq-lit x o) (side-of (eq-lit x o) x) bx (r-atom 1 x) (r-pos 1 false)) fires)
+        (not (. (r-eq arena false cxo (eq-lit x o) (side-of (eq-lit x o) x) syx (r-role 1 y x) (r-pos 2 false)) fires))
+        (not (. (r-eq arena false cxo (eq-lit x o) (side-of (eq-lit x o) x) bfx (r-atom 1 f0x) (r-pos 1 true)) fires))
+        ;; A unary atom has no second argument.
+        (not (. (r-eq arena false cxo (eq-lit x o) (side-of (eq-lit x o) x) bx (r-atom 1 x) (r-pos 2 false)) fires))
+        ;; The first premise's literal must be an equality.
+        (not (. (r-eq arena false (r-top arena (one-lit arena (neq-lit f1x f0x))) (neq-lit f1x f0x) (side-of (neq-lit f1x f0x) f1x)
+                      bf1 (r-atom 1 f1x) (r-pos 1 false)) fires))
+        ;; t₁ ≻ s₁: f0(x) is below f1(x), so f0(x) is not s₁.
+        (not (. (r-eq arena false cf (eq-lit f1x f0x) (side-of (eq-lit f1x f0x) f0x) bf0 (r-atom 1 f0x) (r-pos 1 false)) fires))
+        (. (r-eq arena false cf (eq-lit f1x f0x) (side-of (eq-lit f1x f0x) f1x) bf1 (r-atom 1 f1x) (r-pos 1 false)) fires)
+        ;; t₂ ≻ s₂: in f1(x) ≈ x, the side x is not s₂.
+        (not (. (r-eq arena false cxo (eq-lit x o) (side-of (eq-lit x o) x) e2 (eq-lit f1x x) (r-pos (side-of (eq-lit f1x x) x) false)) fires))
+        ;; s₂|p is not s₁.
+        (not (. (r-eq arena false cf (eq-lit f1x f0x) (side-of (eq-lit f1x f0x) f1x) bf0 (r-atom 1 f0x) (r-pos 1 false)) fires))
+        ;; Not maximal, first premise, then second.
+        (not (. (r-eq arena false low (eq-lit f1x y) (side-of (eq-lit f1x y) f1x) bf1 (r-atom 1 f1x) (r-pos 1 false)) fires))
+        (not (. (r-eq arena false cf (eq-lit f1x f0x) (side-of (eq-lit f1x f0x) f1x) low (eq-lit f1x y) (r-pos (side-of (eq-lit f1x y) f1x) false)) fires)))))
+
+  (fn test-sriq-join-rows ((arena Arena))
+    (@intent "Join: Example 1's (112) as HOWL reaches it. r-Pred carries (118)'s ground C(o) and D(o) into C(o) ∧ D(o) → F(x) (E3), and Join resolves C(o) with (110), ⊤ → C(o). A non-ground atom, u ≈ u, x ≈ u and a literal that is not maximal do not join")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (o (at-u (cast U32 0))) (u1 (at-u (cast U32 1)))
+          (nolits (list-new arena Lit))
+          (ord (named-consts arena 3))
+          (c110 (r-top arena (one-lit arena (r-atom 2 o))))
+          (pre (r-clause arena (two-lits arena (r-atom 2 o) (r-atom 3 o)) (one-lit arena (r-atom 6 x))))
+          (j (join-rule arena (r-premise arena ord c110 (r-atom 2 o)) (r-body arena pre (r-atom 2 o))))
+          (cx (r-top arena (one-lit arena (r-atom 2 x))))
+          (prex (r-clause arena (one-lit arena (r-atom 2 x)) (one-lit arena (r-atom 6 x))))
+          (uu (r-top arena (one-lit arena (eq-lit o u1))))
+          (preu (r-clause arena (one-lit arena (eq-lit o u1)) (one-lit arena (r-atom 6 x))))
+          (xo (r-top arena (one-lit arena (eq-lit x o))))
+          (prexo (r-clause arena (one-lit arena (eq-lit x o)) (one-lit arena (r-atom 6 x))))
+          (low (r-top arena (two-lits arena (r-atom 2 o) (r-atom 2 (at-fu (cast U32 0) (cast U32 0)))))))
+      (and
+        (. j fires)
+        (clause-eq (assemble arena j) (r-clause arena (one-lit arena (r-atom 3 o)) (one-lit arena (r-atom 6 x))))
+        (. (join-rule arena (r-premise arena ord uu (eq-lit o u1)) (r-body arena preu (eq-lit o u1))) fires)
+        (not (. (join-rule arena (r-premise arena ord cx (r-atom 2 x)) (r-body arena prex (r-atom 2 x))) fires))
+        (not (. (join-rule arena (r-premise arena ord xo (eq-lit x o)) (r-body arena prexo (eq-lit x o))) fires))
+        (not (. (join-rule arena (r-premise arena ord (r-top arena (one-lit arena (eq-lit o o))) (eq-lit o o))
+                              (r-body arena (r-clause arena (one-lit arena (eq-lit o o)) (one-lit arena (r-atom 6 x))) (eq-lit o o))) fires))
+        (not (. (join-rule arena (r-premise arena ord low (r-atom 2 o)) (r-body arena pre (r-atom 2 o))) fires))
+        ;; A different atom in the body.
+        (not (. (join-rule arena (r-premise arena ord c110 (r-atom 2 o)) (r-body arena pre (r-atom 3 o))) fires)))))
+
+  (fn r-body ((arena Arena) (c Clause) (l Lit))
+    (@intent "c viewed at body literal l")
+    (@spec ((Arena Clause Lit) -> BodyView))
+    (@alloc arena)
+    (let ((mut at 0) (mut i 0))
+      (do (for-each (b (. c body)) (do (when (lit-eq b l) (set! at i)) (set! i (+ i 1))))
+          (body-at arena c at))))
+
+  (fn r-kids-order ((arena Arena))
+    (@intent "Named 0 and 1; 2 and 3 are o₀'s S¹ and S² for S role 2; 4 is constant 2's S¹, at depth 2; 5 is o₀'s S′¹ for S′ role 3")
+    (@spec ((Arena) -> SriqOrder))
+    (@alloc arena)
+    (let ((base (named-consts arena 2))
+          (mut cs (list-new arena ConstEntry)))
+      (do
+        (for-each (e (. base consts)) (list-push cs e))
+        (let ((e0 (const-entry base (cast U32 0))))
+          (do (list-push cs (aux-const e0 (cast U32 0) (cast U32 2) (cast U32 1)))
+              (list-push cs (aux-const e0 (cast U32 0) (cast U32 2) (cast U32 2)))
+              (list-push cs (aux-const (aux-const e0 (cast U32 0) (cast U32 2) (cast U32 1)) (cast U32 2) (cast U32 2) (cast U32 1)))
+              (list-push cs (aux-const e0 (cast U32 0) (cast U32 3) (cast U32 1)))))
+        (record-new SriqOrder (consts cs)))))
+
+  (fn r-ids ((arena Arena) (a Int) (b Int))
+    (@intent "[a] when b < 0, else [a, b]")
+    (@spec ((Arena Int Int) -> (List U32)))
+    (@alloc arena)
+    (let ((mut out (list-new arena U32)))
+      (do (list-push out (cast U32 a)) (when (>= b 0) (list-push out (cast U32 b))) out)))
+
+  (fn test-sriq-nom-rows ((arena Arena))
+    (@intent "Nom: Example 2's (149), ⊤ → S₂(o, x), with B₁(o), gives (150), ⊤ → x ≈ o_{S₂¹}; n = 2 gives both children; no firing at |ρ| = Λ, or with the wrong children")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; (131)'s ⊤ ⊑ ≤1 S₂.⊤ is normalised to a fresh class A, here class 7,
+    ;; with ⊤ → A(x) and the DL4 A(x) ∧ S₂(x, z₁) ∧ S₂(x, z₂) → z₁ ≈ z₂.
+    ;; E4's root Hyper gives ⊤ → A(o), which r-Pred carries into v_{B₁}:
+    ;; that is this row's ⊤ → B₁(o). The DL4 also runs through a fresh
+    ;; sub-role S_{B₂} of S₂ (S₂(z₁, x) → S_{B₂}(z₁, x)), so Nom's second
+    ;; premise is S_{B₂}(o, x), which Hyper derives from (149); role 2 is
+    ;; S_{B₂} here. o is constant 0.
+    (let ((x (at-x)) (o (at-u (cast U32 0))) (o2 (at-u (cast U32 2)))
+          (ord (r-kids-order arena))
+          (cb (r-top arena (one-lit arena (r-atom 7 o))))
+          (c149 (r-top arena (one-lit arena (r-role 2 o x))))
+          (p1 (r-premise arena ord cb (r-atom 7 o)))
+          (p2 (r-premise arena ord c149 (r-role 2 o x)))
+          (n1 (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1) p1 p2 (r-ids arena 2 -1)))
+          (n2 (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 2) p1 p2 (r-ids arena 2 3)))
+          (d1 (r-premise arena ord (r-top arena (one-lit arena (r-atom 7 o2))) (r-atom 7 o2)))
+          (d2 (r-premise arena ord (r-top arena (one-lit arena (r-role 2 o2 x))) (r-role 2 o2 x))))
+      (and
+        (. n1 fires)
+        (clause-eq (assemble arena n1) (r-top arena (one-lit arena (eq-lit x o2))))
+        (. n2 fires)
+        (clause-eq (assemble arena n2) (r-top arena (two-lits arena (eq-lit x o2) (eq-lit x (at-u (cast U32 3))))))
+        ;; o₂ is at depth 1: below Λ = 2 it fires, at Λ = 1 it does not.
+        (. (nom-rule arena ord 2 (cast U32 7) (cast U32 2) (cast U32 1) d1 d2 (r-ids arena 4 -1)) fires)
+        (not (. (nom-rule arena ord 1 (cast U32 7) (cast U32 2) (cast U32 1) d1 d2 (r-ids arena 4 -1)) fires))
+        ;; The children must be o's S¹ … Sⁿ, in order, n of them.
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 2) p1 p2 (r-ids arena 3 2)) fires))
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 2) p1 p2 (r-ids arena 2 -1)) fires))
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1) p1 p2 (r-ids arena 4 -1)) fires))
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1) p1 p2 (r-ids arena 5 -1)) fires))
+        ;; Children under role 3 fit S_{B₂} = 3, but the premise is S₂'s.
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 3) (cast U32 1) p1 p2 (r-ids arena 5 -1)) fires))
+        ;; B₁(o) below B₁(f0(o)) is not maximal.
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1)
+                  (r-premise arena ord (r-top arena (two-lits arena (r-atom 7 o) (r-atom 7 (at-fu (cast U32 0) (cast U32 0))))) (r-atom 7 o))
+                  p2 (r-ids arena 2 -1)) fires))
+        ;; B₁'s argument must be a constant, and S_{B₂}'s second must be x.
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1)
+                  (r-premise arena ord (r-top arena (one-lit arena (r-atom 7 x))) (r-atom 7 x))
+                  (r-premise arena ord (r-top arena (one-lit arena (r-role 2 x x))) (r-role 2 x x))
+                  (r-ids arena 2 -1)) fires))
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1) p1
+                  (r-premise arena ord (r-top arena (one-lit arena (r-role 2 o (at-y)))) (r-role 2 o (at-y)))
+                  (r-ids arena 2 -1)) fires))
+        ;; The wrong class, role or constant.
+        (not (. (nom-rule arena ord 5 (cast U32 6) (cast U32 2) (cast U32 1) p1 p2 (r-ids arena 2 -1)) fires))
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 1) (cast U32 1) p1 p2 (r-ids arena 2 -1)) fires))
+        (not (. (nom-rule arena ord 5 (cast U32 7) (cast U32 2) (cast U32 1) p1 d2 (r-ids arena 2 -1)) fires)))))
+
+  (fn test-sriq-depth-limit ((arena Arena))
+    (@intent "Λ exactly when below 2⁶², and 2⁶² from there up, overflow included")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (== (depth-limit 2 3 4 6) 320)
+         (== (depth-limit 0 0 1 2) 3)
+         (== (depth-limit 30 30 3 1) 4611686018427387904)
+         (== (depth-limit 30 30 4 1) 4611686018427387904)
+         (== (depth-limit 30 29 6 1) (* 7 576460752303423488))
+         (== (depth-limit 62 0 0 1) 4611686018427387904)
+         (== (depth-limit 40 40 3 3) 4611686018427387904)
+         ;; Just below the cap, exactly; and a held ω at the cap.
+         (== (depth-limit 30 30 2 1) 3458764513820540928)
+         (== (depth-limit 0 0 4611686018427387904 2) 4611686018427387904)))
+
   (fn test-sriq-gate-table ((arena Arena))
     (@intent "§5.5's language and gate conditions, row by row, against el and el++")
     (@spec ((Arena) -> Bool))
@@ -9033,6 +9279,22 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-ineq-factor-core-rows arena)))
             (print-test-result "7e: Ineq, Factor and Core, row by row" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-eq-rows arena)))
+            (print-test-result "7f: Eq, from O1, Example 1 and Example 2, and its exclusions" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-join-rows arena)))
+            (print-test-result "7f: Join, Example 1's (112)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-nom-rows arena)))
+            (print-test-result "7f: Nom, Example 2's (150), below Λ only" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-depth-limit arena)))
+            (print-test-result "7f: Λ exact below 2^62, held there above" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-clauses-on-fixtures arena)))

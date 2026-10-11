@@ -49,6 +49,12 @@ typedef struct test_RunAs test_RunAs;
 SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #endif
 
+#ifndef SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint32_t, slop_list_u32)
+#endif
+
 #ifndef SLOP_OPTION_U32_DEFINED
 #define SLOP_OPTION_U32_DEFINED
 SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
@@ -1373,6 +1379,19 @@ uint8_t test_test_sriq_hyper_root_rows(slop_arena* arena);
 uint8_t test_test_sriq_hyper_example1(slop_arena* arena);
 uint8_t test_test_sriq_ineq_factor_core_rows(slop_arena* arena);
 uint8_t test_test_sriq_factor_each_condition(slop_arena* arena);
+sriq_Pos test_r_pos(int64_t k, uint8_t inner);
+types_Clause test_r_top(slop_arena* arena, slop_list_types_Lit head);
+sriq_RConcl test_r_eq(slop_arena* arena, uint8_t root, types_Clause c1, types_Lit l1, int64_t k1, types_Clause c2, types_Lit l2, sriq_Pos p);
+uint8_t test_eq_gives(slop_arena* arena, slop_string label, sriq_RConcl r, types_Clause want);
+uint8_t test_test_sriq_eq_rows(slop_arena* arena);
+int64_t test_side_of(types_Lit l, types_ATerm s);
+uint8_t test_test_sriq_eq_excluded(slop_arena* arena);
+uint8_t test_test_sriq_join_rows(slop_arena* arena);
+sriq_BodyView test_r_body(slop_arena* arena, types_Clause c, types_Lit l);
+sriqorder_SriqOrder test_r_kids_order(slop_arena* arena);
+slop_list_u32 test_r_ids(slop_arena* arena, int64_t a, int64_t b);
+uint8_t test_test_sriq_nom_rows(slop_arena* arena);
+uint8_t test_test_sriq_depth_limit(slop_arena* arena);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);

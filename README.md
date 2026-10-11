@@ -236,7 +236,11 @@ ELK or HermiT over every pair of named classes. The protocol, history and memory
 - **generated ontologies:** compared with HermiT.
 
 Results are byte-identical across worker counts. `sriq` is next
-([SPEC §5.5](SPEC.md#55-the-sriq-calculus)), with BFO and CCO as its target. `howl classify` (Turtle output
+([SPEC §5.5](SPEC.md#55-the-sriq-calculus)), with BFO and CCO as its target. Its clause language,
+context order, redundancy and [TGH21] Table 2's rules are built, each rule a function whose
+contracts Z3 proves where it can and whose tests pin the paper's own derivations
+([SPEC §7](SPEC.md#7-verification--contracts) records what is proved and what is owed). The engine
+that runs them is not, so asking for `sriq` still exits 3. `howl classify` (Turtle output
 of the inferred hierarchy with `--emit`, and `--reduce`) is planned; until then both flags are
 refused with exit 3.
 

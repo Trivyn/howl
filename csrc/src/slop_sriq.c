@@ -26,6 +26,34 @@ sriq_RConcl sriq_hyper_finish(slop_arena* arena, sriq_HState st, slop_list_types
 slop_list_sriq_HState sriq_extend_one(slop_arena* arena, sriq_HState st, types_Lit a, slop_list_sriq_Premise ps);
 slop_list_sriq_HState sriq_extend_all(slop_arena* arena, slop_list_sriq_HState sts, types_Lit a, slop_list_sriq_Premise ps);
 slop_list_sriq_RConcl sriq_hyper_join(slop_arena* arena, sriq_HState start, slop_list_types_Lit atoms, slop_list_sriq_Cands cands, slop_list_types_Lit delta);
+uint32_t sriq_other_arg(uint32_t k);
+types_ATerm sriq_arg_term(types_Lit l, uint32_t k);
+uint8_t sriq_has_arg(types_Lit l, uint32_t k);
+slop_option_types_ATerm sriq_inner_of(types_ATerm a);
+slop_option_types_ATerm sriq_subterm_at(types_Lit l, sriq_Pos p);
+types_ATerm sriq_with_inner(types_ATerm a, types_ATerm t);
+types_Lit sriq_with_arg(types_Lit l, uint32_t k, types_ATerm t);
+types_Lit sriq_replace_at(types_Lit l, sriq_Pos p, types_ATerm t);
+types_ATerm sriq_replace_const(types_ATerm a, types_ATerm s, types_ATerm t);
+types_Lit sriq_replace_all(types_Lit l, sriq_Pos p, types_ATerm s, types_ATerm t);
+uint8_t sriq_side_ok(sriqorder_SriqOrder ord, types_Lit l, uint32_t k);
+uint8_t sriq_kinds_are(types_ATerm a, types_ATerm b, types_AKind p, types_AKind q);
+uint8_t sriq_eq_usable(types_ATerm s1, types_ATerm t1);
+uint8_t sriq_plain(types_ATerm a);
+uint8_t sriq_s2_plain(types_Lit l, sriq_Pos p);
+uint8_t sriq_x_ok(types_Lit l, sriq_Pos p, types_ATerm s1);
+uint8_t sriq_at_is(slop_option_types_ATerm o, types_ATerm s);
+sriq_RConcl sriq_eq_rule(slop_arena* arena, sriqorder_SriqOrder ord, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2, sriq_Pos p);
+sriq_BodyView sriq_body_at(slop_arena* arena, types_Clause c, int64_t i);
+uint8_t sriq_ground(types_ATerm a);
+uint8_t sriq_joinable(types_Lit a);
+sriq_RConcl sriq_join_rule(slop_arena* arena, sriq_Premise p1, sriq_BodyView b);
+uint8_t sriq_kid_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t i, uint32_t k);
+uint8_t sriq_kids_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t n, slop_list_u32 kids);
+slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids);
+uint8_t sriq_nom_premises(sriq_Premise p1, sriq_Premise p2, uint32_t b1, uint32_t sb2);
+sriq_RConcl sriq_nom_rule(slop_arena* arena, sriqorder_SriqOrder ord, int64_t lam, uint32_t b1, uint32_t sb2, uint32_t n, sriq_Premise p1, sriq_Premise p2, slop_list_u32 kids);
+int64_t sriq_depth_limit(int64_t tsu, int64_t tpr, int64_t omega, int64_t omega_d);
 
 types_Lit sriq_lit_at(slop_list_types_Lit xs, int64_t i) {
     __auto_type _mv_1364 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Lit _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
@@ -408,5 +436,280 @@ slop_list_sriq_RConcl sriq_hyper_join(slop_arena* arena, sriq_HState start, slop
         }
         return out;
     }
+}
+
+uint32_t sriq_other_arg(uint32_t k) {
+    if (k == ((uint32_t)(1))) {
+        return ((uint32_t)(2));
+    } else {
+        return ((uint32_t)(1));
+    }
+}
+
+types_ATerm sriq_arg_term(types_Lit l, uint32_t k) {
+    if (k == ((uint32_t)(1))) {
+        return l.t1;
+    } else {
+        return l.t2;
+    }
+}
+
+uint8_t sriq_has_arg(types_Lit l, uint32_t k) {
+    return ((k == ((uint32_t)(1))) || ((k == ((uint32_t)(2))) && !((l.form == types_LitForm_lf_unary))));
+}
+
+slop_option_types_ATerm sriq_inner_of(types_ATerm a) {
+    __auto_type _mv_1374 = a.kind;
+    if (_mv_1374 == types_AKind_ak_fx) {
+        return (slop_option_types_ATerm){.has_value = 1, .value = types_at_x()};
+    } else if (_mv_1374 == types_AKind_ak_fu) {
+        return (slop_option_types_ATerm){.has_value = 1, .value = types_at_u(a.cst)};
+    } else if (_mv_1374 == types_AKind_ak_x) {
+        return (slop_option_types_ATerm){.has_value = false};
+    } else if (_mv_1374 == types_AKind_ak_y) {
+        return (slop_option_types_ATerm){.has_value = false};
+    } else if (_mv_1374 == types_AKind_ak_z) {
+        return (slop_option_types_ATerm){.has_value = false};
+    } else if (_mv_1374 == types_AKind_ak_u) {
+        return (slop_option_types_ATerm){.has_value = false};
+    }
+    SLOP_UNREACHABLE();
+}
+
+slop_option_types_ATerm sriq_subterm_at(types_Lit l, sriq_Pos p) {
+    if (!(sriq_has_arg(l, p.arg))) {
+        return (slop_option_types_ATerm){.has_value = false};
+    } else if (p.inner) {
+        return sriq_inner_of(sriq_arg_term(l, p.arg));
+    } else {
+        return (slop_option_types_ATerm){.has_value = 1, .value = sriq_arg_term(l, p.arg)};
+    }
+}
+
+types_ATerm sriq_with_inner(types_ATerm a, types_ATerm t) {
+    if (!(((a.kind == types_AKind_ak_fx) || (a.kind == types_AKind_ak_fu)))) {
+        return a;
+    } else if (t.kind == types_AKind_ak_x) {
+        return types_at_fx(a.fsym);
+    } else if (t.kind == types_AKind_ak_u) {
+        return types_at_fu(a.fsym, t.cst);
+    } else {
+        return a;
+    }
+}
+
+types_Lit sriq_with_arg(types_Lit l, uint32_t k, types_ATerm t) {
+    {
+        __auto_type a = (((k == ((uint32_t)(1)))) ? t : l.t1);
+        __auto_type b = (((k == ((uint32_t)(1)))) ? l.t2 : t);
+        __auto_type _mv_1375 = l.form;
+        if (_mv_1375 == types_LitForm_lf_unary) {
+            return types_atom1(l.pred, a);
+        } else if (_mv_1375 == types_LitForm_lf_binary) {
+            return types_atom2(l.pred, a, b);
+        } else if (_mv_1375 == types_LitForm_lf_eq) {
+            return types_eq_lit(a, b);
+        } else if (_mv_1375 == types_LitForm_lf_neq) {
+            return types_neq_lit(a, b);
+        }
+        SLOP_UNREACHABLE();
+    }
+}
+
+types_Lit sriq_replace_at(types_Lit l, sriq_Pos p, types_ATerm t) {
+    {
+        __auto_type a = sriq_arg_term(l, p.arg);
+        return sriq_with_arg(l, p.arg, ((p.inner) ? sriq_with_inner(a, t) : t));
+    }
+}
+
+types_ATerm sriq_replace_const(types_ATerm a, types_ATerm s, types_ATerm t) {
+    if (types_aterm_eq(a, s)) {
+        return t;
+    } else if ((a.kind == types_AKind_ak_fu) && (a.cst == s.cst)) {
+        return sriq_with_inner(a, t);
+    } else {
+        return a;
+    }
+}
+
+types_Lit sriq_replace_all(types_Lit l, sriq_Pos p, types_ATerm s, types_ATerm t) {
+    __auto_type _mv_1376 = l.form;
+    if (_mv_1376 == types_LitForm_lf_unary) {
+        return types_atom1(l.pred, sriq_replace_const(l.t1, s, t));
+    } else if (_mv_1376 == types_LitForm_lf_binary) {
+        return types_atom2(l.pred, sriq_replace_const(l.t1, s, t), sriq_replace_const(l.t2, s, t));
+    } else if (_mv_1376 == types_LitForm_lf_eq) {
+        return sriq_with_arg(l, p.arg, sriq_replace_const(sriq_arg_term(l, p.arg), s, t));
+    } else if (_mv_1376 == types_LitForm_lf_neq) {
+        return sriq_with_arg(l, p.arg, sriq_replace_const(sriq_arg_term(l, p.arg), s, t));
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t sriq_side_ok(sriqorder_SriqOrder ord, types_Lit l, uint32_t k) {
+    return (((l.form == types_LitForm_lf_unary)) || ((l.form == types_LitForm_lf_binary)) || (!(sriqorder_aterm_gt(ord, sriq_arg_term(l, sriq_other_arg(k)), sriq_arg_term(l, k)))));
+}
+
+uint8_t sriq_kinds_are(types_ATerm a, types_ATerm b, types_AKind p, types_AKind q) {
+    return (((a.kind == p) && (b.kind == q)) || ((a.kind == q) && (b.kind == p)));
+}
+
+uint8_t sriq_eq_usable(types_ATerm s1, types_ATerm t1) {
+    return !((sriq_kinds_are(s1, t1, types_AKind_ak_x, types_AKind_ak_y) || sriq_kinds_are(s1, t1, types_AKind_ak_y, types_AKind_ak_u)));
+}
+
+uint8_t sriq_plain(types_ATerm a) {
+    return !((((a.kind == types_AKind_ak_fx)) || ((a.kind == types_AKind_ak_fu)) || ((a.kind == types_AKind_ak_y))));
+}
+
+uint8_t sriq_s2_plain(types_Lit l, sriq_Pos p) {
+    __auto_type _mv_1377 = l.form;
+    if (_mv_1377 == types_LitForm_lf_unary) {
+        return sriq_plain(l.t1);
+    } else if (_mv_1377 == types_LitForm_lf_binary) {
+        return (sriq_plain(l.t1) && sriq_plain(l.t2));
+    } else if (_mv_1377 == types_LitForm_lf_eq) {
+        return sriq_plain(sriq_arg_term(l, p.arg));
+    } else if (_mv_1377 == types_LitForm_lf_neq) {
+        return sriq_plain(sriq_arg_term(l, p.arg));
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t sriq_x_ok(types_Lit l, sriq_Pos p, types_ATerm s1) {
+    return (!((s1.kind == types_AKind_ak_x)) || sriq_s2_plain(l, p));
+}
+
+uint8_t sriq_at_is(slop_option_types_ATerm o, types_ATerm s) {
+    __auto_type _mv_1378 = o;
+    if (_mv_1378.has_value) {
+        __auto_type t = _mv_1378.value;
+        return types_aterm_eq(t, s);
+    } else if (!_mv_1378.has_value) {
+        return 0;
+    }
+    SLOP_UNREACHABLE();
+}
+
+sriq_RConcl sriq_eq_rule(slop_arena* arena, sriqorder_SriqOrder ord, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2, sriq_Pos p) {
+    {
+        __auto_type s1 = sriq_arg_term(p1.sel, k1);
+        __auto_type t1 = sriq_arg_term(p1.sel, sriq_other_arg(k1));
+        __auto_type l2 = p2.sel;
+        __auto_type lit = (((root && (s1.kind == types_AKind_ak_u))) ? sriq_replace_all(l2, p, s1, t1) : sriq_replace_at(l2, p, t1));
+        __auto_type h = sriq_appended(arena, p1.rest, p2.rest);
+        ({ __auto_type _lst_p = &(h); __auto_type _item = (lit); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        return ((sriq_RConcl){.fires = ((p1.maxed) && ((p1.sel.form == types_LitForm_lf_eq)) && (sriq_side_ok(ord, p1.sel, k1)) && (sriq_eq_usable(s1, t1)) && (p2.maxed) && (sriq_side_ok(ord, l2, p.arg)) && (sriq_at_is(sriq_subterm_at(l2, p), s1)) && (sriq_x_ok(l2, p, s1))), .body = sriq_appended(arena, p1.body, p2.body), .head = h});
+    }
+}
+
+sriq_BodyView sriq_body_at(slop_arena* arena, types_Clause c, int64_t i) {
+    return ((sriq_BodyView){.lit = sriq_lit_at(c.body, i), .rest = sriq_without_at(arena, c.body, i), .head = c.head});
+}
+
+uint8_t sriq_ground(types_ATerm a) {
+    return ((a.kind == types_AKind_ak_u) || (a.kind == types_AKind_ak_fu));
+}
+
+uint8_t sriq_joinable(types_Lit a) {
+    __auto_type _mv_1379 = a.form;
+    if (_mv_1379 == types_LitForm_lf_unary) {
+        return sriq_ground(a.t1);
+    } else if (_mv_1379 == types_LitForm_lf_binary) {
+        return (sriq_ground(a.t1) && sriq_ground(a.t2));
+    } else if (_mv_1379 == types_LitForm_lf_eq) {
+        return (((a.t1.kind == types_AKind_ak_u)) && ((a.t2.kind == types_AKind_ak_u)) && (!(types_aterm_eq(a.t1, a.t2))));
+    } else if (_mv_1379 == types_LitForm_lf_neq) {
+        return 0;
+    }
+    SLOP_UNREACHABLE();
+}
+
+sriq_RConcl sriq_join_rule(slop_arena* arena, sriq_Premise p1, sriq_BodyView b) {
+    return ((sriq_RConcl){.fires = ((p1.maxed) && (types_lit_eq(p1.sel, b.lit)) && (sriq_joinable(b.lit))), .body = sriq_appended(arena, p1.body, b.rest), .head = sriq_appended(arena, p1.rest, b.head)});
+}
+
+uint8_t sriq_kid_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t i, uint32_t k) {
+    {
+        __auto_type e = sriqorder_const_entry(ord, k);
+        return (((e.parent == o)) && ((e.srole == sb2)) && ((e.i == i)));
+    }
+}
+
+uint8_t sriq_kids_ok(sriqorder_SriqOrder ord, uint32_t o, uint32_t sb2, uint32_t n, slop_list_u32 kids) {
+    {
+        uint32_t i = ((uint32_t)(1));
+        uint8_t ok = (((int64_t)(((int64_t)((kids).len)))) == ((int64_t)(n)));
+        {
+            __auto_type _coll = kids;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type k = _coll.data[_i];
+                if (!(sriq_kid_ok(ord, o, sb2, i, k))) {
+                    ok = 0;
+                }
+                i = (i + ((uint32_t)(1)));
+            }
+        }
+        return ok;
+    }
+}
+
+slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids) {
+    {
+        __auto_type out = ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = kids;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type k = _coll.data[_i];
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (types_eq_lit(types_at_x(), types_at_u(k))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            }
+        }
+        return out;
+    }
+}
+
+uint8_t sriq_nom_premises(sriq_Premise p1, sriq_Premise p2, uint32_t b1, uint32_t sb2) {
+    {
+        __auto_type a = p1.sel;
+        __auto_type r = p2.sel;
+        return (((a.form == types_LitForm_lf_unary)) && ((a.pred == b1)) && ((a.t1.kind == types_AKind_ak_u)) && ((r.form == types_LitForm_lf_binary)) && ((r.pred == sb2)) && (types_aterm_eq(r.t1, a.t1)) && ((r.t2.kind == types_AKind_ak_x)));
+    }
+}
+
+sriq_RConcl sriq_nom_rule(slop_arena* arena, sriqorder_SriqOrder ord, int64_t lam, uint32_t b1, uint32_t sb2, uint32_t n, sriq_Premise p1, sriq_Premise p2, slop_list_u32 kids) {
+    {
+        __auto_type o = p1.sel.t1.cst;
+        __auto_type h = sriq_appended(arena, p1.rest, p2.rest);
+        {
+            __auto_type _coll = sriq_nom_head(arena, kids);
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type l = _coll.data[_i];
+                ({ __auto_type _lst_p = &(h); __auto_type _item = (l); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            }
+        }
+        return ((sriq_RConcl){.fires = ((p1.maxed) && (p2.maxed) && (sriq_nom_premises(p1, p2, b1, sb2)) && ((((int64_t)(sriqorder_const_entry(ord, o).len)) < lam)) && (sriq_kids_ok(ord, o, sb2, n, kids))), .body = sriq_appended(arena, p1.body, p2.body), .head = h});
+    }
+}
+
+int64_t sriq_depth_limit(int64_t tsu, int64_t tpr, int64_t omega, int64_t omega_d) {
+    SLOP_PRE(((((tsu >= 0)) && ((tsu <= 2147483648)) && ((tpr >= 0)) && ((tpr <= 2147483648)) && ((omega >= 0)) && ((omega <= 4611686018427387904)) && ((omega_d >= 1)) && ((omega_d <= 2147483648)))), "(and (>= tsu 0) (<= tsu 2147483648) (>= tpr 0) (<= tpr 2147483648) (>= omega 0) (<= omega 4611686018427387904) (>= omega-d 1) (<= omega-d 2147483648))");
+    int64_t _retval = {0};
+    {
+        __auto_type k = (tsu + tpr);
+        __auto_type m = (omega + omega_d);
+        if (k >= 62) {
+            _retval = 4611686018427387904;
+            goto _slop_post;
+        } else if (m > (4611686018427387904 >> k)) {
+            _retval = 4611686018427387904;
+            goto _slop_post;
+        } else {
+            _retval = (m << k);
+            goto _slop_post;
+        }
+    }
+    _slop_post: ;
+    return _retval;
 }
 
