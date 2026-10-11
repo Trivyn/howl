@@ -29,9 +29,9 @@
 (module sriq
   (@doc "sriq's single-context rules (TGH21 Table 2): Core, Hyper, Eq, Ineq, Factor, Join, Nom; and Λ")
 
-  (import types (AKind ATerm LitForm Lit Clause at-x at-fx at-u at-fu atom1 atom2 eq-lit neq-lit aterm-eq lit-eq))
+  (import types (AKind ATerm LitForm Lit Clause at-x at-y at-fx at-u at-fu atom1 atom2 eq-lit neq-lit aterm-eq lit-eq))
   (import sriqclauses (make-clause))
-  (import sriqorder (SriqOrder aterm-gt maximal-at const-entry))
+  (import sriqorder (ConstEntry SriqOrder aterm-gt maximal-at const-entry named-consts aux-const))
 
   (export Premise RConcl Subst HState Cands
           select assemble core-rule ineq-rule factor-rule
@@ -107,6 +107,8 @@
     (@intent "Clause c as a premise with head literal i selected: Γ, L, Δ and whether Δ ⊁ L")
     (@spec ((Arena SriqOrder Clause Int) -> Premise))
     (@alloc arena)
+    (@pre (and (>= i 0) (< i (cast Int (list-len (. c head))))))
+    (@property view (== (. $result body) (. c body)))
     (record-new Premise
       (body  (. c body))
       (sel   (lit-at (. c head) i))
@@ -134,6 +136,7 @@
     (@intent "Core: an atom of the context's core gives ⊤ → A. The caller passes each atom of core_v")
     (@spec ((Arena Lit) -> RConcl))
     (@alloc arena)
+    (@example :eq rconcl-eq (arena (ex-a1 0 (at-x))) -> (ex-rc arena true (ex-l0 arena) (ex-l1 arena (ex-a1 0 (at-x)))))
     (@property complete (== (. $result fires) true))
     (let ((mut h (list-new arena Lit)))
       (do (list-push h a)
@@ -147,6 +150,8 @@
     (@intent "Ineq: drop a selected t ≉ t")
     (@spec ((Premise) -> RConcl))
     (@pure)
+    (@example :eq rconcl-eq ((ex-sel arena (ex-l1 arena (neq-lit (ex-fx 1) (ex-fx 1))) (neq-lit (ex-fx 1) (ex-fx 1)))) -> (ex-rc arena true (ex-l0 arena) (ex-l0 arena)))
+    (@example :eq fires-is ((ex-sel arena (ex-l1 arena (neq-lit (ex-fx 1) (at-x))) (neq-lit (ex-fx 1) (at-x)))) -> (ex-rc arena false (ex-l0 arena) (ex-l0 arena)))
     (@property sound (or (not (. $result fires)) (and (== (. (. p sel) form) 'lf-neq) (aterm-eq (. (. p sel) t1) (. (. p sel) t2)))))
     (@property complete (or (not (== (. (. p sel) form) 'lf-neq)) (not (aterm-eq (. (. p sel) t1) (. (. p sel) t2))) (. $result fires)))
     (@property head (and (== (. $result body) (. p body)) (== (. $result head) (. p rest))))
@@ -172,24 +177,38 @@
     (@intent "The side of l that is not s (t₁ when s is t₂)")
     (@spec ((Lit ATerm) -> ATerm))
     (@pure)
+    (@post (or (== $result (. l t1)) (== $result (. l t2))))
     (if (aterm-eq (. l t1) s) (. l t2) (. l t1)))
 
   (fn holds-lit ((ls (List Lit)) (l Lit))
     (@intent "Is l among ls?")
     (@spec (((List Lit) Lit) -> Bool))
     (@pure)
-    (let ((mut found false)) (do (for-each (x ls) (when (lit-eq x l) (set! found true))) found)))
+    (@post (== $result (exists (x ls) (lit-eq x l))))
+    (let ((mut found false))
+      (do (for-each (x ls)
+            (@loop-invariant (== found (exists (x2 (list-visited ls)) (lit-eq x2 l))))
+            (when (lit-eq x l) (set! found true)))
+          found)))
 
   (fn without-lit ((arena Arena) (ls (List Lit)) (l Lit))
     (@intent "ls without l")
     (@spec ((Arena (List Lit) Lit) -> (List Lit)))
     (@alloc arena)
-    (let ((mut out (list-new arena Lit))) (do (for-each (x ls) (when (not (lit-eq x l)) (list-push out x))) out)))
+    (@post (forall (y $result) (not (lit-eq y l))))
+    (let ((mut out (list-new arena Lit)))
+      (do (for-each (x ls)
+            (@loop-invariant (forall (y out) (not (lit-eq y l))))
+            (when (not (lit-eq x l)) (list-push out x)))
+          out)))
 
   (fn factor-rule ((arena Arena) (ord SriqOrder) (p Premise) (l1 Lit) (s ATerm))
     (@intent "Factor: s ≈ t₁ beside a maximal s ≈ t₂ becomes t₁ ≉ t₂")
     (@spec ((Arena SriqOrder Premise Lit ATerm) -> RConcl))
     (@alloc arena)
+    ;; [TGH21] §3.1: ⊤ → f(x) ≈ y ∨ f(x) ≈ g(x) gives ⊤ → g(x) ≉ y ∨ f(x) ≈ g(x), f being f1 and g f0.
+    (@example :eq rconcl-eq (arena (ex-ord arena) (ex-fac arena) (eq-lit (ex-fx 1) (at-y)) (ex-fx 1)) -> (ex-rc arena true (ex-l0 arena) (ex-l2 arena (neq-lit (at-y) (ex-fx 0)) (eq-lit (ex-fx 1) (ex-fx 0)))))
+    (@example :eq fires-is (arena (ex-ord arena) (ex-fac arena) (eq-lit (ex-fx 1) (at-y)) (ex-fx 0)) -> (ex-rc arena false (ex-l0 arena) (ex-l0 arena)))
     ;; s ≈ t₂ is selected (Δ ∨ s ≈ t₁ ⊁ s ≈ t₂), s ≈ t₁ is in Δ ∨ s ≈ t₁,
     ;; and t₂ ⊁ s.
     (@property sound
@@ -265,6 +284,8 @@
     (@intent "Is l, a premise's selected literal, the body atom a under σ? Both of a's arguments are matched, the second under σ as the first extends it")
     (@spec ((Subst Lit Lit) -> Bool))
     (@pure)
+    (@post (implies $result (and (== (. a form) (. l form)) (== (. a pred) (. l pred)))))
+    (@post (implies $result (or (== (. a form) 'lf-unary) (== (. a form) 'lf-binary))))
     ;; σ extended by a's first argument is needed for its second only
     ;; when both are one variable (S(x, x)) or both one zᵢ, which the
     ;; first check then settles: the same variable must meet the same
@@ -288,6 +309,7 @@
     (@intent "Hyper before any premise: σ(x) = x away from the root; at the root unbound, or a given constant for a bodiless clause (E4)")
     (@spec ((Arena ATerm Bool) -> HState))
     (@alloc arena)
+    (@post (and (. $result fires) (== (. (. $result sub) x) x) (== (. (. $result sub) xbound) bound)))
     (record-new HState
       (fires true)
       (sub   (record-new Subst (x x) (xbound bound) (zs (list-new arena Int)) (ts (list-new arena ATerm))))
@@ -298,6 +320,8 @@
     (@intent "One body atom against one premise: it fires when the premise's L is maximal and is a under σ")
     (@spec ((Arena HState Lit Premise) -> HState))
     (@alloc arena)
+    (@example :eq hstate-eq (arena (hyper-start arena (at-x) true) (ex-a1 0 (at-x)) (ex-sel arena (ex-l1 arena (ex-a1 0 (at-x))) (ex-a1 0 (at-x)))) -> (ex-hs arena true (ex-l0 arena) (ex-l0 arena)))
+    (@example :eq hstate-eq (arena (hyper-start arena (at-x) true) (ex-a1 1 (at-x)) (ex-sel arena (ex-l1 arena (ex-a1 0 (at-x))) (ex-a1 0 (at-x)))) -> (ex-hs arena false (ex-l0 arena) (ex-l0 arena)))
     (@property sound (or (not (. $result fires)) (and (. st fires) (. p maxed) (atom-matches (. st sub) a (. p sel)))))
     (@property complete (or (not (and (. st fires) (. p maxed) (atom-matches (. st sub) a (. p sel)))) (. $result fires)))
     (record-new HState
@@ -310,6 +334,8 @@
     (@intent "tσ: x and each bound zᵢ replaced, f(x) as f(σ(x))")
     (@spec ((Subst ATerm) -> ATerm))
     (@pure)
+    (@post (implies (== (. t kind) 'ak-x) (== $result (. sub x))))
+    (@post (implies (or (== (. t kind) 'ak-y) (== (. t kind) 'ak-u) (== (. t kind) 'ak-fu)) (== $result t)))
     (match (. t kind)
       ('ak-x  (. sub x))
       ('ak-z  (match (z-image sub (cast Int (. t zi))) ((some v) v) ((none) t)))
@@ -393,12 +419,14 @@
     (@intent "The other argument or side")
     (@spec ((U32) -> U32))
     (@pure)
+    (@post (and (or (== $result (cast U32 1)) (== $result (cast U32 2))) (!= $result k)))
     (if (== k (cast U32 1)) (cast U32 2) (cast U32 1)))
 
   (fn arg-term ((l Lit) (k U32))
     (@intent "Argument or side k of l: 1 is t1, anything else t2")
     (@spec ((Lit U32) -> ATerm))
     (@pure)
+    (@post (or (== $result (. l t1)) (== $result (. l t2))))
     (if (== k (cast U32 1)) (. l t1) (. l t2)))
 
   (fn has-arg ((l Lit) (k U32))
@@ -440,6 +468,11 @@
     (@intent "l with argument or side k replaced by t, an equality re-oriented")
     (@spec ((Lit U32 ATerm) -> Lit))
     (@pure)
+    ;; Owed: that the form is kept, here and in replace-at, replace-all and
+    ;; apply-lit. slop verify finds the axioms of a match on an enum whose
+    ;; arms call functions with posts contradictory (an upstream verifier
+    ;; defect, reproduced outside HOWL on slop main 6beae3d), so the claim
+    ;; is held by the rows instead.
     (let ((a (if (== k (cast U32 1)) t (. l t1)))
           (b (if (== k (cast U32 1)) (. l t2) t)))
       (match (. l form)
@@ -459,6 +492,7 @@
     (@intent "a with every occurrence of the constant s replaced by t")
     (@spec ((ATerm ATerm ATerm) -> ATerm))
     (@pure)
+    (@post (implies (aterm-eq a s) (== $result t)))
     (cond ((aterm-eq a s) t)
           ((and (== (. a kind) 'ak-fu) (== (. a cst) (. s cst))) (with-inner a t))
           (else a)))
@@ -535,6 +569,10 @@
     (@intent "Eq: rewrite s₂ at p (everywhere, at the root, for a constant s₁) with s₁ ≈ t₁")
     (@spec ((Arena SriqOrder Bool Premise U32 Premise Pos) -> RConcl))
     (@alloc arena)
+    ;; [TGH21] Example 1: (95) ⊤ → F(x) ∨ x ≈ o and (94) ⊤ → F(x) ∨ D(x) give (96) ⊤ → F(x) ∨ D(o).
+    (@example :eq rconcl-eq (arena (ex-ord arena) false (ex-sel arena (ex-l2 arena (ex-a1 6 (at-x)) (eq-lit (at-x) (ex-u 0))) (eq-lit (at-x) (ex-u 0))) (ex-side (eq-lit (at-x) (ex-u 0)) (at-x)) (ex-sel arena (ex-l2 arena (ex-a1 6 (at-x)) (ex-a1 3 (at-x))) (ex-a1 3 (at-x))) (ex-pos 1 false)) -> (ex-rc arena true (ex-l0 arena) (ex-l3 arena (ex-a1 6 (at-x)) (ex-a1 6 (at-x)) (ex-a1 3 (ex-u 0)))))
+    (@example :eq fires-is (arena (ex-ord arena) false (ex-sel arena (ex-l1 arena (eq-lit (at-x) (at-y))) (eq-lit (at-x) (at-y))) (ex-side (eq-lit (at-x) (at-y)) (at-x)) (ex-sel arena (ex-l1 arena (ex-a1 3 (at-x))) (ex-a1 3 (at-x))) (ex-pos 1 false)) -> (ex-rc arena false (ex-l0 arena) (ex-l0 arena)))
+    (@pre (and (or (== k1 (cast U32 1)) (== k1 (cast U32 2))) (or (== (. p arg) (cast U32 1)) (== (. p arg) (cast U32 2)))))
     (@property sound
       (or (not (. $result fires))
           (and (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq) (side-ok ord (. p1 sel) k1)
@@ -575,6 +613,8 @@
     (@intent "Clause c viewed at body literal i: A, the rest of the body Γ₂, and the head Δ₂")
     (@spec ((Arena Clause Int) -> BodyView))
     (@alloc arena)
+    (@pre (and (>= i 0) (< i (cast Int (list-len (. c body))))))
+    (@property view (== (. $result head) (. c head)))
     (record-new BodyView
       (lit  (lit-at (. c body) i))
       (rest (without-at arena (. c body) i))
@@ -600,6 +640,9 @@
     (@intent "Join: a maximal ground A resolves against A in a body")
     (@spec ((Arena Premise BodyView) -> RConcl))
     (@alloc arena)
+    ;; [TGH21] Example 1's (112): (110) ⊤ → C(o) resolves C(o) in C(o) ∧ D(o) → F(x), r-Pred's conclusion (E3).
+    (@example :eq rconcl-eq (arena (ex-sel arena (ex-l1 arena (ex-a1 2 (ex-u 0))) (ex-a1 2 (ex-u 0))) (ex-body arena (ex-l2 arena (ex-a1 2 (ex-u 0)) (ex-a1 3 (ex-u 0))) (ex-l1 arena (ex-a1 6 (at-x))) (ex-a1 2 (ex-u 0)))) -> (ex-rc arena true (ex-l1 arena (ex-a1 3 (ex-u 0))) (ex-l1 arena (ex-a1 6 (at-x)))))
+    (@example :eq fires-is (arena (ex-sel arena (ex-l1 arena (ex-a1 2 (at-x))) (ex-a1 2 (at-x))) (ex-body arena (ex-l1 arena (ex-a1 2 (at-x))) (ex-l1 arena (ex-a1 6 (at-x))) (ex-a1 2 (at-x)))) -> (ex-rc arena false (ex-l0 arena) (ex-l0 arena)))
     (@property sound (or (not (. $result fires)) (and (. p1 maxed) (lit-eq (. p1 sel) (. b lit)) (joinable (. b lit)))))
     (@property complete (or (not (. p1 maxed)) (not (lit-eq (. p1 sel) (. b lit))) (not (joinable (. b lit))) (. $result fires)))
     (record-new RConcl
@@ -630,10 +673,12 @@
     (@intent "kids are o_{ρ·S^1} … o_{ρ·S^n} for o_ρ = o and S = sb2, in order")
     (@spec ((SriqOrder U32 U32 U32 (List U32)) -> Bool))
     (@pure)
+    (@post (implies $result (== (cast Int (list-len kids)) (cast Int n))))
     (let ((mut i (cast U32 1))
           (mut ok (== (cast Int (list-len kids)) (cast Int n))))
       (do
         (for-each (k kids)
+          (@loop-invariant (implies ok (== (cast Int (list-len kids)) (cast Int n))))
           (do (when (not (kid-ok ord o sb2 i k)) (set! ok false))
               (set! i (+ i (cast U32 1)))))
         ok)))
@@ -642,6 +687,9 @@
     (@intent "⋁ x ≈ o_{ρ·S^i} over the children")
     (@spec ((Arena (List U32)) -> (List Lit)))
     (@alloc arena)
+    ;; Owed: that each literal is an equality would rest on eq-lit's own
+    ;; post, which the verifier defect noted at with-arg keeps out of
+    ;; types.slop. The rows hold it.
     (let ((mut out (list-new arena Lit)))
       (do (for-each (k kids) (list-push out (eq-lit (at-x) (at-u k)))) out)))
 
@@ -659,6 +707,10 @@
     (@intent "Nom: o_ρ with B₁(o_ρ) and S_{B₂}(o_ρ, x), below the depth limit, gives x one of n children")
     (@spec ((Arena SriqOrder Int U32 U32 U32 Premise Premise (List U32)) -> RConcl))
     (@alloc arena)
+    ;; [TGH21] Example 2's (150): B₁(o) and S_{B₂}(o, x) give ⊤ → x ≈ o_{S¹}, constant 2; at Λ = 0 nothing fires.
+    (@example :eq rconcl-eq (arena (ex-kids-ord arena) 5 (cast U32 7) (cast U32 2) (cast U32 1) (ex-sel arena (ex-l1 arena (ex-a1 7 (ex-u 0))) (ex-a1 7 (ex-u 0))) (ex-sel arena (ex-l1 arena (ex-a2 2 (ex-u 0) (at-x))) (ex-a2 2 (ex-u 0) (at-x))) (ex-ids arena 2)) -> (ex-rc arena true (ex-l0 arena) (ex-l1 arena (eq-lit (at-x) (ex-u 2)))))
+    (@example :eq fires-is (arena (ex-kids-ord arena) 0 (cast U32 7) (cast U32 2) (cast U32 1) (ex-sel arena (ex-l1 arena (ex-a1 7 (ex-u 0))) (ex-a1 7 (ex-u 0))) (ex-sel arena (ex-l1 arena (ex-a2 2 (ex-u 0) (at-x))) (ex-a2 2 (ex-u 0) (at-x))) (ex-ids arena 2)) -> (ex-rc arena false (ex-l0 arena) (ex-l0 arena)))
+    (@pre (>= lam 0))
     (@property sound
       (or (not (. $result fires))
           (and (. p1 maxed) (. p2 maxed) (nom-premises p1 p2 b1 sb2)
@@ -688,6 +740,8 @@
     (@intent "Λ = 2^τSu · 2^τPr · (ω + ω_D), or 2⁶² when that is larger")
     (@spec ((Int Int Int Int) -> Int))
     (@pure)
+    (@example (2 3 4 6) -> 320)
+    (@example (30 30 4 1) -> 4611686018427387904)
     ;; τSu and τPr count atoms, ω is at most 2⁶² (eager's is held there),
     ;; and ω_D counts contexts, at least v_r and v_⊤: so the sums cannot
     ;; overflow, and the product is at least 2^(τSu + τPr).
@@ -704,4 +758,156 @@
       (cond ((>= k 62) 4611686018427387904)
             ((> m (>> 4611686018427387904 k)) 4611686018427387904)
             (else (<< m k)))))
+
+  ;; ============================================================
+  ;; Fixtures for the @examples: each rule fires on a row of the paper
+  ;; and not on a near miss. The proved contracts are the guarantee;
+  ;; these are concrete runs beside them, as for the el++ rules.
+  ;; ============================================================
+
+  (fn lits-same ((a (List Lit)) (b (List Lit)))
+    (@intent "The same literals in the same order")
+    (@spec (((List Lit) (List Lit)) -> Bool))
+    (@pure)
+    (let ((mut ok (== (list-len a) (list-len b)))
+          (mut i 0))
+      (do (for-each (l a) (do (when (not (lit-eq l (lit-at b i))) (set! ok false)) (set! i (+ i 1)))) ok)))
+
+  (fn rconcl-eq ((a RConcl) (b RConcl))
+    (@intent "Conclusion equality: the flag, the body and the head")
+    (@spec ((RConcl RConcl) -> Bool))
+    (@pure)
+    (if (== (. a fires) (. b fires)) (if (lits-same (. a body) (. b body)) (lits-same (. a head) (. b head)) false) false))
+
+  (fn fires-is ((a RConcl) (b RConcl))
+    (@intent "The flag alone, for an instance that does not fire")
+    (@spec ((RConcl RConcl) -> Bool))
+    (@pure)
+    (== (. a fires) (. b fires)))
+
+  (fn hstate-eq ((a HState) (b HState))
+    (@intent "Hyper's state: the flag, the body and the head (σ aside)")
+    (@spec ((HState HState) -> Bool))
+    (@pure)
+    (if (== (. a fires) (. b fires)) (if (lits-same (. a body) (. b body)) (lits-same (. a head) (. b head)) false) false))
+
+  (fn ex-fx ((f Int))
+    (@intent "f(x)")
+    (@spec ((Int) -> ATerm))
+    (@pure)
+    (at-fx (cast U32 f)))
+
+  (fn ex-u ((u Int))
+    (@intent "The constant u")
+    (@spec ((Int) -> ATerm))
+    (@pure)
+    (at-u (cast U32 u)))
+
+  (fn ex-a1 ((b Int) (t ATerm))
+    (@intent "B(t)")
+    (@spec ((Int ATerm) -> Lit))
+    (@pure)
+    (atom1 (cast U32 b) t))
+
+  (fn ex-a2 ((r Int) (a ATerm) (b ATerm))
+    (@intent "R(a, b)")
+    (@spec ((Int ATerm ATerm) -> Lit))
+    (@pure)
+    (atom2 (cast U32 r) a b))
+
+  (fn ex-pos ((k Int) (inner Bool))
+    (@intent "Position k")
+    (@spec ((Int Bool) -> Pos))
+    (@pure)
+    (record-new Pos (arg (cast U32 k)) (inner inner)))
+
+  (fn ex-side ((l Lit) (s ATerm))
+    (@intent "Which side of l is s")
+    (@spec ((Lit ATerm) -> U32))
+    (@pure)
+    (if (aterm-eq (. l t1) s) (cast U32 1) (cast U32 2)))
+
+  (fn ex-l0 ((arena Arena))
+    (@intent "No literals")
+    (@spec ((Arena) -> (List Lit)))
+    (@alloc arena)
+    (list-new arena Lit))
+
+  (fn ex-l1 ((arena Arena) (a Lit))
+    (@intent "[a]")
+    (@spec ((Arena Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (list-push out a) out)))
+
+  (fn ex-l2 ((arena Arena) (a Lit) (b Lit))
+    (@intent "[a, b]")
+    (@spec ((Arena Lit Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (ex-l1 arena a))) (do (list-push out b) out)))
+
+  (fn ex-l3 ((arena Arena) (a Lit) (b Lit) (c Lit))
+    (@intent "[a, b, c]")
+    (@spec ((Arena Lit Lit Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (ex-l2 arena a b))) (do (list-push out c) out)))
+
+  (fn ex-ord ((arena Arena))
+    (@intent "Three named constants")
+    (@spec ((Arena) -> SriqOrder))
+    (@alloc arena)
+    (named-consts arena 3))
+
+  (fn ex-sel ((arena Arena) (head (List Lit)) (l Lit))
+    (@intent "⊤ → head as a premise, with l selected")
+    (@spec ((Arena (List Lit) Lit) -> Premise))
+    (@alloc arena)
+    (let ((c (make-clause arena (list-new arena Lit) head))
+          (mut at 0)
+          (mut i 0))
+      (do (for-each (h (. c head)) (do (when (lit-eq h l) (set! at i)) (set! i (+ i 1))))
+          (select arena (ex-ord arena) c at))))
+
+  (fn ex-fac ((arena Arena))
+    (@intent "⊤ → f1(x) ≈ y ∨ f1(x) ≈ f0(x), with f1(x) ≈ f0(x) selected")
+    (@spec ((Arena) -> Premise))
+    (@alloc arena)
+    (ex-sel arena (ex-l2 arena (eq-lit (ex-fx 1) (at-y)) (eq-lit (ex-fx 1) (ex-fx 0))) (eq-lit (ex-fx 1) (ex-fx 0))))
+
+  (fn ex-body ((arena Arena) (body (List Lit)) (head (List Lit)) (l Lit))
+    (@intent "body → head, viewed at body literal l")
+    (@spec ((Arena (List Lit) (List Lit) Lit) -> BodyView))
+    (@alloc arena)
+    (let ((c (make-clause arena body head))
+          (mut at 0)
+          (mut i 0))
+      (do (for-each (b (. c body)) (do (when (lit-eq b l) (set! at i)) (set! i (+ i 1))))
+          (body-at arena c at))))
+
+  (fn ex-rc ((arena Arena) (fires Bool) (body (List Lit)) (head (List Lit)))
+    (@intent "A conclusion")
+    (@spec ((Arena Bool (List Lit) (List Lit)) -> RConcl))
+    (@alloc arena)
+    (record-new RConcl (fires fires) (body body) (head head)))
+
+  (fn ex-hs ((arena Arena) (fires Bool) (body (List Lit)) (head (List Lit)))
+    (@intent "A Hyper state; σ is not compared")
+    (@spec ((Arena Bool (List Lit) (List Lit)) -> HState))
+    (@alloc arena)
+    (record-new HState (fires fires) (sub (. (hyper-start arena (at-x) true) sub)) (body body) (head head)))
+
+  (fn ex-kids-ord ((arena Arena))
+    (@intent "Named 0 and 1; 2 is o₀'s S¹ for S role 2")
+    (@spec ((Arena) -> SriqOrder))
+    (@alloc arena)
+    (let ((base (named-consts arena 2))
+          (mut cs (list-new arena ConstEntry)))
+      (do (for-each (e (. base consts)) (list-push cs e))
+          (list-push cs (aux-const (const-entry base (cast U32 0)) (cast U32 0) (cast U32 2) (cast U32 1)))
+          (record-new SriqOrder (consts cs)))))
+
+  (fn ex-ids ((arena Arena) (k Int))
+    (@intent "[k]")
+    (@spec ((Arena Int) -> (List U32)))
+    (@alloc arena)
+    (let ((mut out (list-new arena U32))) (do (list-push out (cast U32 k)) out)))
 )

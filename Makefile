@@ -246,6 +246,7 @@ verify:
 example:
 	slop test src/rules/el.slop
 	slop test src/rules/ksc.slop
+	slop test src/rules/sriq.slop
 	slop test src/canon.slop
 	slop test src/normalize.slop
 	slop test src/decode.slop

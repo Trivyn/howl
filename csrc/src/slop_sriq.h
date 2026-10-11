@@ -210,6 +210,28 @@ slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids);
 uint8_t sriq_nom_premises(sriq_Premise p1, sriq_Premise p2, uint32_t b1, uint32_t sb2);
 sriq_RConcl sriq_nom_rule(slop_arena* arena, sriqorder_SriqOrder ord, int64_t lam, uint32_t b1, uint32_t sb2, uint32_t n, sriq_Premise p1, sriq_Premise p2, slop_list_u32 kids);
 int64_t sriq_depth_limit(int64_t tsu, int64_t tpr, int64_t omega, int64_t omega_d);
+uint8_t sriq_lits_same(slop_list_types_Lit a, slop_list_types_Lit b);
+uint8_t sriq_rconcl_eq(sriq_RConcl a, sriq_RConcl b);
+uint8_t sriq_fires_is(sriq_RConcl a, sriq_RConcl b);
+uint8_t sriq_hstate_eq(sriq_HState a, sriq_HState b);
+types_ATerm sriq_ex_fx(int64_t f);
+types_ATerm sriq_ex_u(int64_t u);
+types_Lit sriq_ex_a1(int64_t b, types_ATerm t);
+types_Lit sriq_ex_a2(int64_t r, types_ATerm a, types_ATerm b);
+sriq_Pos sriq_ex_pos(int64_t k, uint8_t inner);
+uint32_t sriq_ex_side(types_Lit l, types_ATerm s);
+slop_list_types_Lit sriq_ex_l0(slop_arena* arena);
+slop_list_types_Lit sriq_ex_l1(slop_arena* arena, types_Lit a);
+slop_list_types_Lit sriq_ex_l2(slop_arena* arena, types_Lit a, types_Lit b);
+slop_list_types_Lit sriq_ex_l3(slop_arena* arena, types_Lit a, types_Lit b, types_Lit c);
+sriqorder_SriqOrder sriq_ex_ord(slop_arena* arena);
+sriq_Premise sriq_ex_sel(slop_arena* arena, slop_list_types_Lit head, types_Lit l);
+sriq_Premise sriq_ex_fac(slop_arena* arena);
+sriq_BodyView sriq_ex_body(slop_arena* arena, slop_list_types_Lit body, slop_list_types_Lit head, types_Lit l);
+sriq_RConcl sriq_ex_rc(slop_arena* arena, uint8_t fires, slop_list_types_Lit body, slop_list_types_Lit head);
+sriq_HState sriq_ex_hs(slop_arena* arena, uint8_t fires, slop_list_types_Lit body, slop_list_types_Lit head);
+sriqorder_SriqOrder sriq_ex_kids_ord(slop_arena* arena);
+slop_list_u32 sriq_ex_ids(slop_arena* arena, int64_t k);
 
 #ifndef SLOP_OPTION_TYPES_LIT_DEFINED
 #define SLOP_OPTION_TYPES_LIT_DEFINED
@@ -259,6 +281,42 @@ SLOP_OPTION_DEFINE(sriq_HState, slop_option_sriq_HState)
 #ifndef SLOP_OPTION_U32_DEFINED
 #define SLOP_OPTION_U32_DEFINED
 SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
+
+#ifndef SLOP_OPTION_SRIQORDER_CONSTENTRY_DEFINED
+#define SLOP_OPTION_SRIQORDER_CONSTENTRY_DEFINED
+SLOP_OPTION_DEFINE(sriqorder_ConstEntry, slop_option_sriqorder_ConstEntry)
+#endif
+
+#ifndef SLOP_LIST_SRIQORDER_CONSTENTRY_DEFINED
+#define SLOP_LIST_SRIQORDER_CONSTENTRY_DEFINED
+#define SLOP_LIST_SRIQORDER_CONSTENTRY_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqorder_ConstEntry, slop_list_sriqorder_ConstEntry)
+#endif
+
+
+/* Hash/eq functions and list types for struct map/set keys */
+#ifndef TYPES_ATERM_HASH_EQ_DEFINED
+#define TYPES_ATERM_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_types_ATerm(const void* key) {
+    const types_ATerm* _k = (const types_ATerm*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_int(&(int64_t){ (int64_t)_k->kind }); hash *= 1099511628211ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->fsym }); hash *= 1099511628211ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->cst }); hash *= 1099511628211ULL;
+    hash ^= slop_hash_uint(&(uint64_t){ (uint64_t)_k->zi }); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_types_ATerm(const void* a, const void* b) {
+    const types_ATerm* _a = (const types_ATerm*)a;
+    const types_ATerm* _b = (const types_ATerm*)b;
+    return true
+        && (_a->kind == _b->kind)
+        && (_a->fsym == _b->fsym)
+        && (_a->cst == _b->cst)
+        && (_a->zi == _b->zi)
+    ;
+}
 #endif
 
 
