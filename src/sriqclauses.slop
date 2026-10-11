@@ -1,0 +1,1092 @@
+;; ============================================================
+;; sriq's clause boundary  —  SPEC.md §5.5 S5, and [TGH21] Table 1
+;;
+;; The calculus reads clauses over dense ids, not S2's names. This is
+;; the one place that maps them, once, before any rule runs:
+;;   - classes:   the input's class names (SriqNormal's `classes`) and any
+;;                other input class a clause names, such as one used but
+;;                not declared, in IRI order; then each fresh A_k as
+;;                nclass + k;
+;;   - roles:     every property P a clause names, in IRI order; then P̄
+;;                for each P of `bars`, in that order; then each S_{B₂}
+;;                by its content id, after both;
+;;   - function symbols: S2's own ids, 0 .. fns − 1;
+;;   - constants: the input's individuals and any other a clause names,
+;;                in IRI order. Nom's constants will follow them.
+;; Every list it numbers is already in content order (S5), so every id is
+;; dense and follows content, never input order. The map is a bijection
+;; on what it covers, so it needs no lemma (as kscids); a name it does
+;; not cover is refused with its text, never dropped. owl:Thing and
+;; owl:Nothing are never names here: S2 writes them as the empty body
+;; and the empty head (§5.5 S2 choice 6), so one in a name slot is
+;; refused too.
+;;
+;; Then each axiom becomes Table 1's DL-clauses, one function per form,
+;; and the whole is sorted and deduplicated: axioms can share a clause
+;; (DL4's S(z₁, x) ∧ B₂(x) → S_{B₂}(z₁, x) is one per S_{B₂}).
+;; ============================================================
+
+(module sriqclauses
+  (@doc "sriq's DL-clauses over dense ids: the id boundary and Table 1's expansion (SPEC 5.5 S5)")
+
+  (import rdf (IRI))
+  (import vocab (OWL_THING OWL_NOTHING))
+  (import types (DName DRole Dl1 Dl2 Dl4 DlClause AKind ATerm LitForm Lit Clause
+                 at-x at-z at-fx at-u atom1 atom2 eq-lit neq-lit aterm-cmp aterm-eq lit-cmp lit-eq))
+  (import canon (iri-cmp sort-range sort-iris))
+  (import sriqnames (SriqNormal))
+
+  (export SriqIds SriqClauses sriq-clauses build-sriq-ids class-id role-id const-id
+          expand-clause make-clause clause-cmp clause-eq dl-clause-shape clause-canonical ids-dense
+          render-aterm render-lit render-clause render-clauses)
+
+  ;; The tables, both ways. Maps are pointers, so copies share them.
+  (type SriqIds (record
+    (class-ix (Map IRI U32))     ; an input class name → its id
+    (prop-ix  (Map IRI U32))     ; a property P → its id
+    (bar-ix   (Map IRI U32))     ; P → P̄'s id
+    (const-ix (Map IRI U32))     ; an individual → its id
+    (class-of (List DName))      ; an id → its class name
+    (role-of  (List DRole))      ; an id → its role name
+    (const-of (List IRI))        ; an id → its individual
+    (nclass   Int)               ; input class names: A_k's id is nclass + k
+    (sub0     Int)               ; S_{B₂} k's id is sub0 + k
+    (nfns     Int)))             ; function symbols: ids 0 .. nfns − 1
+
+  ;; The ontology as the calculus reads it.
+  (type SriqClauses (record
+    (ids     SriqIds)
+    (clauses (List Clause))))    ; sorted by clause-cmp, deduplicated
+
+  ;; ============================================================
+  ;; Small helpers
+  ;; ============================================================
+
+  (fn no-id ()
+    (@intent "An id no table holds: what a lookup outside the tables gives, which ids-dense flags")
+    (@spec (() -> U32))
+    (@pure)
+    (cast U32 4294967295))
+
+  (fn cmp-int ((a Int) (b Int))
+    (@intent "-1, 0 or 1")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn lit-at ((xs (List Lit)) (i Int))
+    (@intent "Element i, or a placeholder")
+    (@spec (((List Lit) Int) -> Lit))
+    (@pure)
+    (match (list-get xs i) ((some l) l) ((none) (atom1 (no-id) (at-x)))))
+
+  (fn clause-at ((xs (List Clause)) (i Int) (fallback Clause))
+    (@intent "Element i, or the fallback")
+    (@spec (((List Clause) Int Clause) -> Clause))
+    (@pure)
+    (match (list-get xs i) ((some c) c) ((none) fallback)))
+
+  (fn lits1 ((arena Arena) (a Lit))
+    (@intent "[a]")
+    (@spec ((Arena Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (list-push out a) out)))
+
+  (fn lits2 ((arena Arena) (a Lit) (b Lit))
+    (@intent "[a, b]")
+    (@spec ((Arena Lit Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (list-push out a) (list-push out b) out)))
+
+  (fn one ((arena Arena) (c Clause))
+    (@intent "[c]")
+    (@spec ((Arena Clause) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause))) (do (list-push out c) out)))
+
+  ;; ============================================================
+  ;; Clauses as sets: sorted by lit-cmp, without repetition
+  ;; ============================================================
+
+  (fn ends-with ((xs (List Lit)) (l Lit))
+    (@intent "Is l the last element of xs?")
+    (@spec (((List Lit) Lit) -> Bool))
+    (@pure)
+    (let ((n (cast Int (list-len xs))))
+      (and (> n 0) (lit-eq (lit-at xs (- n 1)) l))))
+
+  (fn lit-set ((arena Arena) (xs (List Lit)))
+    (@intent "xs sorted by lit-cmp, each literal once")
+    (@spec ((Arena (List Lit)) -> (List Lit)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (lit-cmp (lit-at xs i) (lit-at xs j)))))
+          (mut out (list-new arena Lit)))
+      (do
+        (for-each (k idx)
+          (let ((l (lit-at xs k)))
+            (when (not (ends-with out l)) (list-push out l))))
+        out)))
+
+  (fn make-clause ((arena Arena) (body (List Lit)) (head (List Lit)))
+    (@intent "body → head, each a set: \"treated as sets\" ([TGH21] §2.1)")
+    (@spec ((Arena (List Lit) (List Lit)) -> Clause))
+    (@alloc arena)
+    (record-new Clause (body (lit-set arena body)) (head (lit-set arena head))))
+
+  (fn lits-cmp ((a (List Lit)) (b (List Lit)))
+    (@intent "Lexicographic on literal lists, a proper prefix first")
+    (@spec (((List Lit) (List Lit)) -> Int))
+    (@pure)
+    (let ((na (cast Int (list-len a)))
+          (nb (cast Int (list-len b)))
+          (n  (min na nb))
+          (mut i 0)
+          (mut r 0))
+      (do
+        (while (and (< i n) (== r 0))
+          (do (set! r (lit-cmp (lit-at a i) (lit-at b i)))
+              (set! i (+ i 1))))
+        (if (!= r 0) r (cmp-int na nb)))))
+
+  (fn clause-cmp ((a Clause) (b Clause))
+    (@intent "A structural total order on clauses: body, then head")
+    (@spec ((Clause Clause) -> Int))
+    (@pure)
+    (let ((c (lits-cmp (. a body) (. b body))))
+      (if (!= c 0) c (lits-cmp (. a head) (. b head)))))
+
+  (fn clause-eq ((a Clause) (b Clause))
+    (@intent "The same clause")
+    (@spec ((Clause Clause) -> Bool))
+    (@pure)
+    (== (clause-cmp a b) 0))
+
+  (fn ends-with-clause ((xs (List Clause)) (c Clause))
+    (@intent "Is c the last element of xs?")
+    (@spec (((List Clause) Clause) -> Bool))
+    (@pure)
+    (let ((n (cast Int (list-len xs))))
+      (and (> n 0) (clause-eq (clause-at xs (- n 1) c) c))))
+
+  (fn clause-set ((arena Arena) (xs (List Clause)))
+    (@intent "xs sorted by clause-cmp, each clause once")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((none-such (record-new Clause (body (list-new arena Lit)) (head (list-new arena Lit))))
+          (idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((i Int) (j Int)) (clause-cmp (clause-at xs i none-such) (clause-at xs j none-such)))))
+          (mut out (list-new arena Clause)))
+      (do
+        (for-each (k idx)
+          (let ((c (clause-at xs k none-such)))
+            (when (not (ends-with-clause out c)) (list-push out c))))
+        out)))
+
+  ;; ============================================================
+  ;; The names an axiom uses, by kind
+  ;; ============================================================
+
+  (fn filler-names ((arena Arena) (sub DName) (filler (Option DName)))
+    (@intent "B₁, and B₂ unless it is ⊤")
+    (@spec ((Arena DName (Option DName)) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DName)))
+      (do
+        (list-push out sub)
+        (match filler ((some b) (list-push out b)) ((none) (do)))
+        out)))
+
+  (fn names-of ((arena Arena) (ns (List DName)))
+    (@intent "A copy of ns")
+    (@spec ((Arena (List DName)) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DName))) (do (for-each (n ns) (list-push out n)) out)))
+
+  (fn dl1-names ((arena Arena) (d Dl1))
+    (@intent "DL1's body and head names")
+    (@spec ((Arena Dl1) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (names-of arena (. d body))))
+      (do (for-each (n (. d head)) (list-push out n)) out)))
+
+  (fn two-names ((arena Arena) (a DName) (b DName))
+    (@intent "[a, b]")
+    (@spec ((Arena DName DName) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DName))) (do (list-push out a) (list-push out b) out)))
+
+  (fn one-name ((arena Arena) (a DName))
+    (@intent "[a]")
+    (@spec ((Arena DName) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DName))) (do (list-push out a) out)))
+
+  (fn dl-names ((arena Arena) (c DlClause))
+    (@intent "The class names an axiom uses")
+    (@spec ((Arena DlClause) -> (List DName)))
+    (@alloc arena)
+    (match c
+      ((dl1 d)       (dl1-names arena d))
+      ((dl2 d)       (filler-names arena (. d sub) (. d filler)))
+      ((dl3 _ b1 b2) (two-names arena b1 b2))
+      ((dl4 d)       (filler-names arena (. d sub) (. d filler)))
+      ((dl5 b _)     (one-name arena b))
+      ((dl6 _ b)     (one-name arena b))
+      ((dl7 _ _)     (list-new arena DName))
+      ((dl8 _ _)     (list-new arena DName))
+      ((dl9 _ _)     (list-new arena DName))
+      ((dl10 _ b)    (one-name arena b))
+      ((dl11 b _)    (one-name arena b))))
+
+  (fn roles-of ((arena Arena) (a DRole) (b (Option DRole)))
+    (@intent "[a], or [a, b]")
+    (@spec ((Arena DRole (Option DRole)) -> (List DRole)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DRole)))
+      (do
+        (list-push out a)
+        (match b ((some r) (list-push out r)) ((none) (do)))
+        out)))
+
+  (fn dl-roles ((arena Arena) (c DlClause))
+    (@intent "The role names an axiom uses")
+    (@spec ((Arena DlClause) -> (List DRole)))
+    (@alloc arena)
+    (match c
+      ((dl1 _)       (list-new arena DRole))
+      ((dl2 d)       (roles-of arena (. d role) (none)))
+      ((dl3 s _ _)   (roles-of arena s (none)))
+      ((dl4 d)       (roles-of arena (. d role) (some (. d srole))))
+      ((dl5 _ s)     (roles-of arena s (none)))
+      ((dl6 s _)     (roles-of arena s (none)))
+      ((dl7 s1 s2)   (roles-of arena s1 (some s2)))
+      ((dl8 s1 s2)   (roles-of arena s1 (some s2)))
+      ((dl9 s1 s2)   (roles-of arena s1 (some s2)))
+      ((dl10 _ _)    (list-new arena DRole))
+      ((dl11 _ _)    (list-new arena DRole))))
+
+  (fn dl-consts ((arena Arena) (c DlClause))
+    (@intent "The individuals an axiom names: DL10's and DL11's o")
+    (@spec ((Arena DlClause) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)))
+      (do
+        (match c
+          ((dl10 o _) (list-push out o))
+          ((dl11 _ o) (list-push out o))
+          (_          (do)))
+        out)))
+
+  (fn dl-fns ((arena Arena) (c DlClause))
+    (@intent "The function symbols an axiom carries: DL2's")
+    (@spec ((Arena DlClause) -> (List (Int 0 ..))))
+    (@alloc arena)
+    (let ((mut out (list-new arena (Int 0 ..))))
+      (do
+        (match c
+          ((dl2 d) (for-each (f (. d fns)) (list-push out f)))
+          (_       (do)))
+        out)))
+
+  ;; ============================================================
+  ;; The tables
+  ;; ============================================================
+
+  (fn iri-at ((xs (List IRI)) (i Int))
+    (@intent "Element i, or the empty IRI")
+    (@spec (((List IRI) Int) -> IRI))
+    (@pure)
+    (match (list-get xs i) ((some v) v) ((none) (record-new IRI (value "")))))
+
+  (fn distinct-iris ((arena Arena) (sorted (List IRI)))
+    (@intent "A sorted list without repetition")
+    (@spec ((Arena (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)))
+      (do
+        (for-each (i sorted)
+          (let ((n (cast Int (list-len out))))
+            (when (or (== n 0) (!= (iri-cmp (iri-at out (- n 1)) i) 0)) (list-push out i))))
+        out)))
+
+  (fn props-of ((arena Arena) (n SriqNormal))
+    (@intent "Every property P a clause names, in IRI order, once")
+    (@spec ((Arena SriqNormal) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut ps (list-new arena IRI)))
+      (do
+        (for-each (c (. n clauses))
+          (for-each (r (dl-roles arena c))
+            (match r
+              ((dr-prop p) (list-push ps p))
+              ((dr-bar _)  (do))
+              ((dr-sub _)  (do)))))
+        (distinct-iris arena (sort-iris arena ps)))))
+
+  (fn is-top-or-bottom ((i IRI))
+    (@intent "Is i owl:Thing or owl:Nothing?")
+    (@spec ((IRI) -> Bool))
+    (@pure)
+    (or (string-eq (. i value) OWL_THING) (string-eq (. i value) OWL_NOTHING)))
+
+  (fn classes-of ((arena Arena) (n SriqNormal))
+    (@intent "The input's class names and every other input class a clause names, in IRI order, once; never ⊤ or ⊥")
+    (@spec ((Arena SriqNormal) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut cs (list-new arena IRI)))
+      (do
+        (for-each (i (. n classes)) (list-push cs i))
+        (for-each (c (. n clauses))
+          (for-each (b (dl-names arena c))
+            (match b
+              ((dn-class i) (list-push cs i))
+              ((dn-fresh _) (do)))))
+        (distinct-iris arena (sort-iris arena (without-top-bottom arena cs))))))
+
+  (fn without-top-bottom ((arena Arena) (xs (List IRI)))
+    (@intent "xs without owl:Thing and owl:Nothing: the class table never holds them, so one in a name slot has no id")
+    (@spec ((Arena (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)))
+      (do (for-each (i xs) (when (not (is-top-or-bottom i)) (list-push out i))) out)))
+
+  (fn individuals-of ((arena Arena) (n SriqNormal))
+    (@intent "The input's individuals and every other a clause names, in IRI order, once")
+    (@spec ((Arena SriqNormal) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut is (list-new arena IRI)))
+      (do
+        (for-each (i (. n individuals)) (list-push is i))
+        (for-each (c (. n clauses)) (for-each (o (dl-consts arena c)) (list-push is o)))
+        (distinct-iris arena (sort-iris arena is)))))
+
+  (fn index-from ((arena Arena) (xs (List IRI)) (base Int))
+    (@intent "Each IRI of xs → base + its position")
+    (@spec ((Arena (List IRI) Int) -> (Map IRI U32)))
+    (@alloc arena)
+    (let ((mut m (map-new arena IRI U32))
+          (mut i base))
+      (do
+        (for-each (x xs) (do (map-put m x (cast U32 i)) (set! i (+ i 1))))
+        m)))
+
+  (fn class-names ((arena Arena) (classes (List IRI)) (nfresh Int))
+    (@intent "id → class name: the input's classes, then A_0 … A_{nfresh−1}")
+    (@spec ((Arena (List IRI) Int) -> (List DName)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DName))
+          (mut k 0))
+      (do
+        (for-each (c classes) (list-push out (union-new DName dn-class c)))
+        (while (< k nfresh)
+          (do (list-push out (union-new DName dn-fresh (cast (Int 0 ..) k)))
+              (set! k (+ k 1))))
+        out)))
+
+  (fn role-names ((arena Arena) (props (List IRI)) (bars (List IRI)) (nsub Int))
+    (@intent "id → role name: the properties, then their P̄, then S_0 … S_{nsub−1}")
+    (@spec ((Arena (List IRI) (List IRI) Int) -> (List DRole)))
+    (@alloc arena)
+    (let ((mut out (list-new arena DRole))
+          (mut k 0))
+      (do
+        (for-each (p props) (list-push out (union-new DRole dr-prop p)))
+        (for-each (p bars)  (list-push out (union-new DRole dr-bar p)))
+        (while (< k nsub)
+          (do (list-push out (union-new DRole dr-sub (cast (Int 0 ..) k)))
+              (set! k (+ k 1))))
+        out)))
+
+  (fn build-sriq-ids ((arena Arena) (n SriqNormal))
+    (@intent "§5.5 S5's ids, dense and from content: classes, roles, function symbols and constants")
+    (@spec ((Arena SriqNormal) -> SriqIds))
+    (@alloc arena)
+    (let ((classes (classes-of arena n))
+          (consts  (individuals-of arena n))
+          (props   (props-of arena n))
+          (np      (cast Int (list-len props)))
+          (nb      (cast Int (list-len (. n bars)))))
+      (record-new SriqIds
+        (class-ix (index-from arena classes 0))
+        (prop-ix  (index-from arena props 0))
+        (bar-ix   (index-from arena (. n bars) np))
+        (const-ix (index-from arena consts 0))
+        (class-of (class-names arena classes (cast Int (list-len (. n concepts)))))
+        (role-of  (role-names arena props (. n bars) (cast Int (list-len (. n sroles)))))
+        (const-of consts)
+        (nclass   (cast Int (list-len classes)))
+        (sub0     (+ np nb))
+        (nfns     (cast Int (. n fns))))))
+
+  ;; ============================================================
+  ;; Lookups. `uncovered` refuses an ontology with a name outside the
+  ;; tables before any lookup runs; were one to slip through, it would
+  ;; get no-id, which ids-dense flags.
+  ;; ============================================================
+
+  (fn lookup ((m (Map IRI U32)) (i IRI))
+    (@intent "i's id, or no-id")
+    (@spec (((Map IRI U32) IRI) -> U32))
+    (match (map-get m i) ((some v) v) ((none) (no-id))))
+
+  (fn class-id ((ids SriqIds) (b DName))
+    (@intent "A class name's id")
+    (@spec ((SriqIds DName) -> U32))
+    (match b
+      ((dn-class i) (lookup (. ids class-ix) i))
+      ((dn-fresh k) (cast U32 (+ (. ids nclass) k)))))
+
+  (fn role-id ((ids SriqIds) (r DRole))
+    (@intent "A role name's id")
+    (@spec ((SriqIds DRole) -> U32))
+    (match r
+      ((dr-prop p) (lookup (. ids prop-ix) p))
+      ((dr-bar p)  (lookup (. ids bar-ix) p))
+      ((dr-sub k)  (cast U32 (+ (. ids sub0) k)))))
+
+  (fn const-id ((ids SriqIds) (o IRI))
+    (@intent "An individual's id")
+    (@spec ((SriqIds IRI) -> U32))
+    (lookup (. ids const-ix) o))
+
+  (fn name-covered ((ids SriqIds) (b DName))
+    (@intent "Does b have an id?")
+    (@spec ((SriqIds DName) -> Bool))
+    (match b
+      ((dn-class i) (map-has (. ids class-ix) i))
+      ((dn-fresh k) (< (+ (. ids nclass) k) (cast Int (list-len (. ids class-of)))))))
+
+  (fn role-covered ((ids SriqIds) (r DRole))
+    (@intent "Does r have an id?")
+    (@spec ((SriqIds DRole) -> Bool))
+    (match r
+      ((dr-prop p) (map-has (. ids prop-ix) p))
+      ((dr-bar p)  (map-has (. ids bar-ix) p))
+      ((dr-sub k)  (< (+ (. ids sub0) k) (cast Int (list-len (. ids role-of)))))))
+
+  (fn dname-text ((arena Arena) (b DName))
+    (@intent "An input class's IRI, or A_k")
+    (@spec ((Arena DName) -> String))
+    (@alloc arena)
+    (match b
+      ((dn-class i) (. i value))
+      ((dn-fresh k) (string-concat arena "A" (int-to-string arena k)))))
+
+  (fn drole-text ((arena Arena) (r DRole))
+    (@intent "P's IRI, P^bar, or S_k")
+    (@spec ((Arena DRole) -> String))
+    (@alloc arena)
+    (match r
+      ((dr-prop p) (. p value))
+      ((dr-bar p)  (string-concat arena (. p value) "^bar"))
+      ((dr-sub k)  (string-concat arena "S" (int-to-string arena k)))))
+
+  (fn clause-misses ((arena Arena) (ids SriqIds) (c DlClause))
+    (@intent "Each name of one axiom that has no id, as text")
+    (@spec ((Arena SriqIds DlClause) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (for-each (b (dl-names arena c))
+          (when (not (name-covered ids b)) (list-push out (string-concat arena "class " (dname-text arena b)))))
+        (for-each (r (dl-roles arena c))
+          (when (not (role-covered ids r)) (list-push out (string-concat arena "role " (drole-text arena r)))))
+        (for-each (o (dl-consts arena c))
+          (when (not (map-has (. ids const-ix) o)) (list-push out (string-concat arena "individual " (. o value)))))
+        (for-each (f (dl-fns arena c))
+          (when (>= f (. ids nfns)) (list-push out (string-concat arena "function symbol " (int-to-string arena f)))))
+        out)))
+
+  (fn uncovered ((arena Arena) (ids SriqIds) (n SriqNormal))
+    (@intent "Every name a clause uses that has no id, as text")
+    (@spec ((Arena SriqIds SriqNormal) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (for-each (c (. n clauses))
+          (for-each (m (clause-misses arena ids c)) (list-push out m)))
+        out)))
+
+  ;; ============================================================
+  ;; Table 1, one function per form (SPEC §5.5 S2, "[TGH21] Table 1,
+  ;; pinned"). x is the central variable, zᵢ a neighbour from 1.
+  ;; ============================================================
+
+  (fn unary-x ((arena Arena) (ids SriqIds) (ns (List DName)))
+    (@intent "B(x) for each name")
+    (@spec ((Arena SriqIds (List DName)) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit)))
+      (do (for-each (b ns) (list-push out (atom1 (class-id ids b) (at-x)))) out)))
+
+  (fn expand-dl1 ((arena Arena) (ids SriqIds) (d Dl1))
+    (@intent "DL1: B₁(x) ∧ … ∧ Bₙ(x) → Bₙ₊₁(x) ∨ … ∨ Bₘ(x)")
+    (@spec ((Arena SriqIds Dl1) -> (List Clause)))
+    (@alloc arena)
+    (one arena (make-clause arena (unary-x arena ids (. d body)) (unary-x arena ids (. d head)))))
+
+  (fn dl2-successor ((arena Arena) (ids SriqIds) (d Dl2) (b1 (List Lit)) (f (Int 0 ..)))
+    (@intent "One successor fᵢ(x): B₁(x) → B₂(fᵢ(x)), unless B₂ is ⊤, and B₁(x) → S(x, fᵢ(x))")
+    (@spec ((Arena SriqIds Dl2 (List Lit) (Int 0 ..)) -> (List Clause)))
+    (@alloc arena)
+    (let ((fx (at-fx (cast U32 f)))
+          (mut out (list-new arena Clause)))
+      (do
+        (match (. d filler)
+          ((some b2) (list-push out (make-clause arena b1 (lits1 arena (atom1 (class-id ids b2) fx)))))
+          ((none)    (do)))
+        (list-push out (make-clause arena b1 (lits1 arena (atom2 (role-id ids (. d role)) (at-x) fx))))
+        out)))
+
+  (fn dl2-successors ((arena Arena) (ids SriqIds) (d Dl2))
+    (@intent "DL2's successor clauses, for 1 ≤ i ≤ n")
+    (@spec ((Arena SriqIds Dl2) -> (List Clause)))
+    (@alloc arena)
+    (let ((b1 (lits1 arena (atom1 (class-id ids (. d sub)) (at-x))))
+          (mut out (list-new arena Clause)))
+      (do
+        (for-each (f (. d fns))
+          (for-each (c (dl2-successor arena ids d b1 f)) (list-push out c)))
+        out)))
+
+  (fn fn-at ((fs (List (Int 0 ..))) (i Int))
+    (@intent "fᵢ's id, or no-id")
+    (@spec (((List (Int 0 ..)) Int) -> U32))
+    (@pure)
+    (match (list-get fs i) ((some f) (cast U32 f)) ((none) (no-id))))
+
+  (fn neq-after ((arena Arena) (b1 (List Lit)) (fs (List (Int 0 ..))) (i Int))
+    (@intent "B₁(x) → fᵢ(x) ≉ fⱼ(x) for every j after i")
+    (@spec ((Arena (List Lit) (List (Int 0 ..)) Int) -> (List Clause)))
+    (@alloc arena)
+    (let ((fi  (at-fx (fn-at fs i)))
+          (n   (cast Int (list-len fs)))
+          (mut out (list-new arena Clause))
+          (mut j (+ i 1)))
+      (do
+        (while (< j n)
+          (let ((l (neq-lit fi (at-fx (fn-at fs j)))))
+            (do (list-push out (make-clause arena b1 (lits1 arena l)))
+                (set! j (+ j 1)))))
+        out)))
+
+  (fn expand-dl2 ((arena Arena) (ids SriqIds) (d Dl2))
+    (@intent "DL2, B₁ ⊑ ≥n S.B₂: n successors in S and B₂, pairwise distinct")
+    (@spec ((Arena SriqIds Dl2) -> (List Clause)))
+    (@alloc arena)
+    (let ((b1 (lits1 arena (atom1 (class-id ids (. d sub)) (at-x))))
+          (n  (cast Int (list-len (. d fns))))
+          (mut out (dl2-successors arena ids d))
+          (mut i 0))
+      (do
+        (while (< i n)
+          (do (for-each (c (neq-after arena b1 (. d fns) i)) (list-push out c))
+              (set! i (+ i 1))))
+        out)))
+
+  (fn expand-dl3 ((arena Arena) (ids SriqIds) (s DRole) (b1 DName) (b2 DName))
+    (@intent "DL3, ∃S.B₁ ⊑ B₂: S(z₁, x) ∧ B₁(x) → B₂(z₁)")
+    (@spec ((Arena SriqIds DRole DName DName) -> (List Clause)))
+    (@alloc arena)
+    (let ((z1 (at-z (cast U32 1))))
+      (one arena (make-clause arena
+                   (lits2 arena (atom2 (role-id ids s) z1 (at-x)) (atom1 (class-id ids b1) (at-x)))
+                   (lits1 arena (atom1 (class-id ids b2) z1))))))
+
+  (fn dl4-sub ((arena Arena) (ids SriqIds) (d Dl4))
+    (@intent "DL4's S(z₁, x) ∧ B₂(x) → S_{B₂}(z₁, x); with B₂ = ⊤, S(z₁, x) → S_{B₂}(z₁, x)")
+    (@spec ((Arena SriqIds Dl4) -> Clause))
+    (@alloc arena)
+    (let ((z1   (at-z (cast U32 1)))
+          (sx   (atom2 (role-id ids (. d role)) z1 (at-x)))
+          (head (lits1 arena (atom2 (role-id ids (. d srole)) z1 (at-x)))))
+      (match (. d filler)
+        ((some b2) (make-clause arena (lits2 arena sx (atom1 (class-id ids b2) (at-x))) head))
+        ((none)    (make-clause arena (lits1 arena sx) head)))))
+
+  (fn dl4-body ((arena Arena) (ids SriqIds) (d Dl4))
+    (@intent "B₁(x) ∧ S_{B₂}(x, z₁) ∧ … ∧ S_{B₂}(x, zₙ₊₁)")
+    (@spec ((Arena SriqIds Dl4) -> (List Lit)))
+    (@alloc arena)
+    (let ((sb (role-id ids (. d srole)))
+          (mut out (list-new arena Lit))
+          (mut i 1))
+      (do
+        (list-push out (atom1 (class-id ids (. d sub)) (at-x)))
+        (while (<= i (+ (. d count) 1))
+          (do (list-push out (atom2 sb (at-x) (at-z (cast U32 i))))
+              (set! i (+ i 1))))
+        out)))
+
+  (fn eq-after ((arena Arena) (i Int) (m Int))
+    (@intent "zᵢ ≈ zⱼ for every j from i + 1 to m")
+    (@spec ((Arena Int Int) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))
+          (mut j (+ i 1)))
+      (do
+        (while (<= j m)
+          (do (list-push out (eq-lit (at-z (cast U32 i)) (at-z (cast U32 j))))
+              (set! j (+ j 1))))
+        out)))
+
+  (fn dl4-head ((arena Arena) (d Dl4))
+    (@intent "⋁ zᵢ ≈ zⱼ over 1 ≤ i < j ≤ n + 1: empty, so ⊥, when n = 0")
+    (@spec ((Arena Dl4) -> (List Lit)))
+    (@alloc arena)
+    (let ((m (+ (. d count) 1))
+          (mut out (list-new arena Lit))
+          (mut i 1))
+      (do
+        (while (<= i m)
+          (do (for-each (l (eq-after arena i m)) (list-push out l))
+              (set! i (+ i 1))))
+        out)))
+
+  (fn expand-dl4 ((arena Arena) (ids SriqIds) (d Dl4))
+    (@intent "DL4, B₁ ⊑ ≤n S.B₂, through its S_{B₂}: two clauses")
+    (@spec ((Arena SriqIds Dl4) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do
+        (list-push out (dl4-sub arena ids d))
+        (list-push out (make-clause arena (dl4-body arena ids d) (dl4-head arena d)))
+        out)))
+
+  (fn expand-dl5 ((arena Arena) (ids SriqIds) (b DName) (s DRole))
+    (@intent "DL5, B ⊑ ∃S.Self: B(x) → S(x, x)")
+    (@spec ((Arena SriqIds DName DRole) -> (List Clause)))
+    (@alloc arena)
+    (one arena (make-clause arena (lits1 arena (atom1 (class-id ids b) (at-x)))
+                                  (lits1 arena (atom2 (role-id ids s) (at-x) (at-x))))))
+
+  (fn expand-dl6 ((arena Arena) (ids SriqIds) (s DRole) (b DName))
+    (@intent "DL6, ∃S.Self ⊑ B: S(x, x) → B(x)")
+    (@spec ((Arena SriqIds DRole DName) -> (List Clause)))
+    (@alloc arena)
+    (one arena (make-clause arena (lits1 arena (atom2 (role-id ids s) (at-x) (at-x)))
+                                  (lits1 arena (atom1 (class-id ids b) (at-x))))))
+
+  (fn expand-dl7 ((arena Arena) (ids SriqIds) (s1 DRole) (s2 DRole))
+    (@intent "DL7, S₁ ⊑ S₂: S₁(z₁, x) → S₂(z₁, x)")
+    (@spec ((Arena SriqIds DRole DRole) -> (List Clause)))
+    (@alloc arena)
+    (let ((z1 (at-z (cast U32 1))))
+      (one arena (make-clause arena (lits1 arena (atom2 (role-id ids s1) z1 (at-x)))
+                                    (lits1 arena (atom2 (role-id ids s2) z1 (at-x)))))))
+
+  (fn expand-dl8 ((arena Arena) (ids SriqIds) (s1 DRole) (s2 DRole))
+    (@intent "DL8, S₁ ⊑ S₂⁻: S₁(z₁, x) → S₂(x, z₁)")
+    (@spec ((Arena SriqIds DRole DRole) -> (List Clause)))
+    (@alloc arena)
+    (let ((z1 (at-z (cast U32 1))))
+      (one arena (make-clause arena (lits1 arena (atom2 (role-id ids s1) z1 (at-x)))
+                                    (lits1 arena (atom2 (role-id ids s2) (at-x) z1))))))
+
+  (fn expand-dl9 ((arena Arena) (ids SriqIds) (s1 DRole) (s2 DRole))
+    (@intent "DL9, Disj(S₁, S₂): S₁(z₁, x) ∧ S₂(z₁, x) → ⊥ ([TGH21]'s z₁ twice, not [Bate+18]'s z₂)")
+    (@spec ((Arena SriqIds DRole DRole) -> (List Clause)))
+    (@alloc arena)
+    (let ((z1 (at-z (cast U32 1))))
+      (one arena (make-clause arena (lits2 arena (atom2 (role-id ids s1) z1 (at-x)) (atom2 (role-id ids s2) z1 (at-x)))
+                                    (list-new arena Lit)))))
+
+  (fn expand-dl10 ((arena Arena) (ids SriqIds) (o IRI) (b DName))
+    (@intent "DL10, {o} ⊑ B: ⊤ → B(o)")
+    (@spec ((Arena SriqIds IRI DName) -> (List Clause)))
+    (@alloc arena)
+    (one arena (make-clause arena (list-new arena Lit) (lits1 arena (atom1 (class-id ids b) (at-u (const-id ids o)))))))
+
+  (fn expand-dl11 ((arena Arena) (ids SriqIds) (b DName) (o IRI))
+    (@intent "DL11, B ⊑ {o}: B(x) → x ≈ o")
+    (@spec ((Arena SriqIds DName IRI) -> (List Clause)))
+    (@alloc arena)
+    (one arena (make-clause arena (lits1 arena (atom1 (class-id ids b) (at-x)))
+                                  (lits1 arena (eq-lit (at-x) (at-u (const-id ids o)))))))
+
+  (fn expand-clause ((arena Arena) (ids SriqIds) (c DlClause))
+    (@intent "One normal-form axiom's DL-clauses, as Table 1 lists them")
+    (@spec ((Arena SriqIds DlClause) -> (List Clause)))
+    (@alloc arena)
+    (match c
+      ((dl1 d)       (expand-dl1 arena ids d))
+      ((dl2 d)       (expand-dl2 arena ids d))
+      ((dl3 s b1 b2) (expand-dl3 arena ids s b1 b2))
+      ((dl4 d)       (expand-dl4 arena ids d))
+      ((dl5 b s)     (expand-dl5 arena ids b s))
+      ((dl6 s b)     (expand-dl6 arena ids s b))
+      ((dl7 s1 s2)   (expand-dl7 arena ids s1 s2))
+      ((dl8 s1 s2)   (expand-dl8 arena ids s1 s2))
+      ((dl9 s1 s2)   (expand-dl9 arena ids s1 s2))
+      ((dl10 o b)    (expand-dl10 arena ids o b))
+      ((dl11 b o)    (expand-dl11 arena ids b o))))
+
+  (fn ontology-clauses ((arena Arena) (ids SriqIds) (n SriqNormal))
+    (@intent "Every axiom's DL-clauses, as one sorted set")
+    (@spec ((Arena SriqIds SriqNormal) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do
+        (for-each (c (. n clauses))
+          (for-each (x (expand-clause arena ids c)) (list-push out x)))
+        (clause-set arena out))))
+
+  (fn sriq-clauses ((arena Arena) (n SriqNormal))
+    (@intent "The normal form as the calculus reads it, or the first name without an id")
+    (@spec ((Arena SriqNormal) -> (Result SriqClauses String)))
+    (@alloc arena)
+    (let ((ids  (build-sriq-ids arena n))
+          (miss (uncovered arena ids n)))
+      (match (list-get miss 0)
+        ((some m) (error (string-concat arena "the clause boundary has no id for " m)))
+        ((none)   (ok (record-new SriqClauses (ids ids) (clauses (ontology-clauses arena ids n))))))))
+
+  ;; ============================================================
+  ;; [TGH21] §2.3's DL-clause: "only DL-atoms of the form B(x), S(x, zᵢ),
+  ;; S(zᵢ, x), or S(x, x) in the body, and only DL-literals in the head"
+  ;; ============================================================
+
+  (fn is-x ((t ATerm))
+    (@intent "Is t the central variable?")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (== (. t kind) 'ak-x))
+
+  (fn is-z ((t ATerm))
+    (@intent "Is t a neighbour variable?")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (== (. t kind) 'ak-z))
+
+  (fn is-fx ((t ATerm))
+    (@intent "Is t of the form f(x)?")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (== (. t kind) 'ak-fx))
+
+  (fn dl-aterm ((t ATerm))
+    (@intent "A DL-a-term: zᵢ, x, f(x) or a constant o")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (or (is-x t) (is-z t) (is-fx t) (== (. t kind) 'ak-u)))
+
+  (fn dl-body-atom ((l Lit))
+    (@intent "B(x), S(x, zᵢ), S(zᵢ, x) or S(x, x)")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (let ((a (. l t1)) (b (. l t2)))
+      (match (. l form)
+        ('lf-unary  (is-x a))
+        ('lf-binary (or (and (is-x a) (or (is-x b) (is-z b))) (and (is-z a) (is-x b))))
+        ('lf-eq     false)
+        ('lf-neq    false))))
+
+  (fn dl-head-lit ((l Lit))
+    (@intent "A DL-literal: B(t) over a DL-a-term; S(zᵢ, x), S(x, zᵢ), S(x, x), S(x, f(x)) or S(f(x), x); or ≈ or ≉ between DL-a-terms")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (let ((a (. l t1)) (b (. l t2)))
+      (match (. l form)
+        ('lf-unary  (dl-aterm a))
+        ('lf-binary (or (and (is-x a) (or (is-x b) (is-z b) (is-fx b)))
+                        (and (or (is-z a) (is-fx a)) (is-x b))))
+        ('lf-eq     (and (dl-aterm a) (dl-aterm b)))
+        ('lf-neq    (and (dl-aterm a) (dl-aterm b))))))
+
+  (fn dl-clause-shape ((c Clause))
+    (@intent "Is c a DL-clause ([TGH21] §2.3)?")
+    (@spec ((Clause) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (l (. c body)) (when (not (dl-body-atom l)) (set! ok false)))
+        (for-each (l (. c head)) (when (not (dl-head-lit l)) (set! ok false)))
+        ok)))
+
+  ;; ============================================================
+  ;; One record per literal and per clause (S5's data-model note): an
+  ;; a-term keeps 0 in every slot its kind does not use; an atom B(t)
+  ;; keeps x in its unused slot; ≈ and ≉ keep predicate 0 and the larger
+  ;; a-term first; a body and a head are strictly sorted
+  ;; ============================================================
+
+  (fn canonical-aterm ((t ATerm))
+    (@intent "Is every slot t's kind does not use 0, and zᵢ's i from 1?")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (let ((f (cast Int (. t fsym)))
+          (u (cast Int (. t cst)))
+          (i (cast Int (. t zi))))
+      (match (. t kind)
+        ('ak-x  (and (== f 0) (== u 0) (== i 0)))
+        ('ak-y  (and (== f 0) (== u 0) (== i 0)))
+        ('ak-z  (and (== f 0) (== u 0) (>= i 1)))
+        ('ak-fx (and (== u 0) (== i 0)))
+        ('ak-u  (and (== f 0) (== i 0)))
+        ('ak-fu (== i 0)))))
+
+  (fn canonical-lit ((l Lit))
+    (@intent "Is l in its one record form?")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (let ((terms    (and (canonical-aterm (. l t1)) (canonical-aterm (. l t2))))
+          (oriented (and (== (cast Int (. l pred)) 0) (>= (aterm-cmp (. l t1) (. l t2)) 0))))
+      (match (. l form)
+        ('lf-unary  (and terms (aterm-eq (. l t2) (at-x))))
+        ('lf-binary terms)
+        ('lf-eq     (and terms oriented))
+        ('lf-neq    (and terms oriented)))))
+
+  (fn lits-canonical ((ls (List Lit)))
+    (@intent "Is every literal canonical, and the list strictly sorted, so a set?")
+    (@spec (((List Lit)) -> Bool))
+    (@pure)
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (for-each (l ls)
+          (do (when (not (canonical-lit l)) (set! ok false))
+              (when (and (> i 0) (>= (lit-cmp (lit-at ls (- i 1)) l) 0)) (set! ok false))
+              (set! i (+ i 1))))
+        ok)))
+
+  (fn clause-canonical ((c Clause))
+    (@intent "Is c the one record of its clause?")
+    (@spec ((Clause) -> Bool))
+    (@pure)
+    (and (lits-canonical (. c body)) (lits-canonical (. c head))))
+
+  ;; ============================================================
+  ;; The tables checked: every id a clause uses is in range, each table
+  ;; entry's lookup gives back its own id, and the tables are in content
+  ;; order (IRI order, then content ids)
+  ;; ============================================================
+
+  (fn aterm-in-range ((ids SriqIds) (t ATerm))
+    (@intent "Are t's ids in range: f below nfns, u a constant, i from 1?")
+    (@spec ((SriqIds ATerm) -> Bool))
+    (let ((nc (cast Int (list-len (. ids const-of))))
+          (f  (cast Int (. t fsym)))
+          (u  (cast Int (. t cst))))
+      (match (. t kind)
+        ('ak-x  true)
+        ('ak-y  true)
+        ('ak-z  (>= (cast Int (. t zi)) 1))
+        ('ak-fx (< f (. ids nfns)))
+        ('ak-u  (< u nc))
+        ('ak-fu (and (< f (. ids nfns)) (< u nc))))))
+
+  (fn lit-in-range ((ids SriqIds) (l Lit))
+    (@intent "Is l's predicate an id of its kind, and are its a-terms in range?")
+    (@spec ((SriqIds Lit) -> Bool))
+    (let ((p (cast Int (. l pred)))
+          (terms (and (aterm-in-range ids (. l t1)) (aterm-in-range ids (. l t2)))))
+      (match (. l form)
+        ('lf-unary  (and terms (< p (cast Int (list-len (. ids class-of))))))
+        ('lf-binary (and terms (< p (cast Int (list-len (. ids role-of))))))
+        ('lf-eq     (and terms (== p 0)))
+        ('lf-neq    (and terms (== p 0))))))
+
+  (fn clause-in-range ((ids SriqIds) (c Clause))
+    (@intent "Is every id of c in range?")
+    (@spec ((SriqIds Clause) -> Bool))
+    (let ((mut ok true))
+      (do
+        (for-each (l (. c body)) (when (not (lit-in-range ids l)) (set! ok false)))
+        (for-each (l (. c head)) (when (not (lit-in-range ids l)) (set! ok false)))
+        ok)))
+
+  (fn tables-round-trip ((ids SriqIds))
+    (@intent "Does each table entry's lookup give back its own id?")
+    (@spec ((SriqIds) -> Bool))
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (for-each (b (. ids class-of))
+          (do (when (!= (cast Int (class-id ids b)) i) (set! ok false)) (set! i (+ i 1))))
+        (set! i 0)
+        (for-each (r (. ids role-of))
+          (do (when (!= (cast Int (role-id ids r)) i) (set! ok false)) (set! i (+ i 1))))
+        (set! i 0)
+        (for-each (o (. ids const-of))
+          (do (when (!= (cast Int (const-id ids o)) i) (set! ok false)) (set! i (+ i 1))))
+        ok)))
+
+  ;; A_k's and S_k's ids are arithmetic (nclass + k, sub0 + k), so their
+  ;; place is their id, which tables-round-trip already checks.
+  (fn class-in-place ((ids SriqIds) (i Int) (b DName) (prev IRI))
+    (@intent "Is class entry i where content order puts it: an input class before every A_k and after the class before it?")
+    (@spec ((SriqIds Int DName IRI) -> Bool))
+    (match b
+      ((dn-class c) (and (< i (. ids nclass)) (or (== i 0) (< (iri-cmp prev c) 0))))
+      ((dn-fresh _) true)))
+
+  (fn classes-in-order ((ids SriqIds))
+    (@intent "Is the class table in content order?")
+    (@spec ((SriqIds) -> Bool))
+    (let ((mut ok true)
+          (mut i 0)
+          (mut prev (record-new IRI (value ""))))
+      (do
+        (for-each (b (. ids class-of))
+          (do (when (not (class-in-place ids i b prev)) (set! ok false))
+              (match b ((dn-class c) (set! prev c)) ((dn-fresh _) (do)))
+              (set! i (+ i 1))))
+        ok)))
+
+  (fn prop-after ((prev DRole) (p IRI))
+    (@intent "May property p follow prev?")
+    (@spec ((DRole IRI) -> Bool))
+    (match prev ((dr-prop q) (< (iri-cmp q p) 0)) ((dr-bar _) false) ((dr-sub _) false)))
+
+  (fn bar-after ((prev DRole) (p IRI))
+    (@intent "May P̄ for p follow prev?")
+    (@spec ((DRole IRI) -> Bool))
+    (match prev ((dr-prop _) true) ((dr-bar q) (< (iri-cmp q p) 0)) ((dr-sub _) false)))
+
+  (fn role-in-place ((ids SriqIds) (i Int) (r DRole) (prev DRole))
+    (@intent "Is role entry i where content order puts it: the properties, then each P̄, all before every S_k?")
+    (@spec ((SriqIds Int DRole DRole) -> Bool))
+    (match r
+      ((dr-prop p) (and (< i (. ids sub0)) (or (== i 0) (prop-after prev p))))
+      ((dr-bar p)  (and (< i (. ids sub0)) (or (== i 0) (bar-after prev p))))
+      ((dr-sub _)  true)))
+
+  (fn roles-in-order ((ids SriqIds))
+    (@intent "Is the role table in content order?")
+    (@spec ((SriqIds) -> Bool))
+    (let ((mut ok true)
+          (mut i 0)
+          (mut prev (union-new DRole dr-sub 0)))
+      (do
+        (for-each (r (. ids role-of))
+          (do (when (not (role-in-place ids i r prev)) (set! ok false))
+              (set! prev r)
+              (set! i (+ i 1))))
+        ok)))
+
+  (fn consts-in-order ((ids SriqIds))
+    (@intent "Are the constants in IRI order, once each?")
+    (@spec ((SriqIds) -> Bool))
+    (let ((mut ok true)
+          (mut i 0))
+      (do
+        (for-each (o (. ids const-of))
+          (do (when (and (> i 0) (>= (iri-cmp (iri-at (. ids const-of) (- i 1)) o) 0)) (set! ok false))
+              (set! i (+ i 1))))
+        ok)))
+
+  (fn ids-dense ((arena Arena) (sc SriqClauses))
+    (@intent "What breaks the tables' promises, as text: none when every id is in range and every entry round-trips")
+    (@spec ((Arena SriqClauses) -> (List String)))
+    (@alloc arena)
+    (let ((ids (. sc ids))
+          (mut out (list-new arena String)))
+      (do
+        (when (not (tables-round-trip ids)) (list-push out "a table entry does not look up to its own id"))
+        (when (not (and (classes-in-order ids) (roles-in-order ids) (consts-in-order ids)))
+          (list-push out "a table is not in content order"))
+        (for-each (c (. sc clauses))
+          (when (not (clause-in-range ids c))
+            (list-push out (string-concat arena "an id out of range in " (render-clause arena ids c)))))
+        out)))
+
+  ;; ============================================================
+  ;; Rendering, by name: for the tests and the dumps
+  ;; ============================================================
+
+  (fn class-text ((arena Arena) (ids SriqIds) (b U32))
+    (@intent "Class id b's name")
+    (@spec ((Arena SriqIds U32) -> String))
+    (@alloc arena)
+    (match (list-get (. ids class-of) (cast Int b))
+      ((some n) (dname-text arena n))
+      ((none)   (string-concat arena "?class" (int-to-string arena (cast Int b))))))
+
+  (fn role-text ((arena Arena) (ids SriqIds) (r U32))
+    (@intent "Role id r's name")
+    (@spec ((Arena SriqIds U32) -> String))
+    (@alloc arena)
+    (match (list-get (. ids role-of) (cast Int r))
+      ((some n) (drole-text arena n))
+      ((none)   (string-concat arena "?role" (int-to-string arena (cast Int r))))))
+
+  (fn const-text ((arena Arena) (ids SriqIds) (u U32))
+    (@intent "Constant id u's name")
+    (@spec ((Arena SriqIds U32) -> String))
+    (@alloc arena)
+    (match (list-get (. ids const-of) (cast Int u))
+      ((some o) (. o value))
+      ((none)   (string-concat arena "?const" (int-to-string arena (cast Int u))))))
+
+  (fn fsym-text ((arena Arena) (f U32))
+    (@intent "f_k")
+    (@spec ((Arena U32) -> String))
+    (@alloc arena)
+    (string-concat arena "f" (int-to-string arena (cast Int f))))
+
+  (fn applied ((arena Arena) (f String) (arg String))
+    (@intent "f(arg)")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena f (string-concat arena "(" (string-concat arena arg ")"))))
+
+  (fn render-aterm ((arena Arena) (ids SriqIds) (t ATerm))
+    (@intent "x, y, z_i, f_k(x), a constant's IRI, or f_k(IRI)")
+    (@spec ((Arena SriqIds ATerm) -> String))
+    (@alloc arena)
+    (match (. t kind)
+      ('ak-x  "x")
+      ('ak-y  "y")
+      ('ak-z  (string-concat arena "z" (int-to-string arena (cast Int (. t zi)))))
+      ('ak-fx (applied arena (fsym-text arena (. t fsym)) "x"))
+      ('ak-u  (const-text arena ids (. t cst)))
+      ('ak-fu (applied arena (fsym-text arena (. t fsym)) (const-text arena ids (. t cst))))))
+
+  (fn infix ((arena Arena) (a String) (op String) (b String))
+    (@intent "a op b")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (string-concat arena a (string-concat arena op b)))
+
+  (fn render-lit ((arena Arena) (ids SriqIds) (l Lit))
+    (@intent "B(t), S(s, t), s ≈ t or s ≉ t")
+    (@spec ((Arena SriqIds Lit) -> String))
+    (@alloc arena)
+    (let ((a (render-aterm arena ids (. l t1)))
+          (b (render-aterm arena ids (. l t2))))
+      (match (. l form)
+        ('lf-unary  (applied arena (class-text arena ids (. l pred)) a))
+        ('lf-binary (applied arena (role-text arena ids (. l pred)) (infix arena a ", " b)))
+        ('lf-eq     (infix arena a " ≈ " b))
+        ('lf-neq    (infix arena a " ≉ " b)))))
+
+  (fn render-lits ((arena Arena) (ids SriqIds) (ls (List Lit)) (sep String) (empty String))
+    (@intent "The literals joined by sep, or `empty` when there are none")
+    (@spec ((Arena SriqIds (List Lit) String String) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do
+        (for-each (l ls)
+          (do (when (not first) (set! out (string-concat arena out sep)))
+              (set! out (string-concat arena out (render-lit arena ids l)))
+              (set! first false)))
+        (if first empty out))))
+
+  (fn render-clause ((arena Arena) (ids SriqIds) (c Clause))
+    (@intent "Γ → Δ, ⊤ for an empty body and ⊥ for an empty head")
+    (@spec ((Arena SriqIds Clause) -> String))
+    (@alloc arena)
+    (infix arena (render-lits arena ids (. c body) " ∧ " "⊤") " → " (render-lits arena ids (. c head) " ∨ " "⊥")))
+
+  (fn render-clauses ((arena Arena) (sc SriqClauses))
+    (@intent "One clause per line, in order")
+    (@spec ((Arena SriqClauses) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (c (. sc clauses)) (list-push out (render-clause arena (. sc ids) c))) out)))
+)

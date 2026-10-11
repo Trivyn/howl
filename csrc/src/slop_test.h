@@ -17,6 +17,7 @@
 #include "slop_sriqelim.h"
 #include "slop_sriqnames.h"
 #include "slop_sroiqfss.h"
+#include "slop_sriqclauses.h"
 #include "slop_file.h"
 #include "slop_types.h"
 #include "slop_canon.h"
@@ -38,6 +39,11 @@
 
 typedef struct test_KscFixture test_KscFixture;
 typedef struct test_RunAs test_RunAs;
+
+#ifndef SLOP_OPTION_U32_DEFINED
+#define SLOP_OPTION_U32_DEFINED
+SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
@@ -80,6 +86,42 @@ SLOP_LIST_DEFINE(types_AxiomRef, slop_list_types_AxiomRef)
 SLOP_LIST_DEFINE(sroiq_SAxiom, slop_list_sroiq_SAxiom)
 #endif
 
+#ifndef SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_DEFINED
+#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
+#endif
+
+#ifndef SLOP_LIST_TYPES_DLCLAUSE_DEFINED
+#define SLOP_LIST_TYPES_DLCLAUSE_DEFINED
+#define SLOP_LIST_TYPES_DLCLAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_DlClause, slop_list_types_DlClause)
+#endif
+
+#ifndef SLOP_LIST_TYPES_LIT_DEFINED
+#define SLOP_LIST_TYPES_LIT_DEFINED
+#define SLOP_LIST_TYPES_LIT_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Lit, slop_list_types_Lit)
+#endif
+
+#ifndef SLOP_LIST_TYPES_DNAME_DEFINED
+#define SLOP_LIST_TYPES_DNAME_DEFINED
+#define SLOP_LIST_TYPES_DNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_DName, slop_list_types_DName)
+#endif
+
+#ifndef SLOP_LIST_TYPES_DROLE_DEFINED
+#define SLOP_LIST_TYPES_DROLE_DEFINED
+#define SLOP_LIST_TYPES_DROLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_DRole, slop_list_types_DRole)
+#endif
+
+#ifndef SLOP_LIST_TYPES_ATERM_DEFINED
+#define SLOP_LIST_TYPES_ATERM_DEFINED
+#define SLOP_LIST_TYPES_ATERM_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_ATerm, slop_list_types_ATerm)
+#endif
+
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
@@ -102,12 +144,6 @@ SLOP_LIST_DEFINE(types_KFact, slop_list_types_KFact)
 #define SLOP_LIST_TYPES_ADDRESSED_DEFINED
 #define SLOP_LIST_TYPES_ADDRESSED_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
-#endif
-
-#ifndef SLOP_LIST_RDF_IRI_DEFINED
-#define SLOP_LIST_RDF_IRI_DEFINED
-#define SLOP_LIST_RDF_IRI_IMPL_DEFINED
-SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
 #ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
@@ -161,6 +197,36 @@ SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
+#define SLOP_OPTION_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DROLE_DEFINED
+#define SLOP_OPTION_TYPES_DROLE_DEFINED
+SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
@@ -189,11 +255,6 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 #define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
-#endif
-
-#ifndef SLOP_OPTION_RDF_IRI_DEFINED
-#define SLOP_OPTION_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
@@ -293,6 +354,23 @@ static inline bool slop_eq_types_Node(const void* a, const void* b) {
             return _a->data.fresh_node == _b->data.fresh_node;
     }
     return false;
+}
+#endif
+
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
 }
 #endif
 
@@ -1119,6 +1197,49 @@ uint8_t test_print_problems(slop_string path, slop_list_string bad);
 uint8_t test_test_sriq_s1_invariants(slop_arena* arena);
 uint8_t test_test_sriq_s2_refuses_a_count_past_the_bound(slop_arena* arena);
 uint8_t test_test_sriq_s2_rows(slop_arena* arena);
+rdf_IRI test_x_iri(slop_arena* arena, slop_string local);
+types_DName test_dn(slop_arena* arena, slop_string local);
+types_DRole test_dp(slop_arena* arena, slop_string local);
+slop_list_rdf_IRI test_iris_of(slop_arena* arena, slop_list_string locals);
+slop_list_string test_strs(slop_arena* arena, slop_string text);
+slop_list_string test_line1(slop_arena* arena, slop_string text);
+sriqnames_SriqNormal test_row_normal(slop_arena* arena, slop_list_types_DlClause cs, int64_t nfresh, int64_t nsub, int64_t nfns);
+slop_string test_clause_text(slop_arena* arena, sriqnames_SriqNormal n);
+uint8_t test_clauses_sound(slop_arena* arena, sriqnames_SriqNormal n);
+uint8_t test_table1_is(slop_arena* arena, slop_string label, sriqnames_SriqNormal n, slop_string want);
+slop_list_types_DlClause test_one_dl(slop_arena* arena, types_DlClause c);
+types_DlClause test_dl1_of(slop_arena* arena, slop_string body, slop_string head);
+slop_list_int test_fn_ids(slop_arena* arena, int64_t n);
+types_DlClause test_dl4_of(slop_arena* arena, slop_string sub, int64_t n, slop_option_types_DName filler);
+types_DlClause test_dl2_of(slop_arena* arena, slop_string sub, types_DRole role, int64_t n, slop_option_types_DName filler);
+uint8_t test_table1_rows_names(slop_arena* arena);
+uint8_t test_table1_rows_dl4(slop_arena* arena);
+uint8_t test_table1_rows_roles(slop_arena* arena);
+uint8_t test_test_sriq_table1_rows(slop_arena* arena);
+uint8_t test_boundary_refuses(slop_arena* arena, slop_string label, sriqnames_SriqNormal n, slop_string want);
+uint8_t test_test_sriq_clauses_cover_every_name(slop_arena* arena);
+slop_list_types_Lit test_lits_of(slop_arena* arena, types_Lit a, types_Lit b, types_Lit c);
+slop_list_types_Lit test_no_lits(slop_arena* arena);
+slop_list_types_Lit test_one_lit(slop_arena* arena, types_Lit a);
+uint8_t test_not_canonical(slop_list_types_Lit body, slop_list_types_Lit head);
+uint8_t test_canonical_rejects(slop_arena* arena);
+slop_list_types_Lit test_lits2_of(slop_arena* arena, types_Lit a, types_Lit b);
+slop_map* test_index_classes(slop_arena* arena, slop_list_types_DName ds);
+slop_map* test_index_iris(slop_arena* arena, slop_list_rdf_IRI xs);
+uint8_t test_permuted_tables_flagged(slop_arena* arena, types_Clause ok_clause);
+slop_list_types_DRole test_bars_swapped(slop_arena* arena);
+slop_map* test_bar_index(slop_arena* arena);
+uint8_t test_shape_rejects(slop_arena* arena);
+uint8_t test_flagged(slop_arena* arena, sriqclauses_SriqIds ids, types_Clause c);
+uint8_t test_ids_dense_rejects(slop_arena* arena);
+slop_list_types_DName test_reverse_dnames(slop_arena* arena, slop_list_types_DName xs);
+uint8_t test_test_sriq_clause_checks_reject(slop_arena* arena);
+slop_list_types_ATerm test_sample_aterms(slop_arena* arena);
+uint8_t test_oriented_pair_ok(types_ATerm s, types_ATerm t, uint8_t same);
+uint8_t test_test_sriq_eq_orientation(slop_arena* arena);
+slop_list_string test_clause_lines(slop_arena* arena, slop_result_sriqnames_SriqNormal_string r);
+uint8_t test_fixture_clauses_ok(slop_arena* arena, slop_string path);
+uint8_t test_test_sriq_clauses_on_fixtures(slop_arena* arena);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1275,6 +1396,8 @@ int64_t test_dump_s1(slop_arena* arena, gate_GateResult gr, slop_result_sriqnorm
 int64_t test_dump_s1_invariants(slop_arena* arena, gate_GateResult gr, int64_t bound);
 uint8_t test_s1_guarded(slop_arena* arena, gate_GateResult gr, int64_t bound);
 uint8_t test_uses_reserved(slop_arena* arena, owl2_Signature sig);
+int64_t test_clauses_report(slop_arena* arena, sriqclauses_SriqClauses sc);
+int64_t test_clauses_check(slop_arena* arena, slop_result_sriqnames_SriqNormal_string r);
 int64_t test_dump_stage(slop_arena* arena, slop_string stage, gate_GateResult gr, int64_t bound);
 int64_t test_sriq_dump(slop_arena* arena, slop_string stage, slop_string path, int64_t bound);
 int64_t test_bound_arg(slop_string s);
@@ -1351,6 +1474,41 @@ SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
+#define SLOP_OPTION_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#endif
+
+#ifndef SLOP_OPTION_U32_DEFINED
+#define SLOP_OPTION_U32_DEFINED
+SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DROLE_DEFINED
+#define SLOP_OPTION_TYPES_DROLE_DEFINED
+SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
@@ -1396,11 +1554,6 @@ SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #endif
 
-#ifndef SLOP_OPTION_RDF_IRI_DEFINED
-#define SLOP_OPTION_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
-#endif
-
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
@@ -1426,6 +1579,21 @@ SLOP_OPTION_DEFINE(slop_map*, slop_option_map_ptr)
 SLOP_OPTION_DEFINE(saturate_RoundDelta, slop_option_saturate_RoundDelta)
 #endif
 
+#ifndef SLOP_OPTION_SROIQ_SCONCEPT_DEFINED
+#define SLOP_OPTION_SROIQ_SCONCEPT_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SConcept, slop_option_sroiq_SConcept)
+#endif
+
+#ifndef SLOP_OPTION_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(slop_option_types_DName, slop_option_option_types_DName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 #define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
@@ -1447,6 +1615,24 @@ SLOP_LIST_DEFINE(slop_arena*, slop_list_arena_ptr)
 #define SLOP_LIST_SATURATE_ROUNDDELTA_DEFINED
 #define SLOP_LIST_SATURATE_ROUNDDELTA_IMPL_DEFINED
 SLOP_LIST_DEFINE(saturate_RoundDelta, slop_list_saturate_RoundDelta)
+#endif
+
+#ifndef SLOP_LIST_SROIQ_SCONCEPT_DEFINED
+#define SLOP_LIST_SROIQ_SCONCEPT_DEFINED
+#define SLOP_LIST_SROIQ_SCONCEPT_IMPL_DEFINED
+SLOP_LIST_DEFINE(sroiq_SConcept, slop_list_sroiq_SConcept)
+#endif
+
+#ifndef SLOP_LIST_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_LIST_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_LIST_OPTION_TYPES_DNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_option_types_DName, slop_list_option_types_DName)
+#endif
+
+#ifndef SLOP_LIST_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_TYPES_CLAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
 #endif
 
 #ifndef SLOP_LIST_TYPES_CLASSANSWER_DEFINED

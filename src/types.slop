@@ -23,6 +23,7 @@
     NormAxiom
     KName KTerm KscAxiom
     DName DRole Dl1 Dl2 Dl4 DlClause
+    AKind ATerm LitForm Lit Clause
     KElem KFact
     ;; saturation
     Derived
@@ -60,6 +61,8 @@
     kname-eq kterm-eq kelem-eq kfact-eq
     name-term nominal-term ind-elem aux-elem class-elem
     thing-term nothing-term
+    at-x at-y at-z at-fx at-u at-fu aterm-cmp aterm-eq
+    atom1 atom2 eq-lit neq-lit lit-cmp lit-eq
     derived-eq
     addressed-eq
     emit-edge
@@ -294,6 +297,48 @@
     (dl9  DRole DRole)          ; Disj(S₁, S₂)
     (dl10 IRI DName)            ; {o} ⊑ B
     (dl11 DName IRI)))          ; B ⊑ {o}
+
+  ;; ============================================================
+  ;; sriq's clause language — [TGH21] §2.1, §2.3 and Definition 2
+  ;; (SPEC §5.5 S5)
+  ;;
+  ;; What the calculus reads: flat records of dense U32 ids, which
+  ;; sriqclauses.slop builds once from the normal form. Classes, roles,
+  ;; function symbols and constants are each numbered from 0. An a-term
+  ;; never nests ([TGH21]'s are x, y, zᵢ, f(x), u and f(u)), so a kind and
+  ;; three id slots hold any of them, and a literal has finitely many
+  ;; positions. A slot its kind does not use is 0, so equal a-terms are
+  ;; equal field by field.
+  ;; ============================================================
+
+  ;; x is the central variable and y its predecessor; zᵢ is a neighbour
+  ;; (ontology clauses only); u is a constant, named or Nom's.
+  (type AKind (enum ak-x ak-y ak-z ak-fx ak-u ak-fu))
+
+  (type ATerm (record
+    (kind AKind)
+    (fsym U32)      ; f, in f(x) and f(u)
+    (cst  U32)      ; u, in u and f(u)
+    (zi   U32)))    ; i, in zᵢ, from 1 as in Table 1
+
+  (type LitForm (enum lf-unary lf-binary lf-eq lf-neq))
+
+  ;; B(t): pred B, t1 t, t2 x. S(s, t): pred S, t1 s, t2 t. s ≈ t and
+  ;; s ≉ t: pred 0, the larger a-term (aterm-cmp) first, so that "t1 ⋈ t2
+  ;; is identical to t2 ⋈ t1" ([TGH21] §2.1) is field equality. An atom
+  ;; A ≈ true is written A, as the paper does.
+  (type Lit (record
+    (form LitForm)
+    (pred U32)
+    (t1   ATerm)
+    (t2   ATerm)))
+
+  ;; Γ → Δ: a body of atoms (and, in a context clause, u₁ ≈ u₂) and a head
+  ;; of literals, each sorted by lit-cmp without repetition, since they are
+  ;; "treated as sets" (§2.1). An empty body is ⊤, an empty head ⊥.
+  (type Clause (record
+    (body (List Lit))
+    (head (List Lit))))
 
   ;; ============================================================
   ;; el++ facts — Kinst's IDB, [Krö10] Fig. 3 (SPEC §5.4)
@@ -851,6 +896,145 @@
     (@spec (() -> KTerm))
     (@pure)
     (union-new KTerm k-name (union-new KName k-class (record-new IRI (value OWL_NOTHING)))))
+
+  ;; ------------------------------------------------------------
+  ;; sriq's a-terms and literals: constructors, and a structural order.
+  ;; The order only sorts and orients; it is never the context order ≻.
+  ;; ------------------------------------------------------------
+
+  (fn at-x ()
+    (@intent "x, the central variable")
+    (@spec (() -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-x) (fsym (cast U32 0)) (cst (cast U32 0)) (zi (cast U32 0))))
+
+  (fn at-y ()
+    (@intent "y, the predecessor variable")
+    (@spec (() -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-y) (fsym (cast U32 0)) (cst (cast U32 0)) (zi (cast U32 0))))
+
+  (fn at-z ((i U32))
+    (@intent "zᵢ, a neighbour variable")
+    (@spec ((U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-z) (fsym (cast U32 0)) (cst (cast U32 0)) (zi i)))
+
+  (fn at-fx ((f U32))
+    (@intent "f(x)")
+    (@spec ((U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-fx) (fsym f) (cst (cast U32 0)) (zi (cast U32 0))))
+
+  (fn at-u ((u U32))
+    (@intent "The constant u")
+    (@spec ((U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-u) (fsym (cast U32 0)) (cst u) (zi (cast U32 0))))
+
+  (fn at-fu ((f U32) (u U32))
+    (@intent "f(u)")
+    (@spec ((U32 U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-fu) (fsym f) (cst u) (zi (cast U32 0))))
+
+  (fn ord-int ((a Int) (b Int))
+    (@intent "-1, 0 or 1")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn akind-rank ((k AKind))
+    (@intent "x, y, zᵢ, f(x), u, f(u), in that order")
+    (@spec ((AKind) -> Int))
+    (@pure)
+    (match k ('ak-x 0) ('ak-y 1) ('ak-z 2) ('ak-fx 3) ('ak-u 4) ('ak-fu 5)))
+
+  (fn aterm-cmp ((a ATerm) (b ATerm))
+    (@intent "A structural total order on a-terms: kind, then f, u and i")
+    (@spec ((ATerm ATerm) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (let ((ka (akind-rank (. a kind)))
+          (kb (akind-rank (. b kind))))
+      (cond
+        ((!= ka kb)                 (ord-int ka kb))
+        ((!= (. a fsym) (. b fsym)) (ord-int (cast Int (. a fsym)) (cast Int (. b fsym))))
+        ((!= (. a cst) (. b cst))   (ord-int (cast Int (. a cst)) (cast Int (. b cst))))
+        (else                       (ord-int (cast Int (. a zi)) (cast Int (. b zi)))))))
+
+  (fn aterm-eq ((a ATerm) (b ATerm))
+    (@intent "The same a-term")
+    (@spec ((ATerm ATerm) -> Bool))
+    (@pure)
+    (== (aterm-cmp a b) 0))
+
+  (fn atom1 ((b U32) (t ATerm))
+    (@intent "B(t); the unused second slot is x")
+    (@spec ((U32 ATerm) -> Lit))
+    (@pure)
+    (record-new Lit (form 'lf-unary) (pred b) (t1 t) (t2 (at-x))))
+
+  (fn atom2 ((s U32) (l ATerm) (r ATerm))
+    (@intent "S(l, r)")
+    (@spec ((U32 ATerm ATerm) -> Lit))
+    (@pure)
+    (record-new Lit (form 'lf-binary) (pred s) (t1 l) (t2 r)))
+
+  (fn oriented ((form LitForm) (s ATerm) (t ATerm))
+    (@intent "s ⋈ t with the larger a-term first: one record whichever way round it is written")
+    (@spec ((LitForm ATerm ATerm) -> Lit))
+    (@pure)
+    ;; No orientation @post. In another function's contract the solver
+    ;; reads aterm-cmp as uninterpreted, so the antisymmetry it would need
+    ;; is out of reach (it refutes `t1 ≥ t2` with aterm-cmp ≡ -1).
+    ;; test-sriq-eq-orientation checks both orders on every pair of a-term
+    ;; kinds instead.
+    (if (>= (aterm-cmp s t) 0)
+      (record-new Lit (form form) (pred (cast U32 0)) (t1 s) (t2 t))
+      (record-new Lit (form form) (pred (cast U32 0)) (t1 t) (t2 s))))
+
+  (fn eq-lit ((s ATerm) (t ATerm))
+    (@intent "s ≈ t, oriented")
+    (@spec ((ATerm ATerm) -> Lit))
+    (@pure)
+    (oriented 'lf-eq s t))
+
+  (fn neq-lit ((s ATerm) (t ATerm))
+    (@intent "s ≉ t, oriented")
+    (@spec ((ATerm ATerm) -> Lit))
+    (@pure)
+    (oriented 'lf-neq s t))
+
+  (fn lit-form-rank ((f LitForm))
+    (@intent "Atoms B(t), then S(s, t), then ≈, then ≉")
+    (@spec ((LitForm) -> Int))
+    (@pure)
+    (match f ('lf-unary 0) ('lf-binary 1) ('lf-eq 2) ('lf-neq 3)))
+
+  (fn lit-cmp ((a Lit) (b Lit))
+    (@intent "A structural total order on literals: form, predicate, then the a-terms in order")
+    (@spec ((Lit Lit) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (let ((fa (lit-form-rank (. a form)))
+          (fb (lit-form-rank (. b form)))
+          (c1 (aterm-cmp (. a t1) (. b t1))))
+      (cond
+        ((!= fa fb)                 (ord-int fa fb))
+        ((!= (. a pred) (. b pred)) (ord-int (cast Int (. a pred)) (cast Int (. b pred))))
+        ((!= c1 0)                  c1)
+        (else                       (aterm-cmp (. a t2) (. b t2))))))
+
+  (fn lit-eq ((a Lit) (b Lit))
+    (@intent "The same literal")
+    (@spec ((Lit Lit) -> Bool))
+    (@pure)
+    (== (lit-cmp a b) 0))
 
 ;; ============================================================
   ;; Saturation-local names  —  M1 slice 6b C2

@@ -2416,6 +2416,26 @@ is fixed here so that reports are input-determined.
     and its position `i`.
 
   A context's identity is its core.
+- **The calculus reads flat records of dense ids** (`src/sriqclauses.slop`, data model only). One
+  boundary numbers, once, before any rule runs:
+  - **classes:** the input's class names and any other class a clause names (one used but not
+    declared), in IRI order; then each `A_E` by its content id;
+  - **roles:** each `P` a clause names, in IRI order; then each `P̄`, in `P`'s order; then each
+    `S_{B₂}` by its content id;
+  - **function symbols:** as above;
+  - **constants:** the input's individuals and any other a clause names, in IRI order. The constants
+    Nom invents follow them.
+
+  An a-term is a kind (`x`, `y`, `zᵢ`, `f(x)`, `u`, `f(u)`) with its ids. A literal is a form (an
+  atom `B(t)` or `S(s, t)`, or `≈`, or `≉`) with a predicate and two a-terms. An equality's or
+  inequality's two a-terms are ordered by a fixed structural order (never `≻`), so that "`t1 ⋈ t2` is
+  identical to `t2 ⋈ t1`" ([TGH21] §2.1) is equality of records. A clause is a body and a head, each
+  sorted without repetition, since they are "treated as sets". Table 1 is expanded there, once, so
+  the rules read DL-clauses, as [TGH21] defines Hyper and the trigger sets over them.
+
+  The numbering is a bijection on the names it covers, as `el++`'s store ids are (AD 7910309f), so
+  it needs no lemma. A name it does not cover, or `owl:Thing` or `owl:Nothing` in a name's place
+  (S2 writes them as the empty body and head), is refused with its text, never dropped.
 
 **S6 — rounds, and why every report is the same at every worker count.** [TGH21]'s rules are a set
 of independent inferences, and S6 fixes their schedule. The state at boundary `n` is:
@@ -3800,6 +3820,7 @@ row below sits on one side of that line.
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
 | **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract; each part of the read-through was seen to fail under a mutation, caught by that differential or a pinned entailment ([§5.4](#54-the-el-calculus), K7's gate). Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
 | **`el++` translation and sharing** — K0–K7: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, the shared saturation for safe classes, and role inclusions read through the told closure (rule (13) is the dispatcher's `sup*`/`sub*` reads, not a rule function, so its coverage is held by the reference differential, not a per-rule contract) | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
+| **`sriq` clause boundary** — [TGH21] Table 1 is expanded exactly into DL-clauses, over dense ids from content | `src/sriqclauses.slop`: one function per Table 1 form, checked row by row against Table 1 (`test-sriq-table1-rows`, with DL2 over three symbols and over a ⊤ filler, and DL4 over three neighbours, over `n = 0` and with a shared `S_{B₂}` clause). On every tracked `sriq` fixture (`make test`), every clause is a DL-clause (§2.3) in its one canonical record, every id is in range and maps back, every table is in content order, and reordered input gives the same clauses. The shape, canonical-record, range, round-trip and order checks (not the reordering) also pass on all 18 vendored documents, run by hand (`howl-test sriq-dump clauses-check`). The checks themselves reject a malformed clause, record and table (`test-sriq-clause-checks-reject`). 56 mutants: 53 seen red; the other 3 each exposed a check that another already made, now removed | **Owed** — the expansions build lists in loops, whose lengths and contents the checker does not track (as `sort-range`); the tests stand in |
 | **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`, planned), with `sound`, `complete` and `head` properties against the rule's line; Hyper and Pred split into a loop-free step and one join combinator with loop invariants, as `ksc-join`; a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Yes** — structural, once built |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
@@ -4815,6 +4836,24 @@ flowchart TB
   - **(g) BFO and CCO pass.** `howl validate --profile sriq` exits 0 on both.
   - **(h) Performance is recorded** against HermiT and Sequoia. The target is set at the
     feasibility checkpoint, which may also stop and re-plan the program.
+
+  It is built in slices on the `sriq` branch, as `el++` was (owner's plan, 2026-10-10; AD
+  00b7c42d):
+  1. the specification: §5.5 and the data lemma;
+  2. `horn-sriq` dropped from every surface;
+  3. the data lemma, implemented in every rung;
+  4. the `sriq` gate and census;
+  5. S0, S2 and S5: the working form, the normal form and ids from content;
+  6. S1, chain elimination, and the normaliser differential against HermiT;
+  7. the clause language (dense ids, Table 1 expanded into DL-clauses), the context order, `∈̂`
+     and the commit's `min`, and Table 2's rules with their contracts;
+  8. the context structure, triggers and strategies, Table 3's rules, Λ, S4's read-off, and the
+     literal reference evaluator with a HermiT leg;
+  9. a single-threaded prototype of S6's rounds, and the feasibility checkpoint ((h));
+  10. the parallel engine;
+  11. wiring.
+
+  Each slice's SPEC amendments ship in the PR that implements them.
 - *Earlier rungs and plans:*
   - **`el++`** was specified in [§5.4](#54-the-el-calculus) and built in slices:
     1. decode fixes;
