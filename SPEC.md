@@ -2317,6 +2317,8 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
     enforce ([§9](#9-cli--interface-sketch)).
   - So every label a run can build is shorter than 2⁶², and the test `|ρ| < Λ` has the same outcome
     under the stored value as under the true one.
+  - Slice 8 stores `max(Λ, 10,001)` (G1, below). Unlike the 2⁶² cap, that floor can change a run,
+    but only one whose true Λ is at most 10,000; G1 says how.
 - **Errata.** Each is read as follows, and each is checked against the completeness proof:
   - **E1.** Table 2's Nom prints its DL4 premise's head as `⋁_{1≤i<j≤n}`. Table 1 has `n+1`
     neighbours, so the head is `⋁_{1≤i<j≤n+1}`.
@@ -2420,7 +2422,9 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
       Two reviewers found them, and the literal reading has each of them too.
   - **Open points in Theorem 2's printed proof.** None is caused by E4, and none has been shown
     to make the calculus incomplete. HOWL's completeness rests on Theorem 2, so each is a gap in
-    the argument HOWL cites until it is closed (the owner's call, flagged with slice 7e).
+    the argument HOWL cites until it is closed. **Decided** (the owner, 2026-10-10; AD 3f465834):
+    HOWL builds on Theorem 2 with these recorded and claims nothing new, and M5 (a)'s completeness
+    acceptance waits on them.
     - **G1. Lemma 27's descent chain can break at a premise-free inference.** Lemma 27 traces each
       literal mentioning `o_j` back through Definition 15's descent to a premise literal
       mentioning `o_j`, or to the Nom that created `o_j`. Root Hyper with `n = 0` and Pred into
@@ -2428,12 +2432,12 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
       with no `Cᵢ` carries such a root clause to a non-root context. So the chain can stop with
       neither case holding. Lemmas 29 to 31 replay inferences along the chain, and a break leaves
       fewer than Λ links for Lemma 31's pigeonhole. Only Lemma 24's case `|ρ| = Λ` uses Lemmas 27
-      to 31. **Proposed** (the owner's call): store Λ as at least 10,001, one more than the round
-      cap. No label then reaches Λ in a run, since labels are no longer than the rounds run, so
+      to 31. **Chosen** (the owner, 2026-10-10; AD d29622cd): slice 8 stores Λ as at least 10,001,
+      one more than the round cap. No label then reaches Λ in a run, since labels are no longer than the rounds run, so
       a run that saturates never meets the case `|ρ| = Λ`. The cost is that a run whose Nom
       recursion only a smaller true Λ would cut ends capped (sound, reported incomplete) instead of
-      saturating. A true Λ that small needs `τSu + τPr ≤ 12`, since `ω + ω_D ≥ 2`. `depth-limit` computes Theorem 2's
-      value either way; the stored one is slice 8's.
+      saturating. A true Λ that small needs `τSu + τPr ≤ 12`, since `ω + ω_D ≥ 2`.
+      `depth-limit` computes Theorem 2's value; the stored one is slice 8's.
     - **G2. `N_u` can hold rules outside `u`'s neighbourhood.** `N_u` takes every ground instance
       of `S_{v_r}` whose body is in `Γ_u` (D.2.1), and such a clause can mention `f(u″)` for
       `u″ ≠ u`. Definition 11's neighbourhood of `u` omits that term, and `>_u` is defined on the
