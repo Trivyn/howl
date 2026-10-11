@@ -43,6 +43,7 @@
   (import sroiqfss (fss-axioms fss-normal))
   (import sriqclauses (SriqIds SriqClauses sriq-clauses build-sriq-ids make-clause clause-eq dl-clause-shape clause-canonical ids-dense render-clauses))
   (import sriqsubsume (Committed in-hat subsumes tautology commit-min))
+  (import sriq (Premise RConcl HState Cands select assemble core-rule ineq-rule factor-rule hyper-start hyper-join))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt max-flags))
 
   (ffi "string.h"
@@ -4548,6 +4549,289 @@
         ;; And the commit deleted both of W's clauses.
         (and ok (not (in-list after (cl arena "A" "B C"))) (not (in-list after (cl arena "D" "C")))))))
 
+  ;; ------------------------------------------------------------
+  ;; Slice 7e: Core, Hyper, Ineq and Factor (rules/sriq.slop). Classes
+  ;; A 0, B 1, C 2, D 3, G 4, E 5; roles R 0, S 1; function symbols
+  ;; f 0, g 1, h 2, so g(x) ≻ f(x) as in [TGH21] §3.1's O1. HOWL's order
+  ;; never ranks D(x) against G(x), so each row is O1's inference read as
+  ;; an instance under HOWL's order.
+  ;; ------------------------------------------------------------
+
+  (fn r-atom ((c Int) (t ATerm))
+    (@intent "Class c of t")
+    (@spec ((Int ATerm) -> Lit))
+    (@pure)
+    (atom1 (cast U32 c) t))
+
+  (fn r-role ((r Int) (a ATerm) (b ATerm))
+    (@intent "Role r of a, b")
+    (@spec ((Int ATerm ATerm) -> Lit))
+    (@pure)
+    (atom2 (cast U32 r) a b))
+
+  (fn r-fx ((f Int))
+    (@intent "f(x)")
+    (@spec ((Int) -> ATerm))
+    (@pure)
+    (at-fx (cast U32 f)))
+
+  (fn r-clause ((arena Arena) (body (List Lit)) (head (List Lit)))
+    (@intent "A set clause")
+    (@spec ((Arena (List Lit) (List Lit)) -> Clause))
+    (@alloc arena)
+    (make-clause arena body head))
+
+  (fn r-premises ((arena Arena) (ord SriqOrder) (c Clause))
+    (@intent "c with each head literal selected in turn")
+    (@spec ((Arena SriqOrder Clause) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)) (mut i 0))
+      (do (while (< i (cast Int (list-len (. c head))))
+            (do (list-push out (select arena ord c i)) (set! i (+ i 1))))
+          out)))
+
+  (fn r-cands ((arena Arena) (ord SriqOrder) (atoms Int) (cs (List Clause)))
+    (@intent "The same candidates, every head literal of every clause, for each body atom")
+    (@spec ((Arena SriqOrder Int (List Clause)) -> (List Cands)))
+    (@alloc arena)
+    (let ((mut ps (list-new arena Premise))
+          (mut out (list-new arena Cands))
+          (mut k 0))
+      (do (for-each (c cs) (for-each (p (r-premises arena ord c)) (list-push ps p)))
+          (while (< k atoms) (do (list-push out (record-new Cands (ps ps))) (set! k (+ k 1))))
+          out)))
+
+  (fn r-hyper ((arena Arena) (start HState) (ont Clause) (cs (List Clause)))
+    (@intent "Every Hyper conclusion of the ontology clause ont over the context clauses cs, as set clauses")
+    (@spec ((Arena HState Clause (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((ord (named-consts arena 3))
+          (rs (hyper-join arena start (. ont body) (r-cands arena ord (cast Int (list-len (. ont body))) cs) (. ont head)))
+          (mut out (list-new arena Clause)))
+      (do (for-each (r rs) (list-push out (assemble arena r))) out)))
+
+  (fn r-useful ((arena Arena) (cs (List Clause)))
+    (@intent "cs without tautologies or repeats")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (c cs) (when (and (not (tautology c)) (not (in-list out c))) (list-push out c))) out)))
+
+  (fn r-one ((arena Arena) (c Clause))
+    (@intent "[c]")
+    (@spec ((Arena Clause) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause))) (do (list-push out c) out)))
+
+  (fn hyper-is ((arena Arena) (label String) (got (List Clause)) (want (List Clause)))
+    (@intent "The useful conclusions are exactly want")
+    (@spec ((Arena String (List Clause) (List Clause)) -> Bool))
+    (@alloc arena)
+    (if (same-clause-set (r-useful arena got) want)
+      true
+      (do (print "  [hyper] ") (println label) false)))
+
+  (fn r-premise ((arena Arena) (ord SriqOrder) (c Clause) (l Lit))
+    (@intent "c with the head literal l selected")
+    (@spec ((Arena SriqOrder Clause Lit) -> Premise))
+    (@alloc arena)
+    (let ((mut at 0) (mut i 0))
+      (do (for-each (h (. c head)) (do (when (lit-eq h l) (set! at i)) (set! i (+ i 1))))
+          (select arena ord c at))))
+
+  (fn test-sriq-hyper-rows ((arena Arena))
+    (@intent "Hyper, row by row: O1's inferences (15) to (21) under HOWL's order, a premise with a body, a literal that is not maximal, and DL4 with a repeated neighbour")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (z1 (at-z (cast U32 1))) (z2 (at-z (cast U32 2)))
+          (nolits (list-new arena Lit))
+          (start (hyper-start arena (at-x) true))
+          (c15 (r-clause arena nolits (one-lit arena (r-atom 0 x))))
+          (c17 (r-clause arena nolits (one-lit arena (r-role 0 x (r-fx 0)))))
+          (c18 (r-clause arena nolits (two-lits arena (r-atom 3 x) (r-atom 4 x))))
+          (c20 (r-clause arena nolits (two-lits arena (r-atom 3 x) (r-role 0 x (r-fx 1)))))
+          (o2 (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-atom 1 (r-fx 0)))))
+          (o3 (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-role 0 x (r-fx 0)))))
+          (o6 (r-clause arena (one-lit arena (r-atom 0 x)) (two-lits arena (r-atom 3 x) (r-atom 4 x))))
+          (o8 (r-clause arena (one-lit arena (r-atom 4 x)) (one-lit arena (r-role 0 x (r-fx 1)))))
+          (o7 (r-clause arena (one-lit arena (r-atom 4 x)) (one-lit arena (r-atom 2 (r-fx 1)))))
+          (o9 (r-clause arena (two-lits arena (r-role 0 x z1) (r-role 0 x z2)) (one-lit arena (eq-lit z2 z1))))
+          (blocked (r-clause arena nolits (two-lits arena (r-atom 1 x) (r-atom 1 (r-fx 0)))))
+          (o-bc (r-clause arena (one-lit arena (r-atom 1 x)) (one-lit arena (r-atom 2 x))))
+          (all (r-hyper arena start o9 (clauses-of arena c17 c20))))
+      (and
+        ;; R(x, f0(x)) shares A's id 0 but is not A(x).
+        (hyper-is arena "(15) and (2) give (16)"
+          (r-hyper arena start o2 (clauses-of arena c15 (r-clause arena (one-lit arena (r-atom 2 x)) (one-lit arena (r-role 0 x (r-fx 0))))))
+          (r-one arena (r-clause arena nolits (one-lit arena (r-atom 1 (r-fx 0))))))
+        (hyper-is arena "(15) and (3) give (17)" (r-hyper arena start o3 (r-one arena c15)) (r-one arena c17))
+        (hyper-is arena "(15) and (6) give (18)" (r-hyper arena start o6 (r-one arena c15)) (r-one arena c18))
+        (hyper-is arena "(18) and (8) give (20)" (r-hyper arena start o8 (r-one arena c18)) (r-one arena c20))
+        ;; G(x) is selected; D(x) rides along in the conclusion.
+        (hyper-is arena "(18) and (7) give (19)" (r-hyper arena start o7 (r-one arena c18))
+          (r-one arena (r-clause arena nolits (two-lits arena (r-atom 3 x) (r-atom 2 (r-fx 1))))))
+        ;; The two choices that repeat a neighbour fire too, as tautologies.
+        (hyper-is arena "(17), (20) and (9) give (21)" all
+          (r-one arena (r-clause arena nolits (two-lits arena (r-atom 3 x) (eq-lit (r-fx 1) (r-fx 0))))))
+        (== (list-len all) 4)
+        (hyper-is arena "a premise's body joins the conclusion's"
+          (r-hyper arena start o-bc (r-one arena (r-clause arena (one-lit arena (r-atom 3 x)) (one-lit arena (r-atom 1 x)))))
+          (r-one arena (r-clause arena (one-lit arena (r-atom 3 x)) (one-lit arena (r-atom 2 x)))))
+        ;; B(x) is below B(f(x)) in its clause, so it is not selected, and
+        ;; B(f(x)) is not B(x).
+        (hyper-is arena "a literal below another is not selected" (r-hyper arena start o-bc (r-one arena blocked)) (list-new arena Clause))
+        (test-sriq-hyper-dl4 arena)
+        ;; A body atom with no candidates list: nothing fires.
+        (== (list-len (hyper-join arena start (. o9 body) (list-new arena Cands) (. o9 head))) 0))))
+
+  (fn test-sriq-hyper-dl4 ((arena Arena))
+    (@intent "DL4 (≤ 1 R.B) over R(x, f0(x)), R(x, f1(x)) and B(f0(x)) alone: only the choice z₁ = z₂ = f0(x) fires, and its conclusion is ∈̂ (i)'s tautology")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (z1 (at-z (cast U32 1))) (z2 (at-z (cast U32 2)))
+          (nolits (list-new arena Lit))
+          (start (hyper-start arena (at-x) true))
+          (mut body (two-lits arena (r-role 0 x z1) (r-role 0 x z2)))
+          (o-dl4 (r-clause arena (do (list-push body (r-atom 1 z1)) (list-push body (r-atom 1 z2)) body)
+                   (one-lit arena (eq-lit z2 z1))))
+          (mut cs (clauses-of arena
+                (r-clause arena nolits (one-lit arena (r-role 0 x (r-fx 0))))
+                (r-clause arena nolits (one-lit arena (r-role 0 x (r-fx 1))))))
+          (got (do (list-push cs (r-clause arena nolits (one-lit arena (r-atom 1 (r-fx 0)))))
+                   (r-hyper arena start o-dl4 cs))))
+      (and (== (list-len got) 1)
+           (hyper-is arena "DL4's repeated neighbour is a tautology" got (list-new arena Clause)))))
+
+  (fn test-sriq-hyper-root-rows ((arena Arena))
+    (@intent "Hyper at the root: x binds to the premise's constant, a bodiless clause takes the constant it is given (E4), zᵢ binds a constant, f(x) becomes f(u), and S(x, x) needs one constant twice")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (y (at-y)) (z1 (at-z (cast U32 1)))
+          (u0 (at-u (cast U32 0))) (u1 (at-u (cast U32 1)))
+          (nolits (list-new arena Lit))
+          (root (hyper-start arena (at-x) false))
+          (b-u0 (r-clause arena nolits (one-lit arena (r-atom 1 u0))))
+          (b-y (r-clause arena nolits (one-lit arena (r-atom 1 y))))
+          (s-u1u0 (r-clause arena nolits (one-lit arena (r-role 1 u1 u0))))
+          (o-bc (r-clause arena (one-lit arena (r-atom 1 x)) (one-lit arena (r-atom 2 x))))
+          (o-bf (r-clause arena (one-lit arena (r-atom 1 x)) (one-lit arena (r-atom 0 (r-fx 0)))))
+          (o-top (r-clause arena nolits (two-lits arena (r-atom 3 x) (r-atom 5 x))))
+          (o-dl3 (r-clause arena (two-lits arena (r-role 1 z1 x) (r-atom 1 x)) (one-lit arena (r-atom 2 z1))))
+          (o-self (r-clause arena (one-lit arena (r-role 1 x x)) (one-lit arena (r-atom 2 x)))))
+      (and
+        (test-sriq-hyper-example1 arena)
+        (hyper-is arena "B(u0) and B(x) → C(x) give C(u0)" (r-hyper arena root o-bc (r-one arena b-u0))
+          (r-one arena (r-clause arena nolits (one-lit arena (r-atom 2 u0)))))
+        (hyper-is arena "x never binds y at the root" (r-hyper arena root o-bc (r-one arena b-y)) (list-new arena Clause))
+        (hyper-is arena "f(x) at the root is f(u0)" (r-hyper arena root o-bf (r-one arena b-u0))
+          (r-one arena (r-clause arena nolits (one-lit arena (r-atom 0 (at-fu (cast U32 0) (cast U32 0)))))))
+        (hyper-is arena "a bodiless clause on the constant it is given" (r-hyper arena (hyper-start arena u1 true) o-top (list-new arena Clause))
+          (r-one arena (r-clause arena nolits (two-lits arena (r-atom 3 u1) (r-atom 5 u1)))))
+        ;; x is bound by S's second argument, then B(x) must be B(u0).
+        (hyper-is arena "DL3 at the root binds z1 to another constant" (r-hyper arena root o-dl3 (clauses-of arena b-u0 s-u1u0))
+          (r-one arena (r-clause arena nolits (one-lit arena (r-atom 2 u1)))))
+        (hyper-is arena "S(x, x) does not match S(u0, u1)"
+          (r-hyper arena root o-self (r-one arena (r-clause arena nolits (one-lit arena (r-role 1 u0 u1))))) (list-new arena Clause))
+        (hyper-is arena "S(x, x) matches S(u1, u1)"
+          (r-hyper arena root o-self (r-one arena (r-clause arena nolits (one-lit arena (r-role 1 u1 u1)))))
+          (r-one arena (r-clause arena nolits (one-lit arena (r-atom 2 u1))))))))
+
+  (fn test-sriq-hyper-example1 ((arena Arena))
+    (@intent "[TGH21] Example 1's two root Hypers: (114), (115) and (88) give (117), which with (116) and (90) gives (118), binding x to o and z₁ to y")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; C 2, D 3, E 5, F 6; S 1; o is u0.
+    (let ((x (at-x)) (y (at-y)) (z1 (at-z (cast U32 1))) (o (at-u (cast U32 0)))
+          (root (hyper-start arena (at-x) false))
+          (c114 (r-clause arena (one-lit arena (r-atom 3 o)) (one-lit arena (r-atom 3 o))))
+          (c115 (r-clause arena (one-lit arena (r-atom 2 o)) (one-lit arena (r-atom 2 o))))
+          (c116 (r-clause arena (one-lit arena (r-role 1 y o)) (one-lit arena (r-role 1 y o))))
+          (o88 (r-clause arena (two-lits arena (r-atom 2 x) (r-atom 3 x)) (one-lit arena (r-atom 5 x))))
+          (o90 (r-clause arena (two-lits arena (r-role 1 z1 x) (r-atom 5 x)) (one-lit arena (r-atom 6 z1))))
+          (c117 (r-clause arena (two-lits arena (r-atom 2 o) (r-atom 3 o)) (one-lit arena (r-atom 5 o))))
+          (mut b118 (two-lits arena (r-atom 2 o) (r-atom 3 o))))
+      (do
+        (list-push b118 (r-role 1 y o))
+        (and
+          (hyper-is arena "(114), (115) and (88) give (117)" (r-hyper arena root o88 (clauses-of arena c114 c115)) (r-one arena c117))
+          (hyper-is arena "(117), (116) and (90) give (118)" (r-hyper arena root o90 (clauses-of arena c117 c116))
+            (r-one arena (r-clause arena b118 (one-lit arena (r-atom 6 y)))))))))
+
+  (fn test-sriq-ineq-factor-core-rows ((arena Arena))
+    (@intent "Ineq drops t ≉ t, maximal or not, and nothing else; Factor is [TGH21] §3.1's example, and fails when any one side condition fails; Core gives ⊤ → A")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (y (at-y)) (f1x (r-fx 1)) (f0x (r-fx 0))
+          (nolits (list-new arena Lit))
+          (ord (named-consts arena 3))
+          (low (r-clause arena nolits (two-lits arena (neq-lit x x) (r-atom 1 f0x))))
+          (p-low-neq (r-premise arena ord low (neq-lit x x)))
+          (p-eq (select arena ord (r-clause arena nolits (one-lit arena (eq-lit f1x f1x))) 0))
+          (p-non (select arena ord (r-clause arena nolits (one-lit arena (neq-lit f1x x))) 0))
+          ;; [TGH21] §3.1's ⊤ → f(x) ≈ y ∨ f(x) ≈ g(x) ⟹ ⊤ → g(x) ≉ y ∨ f(x) ≈ g(x)
+          ;; needs t₂ = g(x) ⊁ s = f(x), the reverse of O1's g(x) ≻ f(x), so
+          ;; here f is f1 and g is f0.
+          (fac (r-clause arena nolits (two-lits arena (eq-lit f1x y) (eq-lit f1x f0x))))
+          (p-fac (r-premise arena ord fac (eq-lit f1x f0x)))
+          (ok-factor (factor-rule arena ord p-fac (eq-lit f1x y) f1x)))
+      (and
+        (clause-eq (assemble arena (ineq-rule (select arena ord (r-clause arena nolits (one-lit arena (neq-lit f1x f1x))) 0)))
+          (r-clause arena nolits nolits))
+        (not (. p-low-neq maxed))
+        (. (ineq-rule p-low-neq) fires)
+        (clause-eq (assemble arena (ineq-rule p-low-neq)) (r-clause arena nolits (one-lit arena (r-atom 1 f0x))))
+        (not (. (ineq-rule p-eq) fires))
+        (not (. (ineq-rule p-non) fires))
+        (. p-fac maxed)
+        (. ok-factor fires)
+        (clause-eq (assemble arena ok-factor) (r-clause arena nolits (two-lits arena (neq-lit y f0x) (eq-lit f1x f0x))))
+        (test-sriq-factor-each-condition arena)
+        (. (core-rule arena (r-atom 0 x)) fires)
+        (clause-eq (assemble arena (core-rule arena (r-atom 0 x))) (r-clause arena nolits (one-lit arena (r-atom 0 x)))))))
+
+  (fn test-sriq-factor-each-condition ((arena Arena))
+    (@intent "Factor with exactly one side condition failing does not fire")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((x (at-x)) (y (at-y)) (f1x (r-fx 1)) (f0x (r-fx 0))
+          (nolits (list-new arena Lit))
+          (ord (named-consts arena 3))
+          (fac (r-clause arena nolits (two-lits arena (eq-lit f1x y) (eq-lit f1x f0x))))
+          (p-low (r-premise arena ord fac (eq-lit f1x y)))
+          (p-fac (r-premise arena ord fac (eq-lit f1x f0x)))
+          ;; ⊤ → f1(x) ≈ y ∨ f0(x) ≈ y: the shared side y is below t₂ = f1(x).
+          (fy (r-clause arena nolits (two-lits arena (eq-lit f1x y) (eq-lit f0x y))))
+          (p-fy (r-premise arena ord fy (eq-lit f1x y)))
+          ;; ⊤ → f1(x) ≈ f0(x) ∨ f0(x) ≈ y: l₁ lacks s = f1(x).
+          (fz (r-clause arena nolits (two-lits arena (eq-lit f1x f0x) (eq-lit f0x y))))
+          (p-fz (r-premise arena ord fz (eq-lit f1x f0x)))
+          (u0 (at-u (cast U32 0)))
+          (xy (r-clause arena nolits (two-lits arena (eq-lit x y) (eq-lit u0 y))))
+          (p-xy (r-premise arena ord xy (eq-lit x y)))
+          (p-uy (r-premise arena ord xy (eq-lit u0 y))))
+      (and
+        ;; Not maximal: f1(x) ≈ y is below f1(x) ≈ f0(x).
+        (not (. p-low maxed))
+        (not (. (factor-rule arena ord p-low (eq-lit f1x f0x) f1x) fires))
+        ;; t₂ ≻ s.
+        (. p-fy maxed)
+        (not (. (factor-rule arena ord p-fy (eq-lit f0x y) y) fires))
+        ;; l₁ not in the head.
+        (not (. (factor-rule arena ord p-fac (eq-lit f1x x) f1x) fires))
+        ;; l₁ without s.
+        (. p-fz maxed)
+        (not (. (factor-rule arena ord p-fz (eq-lit f0x y) f1x) fires))
+        ;; The selected literal without s: x and y are never compared with
+        ;; a constant, so x ≈ y is maximal beside u0 ≈ y, and t₂ ⊁ s.
+        (. p-xy maxed)
+        (not (. (factor-rule arena ord p-xy (eq-lit u0 y) u0) fires))
+        ;; t₁ ≻ s does not stop it: in the same clause u0 ≈ y is maximal
+        ;; too, and with s = y, t₁ = x ≻ y while t₂ = u0 ⊁ y.
+        (. p-uy maxed)
+        (. (factor-rule arena ord p-uy (eq-lit x y) y) fires)
+        (clause-eq (assemble arena (factor-rule arena ord p-uy (eq-lit x y) y))
+          (r-clause arena nolits (two-lits arena (neq-lit x u0) (eq-lit u0 y)))))))
+
   (fn test-sriq-gate-table ((arena Arena))
     (@intent "§5.5's language and gate conditions, row by row, against el and el++")
     (@spec ((Arena) -> Bool))
@@ -8737,6 +9021,18 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-inhat-persists arena)))
             (print-test-result "7d: R2, ∈̂ persists through the commit" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-hyper-rows arena)))
+            (print-test-result "7e: Hyper, O1's inferences under HOWL's order" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-hyper-root-rows arena)))
+            (print-test-result "7e: Hyper at the root, E4's constants included" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ineq-factor-core-rows arena)))
+            (print-test-result "7e: Ineq, Factor and Core, row by row" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-clauses-on-fixtures arena)))
