@@ -2293,6 +2293,45 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
 - **Definition 5:** the expansion strategies.
 - **Definition 3:** the context structure, with its root context `v_r`.
 
+**As HOWL stores them** (`src/sriqctx.slop`):
+- **The structure.**
+  - It holds the contexts (each a core and whether it is `v_r`), each context's clause set, the
+    edges `⟨v, w, f⟩` and `⟨v, w, u⟩`, and the constants (the order's table).
+  - Every context shares S5's one order, so θ is not stored.
+  - Ids: `v_r` is 0, `v_⊤` is 1, and `v_B` is 2 + B for each class B of the input signature (S4).
+    Contexts a strategy adds follow.
+  - A context other than `v_r` is identified by its core, so a lookup by the empty core finds
+    `v_⊤`, never `v_r` (Definition 5: `v ≠ v_r`).
+- **The trigger sets** are read off O's clause bodies once, as flags by id, so each membership
+  test is loop-free:
+  - a body's `B(x)` puts `B(x)` and `B(u)` in Su(O);
+  - `S(x, zᵢ)` puts `S(x, y)` in Su(O) and `S(y, x)` in Pr(O);
+  - `S(zᵢ, x)` does the reverse;
+  - any role a body names gives `S(u₁, u₂)` in both;
+  - every class of O gives `B(y)` and `B(u)` in Pr(O).
+
+  Suʳ(O) and Prʳ(O) range over O's predicates.
+- **The tests read shapes, not the signature.** Membership in `Σ_u^O`, and Definition 3's
+  "in the signature of O", hold by construction rather than by a check:
+  - every constant a structure holds is in `Σ_u^O`: O's individuals, and Nom's constants, whose
+    labels' letters are O's roles;
+  - every rule builds its literals from O's predicates and those constants.
+
+  So the trigger tests and the context-clause check (`ctx-clause-ok`) take that as given, and test
+  only the forms Definitions 2 to 4 print.
+- **K₁ reads "A′ mentions x".** The PDF prints "A′ mentions xσ" (p. 15). Read literally that is
+  always empty, since no atom of Su(O) contains `f(x)` or `f(u)`. "A′σ mentions xσ" is the same as
+  "A′ mentions x", which gives Definition 3's core forms `B(x)`, `S(x, y)` and `S(y, x)`.
+  [TGH21]'s own Figure 2 has `K₁ = {B(x), R(y, x)}`.
+- **The strategies.**
+  - All three of Definition 5's strategies are built. Trivial always chooses `∅`. Eager chooses
+    `K₁`. Cautious chooses `{B(x)}` when `f` occurs in O in exactly one atom `B(f(x))` and
+    `B(x) ∈ K₁`, and `∅` otherwise (S5).
+  - Each choice is returned as a kind and a class. Z3 proves that a cautious `{B(x)}` has
+    `B(x) ∈ K₁`, so `core ⊆ K₁` holds of every choice.
+  - Cautious is the engine's (S5). Trivial and eager serve the reference evaluator and the
+    feasibility checkpoint.
+
 - **Nom is in.** It introduces auxiliary constants when "an inverse role, an at-most number
   restriction, and a nominal" interact ([TGH21] §4.1). [TGH18] adds that the rule "does not apply if
   the input ontology lacks either inverse roles, or nominals, or number restrictions."
@@ -2301,13 +2340,14 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
     runs nothing.)
 - **The depth limit Λ** is Algorithm 1 step A4's, `2^τSu · 2^τPr · (ω + ω_D)`, which meets
   Theorem 2's precondition.
-  - τSu and τPr count Theorem 2's atoms of Su(O) and Pr(O) (Definition 4).
+  - τSu and τPr count Theorem 2's atoms (Definition 4): Su(O)'s of the form `B(x)`, `S(y, x)` or
+    `S(x, y)`, and Pr(O)'s of the form `B(y)`, `S(y, x)` or `S(x, y)`.
   - ω is Definition 9's bound on the contexts the strategy adds ([TGH21] §5.1): `|Σ_A^O|` under
     cautious ("the cautious strategy can introduce at most m contexts"), 1 under trivial (it only
     ever uses `v_⊤`), and `2^(m+m′+1)` under eager, for m and m′ the numbers of unary and binary
-    predicates.
-  - ω_D is the number of contexts after initialisation (A4): `v_r`, `v_⊤`, and one `v_B` per
-    class name, so `|Σ_A^O| + 2`.
+    predicates of O. Eager's is held at 2⁶².
+  - ω_D is the number of contexts initialisation creates (A4): `v_r`, `v_⊤`, and one `v_B` per class
+    name of the input signature (S4), so that number plus 2.
   - `depth-limit` (`src/rules/sriq.slop`) computes it exactly when it is below 2⁶², and gives 2⁶²
     otherwise, by a shift held at the cap before it can overflow. That changes no run:
   - Nom on `o_ρ` needs a clause that mentions `o_ρ`. Such a clause exists only from the round in
@@ -2317,8 +2357,10 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
     enforce ([§9](#9-cli--interface-sketch)).
   - So every label a run can build is shorter than 2⁶², and the test `|ρ| < Λ` has the same outcome
     under the stored value as under the true one.
-  - Slice 8 stores `max(Λ, 10,001)` (G1, below). Unlike the 2⁶² cap, that floor can change a run,
-    but only one whose true Λ is at most 10,000; G1 says how.
+  - HOWL stores `max(Λ, 10,001)` (`stored-lambda`, beside `depth-limit`; G1, below). Unlike the 2⁶²
+    cap, that floor can change a run, but only one whose true Λ is at most 10,000; G1 says how. It
+    also means Λ's exact value never decides a run that saturates, so τSu, τPr, ω and ω_D are held
+    by test rows, not by an end-to-end run.
 - **Errata.** Each is read as follows, and each is checked against the completeness proof:
   - **E1.** Table 2's Nom prints its DL4 premise's head as `⋁_{1≤i<j≤n}`. Table 1 has `n+1`
     neighbours, so the head is `⋁_{1≤i<j≤n+1}`.
@@ -2432,12 +2474,12 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
       with no `Cᵢ` carries such a root clause to a non-root context. So the chain can stop with
       neither case holding. Lemmas 29 to 31 replay inferences along the chain, and a break leaves
       fewer than Λ links for Lemma 31's pigeonhole. Only Lemma 24's case `|ρ| = Λ` uses Lemmas 27
-      to 31. **Chosen** (the owner, 2026-10-10; AD d29622cd): slice 8 stores Λ as at least 10,001,
+      to 31. **Chosen** (the owner, 2026-10-10; AD d29622cd): HOWL stores Λ as at least 10,001,
       one more than the round cap. No label then reaches Λ in a run, since labels are no longer than the rounds run, so
       a run that saturates never meets the case `|ρ| = Λ`. The cost is that a run whose Nom
       recursion only a smaller true Λ would cut ends capped (sound, reported incomplete) instead of
       saturating. A true Λ that small needs `τSu + τPr ≤ 12`, since `ω + ω_D ≥ 2`.
-      `depth-limit` computes Theorem 2's value; the stored one is slice 8's.
+      `depth-limit` computes Theorem 2's value, and `stored-lambda` the value HOWL stores.
     - **G2. `N_u` can hold rules outside `u`'s neighbourhood.** `N_u` takes every ground instance
       of `S_{v_r}` whose body is in `Γ_u` (D.2.1), and such a clause can mention `f(u″)` for
       `u″ ≠ u`. Definition 11's neighbourhood of `u` omits that term, and `>_u` is defined on the
@@ -3989,6 +4031,15 @@ Z3 also proves that `apply-lit`, `with-arg`, `replace-at` and `replace-all` keep
 - `replace-const` rewrites the constant itself;
 - a `kids-ok` that passes has exactly n children (that they are the right ones is held by the rows);
 - `nom-head` builds only equalities, through a loop invariant. Rows: Eq as O1's (22), Example 1's (96) and Example 2's (149), the root rewriting a constant everywhere (under f too) where elsewhere it rewrites at p, and each exclusion alone; Join completing Example 1's (112) after r-Pred has carried (118)'s ground atoms (E3), and on `u₁ ≈ u₂`, and its refusals; Nom as Example 2's (150), with (131)'s ⊤ named by S2's fresh class A (the root's `⊤ → A(o)` carried in by r-Pred) and its `S₂` by the fresh sub-role `S_{B₂}` (`S_{B₂}(o, x)` derived from (149) by Hyper), with n = 1 and 2, depth against Λ, and each wrong child, class, role, constant or argument; Λ's exact and held values, just below and at the cap. 42 mutants, all seen red (five after filling the test gaps they exposed). Every contract was seen to go unverified under a mutation of its body: 17 mutants for the rules, each refuted by exactly the contract it targets, and 6 for the helpers, each refuted by its target or (`body-at`'s view) unknown, not verified | **Partly** — the rule functions are proved. Positions and replacement beyond the form, which children `kids-ok` accepts, `nom-head`'s literals beyond their form, and `depth-limit`'s exact branch (a shift, which the checker does not interpret) are held by the tests |
+| **`sriq` context structure, triggers and strategies** — [TGH21] Definitions 3 to 5 are stored exactly, over the structure's own constants and O's predicates (§5.5 S3), and Λ is the value G1 fixes | `src/sriqctx.slop`. Z3 proves:
+- each trigger test accepts only its definition's shapes: `in-su` only atoms and `u₁ ≈ u₂`, with an equality only between constants; `in-pr`, `in-sur` and `in-prr` never an inequality; and `in-prr` holds wherever `in-sur` does;
+- `strat-choice`: trivial chooses ∅ and eager K₁, and a cautious `{B(x)}` has `B(x) ∈ K₁` with `B` the sole atom `B(f(x))` of `f`, so `core ⊆ K₁` holds of every choice. `core-of` returns K₁ itself for eager;
+- `ctx-by-core` never returns `v_r`;
+- τSu and τPr are non-negative; ω is 1 under trivial and `|Σ_A^O|` under cautious; `pow2-sat` holds at 2⁶²; and ω_D is the query classes plus 2;
+- `has-lit` is membership, through a loop invariant;
+- `stored-lambda` (`src/rules/sriq.slop`) is at least 10,001, and equals `depth-limit` from 10,001 up.
+
+Rows: Definition 4 item by item on [TGH21] Figure 1's O1, on DL6's `S(x, x)` and on Table 1's DL4 (`test-sriq-triggers-rows`); on every fixture, each body atom's triggers are in Su and Pr; Definition 5 on O1's Figures 2 and 3 (eager K₁, cautious `{B(x)}`, trivial ∅, and cautious falling back to ∅ without the atom); ω, ω_D and the stored Λ; A1–A2's structure; and Definitions 2 and 3 on one clause of each kind. 24 test mutants: 22 seen red. One exposed redundant code in `side-x`, now removed. The other (`ctx-by-core` considering id 0) changes nothing a test can see, since id 0 is always `v_r`, and `ctx-by-core`'s contract refutes it. 21 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — the flags' read-off, `ctx-clause-ok`'s shape table, and that `core-of`'s ∅ and `{B(x)}` have no and one member are held by the rows |
 | **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's rules, in the two rows above; Table 3's rules planned), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. Still to come: a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Planned** — structural once every rule and the reference are built |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |

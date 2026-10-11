@@ -1,6 +1,6 @@
 ;; ============================================================
 ;; sriq's single-context rules — [TGH21] Table 2's Core, Hyper, Eq, Ineq,
-;; Factor, Join and Nom, and Λ (SPEC §5.5 S3). Elim is the commit
+;; Factor, Join and Nom, and Λ with the value HOWL stores (SPEC §5.5 S3). Elim is the commit
 ;; (sriqsubsume.slop).
 ;;
 ;; ONE FUNCTION PER RULE INSTANCE, loop-free, over premise VIEWS (the
@@ -38,7 +38,7 @@
           hyper-start hyper-step hyper-finish hyper-join
           atom-matches apply-lit
           Pos BodyView subterm-at replace-at replace-all eq-rule
-          body-at join-rule kids-ok nom-head nom-rule depth-limit)
+          body-at join-rule kids-ok nom-head nom-rule depth-limit stored-lambda)
 
   ;; Γ → Δ ∨ L, as a rule reads it.
   (type Premise (record
@@ -758,6 +758,22 @@
       (cond ((>= k 62) 4611686018427387904)
             ((> m (>> 4611686018427387904 k)) 4611686018427387904)
             (else (<< m k)))))
+
+  (fn stored-lambda ((tsu Int) (tpr Int) (omega Int) (omega-d Int))
+    (@intent "The Λ HOWL stores: Theorem 2's value, but at least 10,001, one more than the round cap (SPEC §5.5 S3, G1; AD d29622cd)")
+    (@spec ((Int Int Int Int) -> Int))
+    (@pure)
+    (@example (2 3 4 6) -> 10001)
+    (@example (30 30 4 1) -> 4611686018427387904)
+    (@pre (and (>= tsu 0) (<= tsu 2147483648) (>= tpr 0) (<= tpr 2147483648)
+               (>= omega 0) (<= omega 4611686018427387904)
+               (>= omega-d 1) (<= omega-d 2147483648)))
+    ;; No label a run builds reaches it: labels are no longer than the
+    ;; rounds run, and every run stops within 10,000 rounds.
+    (@post (>= $result 10001))
+    (@post (implies (>= (depth-limit tsu tpr omega omega-d) 10001) (== $result (depth-limit tsu tpr omega omega-d))))
+    (let ((d (depth-limit tsu tpr omega omega-d)))
+      (if (>= d 10001) d 10001)))
 
   ;; ============================================================
   ;; Fixtures for the @examples: each rule fires on a row of the paper

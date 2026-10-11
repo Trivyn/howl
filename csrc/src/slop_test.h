@@ -20,6 +20,7 @@
 #include "slop_sriqclauses.h"
 #include "slop_sriqsubsume.h"
 #include "slop_sriq.h"
+#include "slop_sriqctx.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
@@ -284,6 +285,11 @@ SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
 #ifndef SLOP_OPTION_SRIQ_CANDS_DEFINED
 #define SLOP_OPTION_SRIQ_CANDS_DEFINED
 SLOP_OPTION_DEFINE(sriq_Cands, slop_option_sriq_Cands)
+#endif
+
+#ifndef SLOP_OPTION_SRIQCLAUSES_SRIQCLAUSES_DEFINED
+#define SLOP_OPTION_SRIQCLAUSES_SRIQCLAUSES_DEFINED
+SLOP_OPTION_DEFINE(sriqclauses_SriqClauses, slop_option_sriqclauses_SriqClauses)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1392,6 +1398,23 @@ sriqorder_SriqOrder test_r_kids_order(slop_arena* arena);
 slop_list_u32 test_r_ids(slop_arena* arena, int64_t a, int64_t b);
 uint8_t test_test_sriq_nom_rows(slop_arena* arena);
 uint8_t test_test_sriq_depth_limit(slop_arena* arena);
+uint8_t test_want(slop_string label, uint8_t got, uint8_t expected);
+uint8_t test_want_int(slop_arena* arena, slop_string label, int64_t got, int64_t expected);
+slop_list_types_Clause test_o1_clauses(slop_arena* arena);
+sriqctx_Triggers test_o1_triggers(slop_arena* arena);
+uint8_t test_test_sriq_triggers_rows(slop_arena* arena);
+uint8_t test_triggers_edge_rows(slop_arena* arena);
+uint8_t test_shape_rows(void);
+uint8_t test_test_sriq_strategy_rows(slop_arena* arena);
+uint8_t test_core_is(slop_arena* arena, slop_string label, sriqctx_CoreChoice cc, slop_list_types_Lit k1, slop_list_types_Lit expected);
+uint8_t test_test_sriq_structure_rows(slop_arena* arena);
+uint8_t test_ctx_root_is(sriqctx_Structure st, int64_t v, uint8_t root);
+uint8_t test_all_sets_empty(sriqctx_Structure st);
+uint8_t test_role_triggers_ok(sriqctx_Triggers tr, types_Lit l);
+uint8_t test_body_lit_triggers_ok(sriqctx_Triggers tr, types_Lit l);
+uint8_t test_body_triggers_ok(sriqctx_Triggers tr, types_Clause c);
+uint8_t test_test_sriq_triggers_on_fixtures(slop_arena* arena);
+slop_option_sriqclauses_SriqClauses test_fixture_sc(slop_arena* arena, slop_string path);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1684,6 +1707,11 @@ SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
 #ifndef SLOP_OPTION_SRIQ_CANDS_DEFINED
 #define SLOP_OPTION_SRIQ_CANDS_DEFINED
 SLOP_OPTION_DEFINE(sriq_Cands, slop_option_sriq_Cands)
+#endif
+
+#ifndef SLOP_OPTION_SRIQCLAUSES_SRIQCLAUSES_DEFINED
+#define SLOP_OPTION_SRIQCLAUSES_SRIQCLAUSES_DEFINED
+SLOP_OPTION_DEFINE(sriqclauses_SriqClauses, slop_option_sriqclauses_SriqClauses)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
