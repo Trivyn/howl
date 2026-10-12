@@ -1,0 +1,14 @@
+# The probe document of the probe-query golden: classes defined to be asked
+# about, read only by the probe run. Issue #68's probe asks whether a
+# property can have a value; urn:probe:rc and urn:probe:re are ∃r.C and ∃r.E,
+# so A ⊑ urn:probe:rc asks whether A ⊑ ∃r.C. None of them is declared: the
+# probe run declares every class a query names.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<urn:probe:p>  rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom owl:Thing ] .
+<urn:probe:q>  rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom owl:Thing ] .
+<urn:probe:rc> owl:equivalentClass [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .
+<urn:probe:re> owl:equivalentClass [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :E ] .

@@ -3895,6 +3895,37 @@ Five things the port constrains that are easy to get wrong:
   the per-document hashes before flattening. That is a port change, so it is deferred with the other
   two rather than half-implemented here.
 
+**Probe queries are HOWL's side of A4** ([§8.5](#85-required-port-amendments)), on the C API, the
+crate and the CLI (`--probe FILE`, `--ask-unsat C`, `--ask-sub A B`). A caller adds *probe
+documents*, which define classes for the purpose (`:P rdfs:subClassOf ∃p.⊤` asks whether `p` can
+have a value), and *queries*: is `C` unsatisfiable, is `A ⊑ B`, for named classes.
+
+- **A second classification answers them.** Its input is the input, then the probe documents (one
+  more document, standardized apart), then `C rdf:type owl:Class` for every class a query names, so
+  a probe class never becomes a `missing-declaration`. Any other class a probe document
+  introduces needs its own declaration, as in any document. It runs under the same options and
+  cancellation, never strict. The main run is untouched: its report, verdict, omissions, rounds and
+  termination are byte-identical to a run without probes. The rejected alternative, probe classes
+  filtered out of one run, still lets them change the main run's rounds, its termination at the
+  cap, its coverage and `auto`'s choice of profile.
+- **Answers are three-valued, and both queries ask for an entailment.** `yes`: the probe run
+  entails the inclusion (`entails-sub`, [§6.4](#64-completion-rules); unsatisfiable is
+  `C ⊑ owl:Nothing`). That is sound whatever its coverage or budget, because adding back what it
+  left out only adds conclusions. `no`: it does not, and the probe run was complete (no omission,
+  fixpoint) — the condition `coherent` needs. `unknown`: anything else, including a class with no
+  context or answer. `owl:Nothing ⊑ B`, `A ⊑ owl:Thing` and `A ⊑ A` are `yes` in every ontology.
+- **An inconsistent probe run** entails every inclusion, so every answer is `yes`, and the run says
+  it was inconsistent so the caller can tell a vacuous `yes` from a real one.
+- **Answers are input-determined** ([§6.8](#68-determinism-binding)): each query once, in
+  canonical order — unsatisfiability before subsumption, then by class, then by superclass.
+- **Probe lines follow the report, and only when a query was asked:** `probes N`,
+  `probe-inconsistent`, `probe-omitted N` with a `probe-omission` line each, then
+  `probe unsatisfiable C yes|no|unknown` or `probe subsumed A B …` per query. A run that asks
+  nothing prints exactly the report it printed before probes existed.
+- **A probe run that faults takes the run with it:** cancelled is cancelled, and an input error in
+  a probe document is the caller's, named as the probe run's. A query naming an empty IRI, or a
+  probe document that does not parse, refuses the input as a bad document does.
+
 **Dual-engine cross-check changes §8.2's story.** The pipeline runs an agreement stage that
 cross-checks the TBox and ABox engines on a deterministic probe set **in the EL ∩ RL entailment
 overlap**, where disagreement is an *engine fault* — never resolved by preferring one engine. So
@@ -3943,7 +3974,7 @@ struct and thereby specified a fix that could not be built. **`TBoxInput` is
 | **A1** | Per-document triple buffers, or a source IRI on every triple | `AxiomRef.source` ([§6.2](#62-data-model)); blank-node standardization apart ([§6.3](#63-normalization) step 0) | Flattening loses document identity, so equivalent axioms from different mapping documents are indistinguishable and blank nodes from different documents can merge |
 | **A2** | `imports_resolved` closure attestation | Import reconciliation ([§6.3](#63-normalization) step 0) | A root document with a dangling import yields empty omissions, a fixpoint, and a **false coherent** — the failure the mechanism exists to close |
 | **A3** | A baseline theory (or a supplied baseline classification with its fingerprint and input hash) **and** `subsumption_delta: Option<Vec<_>>` | `subsumption_delta` ([§6.7](#67-output--classification)) | No baseline can be identified, and `classify` is pure, so the delta cannot be computed at all |
-| **A4** | Probe-set entailment readback | The consumer's agreement stage (below) | A non-stub engine fails that stage closed, so landing HOWL makes the pipeline *less* usable |
+| **A4** | Probe-set entailment readback | The consumer's agreement stage (below) | A non-stub engine fails that stage closed, so landing HOWL makes the pipeline *less* usable. HOWL's side is built (probe queries, [§8.4](#84-the-moose-tboxreasoner-port)); the port's is not |
 
 **Until an amendment lands, the capability it unblocks is not delivered — it is not approximated.**
 A2's absence means HOWL cannot verify closure and must not imply it does. The adapter never

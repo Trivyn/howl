@@ -107,3 +107,23 @@ fn imports_golden() {
     );
     assert_eq!(got, golden(&corpus().join("goldens/imports/root.report")));
 }
+
+/// `howl validate main.ttl --probe probe.ttl --ask-... --report`: the
+/// main report unchanged, then the probe run's lines, the queries each
+/// once and in canonical order however they were asked.
+#[test]
+fn probe_queries_golden() {
+    let dir = corpus().join("fixtures/probe-queries");
+    let read = |f: &str| fs::read_to_string(dir.join(f)).unwrap_or_else(|e| panic!("{f}: {e}"));
+    let mut input = Input::new();
+    input.add_turtle(&read("main.ttl")).unwrap();
+    input.add_probe_turtle(&read("probe.ttl")).unwrap();
+    input.ask_subsumed("http://example.org/t#A", "urn:probe:re");
+    input.ask_unsatisfiable("urn:probe:q");
+    input.ask_unsatisfiable("urn:probe:p");
+    input.ask_subsumed("http://example.org/t#A", "urn:probe:rc");
+    input.ask_unsatisfiable("urn:probe:p");
+    let r = Reasoner::new().classify(&input).unwrap();
+    let got = format!("{}\nexit {}", r.lines().join("\n"), r.verdict.exit_code());
+    assert_eq!(got, golden(&corpus().join("goldens/probe-queries/main.report")));
+}

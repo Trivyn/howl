@@ -1,0 +1,235 @@
+;; ============================================================
+;; Probe queries (SPEC §8.5 A4, issue #68)
+;;
+;; A host asks "is C unsatisfiable?" or "is A ⊑ B?" about named classes,
+;; usually classes it defines for the purpose in a PROBE DOCUMENT
+;; (`:P rdfs:subClassOf [ owl:onProperty :p ; owl:someValuesFrom owl:Thing ]`).
+;; The answers come from a SECOND classification, of the input plus the
+;; probe documents plus a class declaration for every class a query
+;; names, so the main report is byte-identical to a run without probes:
+;; nothing a probe adds can reach its unsatisfiable list, its taxonomy,
+;; its coverage, its rounds or its verdict.
+;;
+;; THREE ANSWERS, NOT TWO. Both queries ask whether an inclusion is
+;; ENTAILED. `yes` is sound whatever the probe run's coverage or budget:
+;; adding back what it left out only adds conclusions (L9, K4). `no` needs
+;; a complete probe run (no omission, fixpoint), as `coherent` does, and
+;; anything else is `unknown`. An inconsistent probe run entails every
+;; inclusion, so every query is `yes`, and the run says it was
+;; inconsistent so a host can tell a vacuous yes apart.
+;; ============================================================
+
+(module probe
+  (@doc "Probe queries: named entailment questions answered by a classification of their own")
+
+  (import rdf (IRI Triple make-iri make-triple))
+  (import vocab (RDF_TYPE OWL_CLASS OWL_THING OWL_NOTHING))
+  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission kname-eq
+                 outcome-is-complete renamed-node copy-iri))
+  (import canon (string-cmp iri-cmp sort-range))
+  (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
+  (import classify (entails-sub ksc-entails-sub))
+
+  (export
+    QueryKind ProbeAnswer Query Answered Probing
+    query-cmp sort-queries probe-document answer-queries)
+
+  (type QueryKind (enum
+    query-unsatisfiable            ; is `sub` unsatisfiable, sub ⊑ owl:Nothing?
+    query-subsumed))               ; is sub ⊑ sup?
+
+  (type ProbeAnswer (enum
+    answer-yes                     ; entailed
+    answer-no                      ; not entailed, and the probe run was complete
+    answer-unknown))               ; not shown entailed by an incomplete probe run
+
+  (type Query (record
+    (kind QueryKind)
+    (sub  IRI)
+    (sup  IRI)))                   ; empty for query-unsatisfiable
+
+  (type Answered (record
+    (query  Query)
+    (answer ProbeAnswer)))
+
+  ;; What a probe run returns: its answers and the two facts that qualify
+  ;; them. Its own rounds and termination are not here: only whether it
+  ;; was complete matters, and that is already in every `no`.
+  (type Probing (record
+    (answers      (List Answered))   ; one per query, in canonical order
+    (inconsistent Bool)              ; every answer is then a vacuous yes
+    (omissions    (List Omission)))) ; the probe run's coverage gaps; any rules out `no`
+
+  ;; ============================================================
+  ;; Canonical order: unsatisfiable before subsumed, then sub, then sup
+  ;; ============================================================
+
+  (fn kind-rank ((k QueryKind))
+    (@intent "The query kind's place in the canonical order")
+    (@spec ((QueryKind) -> Int))
+    (@pure)
+    (match k
+      ('query-unsatisfiable 0)
+      ('query-subsumed      1)))
+
+  (fn query-cmp ((a Query) (b Query))
+    (@intent "Canonical order on queries")
+    (@spec ((Query Query) -> Int))
+    (@pure)
+    (let ((ka (kind-rank (. a kind))) (kb (kind-rank (. b kind))))
+      (if (!= ka kb)
+        (if (< ka kb) -1 1)
+        (let ((c (iri-cmp (. a sub) (. b sub))))
+          (if (!= c 0) c (iri-cmp (. a sup) (. b sup)))))))
+
+  (fn query-at ((qs (List Query)) (i Int))
+    (@spec (((List Query) Int) -> Query))
+    (@pure)
+    (@pre {i >= 0})
+    (match (list-get qs i)
+      ((some q) q)
+      ((none)   (record-new Query (kind 'query-unsatisfiable)
+                  (sub (record-new IRI (value ""))) (sup (record-new IRI (value "")))))))
+
+  (fn sort-queries ((arena Arena) (qs (List Query)))
+    (@intent "The queries in canonical order, each once")
+    (@spec ((Arena (List Query)) -> (List Query)))
+    (@alloc arena)
+    ;; Each once: asking the same question twice is one question, and the
+    ;; answer list is a function of the SET of queries (§6.8).
+    (let ((idx (sort-range arena (cast Int (list-len qs))
+                 (fn ((i Int) (j Int)) (query-cmp (query-at qs i) (query-at qs j)))))
+          (mut out (list-new arena Query)))
+      (do
+        (for-each (k idx)
+          (let ((q (query-at qs k))
+                (n (cast Int (list-len out))))
+            (when (or (== n 0) (!= (query-cmp (query-at out (- n 1)) q) 0))
+              (list-push out q))))
+        out)))
+
+  ;; ============================================================
+  ;; The probe run's input
+  ;; ============================================================
+
+  (fn probe-document ((arena Arena) (main Encoded) (probes Encoded) (queries (List Query)))
+    (@intent "The probe run's input: the input, then the probe documents, then a declaration per queried class")
+    (@spec ((Arena Encoded Encoded (List Query)) -> (Ptr Encoded)))
+    (@alloc arena)
+    ;; The input's triples are re-encoded with their blank ids as they are
+    ;; (the first document has no shift), and the probe documents follow as
+    ;; one more document, shifted past them; their own documents were
+    ;; already kept apart when they were added. A declared class has a
+    ;; context in el and an answer in el++, so every class a query names is
+    ;; one - and a probe class never becomes a MissingDeclaration.
+    (let ((p (new-encoded arena)))
+      (do
+        (for-each (it (. main triples)) (encoded-add arena p (triple-of (. main dict) it)))
+        (encoded-next-document arena p)
+        (for-each (it (. probes triples)) (encoded-add arena p (triple-of (. probes dict) it)))
+        (encoded-next-document arena p)
+        (for-each (q queries)
+          (do
+            (encoded-add arena p (class-declaration arena (. q sub)))
+            (match (. q kind)
+              ('query-subsumed      (encoded-add arena p (class-declaration arena (. q sup))))
+              ('query-unsatisfiable (do)))))
+        p)))
+
+  (fn class-declaration ((arena Arena) (c IRI))
+    (@intent "`c rdf:type owl:Class`")
+    (@spec ((Arena IRI) -> Triple))
+    (@alloc arena)
+    (make-triple arena (make-iri arena (. c value)) (make-iri arena RDF_TYPE) (make-iri arena OWL_CLASS)))
+
+  ;; ============================================================
+  ;; Answers, read from the probe run's outcome
+  ;; ============================================================
+
+  (fn answer-queries ((arena Arena) (o Outcome) (queries (List Query)))
+    (@intent "Every query's answer, in the queries' order, owning its IRIs in arena")
+    (@spec ((Arena Outcome (List Query)) -> (List Answered)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Answered)))
+      (do
+        (for-each (q queries)
+          (list-push out
+            (record-new Answered
+              (query  (record-new Query (kind (. q kind))
+                        (sub (copy-iri arena (. q sub))) (sup (copy-iri arena (. q sup)))))
+              (answer (answer-of o q)))))
+        out)))
+
+  (fn answer-of ((o Outcome) (q Query))
+    (@intent "yes if entailed; no if not and the run was complete; else unknown")
+    (@spec ((Outcome Query) -> ProbeAnswer))
+    (match (query-holds o q)
+      ((some h)
+        (cond
+          (h                         'answer-yes)
+          ((outcome-is-complete o)   'answer-no)
+          (else                      'answer-unknown)))
+      ((none) 'answer-unknown)))
+
+  (fn query-target ((q Query))
+    (@intent "The class the query asks `sub` to be under: sup, or owl:Nothing")
+    (@spec ((Query) -> IRI))
+    (match (. q kind)
+      ('query-subsumed      (. q sup))
+      ('query-unsatisfiable (record-new IRI (value OWL_NOTHING)))))
+
+  (fn query-holds ((o Outcome) (q Query))
+    (@intent "Whether the probe run entails the query's inclusion; none if it has no answer for `sub`")
+    (@spec ((Outcome Query) -> (Option Bool)))
+    ;; owl:Nothing ⊑ B and A ⊑ owl:Thing hold in every ontology, and
+    ;; neither engine keeps a context or an answer for owl:Nothing, so
+    ;; they are answered here rather than read as "no context".
+    (let ((b (query-target q)))
+      (cond
+        ((== (string-cmp (. (. q sub) value) OWL_NOTHING) 0) (some true))
+        ((== (string-cmp (. b value) OWL_THING) 0)           (some true))
+        ((== (iri-cmp (. q sub) b) 0)                        (some true))
+        (else
+          (match (. o evidence)
+            ((el-evidence sat)  (el-holds sat o (. q sub) b))
+            ((ksc-evidence r)   (ksc-holds r (. q sub) b)))))))
+
+  (fn el-holds ((sat Saturation) (o Outcome) (a IRI) (b IRI))
+    (@intent "el's entails-sub(A, B), or none when A has no context")
+    (@spec ((Saturation Outcome IRI IRI) -> (Option Bool)))
+    ;; Every class a query names is declared in the probe run, and el gives
+    ;; every declared class a context, so the `none` arm is a guard: were
+    ;; that ever to break, the answer would be unknown, not a false no.
+    (let ((na (union-new Node class-node a))
+          (nb (union-new Node class-node b)))
+      (if (has-context sat o na)
+        (some (entails-sub sat (. o names) (. (. o findings) inconsistent) na nb))
+        (if (. (. o findings) inconsistent) (some true) (none)))))
+
+  (fn has-context ((sat Saturation) (o Outcome) (n Node))
+    (@intent "Does the saturation hold a context for this original node?")
+    (@spec ((Saturation Outcome Node) -> Bool))
+    (match (renamed-node (. o names) n)
+      ((none) false)
+      ((some r)
+        (match (map-get (. sat contexts) r)
+          ((some _) true)
+          ((none)   false)))))
+
+  (fn ksc-holds ((r KscResult) (a IRI) (b IRI))
+    (@intent "el++'s entails-sub(A, B) (K5), or none when A has no answer")
+    (@spec ((KscResult IRI IRI) -> (Option Bool)))
+    ;; A capped G or W phase leaves no answers at all; only inconsistency
+    ;; is then known, and it entails everything. A complete run answers
+    ;; every declared class, and every class a query names is declared, so
+    ;; `none` is only ever read from an incomplete run, as unknown.
+    (let ((ka (union-new KName k-class a))
+          (mut found false))
+      (do
+        (for-each (x (. r answers))
+          (when (kname-eq (. x cls) ka) (set! found true)))
+        (cond
+          ((. r inconsistent) (some true))
+          (found              (some (ksc-entails-sub r ka (union-new KName k-class b))))
+          (else               (none))))))
+)
