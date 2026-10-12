@@ -736,7 +736,7 @@
         bad)))
 
   (fn fresh-not-signature ((arena Arena) (n SriqNormal))
-    (@intent "The A_E that stand for a class name or ⊤, which are their own names")
+    (@intent "The A_E that stand for a class name, which is its own name. ⊤'s one fresh name is T, choice 11's B₁ for a domain or range, defined by ⊤ ⊑ T (§5.5 S2)")
     (@spec ((Arena SriqNormal) -> (List String)))
     (@alloc arena)
     (let ((mut bad (list-new arena String)))
@@ -744,7 +744,6 @@
         (for-each (c (. n concepts))
           (match c
             ((sc-name _) (list-push bad (string-concat arena "a fresh name for a class name: " (render-sconcept arena c))))
-            ((sc-top)    (list-push bad "a fresh name for ⊤"))
             (_           (do))))
         bad)))
 
@@ -755,8 +754,9 @@
     ;; Ids in key order: each table strictly increasing in its content's
     ;; order, so dense and duplicate-free. Clauses sorted and deduped.
     ;; Every id in range. DL2's function symbols 0 .. fns−1, in clause
-    ;; order, one per witness. No A_E stands for a class name or ⊤, which
-    ;; are their own names: a fresh name never aliases the signature.
+    ;; order, one per witness. No A_E stands for a class name, which is its
+    ;; own name: a fresh name never aliases the signature. (⊤'s is T, choice
+    ;; 11's, which stands for no name.)
     (let ((mut bad (list-new arena String)))
       (do
         (for-each (b (concepts-ordered arena (. n concepts)))         (list-push bad b))

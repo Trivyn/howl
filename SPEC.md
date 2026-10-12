@@ -2193,12 +2193,17 @@ the RBox's depth. That is exponential in the depth, and optimal.
 **S2 — normal form.** The structural transformation takes S1's output into [TGH21] Table 1's
 DL1–DL11:
 - Every GCI `C ⊑ D` becomes `⊤ ⊑ NNF(¬C ⊔ D)`, so every subconcept occurrence is then positive.
+  Three forms are read as DL3 first, without that rewriting (choice 11): `∃R.C ⊑ D`, a domain
+  `∃R.⊤ ⊑ D`, and a range `⊤ ⊑ ∀R.D`. Their fillers are named as below, so a filler's own name can
+  still come from the rewriting.
 - Each subconcept `E` that is not a concept name gets one fresh name `A_E` per distinct `E`, with
   `A_E ⊑ E`, and `E`'s own subconcepts are replaced by their names. The one exception is a literal
   standing directly in a disjunction, which goes to DL1 as it is. So the filler of every `∃`, `∀`,
   `≥` and `≤` is a name, even when it is a literal, except ⊤, which stays ⊤ (choice 6 below). `∀R.¬B`, for example, gets `A_{¬B}` with the
   DL1 clause `A_{¬B} ⊓ B ⊑ ⊥`. Three cases name differently:
   - in `≤n R.F`, `F`'s occurrence is negative, so it is named through `F ⊑ B`;
+  - in choice 11's `∃R.C ⊑ D`, C's occurrence is negative, so it is named through `C ⊑ B₁`, built as
+    any `F ⊑ B` is;
   - a literal `¬{o}` is named through `{o} ⊑ X` (DL10), and becomes `¬X`;
   - a literal `¬∃R.Self` is named through `∃R.Self ⊑ X` (DL6), and becomes `¬X`.
 - The shapes are then read off:
@@ -2252,7 +2257,8 @@ name below what it names at a positive occurrence and above it at a negative one
    3) rather than naming the conjunction. (Owner-approved, 2026-10-09, during slice 5c.)
 2. **No shortcut for a single-name body.** `A ⊑ ∃R.B` is DL1 `A → A_E` and then DL2 for `A_E`, as
    the transformation reads. Emitting DL2 for `A` directly would save a name and a rule application.
-   It changes rounds, so it is an optimisation that needs its own amendment.
+   It changes rounds, so it is an optimisation that needs its own amendment. Choice 11 is one, for a
+   negative `∃`.
 3. **A top-level ⊓ is split:** `⊤ ⊑ E₁ ⊓ … ⊓ Eₖ` is k axioms. A nested ⊓ is a concept like any
    other, named once.
 4. **DL1 holds names only.** A positive `{o}` or `∃R.Self` standing in a disjunction gets its `A_E`,
@@ -2272,14 +2278,59 @@ name below what it names at a positive occurrence and above it at a negative one
 9. **NNF runs here,** after S1's polarity labelling, as written. S1 labels by polarity on the
    un-normalised GCIs.
 10. **SameIndividual's hub** is its canonically least member, not the first written.
+11. **A top-level `∃` on a GCI's left is read as DL3** (amends choice 2; owner-approved 2026-10-11, AD
+    1cfde27c). Three GCI forms are Table 1's DL3 as they stand, and are read so before
+    `⊤ ⊑ NNF(¬C ⊔ D)`:
+
+    | GCI | Read as |
+    |---|---|
+    | `∃R.C ⊑ D`, C not ⊤ | DL3 `∃R.B₁ ⊑ B₂`, B₁ the name above C, B₂ the name below D; over `P̄` when R is an inverse |
+    | `∃R.⊤ ⊑ D`, a domain | DL3 `∃R.T ⊑ B₂`, B₂ the name below D |
+    | `⊤ ⊑ ∀R.D`, a range | DL3 `∃inv(R).T ⊑ B₂`, B₂ the name below D, over `P̄` as for any `∀` |
+
+    - **The match.** It runs on canonical NNF (choices 1 and 7): the left side `C ⊑ D`'s C is in
+      canonical NNF, so `≥1 R.C` and `¬∀R.¬C` are `∃R.C`, and C and D are canonical. A range is
+      matched on each conjunct of `⊤ ⊑ NNF(D)` after choice 3's split, so `⊤ ⊑ ∀R.D ⊓ ∀S.E` reads both.
+      Only an `∃` at the top of a left side is read so: `A ⊓ ∃R.C ⊑ D` is not, and a filler's name
+      (B₁, B₂) is built as S2 builds any name above or below, not by this choice again.
+    - **T** is S2's fresh name for ⊤, `A_⊤`. It is used by this choice only, and made only when one
+      of these forms occurs, with the single DL1 axiom `⊤ ⊑ T`. It is numbered with the other fresh
+      names from content (S5), and like every fresh name it is never a query class. The ⊤ fillers of
+      DL2 and DL4 stay ⊤ (choice 6). Table 1's B₁ must be a class name, and the empty body is DL1's
+      alone.
+    - **Degenerate cases.** If C is ⊥ or D is ⊤, the GCI is a tautology and nothing is emitted. If
+      D is ⊥, B₂ is the name below ⊥, as for any other D.
+    - **Why.** Read through `⊤ ⊑ NNF(¬C ⊔ D)`, a negative `∃` becomes a named `∀` and a ⊤-headed
+      DL1 clause. Hyper fires a bodiless clause in every context, so each domain put a disjunction,
+      and each range a unit, into every context. On CCO these were 141 disjunctions and 151 units in
+      each of its 1,424 contexts, and the checkpoint's first probe died in round 2 (Consequence
+      8c82ff31). Read as DL3, the clause `S(z₁, x) ∧ B₁(x) → B₂(z₁)` fires only where an S-edge
+      exists. Of what these readings emit, only T's one unit reaches every context. Other bodiless
+      clauses still do: S1's `⊤ ⊑ I`, `≤ 1` units, and the names of complex fillers.
+    - **Proof.** Each reading is an equivalence up to fresh names (a conservative extension), given
+      S2's naming:
+      - `∃R.C ⊑ D` is equivalent to `∃R.B₁ ⊑ B₂` with `C ⊑ B₁` and `B₂ ⊑ D`, by the proof below:
+        B₁ stands above C at its negative occurrence, and B₂ below D at its positive one;
+      - `∃R.⊤ ⊑ D` is `∃R.T ⊑ D` once `⊤ ⊑ T` makes T all of Δ;
+      - `⊤ ⊑ ∀R.D` is `∃R⁻.⊤ ⊑ D`, and so `∃inv(R).T ⊑ D`.
+
+      The axioms this choice emits, DL3 and `⊤ ⊑ T`, are Table 1 rows, so it adds nothing outside
+      Table 1 (choice 6's DL2 with a ⊤ filler is unchanged). It changes names, ids and rounds, and so
+      can change a capped report, as every S2 choice can (R7). It never changes a complete run's
+      answer. The normaliser differential checks it against HermiT at S2.
 
 *Proof.*
 - **Input to output:** any model of the input becomes a model of the output by setting
   `A_E^I := E^I` and `P̄^I := (P^I)⁻`.
 - **Output to input:** any model of the output satisfies the input, by induction on `E`. A name
   stands *below* what it names where the occurrence is positive (`A_E ⊑ E`), and *above* it where
-  the occurrence is negative (`F ⊑ B`, `{o} ⊑ X`, `∃R.Self ⊑ X`). So putting the named concepts
-  back in place of the names can only grow each disjunct, and `⊤ ⊑ NNF(¬C ⊔ D)` still holds.
+  the occurrence is negative (`F ⊑ B`, choice 11's `C ⊑ B₁`, `{o} ⊑ X`, `∃R.Self ⊑ X`). So putting
+  the named concepts back in place of the names can only grow each disjunct, and `⊤ ⊑ NNF(¬C ⊔ D)`
+  still holds. For a
+  GCI choice 11 reads as DL3, `∃R.B₁ ⊑ B₂` with `C ⊑ B₁` and `B₂ ⊑ D` gives `∃R.C ⊑ ∃R.B₁ ⊑ B₂ ⊑ D`,
+  and T is ⊤ in every model of `⊤ ⊑ T`.
+- **Input to output, for choice 11:** set `B₁^I := C^I`, `B₂^I := D^I`, `T^I := Δ^I`; then
+  `∃R.B₁ ⊑ B₂` is the input GCI itself.
 
 So the output is a conservative extension of the input, and agrees with it on every entailment over
 the input signature. This is the standard argument for the transformation [TGH21] §2.3 cites. It is

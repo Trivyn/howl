@@ -283,7 +283,14 @@ uint8_t sriqnormal_disjunction(slop_arena* arena, sriqnormal_S2State* p, slop_op
 uint8_t sriqnormal_define_pos(slop_arena* arena, sriqnormal_S2State* p, types_DName x, sroiq_SConcept e);
 uint8_t sriqnormal_define_dl2(slop_arena* arena, sriqnormal_S2State* p, types_DName x, types_RoleId r, int64_t n, sroiq_SConcept f);
 uint8_t sriqnormal_s2_gci(slop_arena* arena, sriqnormal_S2State* p, sroiq_SConcept l, sroiq_SConcept r);
-uint8_t sriqnormal_assert_top(slop_arena* arena, sriqnormal_S2State* p, sroiq_SConcept e);
+uint8_t sriqnormal_gci_nnf(slop_arena* arena, sriqnormal_S2State* p, sroiq_SConcept l, sroiq_SConcept r);
+uint8_t sriqnormal_assert_top(slop_arena* arena, sriqnormal_S2State* p, sroiq_SConcept e, uint8_t ranges);
+uint8_t sriqnormal_sc_is_top(sroiq_SConcept c);
+uint8_t sriqnormal_sc_is_bottom(sroiq_SConcept c);
+types_DName sriqnormal_top_name(slop_arena* arena, sriqnormal_S2State* p);
+slop_list_types_DName sriqnormal_one_name(slop_arena* arena, types_DName n);
+uint8_t sriqnormal_gci_dl3(slop_arena* arena, sriqnormal_S2State* p, types_RoleId r, sroiq_SConcept c, sroiq_SConcept d);
+uint8_t sriqnormal_dl3_of(slop_arena* arena, sriqnormal_S2State* p, types_RoleId r, slop_option_types_DName b1, sroiq_SConcept d);
 slop_option_rdf_IRI sriqnormal_role_prop(types_RoleId r);
 uint8_t sriqnormal_role_inverted(types_RoleId r);
 slop_result_u8_string sriqnormal_s2_inclusion(slop_arena* arena, sriqnormal_S2State* p, types_RoleId r, types_RoleId s);
