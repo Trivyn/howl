@@ -39,7 +39,7 @@
           hyper-start hyper-step hyper-finish hyper-join
           atom-matches apply-lit
           Pos BodyView subterm-at replace-at replace-all eq-rule
-          body-at join-rule kids-ok nom-head nom-rule depth-limit stored-lambda
+          body-at joinable join-rule kids-ok nom-head nom-rule depth-limit stored-lambda
           CSub SuccSig PreLit KSets SuccConcl RSuccConcl PredView PSlot PState PCands
           csub-term csub-lit succ-csub succ-sig succ-pre k-sets unit-held covers succ-step
           rsucc-lit rsucc-rule has-fterm pred-view rpred-view pred-start pred-step pred-heads-ok rpred-heads-ok

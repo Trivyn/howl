@@ -2870,10 +2870,35 @@ schedule is its own.
 - **Create** follows the reference's round's end, and adds each new context's Core clauses to the
   candidates (step 2). The reference derives them the round after, so the prototype can finish in
   fewer rounds.
-- **Commit** is `commit-min` per context. It deletes as it goes, where the reference waits for the
-  fixpoint (D5(a)). The two stores can therefore differ, and under cautious even their contexts: K₂ is
-  read from a set already minimised. They are compared on their raw answers (M5 (b)), never on their
-  stores.
+- **Commit** computes each context's `min(Sₙ ∪ C)` (slice 9b, `src/sriqindex.slop`). It deletes as it
+  goes, where the reference waits for the fixpoint (D5(a)). The two stores can therefore differ, and
+  under cautious even their contexts: K₂ is read from a set already minimised. They are compared on
+  their raw answers (M5 (b)), never on their stores.
+
+  `commit-min` takes candidates one at a time, scanning W for each and copying it at each insert. The
+  indexed commit computes the same set (R1) in one pass. With W a min set:
+  - C₁ is the distinct candidates that are neither tautologies nor `∈̂ W`;
+  - C₂ is the members of C₁ that no other member of C₁ subsumes;
+  - W′ is the members of W that no member of C₂ subsumes.
+
+  Then `min(W ∪ C) = W′ ∪ C₂`, and C₂ is `Δₙ₊₁`. Checking W against C₂ alone suffices: a member of C₁
+  that C₂ drops is subsumed by one C₂ keeps, since subsumption is a preorder on a finite set, and a
+  member of W that a candidate strictly subsumes is subsumed by a member of C₂. A candidate equal to a
+  member of W is `∈̂ W`, never reaches C₁, and leaves that member in place, as `commit-min` does.
+
+  "Does some x of X subsume c?" goes through an index. Each x is filed under one literal: its least
+  body literal, or its least head literal when its body is empty. If x ⊆ c, that literal is in c on the
+  same side, so probing c's literals finds every such x, and `subsumes` confirms each. The empty clause
+  subsumes everything; it is kept aside by position, so that a query can skip it as it skips any
+  clause. The index is complete by construction, and each index assumes at most one empty clause, as
+  a min set or a list without repeats has. The tests diff it against `commit-min` on hand rows and on
+  every context's final set of every run, split into a W and candidates. They also require each run
+  through it to give the same status, rounds, answers and work counts as the run through `commit-min`,
+  on every fixture and hand row under every strategy.
+- **Join is tried only where it can fire.** Its `sound` property requires a maximal premise whose
+  selected literal is joinable and equal to the body literal. So the prototype pairs a premise only
+  with the joinable body literals equal to its own, and builds no view of any other pair. These are the
+  rule's own conditions, so no conclusion changes, as with the reference's slot filters.
 - **Derive does not filter by ∈̂.** S6's derive keeps only conclusions not `∈̂ Sₙ`; the prototype
   leaves that to the commit, whose `commit-min` skips exactly those. `Δₙ₊₁` is the same, and its
   candidate counts include the conclusions the commit skips.
@@ -2891,6 +2916,9 @@ schedule is its own.
 
   `make diff-elim` adds a `proto~ref` leg per strategy. A pin on O1's work catches an instance that
   runs twice, or one skipped and recovered later, which no answer can see.
+- **`howl-test sriq-run FILE [STRATEGY] [--counts] [--rounds N]`** runs it outside the tests.
+  `--rounds` caps the run, for probing a large input round by round; a capped run is n/a, but
+  `--counts` still prints its work.
 
 **Cancellation.** As in `el++`. It is checked at every round boundary, before the cap, and yields
 `Fault::cancelled` with no Outcome.

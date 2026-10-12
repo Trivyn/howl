@@ -37,10 +37,12 @@
   (import types (Lit Clause at-x at-u))
   (import sriqclauses (clause-cmp))
   (import sriqsubsume (Committed commit-min))
+  (import sriqindex (commit-indexed))
   (import sriqctx (Strategy Triggers EdgeLabel Edge Ctx CtxSet Structure build-triggers init-structure))
   (import canon (sort-range))
   (import sriq (Premise RConcl HState PredView PSlot CSub SuccSig KSets
-                hyper-start hyper-finish succ-sig k-sets pred-view rpred-view))
+                hyper-start hyper-finish succ-sig k-sets pred-view rpred-view body-at joinable join-rule))
+  (import types (lit-eq))
   (import sriqref (RefStatus RefConfig RefResult RefIn Cand Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
                    set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
                    ref-core slot-cands hyper-choices eq-positions ref-ineq ref-factor ref-join
@@ -53,9 +55,12 @@
 
   ;; perm: 0 runs Δₙ as committed; 1 reverses each Δ_v and the order
   ;; contexts are visited; 2 rotates both. R6: no report may change.
+  ;; scan: commit through commit-min's scans, not the index (9b's
+  ;; baseline, which the tests diff the index against).
   (type SatConfig (record
     (base RefConfig)
-    (perm Int)))
+    (perm Int)
+    (scan Bool)))
 
   ;; Work counted over the run (no clock is read under src/).
   (type Counts (record
@@ -249,9 +254,62 @@
           (for-each (c (eq-pairs arena st h (. h ops) (. h dps))) (list-push out c))
           (for-each (c (ref-ineq arena (. h v) (. h dps))) (list-push out c))
           (for-each (c (ref-factor arena (. st ord) (. h v) (. h dps))) (list-push out c))
-          (for-each (c (ref-join arena (. h v) (. h dps) (. h all))) (list-push out c))
-          (for-each (c (ref-join arena (. h v) (. h ops) (. h news))) (list-push out c))
+          (for-each (c (sat-join arena (. h v) (. h dps) (join-sites arena (. h all)))) (list-push out c))
+          (for-each (c (sat-join arena (. h v) (. h ops) (join-sites arena (. h news)))) (list-push out c))
           (out-of out (. hy over)))))
+
+  ;; Join fires only on a maximal premise whose selected literal is a body
+  ;; literal and joinable (join-rule's sound property). So it is tried only
+  ;; on the body literals that are joinable, and only where they equal the
+  ;; premise's: the conditions the rule's own soundness requires, which
+  ;; change no conclusion, without building a view of every other pair.
+  (type JoinSite (record
+    (c Clause)
+    (j Int)))
+
+  (fn join-sites ((arena Arena) (cs (List Clause)))
+    (@intent "Each body literal of cs that Join could resolve: a joinable one, as its clause and position")
+    (@spec ((Arena (List Clause)) -> (List JoinSite)))
+    (@alloc arena)
+    (let ((mut out (list-new arena JoinSite)))
+      (do (for-each (c cs)
+            (let ((mut j 0))
+              (for-each (l (. c body))
+                (do (when (joinable l) (list-push out (record-new JoinSite (c c) (j j))))
+                    (set! j (+ j 1))))))
+          out)))
+
+  (fn site-lit ((s JoinSite))
+    (@intent "The site's body literal")
+    (@spec ((JoinSite) -> (Option Lit)))
+    (@pure)
+    (list-get (. (. s c) body) (. s j)))
+
+  (fn sat-join ((arena Arena) (v U32) (p1s (List Premise)) (sites (List JoinSite)))
+    (@intent "Join of each maximal premise of p1s with a joinable selected literal against each site holding that literal")
+    (@spec ((Arena U32 (List Premise) (List JoinSite)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (p1 p1s)
+            (when (and (. p1 maxed) (joinable (. p1 sel)))
+              (for-each (c (join-one arena v p1 sites)) (list-push out c))))
+          out)))
+
+  (fn join-one ((arena Arena) (v U32) (p1 Premise) (sites (List JoinSite)))
+    (@intent "Join of one premise against each site holding its selected literal")
+    (@spec ((Arena U32 Premise (List JoinSite)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (s sites)
+            (when (site-holds s (. p1 sel))
+              (for-each (c (conclusion arena v (join-rule arena p1 (body-at arena (. s c) (. s j))))) (list-push out c))))
+          out)))
+
+  (fn site-holds ((s JoinSite) (l Lit))
+    (@intent "Is the site's body literal l?")
+    (@spec ((JoinSite Lit) -> Bool))
+    (@pure)
+    (match (site-lit s) ((some m) (lit-eq m l)) ((none) false)))
 
   (fn nom-pairs ((arena Arena) (env Env) (st Structure) (h Here) (d Dl4) (p1s (List Premise)) (p2s (List Premise)))
     (@intent "Nom on one DL4 clause, B₁(o) from p1s and S_{B₂}(o, x) from p2s")
@@ -561,9 +619,9 @@
                 (set! v (+ v 1))))
           out)))
 
-  (fn sat-apply ((arena Arena) (st Structure) (r Round))
+  (fn sat-apply ((arena Arena) (st Structure) (r Round) (scan Bool))
     (@intent "Create, then commit: new constants, contexts and edges in content order; then each context's min over its candidates, which gives Δₙ₊₁")
-    (@spec ((Arena Structure Round) -> Step))
+    (@spec ((Arena Structure Round Bool) -> Step))
     (@alloc arena)
     (let ((n0 (consts-of st))
           (c0 (cast Int (list-len (. st ctxs))))
@@ -574,11 +632,11 @@
           (s3 (add-edges arena s2 (. r succs) (. r rsuccs)))
           (cands (append-cands arena (append-cands arena (. r cands) (action-cands arena s3 (. r succs) (. r rsuccs)))
                                      (new-cores arena s3 c0))))
-      (commit-all arena s3 cands c0 e0 n0)))
+      (commit-all arena s3 cands c0 e0 n0 scan)))
 
-  (fn commit-all ((arena Arena) (st Structure) (cands (List Cand)) (c0 Int) (e0 Int) (n0 Int))
+  (fn commit-all ((arena Arena) (st Structure) (cands (List Cand)) (c0 Int) (e0 Int) (n0 Int) (scan Bool))
     (@intent "Each context's set and Δ: candidates sorted by context and content, each context committed through commit-min over its own run of them")
-    (@spec ((Arena Structure (List Cand) Int Int Int) -> Step))
+    (@spec ((Arena Structure (List Cand) Int Int Int Bool) -> Step))
     (@alloc arena)
     (let ((none-such (record-new Cand (ctx (cast U32 0)) (c (record-new Clause (body (list-new arena Lit)) (head (list-new arena Lit))))))
           (idx (sort-range arena (cast Int (list-len cands))
@@ -587,7 +645,7 @@
           (mut k 0) (mut v 0) (mut grew false))
       (do (for-each (s (. st sets))
             (let ((mine (run-of arena cands idx k (cast U32 v) none-such)))
-              (let ((cm (commit-one arena (. s cs) mine)))
+              (let ((cm (commit-one arena (. s cs) mine scan)))
                 (do (list-push sets (record-new CtxSet (cs (. cm set))))
                     (list-push news (record-new CtxSet (cs (. cm added))))
                     (list-push olds (record-new CtxSet (cs (minus-sorted arena (. cm set) (. cm added)))))
@@ -614,13 +672,13 @@
                 (set! going false))))
           out)))
 
-  (fn commit-one ((arena Arena) (ws (List Clause)) (cs (List Clause)))
-    (@intent "commit-min when there are candidates; else the set as it is, with nothing added")
-    (@spec ((Arena (List Clause) (List Clause)) -> Committed))
+  (fn commit-one ((arena Arena) (ws (List Clause)) (cs (List Clause)) (scan Bool))
+    (@intent "min(S_v ∪ candidates) when there are candidates, through the index or (scan) commit-min; else the set as it is, with nothing added")
+    (@spec ((Arena (List Clause) (List Clause) Bool) -> Committed))
     (@alloc arena)
-    (if (== (list-len cs) 0)
-      (record-new Committed (set ws) (added (list-new arena Clause)))
-      (commit-min arena ws cs)))
+    (cond ((== (list-len cs) 0) (record-new Committed (set ws) (added (list-new arena Clause))))
+          (scan (commit-min arena ws cs))
+          (else (commit-indexed arena ws cs))))
 
   (fn minus-sorted ((arena Arena) (xs (List Clause)) (ys (List Clause)))
     (@intent "xs without ys, both in content order (ys ⊆ xs)")
@@ -705,7 +763,7 @@
       (if (. r over)
         (record-new Run (st (. run st)) (dl (. run dl)) (status 'rs-product) (rounds (. run rounds)) (going false)
                         (counts (. run counts)))
-        (let ((sp (sat-apply scratch (. run st) r))
+        (let ((sp (sat-apply scratch (. run st) r (. cfg scan)))
               (st (copy-structure next (. sp st)))
               (status (stop-status scratch env st (record-new Committing (st st) (changed (. sp changed))) (. cfg base))))
           (record-new Run (st st) (dl (copy-delta next (. sp dl))) (status status) (rounds (+ (. run rounds) 1))

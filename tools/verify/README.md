@@ -25,7 +25,7 @@ reached the build, such as one applied to a stray second copy of a module.
 | Script | What it shows |
 |---|---|
 | `depth.py [--min N] FILE…` | The functions nested N or deeper (default 13). New code stays at 12 or less. |
-| `mutate.py TREE MUTANTS.py LOG` | Each test mutant is red. It regenerates the C, then runs `make test` and `make golden`. `SLOP_HOME` must name the toolchain that generates the committed C. |
+| `mutate.py TREE MUTANTS.py LOG` | Each test mutant is red. It regenerates the C, then runs `make test` and `make golden`. `SLOP_HOME` must name the toolchain that generates the committed C. `MUTATE_TIMEOUT` (seconds, default 3000) bounds each; a timeout is red. |
 | `mutverify.py TREE MUTANTS.py LOG` | Each contract mutant is refuted, and by which contracts. |
 | `casevac.py TREE LOG FILE…` | No guarded post is vacuous: each `(implies C P)`'s twin `(implies C (not P))` must fail. |
 | `one-mut.py MUTANTS.py NAME FILE` | Applies one mutant, to look at it by hand. |

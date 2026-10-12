@@ -23,6 +23,7 @@
 #include "slop_sriqctx.h"
 #include "slop_sriqref.h"
 #include "slop_sriqsat.h"
+#include "slop_sriqindex.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
@@ -1565,6 +1566,16 @@ uint8_t test_qualified_max_rounds(slop_arena* arena);
 uint8_t test_test_sriq_proto_fixtures(slop_arena* arena);
 uint8_t test_fixture_proto(slop_arena* arena, slop_string name);
 uint8_t test_fixture_proto_sc(slop_arena* arena, slop_string name, sriqclauses_SriqClauses sc);
+uint8_t test_same_list(slop_list_types_Clause a, slop_list_types_Clause b);
+uint8_t test_commits_agree(slop_arena* arena, slop_list_types_Clause ws, slop_list_types_Clause cs);
+types_Clause test_dropped_last(slop_arena* arena, types_Clause c);
+slop_list_types_Lit test_but_last(slop_arena* arena, slop_list_types_Lit ls);
+uint8_t test_split_agrees(slop_arena* arena, slop_list_types_Clause s);
+uint8_t test_structure_agrees(slop_arena* arena, sriqctx_Structure st);
+uint8_t test_commit_edge_row(slop_arena* arena);
+uint8_t test_scan_same(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s);
+uint8_t test_test_sriq_index(slop_arena* arena);
+uint8_t test_fixture_scan_same(slop_arena* arena, slop_string name);
 slop_option_sriqctx_Strategy test_parse_strategy(slop_string name);
 slop_string test_status_name(sriqref_RefStatus s);
 int64_t test_print_ref_report(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, slop_string who, sriqctx_Strategy s, int64_t rounds);
@@ -1572,9 +1583,10 @@ int64_t test_print_thing_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqct
 int64_t test_print_class_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, uint32_t b, slop_string thing, slop_string nothing);
 slop_result_sriqclauses_SriqClauses_string test_sriq_load(slop_arena* arena, slop_string path);
 int64_t test_sriq_ref(slop_arena* arena, slop_string path, slop_string strat, uint8_t proto, uint8_t counts);
+int64_t test_sriq_proto(slop_arena* arena, slop_string path, slop_string strat, uint8_t counts, int64_t rounds);
 int64_t test_ref_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s);
-sriqsat_SatConfig test_proto_cfg(sriqctx_Strategy s);
-int64_t test_proto_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s, uint8_t counts);
+sriqsat_SatConfig test_proto_cfg(sriqctx_Strategy s, int64_t rounds);
+int64_t test_proto_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s, uint8_t counts, int64_t rounds);
 int64_t test_count_line(slop_arena* arena, slop_string name, int64_t n);
 int64_t test_print_counts(slop_arena* arena, sriqsat_SatResult p);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
