@@ -1,0 +1,20 @@
+# TGH21 Figure 1's O1, its running example (§3.1): (9) is ⊤ ⊑ ≤1 R.⊤, R functional.
+# Expect: A ⊑ D.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :G a owl:Class .
+:F1 a owl:Class . :F2 a owl:Class . :D1 a owl:Class . :D2 a owl:Class .
+:R a owl:ObjectProperty , owl:FunctionalProperty . :S a owl:ObjectProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :R ; owl:someValuesFrom :B ] ,
+                   [ a owl:Restriction ; owl:onProperty :S ; owl:someValuesFrom :B ] ,
+                   [ a owl:Class ; owl:unionOf ( :D :G ) ] .
+:G rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :R ; owl:someValuesFrom :C ] .
+[ a owl:Class ; owl:intersectionOf ( :B :C ) ] rdfs:subClassOf :F1 .
+[ a owl:Restriction ; owl:onProperty :R ; owl:someValuesFrom :F1 ] rdfs:subClassOf :D1 .
+:B rdfs:subClassOf :F2 .
+[ a owl:Restriction ; owl:onProperty :S ; owl:someValuesFrom :F2 ] rdfs:subClassOf :D2 .
+[ a owl:Class ; owl:intersectionOf ( :D1 :D2 ) ] rdfs:subClassOf :D .

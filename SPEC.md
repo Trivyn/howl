@@ -4807,10 +4807,25 @@ the weaker, more useful condition.
        membership.
      - **Corpus:** BFO-core and CCO are vendored and pinned beside RO and OBI. Each gets a `sriq`
        projection, which is empty for BFO and CCO once the data lemma applies.
-     - **Fixtures:** ABox fixtures for equality (a functional role with two asserted successors),
-       negative assertions on transitive roles, and inverse functionality.
-     - **Engine checks:** the literal reference evaluator, and determinism with a shuffled `Δ`
-       (S6, R6).
+     - **Fixtures:** `corpus/fixtures/sriq` holds ABox fixtures as clash and control pairs. A clash is
+       inconsistent; its control drops one assertion and is consistent:
+       - equality: a functional role with two asserted successors;
+       - a negative assertion on a transitive role;
+       - inverse functionality;
+       - a root successor, whose context sends a class back to its individual;
+       - `⊤ ⊑ X`, which the root takes for every individual.
+
+       Beside them sits [TGH21]'s O1 as Turtle (`tgh21-o1.ttl`).
+     - **Engine checks:** the literal reference evaluator (§5.5), and determinism with a shuffled
+       `Δ` (S6, R6). `make diff-elim` runs the reference under trivial, eager and cautious on every
+       fixture whose stages dump (one that does not already fails the harness):
+       - its cautious run must agree with HermiT on the input and on S2;
+       - its trivial and eager runs must agree with its cautious one;
+       - on `corpus/fixtures/sriq` neither the reference nor HermiT may be missing or end n/a.
+
+       The reports compare consistency and the class hierarchy, not individual equality, so a
+       control's equality (`b = c` from functionality) is checked through its clash partner's
+       `AllDifferent`.
 3. **Contract obligations.** Every loop-free completion rule carries a `sound`/`complete`
    *faithfulness* pair of `@property`s ([§7](#7-verification--contracts)), each seen to stop
    verifying under a mutation of the rule's body; the four loop rules are owed. The driver

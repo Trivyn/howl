@@ -16,6 +16,11 @@ the classifications must agree, which is what the stages promise:
     S0    == S1     [Sim12] Theorem 3: simple-conservative;
     S1    == S2     S2's proof: agrees with its input on the input's signature.
 
+In fixtures mode the reference evaluator (`howl-test sriq-ref FILE STRATEGY`, SPEC
+§5.5) answers too, under trivial, eager and cautious: its cautious run must agree
+with HermiT on the input and on S2, and its trivial and eager runs with its cautious
+one. It may end n/a (a cap, omissions), except on corpus/fixtures/sriq, its own.
+
 A leg HermiT cannot take (an RBox it refuses, an input it reads lossily) is
 reported as n/a, never as a pass. Exit 0 when every leg that ran agrees, 1 on a
 mismatch, 3 when the harness itself fails.
@@ -96,6 +101,12 @@ class HarnessError(Exception):
 
 
 BOUND = []  # S1's guard bound for the dump, empty for the default
+# The reference evaluator's legs (SPEC §5.5): the strategies run on each input,
+# empty unless the mode asks for them. Its own fixtures may not end n/a.
+REF = []
+STRATEGIES = ("trivial", "eager", "cautious")
+REF_TIMEOUT = 120
+OWN = os.path.join("corpus", "fixtures", "sriq") + os.sep
 
 
 def dump(stage, path, out):
@@ -106,6 +117,81 @@ def dump(stage, path, out):
     with open(out, "w", encoding="utf-8") as f:
         f.write(p.stdout)
     return None
+
+
+def ref_report(path, strat, out):
+    """The reference's oracle report under one strategy: (Report, None), or (None, why) when
+    it is n/a: a cap, the fuel, omissions, or no answer within REF_TIMEOUT."""
+    try:
+        p = subprocess.run([TEST_BIN, "sriq-ref", path, strat], capture_output=True, text=True,
+                           timeout=REF_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return None, f"n/a: no answer within {REF_TIMEOUT} s"
+    if p.returncode == 4:
+        return None, (p.stdout.strip() or "n/a")
+    if p.returncode != 0:
+        raise HarnessError(f"{path}: sriq-ref {strat} exited {p.returncode}: {p.stdout[-200:]}{p.stderr[-200:]}")
+    with open(out, "w", encoding="utf-8") as f:
+        f.write(p.stdout)
+    return entdiff.parse(out), None
+
+
+def own_fixture(path):
+    """Is path one of the sriq rung's own fixtures, which the reference must answer?"""
+    return os.path.relpath(path, ROOT).startswith(OWN)
+
+
+def mismatch_lines(name, leg, diff, label):
+    """A mismatch's lines, the HOWL side named label."""
+    out = [f"{name} {leg}: MISMATCH"]
+    for cat, items in sorted(diff.items()):
+        for item in items[:20]:
+            out.append(f"  {cat.replace('HOWL', label)}: {item}")
+    return out
+
+
+def ref_legs(path, name, classes, side):
+    """The reference's legs: HermiT on the input and on S2 against the cautious run, and
+    trivial and eager against cautious. (lines, failures)."""
+    ref_dir = os.path.join(WORK, "ref")
+    os.makedirs(ref_dir, exist_ok=True)
+    runs = {st: ref_report(path, st, os.path.join(ref_dir, f"{name}.{st}.report")) for st in REF}
+    lines, bad = [], 0
+    for st, (r, why) in runs.items():
+        if r is None and own_fixture(path):
+            lines.append(f"{name} ref-{st}: FAILED: the reference must answer its own fixtures: {why}")
+            bad += 1
+    base, base_why = runs.get("cautious", (None, "not run"))
+    if base is None:
+        lines.append(f"{name} input~ref: n/a ({base_why})")
+        return lines, bad
+    for key in ("input", "s2"):
+        oracle, owhy = side.get(key, (None, "not dumped"))
+        if oracle is None and own_fixture(path):
+            # The rung's own fixtures are chosen so HermiT can take them: no oracle there fails.
+            lines.append(f"{name} {key}~ref: FAILED: no HermiT report to check the reference against: {owhy}")
+            bad += 1
+            continue
+        if oracle is None:
+            lines.append(f"{name} {key}~ref: n/a ({owhy})")
+            continue
+        diff = entdiff.compare(restrict(base, classes), restrict(oracle, classes))
+        if diff:
+            lines += mismatch_lines(name, f"{key}~ref", diff, "ref")
+            bad += 1
+        else:
+            lines.append(f"{name} {key}~ref: ok")
+    for st in REF:
+        r, why = runs[st]
+        if st == "cautious" or r is None:
+            continue
+        diff = entdiff.compare(restrict(r, classes), restrict(base, classes))
+        if diff:
+            lines += mismatch_lines(name, f"ref-{st}~cautious", diff, st)
+            bad += 1
+        else:
+            lines.append(f"{name} ref-{st}~cautious: ok")
+    return lines, bad
 
 
 def info(path):
@@ -277,6 +363,10 @@ def check(inputs, timeout=None):
                         lines.append(f"  {cat.replace('HOWL', b)}: {item}")
             else:
                 lines.append(f"{name} {a}~{b}: ok")
+        if REF:
+            l, b = ref_legs(path, name, classes, side)
+            lines += l
+            bad += b
     return lines, bad
 
 
@@ -395,6 +485,7 @@ def main(argv):
         return 1 if bad else 0
     if argv[1] == "fixtures":
         inputs = differential.fixtures(*differential.FIXTURE_DIRS, "el++", "out-of-profile", "sriq")
+        REF.extend(STRATEGIES)
     elif argv[1] == "guarded":
         # S1's guard tripped on purpose: S0~S1 is then checked one way.
         BOUND.append("0")

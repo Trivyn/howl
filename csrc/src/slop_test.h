@@ -1509,6 +1509,7 @@ uint8_t test_root_rows(slop_arena* arena, sriqctx_Strategy s);
 uint8_t test_not_dl4_row(slop_arena* arena, sriqctx_Strategy s);
 uint8_t test_test_sriq_ref_e4_rows(slop_arena* arena);
 slop_list_test_Expect test_expects(slop_arena* arena);
+slop_list_test_Expect test_abox_expects(slop_arena* arena);
 uint32_t test_class_named(slop_arena* arena, sriqclauses_SriqIds ids, slop_string name);
 uint8_t test_expect_holds(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, test_Expect e);
 slop_string test_fixture_path(slop_arena* arena, slop_string name);
