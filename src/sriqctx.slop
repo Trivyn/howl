@@ -42,7 +42,8 @@
   (@doc "sriq's context structure, triggers and strategies (TGH21 Definitions 3-5), Λ's inputs, and the initial structure")
 
   (import types (AKind ATerm LitForm Lit Clause at-x atom1 lit-eq))
-  (import sriqclauses (SriqClauses))
+  (import sriqclauses (SriqClauses make-clause))
+  (import sriqsubsume (in-hat))
   (import sriqorder (SriqOrder named-consts))
 
   (export Strategy Triggers CoreKind CoreChoice EdgeLabel Edge Ctx CtxSet Structure
@@ -50,7 +51,8 @@
           tau-su tau-pr omega omega-d pow2-sat
           has-lit strat-choice core-of
           init-structure ctx-count ctx-at set-at ctx-by-core
-          lit-ok ctx-clause-ok)
+          lit-ok ctx-clause-ok
+          q-inconsistent q-unsat q-holds q-thing)
 
   (type Strategy (enum st-trivial st-eager st-cautious))
 
@@ -610,5 +612,52 @@
       (do (for-each (l (. c body)) (when (not (body-lit-ok l root)) (set! ok false)))
           (for-each (l (. c head)) (when (not (lit-ok l root)) (set! ok false)))
           ok)))
+
+  ;; ============================================================
+  ;; S4's raw queries (Algorithm 1 step A6, Corollary 1), read through ∈̂
+  ;; from v_⊤ (id 1) and v_B (id 2 + B)
+  ;; ============================================================
+
+  (fn set-or-none ((arena Arena) (st Structure) (v Int))
+    (@intent "S_v, or nothing for a missing context")
+    (@spec ((Arena Structure Int) -> (List Clause)))
+    (@alloc arena)
+    (match (list-get (. st sets) v) ((some s) (. s cs)) ((none) (list-new arena Clause))))
+
+  (fn q-of ((arena Arena) (st Structure) (v Int) (body (List Lit)) (head (List Lit)))
+    (@intent "body → head ∈̂ S_v")
+    (@spec ((Arena Structure Int (List Lit) (List Lit)) -> Bool))
+    (@alloc arena)
+    (in-hat (make-clause arena body head) (set-or-none arena st v)))
+
+  (fn atom-x ((arena Arena) (b U32))
+    (@intent "[B(x)]")
+    (@spec ((Arena U32) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (list-push out (atom1 b (at-x))) out)))
+
+  (fn q-inconsistent ((arena Arena) (st Structure))
+    (@intent "inconsistent iff ⊤ → ⊥ ∈̂ S_{v_⊤}")
+    (@spec ((Arena Structure) -> Bool))
+    (@alloc arena)
+    (q-of arena st 1 (list-new arena Lit) (list-new arena Lit)))
+
+  (fn q-unsat ((arena Arena) (st Structure) (b U32))
+    (@intent "unsat(B) iff B(x) → ⊥ ∈̂ S_{v_B}")
+    (@spec ((Arena Structure U32) -> Bool))
+    (@alloc arena)
+    (q-of arena st (+ 2 (cast Int b)) (atom-x arena b) (list-new arena Lit)))
+
+  (fn q-holds ((arena Arena) (st Structure) (b U32) (a U32))
+    (@intent "holds(B, A) iff B(x) → A(x) ∈̂ S_{v_B}")
+    (@spec ((Arena Structure U32 U32) -> Bool))
+    (@alloc arena)
+    (q-of arena st (+ 2 (cast Int b)) (atom-x arena b) (atom-x arena a)))
+
+  (fn q-thing ((arena Arena) (st Structure) (a U32))
+    (@intent "holds(owl:Thing, A) iff ⊤ → A(x) ∈̂ S_{v_⊤}")
+    (@spec ((Arena Structure U32) -> Bool))
+    (@alloc arena)
+    (q-of arena st 1 (list-new arena Lit) (atom-x arena a)))
 
 )

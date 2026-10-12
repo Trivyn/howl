@@ -2811,6 +2811,47 @@ The argument, one short step at a time:
     bottom. So a larger cap that finds `A ⊑ ⊥` replaces `A`'s `sub` lines by its unsatisfiability,
     and one that finds inconsistency drops the hierarchy. Each report is still sound (S7).
 
+**The literal reference evaluator** (`src/sriqref.slop`; D7, D5(a), D10's fuel cap). The engine of
+slices 9 and 10 must answer every fixture as this does. It is S6's semantics without S6's schedule:
+- **Each round is naive.** It reads a frozen structure, and applies every Table 2 and Table 3 rule to
+  every choice of premises in every context, and every Table 3 rule over every edge. Its products
+  are its own: it folds the proved per-instance steps (`hyper-step`, `pred-step`) over every choice,
+  and never calls `hyper-join` or `pred-join`. A test then checks that those two combinators conclude
+  exactly what its products do, on every context of every finished run.
+- **Premises are filtered before they are offered.** A premise is offered to a slot only if it meets
+  conditions the step's `sound` property already requires, so no conclusion changes. It must be
+  maximal. For Hyper it must have the body atom's form and predicate, and, away from the root, `x`
+  where the atom has `x`. For Pred and r-Pred it must select exactly `Cᵢσ`.
+- **Root Hyper with no body, and Pred into `v_r`,** range over every constant the structure holds
+  (E4's `U_H`).
+- **Nom** reads only DL4's at-most clauses: one `B₁(x)`, `n + 1` atoms `S_{B₂}(x, zᵢ)` of one role,
+  and a head of exactly the `C(n + 1, 2)` equalities `zᵢ ≈ zⱼ`. It adds `o_ρ`'s missing children at
+  the round's end, and its conclusion arrives the next round, once they exist.
+- **At the round's end,** in content order:
+  - Nom's new constants, by parent, role and index;
+  - the new contexts, by core;
+  - the new edges, each once (in the order their actions were found, which no rule reads);
+  - each context's candidates, by content, each kept only if it is not `∈̂` the set so far.
+
+  Nothing is deleted until the fixpoint (D5(a)). Then Elim runs once, leaving each set's `min`. A
+  test checks that one more round then changes nothing, which is D5(a)'s argument.
+- **The run stops** at the fixpoint, or at `⊤ → ⊥ ∈̂ S_{v_⊤}` (S4). It also stops when the fuel of
+  10,000 rounds runs out, or at a cap: 512 contexts, 4,000 clauses, 10⁶ choices for one instance, or
+  8 constants from Nom. A stop at the fuel or a cap is n/a, never an answer. Each round runs in a
+  scratch arena, so a long run holds one structure and one round.
+- **The strategy is a parameter:** trivial, eager or cautious. The engine keeps cautious (S5). On
+  every fixture the three agree on every raw query wherever each completes.
+- **Trivial can recurse through Nom.** Under trivial every successor shares `v_⊤`. On [TGH21]'s O4
+  each new constant's successor then holds Nom's premises again, so Nom mints a constant every few
+  rounds, and only Λ (at least 10,001 here) would end the chain. The reference ends it n/a at a cap.
+  Eager and cautious reach O4's fixpoint with the one Nom constant Example 2 describes. This is the
+  trivial strategy's behaviour, not a defect: Theorem 5 bounds it only by Λ.
+- **[TGH21]'s Figure 6 misprints O3's (87).** It prints `C ⊑ F ⊔ D`, but Example 1's own run needs
+  `A ⊑ F ⊔ D`: Hyper on (93) `⊤ → A(x)` gives (94) `⊤ → F(x) ∨ D(x)` in `v_A`, and `v_C` holds no
+  `F ∨ D`. As printed, O3 does not entail `A ⊑ F`. A model with `o ∈ C ∩ F`, `o ∉ D`, `b S o` and
+  `a R b`, and no other F, satisfies it, and HermiT agrees. With `A ⊑ F ⊔ D`, both HermiT and the
+  reference find `A ⊑ F`. The tests run both.
+
 **Cancellation.** As in `el++`. It is checked at every round boundary, before the cap, and yields
 `Fault::cancelled` with no Outcome.
 
@@ -4146,7 +4187,7 @@ Owed, with the rows that stand in:
 - `pred-join`'s fold, as `hyper-join`'s;
 - the conclusions' assembly: `succ-step`'s added atoms (K₂ outside the core), and the body and head that `pred-step`, `pred-finish` and `rpred-finish` build. The contracts fix when each rule fires and which core it chooses, and the rows fix what it concludes;
 - that `succ-pre` inverts σ exactly, which `test-sriq-succ-pre-inverts` checks over every Su(O) shape at and away from the root (the constructors post only their form, so the checker does not see a rebuilt ground literal come back). Rows: Succ on O1's Figures 2 and 3 (K₁ and K₂, each strategy's core and adds (31), (39)–(40), (43), covered targets, a ground atom, the root's `f(u)`); r-Succ on Example 1's (114)–(116), one instance per constant; Pred on O1's (24) and (27), Example 1's (113), Example 2's (147), and into `v_r` for `u = a` but not `b` (E4, with the core as a side premise); r-Pred on Example 1's (118) carrying its ground atoms (E3), with no `Cᵢ`, and E5's refusal. 29 test mutants, all seen red, eight of them only after filling the test gaps they exposed: a non-maximal image, a non-unit clause in K₁, another constant's `f(u)` at the root, Succ on an equality, a non-maximal side premise, a slot outside Suʳ(O) that v could meet, two candidates for one slot, and a ground `f(u)` given to `succ-pre`. 27 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — `k-sets`, `pred-join`'s fold, the conclusions' assembly and `succ-pre`'s exact inversion are held by the rows |
-| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's and Table 3's rules, in the rows above), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. Still to come: a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Planned** — structural once every rule and the reference are built |
+| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's and Table 3's rules, in the rows above), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. The literal reference evaluator (`src/sriqref.slop`, §5.5) is built. On every fixture, and on [TGH21]'s O1, O3 and O4, its trivial, eager and cautious runs agree wherever each completes (trivial can end n/a when Nom recurses), and HermiT agrees with it on every fixture. Its own 14 test mutants: 11 seen red, four of them only after filling the test gaps they exposed (root Hyper on a bodiless clause with `x`, for every constant; the fuel's count; Nom on a body like DL4's with another head). Three change no answer the tests can see: the root's `⟨v_r, w, u⟩` edges, which no rule reads; contexts numbered in discovery order; and r-Succ skipping a unary ground atom, whose answers reach the root another way in every row so far. 8d's HermiT leg runs the root on ABox fixtures. The engine (slices 9 and 10) must match it on every fixture | **Planned** — structural once every rule and the reference are built |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK for `el`; [Krö10] for `el++`; [Sim12] then [TGH21] for `sriq`) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
@@ -5145,8 +5186,9 @@ flowchart TB
     review and accepted by the owner, and their Requirements and Constraints are in the graph.
   - **(b) Faithfulness.** Every rule function carries its contracts, each seen to fail under
     mutation, or an explicit owed row in [§7](#7-verification--contracts). The engine answers every
-    class of every fixture as the literal reference evaluator does, and the reference agrees with
-    its own eager-strategy run.
+    class of every fixture as the literal reference evaluator does, and the reference's trivial,
+    eager and cautious runs agree wherever each completes (§5.5: trivial can end n/a when Nom
+    recurses).
   - **(c) Differential.** HermiT agrees on consistency and on every ordered pair of named classes,
     for BFO-core, CCO, RO and OBI's `sriq` projection, ABoxes included. Sequoia, run as a pinned
     external process, agrees on their TBoxes. Every oracle is capability-probed per construct

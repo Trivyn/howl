@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "slop_types.h"
 #include "slop_sriqclauses.h"
+#include "slop_sriqsubsume.h"
 #include "slop_sriqorder.h"
 
 typedef struct sriqctx_Triggers sriqctx_Triggers;
@@ -225,6 +226,13 @@ uint8_t sriqctx_binary_ok(types_Lit l);
 uint8_t sriqctx_lit_ok(types_Lit l, uint8_t root);
 uint8_t sriqctx_body_lit_ok(types_Lit l, uint8_t root);
 uint8_t sriqctx_ctx_clause_ok(uint8_t root, types_Clause c);
+slop_list_types_Clause sriqctx_set_or_none(slop_arena* arena, sriqctx_Structure st, int64_t v);
+uint8_t sriqctx_q_of(slop_arena* arena, sriqctx_Structure st, int64_t v, slop_list_types_Lit body, slop_list_types_Lit head);
+slop_list_types_Lit sriqctx_atom_x(slop_arena* arena, uint32_t b);
+uint8_t sriqctx_q_inconsistent(slop_arena* arena, sriqctx_Structure st);
+uint8_t sriqctx_q_unsat(slop_arena* arena, sriqctx_Structure st, uint32_t b);
+uint8_t sriqctx_q_holds(slop_arena* arena, sriqctx_Structure st, uint32_t b, uint32_t a);
+uint8_t sriqctx_q_thing(slop_arena* arena, sriqctx_Structure st, uint32_t a);
 
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
