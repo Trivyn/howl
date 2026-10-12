@@ -1377,7 +1377,7 @@ int64_t sriqnormal_fresh_name(slop_arena* arena, sriqnormal_S2State* p, sroiq_SC
                 (*p) = s;
             }
         }
-        return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:732:9");
+        return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:734:9");
     }
 }
 
@@ -1523,11 +1523,11 @@ int64_t sriqnormal_fn_id(slop_arena* arena, sriqnormal_S2State* p, slop_string k
     } else if (!_mv_272.has_value) {
         {
             __auto_type s = (*p);
-            __auto_type id = ((int64_t)(SLOP_RANGE(int64_t, ((int64_t)(((*p).fnkeys).len)), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:822:36")));
+            __auto_type id = ((int64_t)(SLOP_RANGE(int64_t, ((int64_t)(((*p).fnkeys).len)), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:824:36")));
             ({ __auto_type _lst_p = &(s.fnkeys); __auto_type _item = (key); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ int64_t _val = SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:825:40"); slop_map_put(NULL, s.fnindex, &(key), &_val, sizeof(_val)); });
+            ({ int64_t _val = SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:827:40"); slop_map_put(NULL, s.fnindex, &(key), &_val, sizeof(_val)); });
             (*p) = s;
-            return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:827:13");
+            return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:829:13");
         }
     }
     SLOP_UNREACHABLE();
@@ -1698,7 +1698,7 @@ sroiq_SConcept sriqnormal_nnf(slop_arena* arena, sroiq_SConcept c, uint8_t pos) 
                 if (n == 0) {
                     return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_bottom });
                 } else {
-                    return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_atmost, .data.sc_atmost = { .f0 = ((int64_t)(SLOP_RANGE(int64_t, (n - 1), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:888:60"))), .f1 = r, .f2 = sriqnormal_sc(arena, sriqnormal_nnf(arena, (*f), 1)) } });
+                    return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_atmost, .data.sc_atmost = { .f0 = ((int64_t)(SLOP_RANGE(int64_t, (n - 1), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:891:60"))), .f1 = r, .f2 = sriqnormal_sc(arena, sriqnormal_nnf(arena, (*f), 1)) } });
                 }
             }
             case sroiq_SConcept_sc_atmost:
@@ -1979,7 +1979,7 @@ uint8_t sriqnormal_define_dl2(slop_arena* arena, sriqnormal_S2State* p, types_DN
         ({ __auto_type _lst_p = &(parts); __auto_type _item = (int_to_string(arena, n)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(parts); __auto_type _item = (sriqnormal_drole_key(arena, p, s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(parts); __auto_type _item = (sriqnormal_filler_key(arena, p, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        return sriqnormal_emit(arena, p, ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = x, .role = s, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at sriqnormal.slop:1039:82"))), .filler = b, .fns = sriqnormal_fn_ids(arena, p, sriqnormal_key_of(arena, SLOP_STR("dl2"), parts), ((int64_t)(n)))}) }));
+        return sriqnormal_emit(arena, p, ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = x, .role = s, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at sriqnormal.slop:1042:82"))), .filler = b, .fns = sriqnormal_fn_ids(arena, p, sriqnormal_key_of(arena, SLOP_STR("dl2"), parts), ((int64_t)(n)))}) }));
     }
 }
 

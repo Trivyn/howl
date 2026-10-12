@@ -1014,8 +1014,10 @@
           (match ax
             ((k-sub y z)
               (do
-                (match y ((k-nominal a) (when (not (set-has seen a)) (do (set-put seen a) (list-push out a)))) ((k-name _) (do)))
-                (match z ((k-nominal a) (when (not (set-has seen a)) (do (set-put seen a) (list-push out a)))) ((k-name _) (do)))))
+                (match y ((k-nominal a) (when (not (set-has seen a)) (do (set-put seen a) (list-push out a))))
+                  ((k-name _) (do)))
+                (match z ((k-nominal a) (when (not (set-has seen a)) (do (set-put seen a) (list-push out a))))
+                  ((k-name _) (do)))))
             ((k-role-assert a _ b)
               (do
                 (when (not (set-has seen a)) (do (set-put seen a) (list-push out a)))
@@ -1041,7 +1043,8 @@
             (match ax
               ((k-sub sy sz)          (list-push out (ksc-5 sy sz x y)))
               ((k-some-rhs a v b w)   (do (list-push out (ksc-9 a v b w x y)) (list-push out (ksc-10 a v b w x y))))
-              ((k-role-assert a v b)  (do (list-push out (ksc-9-assert a v b x y)) (list-push out (ksc-10-assert a v b x y))))
+              ((k-role-assert a v b)
+               (do (list-push out (ksc-9-assert a v b x y)) (list-push out (ksc-10-assert a v b x y))))
               ((k-self-rhs a v)       (list-push out (ksc-12 a v x y)))
               ((k-and _ _ _)          (do))
               ((k-some-lhs _ _ _)     (do))

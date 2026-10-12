@@ -445,8 +445,8 @@ types_ReasonerConfig howl_options_config(howl_Options o) {
     SLOP_PRE(((o.max_iterations <= 10000)), "(<= (. o max-iterations) 10000)");
     {
         __auto_type c = types_default_config();
-        c.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, o.workers, 1, 1, 1, 64, "(Int 1 .. 64) at howl.slop:726:50")));
-        c.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, o.max_iterations, 1, 1, 0, 10000, "(Int 0 .. 10000) at howl.slop:727:55")));
+        c.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, o.workers, 1, 1, 1, 64, "(Int 1 .. 64) at howl.slop:727:50")));
+        c.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, o.max_iterations, 1, 1, 0, 10000, "(Int 0 .. 10000) at howl.slop:728:55")));
         c.selection = ((o.auto_select) ? ((types_ProfileSelection){ .tag = types_ProfileSelection_slop_auto }) : ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = o.profile }));
         c.strict_profile = 0;
         c.cancel_ptr = o.cancel;

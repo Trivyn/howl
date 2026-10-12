@@ -530,7 +530,8 @@
                                       (set! cfg max-iterations (cast Int n))
                                       (do (println "howl: --max-iterations must be 0..10000") (set! failed true))))
                                   ((error _)
-                                    (do (println "howl: --max-iterations needs a whole number 0..10000") (set! failed true)))))))))
+                                    (do (println "howl: --max-iterations needs a whole number 0..10000")
+                                        (set! failed true)))))))))
 
                       ;; Worker count (§6.8): how many threads join each round.
                       ;; It can change only speed, never the report — the
@@ -553,7 +554,8 @@
                                       (set! cfg worker-count (cast Int n))
                                       (do (println "howl: --workers must be 1..64") (set! failed true))))
                                   ((error _)
-                                    (do (println "howl: --workers needs a whole number 1..64") (set! failed true)))))))))
+                                    (do (println "howl: --workers needs a whole number 1..64")
+                                        (set! failed true)))))))))
 
                       (when (or (string-eq arg "--emit") (string-eq arg "--reduce"))
                         (do

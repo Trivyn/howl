@@ -22,7 +22,8 @@
 ;; ============================================================
 
 (module sriqindex
-  (@doc "sriq's indexed commit: min(W ∪ C) in one pass, with subsumption queries through a literal index (SPEC 5.5 S6, D5)")
+  (@doc "sriq's indexed commit: min(W ∪ C) in one pass, with subsumption queries through a literal index (SPEC 5.5 S6,
+         D5)")
 
   (import types (Lit Clause lit-cmp))
   (import sriqclauses (clause-cmp clause-eq))
@@ -61,7 +62,8 @@
     (match (list-get es k) ((some e) e) ((none) fallback)))
 
   (fn key-of ((c Clause) (i Int))
-    (@intent "The entry c is filed under: its least body literal, else its least head literal; none for the empty clause")
+    (@intent "The entry c is filed under: its least body literal, else its least head literal; none for the empty
+              clause")
     (@spec ((Clause Int) -> (Option Entry)))
     (@pure)
     (match (list-get (. c body) 0)
@@ -71,7 +73,8 @@
                 ((none) (none))))))
 
   (fn sub-index ((arena Arena) (xs (List Clause)))
-    (@intent "xs filed by key literal, sorted. xs holds at most one empty clause (a min set, or a list without repeats), which is kept aside by position")
+    (@intent "xs filed by key literal, sorted. xs holds at most one empty clause (a min set, or a list without repeats),
+              which is kept aside by position")
     (@spec ((Arena (List Clause)) -> SubIndex))
     (@alloc arena)
     (let ((mut raw (list-new arena Entry)) (mut empty -1) (mut i 0))
@@ -176,7 +179,8 @@
           out)))
 
   (fn commit-indexed ((arena Arena) (ws (List Clause)) (cs (List Clause)))
-    (@intent "min(W ∪ C) for a min set W (content order) and candidates C, as commit-min gives it, in one pass: its set in content order, and what W lacked")
+    (@intent "min(W ∪ C) for a min set W (content order) and candidates C, as commit-min gives it, in one pass: its set
+              in content order, and what W lacked")
     (@spec ((Arena (List Clause) (List Clause)) -> Committed))
     (@alloc arena)
     (let ((wix (sub-index arena ws))

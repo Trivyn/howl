@@ -54,8 +54,8 @@
 
   (import rdf (IRI))
   (import vocab (OWL_THING OWL_NOTHING))
-  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig Fault cancel-requested
-                 role-eq kname-eq kterm-eq kelem-eq
+  (import types (RoleId KName KTerm KElem KFact KscAxiom ClassAnswer KscResult Termination ReasonerConfig Fault
+                 cancel-requested role-eq kname-eq kterm-eq kelem-eq
                  name-term nominal-term ind-elem class-elem copy-iri nothing-term))
   (import ksc (Concl JoinRule is-name is-nominal is-individual term-elem
                ksc-1 ksc-q ksc-2 ksc-3 ksc-4 ksc-5 ksc-6 ksc-7 ksc-8
@@ -274,7 +274,8 @@
       (file-new arena st f (encode-fact (. st ids) f))))
 
   (fn commit-coded ((arena Arena) (st KStore) (c CFact))
-    (@intent "A round's commit of a conclusion its worker found absent from the frozen store: the fact if it is new, none if this round already stored it")
+    (@intent "A round's commit of a conclusion its worker found absent from the frozen store: the fact if it is new,
+              none if this round already stored it")
     (@spec ((Arena KStore CFact) -> (Option KFact)))
     (@alloc arena)
     ;; The worker checked c against the store as the round began, the base
@@ -298,7 +299,8 @@
         ((none)   true))))
 
   (fn file-subject ((arena Arena) (sh Shard) (f KFact) (c CFact))
-    (@intent "The subject's half of filing a new fact, all in its subject's shard: seen, insts, noms, outs, noms-at, bots")
+    (@intent "The subject's half of filing a new fact, all in its subject's shard: seen, insts, noms, outs, noms-at,
+              bots")
     (@spec ((Arena Shard KFact CFact) -> Bool))
     (@alloc arena)
     (do
@@ -318,7 +320,8 @@
       true))
 
   (fn other-end ((st KStore) (f KFact) (c CFact))
-    (@intent "The element id a new fact is filed under besides its subject: a triple's x′, a nominal's {a}; none for the rest")
+    (@intent "The element id a new fact is filed under besides its subject: a triple's x′, a nominal's {a}; none for the
+              rest")
     (@spec ((KStore KFact CFact) -> (Option U32)))
     (match f
       ((f-inst _ y)
@@ -784,7 +787,8 @@
               ((k-and _ _ _)          (do))   ; filed in and-pairs, below
               ((k-some-lhs v a z)     (inst-some-lhs arena d f x y v a z))
               ((k-some-rhs a v b w)   (do (emit-concl d (ksc-9 a v b w x y)) (emit-concl d (ksc-10 a v b w x y))))
-              ((k-role-assert a v b)  (do (emit-concl d (ksc-9-assert a v b x y)) (emit-concl d (ksc-10-assert a v b x y))))
+              ((k-role-assert a v b)
+               (do (emit-concl d (ksc-9-assert a v b x y)) (emit-concl d (ksc-10-assert a v b x y))))
               ((k-self-rhs a v)       (emit-concl d (ksc-12 a v x y)))
               ((k-self-lhs _ _)       (do))
               ((k-role _ _)           (do))
@@ -1297,7 +1301,8 @@
     (set-has (. (shard-at st (. c a)) seen) c))
 
   (fn commit-subjects ((ca Arena) (sa Arena) (st KStore) (d Derived) (k Int) (nc Int) (res (Map Int Fresh)))
-    (@intent "Committer k's subject pass: dedup and file the subject's half of every conclusion its shards own, in Δₙ's order")
+    (@intent "Committer k's subject pass: dedup and file the subject's half of every conclusion its shards own, in Δₙ's
+              order")
     (@spec ((Arena Arena KStore Derived Int Int (Map Int Fresh)) -> Int))
     (@alloc sa)
     ;; Returns an Int because a spawned function is called through
@@ -1324,7 +1329,8 @@
         0)))
 
   (fn commit-others ((ca Arena) (st KStore) (held (List Held)) (k Int) (nc Int))
-    (@intent "Committer k's other pass: file the other end's half of each new fact whose other end's shard it owns, in Δₙ's order")
+    (@intent "Committer k's other pass: file the other end's half of each new fact whose other end's shard it owns, in
+              Δₙ's order")
     (@spec ((Arena KStore (List Held) Int Int) -> Int))
     (@alloc ca)
     (do
@@ -1464,7 +1470,8 @@
         (for-each (r ress)
           (match (map-get r 0)
             ((some fr) (do (list-push frs fr) (list-push cur 0)))
-            ((none)    (do (list-push frs (record-new Fresh (pos (list-new scratch Int)) (facts (list-new scratch KFact))))
+            ((none)    (do (list-push frs (record-new Fresh (pos (list-new scratch Int))
+                                                      (facts (list-new scratch KFact))))
                            (list-push cur 0)))))
         (set! (deref m) (record-new Merging (st st) (base base) (nc nc) (frs frs) (cur cur)
                           (next (list-new na KFact)) (held (list-new scratch Held))
@@ -1479,7 +1486,8 @@
 
   (fn run-ksc ((arena Arena) (idx KscIndex) (ids KscIds) (base (Option Base)) (seeds (List KFact))
                 (stop-at-bottom Bool) (budget Int) (cancel I64) (workers Int) (cas (List Arena)))
-    (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if asked to")
+    (@intent "Saturate from seeds over a base for at most `budget` rounds; stop at the fixpoint, or when ⊥ arises if
+              asked to")
     (@spec ((Arena KscIndex KscIds (Option Base) (List KFact) Bool Int I64 Int (List Arena)) -> RunResult))
     (@alloc arena)
     (@pre {budget >= 0})
@@ -2046,7 +2054,8 @@
   (fn classify-over-w ((arena Arena) (idx KscIndex) (g RunResult) (w RunResult) (tainted (List KElem))
                        (thing KName) (classes (List KName)) (budget Int) (workers Int) (cancel I64))
     (@intent "With G and W complete: mark safety and ⊥-reach, then answer every class (K6); a Fault if cancelled")
-    (@spec ((Arena KscIndex RunResult RunResult (List KElem) KName (List KName) Int Int I64) -> (Result KscResult Fault)))
+    (@spec ((Arena KscIndex RunResult RunResult (List KElem) KName (List KName) Int Int I64)
+            -> (Result KscResult Fault)))
     (@alloc arena)
     ;; PHASE Q IN PARALLEL. A safe class is answered from W here, inline:
     ;; it is a lookup. The unsafe ones are split into contiguous chunks of
