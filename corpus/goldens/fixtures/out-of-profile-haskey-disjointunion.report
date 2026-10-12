@@ -5,7 +5,7 @@ termination fixpoint
 rounds 1
 inconsistent false
 omitted 2
-omission DisjointUnion(<http://example.org/t#C> <http://www.w3.org/2002/07/owl#disjointUnionOf> _:b1 .)
+omission DisjointUnion(http://example.org/t#C http://example.org/t#A http://example.org/t#B)
 omission HasKey(<http://example.org/t#A> <http://www.w3.org/2002/07/owl#hasKey> _:b0 .)
 unsatisfiable 0
 subsumptions 7

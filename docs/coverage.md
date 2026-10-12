@@ -51,7 +51,8 @@ document using it reports *inconclusive*, never *coherent*. **non-goal** — exc
 | `NegativeObjectPropertyAssertion` | via {a} | ✓ | **done (`el++`)** | {a} ⊓ ∃r.{b} ⊑ ⊥ |
 | `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality; outside `el++` too |
 | ***Concrete domains*** | | | | |
-| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data property axioms and assertions, `DatatypeDefinition` | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
+| Domain, range, sub-property, equivalence, disjointness and functionality axioms of *idle* data properties (neither the property nor any data property below it is used in a class expression, assertion or key) | ✓ | ✓ | **inert, every rung** | the data lemma ([SPEC §5.2](../SPEC.md#52-the-exact-v0-language)): emptying an idle property changes no answer |
+| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data assertions, `DatatypeDefinition`, and the property axioms of data properties that are used | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
 
 † Sound and complete by the argument in [SPEC §5.3](../SPEC.md#53-the-abox-reduction-is-sound-and-complete)
 (M1 (f), reviewed 2026-09-30): a reduction to the published EL++ calculus on a nominal-free CBox and
@@ -90,8 +91,9 @@ Each is a `make` target that runs both rungs:
   R, which cuts each of phase G, phase W and phase Q.
 - **Bench** (`make bench-el++`, informational, W = 4): OBI 0.03× and RO 0.10× HermiT; GO 0.95× and
   EL-GALEN 5.25× ELK (`el`: 0.84× and 2.9×).
-`horn-sriq` ([§12](../SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not
-EL++'s nominals.
+`sriq` ([SPEC §5.5](../SPEC.md#55-the-sriq-calculus), M5 in
+[§12](../SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not EL++'s
+nominals.
 
 ## Off the path entirely
 
@@ -100,10 +102,11 @@ are recognized and enumerated like every open row above.
 
 | Construct | Where it lives |
 |---|---|
-| `ObjectUnionOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion`, `ObjectOneOf` with several members | outside EL entirely — `sriq` (v2); several-member `ObjectOneOf` needs nominals, which no rung plans |
-| `ObjectComplementOf` | **done** where it is a superclass, domain or range (or a conjunct of one): rewritten into ⊥ axioms, an exact equivalence. Anywhere else — under `∃`, in a union, on the left — `sriq` (v2) |
-| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — `horn-sriq` (v1) |
-| `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL — `horn-sriq` (v1) |
+| `ObjectUnionOf`, `ObjectAllValuesFrom`, cardinalities, `DisjointUnion` | outside EL entirely — `sriq` ([SPEC §5.5](../SPEC.md#55-the-sriq-calculus)) |
+| `ObjectOneOf` with several members | needs class nominals, which `sriq` leaves out; a later `sroiq` rung would take it, and none is planned |
+| `ObjectComplementOf` | **done** where it is a superclass, domain or range (or a conjunct of one): rewritten into ⊥ axioms, an exact equivalence. Anywhere else — under `∃`, in a union, on the left — `sriq` |
+| `InverseObjectProperties`, functional / inverse-functional, qualified cardinality | **the largest real gap** — `sriq` |
+| `DisjointObjectProperties`, symmetric / asymmetric / irreflexive | outside OWL 2 EL — `sriq` |
 | Anonymous individuals, reserved IRIs as entity names | excluded by OWL 2 EL / forbidden by OWL 2 |
 | SWRL rules | **never**, at any rung — unrestricted SWRL is undecidable, and it is in neither OWL 2 DL nor OWL 2 EL |
 

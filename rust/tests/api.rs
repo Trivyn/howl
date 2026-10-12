@@ -142,9 +142,21 @@ fn an_empty_input_is_coherent() {
 
 #[test]
 fn an_unbuilt_profile_is_refused_by_name() {
+    let config = Config { selection: ProfileSelection::Explicit(Profile::Sriq), ..Config::default() };
+    match Reasoner::with_config(config).classify(&turtle(UNSAT_TTL)) {
+        Err(Fault::ProfileUnavailable(Profile::Sriq)) => {}
+        other => panic!("expected ProfileUnavailable(Sriq), got {other:?}"),
+    }
+}
+
+#[test]
+#[allow(deprecated)]
+fn the_dropped_profile_is_refused() {
     let config = Config { selection: ProfileSelection::Explicit(Profile::HornSriq), ..Config::default() };
     match Reasoner::with_config(config).classify(&turtle(UNSAT_TTL)) {
-        Err(Fault::ProfileUnavailable(Profile::HornSriq)) => {}
+        Err(f @ Fault::ProfileUnavailable(Profile::HornSriq)) => {
+            assert_eq!(f.to_string(), "profile horn-sriq was dropped; sriq covers its language")
+        }
         other => panic!("expected ProfileUnavailable(HornSriq), got {other:?}"),
     }
 }

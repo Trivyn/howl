@@ -1,0 +1,23 @@
+# THE DATA LEMMA (SPEC.md §5.2): the property axioms of a data property that
+# nothing uses -- neither it nor any data property below it -- are inert in
+# every rung. Every data axiom here is on an idle property: domains (one a
+# class expression), a range, functionality, a sub-property, an equivalence,
+# a disjointness, and a sub-property of owl:topDataProperty. So the verdict is
+# COHERENT (exit 0), with nothing omitted.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:B rdfs:subClassOf :A .
+:d1 a owl:DatatypeProperty , owl:FunctionalProperty ;
+    rdfs:domain :A ; rdfs:range xsd:integer ;
+    rdfs:subPropertyOf :d2 .
+:d2 a owl:DatatypeProperty ;
+    rdfs:domain [ a owl:Class ; owl:intersectionOf ( :A :B ) ] .
+:d3 a owl:DatatypeProperty ; owl:equivalentProperty :d4 ; owl:propertyDisjointWith :d1 .
+:d4 a owl:DatatypeProperty ; rdfs:subPropertyOf owl:topDataProperty .

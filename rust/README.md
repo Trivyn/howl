@@ -72,8 +72,10 @@ The verdict is asymmetric. A finding is definitive at any coverage, because rest
 axiom can only add conclusions. Only the absence of a finding needs complete coverage.
 
 The library always runs non-strict: an out-of-profile axiom is reported as an omission, never
-refused. Asking for a rung that is not built yet (`HornSriq`, `Sriq`) returns
-`Fault::ProfileUnavailable`. It is never run as another rung.
+refused. Asking for a rung that is not built yet (`Sriq`) returns `Fault::ProfileUnavailable`. It
+is never run as another rung. `HornSriq` was dropped from the ladder: it is deprecated, always
+refused the same way, and kept only so the C enum is not renumbered. `Profile` is
+`#[non_exhaustive]`, so a later rung can be added without breaking your matches.
 
 ## Cancellation
 

@@ -300,6 +300,22 @@ static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
     ;
 }
 #endif
+#ifndef RDF_IRI_HASH_EQ_DEFINED
+#define RDF_IRI_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_rdf_IRI(const void* key) {
+    const rdf_IRI* _k = (const rdf_IRI*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_string(&_k->value); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_rdf_IRI(const void* a, const void* b) {
+    const rdf_IRI* _a = (const rdf_IRI*)a;
+    const rdf_IRI* _b = (const rdf_IRI*)b;
+    return true
+        && (slop_eq_string(&_a->value, &_b->value))
+    ;
+}
+#endif
 static inline uint64_t slop_hash_types_RoleId(const void* key) {
     const types_RoleId* _k = (const types_RoleId*)key;
     switch (_k->tag) {
@@ -307,6 +323,8 @@ static inline uint64_t slop_hash_types_RoleId(const void* key) {
             return slop_hash_rdf_IRI(&_k->data.named_role);
         case types_RoleId_fresh_role:
             return slop_hash_int(&(int64_t){ (int64_t)_k->data.fresh_role });
+        case types_RoleId_inverse_role:
+            return slop_hash_rdf_IRI(&_k->data.inverse_role);
     }
     return 0;
 }
@@ -319,6 +337,8 @@ static inline bool slop_eq_types_RoleId(const void* a, const void* b) {
             return slop_eq_rdf_IRI(&_a->data.named_role, &_b->data.named_role);
         case types_RoleId_fresh_role:
             return _a->data.fresh_role == _b->data.fresh_role;
+        case types_RoleId_inverse_role:
+            return slop_eq_rdf_IRI(&_a->data.inverse_role, &_b->data.inverse_role);
     }
     return false;
 }

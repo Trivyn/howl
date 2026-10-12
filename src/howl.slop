@@ -27,7 +27,7 @@
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document))
-  (import select (select-profile choose-auto profile-implemented))
+  (import select (select-profile choose-auto profile-implemented unavailable-message))
   (import saturate (RoundResult saturate reuse-arena))
   (import classify (extract-findings entails-sub extract-ksc-findings))
   (import gate (gate-axioms))
@@ -278,8 +278,8 @@
     (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
     (@alloc arena)
     ;; el++ has its own gate verdicts and normal form (§5.4); el's are
-    ;; §5.2's. horn-sriq and sriq never get here: profile-implemented
-    ;; refuses them first.
+    ;; §5.2's. horn-sriq (dropped) and sriq (not built yet) never get
+    ;; here: profile-implemented refuses them first.
     (match profile
       ('profile-el-plus-plus (prepare-ksc arena d config profile))
       ('profile-el           (prepare-el arena d config profile))
@@ -773,7 +773,7 @@
                   (match f
                     ((cancelled)       (faulted a 'fault-cancelled "" (. o profile)))
                     ((input-error m)   (faulted a 'fault-input-error m (. o profile)))
-                    ((unavailable p)   (faulted a 'fault-unavailable "" p))
+                    ((unavailable p)   (faulted a 'fault-unavailable (unavailable-message a p) p))
                     ;; Only a strict run refuses, and this API never runs
                     ;; strict; should it happen it is an input error, never
                     ;; a verdict.

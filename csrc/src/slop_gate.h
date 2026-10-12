@@ -170,6 +170,10 @@ owl2_RawConcept gate_with_conjunct(slop_arena* arena, owl2_RawConcept c, owl2_Ra
 owl2_RawAxiom gate_empty_axiom(slop_arena* arena, owl2_RawConcept c);
 slop_list_owl2_RawAxiom gate_expand_negation(slop_arena* arena, types_Profile p, slop_list_owl2_RawAxiom axs);
 uint8_t gate_is_top_role(types_RoleId r);
+uint8_t gate_is_inverse_role(types_RoleId r);
+uint8_t gate_roles_have_inverse(slop_list_types_RoleId rs);
+uint8_t gate_axiom_has_inverse(owl2_RawAxiom ax);
+slop_list_owl2_RawAxiom gate_named_roles_only(slop_arena* arena, slop_list_owl2_RawAxiom axs);
 uint8_t gate_into_top_role(owl2_RawAxiom ax);
 slop_list_owl2_RawAxiom gate_drop_top_role_tautologies(slop_arena* arena, types_Profile p, slop_list_owl2_RawAxiom axs);
 uint8_t gate_role_listed(slop_list_types_RoleId rs, types_RoleId r);

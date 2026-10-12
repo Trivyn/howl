@@ -1,0 +1,17 @@
+# The data lemma's hierarchy runs UP: :q is used (in an assertion), so :q is
+# not idle, and neither is :p above it. Both domains, the sub-property and the
+# assertion stay omitted, so the run is INCONCLUSIVE (exit 2). :r is idle, and
+# its range is set aside.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class .
+:p a owl:DatatypeProperty ; rdfs:domain :A .
+:q a owl:DatatypeProperty ; rdfs:subPropertyOf :p ; rdfs:domain :A .
+:r a owl:DatatypeProperty ; rdfs:range xsd:string .
+:a a owl:NamedIndividual ; :q "x" .

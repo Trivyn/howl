@@ -22,7 +22,7 @@ w3c outside-el++ New-Feature-Keys-002 DataAxiom HasKey
 w3c outside-el++ New-Feature-Keys-003 DataAxiom HasKey
 w3c outside-el++ New-Feature-Keys-004 DataAxiom HasKey
 w3c outside-el++ New-Feature-Keys-005 DataAxiom HasKey
-w3c outside-el++ New-Feature-Keys-006 DataAxiom FunctionalObjectProperty HasKey
+w3c outside-el++ New-Feature-Keys-006 DataAxiom HasKey
 w3c outside-el++ New-Feature-Keys-007 ClassAssertion DataAxiom HasKey
 w3c outside-el++ New-Feature-NegativeDataPropertyAssertion-001 DataAxiom
 w3c ok New-Feature-NegativeObjectPropertyAssertion-001
@@ -32,7 +32,7 @@ w3c ok New-Feature-ObjectPropertyChain-BJP-004
 w3c ok New-Feature-ReflexiveProperty-001
 w3c ok New-Feature-SelfRestriction-001
 w3c ok New-Feature-SelfRestriction-002
-w3c outside-el++ Plus_and_Minus_Zero_are_Distinct DataAxiom FunctionalObjectProperty
+w3c outside-el++ Plus_and_Minus_Zero_are_Distinct DataAxiom
 w3c ok WebOnt-AnnotationProperty-003
 w3c ok WebOnt-AnnotationProperty-004
 w3c ok WebOnt-I4.6-005-Direct
@@ -133,7 +133,7 @@ elk ok Negation
 elk ok NegationExistential
 elk outside-el++ OneOf SubClassOf
 elk ok PropertyChains
-elk outside-el++ PropertyChainsWithInverses ObjectInverseOf
+elk outside-el++ PropertyChainsWithInverses SubObjectPropertyOf
 elk ok PropertyHierarchy
 elk ok PropertyRanges
 elk ok PropertyRangesChains

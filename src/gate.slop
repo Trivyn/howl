@@ -112,16 +112,22 @@
                   (list-push out (union-new RawAxiom ra-property-chain
                                    (record-new RawChain (steps steps) (super r)))))))
 
-            ;; EquivalentObjectProperties(r₀ … rₙ) ⇒ a star through the least
+            ;; EquivalentObjectProperties(r₀ … rₙ) ⇒ a star through the least.
+            ;; One naming an ObjectInverseOf is kept whole: no rung built so
+            ;; far admits it, so it is omitted as written, one axiom. Its
+            ;; star could split it in pieces, or, when its members coincide,
+            ;; into nothing at all.
             ((ra-equivalent-properties rs)
-              (match (least-role rs)
-                ((none) (do))
-                ((some hub)
-                  (for-each (r rs)
-                    (when (!= (role-cmp r hub) 0)
-                      (do
-                        (list-push out (union-new RawAxiom ra-sub-object-property hub r))
-                        (list-push out (union-new RawAxiom ra-sub-object-property r hub))))))))
+              (if (roles-have-inverse rs)
+                (list-push out ax)
+                (match (least-role rs)
+                  ((none) (do))
+                  ((some hub)
+                    (for-each (r rs)
+                      (when (!= (role-cmp r hub) 0)
+                        (do
+                          (list-push out (union-new RawAxiom ra-sub-object-property hub r))
+                          (list-push out (union-new RawAxiom ra-sub-object-property r hub)))))))))
 
             ;; EquivalentClasses(C₀ … Cₙ) ⇒ a star through the least
             ((ra-equivalent-classes cs)
@@ -341,8 +347,58 @@
     (@spec ((RoleId) -> Bool))
     (@pure)
     (match r
-      ((named-role i) (== (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0))
-      ((fresh-role _) false)))
+      ((named-role i)   (== (string-cmp (. i value) OWL_TOP_OBJECT_PROPERTY) 0))
+      ((fresh-role _)   false)
+      ((inverse-role _) false)))
+
+  (fn is-inverse-role ((r RoleId))
+    (@intent "Is this an ObjectInverseOf?")
+    (@spec ((RoleId) -> Bool))
+    (@pure)
+    (match r
+      ((inverse-role _) true)
+      ((named-role _)   false)
+      ((fresh-role _)   false)))
+
+  (fn roles-have-inverse ((rs (List RoleId)))
+    (@intent "Does any role in this list invert a property?")
+    (@spec (((List RoleId)) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do
+        (for-each (r rs)
+          (when (is-inverse-role r) (set! found true)))
+        found)))
+
+  (fn axiom-has-inverse ((ax RawAxiom))
+    (@intent "Does this RBox, domain or range axiom name an ObjectInverseOf?")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (match ax
+      ((ra-sub-object-property a b)    (or (is-inverse-role a) (is-inverse-role b)))
+      ((ra-property-chain ch)          (or (roles-have-inverse (. ch steps))
+                                           (is-inverse-role (. ch super))))
+      ((ra-equivalent-properties rs)   (roles-have-inverse rs))
+      ((ra-transitive-property r)      (is-inverse-role r))
+      ((ra-object-property-domain r _) (is-inverse-role r))
+      ((ra-object-property-range r _)  (is-inverse-role r))
+      (_ false)))
+
+  (fn named-roles-only ((arena Arena) (axs (List RawAxiom)))
+    (@intent "The axioms naming no ObjectInverseOf: what el's and el++'s RBox conditions read")
+    (@spec ((Arena (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    ;; An axiom with an inverse is out of profile in every rung built so
+    ;; far, and the per-axiom check omits it. Its roles must not reach the
+    ;; collective RBox conditions either. Before inverses were
+    ;; represented, such an axiom was an opaque fragment those conditions
+    ;; never saw; letting RO's ten inverse-step chains into §11.2's check
+    ;; now would change el's answer on RBoxes it has already judged.
+    (let ((mut out (list-new arena RawAxiom)))
+      (do
+        (for-each (ax axs)
+          (when (not (axiom-has-inverse ax)) (list-push out ax)))
+        out)))
 
   (fn into-top-role ((ax RawAxiom))
     (@intent "Is this an inclusion whose super-role is owl:topObjectProperty?")
@@ -366,8 +422,12 @@
       axs
       (let ((mut out (list-new arena RawAxiom)))
         (do
+          ;; Only an inclusion of el++'s own roles: one naming an
+          ;; ObjectInverseOf is outside el++'s language, and is omitted
+          ;; as written rather than dropped.
           (for-each (ax axs)
-            (when (not (into-top-role ax)) (list-push out ax)))
+            (when (not (and (into-top-role ax) (not (axiom-has-inverse ax))))
+              (list-push out ax)))
           out))))
 
   (fn role-listed ((rs (List RoleId)) (r RoleId))
@@ -506,19 +566,20 @@
         ;; that range elimination then runs outside its own
         ;; precondition. A deterministic refusal is worth more than a
         ;; larger result set nobody can reproduce.
-        (let ((rbox-bad (match (check-regularity arena expanded)
+        (let ((rview  (named-roles-only arena expanded))
+              (rbox-bad (match (check-regularity arena rview)
                           ((rbox-regular) false)
                           ((rbox-irregular _) true)))
               ;; The RBox role list is collected ONCE over the expanded
               ;; axioms and shared by the closure, the range table and the
               ;; per-axiom check — it had been recomputed for each.
-              (rroles (collect-rbox-roles arena expanded))
-              (told   (told-closure arena expanded rroles (cast Int (list-len rroles))))
-              (ranges (collect-ranges arena expanded rroles))
+              (rroles (collect-rbox-roles arena rview))
+              (told   (told-closure arena rview rroles (cast Int (list-len rroles))))
+              (ranges (collect-ranges arena rview rroles))
               ;; Self is only ever in el++, so only el++ pays for the
               ;; simple-role closure.
               (nonsimple (if (is-el-plus-plus p)
-                           (non-simple-roles arena expanded)
+                           (non-simple-roles arena rview)
                            (list-new arena RoleId))))
           (for-each (ax expanded)
           (match (disposition p ax)
@@ -812,13 +873,13 @@
     (@spec ((Arena (List RoleId) Int Int) -> String))
     (@alloc arena)
     (string-concat arena "property-chain regularity: "
-      (string-concat arena (render-role (role-at roles i))
+      (string-concat arena (render-role arena (role-at roles i))
         (string-concat arena " must precede "
-          (string-concat arena (render-role (role-at roles j))
+          (string-concat arena (render-role arena (role-at roles j))
             (string-concat arena ", but the told hierarchy has "
-              (string-concat arena (render-role (role-at roles j))
+              (string-concat arena (render-role arena (role-at roles j))
                 (string-concat arena " sub-property-of "
-                  (render-role (role-at roles i))))))))))
+                  (render-role arena (role-at roles i))))))))))
 
   (fn check-regularity ((arena Arena) (axs (List RawAxiom)))
     (@intent "OWL 2 §11.2 regularity over the RBox AS WRITTEN")
@@ -1081,7 +1142,11 @@
                                  (kind 'entity-class) (entity i) (axiom ax))))
               (for-each (rl roles)
                 (match rl
+                  ;; ObjectInverseOf(P) declares nothing, but P must be.
                   ((named-role i)
+                    (list-push out (record-new EntityRef
+                                     (kind 'entity-object-property) (entity i) (axiom ax))))
+                  ((inverse-role i)
                     (list-push out (record-new EntityRef
                                      (kind 'entity-object-property) (entity i) (axiom ax))))
                   ((fresh-role _) (do)))))))

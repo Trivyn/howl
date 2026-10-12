@@ -60,6 +60,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 import entdiff  # noqa: E402
+import profiles  # noqa: E402
 
 HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "howl"))
 ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
@@ -69,7 +70,7 @@ TRIPWIRE = os.path.join(ROOT, "corpus", "fixtures", "out-of-profile", "allvalues
 PROFILE = "el"
 CAPABILITIES = os.path.join(HERE, "oracle-capabilities.txt")
 OUT = os.path.join(ROOT, "build", "differential")
-FIXTURE_DIRS = ("v0", "hazards", "probes")
+FIXTURE_DIRS = ("v0", "hazards", "probes", "data")
 PROBE_DIR = "probes"
 REASONERS = ("hermit", "elk")
 RANGE = "ObjectPropertyRange"
@@ -468,6 +469,13 @@ def elk_capable():
     return passes - fails
 
 
+def routed_constructs(in_v0, inert):
+    """The constructs an input is routed on: what HOWL reasons over, plus the
+    data axioms the data lemma sets aside (SPEC.md §5.2), which ELK cannot read."""
+    import census
+    return set(in_v0) | ({census.INERT_DATA} & set(inert))
+
+
 def elk_gates(constructs, capable):
     """(does ELK gate?, why not) for an input with these census constructs."""
     uncovered = sorted(set(constructs) - capable)
@@ -484,14 +492,14 @@ CORPUS_RECORD = os.path.join(HERE, "corpus-differential.txt")
 def set_profile(p):
     """Point the harness at one rung: HOWL's flag, the census, the records, the fixtures."""
     global PROFILE, CAPABILITIES, CORPUS_RECORD, OUT, FIXTURE_DIRS, PROBE_DIR
-    if p not in ("el", "el++"):
-        raise HarnessError(f"unknown profile {p} (el or el++)")
+    if p not in profiles.BUILT:
+        raise HarnessError(f"unknown profile {p} ({profiles.expected()})")
     PROFILE = p
     if p != "el":
         CAPABILITIES = os.path.join(HERE, f"oracle-capabilities-{p}.txt")
         CORPUS_RECORD = os.path.join(HERE, f"corpus-differential-{p}.txt")
         OUT = os.path.join(ROOT, "build", f"differential-{p}")
-        FIXTURE_DIRS = ("v0", "hazards", "probes", p, f"probes-{p}")
+        FIXTURE_DIRS = ("v0", "hazards", "probes", "data", p, f"probes-{p}")
         PROBE_DIR = f"probes-{p}"
 
 
@@ -538,9 +546,9 @@ def cmd_corpus(update, also, timeout):
             continue
         ground = pins["ground_sha"]
         bnode_sha = pins["bnode_sha"]
-        _, in_v0, _, _, _ = census.census(path, graph=g, profile=PROFILE)
+        _, in_v0, _, inert, _ = census.census(path, graph=g, profile=PROFILE)
         spots = owlapi_blind_spots(g)
-        gates_elk, why = elk_gates(set(in_v0), capable)
+        gates_elk, why = elk_gates(routed_constructs(in_v0, inert), capable)
         routed = "elk" if gates_elk else "hermit"
         plan.append((e, stem, path, routed, why, spots, (ground, bnode_sha)))
 
@@ -646,8 +654,8 @@ def cmd_fixtures():
     failed = malformed
     for f in comparable:
         n = name_of(f)
-        _, in_v0, _, _, _ = census.census(f, profile=PROFILE)
-        constructs = set(in_v0)
+        _, in_v0, _, inert, _ = census.census(f, profile=PROFILE)
+        constructs = routed_constructs(in_v0, inert)
         gates_elk, why = elk_gates(constructs, capable)
         cells, row_failed = [], False
         if n in lossy:

@@ -24,6 +24,7 @@ static int failures = 0;
 #define CHECK(cond, ...) do { if (!(cond)) { failures++; fprintf(stderr, "FAIL: " __VA_ARGS__); fputc('\n', stderr); } } while (0)
 
 static slop_string str(const char* s) { return (slop_string){ strlen(s), s }; }
+static int msg_is(slop_string m, const char* want) { return m.len == strlen(want) && memcmp(m.data, want, m.len) == 0; }
 
 static char* read_file(const char* path, size_t* len) {
     FILE* f = fopen(path, "rb");
@@ -130,11 +131,23 @@ static void refusals(const char* path) {
     CHECK(howl_run_fault(r) == howl_FaultKind_fault_invalid_options, "max_iterations 10001 accepted");
     howl_run_free(r);
 
+    /* horn-sriq was dropped (SPEC §5): its slot stays in the enum and is
+     * refused for good, saying what replaces it. sriq is not built yet. */
     o = howl_default_options();
     o.profile = types_Profile_profile_horn_sriq;
     r = howl_run_classify(in, o);
     CHECK(howl_run_fault(r) == howl_FaultKind_fault_unavailable, "horn-sriq not refused");
     CHECK(howl_run_fault_profile(r) == types_Profile_profile_horn_sriq, "unavailable names another profile");
+    CHECK(msg_is(howl_run_fault_message(r), "profile horn-sriq was dropped; sriq covers its language"),
+          "horn-sriq's refusal does not say it was dropped");
+    howl_run_free(r);
+
+    o = howl_default_options();
+    o.profile = types_Profile_profile_sriq;
+    r = howl_run_classify(in, o);
+    CHECK(howl_run_fault(r) == howl_FaultKind_fault_unavailable, "sriq not refused");
+    CHECK(msg_is(howl_run_fault_message(r), "profile sriq is not implemented yet (implemented: el, el++)"),
+          "sriq's refusal does not say it is not built yet");
     howl_run_free(r);
 
     uint32_t flag = 1;

@@ -29,8 +29,12 @@ Checked in order, and each reported under its own category:
 
 Exit 0 clean, 1 on any mismatch, 3 on malformed or refused input.
 """
+import os
 import sys
 from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 
 NOTHING = "http://www.w3.org/2002/07/owl#Nothing"
 SHOWN = 50
@@ -129,7 +133,7 @@ def parse(path):
                 raise Refused(f"{path}: {count_key} {single[count_key]} but {tally[item_key]} {item_key} line(s)")
         # A version-2 report states the calculus that ran (SPEC §5.1): its
         # findings are complete for that rung's logic and no other.
-        if single.get("profile") not in ("el", "el++", "horn-sriq", "sriq"):
+        if single.get("profile") not in profiles.RUNGS:
             raise Refused(f"{path}: profile {single.get('profile')!r}")
         termination = single.get("termination")
         if termination not in ("fixpoint", "resource-limit"):
