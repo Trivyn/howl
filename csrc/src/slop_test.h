@@ -1566,6 +1566,7 @@ uint8_t test_proto_caps(slop_arena* arena, slop_string label, sriqref_RefIn in, 
 slop_list_types_Clause test_rpred_late_clauses(slop_arena* arena);
 uint8_t test_test_sriq_rpred_late(slop_arena* arena);
 slop_list_types_Clause test_view_eq_clauses(slop_arena* arena);
+slop_list_types_Clause test_root_hyper_clauses(slop_arena* arena);
 slop_list_types_Clause test_view_join_clauses(slop_arena* arena);
 slop_list_types_Clause test_view_units_clauses(slop_arena* arena);
 uint8_t test_test_sriq_view_eq(slop_arena* arena);

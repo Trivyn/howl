@@ -1,0 +1,357 @@
+;; ============================================================
+;; sriq's indexed Hyper for the prototype  —  SPEC.md §5.5, the prototype
+;; ("Filters that change no conclusion", Hyper), slice 9e
+;; ============================================================
+
+(module sriqhyper
+  (@doc "sriq's indexed Hyper for the prototype: O's clauses filed by body-atom key, slot premises found by lookup,
+         and at the root choices tried one constant at a time (SPEC 5.5, slice 9e)")
+
+  (import types (Lit Clause at-x))
+  (import canon (sort-range))
+  (import sriq (Premise HState hyper-start))
+  (import sriqref (Env Cand Out Dl4 out-of product x-fits hyper-choices dl4-of))
+  (import sriqground (PIdx pidx-key-range form-rank pick-ix))
+
+  (export HIdx HCtx HOut h-index hyper-indexed)
+
+  ;; One context as Hyper reads it.
+  (type HCtx (record
+    (v    U32)
+    (root Bool)
+    (dps  (List Premise))
+    (aps  (List Premise))
+    (dix  PIdx)
+    (oix  PIdx)
+    (aix  PIdx)))
+
+  ;; ============================================================
+  ;; Hyper, indexed (slice 9e)
+  ;;
+  ;; hyper-step fires only on a maximal premise whose selected literal is
+  ;; the body atom under σ: of its form and predicate, with x at x away
+  ;; from the root (x-fits), and at the root with σ(x) one constant for
+  ;; every atom (term-matches). So, changing no conclusion:
+  ;;   - an instance anchored on atom i needs a premise of Δ of atom i's
+  ;;     form and predicate, so only the (clause, atom) pairs filed under
+  ;;     the keys Δ selects are run;
+  ;;   - each slot's premises are found by that key in premises filed by
+  ;;     selected literal;
+  ;;   - at the root, each slot's premises are grouped by the constant at
+  ;;     the atom's x (every Table 1 body atom mentions x), and only the
+  ;;     choices within one constant's groups are tried.
+  ;; ============================================================
+
+  ;; One body atom of one ontology clause, filed under its form and
+  ;; predicate.
+  (type OKey (record
+    (rank Int)
+    (pred U32)
+    (oc   Int)       ; position in HIdx's bodied
+    (i    Int)))     ; the atom's position in its body
+
+  (type HIdx (record
+    (bodied   (List Clause))
+    (bodiless (List Clause))
+    (keys     (List OKey))     ; sorted by rank, then pred
+    (width    Int)             ; the widest body's length: pair codes are oc × width + i
+    (dl4s     (List Dl4))))    ; O's DL4 at-most clauses, as Nom reads them
+
+  ;; Hyper's output and the choices it tried.
+  (type HOut (record
+    (out   Out)
+    (tried Int)))
+
+  (fn okey-at ((ks (List OKey)) (k Int) (fallback OKey))
+    (@intent "Element k")
+    (@spec (((List OKey) Int OKey) -> OKey))
+    (@pure)
+    (match (list-get ks k) ((some x) x) ((none) fallback)))
+
+  (fn okey-cmp ((a OKey) (b OKey))
+    (@intent "By rank, then pred")
+    (@spec ((OKey OKey) -> Int))
+    (@pure)
+    (cond ((< (. a rank) (. b rank)) -1) ((> (. a rank) (. b rank)) 1)
+          ((< (. a pred) (. b pred)) -1) ((> (. a pred) (. b pred)) 1)
+          (else 0)))
+
+  (fn h-index ((arena Arena) (onto (List Clause)))
+    (@intent "O's clauses split by whether they have a body, every body atom filed under its form and predicate, and the
+              DL4 at-most clauses")
+    (@spec ((Arena (List Clause)) -> HIdx))
+    (@alloc arena)
+    (let ((mut bodied (list-new arena Clause)) (mut bodiless (list-new arena Clause)) (mut raw (list-new arena OKey)))
+      (do (for-each (oc onto)
+            (if (== (list-len (. oc body)) 0)
+              (list-push bodiless oc)
+              (do (for-each (k (okeys-of arena oc (cast Int (list-len bodied)))) (list-push raw k))
+                  (list-push bodied oc))))
+          (record-new HIdx (bodied bodied) (bodiless bodiless) (keys (okeys-sorted arena raw)) (width (widest onto))
+                           (dl4s (dl4s-of arena onto))))))
+
+  (fn widest ((onto (List Clause)))
+    (@intent "The longest body of O, at least 1")
+    (@spec (((List Clause)) -> Int))
+    (@pure)
+    (let ((mut w 1))
+      (do (for-each (oc onto) (when (> (cast Int (list-len (. oc body))) w) (set! w (cast Int (list-len (. oc body))))))
+          w)))
+
+  (fn dl4s-of ((arena Arena) (onto (List Clause)))
+    (@intent "O's DL4 at-most clauses, as Nom reads them, found once")
+    (@spec ((Arena (List Clause)) -> (List Dl4)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Dl4)))
+      (do (for-each (oc onto) (let ((d (dl4-of oc))) (when (. d ok) (list-push out d)))) out)))
+
+  (fn okeys-of ((arena Arena) (oc Clause) (n Int))
+    (@intent "oc's body atoms as keys, oc being clause n of the bodied")
+    (@spec ((Arena Clause Int) -> (List OKey)))
+    (@alloc arena)
+    (let ((mut out (list-new arena OKey)) (mut i 0))
+      (do (for-each (a (. oc body))
+            (do (list-push out (record-new OKey (rank (form-rank (. a form))) (pred (. a pred)) (oc n) (i i)))
+                (set! i (+ i 1))))
+          out)))
+
+  (fn okeys-sorted ((arena Arena) (raw (List OKey)))
+    (@intent "raw sorted by rank, then pred")
+    (@spec ((Arena (List OKey)) -> (List OKey)))
+    (@alloc arena)
+    (match (list-get raw 0)
+      ((none) raw)
+      ((some k0)
+        (let ((idx (sort-range arena (cast Int (list-len raw))
+                     (fn ((a Int) (b Int)) (okey-cmp (okey-at raw a k0) (okey-at raw b k0)))))
+              (mut out (list-new arena OKey)))
+          (do (for-each (k idx) (list-push out (okey-at raw k k0))) out)))))
+
+  (fn okey-lower ((ks (List OKey)) (key OKey) (fallback OKey))
+    (@intent "The first position whose key is not below key's")
+    (@spec (((List OKey) OKey OKey) -> Int))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len ks))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (okey-cmp (okey-at ks mid fallback) key) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  (fn pair-code ((hx HIdx) (k OKey))
+    (@intent "A (clause, atom) pair as one number: oc times the widest body's length, plus i")
+    (@spec ((HIdx OKey) -> Int))
+    (@pure)
+    (+ (* (. k oc) (. hx width)) (. k i)))
+
+  (fn hyper-pairs ((arena Arena) (hx HIdx) (ps (List Premise)))
+    (@intent "The (clause, atom) pairs whose atom has the form and predicate of a maximal premise of ps, each once,
+              as pair codes in order")
+    (@spec ((Arena HIdx (List Premise)) -> (List Int)))
+    (@alloc arena)
+    (match (list-get (. hx keys) 0)
+      ((none) (list-new arena Int))
+      ((some k0) (codes-set arena (pairs-of arena hx ps k0)))))
+
+  (fn pairs-of ((arena Arena) (hx HIdx) (ps (List Premise)) (k0 OKey))
+    (@intent "The pair codes filed under each maximal premise's form and predicate, with repeats")
+    (@spec ((Arena HIdx (List Premise) OKey) -> (List Int)))
+    (@alloc arena)
+    (let ((mut raw (list-new arena Int)))
+      (do (for-each (p ps)
+            (when (. p maxed)
+              (for-each (c (pairs-under arena hx (form-rank (. (. p sel) form)) (. (. p sel) pred) k0))
+                (list-push raw c))))
+          raw)))
+
+  (fn pairs-under ((arena Arena) (hx HIdx) (rank Int) (pred U32) (k0 OKey))
+    (@intent "The pair codes filed under (rank, pred)")
+    (@spec ((Arena HIdx Int U32 OKey) -> (List Int)))
+    (@alloc arena)
+    (let ((ks (. hx keys)) (key (record-new OKey (rank rank) (pred pred) (oc 0) (i 0)))
+          (mut out (list-new arena Int)) (mut k (okey-lower ks key k0)))
+      (do (while (and (< k (cast Int (list-len ks))) (== (okey-cmp (okey-at ks k k0) key) 0))
+            (do (list-push out (pair-code hx (okey-at ks k k0))) (set! k (+ k 1))))
+          out)))
+
+  (fn codes-set ((arena Arena) (xs (List Int)))
+    (@intent "xs sorted, each once")
+    (@spec ((Arena (List Int)) -> (List Int)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((a Int) (b Int)) (cond ((< (code-at xs a) (code-at xs b)) -1)
+                                             ((> (code-at xs a) (code-at xs b)) 1)
+                                             (else 0)))))
+          (mut out (list-new arena Int)) (mut last -1))
+      (do (for-each (k idx)
+            (let ((x (code-at xs k))) (when (!= x last) (do (list-push out x) (set! last x)))))
+          out)))
+
+  (fn code-at ((xs (List Int)) (k Int))
+    (@intent "Element k, or -1")
+    (@spec (((List Int) Int) -> Int))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) -1)))
+
+  (fn slot-ix-cands ((arena Arena) (root Bool) (a Lit) (ix PIdx))
+    (@intent "The premises Hyper's step can match against body atom a, found by a's form and predicate in ix: maximal,
+              and x against x away from the root (slot-cands' filter, by lookup)")
+    (@spec ((Arena Bool Lit PIdx) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)))
+      (do (for-each (p (pidx-key-range arena ix (form-rank (. a form)) (. a pred)))
+            (when (and (x-fits root (. a t1) (. (. p sel) t1))
+                       (or (== (. a form) 'lf-unary) (x-fits root (. a t2) (. (. p sel) t2))))
+              (list-push out p)))
+          out)))
+
+  (fn hyper-anchor ((arena Arena) (env Env) (hc HCtx) (start HState) (oc Clause) (i Int))
+    (@intent "Hyper on one ontology clause with its body atom i anchored in Δ_v; at the root, choice by choice within
+              one constant bound to x")
+    (@spec ((Arena Env HCtx HState Clause Int) -> HOut))
+    (@alloc arena)
+    (let ((anchor (match (list-get (. oc body) i)
+                    ((some a) (slot-ix-cands arena (. hc root) a (. hc dix)))
+                    ((none) (list-new arena Premise))))
+          (mut cs (list-new arena (List Premise))) (mut j 0) (mut empty (== (list-len anchor) 0)))
+      (do (while (and (not empty) (< j (cast Int (list-len (. oc body)))))
+            (let ((c (if (== j i) anchor (slot-at arena hc oc i j))))
+              (do (list-push cs c) (when (== (list-len c) 0) (set! empty true)) (set! j (+ j 1)))))
+          (cond (empty (record-new HOut (out (out-of (list-new arena Cand) false)) (tried 0)))
+                ((. hc root) (hyper-root-groups arena env hc start oc cs))
+                (else (hyper-product arena env hc start oc cs))))))
+
+  (fn slot-at ((arena Arena) (hc HCtx) (oc Clause) (i Int) (j Int))
+    (@intent "Slot j's premises when atom i is the anchor")
+    (@spec ((Arena HCtx Clause Int Int) -> (List Premise)))
+    (@alloc arena)
+    (match (list-get (. oc body) j)
+      ((some a) (slot-ix-cands arena (. hc root) a (pick-ix j i (. hc dix) (. hc oix) (. hc aix))))
+      ((none) (list-new arena Premise))))
+
+  (fn hyper-product ((arena Arena) (env Env) (hc HCtx) (start HState) (oc Clause) (cs (List (List Premise))))
+    (@intent "Every choice of one premise per slot, finished; over the choices cap, none and over")
+    (@spec ((Arena Env HCtx HState Clause (List (List Premise))) -> HOut))
+    (@alloc arena)
+    (let ((n (product cs (. env prod))))
+      (cond ((> n (. env prod)) (record-new HOut (out (out-of (list-new arena Cand) true)) (tried 0)))
+            ((== n 0) (record-new HOut (out (out-of (list-new arena Cand) false)) (tried 0)))
+            (else (match (list-get (. hc aps) 0)
+                    ((none) (record-new HOut (out (out-of (list-new arena Cand) false)) (tried 0)))
+                    ((some p0) (record-new HOut (out (out-of (hyper-choices arena (. hc v) start oc cs n p0) false))
+                                                (tried n))))))))
+
+  ;; At the root: a slot's premise binds σ(x) to the constant at the
+  ;; atom's x, or matches nothing (term-matches takes a constant there).
+
+  (type CPrem (record
+    (u U32)
+    (p Premise)))
+
+  ;; One slot's premises by constant. A record, as Bucket is: the C
+  ;; generator orders a (List (List T)) before (List T) in the header.
+  (type Group (record
+    (cps (List CPrem))))
+
+  (fn x-const ((a Lit) (p Premise))
+    (@intent "The constant p's selected literal has where a has x, or none")
+    (@spec ((Lit Premise) -> (Option U32)))
+    (@pure)
+    (let ((t (if (== (. (. a t1) kind) 'ak-x) (. (. p sel) t1) (. (. p sel) t2))))
+      (if (== (. t kind) 'ak-u) (some (. t cst)) (none))))
+
+  (fn cprem-at ((xs (List CPrem)) (k Int) (fallback CPrem))
+    (@intent "Element k")
+    (@spec (((List CPrem) Int CPrem) -> CPrem))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) fallback)))
+
+  (fn by-const ((arena Arena) (a Lit) (ps (List Premise)))
+    (@intent "ps with the constant each binds to x, sorted by it; those binding none dropped")
+    (@spec ((Arena Lit (List Premise)) -> (List CPrem)))
+    (@alloc arena)
+    (let ((mut raw (list-new arena CPrem)))
+      (do (for-each (p ps)
+            (match (x-const a p) ((some u) (list-push raw (record-new CPrem (u u) (p p)))) ((none) (set! raw raw))))
+          (match (list-get raw 0)
+            ((none) raw)
+            ((some c0) (cprems-sorted arena raw c0))))))
+
+  (fn cprems-sorted ((arena Arena) (raw (List CPrem)) (c0 CPrem))
+    (@intent "raw sorted by constant")
+    (@spec ((Arena (List CPrem) CPrem) -> (List CPrem)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len raw))
+                 (fn ((i Int) (j Int)) (cond ((< (. (cprem-at raw i c0) u) (. (cprem-at raw j c0) u)) -1)
+                                             ((> (. (cprem-at raw i c0) u) (. (cprem-at raw j c0) u)) 1)
+                                             (else 0)))))
+          (mut out (list-new arena CPrem)))
+      (do (for-each (k idx) (list-push out (cprem-at raw k c0))) out)))
+
+  (fn with-const ((arena Arena) (xs (List CPrem)) (u U32))
+    (@intent "The premises of xs (sorted by constant) that bind u")
+    (@spec ((Arena (List CPrem) U32) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)) (mut lo 0) (mut hi (cast Int (list-len xs))))
+      (match (list-get xs 0)
+        ((none) out)
+        ((some c0)
+          (do (while (< lo hi)
+                (let ((mid (/ (+ lo hi) 2)))
+                  (if (< (. (cprem-at xs mid c0) u) u) (set! lo (+ mid 1)) (set! hi mid))))
+              (while (and (< lo (cast Int (list-len xs))) (== (. (cprem-at xs lo c0) u) u))
+                (do (list-push out (. (cprem-at xs lo c0) p)) (set! lo (+ lo 1))))
+              out)))))
+
+  (fn hyper-root-groups ((arena Arena) (env Env) (hc HCtx) (start HState) (oc Clause) (cs (List (List Premise))))
+    (@intent "Hyper at the root, for each constant u that binds x in every slot: the choices within u's premises")
+    (@spec ((Arena Env HCtx HState Clause (List (List Premise))) -> HOut))
+    (@alloc arena)
+    (let ((mut groups (list-new arena Group)) (mut j 0))
+      (do (for-each (a (. oc body))
+            (do (match (list-get cs j) ((some ps) (list-push groups (record-new Group (cps (by-const arena a ps)))))
+                  ((none) (set! j j)))
+                (set! j (+ j 1))))
+          (match (list-get groups 0)
+            ((none) (record-new HOut (out (out-of (list-new arena Cand) false)) (tried 0)))
+            ((some g0) (root-by-const arena env hc start oc groups (. g0 cps)))))))
+
+  (fn root-by-const ((arena Arena) (env Env) (hc HCtx) (start HState) (oc Clause) (groups (List Group))
+                     (g0 (List CPrem)))
+    (@intent "hyper-root-groups over each constant of the first slot's groups, once each")
+    (@spec ((Arena Env HCtx HState Clause (List Group) (List CPrem)) -> HOut))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut over false) (mut tried 0) (mut last -1))
+      (do (for-each (c g0)
+            (when (!= (cast Int (. c u)) last)
+              (let ((o (hyper-product arena env hc start oc (slots-for arena groups (. c u)))))
+                (do (set! last (cast Int (. c u)))
+                    (for-each (x (. (. o out) cands)) (list-push out x))
+                    (when (. (. o out) over) (set! over true))
+                    (set! tried (+ tried (. o tried)))))))
+          (record-new HOut (out (out-of out over)) (tried tried)))))
+
+  (fn slots-for ((arena Arena) (groups (List Group)) (u U32))
+    (@intent "Each slot's premises that bind u")
+    (@spec ((Arena (List Group) U32) -> (List (List Premise))))
+    (@alloc arena)
+    (let ((mut out (list-new arena (List Premise))))
+      (do (for-each (g groups) (list-push out (with-const arena (. g cps) u))) out)))
+
+  (fn hyper-indexed ((arena Arena) (env Env) (hx HIdx) (hc HCtx))
+    (@intent "Hyper on the ontology clauses with a body, once per (clause, atom) pair a premise of Δ_v can anchor")
+    (@spec ((Arena Env HIdx HCtx) -> HOut))
+    (@alloc arena)
+    (let ((start (hyper-start arena (at-x) (not (. hc root))))
+          (mut out (list-new arena Cand)) (mut over false) (mut tried 0))
+      (do (for-each (code (hyper-pairs arena hx (. hc dps)))
+            (match (list-get (. hx bodied) (/ code (. hx width)))
+              ((none) (set! tried tried))
+              ((some oc)
+                (let ((o (hyper-anchor arena env hc start oc (% code (. hx width)))))
+                  (do (for-each (c (. (. o out) cands)) (list-push out c))
+                      (when (. (. o out) over) (set! over true))
+                      (set! tried (+ tried (. o tried))))))))
+          (record-new HOut (out (out-of out over)) (tried tried)))))
+
+
+)

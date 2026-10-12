@@ -53,7 +53,7 @@
                    in-su in-pr in-sur in-prr lit-ground mentions-x tau-su tau-pr omega omega-d pow2-sat has-lit strat-choice core-of
                    init-structure ctx-count ctx-at ctx-by-core ctx-clause-ok q-inconsistent q-unsat q-holds q-thing))
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
-  (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise))
+  (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees))
   (import sriqindex (commit-indexed KIdx k-index k-query))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt max-flags))
 
@@ -6296,6 +6296,9 @@
                          (same-bools (answers-of arena (. r st) n) (answers-of arena (. (. p res) st) n)))
              (proto-says arena (string-concat arena label ": the K-set index is k-sets, on every context and trigger") s
                          (and (kidx-agrees arena in (. r st)) (kidx-agrees arena in (. (. p res) st))))
+             (proto-says arena (string-concat arena label ": the indexed Hyper is the reference's, on every context") s
+                         (and (hyper-ix-agrees arena in (sat-cfg s 0) (. r st))
+                              (hyper-ix-agrees arena in (sat-cfg s 0) (. (. p res) st))))
              (proto-perms arena label in n s p)
              (proto-caps arena label in n s p)))))
 
@@ -6429,6 +6432,24 @@
           (list-push out (r-clause arena (one-lit arena (r-atom 7 x)) (one-lit arena (r-atom 8 (r-fx 0)))))
           out)))
 
+  (fn root-hyper-clauses ((arena Arena))
+    (@intent "Root Hyper grouped by σ(x): S(a, b), S(b, c), S(c, a), B(a), B(b), E(b), ∃S.B ⊑ C (S(z₁, x) ∧ B(x) →
+              C(z₁)) and C ⊓ E ⊑ ⊥. The root must derive C(a) and C(c), each from premises about two individuals, and
+              not C(b) (no B(c)), which would make the ABox inconsistent. Classes B 0, C 1, E 2; S 0; a 0, b 1, c 2")
+    (@spec ((Arena) -> (List Clause)))
+    (@alloc arena)
+    (let ((x (at-x)) (z1 (at-z (cast U32 1))) (a (at-u (cast U32 0))) (b (at-u (cast U32 1))) (c (at-u (cast U32 2)))
+          (mut out (list-new arena Clause)))
+      (do (list-push out (r-top arena (one-lit arena (r-role 0 a b))))
+          (list-push out (r-top arena (one-lit arena (r-role 0 b c))))
+          (list-push out (r-top arena (one-lit arena (r-role 0 c a))))
+          (list-push out (r-top arena (one-lit arena (r-atom 0 a))))
+          (list-push out (r-top arena (one-lit arena (r-atom 0 b))))
+          (list-push out (r-top arena (one-lit arena (r-atom 2 b))))
+          (list-push out (r-clause arena (lits2-of arena (r-role 0 z1 x) (r-atom 0 x)) (one-lit arena (r-atom 1 z1))))
+          (list-push out (r-clause arena (lits2-of arena (r-atom 1 x) (r-atom 2 x)) (no-lits arena)))
+          out)))
+
   (fn view-join-clauses ((arena Arena))
     (@intent "The shared ground view's Join of a context's premise into G. v_A holds ⊤ → F(x) ∨ C(o) and
               ⊤ → G(x) ∨ E(o) directly (no x ≈ o, so nothing in v_A reaches C(o)'s or E(o)'s consequences
@@ -6504,6 +6525,8 @@
                                            (in (ref-in (view-eq-clauses arena) 9 9 4 1 2)) (n 9)))
           (list-push out (record-new ProtoCase (label "view units row")
                                            (in (ref-in (view-units-clauses arena) 5 5 1 1 1)) (n 5)))
+          (list-push out (record-new ProtoCase (label "root Hyper row")
+                                           (in (ref-in (root-hyper-clauses arena) 3 3 1 0 3)) (n 3)))
           (list-push out (record-new ProtoCase (label "view Join row")
                                            (in (ref-in (view-join-clauses arena) 14 14 1 0 1)) (n 14)))
           out)))
@@ -6868,7 +6891,8 @@
           (count-line arena "committed" (. c added))
           (count-line arena "succ" (. c succs))
           (count-line arena "rsucc" (. c rsuccs))
-          (count-line arena "nom-children" (. c noms)))))
+          (count-line arena "nom-children" (. c noms))
+          (count-line arena "hyper-choices" (. c hyper)))))
 
   (fn test-sriq-gate-table ((arena Arena))
     (@intent "§5.5's language and gate conditions, row by row, against el and el++")

@@ -108,17 +108,6 @@ SLOP_OPTION_DEFINE(sriqground_Hides, slop_option_sriqground_Hides)
 SLOP_LIST_DEFINE(sriqground_Hides, slop_list_sriqground_Hides)
 #endif
 
-struct sriqground_PIdx {
-    slop_list_sriq_Premise ps;
-    slop_list_int bysel;
-};
-typedef struct sriqground_PIdx sriqground_PIdx;
-
-#ifndef SLOP_OPTION_SRIQGROUND_PIDX_DEFINED
-#define SLOP_OPTION_SRIQGROUND_PIDX_DEFINED
-SLOP_OPTION_DEFINE(sriqground_PIdx, slop_option_sriqground_PIdx)
-#endif
-
 struct sriqground_Ground {
     slop_list_types_Clause gs;
     slop_list_u8 fresh;
@@ -129,15 +118,23 @@ struct sriqground_Ground {
     slop_list_sriq_Premise ps;
     slop_list_int pm;
     slop_list_int bysel;
-    sriqground_PIdx rall;
-    sriqground_PIdx rnew;
-    sriqground_PIdx rold;
 };
 typedef struct sriqground_Ground sriqground_Ground;
 
 #ifndef SLOP_OPTION_SRIQGROUND_GROUND_DEFINED
 #define SLOP_OPTION_SRIQGROUND_GROUND_DEFINED
 SLOP_OPTION_DEFINE(sriqground_Ground, slop_option_sriqground_Ground)
+#endif
+
+struct sriqground_PIdx {
+    slop_list_sriq_Premise ps;
+    slop_list_int bysel;
+};
+typedef struct sriqground_PIdx sriqground_PIdx;
+
+#ifndef SLOP_OPTION_SRIQGROUND_PIDX_DEFINED
+#define SLOP_OPTION_SRIQGROUND_PIDX_DEFINED
+SLOP_OPTION_DEFINE(sriqground_PIdx, slop_option_sriqground_PIdx)
 #endif
 
 uint8_t sriqground_lit_gf(types_Lit l);
@@ -172,9 +169,13 @@ uint8_t sriqground_held_in(slop_arena* arena, sriqindex_SubIndex ix, types_Lit a
 slop_list_sriq_Premise sriqground_member_premises(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_types_Clause gs);
 slop_list_int sriqground_premise_members(slop_arena* arena, slop_list_types_Clause gs);
 sriqground_Ground sriqground_ground_of(slop_arena* arena, sriqctx_Triggers tr, sriqctx_Structure st, slop_list_types_Clause root_news);
-slop_list_types_Clause sriqground_not_in(slop_arena* arena, slop_list_types_Clause cs, slop_list_types_Clause news);
 sriqground_PIdx sriqground_pidx_of(slop_arena* arena, slop_list_sriq_Premise ps);
 slop_list_sriq_Premise sriqground_pidx_find(slop_arena* arena, sriqground_PIdx ix, types_Lit l);
+int64_t sriqground_form_rank(types_LitForm f);
+int64_t sriqground_key_cmp_lit(types_Lit l, int64_t rank, uint32_t pred);
+slop_list_sriq_Premise sriqground_pidx_key_range(slop_arena* arena, sriqground_PIdx ix, int64_t rank, uint32_t pred);
+int64_t sriqground_key_lower(sriqground_PIdx ix, int64_t rank, uint32_t pred, sriq_Premise p0);
+sriqground_PIdx sriqground_pick_ix(int64_t j, int64_t i, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix);
 types_Lit sriqground_idx_sel(sriqground_PIdx ix, int64_t k, sriq_Premise p0);
 int64_t sriqground_idx_lower(sriqground_PIdx ix, types_Lit l, sriq_Premise p0);
 uint8_t sriqground_g_visible(sriqground_Ground gd, int64_t v, int64_t i);
