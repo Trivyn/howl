@@ -610,7 +610,7 @@ types_DName sriqnames_rename_name(slop_list_int fresh, types_DName n) {
         case types_DName_dn_fresh:
         {
             __auto_type k = _mv_357.data.dn_fresh;
-            return ((types_DName){ .tag = types_DName_dn_fresh, .data.dn_fresh = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_int_at(fresh, ((int64_t)(k))), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:205:64"))) });
+            return ((types_DName){ .tag = types_DName_dn_fresh, .data.dn_fresh = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_int_at(fresh, ((int64_t)(k))), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:207:64"))) });
         }
     }
     SLOP_UNREACHABLE();
@@ -633,7 +633,7 @@ types_DRole sriqnames_rename_role(slop_list_int subs, types_DRole r) {
         case types_DRole_dr_sub:
         {
             __auto_type k = _mv_359.data.dr_sub;
-            return ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_int_at(subs, ((int64_t)(k))), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:218:60"))) });
+            return ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_int_at(subs, ((int64_t)(k))), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:220:60"))) });
         }
         default: {
             return r;
@@ -782,7 +782,7 @@ types_DlClause sriqnames_renumber_fns(slop_arena* arena, types_DlClause c, int64
                 __auto_type fs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                 int64_t i = 0;
                 while (i < ((int64_t)(((int64_t)((d.fns).len))))) {
-                    ({ __auto_type _lst_p = &(fs); __auto_type _item = (((int64_t)(SLOP_RANGE(int64_t, (next + i), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:295:50")))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ __auto_type _lst_p = &(fs); __auto_type _item = (((int64_t)(SLOP_RANGE(int64_t, (next + i), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:297:50")))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     i = (i + 1);
                 }
                 return ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = d.sub, .role = d.role, .count = d.count, .filler = d.filler, .fns = fs}) });
@@ -977,7 +977,7 @@ sriqnames_SriqNormal sriqnames_sriq_names(slop_arena* arena, sriqnormal_S2 s2, o
         __auto_type sorder = sriqnames_srole_order(arena, s2.sroles, fills);
         __auto_type subs = sriqnames_rank_of(arena, sorder);
         __auto_type clauses = sriqnames_canonical_clauses(arena, sriqnames_rename_clauses(arena, fresh, subs, s2.clauses));
-        return ((sriqnames_SriqNormal){.clauses = clauses, .concepts = sriqnames_pick_concepts(arena, s2.concepts, forder), .sroles = sriqnames_pick_roles(arena, s2.sroles, sorder), .sfills = sriqnames_pick_fills(arena, fills, sorder), .bars = canon_sort_iris(arena, s2.bars), .fns = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_fn_total(clauses), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:432:39"))), .classes = sriqnames_input_classes(arena, sig), .individuals = sriqnames_input_individuals(arena, sig), .omitted = omitted});
+        return ((sriqnames_SriqNormal){.clauses = clauses, .concepts = sriqnames_pick_concepts(arena, s2.concepts, forder), .sroles = sriqnames_pick_roles(arena, s2.sroles, sorder), .sfills = sriqnames_pick_fills(arena, fills, sorder), .bars = canon_sort_iris(arena, s2.bars), .fns = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_fn_total(clauses), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:434:39"))), .classes = sriqnames_input_classes(arena, sig), .individuals = sriqnames_input_individuals(arena, sig), .omitted = omitted});
     }
 }
 

@@ -26,7 +26,8 @@
   (import sriqnormal (S0 S2 sriq-s0 sriq-s2))
   (import sriqelim (S1 sriq-s1 S1_BOUND))
 
-  (export SriqNormal sriq-normalize sriq-normalize-bounded guard-witnesses sriq-names render-dl-ids render-sriq-normal sriq-invariants)
+  (export SriqNormal sriq-normalize sriq-normalize-bounded guard-witnesses sriq-names
+          render-dl-ids render-sriq-normal sriq-invariants)
 
   ;; The normaliser's output, as the calculus will read it.
   (type SriqNormal (record
@@ -182,7 +183,8 @@
           ((dl1 x)      (match b ((dl1 y) (dl1-cmp x y)) (_ 0)))
           ((dl2 x)      (match b ((dl2 y) (dl2-cmp x y)) (_ 0)))
           ((dl3 s1 p1 q1)
-            (match b ((dl3 s2 p2 q2) (then-cmp (drole-cmp s1 s2) (then-cmp (dname-cmp p1 p2) (dname-cmp q1 q2)))) (_ 0)))
+            (match b ((dl3 s2 p2 q2) (then-cmp (drole-cmp s1 s2) (then-cmp (dname-cmp p1 p2) (dname-cmp q1 q2))))
+              (_ 0)))
           ((dl4 x)      (match b ((dl4 y) (dl4-cmp x y)) (_ 0)))
           ((dl5 n1 s1)  (match b ((dl5 n2 s2) (then-cmp (dname-cmp n1 n2) (drole-cmp s1 s2))) (_ 0)))
           ((dl6 s1 n1)  (match b ((dl6 s2 n2) (then-cmp (drole-cmp s1 s2) (dname-cmp n1 n2))) (_ 0)))
@@ -524,13 +526,16 @@
     (@intent "Names, space-joined")
     (@spec ((Arena (List DName)) -> String))
     (@alloc arena)
-    (let ((mut out "")) (do (for-each (n ns) (set! out (string-concat arena out (string-concat arena " " (rn arena n))))) out)))
+    (let ((mut out ""))
+      (do (for-each (n ns) (set! out (string-concat arena out (string-concat arena " " (rn arena n))))) out)))
 
   (fn rints ((arena Arena) (xs (List (Int 0 ..))))
     (@intent "Ids, space-joined")
     (@spec ((Arena (List (Int 0 ..))) -> String))
     (@alloc arena)
-    (let ((mut out "")) (do (for-each (x xs) (set! out (string-concat arena out (string-concat arena " f" (int-to-string arena x))))) out)))
+    (let ((mut out ""))
+      (do (for-each (x xs) (set! out (string-concat arena out (string-concat arena " f" (int-to-string arena x)))))
+          out)))
 
   (fn j ((arena Arena) (parts (List String)))
     (@intent "Parts joined by |")
@@ -549,11 +554,14 @@
     (let ((mut ps (list-new arena String)))
       (do
         (match c
-          ((dl1 d)  (do (list-push ps "DL1") (list-push ps (rns arena (. d body))) (list-push ps (rns arena (. d head)))))
+          ((dl1 d)
+           (do (list-push ps "DL1") (list-push ps (rns arena (. d body))) (list-push ps (rns arena (. d head)))))
           ((dl2 d)  (do (list-push ps "DL2") (list-push ps (rn arena (. d sub))) (list-push ps (rr arena (. d role)))
                         (list-push ps (int-to-string arena (. d count))) (list-push ps (rf arena (. d filler)))
                         (list-push ps (rints arena (. d fns)))))
-          ((dl3 s a b) (do (list-push ps "DL3") (list-push ps (rr arena s)) (list-push ps (rn arena a)) (list-push ps (rn arena b))))
+          ((dl3 s a b)
+           (do (list-push ps "DL3") (list-push ps (rr arena s)) (list-push ps (rn arena a))
+               (list-push ps (rn arena b))))
           ((dl4 d)  (do (list-push ps "DL4") (list-push ps (rn arena (. d sub))) (list-push ps (rr arena (. d role)))
                         (list-push ps (int-to-string arena (. d count))) (list-push ps (rf arena (. d filler)))
                         (list-push ps (rr arena (. d srole)))))
@@ -592,7 +600,8 @@
         (set! k 0)
         (for-each (r (. n sroles))
           (let ((b (fill-at (. n sfills) k)))
-            (do (list-push out (table-line arena "S" k (string-concat arena (rr arena r) (string-concat arena " " (rf arena b)))))
+            (do (list-push out (table-line arena "S" k
+                                           (string-concat arena (rr arena r) (string-concat arena " " (rf arena b)))))
                 (set! k (+ k 1)))))
         (for-each (l (prefixed arena "bar " (. n bars))) (list-push out l))
         (list-push out (string-concat arena "fns " (int-to-string arena (. n fns))))
@@ -726,7 +735,8 @@
         (for-each (c (. n clauses))
           (do
             (when (not (witness-count-ok c))
-              (list-push bad (string-concat arena "a DL2 without one function symbol per witness: " (render-dl-ids arena c))))
+              (list-push bad (string-concat arena "a DL2 without one function symbol per witness: "
+                                            (render-dl-ids arena c))))
             (for-each (f (clause-fns arena c))
               (do (when (!= (cast Int f) next)
                     (list-push bad (string-concat arena "function symbols not dense: " (render-dl-ids arena c))))
@@ -736,14 +746,16 @@
         bad)))
 
   (fn fresh-not-signature ((arena Arena) (n SriqNormal))
-    (@intent "The A_E that stand for a class name, which is its own name. ⊤'s one fresh name is T, choice 11's B₁ for a domain or range, defined by ⊤ ⊑ T (§5.5 S2)")
+    (@intent "The A_E that stand for a class name, which is its own name. ⊤'s one fresh name is T, choice 11's B₁ for a
+              domain or range, defined by ⊤ ⊑ T (§5.5 S2)")
     (@spec ((Arena SriqNormal) -> (List String)))
     (@alloc arena)
     (let ((mut bad (list-new arena String)))
       (do
         (for-each (c (. n concepts))
           (match c
-            ((sc-name _) (list-push bad (string-concat arena "a fresh name for a class name: " (render-sconcept arena c))))
+            ((sc-name _)
+             (list-push bad (string-concat arena "a fresh name for a class name: " (render-sconcept arena c))))
             (_           (do))))
         bad)))
 

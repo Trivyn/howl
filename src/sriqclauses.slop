@@ -785,7 +785,8 @@
         ('lf-neq    false))))
 
   (fn dl-head-lit ((l Lit))
-    (@intent "A DL-literal: B(t) over a DL-a-term; S(zᵢ, x), S(x, zᵢ), S(x, x), S(x, f(x)) or S(f(x), x); or ≈ or ≉ between DL-a-terms")
+    (@intent "A DL-literal: B(t) over a DL-a-term; S(zᵢ, x), S(x, zᵢ), S(x, x), S(x, f(x)) or S(f(x), x); or ≈ or ≉
+              between DL-a-terms")
     (@spec ((Lit) -> Bool))
     (@pure)
     (let ((a (. l t1)) (b (. l t2)))
@@ -918,7 +919,8 @@
   ;; A_k's and S_k's ids are arithmetic (nclass + k, sub0 + k), so their
   ;; place is their id, which tables-round-trip already checks.
   (fn class-in-place ((ids SriqIds) (i Int) (b DName) (prev IRI))
-    (@intent "Is class entry i where content order puts it: an input class before every A_k and after the class before it?")
+    (@intent "Is class entry i where content order puts it: an input class before every A_k and after the class before
+              it?")
     (@spec ((SriqIds Int DName IRI) -> Bool))
     (match b
       ((dn-class c) (and (< i (. ids nclass)) (or (== i 0) (< (iri-cmp prev c) 0))))

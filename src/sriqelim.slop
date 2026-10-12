@@ -336,7 +336,8 @@
     (@pure)
     (match (list-get xs i)
       ((some e) e)
-      ((none)   (record-new Pending (forall true) (role (union-new RoleId fresh-role 0)) (filler (union-new SConcept sc-top))))))
+      ((none)
+       (record-new Pending (forall true) (role (union-new RoleId fresh-role 0)) (filler (union-new SConcept sc-top))))))
 
   (fn drain ((arena Arena) (p (Ptr S1State)))
     (@intent "Expand every queued key, those expansions queue included, while S1 is going")
@@ -496,7 +497,8 @@
           out)))
 
   (fn atom-axioms ((arena Arena) (c SConcept))
-    (@intent "The axioms a replacing atom's expansion must have left (an I∀ or an F∃; the others are made by expansions)")
+    (@intent "The axioms a replacing atom's expansion must have left (an I∀ or an F∃; the others are made by
+              expansions)")
     (@spec ((Arena SConcept) -> (List SAxiom)))
     (@alloc arena)
     (match c
@@ -540,7 +542,8 @@
       (do
         (match a
           ((sa-ria x)
-            (when (ria-complex rb x) (list-push bad (string-concat arena "a complex RIA is left: " (render-saxiom arena a)))))
+            (when (ria-complex rb x)
+              (list-push bad (string-concat arena "a complex RIA is left: " (render-saxiom arena a)))))
           ((sa-gci l r)
             (do
               (when (and (not (item1-p (deref l) (deref r)))
@@ -562,7 +565,8 @@
       (do
         (while (and ok (< i (cast Int (list-len a))))
           (do (match (list-get a i)
-                ((some x) (match (list-get b i) ((some y) (when (!= (sa-cmp x y) 0) (set! ok false))) ((none) (set! ok false))))
+                ((some x)
+                 (match (list-get b i) ((some y) (when (!= (sa-cmp x y) 0) (set! ok false))) ((none) (set! ok false))))
                 ((none) (set! ok false)))
               (set! i (+ i 1))))
         ok)))

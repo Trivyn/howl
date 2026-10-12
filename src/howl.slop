@@ -638,7 +638,8 @@
         (reuse-arena sc)
         (when (not ok)
           (do
-            (set! st failed (some "a term of a kind HOWL does not take (a quoted triple, or a blank id outside 0..2^40-1)"))
+            (set! st failed
+                  (some "a term of a kind HOWL does not take (a quoted triple, or a blank id outside 0..2^40-1)"))
             (set! (deref ptr) st)))
         ok)))
 
@@ -777,7 +778,7 @@
                     ;; Only a strict run refuses, and this API never runs
                     ;; strict; should it happen it is an input error, never
                     ;; a verdict.
-                    ((refused _)       (faulted a 'fault-input-error "refused under a strict profile" (. o profile))))))))))))
+                    ((refused _) (faulted a 'fault-input-error "refused under a strict profile" (. o profile))))))))))))
 
   (fn run-free ((r Run))
     (@intent "Free a run and every string it returned")

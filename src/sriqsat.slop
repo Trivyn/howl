@@ -32,7 +32,8 @@
 ;; ============================================================
 
 (module sriqsat
-  (@doc "sriq's single-threaded prototype of S6's rounds: derive over Δₙ against a frozen Sₙ, a serial create, commit-min per context, the boundary (SPEC 5.5 S6, D8)")
+  (@doc "sriq's single-threaded prototype of S6's rounds: derive over Δₙ against a frozen Sₙ, a serial create,
+         commit-min per context, the boundary (SPEC 5.5 S6, D8)")
 
   (import types (Lit Clause at-x at-u))
   (import sriqclauses (clause-cmp))
@@ -212,7 +213,8 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut u (. dl ncst)))
       (do (while (< u (consts-of st))
-            (do (for-each (c (conclusion arena v (hyper-finish arena (hyper-start arena (at-u (cast U32 u)) true) (. oc head))))
+            (do (for-each (c (conclusion arena v (hyper-finish arena (hyper-start arena (at-u (cast U32 u)) true)
+                                                               (. oc head))))
                   (list-push out c))
                 (set! u (+ u 1))))
           out)))
@@ -239,12 +241,15 @@
             (when (and (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq))
               (for-each (p2 p2s)
                 (when (. p2 maxed)
-                  (do (for-each (c (eq-positions arena (. st ord) (. h v) (. h root) p1 (cast U32 1) p2)) (list-push out c))
-                      (for-each (c (eq-positions arena (. st ord) (. h v) (. h root) p1 (cast U32 2) p2)) (list-push out c)))))))
+                  (do (for-each (c (eq-positions arena (. st ord) (. h v) (. h root) p1 (cast U32 1) p2))
+                        (list-push out c))
+                      (for-each (c (eq-positions arena (. st ord) (. h v) (. h root) p1 (cast U32 2) p2))
+                        (list-push out c)))))))
           out)))
 
   (fn sat-table2 ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here))
-    (@intent "Table 2 but Nom and Core, anchored on Δ_v: Hyper; Eq with either premise new; Ineq and Factor on the new; Join with either side new")
+    (@intent "Table 2 but Nom and Core, anchored on Δ_v: Hyper; Eq with either premise new; Ineq and Factor on the new;
+              Join with either side new")
     (@spec ((Arena Env Structure Delta Here) -> Out))
     (@alloc arena)
     (let ((hy (sat-hyper arena env st dl h))
@@ -286,7 +291,8 @@
     (list-get (. (. s c) body) (. s j)))
 
   (fn sat-join ((arena Arena) (v U32) (p1s (List Premise)) (sites (List JoinSite)))
-    (@intent "Join of each maximal premise of p1s with a joinable selected literal against each site holding that literal")
+    (@intent "Join of each maximal premise of p1s with a joinable selected literal against each site holding that
+              literal")
     (@spec ((Arena U32 (List Premise) (List JoinSite)) -> (List Cand)))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
@@ -302,7 +308,8 @@
     (let ((mut out (list-new arena Cand)))
       (do (for-each (s sites)
             (when (site-holds s (. p1 sel))
-              (for-each (c (conclusion arena v (join-rule arena p1 (body-at arena (. s c) (. s j))))) (list-push out c))))
+              (for-each (c (conclusion arena v (join-rule arena p1 (body-at arena (. s c) (. s j)))))
+                (list-push out c))))
           out)))
 
   (fn site-holds ((s JoinSite) (l Lit))
@@ -352,7 +359,8 @@
   ;; ============================================================
 
   (fn k2-touched ((arena Arena) (env Env) (st Structure) (h Here) (p Premise))
-    (@intent "Does a new clause of v put an atom into K₂ for p's successor term? Then p's Succ instance has a new premise")
+    (@intent "Does a new clause of v put an atom into K₂ for p's successor term? Then p's Succ instance has a new
+              premise")
     (@spec ((Arena Env Structure Here Premise) -> Bool))
     (@alloc arena)
     (match (succ-sig (. h root) (. p sel))
@@ -360,7 +368,8 @@
       ((some sg) (> (list-len (. (k-sets arena (. st ord) (. env tr) sg (. h news)) k2)) 0))))
 
   (fn succ-premises ((arena Arena) (env Env) (st Structure) (h Here))
-    (@intent "The premises whose Succ instance has a new premise: the new ones, and the old ones whose K₂ a new clause touches")
+    (@intent "The premises whose Succ instance has a new premise: the new ones, and the old ones whose K₂ a new clause
+              touches")
     (@spec ((Arena Env Structure Here) -> (List Premise)))
     (@alloc arena)
     (let ((mut out (list-new arena Premise)))
@@ -381,7 +390,8 @@
                   (set! i (+ i 1)))))
           (out-of out over))))
 
-  (fn pred-anchor ((arena Arena) (env Env) (job PJob) (dws (List Premise)) (ows (List Premise)) (aws (List Premise)) (i Int))
+  (fn pred-anchor ((arena Arena) (env Env) (job PJob) (dws (List Premise)) (ows (List Premise)) (aws (List Premise))
+                   (i Int))
     (@intent "One job with side slot i anchored in Δ_w: every choice, finished as pred-run finishes")
     (@spec ((Arena Env PJob (List Premise) (List Premise) (List Premise) Int) -> Out))
     (@alloc arena)
@@ -397,7 +407,8 @@
                   (out-of out false)))))))
 
   (fn pred-side ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here) (e Edge))
-    (@intent "Pred over ⟨w, v, f⟩ for the old clauses of S_v, with a side premise new in S_w; into v_r for each u ∈ U_H")
+    (@intent "Pred over ⟨w, v, f⟩ for the old clauses of S_v, with a side premise new in S_w; into v_r for each u ∈
+              U_H")
     (@spec ((Arena Env Structure Delta Here Edge) -> Out))
     (@alloc arena)
     (let ((w (cast Int (. e from)))
@@ -426,7 +437,8 @@
           out)))
 
   (fn sat-pred ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here) (ins (List Edge)))
-    (@intent "Pred over every f-edge ⟨w, v, f⟩: all of it when the edge is new (or w is v_r and constants are new); else the new clauses of S_v, and the old ones with a new side premise in S_w")
+    (@intent "Pred over every f-edge ⟨w, v, f⟩: all of it when the edge is new (or w is v_r and constants are new); else
+              the new clauses of S_v, and the old ones with a new side premise in S_w")
     (@spec ((Arena Env Structure Delta Here (List Edge)) -> Out))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut over false))
@@ -458,7 +470,8 @@
           found)))
 
   (fn sat-rpred ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here))
-    (@intent "r-Pred into v: all of it when an edge ⟨v, v_r, u⟩ is new; else the new root clauses, and the old ones with a new side premise in S_v")
+    (@intent "r-Pred into v: all of it when an edge ⟨v, v_r, u⟩ is new; else the new root clauses, and the old ones with
+              a new side premise in S_v")
     (@spec ((Arena Env Structure Delta Here) -> Out))
     (@alloc arena)
     (if (rpred-edge-new dl (. h v))
@@ -568,7 +581,8 @@
           (record-new Cut (es cur) (k i)))))
 
   (fn buckets ((arena Arena) (es (List Edge)) (idx (List Int)) (n Int) (by-to Bool) (e0 Edge))
-    (@intent "For each context 0 to n - 1, the edges whose target (by-to) or source it is, walking idx, sorted on that end, once")
+    (@intent "For each context 0 to n - 1, the edges whose target (by-to) or source it is, walking idx, sorted on that
+              end, once")
     (@spec ((Arena (List Edge) (List Int) Int Bool Edge) -> (List Bucket)))
     (@alloc arena)
     (let ((mut out (list-new arena Bucket)) (mut k 0) (mut v 0))
@@ -620,7 +634,8 @@
           out)))
 
   (fn sat-apply ((arena Arena) (st Structure) (r Round) (scan Bool))
-    (@intent "Create, then commit: new constants, contexts and edges in content order; then each context's min over its candidates, which gives Δₙ₊₁")
+    (@intent "Create, then commit: new constants, contexts and edges in content order; then each context's min over its
+              candidates, which gives Δₙ₊₁")
     (@spec ((Arena Structure Round Bool) -> Step))
     (@alloc arena)
     (let ((n0 (consts-of st))
@@ -635,10 +650,12 @@
       (commit-all arena s3 cands c0 e0 n0 scan)))
 
   (fn commit-all ((arena Arena) (st Structure) (cands (List Cand)) (c0 Int) (e0 Int) (n0 Int) (scan Bool))
-    (@intent "Each context's set and Δ: candidates sorted by context and content, each context committed through commit-min over its own run of them")
+    (@intent "Each context's set and Δ: candidates sorted by context and content, each context committed through
+              commit-min over its own run of them")
     (@spec ((Arena Structure (List Cand) Int Int Int Bool) -> Step))
     (@alloc arena)
-    (let ((none-such (record-new Cand (ctx (cast U32 0)) (c (record-new Clause (body (list-new arena Lit)) (head (list-new arena Lit))))))
+    (let ((none-such (record-new Cand (ctx (cast U32 0))
+                                 (c (record-new Clause (body (list-new arena Lit)) (head (list-new arena Lit))))))
           (idx (sort-range arena (cast Int (list-len cands))
                  (fn ((i Int) (j Int)) (cand-cmp (cand-at cands i none-such) (cand-at cands j none-such)))))
           (mut sets (list-new arena CtxSet)) (mut news (list-new arena CtxSet)) (mut olds (list-new arena CtxSet))
@@ -654,7 +671,8 @@
                     (set! v (+ v 1))))))
           (record-new Step
             (st (record-new Structure (ctxs (. st ctxs)) (sets sets) (edges (. st edges)) (ord (. st ord))))
-            (dl (record-new Delta (news news) (olds olds) (edges (edges-from arena (. st edges) e0)) (nctx c0) (ncst n0)))
+            (dl (record-new Delta (news news) (olds olds) (edges (edges-from arena (. st edges) e0)) (nctx c0)
+                            (ncst n0)))
             (changed (or grew
                          (!= (cast Int (list-len (. st ctxs))) c0)
                          (!= (cast Int (list-len (. st edges))) e0)
@@ -673,7 +691,8 @@
           out)))
 
   (fn commit-one ((arena Arena) (ws (List Clause)) (cs (List Clause)) (scan Bool))
-    (@intent "min(S_v ∪ candidates) when there are candidates, through the index or (scan) commit-min; else the set as it is, with nothing added")
+    (@intent "min(S_v ∪ candidates) when there are candidates, through the index or (scan) commit-min; else the set as
+              it is, with nothing added")
     (@spec ((Arena (List Clause) (List Clause) Bool) -> Committed))
     (@alloc arena)
     (cond ((== (list-len cs) 0) (record-new Committed (set ws) (added (list-new arena Clause))))
@@ -756,7 +775,8 @@
                        (added (+ (. c added) (sum-added dl)))))
 
   (fn sat-once ((next Arena) (scratch Arena) (env Env) (cfg SatConfig) (run Run))
-    (@intent "One round: derive and create in scratch, and what the commit leaves copied into next; at the choices cap, the run as it was, stopped")
+    (@intent "One round: derive and create in scratch, and what the commit leaves copied into next; at the choices cap,
+              the run as it was, stopped")
     (@spec ((Arena Arena Env SatConfig Run) -> Run))
     (@alloc next)
     (let ((r (sat-round scratch env (. run st) (. run dl) (. cfg perm))))
@@ -765,12 +785,14 @@
                         (counts (. run counts)))
         (let ((sp (sat-apply scratch (. run st) r (. cfg scan)))
               (st (copy-structure next (. sp st)))
-              (status (stop-status scratch env st (record-new Committing (st st) (changed (. sp changed))) (. cfg base))))
+              (status (stop-status scratch env st (record-new Committing (st st) (changed (. sp changed)))
+                                   (. cfg base))))
           (record-new Run (st st) (dl (copy-delta next (. sp dl))) (status status) (rounds (+ (. run rounds) 1))
                           (going (== status 'rs-fuel)) (counts (tally (. run counts) r (. sp dl))))))))
 
   (fn sat-run ((arena Arena) (in RefIn) (cfg SatConfig))
-    (@intent "Algorithm 1 under S6's schedule at one worker: initialise, then rounds of derive, create and commit to a stop. Each round runs in a scratch arena, and what it leaves is copied into an arena of its own")
+    (@intent "Algorithm 1 under S6's schedule at one worker: initialise, then rounds of derive, create and commit to a
+              stop. Each round runs in a scratch arena, and what it leaves is copied into an arena of its own")
     (@spec ((Arena RefIn SatConfig) -> SatResult))
     (@alloc arena)
     (let ((base (. cfg base))
@@ -780,7 +802,8 @@
           (st0 (init-structure arena (. in nquery) (. in nconst)))
           (mut held (arena-new 1048576))
           (mut run (record-new Run (st st0) (dl (first-delta arena st0)) (status 'rs-fuel) (rounds 0) (going true)
-                                   (counts (record-new Counts (cands 0) (rcands 0) (succs 0) (rsuccs 0) (noms 0) (added 0))))))
+                                   (counts (record-new Counts (cands 0) (rcands 0) (succs 0) (rsuccs 0) (noms 0)
+                                                       (added 0))))))
       (do (while (and (. run going) (< (. run rounds) (. base fuel)))
             (let ((scratch (arena-new 1048576))
                   (next (arena-new 1048576))

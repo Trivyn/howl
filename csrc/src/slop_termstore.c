@@ -333,7 +333,7 @@ rdf_Term termstore_shift_blanks(slop_arena* arena, rdf_Term t, int64_t offset) {
         case rdf_Term_term_blank:
         {
             __auto_type b = _mv_310.data.term_blank;
-            return rdf_make_blank(arena, SLOP_RANGE(rdf_BlankNodeId, (b.id + offset), 1, 0, 0, 0, "BlankNodeId (Int 0 ..) at termstore.slop:404:43"));
+            return rdf_make_blank(arena, SLOP_RANGE(rdf_BlankNodeId, (b.id + offset), 1, 0, 0, 0, "BlankNodeId (Int 0 ..) at termstore.slop:405:43"));
         }
         case rdf_Term_term_iri:
         {

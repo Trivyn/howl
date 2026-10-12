@@ -493,9 +493,11 @@
       ((sc-some r f)     (render-restriction arena "∃" r (deref f)))
       ((sc-all r f)      (render-restriction arena "∀" r (deref f)))
       ((sc-atleast n r f)
-        (render-restriction arena (string-concat arena "≥" (string-concat arena (int-to-string arena n) " ")) r (deref f)))
+        (render-restriction arena (string-concat arena "≥" (string-concat arena (int-to-string arena n) " ")) r
+                            (deref f)))
       ((sc-atmost n r f)
-        (render-restriction arena (string-concat arena "≤" (string-concat arena (int-to-string arena n) " ")) r (deref f)))
+        (render-restriction arena (string-concat arena "≤" (string-concat arena (int-to-string arena n) " ")) r
+                            (deref f)))
       ((sc-self r)       (string-concat arena "∃" (string-concat arena (render-srole arena r) ".Self")))
       ((sc-elim k r f)   (string-concat arena (render-restriction arena (elim-head k) r (deref f)) "]"))))
 

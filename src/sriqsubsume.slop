@@ -180,7 +180,8 @@
           found)))
 
   (fn commit-min ((arena Arena) (ws (List Clause)) (cs (List Clause)))
-    (@intent "S6 step 3 for one context: each candidate in turn is skipped if ∈̂ W, else deletes what it subsumes and is inserted")
+    (@intent "S6 step 3 for one context: each candidate in turn is skipped if ∈̂ W, else deletes what it subsumes and is
+              inserted")
     (@spec ((Arena (List Clause) (List Clause)) -> Committed))
     (@alloc arena)
     (let ((mut w ws)

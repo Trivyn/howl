@@ -40,7 +40,8 @@
 ;; ============================================================
 
 (module owl2
-  (@doc "The OWL 2 axiom AST (lossless for every non-annotation axiom), its disposition matrix, and the input signature (§5.2, §6.3)")
+  (@doc "The OWL 2 axiom AST (lossless for every non-annotation axiom), its disposition matrix, and the input signature
+         (§5.2, §6.3)")
 
   (import rdf (IRI))
   (import vocab (OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY

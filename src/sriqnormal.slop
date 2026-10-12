@@ -507,10 +507,12 @@
       ((sc-not f)        (union-new SConcept sc-not (sc arena (collapse-concept arena rb (deref f)))))
       ((sc-and xs)       (union-new SConcept sc-and (collapse-concepts arena rb xs)))
       ((sc-or xs)        (union-new SConcept sc-or (collapse-concepts arena rb xs)))
-      ((sc-some r f)     (union-new SConcept sc-some (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
-      ((sc-all r f)      (union-new SConcept sc-all (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
-      ((sc-atleast n r f) (union-new SConcept sc-atleast n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
-      ((sc-atmost n r f)  (union-new SConcept sc-atmost n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-some r f) (union-new SConcept sc-some (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-all r f) (union-new SConcept sc-all (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-atleast n r f)
+       (union-new SConcept sc-atleast n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
+      ((sc-atmost n r f)
+       (union-new SConcept sc-atmost n (collapse-role rb r) (sc arena (collapse-concept arena rb (deref f)))))
       ((sc-self r)       (union-new SConcept sc-self (collapse-role rb r)))
       ((sc-elim _ _ _)   c)))
 
@@ -835,7 +837,8 @@
       (do
         (while (<= i n)
           (do
-            (list-push out (fn-id arena p (string-concat arena axkey (string-concat arena "|" (int-to-string arena i)))))
+            (list-push out (fn-id arena p (string-concat arena axkey (string-concat arena "|" (int-to-string arena
+                                                                                                             i)))))
             (set! i (+ i 1))))
         out)))
 
@@ -1044,7 +1047,8 @@
   ;; ------------------------------------------------------------
 
   (fn s2-gci ((arena Arena) (p (Ptr S2State)) (l SConcept) (r SConcept))
-    (@intent "C ⊑ D: a top-level ∃ on the left as DL3, a ⊤ left with each ∀ conjunct as a range (choice 11); else ⊤ ⊑ NNF(¬C ⊔ D), a top-level ⊓ split")
+    (@intent "C ⊑ D: a top-level ∃ on the left as DL3, a ⊤ left with each ∀ conjunct as a range (choice 11); else ⊤ ⊑
+              NNF(¬C ⊔ D), a top-level ⊓ split")
     (@spec ((Arena (Ptr S2State) SConcept SConcept) -> Bool))
     (@alloc arena)
     (let ((lc (sc-canon arena (nnf arena l true))))
@@ -1064,7 +1068,8 @@
         (assert-top arena p (sc-canon arena (nnf arena (union-new SConcept sc-or both) true)) false))))
 
   (fn assert-top ((arena Arena) (p (Ptr S2State)) (e SConcept) (ranges Bool))
-    (@intent "⊤ ⊑ e: each conjunct of a top-level ⊓ alone (choice 3); with ranges, a ∀ conjunct as DL3 over inv(R) from T (choice 11); else one DL1")
+    (@intent "⊤ ⊑ e: each conjunct of a top-level ⊓ alone (choice 3); with ranges, a ∀ conjunct as DL3 over inv(R) from
+              T (choice 11); else one DL1")
     (@spec ((Arena (Ptr S2State) SConcept Bool) -> Bool))
     (@alloc arena)
     (match e
@@ -1103,7 +1108,8 @@
         (when (not (pos-defined (. (deref p) registry) key))
           (do
             (mark-pos arena (. (deref p) registry) key)
-            (emit arena p (union-new DlClause dl1 (record-new Dl1 (body (list-new arena DName)) (head (one-name arena t)))))))
+            (emit arena p (union-new DlClause dl1 (record-new Dl1 (body (list-new arena DName))
+                                                              (head (one-name arena t)))))))
         t)))
 
   (fn one-name ((arena Arena) (n DName))
@@ -1113,7 +1119,8 @@
     (let ((mut xs (list-new arena DName))) (do (list-push xs n) xs)))
 
   (fn gci-dl3 ((arena Arena) (p (Ptr S2State)) (r RoleId) (c SConcept) (d SConcept))
-    (@intent "∃R.C ⊑ D as DL3 ∃R.B₁ ⊑ B₂: B₁ the name above C (T for ⊤), B₂ the name below D; a tautology (C ⊥, D ⊤) emits nothing")
+    (@intent "∃R.C ⊑ D as DL3 ∃R.B₁ ⊑ B₂: B₁ the name above C (T for ⊤), B₂ the name below D; a tautology (C ⊥, D ⊤)
+              emits nothing")
     (@spec ((Arena (Ptr S2State) RoleId SConcept SConcept) -> Bool))
     (@alloc arena)
     (cond ((or (sc-is-bottom c) (sc-is-top d)) true)
@@ -1349,19 +1356,25 @@
     (@alloc arena)
     (match c
       ((dl1 d)
-        (inclusion arena "DL1" (render-dnames arena s2 (. d body) " ⊓ " "⊤") (render-dnames arena s2 (. d head) " ⊔ " "⊥")))
+        (inclusion arena "DL1" (render-dnames arena s2 (. d body) " ⊓ " "⊤")
+                   (render-dnames arena s2 (. d head) " ⊔ " "⊥")))
       ((dl2 d)
         (inclusion arena "DL2" (render-dname arena s2 (. d sub))
-          (restriction-text arena (count-op arena "≥" (. d count)) (render-drole arena s2 (. d role)) (render-dfiller arena s2 (. d filler)))))
+          (restriction-text arena (count-op arena "≥" (. d count)) (render-drole arena s2 (. d role))
+                            (render-dfiller arena s2 (. d filler)))))
       ((dl3 s b1 b2)
-        (inclusion arena "DL3" (restriction-text arena "∃" (render-drole arena s2 s) (render-dname arena s2 b1)) (render-dname arena s2 b2)))
+        (inclusion arena "DL3" (restriction-text arena "∃" (render-drole arena s2 s) (render-dname arena s2 b1))
+                   (render-dname arena s2 b2)))
       ((dl4 d)
         (inclusion arena "DL4" (render-dname arena s2 (. d sub))
           (string-concat arena
-            (restriction-text arena (count-op arena "≤" (. d count)) (render-drole arena s2 (. d role)) (render-dfiller arena s2 (. d filler)))
+            (restriction-text arena (count-op arena "≤" (. d count)) (render-drole arena s2 (. d role))
+                              (render-dfiller arena s2 (. d filler)))
             (string-concat arena " via " (render-drole arena s2 (. d srole))))))
-      ((dl5 b s)  (inclusion arena "DL5" (render-dname arena s2 b) (restriction-text arena "∃" (render-drole arena s2 s) "Self")))
-      ((dl6 s b)  (inclusion arena "DL6" (restriction-text arena "∃" (render-drole arena s2 s) "Self") (render-dname arena s2 b)))
+      ((dl5 b s)
+       (inclusion arena "DL5" (render-dname arena s2 b) (restriction-text arena "∃" (render-drole arena s2 s) "Self")))
+      ((dl6 s b)
+       (inclusion arena "DL6" (restriction-text arena "∃" (render-drole arena s2 s) "Self") (render-dname arena s2 b)))
       ((dl7 a b)  (inclusion arena "DL7" (render-drole arena s2 a) (render-drole arena s2 b)))
       ((dl8 a b)  (inclusion arena "DL8" (render-drole arena s2 a) (string-concat arena (render-drole arena s2 b) "⁻")))
       ((dl9 a b)

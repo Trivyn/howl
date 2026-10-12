@@ -39,7 +39,8 @@
 ;; ============================================================
 
 (module sriqctx
-  (@doc "sriq's context structure, triggers and strategies (TGH21 Definitions 3-5), Λ's inputs, and the initial structure")
+  (@doc "sriq's context structure, triggers and strategies (TGH21 Definitions 3-5), Λ's inputs, and the initial
+         structure")
 
   (import types (AKind ATerm LitForm Lit Clause at-x atom1 lit-eq))
   (import sriqclauses (SriqClauses make-clause))
@@ -221,7 +222,8 @@
           true)))
 
   (fn build-triggers ((arena Arena) (clauses (List Clause)) (nc Int) (nr Int) (nf Int))
-    (@intent "Definition 4's trigger sets for O's clauses, as flags by id, over nc classes, nr roles and nf function symbols")
+    (@intent "Definition 4's trigger sets for O's clauses, as flags by id, over nc classes, nr roles and nf function
+              symbols")
     (@spec ((Arena (List Clause) Int Int Int) -> Triggers))
     (@alloc arena)
     (let ((tr   (record-new Triggers
@@ -259,7 +261,8 @@
     (and (is-kind (. l t1) a) (is-kind (. l t2) b)))
 
   (fn pair-kinds ((l Lit) (a AKind) (b AKind))
-    (@intent "Are l's two terms of kinds a and b, in either order? For (in)equalities, whose sides are oriented structurally")
+    (@intent "Are l's two terms of kinds a and b, in either order? For (in)equalities, whose sides are oriented
+              structurally")
     (@spec ((Lit AKind AKind) -> Bool))
     (@pure)
     (or (both-kinds l a b) (both-kinds l b a)))
@@ -407,7 +410,8 @@
     (if (>= k 62) 4611686018427387904 (<< 1 k)))
 
   (fn omega ((s Strategy) (tr Triggers))
-    (@intent "Definition 9's ω, the contexts the strategy can add: 1 under trivial, m under cautious, 2^(m+m′+1) under eager, for m and m′ O's unary and binary predicates")
+    (@intent "Definition 9's ω, the contexts the strategy can add: 1 under trivial, m under cautious, 2^(m+m′+1) under
+              eager, for m and m′ O's unary and binary predicates")
     (@spec ((Strategy Triggers) -> Int))
     (@pure)
     (@post (implies (== s 'st-trivial) (== $result 1)))
@@ -482,7 +486,8 @@
   ;; ============================================================
 
   (fn init-structure ((arena Arena) (nquery Int) (nconst Int))
-    (@intent "A1–A2: v_r, v_⊤ and v_B with core {B(x)} for each query class B < nquery; every S_v empty, no edge; O's nconst constants")
+    (@intent "A1–A2: v_r, v_⊤ and v_B with core {B(x)} for each query class B < nquery; every S_v empty, no edge; O's
+              nconst constants")
     (@spec ((Arena Int Int) -> Structure))
     (@alloc arena)
     (@pre (and (>= nquery 0) (>= nconst 0)))
@@ -540,7 +545,8 @@
     (and (not (. c root)) (lits-same (. c core) core)))
 
   (fn ctx-by-core ((st Structure) (core (List Lit)))
-    (@intent "The non-root context whose core is core (a set), or no-id. Never v_r, whose core is also empty (Definition 5: v ≠ v_r)")
+    (@intent "The non-root context whose core is core (a set), or no-id. Never v_r, whose core is also empty (Definition
+              5: v ≠ v_r)")
     (@spec ((Structure (List Lit)) -> U32))
     (@pure)
     (@post (!= $result (cast U32 0)))
@@ -557,7 +563,8 @@
   ;; ============================================================
 
   (fn var-ok ((t ATerm) (root Bool))
-    (@intent "A context a-term (x, y, f(x), u or f(u), never zᵢ), with no x at the root and no f(u) elsewhere (Definition 3)")
+    (@intent "A context a-term (x, y, f(x), u or f(u), never zᵢ), with no x at the root and no f(u) elsewhere
+              (Definition 3)")
     (@spec ((ATerm Bool) -> Bool))
     (@pure)
     (match (. t kind)
@@ -569,7 +576,8 @@
       ('ak-z  false)))
 
   (fn side-x ((s ATerm) (t ATerm))
-    (@intent "S(x, t) with t one of x, y, f(x), u (Definition 2's first p-term form). t = f(u) needs no test: var-ok refuses x at the root and f(u) elsewhere, so the two never meet")
+    (@intent "S(x, t) with t one of x, y, f(x), u (Definition 2's first p-term form). t = f(u) needs no test: var-ok
+              refuses x at the root and f(u) elsewhere, so the two never meet")
     (@spec ((ATerm ATerm) -> Bool))
     (@pure)
     (and (is-kind s 'ak-x) (not (is-kind t 'ak-z))))
