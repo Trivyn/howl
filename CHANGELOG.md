@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 — 2026-10-12
+
+A build fix. HOWL's answers do not change.
+
+- **0.1.0 no longer builds from a fresh resolve.** It asked for `slop-std-sys` and `slop-rdf-sys` with
+  a caret, so once slop-std-sys 0.4.2 was published a new build resolved it, and `build.rs`, which
+  requires the runtime header to match HOWL's generated C byte for byte, panicked. 0.1.1 is generated
+  with slop 0.4.2 and slop-rdf 0.5.1, and pins `slop-std-sys = "=0.4.2"` and
+  `slop-rdf-sys = "=0.5.1"` exactly.
+- **Windows** (#64). slop 0.4.2's runtime threads through Win32 on Windows. The crate links pthread
+  only on other targets, and compiles its C with clang-cl on MSVC targets (`cl.exe` cannot compile the
+  generated C), as the -sys crates do. CI builds and tests the crate on Windows, with MSVC and with
+  MinGW.
+
 ## 0.1.0 — 2026-10-06
 
 The first release. HOWL classifies OWL ontologies: the complete subsumption hierarchy, every

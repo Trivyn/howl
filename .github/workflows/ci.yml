@@ -74,6 +74,52 @@ jobs:
             exit 1
           fi
 
+  # The crate on Windows (#64): slop 0.4.2's runtime threads through Win32,
+  # and the C compiles with clang-cl on MSVC and MinGW gcc on GNU, as in the
+  # -sys crates. The vendored C comes from a Linux job, since `make` is not
+  # on the Windows runner.
+  crate-vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make crate-vendor
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-vendored
+          path: |
+            rust/csrc
+            rust/include
+            rust/LICENSE
+
+  windows:
+    needs: crate-vendor
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-pc-windows-msvc, x86_64-pc-windows-gnu]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: rust-vendored
+          path: rust
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      # MinGW-w64 gcc for cc-rs on the GNU target.
+      - if: matrix.target == 'x86_64-pc-windows-gnu'
+        uses: msys2/setup-msys2@v2
+        id: msys2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+      - if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: echo "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" >> $env:GITHUB_PATH
+        shell: pwsh
+      - run: cargo test --target ${{ matrix.target }}
+        working-directory: rust
+
   verify:
     # Z3 weakest-precondition contract checking (SPEC §7). This proves
     # the implementation cannot drift from the calculus without a
