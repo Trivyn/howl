@@ -72,28 +72,28 @@ slop_list_string sriqnames_fns_dense(slop_arena* arena, sriqnames_SriqNormal n);
 slop_list_string sriqnames_fresh_not_signature(slop_arena* arena, sriqnames_SriqNormal n);
 slop_list_string sriqnames_sriq_invariants(slop_arena* arena, sriqnames_SriqNormal n);
 
-typedef struct { slop_list_types_DName xs; } sriqnames__lambda_1081_env_t;
+typedef struct { slop_list_types_DName xs; } sriqnames__lambda_533_env_t;
 
-static int64_t sriqnames__lambda_1081(sriqnames__lambda_1081_env_t* _env, int64_t i, int64_t j) { return sriqnames_dname_cmp(sriqnames_dname_at(_env->xs, i), sriqnames_dname_at(_env->xs, j)); }
+static int64_t sriqnames__lambda_533(sriqnames__lambda_533_env_t* _env, int64_t i, int64_t j) { return sriqnames_dname_cmp(sriqnames_dname_at(_env->xs, i), sriqnames_dname_at(_env->xs, j)); }
 
-typedef struct { slop_list_sroiq_SConcept cs; } sriqnames__lambda_1087_env_t;
+typedef struct { slop_list_sroiq_SConcept cs; } sriqnames__lambda_539_env_t;
 
-static int64_t sriqnames__lambda_1087(sriqnames__lambda_1087_env_t* _env, int64_t i, int64_t j) { return sroiq_sc_cmp(sriqnames_sc_at_n(_env->cs, i), sriqnames_sc_at_n(_env->cs, j)); }
+static int64_t sriqnames__lambda_539(sriqnames__lambda_539_env_t* _env, int64_t i, int64_t j) { return sroiq_sc_cmp(sriqnames_sc_at_n(_env->cs, i), sriqnames_sc_at_n(_env->cs, j)); }
 
-typedef struct { slop_list_types_DRole roles; slop_list_option_types_DName fills; } sriqnames__lambda_1088_env_t;
+typedef struct { slop_list_types_DRole roles; slop_list_option_types_DName fills; } sriqnames__lambda_540_env_t;
 
-static int64_t sriqnames__lambda_1088(sriqnames__lambda_1088_env_t* _env, int64_t i, int64_t j) { return sriqnames_then_cmp(sriqnames_drole_cmp(sriqnames_role_at(_env->roles, i), sriqnames_role_at(_env->roles, j)), sriqnames_filler_cmp(sriqnames_fill_at(_env->fills, i), sriqnames_fill_at(_env->fills, j))); }
+static int64_t sriqnames__lambda_540(sriqnames__lambda_540_env_t* _env, int64_t i, int64_t j) { return sriqnames_then_cmp(sriqnames_drole_cmp(sriqnames_role_at(_env->roles, i), sriqnames_role_at(_env->roles, j)), sriqnames_filler_cmp(sriqnames_fill_at(_env->fills, i), sriqnames_fill_at(_env->fills, j))); }
 
-typedef struct { slop_list_types_DlClause cs; } sriqnames__lambda_1089_env_t;
+typedef struct { slop_list_types_DlClause cs; } sriqnames__lambda_541_env_t;
 
-static int64_t sriqnames__lambda_1089(sriqnames__lambda_1089_env_t* _env, int64_t i, int64_t j) { return sriqnames_dl_cmp(sriqnames_clause_at(_env->cs, i), sriqnames_clause_at(_env->cs, j)); }
+static int64_t sriqnames__lambda_541(sriqnames__lambda_541_env_t* _env, int64_t i, int64_t j) { return sriqnames_dl_cmp(sriqnames_clause_at(_env->cs, i), sriqnames_clause_at(_env->cs, j)); }
 
 int64_t sriqnames_int_at(slop_list_int xs, int64_t i) {
-    __auto_type _mv_1050 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1050.has_value) {
-        __auto_type v = _mv_1050.value;
+    __auto_type _mv_502 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_502.has_value) {
+        __auto_type v = _mv_502.value;
         return v;
-    } else if (!_mv_1050.has_value) {
+    } else if (!_mv_502.has_value) {
         return -1;
     }
     SLOP_UNREACHABLE();
@@ -130,32 +130,32 @@ int64_t sriqnames_cmp_int(int64_t a, int64_t b) {
 }
 
 sroiq_SConcept sriqnames_sc_at_n(slop_list_sroiq_SConcept xs, int64_t i) {
-    __auto_type _mv_1051 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_sroiq_SConcept _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1051.has_value) {
-        __auto_type v = _mv_1051.value;
+    __auto_type _mv_503 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_sroiq_SConcept _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_503.has_value) {
+        __auto_type v = _mv_503.value;
         return v;
-    } else if (!_mv_1051.has_value) {
+    } else if (!_mv_503.has_value) {
         return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_top });
     }
     SLOP_UNREACHABLE();
 }
 
 int64_t sriqnames_dname_cmp(types_DName a, types_DName b) {
-    __auto_type _mv_1052 = a;
-    switch (_mv_1052.tag) {
+    __auto_type _mv_504 = a;
+    switch (_mv_504.tag) {
         case types_DName_dn_class:
         {
-            __auto_type ia = _mv_1052.data.dn_class;
-            __auto_type _mv_1053 = b;
-            switch (_mv_1053.tag) {
+            __auto_type ia = _mv_504.data.dn_class;
+            __auto_type _mv_505 = b;
+            switch (_mv_505.tag) {
                 case types_DName_dn_class:
                 {
-                    __auto_type ib = _mv_1053.data.dn_class;
+                    __auto_type ib = _mv_505.data.dn_class;
                     return canon_iri_cmp(ia, ib);
                 }
                 case types_DName_dn_fresh:
                 {
-                    __auto_type _ = _mv_1053.data.dn_fresh;
+                    __auto_type _ = _mv_505.data.dn_fresh;
                     return -1;
                 }
             }
@@ -163,17 +163,17 @@ int64_t sriqnames_dname_cmp(types_DName a, types_DName b) {
         }
         case types_DName_dn_fresh:
         {
-            __auto_type ka = _mv_1052.data.dn_fresh;
-            __auto_type _mv_1054 = b;
-            switch (_mv_1054.tag) {
+            __auto_type ka = _mv_504.data.dn_fresh;
+            __auto_type _mv_506 = b;
+            switch (_mv_506.tag) {
                 case types_DName_dn_class:
                 {
-                    __auto_type _ = _mv_1054.data.dn_class;
+                    __auto_type _ = _mv_506.data.dn_class;
                     return 1;
                 }
                 case types_DName_dn_fresh:
                 {
-                    __auto_type kb = _mv_1054.data.dn_fresh;
+                    __auto_type kb = _mv_506.data.dn_fresh;
                     return sriqnames_cmp_int(ka, kb);
                 }
             }
@@ -184,23 +184,23 @@ int64_t sriqnames_dname_cmp(types_DName a, types_DName b) {
 }
 
 int64_t sriqnames_filler_cmp(slop_option_types_DName a, slop_option_types_DName b) {
-    __auto_type _mv_1055 = a;
-    if (!_mv_1055.has_value) {
-        __auto_type _mv_1056 = b;
-        if (!_mv_1056.has_value) {
+    __auto_type _mv_507 = a;
+    if (!_mv_507.has_value) {
+        __auto_type _mv_508 = b;
+        if (!_mv_508.has_value) {
             return 0;
-        } else if (_mv_1056.has_value) {
-            __auto_type _ = _mv_1056.value;
+        } else if (_mv_508.has_value) {
+            __auto_type _ = _mv_508.value;
             return -1;
         }
         SLOP_UNREACHABLE();
-    } else if (_mv_1055.has_value) {
-        __auto_type x = _mv_1055.value;
-        __auto_type _mv_1057 = b;
-        if (!_mv_1057.has_value) {
+    } else if (_mv_507.has_value) {
+        __auto_type x = _mv_507.value;
+        __auto_type _mv_509 = b;
+        if (!_mv_509.has_value) {
             return 1;
-        } else if (_mv_1057.has_value) {
-            __auto_type y = _mv_1057.value;
+        } else if (_mv_509.has_value) {
+            __auto_type y = _mv_509.value;
             return sriqnames_dname_cmp(x, y);
         }
         SLOP_UNREACHABLE();
@@ -209,21 +209,21 @@ int64_t sriqnames_filler_cmp(slop_option_types_DName a, slop_option_types_DName 
 }
 
 int64_t sriqnames_drole_rank(types_DRole r) {
-    __auto_type _mv_1058 = r;
-    switch (_mv_1058.tag) {
+    __auto_type _mv_510 = r;
+    switch (_mv_510.tag) {
         case types_DRole_dr_prop:
         {
-            __auto_type _ = _mv_1058.data.dr_prop;
+            __auto_type _ = _mv_510.data.dr_prop;
             return 0;
         }
         case types_DRole_dr_bar:
         {
-            __auto_type _ = _mv_1058.data.dr_bar;
+            __auto_type _ = _mv_510.data.dr_bar;
             return 1;
         }
         case types_DRole_dr_sub:
         {
-            __auto_type _ = _mv_1058.data.dr_sub;
+            __auto_type _ = _mv_510.data.dr_sub;
             return 2;
         }
     }
@@ -237,16 +237,16 @@ int64_t sriqnames_drole_cmp(types_DRole a, types_DRole b) {
         if (ra != rb) {
             return sriqnames_cmp_int(ra, rb);
         } else {
-            __auto_type _mv_1059 = a;
-            switch (_mv_1059.tag) {
+            __auto_type _mv_511 = a;
+            switch (_mv_511.tag) {
                 case types_DRole_dr_prop:
                 {
-                    __auto_type ia = _mv_1059.data.dr_prop;
-                    __auto_type _mv_1060 = b;
-                    switch (_mv_1060.tag) {
+                    __auto_type ia = _mv_511.data.dr_prop;
+                    __auto_type _mv_512 = b;
+                    switch (_mv_512.tag) {
                         case types_DRole_dr_prop:
                         {
-                            __auto_type ib = _mv_1060.data.dr_prop;
+                            __auto_type ib = _mv_512.data.dr_prop;
                             return canon_iri_cmp(ia, ib);
                         }
                         default: {
@@ -256,12 +256,12 @@ int64_t sriqnames_drole_cmp(types_DRole a, types_DRole b) {
                 }
                 case types_DRole_dr_bar:
                 {
-                    __auto_type ia = _mv_1059.data.dr_bar;
-                    __auto_type _mv_1061 = b;
-                    switch (_mv_1061.tag) {
+                    __auto_type ia = _mv_511.data.dr_bar;
+                    __auto_type _mv_513 = b;
+                    switch (_mv_513.tag) {
                         case types_DRole_dr_bar:
                         {
-                            __auto_type ib = _mv_1061.data.dr_bar;
+                            __auto_type ib = _mv_513.data.dr_bar;
                             return canon_iri_cmp(ia, ib);
                         }
                         default: {
@@ -271,12 +271,12 @@ int64_t sriqnames_drole_cmp(types_DRole a, types_DRole b) {
                 }
                 case types_DRole_dr_sub:
                 {
-                    __auto_type ka = _mv_1059.data.dr_sub;
-                    __auto_type _mv_1062 = b;
-                    switch (_mv_1062.tag) {
+                    __auto_type ka = _mv_511.data.dr_sub;
+                    __auto_type _mv_514 = b;
+                    switch (_mv_514.tag) {
                         case types_DRole_dr_sub:
                         {
-                            __auto_type kb = _mv_1062.data.dr_sub;
+                            __auto_type kb = _mv_514.data.dr_sub;
                             return sriqnames_cmp_int(ka, kb);
                         }
                         default: {
@@ -298,16 +298,16 @@ int64_t sriqnames_dnames_cmp(slop_list_types_DName a, slop_list_types_DName b) {
         int64_t i = 0;
         int64_t r = 0;
         while ((i < n) && (r == 0)) {
-            __auto_type _mv_1063 = ({ __auto_type _lst = a; size_t _idx = (size_t)i; slop_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_1063.has_value) {
-                __auto_type x = _mv_1063.value;
-                __auto_type _mv_1064 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (_mv_1064.has_value) {
-                    __auto_type y = _mv_1064.value;
+            __auto_type _mv_515 = ({ __auto_type _lst = a; size_t _idx = (size_t)i; slop_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_515.has_value) {
+                __auto_type x = _mv_515.value;
+                __auto_type _mv_516 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                if (_mv_516.has_value) {
+                    __auto_type y = _mv_516.value;
                     r = sriqnames_dname_cmp(x, y);
-                } else if (!_mv_1064.has_value) {
+                } else if (!_mv_516.has_value) {
                 }
-            } else if (!_mv_1063.has_value) {
+            } else if (!_mv_515.has_value) {
             }
             i = (i + 1);
         }
@@ -324,16 +324,16 @@ int64_t sriqnames_dnames_cmp(slop_list_types_DName a, slop_list_types_DName b) {
 }
 
 int64_t sriqnames_dl_rank(types_DlClause c) {
-    __auto_type _mv_1065 = c;
-    switch (_mv_1065.tag) {
+    __auto_type _mv_517 = c;
+    switch (_mv_517.tag) {
         case types_DlClause_dl1:
         {
-            __auto_type _ = _mv_1065.data.dl1;
+            __auto_type _ = _mv_517.data.dl1;
             return 1;
         }
         case types_DlClause_dl2:
         {
-            __auto_type _ = _mv_1065.data.dl2;
+            __auto_type _ = _mv_517.data.dl2;
             return 2;
         }
         case types_DlClause_dl3:
@@ -342,7 +342,7 @@ int64_t sriqnames_dl_rank(types_DlClause c) {
         }
         case types_DlClause_dl4:
         {
-            __auto_type _ = _mv_1065.data.dl4;
+            __auto_type _ = _mv_517.data.dl4;
             return 4;
         }
         case types_DlClause_dl5:
@@ -408,16 +408,16 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
         if (ra != rb) {
             return sriqnames_cmp_int(ra, rb);
         } else {
-            __auto_type _mv_1066 = a;
-            switch (_mv_1066.tag) {
+            __auto_type _mv_518 = a;
+            switch (_mv_518.tag) {
                 case types_DlClause_dl1:
                 {
-                    __auto_type x = _mv_1066.data.dl1;
-                    __auto_type _mv_1067 = b;
-                    switch (_mv_1067.tag) {
+                    __auto_type x = _mv_518.data.dl1;
+                    __auto_type _mv_519 = b;
+                    switch (_mv_519.tag) {
                         case types_DlClause_dl1:
                         {
-                            __auto_type y = _mv_1067.data.dl1;
+                            __auto_type y = _mv_519.data.dl1;
                             return sriqnames_dl1_cmp(x, y);
                         }
                         default: {
@@ -427,12 +427,12 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl2:
                 {
-                    __auto_type x = _mv_1066.data.dl2;
-                    __auto_type _mv_1068 = b;
-                    switch (_mv_1068.tag) {
+                    __auto_type x = _mv_518.data.dl2;
+                    __auto_type _mv_520 = b;
+                    switch (_mv_520.tag) {
                         case types_DlClause_dl2:
                         {
-                            __auto_type y = _mv_1068.data.dl2;
+                            __auto_type y = _mv_520.data.dl2;
                             return sriqnames_dl2_cmp(x, y);
                         }
                         default: {
@@ -442,16 +442,16 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl3:
                 {
-                    __auto_type s1 = _mv_1066.data.dl3.f0;
-                    __auto_type p1 = _mv_1066.data.dl3.f1;
-                    __auto_type q1 = _mv_1066.data.dl3.f2;
-                    __auto_type _mv_1069 = b;
-                    switch (_mv_1069.tag) {
+                    __auto_type s1 = _mv_518.data.dl3.f0;
+                    __auto_type p1 = _mv_518.data.dl3.f1;
+                    __auto_type q1 = _mv_518.data.dl3.f2;
+                    __auto_type _mv_521 = b;
+                    switch (_mv_521.tag) {
                         case types_DlClause_dl3:
                         {
-                            __auto_type s2 = _mv_1069.data.dl3.f0;
-                            __auto_type p2 = _mv_1069.data.dl3.f1;
-                            __auto_type q2 = _mv_1069.data.dl3.f2;
+                            __auto_type s2 = _mv_521.data.dl3.f0;
+                            __auto_type p2 = _mv_521.data.dl3.f1;
+                            __auto_type q2 = _mv_521.data.dl3.f2;
                             return sriqnames_then_cmp(sriqnames_drole_cmp(s1, s2), sriqnames_then_cmp(sriqnames_dname_cmp(p1, p2), sriqnames_dname_cmp(q1, q2)));
                         }
                         default: {
@@ -461,12 +461,12 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl4:
                 {
-                    __auto_type x = _mv_1066.data.dl4;
-                    __auto_type _mv_1070 = b;
-                    switch (_mv_1070.tag) {
+                    __auto_type x = _mv_518.data.dl4;
+                    __auto_type _mv_522 = b;
+                    switch (_mv_522.tag) {
                         case types_DlClause_dl4:
                         {
-                            __auto_type y = _mv_1070.data.dl4;
+                            __auto_type y = _mv_522.data.dl4;
                             return sriqnames_dl4_cmp(x, y);
                         }
                         default: {
@@ -476,14 +476,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl5:
                 {
-                    __auto_type n1 = _mv_1066.data.dl5.f0;
-                    __auto_type s1 = _mv_1066.data.dl5.f1;
-                    __auto_type _mv_1071 = b;
-                    switch (_mv_1071.tag) {
+                    __auto_type n1 = _mv_518.data.dl5.f0;
+                    __auto_type s1 = _mv_518.data.dl5.f1;
+                    __auto_type _mv_523 = b;
+                    switch (_mv_523.tag) {
                         case types_DlClause_dl5:
                         {
-                            __auto_type n2 = _mv_1071.data.dl5.f0;
-                            __auto_type s2 = _mv_1071.data.dl5.f1;
+                            __auto_type n2 = _mv_523.data.dl5.f0;
+                            __auto_type s2 = _mv_523.data.dl5.f1;
                             return sriqnames_then_cmp(sriqnames_dname_cmp(n1, n2), sriqnames_drole_cmp(s1, s2));
                         }
                         default: {
@@ -493,14 +493,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl6:
                 {
-                    __auto_type s1 = _mv_1066.data.dl6.f0;
-                    __auto_type n1 = _mv_1066.data.dl6.f1;
-                    __auto_type _mv_1072 = b;
-                    switch (_mv_1072.tag) {
+                    __auto_type s1 = _mv_518.data.dl6.f0;
+                    __auto_type n1 = _mv_518.data.dl6.f1;
+                    __auto_type _mv_524 = b;
+                    switch (_mv_524.tag) {
                         case types_DlClause_dl6:
                         {
-                            __auto_type s2 = _mv_1072.data.dl6.f0;
-                            __auto_type n2 = _mv_1072.data.dl6.f1;
+                            __auto_type s2 = _mv_524.data.dl6.f0;
+                            __auto_type n2 = _mv_524.data.dl6.f1;
                             return sriqnames_then_cmp(sriqnames_drole_cmp(s1, s2), sriqnames_dname_cmp(n1, n2));
                         }
                         default: {
@@ -510,14 +510,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl7:
                 {
-                    __auto_type a1 = _mv_1066.data.dl7.f0;
-                    __auto_type b1 = _mv_1066.data.dl7.f1;
-                    __auto_type _mv_1073 = b;
-                    switch (_mv_1073.tag) {
+                    __auto_type a1 = _mv_518.data.dl7.f0;
+                    __auto_type b1 = _mv_518.data.dl7.f1;
+                    __auto_type _mv_525 = b;
+                    switch (_mv_525.tag) {
                         case types_DlClause_dl7:
                         {
-                            __auto_type a2 = _mv_1073.data.dl7.f0;
-                            __auto_type b2 = _mv_1073.data.dl7.f1;
+                            __auto_type a2 = _mv_525.data.dl7.f0;
+                            __auto_type b2 = _mv_525.data.dl7.f1;
                             return sriqnames_roles_cmp(a1, b1, a2, b2);
                         }
                         default: {
@@ -527,14 +527,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl8:
                 {
-                    __auto_type a1 = _mv_1066.data.dl8.f0;
-                    __auto_type b1 = _mv_1066.data.dl8.f1;
-                    __auto_type _mv_1074 = b;
-                    switch (_mv_1074.tag) {
+                    __auto_type a1 = _mv_518.data.dl8.f0;
+                    __auto_type b1 = _mv_518.data.dl8.f1;
+                    __auto_type _mv_526 = b;
+                    switch (_mv_526.tag) {
                         case types_DlClause_dl8:
                         {
-                            __auto_type a2 = _mv_1074.data.dl8.f0;
-                            __auto_type b2 = _mv_1074.data.dl8.f1;
+                            __auto_type a2 = _mv_526.data.dl8.f0;
+                            __auto_type b2 = _mv_526.data.dl8.f1;
                             return sriqnames_roles_cmp(a1, b1, a2, b2);
                         }
                         default: {
@@ -544,14 +544,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl9:
                 {
-                    __auto_type a1 = _mv_1066.data.dl9.f0;
-                    __auto_type b1 = _mv_1066.data.dl9.f1;
-                    __auto_type _mv_1075 = b;
-                    switch (_mv_1075.tag) {
+                    __auto_type a1 = _mv_518.data.dl9.f0;
+                    __auto_type b1 = _mv_518.data.dl9.f1;
+                    __auto_type _mv_527 = b;
+                    switch (_mv_527.tag) {
                         case types_DlClause_dl9:
                         {
-                            __auto_type a2 = _mv_1075.data.dl9.f0;
-                            __auto_type b2 = _mv_1075.data.dl9.f1;
+                            __auto_type a2 = _mv_527.data.dl9.f0;
+                            __auto_type b2 = _mv_527.data.dl9.f1;
                             return sriqnames_roles_cmp(a1, b1, a2, b2);
                         }
                         default: {
@@ -561,14 +561,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl10:
                 {
-                    __auto_type o1 = _mv_1066.data.dl10.f0;
-                    __auto_type n1 = _mv_1066.data.dl10.f1;
-                    __auto_type _mv_1076 = b;
-                    switch (_mv_1076.tag) {
+                    __auto_type o1 = _mv_518.data.dl10.f0;
+                    __auto_type n1 = _mv_518.data.dl10.f1;
+                    __auto_type _mv_528 = b;
+                    switch (_mv_528.tag) {
                         case types_DlClause_dl10:
                         {
-                            __auto_type o2 = _mv_1076.data.dl10.f0;
-                            __auto_type n2 = _mv_1076.data.dl10.f1;
+                            __auto_type o2 = _mv_528.data.dl10.f0;
+                            __auto_type n2 = _mv_528.data.dl10.f1;
                             return sriqnames_then_cmp(canon_iri_cmp(o1, o2), sriqnames_dname_cmp(n1, n2));
                         }
                         default: {
@@ -578,14 +578,14 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
                 }
                 case types_DlClause_dl11:
                 {
-                    __auto_type n1 = _mv_1066.data.dl11.f0;
-                    __auto_type o1 = _mv_1066.data.dl11.f1;
-                    __auto_type _mv_1077 = b;
-                    switch (_mv_1077.tag) {
+                    __auto_type n1 = _mv_518.data.dl11.f0;
+                    __auto_type o1 = _mv_518.data.dl11.f1;
+                    __auto_type _mv_529 = b;
+                    switch (_mv_529.tag) {
                         case types_DlClause_dl11:
                         {
-                            __auto_type n2 = _mv_1077.data.dl11.f0;
-                            __auto_type o2 = _mv_1077.data.dl11.f1;
+                            __auto_type n2 = _mv_529.data.dl11.f0;
+                            __auto_type o2 = _mv_529.data.dl11.f1;
                             return sriqnames_then_cmp(sriqnames_dname_cmp(n1, n2), canon_iri_cmp(o1, o2));
                         }
                         default: {
@@ -600,16 +600,16 @@ int64_t sriqnames_dl_cmp(types_DlClause a, types_DlClause b) {
 }
 
 types_DName sriqnames_rename_name(slop_list_int fresh, types_DName n) {
-    __auto_type _mv_1078 = n;
-    switch (_mv_1078.tag) {
+    __auto_type _mv_530 = n;
+    switch (_mv_530.tag) {
         case types_DName_dn_class:
         {
-            __auto_type _ = _mv_1078.data.dn_class;
+            __auto_type _ = _mv_530.data.dn_class;
             return n;
         }
         case types_DName_dn_fresh:
         {
-            __auto_type k = _mv_1078.data.dn_fresh;
+            __auto_type k = _mv_530.data.dn_fresh;
             return ((types_DName){ .tag = types_DName_dn_fresh, .data.dn_fresh = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_int_at(fresh, ((int64_t)(k))), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:205:64"))) });
         }
     }
@@ -617,22 +617,22 @@ types_DName sriqnames_rename_name(slop_list_int fresh, types_DName n) {
 }
 
 slop_option_types_DName sriqnames_rename_filler(slop_list_int fresh, slop_option_types_DName b) {
-    __auto_type _mv_1079 = b;
-    if (!_mv_1079.has_value) {
+    __auto_type _mv_531 = b;
+    if (!_mv_531.has_value) {
         return b;
-    } else if (_mv_1079.has_value) {
-        __auto_type n = _mv_1079.value;
+    } else if (_mv_531.has_value) {
+        __auto_type n = _mv_531.value;
         return (slop_option_types_DName){.has_value = 1, .value = sriqnames_rename_name(fresh, n)};
     }
     SLOP_UNREACHABLE();
 }
 
 types_DRole sriqnames_rename_role(slop_list_int subs, types_DRole r) {
-    __auto_type _mv_1080 = r;
-    switch (_mv_1080.tag) {
+    __auto_type _mv_532 = r;
+    switch (_mv_532.tag) {
         case types_DRole_dr_sub:
         {
-            __auto_type k = _mv_1080.data.dr_sub;
+            __auto_type k = _mv_532.data.dr_sub;
             return ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = ((int64_t)(SLOP_RANGE(int64_t, sriqnames_int_at(subs, ((int64_t)(k))), 1, 0, 0, 0, "(Int 0 ..) at sriqnames.slop:218:60"))) });
         }
         default: {
@@ -643,7 +643,7 @@ types_DRole sriqnames_rename_role(slop_list_int subs, types_DRole r) {
 
 slop_list_types_DName sriqnames_sort_dnames(slop_arena* arena, slop_list_types_DName xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sriqnames__lambda_1081_env_t* sriqnames__lambda_1081_env = (sriqnames__lambda_1081_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_1081_env_t)); *sriqnames__lambda_1081_env = (sriqnames__lambda_1081_env_t){ .xs = xs }; (slop_closure_t){ (void*)sriqnames__lambda_1081, (void*)sriqnames__lambda_1081_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ sriqnames__lambda_533_env_t* sriqnames__lambda_533_env = (sriqnames__lambda_533_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_533_env_t)); *sriqnames__lambda_533_env = (sriqnames__lambda_533_env_t){ .xs = xs }; (slop_closure_t){ (void*)sriqnames__lambda_533, (void*)sriqnames__lambda_533_env }; }));
         __auto_type out = ((slop_list_types_DName){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         uint8_t have = 0;
         __auto_type last = ((types_DName){ .tag = types_DName_dn_fresh, .data.dn_fresh = 0 });
@@ -666,11 +666,11 @@ slop_list_types_DName sriqnames_sort_dnames(slop_arena* arena, slop_list_types_D
 }
 
 types_DName sriqnames_dname_at(slop_list_types_DName xs, int64_t i) {
-    __auto_type _mv_1082 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1082.has_value) {
-        __auto_type v = _mv_1082.value;
+    __auto_type _mv_534 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_534.has_value) {
+        __auto_type v = _mv_534.value;
         return v;
-    } else if (!_mv_1082.has_value) {
+    } else if (!_mv_534.has_value) {
         return ((types_DName){ .tag = types_DName_dn_fresh, .data.dn_fresh = 0 });
     }
     SLOP_UNREACHABLE();
@@ -691,70 +691,70 @@ slop_list_types_DName sriqnames_rename_names(slop_arena* arena, slop_list_int fr
 }
 
 types_DlClause sriqnames_rename_clause(slop_arena* arena, slop_list_int fresh, slop_list_int subs, types_DlClause c) {
-    __auto_type _mv_1083 = c;
-    switch (_mv_1083.tag) {
+    __auto_type _mv_535 = c;
+    switch (_mv_535.tag) {
         case types_DlClause_dl1:
         {
-            __auto_type d = _mv_1083.data.dl1;
+            __auto_type d = _mv_535.data.dl1;
             return ((types_DlClause){ .tag = types_DlClause_dl1, .data.dl1 = ((types_Dl1){.body = sriqnames_sort_dnames(arena, sriqnames_rename_names(arena, fresh, d.body)), .head = sriqnames_sort_dnames(arena, sriqnames_rename_names(arena, fresh, d.head))}) });
         }
         case types_DlClause_dl2:
         {
-            __auto_type d = _mv_1083.data.dl2;
+            __auto_type d = _mv_535.data.dl2;
             return ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = sriqnames_rename_name(fresh, d.sub), .role = sriqnames_rename_role(subs, d.role), .count = d.count, .filler = sriqnames_rename_filler(fresh, d.filler), .fns = d.fns}) });
         }
         case types_DlClause_dl3:
         {
-            __auto_type s = _mv_1083.data.dl3.f0;
-            __auto_type b1 = _mv_1083.data.dl3.f1;
-            __auto_type b2 = _mv_1083.data.dl3.f2;
+            __auto_type s = _mv_535.data.dl3.f0;
+            __auto_type b1 = _mv_535.data.dl3.f1;
+            __auto_type b2 = _mv_535.data.dl3.f2;
             return ((types_DlClause){ .tag = types_DlClause_dl3, .data.dl3 = { .f0 = sriqnames_rename_role(subs, s), .f1 = sriqnames_rename_name(fresh, b1), .f2 = sriqnames_rename_name(fresh, b2) } });
         }
         case types_DlClause_dl4:
         {
-            __auto_type d = _mv_1083.data.dl4;
+            __auto_type d = _mv_535.data.dl4;
             return ((types_DlClause){ .tag = types_DlClause_dl4, .data.dl4 = ((types_Dl4){.sub = sriqnames_rename_name(fresh, d.sub), .role = sriqnames_rename_role(subs, d.role), .count = d.count, .filler = sriqnames_rename_filler(fresh, d.filler), .srole = sriqnames_rename_role(subs, d.srole)}) });
         }
         case types_DlClause_dl5:
         {
-            __auto_type b = _mv_1083.data.dl5.f0;
-            __auto_type s = _mv_1083.data.dl5.f1;
+            __auto_type b = _mv_535.data.dl5.f0;
+            __auto_type s = _mv_535.data.dl5.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl5, .data.dl5 = { .f0 = sriqnames_rename_name(fresh, b), .f1 = sriqnames_rename_role(subs, s) } });
         }
         case types_DlClause_dl6:
         {
-            __auto_type s = _mv_1083.data.dl6.f0;
-            __auto_type b = _mv_1083.data.dl6.f1;
+            __auto_type s = _mv_535.data.dl6.f0;
+            __auto_type b = _mv_535.data.dl6.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl6, .data.dl6 = { .f0 = sriqnames_rename_role(subs, s), .f1 = sriqnames_rename_name(fresh, b) } });
         }
         case types_DlClause_dl7:
         {
-            __auto_type a = _mv_1083.data.dl7.f0;
-            __auto_type b = _mv_1083.data.dl7.f1;
+            __auto_type a = _mv_535.data.dl7.f0;
+            __auto_type b = _mv_535.data.dl7.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl7, .data.dl7 = { .f0 = sriqnames_rename_role(subs, a), .f1 = sriqnames_rename_role(subs, b) } });
         }
         case types_DlClause_dl8:
         {
-            __auto_type a = _mv_1083.data.dl8.f0;
-            __auto_type b = _mv_1083.data.dl8.f1;
+            __auto_type a = _mv_535.data.dl8.f0;
+            __auto_type b = _mv_535.data.dl8.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl8, .data.dl8 = { .f0 = sriqnames_rename_role(subs, a), .f1 = sriqnames_rename_role(subs, b) } });
         }
         case types_DlClause_dl9:
         {
-            __auto_type a = _mv_1083.data.dl9.f0;
-            __auto_type b = _mv_1083.data.dl9.f1;
+            __auto_type a = _mv_535.data.dl9.f0;
+            __auto_type b = _mv_535.data.dl9.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl9, .data.dl9 = { .f0 = sriqnames_rename_role(subs, a), .f1 = sriqnames_rename_role(subs, b) } });
         }
         case types_DlClause_dl10:
         {
-            __auto_type o = _mv_1083.data.dl10.f0;
-            __auto_type b = _mv_1083.data.dl10.f1;
+            __auto_type o = _mv_535.data.dl10.f0;
+            __auto_type b = _mv_535.data.dl10.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl10, .data.dl10 = { .f0 = o, .f1 = sriqnames_rename_name(fresh, b) } });
         }
         case types_DlClause_dl11:
         {
-            __auto_type b = _mv_1083.data.dl11.f0;
-            __auto_type o = _mv_1083.data.dl11.f1;
+            __auto_type b = _mv_535.data.dl11.f0;
+            __auto_type o = _mv_535.data.dl11.f1;
             return ((types_DlClause){ .tag = types_DlClause_dl11, .data.dl11 = { .f0 = sriqnames_rename_name(fresh, b), .f1 = o } });
         }
     }
@@ -762,22 +762,22 @@ types_DlClause sriqnames_rename_clause(slop_arena* arena, slop_list_int fresh, s
 }
 
 types_DlClause sriqnames_clause_at(slop_list_types_DlClause xs, int64_t i) {
-    __auto_type _mv_1084 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_DlClause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1084.has_value) {
-        __auto_type v = _mv_1084.value;
+    __auto_type _mv_536 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_DlClause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_536.has_value) {
+        __auto_type v = _mv_536.value;
         return v;
-    } else if (!_mv_1084.has_value) {
+    } else if (!_mv_536.has_value) {
         return ((types_DlClause){ .tag = types_DlClause_dl7, .data.dl7 = { .f0 = ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 }), .f1 = ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 }) } });
     }
     SLOP_UNREACHABLE();
 }
 
 types_DlClause sriqnames_renumber_fns(slop_arena* arena, types_DlClause c, int64_t next) {
-    __auto_type _mv_1085 = c;
-    switch (_mv_1085.tag) {
+    __auto_type _mv_537 = c;
+    switch (_mv_537.tag) {
         case types_DlClause_dl2:
         {
-            __auto_type d = _mv_1085.data.dl2;
+            __auto_type d = _mv_537.data.dl2;
             {
                 __auto_type fs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                 int64_t i = 0;
@@ -795,11 +795,11 @@ types_DlClause sriqnames_renumber_fns(slop_arena* arena, types_DlClause c, int64
 }
 
 int64_t sriqnames_fn_count(types_DlClause c) {
-    __auto_type _mv_1086 = c;
-    switch (_mv_1086.tag) {
+    __auto_type _mv_538 = c;
+    switch (_mv_538.tag) {
         case types_DlClause_dl2:
         {
-            __auto_type d = _mv_1086.data.dl2;
+            __auto_type d = _mv_538.data.dl2;
             return ((int64_t)(((int64_t)((d.fns).len))));
         }
         default: {
@@ -825,11 +825,11 @@ slop_list_int sriqnames_rank_of(slop_arena* arena, slop_list_int order) {
 }
 
 slop_list_int sriqnames_concept_order(slop_arena* arena, slop_list_sroiq_SConcept cs) {
-    return canon_sort_range(arena, ((int64_t)(((int64_t)((cs).len)))), ({ sriqnames__lambda_1087_env_t* sriqnames__lambda_1087_env = (sriqnames__lambda_1087_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_1087_env_t)); *sriqnames__lambda_1087_env = (sriqnames__lambda_1087_env_t){ .cs = cs }; (slop_closure_t){ (void*)sriqnames__lambda_1087, (void*)sriqnames__lambda_1087_env }; }));
+    return canon_sort_range(arena, ((int64_t)(((int64_t)((cs).len)))), ({ sriqnames__lambda_539_env_t* sriqnames__lambda_539_env = (sriqnames__lambda_539_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_539_env_t)); *sriqnames__lambda_539_env = (sriqnames__lambda_539_env_t){ .cs = cs }; (slop_closure_t){ (void*)sriqnames__lambda_539, (void*)sriqnames__lambda_539_env }; }));
 }
 
 slop_list_int sriqnames_srole_order(slop_arena* arena, slop_list_types_DRole roles, slop_list_option_types_DName fills) {
-    return canon_sort_range(arena, ((int64_t)(((int64_t)((roles).len)))), ({ sriqnames__lambda_1088_env_t* sriqnames__lambda_1088_env = (sriqnames__lambda_1088_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_1088_env_t)); *sriqnames__lambda_1088_env = (sriqnames__lambda_1088_env_t){ .roles = roles, .fills = fills }; (slop_closure_t){ (void*)sriqnames__lambda_1088, (void*)sriqnames__lambda_1088_env }; }));
+    return canon_sort_range(arena, ((int64_t)(((int64_t)((roles).len)))), ({ sriqnames__lambda_540_env_t* sriqnames__lambda_540_env = (sriqnames__lambda_540_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_540_env_t)); *sriqnames__lambda_540_env = (sriqnames__lambda_540_env_t){ .roles = roles, .fills = fills }; (slop_closure_t){ (void*)sriqnames__lambda_540, (void*)sriqnames__lambda_540_env }; }));
 }
 
 slop_list_sroiq_SConcept sriqnames_pick_concepts(slop_arena* arena, slop_list_sroiq_SConcept cs, slop_list_int order) {
@@ -904,7 +904,7 @@ slop_list_types_DlClause sriqnames_rename_clauses(slop_arena* arena, slop_list_i
 
 slop_list_types_DlClause sriqnames_canonical_clauses(slop_arena* arena, slop_list_types_DlClause cs) {
     {
-        __auto_type order = canon_sort_range(arena, ((int64_t)(((int64_t)((cs).len)))), ({ sriqnames__lambda_1089_env_t* sriqnames__lambda_1089_env = (sriqnames__lambda_1089_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_1089_env_t)); *sriqnames__lambda_1089_env = (sriqnames__lambda_1089_env_t){ .cs = cs }; (slop_closure_t){ (void*)sriqnames__lambda_1089, (void*)sriqnames__lambda_1089_env }; }));
+        __auto_type order = canon_sort_range(arena, ((int64_t)(((int64_t)((cs).len)))), ({ sriqnames__lambda_541_env_t* sriqnames__lambda_541_env = (sriqnames__lambda_541_env_t*)slop_arena_alloc(arena, sizeof(sriqnames__lambda_541_env_t)); *sriqnames__lambda_541_env = (sriqnames__lambda_541_env_t){ .cs = cs }; (slop_closure_t){ (void*)sriqnames__lambda_541, (void*)sriqnames__lambda_541_env }; }));
         __auto_type out = ((slop_list_types_DlClause){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t next = 0;
         {
@@ -982,22 +982,22 @@ sriqnames_SriqNormal sriqnames_sriq_names(slop_arena* arena, sriqnormal_S2 s2, o
 }
 
 types_DRole sriqnames_role_at(slop_list_types_DRole xs, int64_t i) {
-    __auto_type _mv_1090 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_DRole _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1090.has_value) {
-        __auto_type v = _mv_1090.value;
+    __auto_type _mv_542 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_DRole _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_542.has_value) {
+        __auto_type v = _mv_542.value;
         return v;
-    } else if (!_mv_1090.has_value) {
+    } else if (!_mv_542.has_value) {
         return ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 });
     }
     SLOP_UNREACHABLE();
 }
 
 slop_option_types_DName sriqnames_fill_at(slop_list_option_types_DName xs, int64_t i) {
-    __auto_type _mv_1091 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1091.has_value) {
-        __auto_type v = _mv_1091.value;
+    __auto_type _mv_543 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_option_types_DName _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_543.has_value) {
+        __auto_type v = _mv_543.value;
         return v;
-    } else if (!_mv_1091.has_value) {
+    } else if (!_mv_543.has_value) {
         return (slop_option_types_DName){.has_value = false};
     }
     SLOP_UNREACHABLE();
@@ -1011,11 +1011,11 @@ slop_list_owl2_RawAxiom sriqnames_guard_witnesses(slop_arena* arena, slop_list_o
                 __auto_type _coll = accepted;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type a = _coll.data[_i];
-                    __auto_type _mv_1092 = a;
-                    switch (_mv_1092.tag) {
+                    __auto_type _mv_544 = a;
+                    switch (_mv_544.tag) {
                         case owl2_RawAxiom_ra_property_chain:
                         {
-                            __auto_type ch = _mv_1092.data.ra_property_chain;
+                            __auto_type ch = _mv_544.data.ra_property_chain;
                             if (((int64_t)((ch.steps).len)) > 1) {
                                 ({ __auto_type _lst_p = &(out); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                             }
@@ -1033,36 +1033,36 @@ slop_list_owl2_RawAxiom sriqnames_guard_witnesses(slop_arena* arena, slop_list_o
 }
 
 slop_result_sriqnames_SriqNormal_string sriqnames_normalize_after_s1(slop_arena* arena, slop_list_owl2_RawAxiom accepted, sriqelim_S1 s1, owl2_Signature sig) {
-    __auto_type _mv_1093 = sriqnormal_sriq_s2(arena, s1.axioms);
-    if (!_mv_1093.is_ok) {
-        __auto_type m = _mv_1093.data.err;
+    __auto_type _mv_545 = sriqnormal_sriq_s2(arena, s1.axioms);
+    if (!_mv_545.is_ok) {
+        __auto_type m = _mv_545.data.err;
         return ((slop_result_sriqnames_SriqNormal_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_1093.is_ok) {
-        __auto_type s2 = _mv_1093.data.ok;
+    } else if (_mv_545.is_ok) {
+        __auto_type s2 = _mv_545.data.ok;
         return ((slop_result_sriqnames_SriqNormal_string){ .is_ok = true, .data.ok = sriqnames_sriq_names(arena, s2, sig, sriqnames_guard_witnesses(arena, accepted, s1)) });
     }
     SLOP_UNREACHABLE();
 }
 
 slop_result_sriqnames_SriqNormal_string sriqnames_normalize_after_s0(slop_arena* arena, slop_list_owl2_RawAxiom accepted, sriqnormal_S0 s0, owl2_Signature sig, int64_t bound) {
-    __auto_type _mv_1094 = sriqelim_sriq_s1(arena, s0, bound);
-    if (!_mv_1094.is_ok) {
-        __auto_type m = _mv_1094.data.err;
+    __auto_type _mv_546 = sriqelim_sriq_s1(arena, s0, bound);
+    if (!_mv_546.is_ok) {
+        __auto_type m = _mv_546.data.err;
         return ((slop_result_sriqnames_SriqNormal_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_1094.is_ok) {
-        __auto_type s1 = _mv_1094.data.ok;
+    } else if (_mv_546.is_ok) {
+        __auto_type s1 = _mv_546.data.ok;
         return sriqnames_normalize_after_s1(arena, accepted, s1, sig);
     }
     SLOP_UNREACHABLE();
 }
 
 slop_result_sriqnames_SriqNormal_string sriqnames_sriq_normalize_bounded(slop_arena* arena, slop_list_owl2_RawAxiom accepted, owl2_Signature sig, int64_t bound) {
-    __auto_type _mv_1095 = sriqnormal_sriq_s0(arena, accepted);
-    if (!_mv_1095.is_ok) {
-        __auto_type m = _mv_1095.data.err;
+    __auto_type _mv_547 = sriqnormal_sriq_s0(arena, accepted);
+    if (!_mv_547.is_ok) {
+        __auto_type m = _mv_547.data.err;
         return ((slop_result_sriqnames_SriqNormal_string){ .is_ok = false, .data.err = m });
-    } else if (_mv_1095.is_ok) {
-        __auto_type s0 = _mv_1095.data.ok;
+    } else if (_mv_547.is_ok) {
+        __auto_type s0 = _mv_547.data.ok;
         return sriqnames_normalize_after_s0(arena, accepted, s0, sig, bound);
     }
     SLOP_UNREACHABLE();
@@ -1073,16 +1073,16 @@ slop_result_sriqnames_SriqNormal_string sriqnames_sriq_normalize(slop_arena* are
 }
 
 slop_string sriqnames_rn(slop_arena* arena, types_DName n) {
-    __auto_type _mv_1096 = n;
-    switch (_mv_1096.tag) {
+    __auto_type _mv_548 = n;
+    switch (_mv_548.tag) {
         case types_DName_dn_class:
         {
-            __auto_type i = _mv_1096.data.dn_class;
+            __auto_type i = _mv_548.data.dn_class;
             return i.value;
         }
         case types_DName_dn_fresh:
         {
-            __auto_type k = _mv_1096.data.dn_fresh;
+            __auto_type k = _mv_548.data.dn_fresh;
             return string_concat(arena, SLOP_STR("A"), int_to_string(arena, k));
         }
     }
@@ -1090,21 +1090,21 @@ slop_string sriqnames_rn(slop_arena* arena, types_DName n) {
 }
 
 slop_string sriqnames_rr(slop_arena* arena, types_DRole r) {
-    __auto_type _mv_1097 = r;
-    switch (_mv_1097.tag) {
+    __auto_type _mv_549 = r;
+    switch (_mv_549.tag) {
         case types_DRole_dr_prop:
         {
-            __auto_type i = _mv_1097.data.dr_prop;
+            __auto_type i = _mv_549.data.dr_prop;
             return i.value;
         }
         case types_DRole_dr_bar:
         {
-            __auto_type i = _mv_1097.data.dr_bar;
+            __auto_type i = _mv_549.data.dr_bar;
             return string_concat(arena, i.value, SLOP_STR("^bar"));
         }
         case types_DRole_dr_sub:
         {
-            __auto_type k = _mv_1097.data.dr_sub;
+            __auto_type k = _mv_549.data.dr_sub;
             return string_concat(arena, SLOP_STR("S"), int_to_string(arena, k));
         }
     }
@@ -1112,11 +1112,11 @@ slop_string sriqnames_rr(slop_arena* arena, types_DRole r) {
 }
 
 slop_string sriqnames_rf(slop_arena* arena, slop_option_types_DName b) {
-    __auto_type _mv_1098 = b;
-    if (!_mv_1098.has_value) {
+    __auto_type _mv_550 = b;
+    if (!_mv_550.has_value) {
         return SLOP_STR("T");
-    } else if (_mv_1098.has_value) {
-        __auto_type n = _mv_1098.value;
+    } else if (_mv_550.has_value) {
+        __auto_type n = _mv_550.value;
         return sriqnames_rn(arena, n);
     }
     SLOP_UNREACHABLE();
@@ -1172,11 +1172,11 @@ slop_string sriqnames_j(slop_arena* arena, slop_list_string parts) {
 slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
     {
         __auto_type ps = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_1099 = c;
-        switch (_mv_1099.tag) {
+        __auto_type _mv_551 = c;
+        switch (_mv_551.tag) {
             case types_DlClause_dl1:
             {
-                __auto_type d = _mv_1099.data.dl1;
+                __auto_type d = _mv_551.data.dl1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL1")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rns(arena, d.body)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rns(arena, d.head)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1184,7 +1184,7 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl2:
             {
-                __auto_type d = _mv_1099.data.dl2;
+                __auto_type d = _mv_551.data.dl2;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL2")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, d.sub)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, d.role)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1195,9 +1195,9 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl3:
             {
-                __auto_type s = _mv_1099.data.dl3.f0;
-                __auto_type a = _mv_1099.data.dl3.f1;
-                __auto_type b = _mv_1099.data.dl3.f2;
+                __auto_type s = _mv_551.data.dl3.f0;
+                __auto_type a = _mv_551.data.dl3.f1;
+                __auto_type b = _mv_551.data.dl3.f2;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL3")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1206,7 +1206,7 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl4:
             {
-                __auto_type d = _mv_1099.data.dl4;
+                __auto_type d = _mv_551.data.dl4;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL4")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, d.sub)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, d.role)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1217,8 +1217,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl5:
             {
-                __auto_type b = _mv_1099.data.dl5.f0;
-                __auto_type s = _mv_1099.data.dl5.f1;
+                __auto_type b = _mv_551.data.dl5.f0;
+                __auto_type s = _mv_551.data.dl5.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL5")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1226,8 +1226,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl6:
             {
-                __auto_type s = _mv_1099.data.dl6.f0;
-                __auto_type b = _mv_1099.data.dl6.f1;
+                __auto_type s = _mv_551.data.dl6.f0;
+                __auto_type b = _mv_551.data.dl6.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL6")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1235,8 +1235,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl7:
             {
-                __auto_type a = _mv_1099.data.dl7.f0;
-                __auto_type b = _mv_1099.data.dl7.f1;
+                __auto_type a = _mv_551.data.dl7.f0;
+                __auto_type b = _mv_551.data.dl7.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL7")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1244,8 +1244,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl8:
             {
-                __auto_type a = _mv_1099.data.dl8.f0;
-                __auto_type b = _mv_1099.data.dl8.f1;
+                __auto_type a = _mv_551.data.dl8.f0;
+                __auto_type b = _mv_551.data.dl8.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL8")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1253,8 +1253,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl9:
             {
-                __auto_type a = _mv_1099.data.dl9.f0;
-                __auto_type b = _mv_1099.data.dl9.f1;
+                __auto_type a = _mv_551.data.dl9.f0;
+                __auto_type b = _mv_551.data.dl9.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL9")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, a)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rr(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1262,8 +1262,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl10:
             {
-                __auto_type o = _mv_1099.data.dl10.f0;
-                __auto_type b = _mv_1099.data.dl10.f1;
+                __auto_type o = _mv_551.data.dl10.f0;
+                __auto_type b = _mv_551.data.dl10.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL10")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (o.value); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1271,8 +1271,8 @@ slop_string sriqnames_render_dl_ids(slop_arena* arena, types_DlClause c) {
             }
             case types_DlClause_dl11:
             {
-                __auto_type b = _mv_1099.data.dl11.f0;
-                __auto_type o = _mv_1099.data.dl11.f1;
+                __auto_type b = _mv_551.data.dl11.f0;
+                __auto_type o = _mv_551.data.dl11.f1;
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (SLOP_STR("DL11")); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (sriqnames_rn(arena, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(ps); __auto_type _item = (o.value); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1366,16 +1366,16 @@ slop_list_string sriqnames_render_sriq_normal(slop_arena* arena, sriqnames_SriqN
 }
 
 uint8_t sriqnames_name_in_range(types_DName n, int64_t nc) {
-    __auto_type _mv_1100 = n;
-    switch (_mv_1100.tag) {
+    __auto_type _mv_552 = n;
+    switch (_mv_552.tag) {
         case types_DName_dn_class:
         {
-            __auto_type _ = _mv_1100.data.dn_class;
+            __auto_type _ = _mv_552.data.dn_class;
             return 1;
         }
         case types_DName_dn_fresh:
         {
-            __auto_type k = _mv_1100.data.dn_fresh;
+            __auto_type k = _mv_552.data.dn_fresh;
             return (((int64_t)(k)) < nc);
         }
     }
@@ -1399,22 +1399,22 @@ uint8_t sriqnames_names_in_range(slop_list_types_DName ns, int64_t nc) {
 }
 
 uint8_t sriqnames_filler_in_range(slop_option_types_DName b, int64_t nc) {
-    __auto_type _mv_1101 = b;
-    if (!_mv_1101.has_value) {
+    __auto_type _mv_553 = b;
+    if (!_mv_553.has_value) {
         return 1;
-    } else if (_mv_1101.has_value) {
-        __auto_type n = _mv_1101.value;
+    } else if (_mv_553.has_value) {
+        __auto_type n = _mv_553.value;
         return sriqnames_name_in_range(n, nc);
     }
     SLOP_UNREACHABLE();
 }
 
 uint8_t sriqnames_role_in_range(types_DRole r, int64_t ns) {
-    __auto_type _mv_1102 = r;
-    switch (_mv_1102.tag) {
+    __auto_type _mv_554 = r;
+    switch (_mv_554.tag) {
         case types_DRole_dr_sub:
         {
-            __auto_type k = _mv_1102.data.dr_sub;
+            __auto_type k = _mv_554.data.dr_sub;
             return (((int64_t)(k)) < ns);
         }
         default: {
@@ -1424,68 +1424,68 @@ uint8_t sriqnames_role_in_range(types_DRole r, int64_t ns) {
 }
 
 uint8_t sriqnames_clause_in_range(types_DlClause c, int64_t nc, int64_t ns) {
-    __auto_type _mv_1103 = c;
-    switch (_mv_1103.tag) {
+    __auto_type _mv_555 = c;
+    switch (_mv_555.tag) {
         case types_DlClause_dl1:
         {
-            __auto_type d = _mv_1103.data.dl1;
+            __auto_type d = _mv_555.data.dl1;
             return (sriqnames_names_in_range(d.body, nc) && sriqnames_names_in_range(d.head, nc));
         }
         case types_DlClause_dl2:
         {
-            __auto_type d = _mv_1103.data.dl2;
+            __auto_type d = _mv_555.data.dl2;
             return ((sriqnames_name_in_range(d.sub, nc)) && (sriqnames_role_in_range(d.role, ns)) && (sriqnames_filler_in_range(d.filler, nc)));
         }
         case types_DlClause_dl3:
         {
-            __auto_type r = _mv_1103.data.dl3.f0;
-            __auto_type a = _mv_1103.data.dl3.f1;
-            __auto_type b = _mv_1103.data.dl3.f2;
+            __auto_type r = _mv_555.data.dl3.f0;
+            __auto_type a = _mv_555.data.dl3.f1;
+            __auto_type b = _mv_555.data.dl3.f2;
             return ((sriqnames_role_in_range(r, ns)) && (sriqnames_name_in_range(a, nc)) && (sriqnames_name_in_range(b, nc)));
         }
         case types_DlClause_dl4:
         {
-            __auto_type d = _mv_1103.data.dl4;
+            __auto_type d = _mv_555.data.dl4;
             return ((sriqnames_name_in_range(d.sub, nc)) && (sriqnames_role_in_range(d.role, ns)) && (sriqnames_filler_in_range(d.filler, nc)) && (sriqnames_role_in_range(d.srole, ns)));
         }
         case types_DlClause_dl5:
         {
-            __auto_type b = _mv_1103.data.dl5.f0;
-            __auto_type r = _mv_1103.data.dl5.f1;
+            __auto_type b = _mv_555.data.dl5.f0;
+            __auto_type r = _mv_555.data.dl5.f1;
             return (sriqnames_name_in_range(b, nc) && sriqnames_role_in_range(r, ns));
         }
         case types_DlClause_dl6:
         {
-            __auto_type r = _mv_1103.data.dl6.f0;
-            __auto_type b = _mv_1103.data.dl6.f1;
+            __auto_type r = _mv_555.data.dl6.f0;
+            __auto_type b = _mv_555.data.dl6.f1;
             return (sriqnames_role_in_range(r, ns) && sriqnames_name_in_range(b, nc));
         }
         case types_DlClause_dl7:
         {
-            __auto_type a = _mv_1103.data.dl7.f0;
-            __auto_type b = _mv_1103.data.dl7.f1;
+            __auto_type a = _mv_555.data.dl7.f0;
+            __auto_type b = _mv_555.data.dl7.f1;
             return (sriqnames_role_in_range(a, ns) && sriqnames_role_in_range(b, ns));
         }
         case types_DlClause_dl8:
         {
-            __auto_type a = _mv_1103.data.dl8.f0;
-            __auto_type b = _mv_1103.data.dl8.f1;
+            __auto_type a = _mv_555.data.dl8.f0;
+            __auto_type b = _mv_555.data.dl8.f1;
             return (sriqnames_role_in_range(a, ns) && sriqnames_role_in_range(b, ns));
         }
         case types_DlClause_dl9:
         {
-            __auto_type a = _mv_1103.data.dl9.f0;
-            __auto_type b = _mv_1103.data.dl9.f1;
+            __auto_type a = _mv_555.data.dl9.f0;
+            __auto_type b = _mv_555.data.dl9.f1;
             return (sriqnames_role_in_range(a, ns) && sriqnames_role_in_range(b, ns));
         }
         case types_DlClause_dl10:
         {
-            __auto_type b = _mv_1103.data.dl10.f1;
+            __auto_type b = _mv_555.data.dl10.f1;
             return sriqnames_name_in_range(b, nc);
         }
         case types_DlClause_dl11:
         {
-            __auto_type b = _mv_1103.data.dl11.f0;
+            __auto_type b = _mv_555.data.dl11.f0;
             return sriqnames_name_in_range(b, nc);
         }
     }
@@ -1553,11 +1553,11 @@ slop_list_string sriqnames_ids_in_range(slop_arena* arena, sriqnames_SriqNormal 
 }
 
 uint8_t sriqnames_witness_count_ok(types_DlClause c) {
-    __auto_type _mv_1104 = c;
-    switch (_mv_1104.tag) {
+    __auto_type _mv_556 = c;
+    switch (_mv_556.tag) {
         case types_DlClause_dl2:
         {
-            __auto_type d = _mv_1104.data.dl2;
+            __auto_type d = _mv_556.data.dl2;
             return (((int64_t)(((int64_t)((d.fns).len)))) == ((int64_t)(d.count)));
         }
         default: {
@@ -1567,11 +1567,11 @@ uint8_t sriqnames_witness_count_ok(types_DlClause c) {
 }
 
 slop_list_int sriqnames_clause_fns(slop_arena* arena, types_DlClause c) {
-    __auto_type _mv_1105 = c;
-    switch (_mv_1105.tag) {
+    __auto_type _mv_557 = c;
+    switch (_mv_557.tag) {
         case types_DlClause_dl2:
         {
-            __auto_type d = _mv_1105.data.dl2;
+            __auto_type d = _mv_557.data.dl2;
             return d.fns;
         }
         default: {
@@ -1617,11 +1617,11 @@ slop_list_string sriqnames_fresh_not_signature(slop_arena* arena, sriqnames_Sriq
             __auto_type _coll = n.concepts;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type c = _coll.data[_i];
-                __auto_type _mv_1106 = c;
-                switch (_mv_1106.tag) {
+                __auto_type _mv_558 = c;
+                switch (_mv_558.tag) {
                     case sroiq_SConcept_sc_name:
                     {
-                        __auto_type _ = _mv_1106.data.sc_name;
+                        __auto_type _ = _mv_558.data.sc_name;
                         ({ __auto_type _lst_p = &(bad); __auto_type _item = (string_concat(arena, SLOP_STR("a fresh name for a class name: "), sroiq_render_sconcept(arena, c))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                         break;
                     }
