@@ -12463,14 +12463,14 @@ int main(int argc, char** _c_argv) {
             #ifdef SLOP_DEBUG
             SLOP_PRE((4194304) > 0, "with-arena size must be positive");
             #endif
-            slop_arena _arena_4 = slop_arena_new(4194304);
+            slop_arena _arena_3 = slop_arena_new(4194304);
             #ifdef SLOP_DEBUG
-            SLOP_PRE(_arena_4.base != NULL, "arena allocation failed");
+            SLOP_PRE(_arena_3.base != NULL, "arena allocation failed");
             #endif
-            slop_arena* arena = &_arena_4;
+            slop_arena* arena = &_arena_3;
             {
                 int _wa_ret = test_sriq_dump(arena, test_arg_text(argv, 2), test_arg_text(argv, 3), sriqelim_S1_BOUND);
-                slop_arena_free(&_arena_4);
+                slop_arena_free(&_arena_3);
                 return _wa_ret;
             }
             slop_arena_free(arena);
@@ -12486,14 +12486,14 @@ int main(int argc, char** _c_argv) {
                     #ifdef SLOP_DEBUG
                     SLOP_PRE((4194304) > 0, "with-arena size must be positive");
                     #endif
-                    slop_arena _arena_5 = slop_arena_new(4194304);
+                    slop_arena _arena_4 = slop_arena_new(4194304);
                     #ifdef SLOP_DEBUG
-                    SLOP_PRE(_arena_5.base != NULL, "arena allocation failed");
+                    SLOP_PRE(_arena_4.base != NULL, "arena allocation failed");
                     #endif
-                    slop_arena* arena = &_arena_5;
+                    slop_arena* arena = &_arena_4;
                     {
                         int _wa_ret = test_sriq_dump(arena, test_arg_text(argv, 2), test_arg_text(argv, 3), b);
-                        slop_arena_free(&_arena_5);
+                        slop_arena_free(&_arena_4);
                         return _wa_ret;
                     }
                     slop_arena_free(arena);
@@ -12505,19 +12505,36 @@ int main(int argc, char** _c_argv) {
             #ifdef SLOP_DEBUG
             SLOP_PRE((4194304) > 0, "with-arena size must be positive");
             #endif
+            slop_arena _arena_5 = slop_arena_new(4194304);
+            #ifdef SLOP_DEBUG
+            SLOP_PRE(_arena_5.base != NULL, "arena allocation failed");
+            #endif
+            slop_arena* arena = &_arena_5;
+            {
+                int _wa_ret = test_front_dump(arena, test_arg_text(argv, 2));
+                slop_arena_free(&_arena_5);
+                return _wa_ret;
+            }
+            slop_arena_free(arena);
+        }
+    } else if ((argc == 3) && string_eq(test_arg_text(argv, 1), SLOP_STR("ksc-dump"))) {
+        {
+            #ifdef SLOP_DEBUG
+            SLOP_PRE((4194304) > 0, "with-arena size must be positive");
+            #endif
             slop_arena _arena_6 = slop_arena_new(4194304);
             #ifdef SLOP_DEBUG
             SLOP_PRE(_arena_6.base != NULL, "arena allocation failed");
             #endif
             slop_arena* arena = &_arena_6;
             {
-                int _wa_ret = test_front_dump(arena, test_arg_text(argv, 2));
+                int _wa_ret = test_ksc_dump(arena, test_arg_text(argv, 2));
                 slop_arena_free(&_arena_6);
                 return _wa_ret;
             }
             slop_arena_free(arena);
         }
-    } else if ((argc == 3) && string_eq(test_arg_text(argv, 1), SLOP_STR("ksc-dump"))) {
+    } else if ((argc == 3) && string_eq(test_arg_text(argv, 1), SLOP_STR("sriq-ref"))) {
         {
             #ifdef SLOP_DEBUG
             SLOP_PRE((4194304) > 0, "with-arena size must be positive");
@@ -12528,13 +12545,13 @@ int main(int argc, char** _c_argv) {
             #endif
             slop_arena* arena = &_arena_7;
             {
-                int _wa_ret = test_ksc_dump(arena, test_arg_text(argv, 2));
+                int _wa_ret = test_sriq_ref(arena, test_arg_text(argv, 2), SLOP_STR("cautious"));
                 slop_arena_free(&_arena_7);
                 return _wa_ret;
             }
             slop_arena_free(arena);
         }
-    } else if ((argc == 3) && string_eq(test_arg_text(argv, 1), SLOP_STR("sriq-ref"))) {
+    } else if ((argc == 4) && string_eq(test_arg_text(argv, 1), SLOP_STR("sriq-ref"))) {
         {
             #ifdef SLOP_DEBUG
             SLOP_PRE((4194304) > 0, "with-arena size must be positive");
@@ -12545,25 +12562,8 @@ int main(int argc, char** _c_argv) {
             #endif
             slop_arena* arena = &_arena_8;
             {
-                int _wa_ret = test_sriq_ref(arena, test_arg_text(argv, 2), SLOP_STR("cautious"));
-                slop_arena_free(&_arena_8);
-                return _wa_ret;
-            }
-            slop_arena_free(arena);
-        }
-    } else if ((argc == 4) && string_eq(test_arg_text(argv, 1), SLOP_STR("sriq-ref"))) {
-        {
-            #ifdef SLOP_DEBUG
-            SLOP_PRE((4194304) > 0, "with-arena size must be positive");
-            #endif
-            slop_arena _arena_9 = slop_arena_new(4194304);
-            #ifdef SLOP_DEBUG
-            SLOP_PRE(_arena_9.base != NULL, "arena allocation failed");
-            #endif
-            slop_arena* arena = &_arena_9;
-            {
                 int _wa_ret = test_sriq_ref(arena, test_arg_text(argv, 2), test_arg_text(argv, 3));
-                slop_arena_free(&_arena_9);
+                slop_arena_free(&_arena_8);
                 return _wa_ret;
             }
             slop_arena_free(arena);
@@ -12579,11 +12579,11 @@ int64_t test_run_suite(void) {
         #ifdef SLOP_DEBUG
         SLOP_PRE((4194304) > 0, "with-arena size must be positive");
         #endif
-        slop_arena _arena_10 = slop_arena_new(4194304);
+        slop_arena _arena_9 = slop_arena_new(4194304);
         #ifdef SLOP_DEBUG
-        SLOP_PRE(_arena_10.base != NULL, "arena allocation failed");
+        SLOP_PRE(_arena_9.base != NULL, "arena allocation failed");
         #endif
-        slop_arena* arena = &_arena_10;
+        slop_arena* arena = &_arena_9;
         {
             int64_t passed = 0;
             int64_t failed = 0;
@@ -14156,13 +14156,13 @@ int64_t test_run_suite(void) {
             if (failed == 0) {
                 {
                     int64_t _wa_ret = 0;
-                    slop_arena_free(&_arena_10);
+                    slop_arena_free(&_arena_9);
                     return _wa_ret;
                 }
             } else {
                 {
                     int64_t _wa_ret = 1;
-                    slop_arena_free(&_arena_10);
+                    slop_arena_free(&_arena_9);
                     return _wa_ret;
                 }
             }

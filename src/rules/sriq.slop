@@ -915,8 +915,6 @@
     (@intent "One clause's part of K₂ (its maximal head literals that are images of Su(O) atoms) and of K₁ (that atom, when it mentions x and c is ⊤ → A′σ)")
     (@spec ((Arena SriqOrder Triggers SuccSig Clause) -> KSets))
     (@alloc arena)
-    ;; Not named `unit`: slop 2bf0e98 compiles a variable of that name as
-    ;; the unit value 0, silently.
     (let ((is-unit (and (== (list-len (. c body)) 0) (== (list-len (. c head)) 1)))
           (mut k1 (list-new arena Lit))
           (mut k2 (list-new arena Lit))
