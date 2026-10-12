@@ -1,0 +1,5 @@
+# Reports are compared byte for byte, and HOWL writes LF on every platform.
+# A Windows checkout (core.autocrlf) must not turn the goldens, or the
+# fixtures they were captured from, into CRLF.
+*.report text eol=lf
+*.ttl    text eol=lf

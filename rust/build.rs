@@ -34,7 +34,11 @@ fn main() {
     sources.sort();
 
     let mut build = cc::Build::new();
+    // The generated C uses GNU statement expressions and __auto_type, which
+    // MSVC's cl.exe rejects; clang-cl accepts them, as in the -sys crates.
+    // CC still overrides this.
     build
+        .prefer_clang_cl_over_msvc(true)
         .include(runtime)
         .include(csrc)
         .include("include")
@@ -53,7 +57,10 @@ fn main() {
     build.file("layout_probes.c");
     build.compile("howl_c");
 
-    println!("cargo:rustc-link-lib=pthread");
+    // The runtime threads through pthreads on POSIX and Win32 on Windows.
+    if env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
+        println!("cargo:rustc-link-lib=pthread");
+    }
     println!("cargo:rerun-if-changed=layout_probes.c");
     println!("cargo:rerun-if-changed=include");
     println!("cargo:rerun-if-changed=csrc");
