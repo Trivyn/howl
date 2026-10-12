@@ -119,6 +119,22 @@ fn imports_need_attestation() {
     assert_eq!(r.verdict, Verdict::Coherent, "{:?}", r.omissions);
 }
 
+/// An undeclared property is an omission naming it (issue #70): the run
+/// goes on and reads the rest, but is inconclusive, never a pass.
+#[test]
+fn an_undeclared_property_is_an_omission() {
+    let r = Reasoner::new().classify(&turtle(&fixture("hazards/undeclared-property.ttl"))).unwrap();
+    assert_eq!(r.verdict, Verdict::Inconclusive);
+    assert_eq!(
+        r.omissions,
+        vec![
+            format!("UndeclaredProperty({EX}editorNote)"),
+            format!("UndeclaredProperty({EX}p)"),
+        ]
+    );
+    assert!(r.subsumptions.iter().any(|(s, t)| s == &format!("{EX}B") && t == &format!("{EX}A")));
+}
+
 #[test]
 fn bad_turtle_is_an_input_error_and_poisons_the_input() {
     let mut input = Input::new();

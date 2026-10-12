@@ -36,6 +36,7 @@
     AxiomRef
     InputRef
     MissingDeclaration
+    UndeclaredProperty
     Omission
     Coverage
     Termination
@@ -439,10 +440,18 @@
     (entity    IRI)
     (referring (List AxiomRef))))   ; canonically sorted
 
+  ;; A user property no declaration gives a kind (§5.2): `:a :p :b` is an
+  ;; object property assertion or an annotation, `:a :p "x"` a data
+  ;; property assertion or an annotation, and HOWL does not guess which.
+  (type UndeclaredProperty (record
+    (property  IRI)
+    (referring (List String))))     ; N-Triples of the triples using it, canonically sorted
+
   (type Omission (union
     (out-of-profile      InputRef)
     (unresolved-import   IRI)       ; declared owl:imports the caller did not attest to
-    (missing-declaration MissingDeclaration)))
+    (missing-declaration MissingDeclaration)
+    (undeclared-property UndeclaredProperty)))
 
   ;; EMPTY means full coverage; anything here means the run saw less
   ;; than the intended theory, whatever the reason.
@@ -946,6 +955,14 @@
               (record-new MissingDeclaration
                 (kind      (. m kind))
                 (entity    (copy-iri arena (. m entity)))
+                (referring refs))))))
+      ((undeclared-property u)
+        (let ((mut refs (list-new arena String)))
+          (do
+            (for-each (s (. u referring)) (list-push refs (copy-string arena s)))
+            (union-new Omission undeclared-property
+              (record-new UndeclaredProperty
+                (property  (copy-iri arena (. u property)))
                 (referring refs))))))))
 
   (fn copy-omissions ((arena Arena) (os (List Omission)))

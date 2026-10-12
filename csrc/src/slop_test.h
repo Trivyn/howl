@@ -62,6 +62,12 @@ SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
 SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #endif
 
+#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
@@ -114,6 +120,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
@@ -980,7 +991,9 @@ int64_t test_accepted_count_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_test_reserved_iri_as_individual_is_out_of_profile(slop_arena* arena);
 uint8_t test_test_annotation_property_axioms_are_inert(slop_arena* arena);
 uint8_t test_decodes_ok(slop_arena* arena, slop_string ttl);
-uint8_t test_test_undeclared_property_is_an_input_error(slop_arena* arena);
+slop_list_types_Omission test_carried_of(slop_arena* arena, decode_Stage0 s0, decode_Stage1 s1);
+uint8_t test_test_undeclared_property_is_an_omission(slop_arena* arena);
+uint8_t test_undeclared_cites(slop_arena* arena, slop_string ttl, slop_string first, slop_string second);
 uint8_t test_test_unknown_owl_vocabulary_still_decodes(slop_arena* arena);
 uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena);
 slop_option_gate_GateResult test_gate_ttl(slop_arena* arena, slop_string ttl);
@@ -1166,6 +1179,11 @@ SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
@@ -1226,11 +1244,6 @@ SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
-#define SLOP_OPTION_TYPES_OMISSION_DEFINED
-SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
-#endif
-
 #ifndef SLOP_OPTION_ARENA_PTR_DEFINED
 #define SLOP_OPTION_ARENA_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
@@ -1261,12 +1274,6 @@ SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #define SLOP_LIST_TYPES_SUBPAIR_DEFINED
 #define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
-#endif
-
-#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
-#define SLOP_LIST_TYPES_OMISSION_DEFINED
-#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED

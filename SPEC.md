@@ -331,10 +331,10 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   `auto` gates under each built rung in the order `el < el++ < sriq`, which is by cost, and runs
   the first that leaves nothing out of profile. If every rung leaves something out, it runs the one
   that leaves the fewest logical axioms out, a tie going to the earlier rung (`choose-auto`,
-  `src/select.slop`, whose postconditions pin the cases). Unresolved imports and missing
-  declarations are the same under every rung, so they never decide. With `el` and `el++` built,
-  that is today's rule: `el` when nothing is out of `el`'s profile, else the one of the two that
-  omits fewer, ties going to `el`.
+  `src/select.slop`, whose postconditions pin the cases). Unresolved imports, missing
+  declarations and undeclared properties are the same under every rung, so they never decide.
+  With `el` and `el++` built, that is today's rule: `el` when nothing is out of `el`'s profile,
+  else the one of the two that omits fewer, ties going to `el`.
 - **The report states the resolved profile** (`profile el`, [§6.7](#67-output--classification)).
   A report is a function of (input, budget, profile). Its findings are complete for that rung's
   logic and no other.
@@ -476,16 +476,22 @@ Position and declaration are *additive*, never exclusive — an IRI appearing as
 subject and a class name yields **both** `individual-node(x)` and `class-node(x)`, which is exactly
 the punning case the tags exist to keep apart.
 
-**An undeclared property whose kind cannot be determined is an `input-error`, not an omission.**
-The `missing-declaration` omission is recoverable only where **structural position uniquely fixes the
-entity kind**. It often does not: `:a :p :b` with `:p` undeclared is ambiguous between an object
-property assertion and an annotation assertion, and the same ambiguity affects `rdfs:subPropertyOf`,
-`rdfs:domain` and `rdfs:range` triples. OWL's RDF parsing uses declarations precisely to settle
-object vs. data vs. annotation, and requires that disambiguation to succeed. Guessing means either
-reasoning over an intended annotation or silently dropping an intended logical assertion — and
-neither can be represented as `missing-declaration(EntityKind, …)`, since there is no determinate
-`EntityKind` to report. So: unique position ⇒ `missing-declaration`; ambiguous ⇒ `input-error`,
-alongside the conflicting-declaration case below.
+**An undeclared property whose kind cannot be determined is an `undeclared-property` omission.**
+The `missing-declaration` omission names an `EntityKind`, so it applies only where **structural
+position uniquely fixes the entity kind** — `owl:onProperty`, a chain or `owl:inverseOf`, read as
+an object property. (An undeclared subject of `rdfs:subPropertyOf`, `rdfs:domain` or `rdfs:range`
+is read as an object property too; a declaration as a data or annotation property selects that
+reading instead.) A predicate does not: `:a :p :b` with `:p` undeclared is ambiguous between an object property
+assertion and an annotation assertion, and `:a :p "x"` between a data property assertion and an
+annotation. OWL's RDF parsing uses declarations precisely to settle object vs. data vs. annotation.
+Guessing means either reasoning over an intended annotation or silently dropping an intended
+logical assertion while the run says `coherent`. So HOWL does not guess: every triple whose
+predicate is an undeclared user property (an IRI outside the reserved namespaces, declared under no
+property kind) contributes nothing, and is reported as one `undeclared-property(IRI, triples)` per
+property, citing each such triple. The omission keeps the run from a pass, and the rest of the
+document is still read. It was an `input-error` until 0.3.0, which failed a whole editor document
+over one tool-specific annotation predicate (issue #70); an omission is no less honest and the run
+goes on. So: unique position ⇒ `missing-declaration`; ambiguous ⇒ `undeclared-property`.
 
 **Declaration *combinations* are checked too, not just presence.** OWL 2 DL forbids an IRI from
 being typed as more than one property kind (object / data / annotation) or as both a class and a
@@ -2615,10 +2621,14 @@ GROWL's `Delta`.
                                   ; supplying. Same disposition as out-of-profile — axioms
                                   ; are missing — reached by a different route.
   (missing-declaration            ; a class/property used without the declaration OWL 2 DL
-    EntityKind IRI (List AxiomRef)))  ; requires. NOT an out-of-profile AxiomRef: the missing
+    EntityKind IRI (List AxiomRef))   ; requires. NOT an out-of-profile AxiomRef: the missing
                                   ; declaration is by definition not an input axiom, so there
                                   ; is nothing to reference. Carries the entity and every
                                   ; referring axiom (canonically sorted) instead.
+  (undeclared-property            ; a predicate no declaration gives a property kind (§5.2):
+    IRI (List Text)))             ; the property, and the canonical N-Triples of every triple
+                                  ; using it (sorted). Not a missing-declaration: there is no
+                                  ; determinate EntityKind to name.
 
 ;; AxiomRef — the identity of an input axiom. Load-bearing: it is what omissions name, what
 ;; repairs remove, and what gets hashed into the consumer's verdict identity (§6.8), so it
@@ -2649,9 +2659,10 @@ GROWL's `Delta`.
 ;;     is meaningless without both.
 ;;   - RoleId: named-role < inverse-role < fresh-role, then by payload.
 ;;   - InputRef: owl-axiom < rdf-fragment < synthetic, then by payload.
-;;   - Omission: out-of-profile < unresolved-import < missing-declaration, then by payload;
-;;     missing-declaration compares (EntityKind, IRI, referring-list) with the list compared
-;;     element-wise after its own canonical sort.
+;;   - Omission: out-of-profile < unresolved-import < missing-declaration < undeclared-property,
+;;     then by payload; missing-declaration compares (EntityKind, IRI, referring-list) and
+;;     undeclared-property (IRI, triple-list), each list compared element-wise after its own
+;;     canonical sort.
 ;;   - EntityKind: class < object-property < data-property < annotation-property < individual
 ;;     < datatype.
 ;;   - AxiomRef: lexicographic by (source, text) under the rules above.
@@ -2680,7 +2691,7 @@ GROWL's `Delta`.
 (union InputRef
   (owl-axiom   AxiomRef)      ; repairs (§12 M4) require THIS variant specifically
   (rdf-fragment Text)         ; canonical N-Triples of the offending triples, sorted
-  (synthetic   Text))         ; the reserved forms below (unresolved-import, missing-declaration)
+  (synthetic   Text))         ; the reserved forms below (unresolved-import, missing-declaration, …)
 ;; Ordering across variants is by tag in the order declared, then by payload.
 
 ;; Crossing to the frozen port (§8.4), out_of_profile_axioms is Vec<AxiomRef>, so EVERY Omission
@@ -2693,6 +2704,8 @@ GROWL's `Delta`.
 ;;     out-of-profile(synthetic t)      -> "synthetic:<len>:<t>"
 ;;     unresolved-import(iri)           -> "unresolved-import:<iri>"
 ;;     missing-declaration(k,iri,refs)  -> "missing-declaration:<k>:<iri>:<len>:<refs ';'-joined,
+;;                                          canonically sorted>"
+;;     undeclared-property(iri,ts)      -> "undeclared-property:<iri>:<len>:<ts ';'-joined,
 ;;                                          canonically sorted>"
 ;; Specified here rather than left to the adapter because these are hashed into the consumer's
 ;; verdict identity: two adapters spelling them differently produce different verdict ids for
@@ -4059,7 +4072,8 @@ makes an out-of-profile ontology *fail louder*, never *pass*: it cannot turn `2`
 ([§6.8](#68-determinism-binding)) — so the three routes to `2` differ only in the diagnostic line,
 which is correct: the *verdict* is identical. `input-error` stays on `3` with the usage failures,
 because a file that will not parse is a different kind of problem from a theory that could not be
-decided.
+decided. An undeclared property is the second kind ([§5.2](#52-the-exact-v0-language)): an
+`undeclared-property` omission, so `2`.
 
 The subtle row is `1`. An earlier draft sent every out-of-profile run to `2`, which contradicted the
 port's fault precedence and was simply wrong: monotonicity means a `⊥` derived from part of the

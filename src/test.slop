@@ -45,7 +45,7 @@
                  Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
-  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at str-at sort-range
+  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at str-at omission-at sort-range
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
@@ -1773,7 +1773,7 @@
               ((error _) -1)
               ((ok s1)
                 (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
-                                         (. s0 omissions) 'profile-el) accepted))))))))))
+                                         (carried-of arena s0 s1) 'profile-el) accepted))))))))))
 
   (fn test-reserved-iri-as-individual-is-out-of-profile ((arena Arena))
     (@intent "owl:Nothing used as a named individual is REPORTED, not consumed")
@@ -1829,22 +1829,62 @@
               ((error _) false)
               ((ok _)    true)))))))
 
-  (fn test-undeclared-property-is-an-input-error ((arena Arena))
-    (@intent "`:a :p :b` with :p undeclared is ambiguous, so it FAULTS")
+  (fn carried-of ((arena Arena) (s0 Stage0) (s1 Stage1))
+    (@intent "What decode-encoded hands the gate as carried coverage: stage 0's, then stage 1's")
+    (@spec ((Arena Stage0 Stage1) -> (List Omission)))
+    (@alloc arena)
+    (let ((mut oms (list-new arena Omission)))
+      (do
+        (for-each (o (. s0 omissions)) (list-push oms o))
+        (for-each (o (. s1 omitted)) (list-push oms o))
+        oms)))
+
+  (fn test-undeclared-property-is-an-omission ((arena Arena))
+    (@intent "`:a :p :b` with :p undeclared is ambiguous, so it is OMITTED, never guessed")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    ;; `missing-declaration` is recoverable only where structural
-    ;; position uniquely fixes the entity kind. Here it does not: :p
-    ;; could be an object property or an annotation property, and
-    ;; neither reading can be reported as missing-declaration(kind, …)
-    ;; because there is no determinate kind to name.
-    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n"))
-      (and (not (decodes-ok arena (string-concat arena pre ":a :p :b .")))
-           ;; THE ACCEPTING HALF: declare it and the same document is
-           ;; fine. Without this the test passes for an implementation
-           ;; that rejects every property assertion in existence.
-           (decodes-ok arena (string-concat arena pre
-             ":p a owl:ObjectProperty . :a :p :b .")))))
+    ;; `missing-declaration` names a kind, and here no position fixes one:
+    ;; :p could be an object property or an annotation property, and with
+    ;; a literal a data property or an annotation property. The run must
+    ;; still go on (issue #70), so the triples are one omission per
+    ;; property, citing them all, and the theory is read without them.
+    (let ((pre (string-concat arena "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+                 ":c a owl:Class . :d a owl:Class . :c rdfs:subClassOf :d .\n")))
+      (and (omits-exactly arena "undeclared, IRI and literal objects"
+             (string-concat arena pre
+               ":a :p :b . :c :editorNote \"x\" . :d :editorNote \"y\" .")
+             "UndeclaredProperty(http://example.org/t#editorNote)\nUndeclaredProperty(http://example.org/t#p)\n")
+           ;; the rest of the document is still read
+           (== (string-cmp (gate-accepted-of-ttl arena (string-concat arena (eq-prefix)
+                 (string-concat arena pre ":c :editorNote \"x\" .")))
+               "SubClassOf(http://example.org/t#c http://example.org/t#d)\n") 0)
+           ;; one omission per property, citing every triple, sorted
+           (undeclared-cites arena (string-concat arena (eq-prefix)
+             (string-concat arena pre ":d :editorNote \"y\" . :c :editorNote \"x\" ."))
+             "<http://example.org/t#c> <http://example.org/t#editorNote> \"x\" ."
+             "<http://example.org/t#d> <http://example.org/t#editorNote> \"y\" .")
+           ;; THE ACCEPTING HALF: declare it and nothing is omitted.
+           ;; Without this the test passes for an implementation that
+           ;; omits every property assertion in existence.
+           (omits-exactly arena "declared"
+             (string-concat arena pre
+               ":p a owl:ObjectProperty . :a :p :b . :editorNote a owl:AnnotationProperty . :c :editorNote \"x\" .")
+             ""))))
+
+  (fn undeclared-cites ((arena Arena) (ttl String) (first String) (second String))
+    (@intent "Is the document's one omission an undeclared property citing exactly these two triples?")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (match (gate-ttl arena ttl)
+      ((none) false)
+      ((some gr)
+        (and (== (list-len (. gr omissions)) 1)
+             (match (omission-at (. gr omissions) 0)
+               ((undeclared-property u)
+                 (and (== (list-len (. u referring)) 2)
+                      (== (string-cmp (str-at (. u referring) 0) first) 0)
+                      (== (string-cmp (str-at (. u referring) 1) second) 0)))
+               (_ false))))))
 
   (fn test-unknown-owl-vocabulary-still-decodes ((arena Arena))
     (@intent "Reserved vocabulary HOWL does not implement gates, never faults")
@@ -1892,7 +1932,7 @@
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions) p)))))))))
+                        (carried-of arena s0 s1) p)))))))))
 
   (fn gate-omissions-of-ttl ((arena Arena) (ttl String))
     (@intent "Gate an inline Turtle document and count its omissions")
@@ -3929,7 +3969,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           ((error _) (none))
           ((ok s1)
             (some (normalize-accepted arena
-                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions) 'profile-el)
+                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (carried-of arena s0 s1) 'profile-el)
                        accepted))))))))
 
   (fn same-normal-form ((a NormOutput) (b NormOutput))
@@ -4598,7 +4638,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions) p)))))))))
+                        (carried-of arena s0 s1) p)))))))))
 
   (fn count-variant-chain ((axs (List RawAxiom)))
     (@intent "How many property-chain axioms survived the gate")
@@ -5559,8 +5599,8 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (print-test-result "negation: a negative range is ∃r.B ⊑ ⊥, on the left" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
-          (let ((r (test-undeclared-property-is-an-input-error arena)))
-            (print-test-result "declarations: an ambiguous undeclared property FAULTS" r)
+          (let ((r (test-undeclared-property-is-an-omission arena)))
+            (print-test-result "declarations: an ambiguous undeclared property is OMITTED" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-unknown-owl-vocabulary-still-decodes arena)))

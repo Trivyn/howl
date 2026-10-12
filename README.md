@@ -83,6 +83,11 @@ incoherence, and HOWL reports `1`, not `2`. Only the *absence* of a finding need
 HOWL never silently drops what it cannot reason over. Every such axiom is listed as an omission, and
 any omission makes an otherwise clean run inconclusive.
 
+That includes a property used without a declaration: in `:A :editorNote "x"` an undeclared
+`:editorNote` could be an annotation or a data property, and HOWL does not guess. It reports
+`UndeclaredProperty(<iri>)` and reads the rest; declaring the property (for example
+`:editorNote a owl:AnnotationProperty`) clears it.
+
 ## Using the CLI
 
 ```

@@ -26,6 +26,7 @@ typedef struct types_Saturation types_Saturation;
 typedef struct types_AxiomRef types_AxiomRef;
 typedef struct types_InputRef types_InputRef;
 typedef struct types_MissingDeclaration types_MissingDeclaration;
+typedef struct types_UndeclaredProperty types_UndeclaredProperty;
 typedef struct types_Omission types_Omission;
 typedef struct types_Coverage types_Coverage;
 typedef struct types_Termination types_Termination;
@@ -513,10 +514,22 @@ typedef struct types_MissingDeclaration types_MissingDeclaration;
 SLOP_OPTION_DEFINE(types_MissingDeclaration, slop_option_types_MissingDeclaration)
 #endif
 
+struct types_UndeclaredProperty {
+    rdf_IRI property;
+    slop_list_string referring;
+};
+typedef struct types_UndeclaredProperty types_UndeclaredProperty;
+
+#ifndef SLOP_OPTION_TYPES_UNDECLAREDPROPERTY_DEFINED
+#define SLOP_OPTION_TYPES_UNDECLAREDPROPERTY_DEFINED
+SLOP_OPTION_DEFINE(types_UndeclaredProperty, slop_option_types_UndeclaredProperty)
+#endif
+
 typedef enum {
     types_Omission_out_of_profile,
     types_Omission_unresolved_import,
-    types_Omission_missing_declaration
+    types_Omission_missing_declaration,
+    types_Omission_undeclared_property
 } types_Omission_tag;
 
 struct types_Omission {
@@ -525,6 +538,7 @@ struct types_Omission {
         types_InputRef out_of_profile;
         rdf_IRI unresolved_import;
         types_MissingDeclaration missing_declaration;
+        types_UndeclaredProperty undeclared_property;
     } data;
 };
 typedef struct types_Omission types_Omission;
@@ -1050,6 +1064,11 @@ SLOP_OPTION_DEFINE(types_InputRef, slop_option_types_InputRef)
 #ifndef SLOP_OPTION_TYPES_MISSINGDECLARATION_DEFINED
 #define SLOP_OPTION_TYPES_MISSINGDECLARATION_DEFINED
 SLOP_OPTION_DEFINE(types_MissingDeclaration, slop_option_types_MissingDeclaration)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_UNDECLAREDPROPERTY_DEFINED
+#define SLOP_OPTION_TYPES_UNDECLAREDPROPERTY_DEFINED
+SLOP_OPTION_DEFINE(types_UndeclaredProperty, slop_option_types_UndeclaredProperty)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED

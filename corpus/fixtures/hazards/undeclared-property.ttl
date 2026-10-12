@@ -1,0 +1,19 @@
+# Undeclared user properties (issue #70). `:p` is never declared, so `:a :p :b`
+# is an object property assertion or an annotation, and `:editorNote "..."` a
+# data property assertion or an annotation; no position fixes either kind.
+# HOWL does not guess: each property is one UndeclaredProperty omission citing
+# its triples, the rest of the document is read (B subClassOf A is derived),
+# and the run is INCONCLUSIVE (exit 2), not an input error (exit 3).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:B rdfs:subClassOf :A .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+
+:A :editorNote "needs review" .
+:B :editorNote "split from A" .
+:a :p :b .

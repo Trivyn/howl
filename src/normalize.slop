@@ -862,10 +862,16 @@
         (match (decode-axioms arena (. s0 dict) (. s0 triples))
           ((error f) (error f))
           ((ok s1)
-            (ok (record-new Decoded
-                  (axioms    (. s1 axioms))
-                  (signature (. s1 signature))
-                  (omissions (. s0 omissions)))))))))
+            ;; Stage 0's unresolved imports, then stage 1's undeclared
+            ;; properties; the gate sorts coverage again as one list.
+            (let ((mut oms (list-new arena Omission)))
+              (do
+                (for-each (o (. s0 omissions)) (list-push oms o))
+                (for-each (o (. s1 omitted)) (list-push oms o))
+                (ok (record-new Decoded
+                      (axioms    (. s1 axioms))
+                      (signature (. s1 signature))
+                      (omissions oms))))))))))
 
   (fn copy-decoded ((arena Arena) (d Decoded))
     (@intent "The decoded document, every string and operand owned in arena")
