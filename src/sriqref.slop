@@ -42,7 +42,16 @@
                 csub-lit succ-csub succ-sig k-sets covers unit-held succ-step rsucc-lit rsucc-rule
                 pred-view rpred-view pred-start pred-step pred-finish rpred-finish PCands pred-join))
 
-  (export RefStatus RefConfig RefResult RefIn Cand ref-run ref-input ref-set ref-lambda ref-stable combinators-agree)
+  (export RefStatus RefConfig RefResult RefIn Cand ref-run ref-input ref-set ref-lambda ref-stable combinators-agree
+          ;; The per-instance plumbing slice 9's prototype (sriqsat) shares,
+          ;; so both order ids, choices and conclusions the same way.
+          Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
+          set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
+          ref-core slot-cands hyper-choices eq-positions ref-ineq ref-factor ref-join
+          dl4-of nom-first nom-second nom-pair ref-nom ref-succ ref-rsucc
+          pslot-cands pred-one pred-run pred-edge away-job root-job slots-of rpred-job ref-rpred ctx-round
+          edge-is add-consts add-contexts add-edges action-cands cand-at cand-cmp
+          copy-clauses copy-structure env-of stop-status)
 
   (type RefStatus (enum rs-fixpoint rs-inconsistent rs-fuel rs-contexts rs-clauses rs-product rs-constants))
 

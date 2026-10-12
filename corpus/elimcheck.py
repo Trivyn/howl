@@ -20,6 +20,9 @@ In fixtures mode the reference evaluator (`howl-test sriq-ref FILE STRATEGY`, SP
 §5.5) answers too, under trivial, eager and cautious: its cautious run must agree
 with HermiT on the input and on S2, and its trivial and eager runs with its cautious
 one. It may end n/a (a cap, omissions), except on corpus/fixtures/sriq, its own.
+The prototype of S6's rounds (`howl-test sriq-run FILE STRATEGY`, slice 9) must
+then give the reference's answers under each strategy, and may be n/a only where
+the reference is, and never on the rung's own fixtures.
 
 A leg HermiT cannot take (an RBox it refuses, an input it reads lossily) is
 reported as n/a, never as a pass. Exit 0 when every leg that ran agrees, 1 on a
@@ -119,18 +122,19 @@ def dump(stage, path, out):
     return None
 
 
-def ref_report(path, strat, out):
-    """The reference's oracle report under one strategy: (Report, None), or (None, why) when
-    it is n/a: a cap, the fuel, omissions, or no answer within REF_TIMEOUT."""
+def ref_report(path, strat, out, cmd="sriq-ref"):
+    """The reference's (cmd sriq-ref) or the prototype's (sriq-run) oracle report under one
+    strategy: (Report, None), or (None, why) when it is n/a: a cap, the fuel, omissions, or no
+    answer within REF_TIMEOUT."""
     try:
-        p = subprocess.run([TEST_BIN, "sriq-ref", path, strat], capture_output=True, text=True,
+        p = subprocess.run([TEST_BIN, cmd, path, strat], capture_output=True, text=True,
                            timeout=REF_TIMEOUT)
     except subprocess.TimeoutExpired:
         return None, f"n/a: no answer within {REF_TIMEOUT} s"
     if p.returncode == 4:
         return None, (p.stdout.strip() or "n/a")
     if p.returncode != 0:
-        raise HarnessError(f"{path}: sriq-ref {strat} exited {p.returncode}: {p.stdout[-200:]}{p.stderr[-200:]}")
+        raise HarnessError(f"{path}: {cmd} {strat} exited {p.returncode}: {p.stdout[-200:]}{p.stderr[-200:]}")
     with open(out, "w", encoding="utf-8") as f:
         f.write(p.stdout)
     return entdiff.parse(out), None
@@ -162,9 +166,10 @@ def ref_legs(path, name, classes, side):
             lines.append(f"{name} ref-{st}: FAILED: the reference must answer its own fixtures: {why}")
             bad += 1
     base, base_why = runs.get("cautious", (None, "not run"))
+    more, worse = proto_legs(path, name, classes, runs)
     if base is None:
         lines.append(f"{name} input~ref: n/a ({base_why})")
-        return lines, bad
+        return lines + more, bad + worse
     for key in ("input", "s2"):
         oracle, owhy = side.get(key, (None, "not dumped"))
         if oracle is None and own_fixture(path):
@@ -191,6 +196,32 @@ def ref_legs(path, name, classes, side):
             bad += 1
         else:
             lines.append(f"{name} ref-{st}~cautious: ok")
+    return lines + more, bad + worse
+
+
+def proto_legs(path, name, classes, runs):
+    """The prototype (slice 9) against the reference, strategy by strategy: the same answers
+    wherever both complete; n/a only where the reference is n/a too, and never on the rung's own
+    fixtures. (lines, failures)."""
+    proto_dir = os.path.join(WORK, "proto")
+    os.makedirs(proto_dir, exist_ok=True)
+    lines, bad = [], 0
+    for st in REF:
+        r, why = runs[st]
+        p, pwhy = ref_report(path, st, os.path.join(proto_dir, f"{name}.{st}.report"), "sriq-run")
+        leg = f"proto-{st}~ref"
+        if p is None and (r is not None or own_fixture(path)):
+            lines.append(f"{name} {leg}: FAILED: the prototype is n/a where the reference answers: {pwhy}")
+            bad += 1
+        elif p is None or r is None:
+            lines.append(f"{name} {leg}: n/a (" + (f"the prototype: {pwhy}" if p is None else f"the reference: {why}") + ")")
+        else:
+            diff = entdiff.compare(restrict(p, classes), restrict(r, classes))
+            if diff:
+                lines += mismatch_lines(name, leg, diff, "proto")
+                bad += 1
+            else:
+                lines.append(f"{name} {leg}: ok")
     return lines, bad
 
 

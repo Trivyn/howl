@@ -59,8 +59,11 @@ class RefLegsTest(unittest.TestCase):
     def tearDown(self):
         elimcheck.ref_report, elimcheck.REF[:], elimcheck.WORK = self.saved[0], self.saved[1], self.saved[2]
 
-    def stub(self, by_strategy):
-        elimcheck.ref_report = lambda path, st, out: by_strategy[st]
+    def stub(self, by_strategy, proto=None):
+        """ref_report stubbed: the reference's runs by strategy, and the prototype's (the
+        reference's unless given)."""
+        protos = by_strategy if proto is None else proto
+        elimcheck.ref_report = lambda path, st, out, cmd="sriq-ref": (protos if cmd == "sriq-run" else by_strategy)[st]
 
     def legs(self, path, oracle):
         side = {"input": (oracle, None), "s2": (oracle, None)}
@@ -70,7 +73,7 @@ class RefLegsTest(unittest.TestCase):
         self.stub({st: (self.good, None) for st in elimcheck.STRATEGIES})
         lines, bad = self.legs(self.own, self.good)
         self.assertEqual(bad, 0)
-        self.assertEqual(sum(1 for l in lines if l.endswith(": ok")), 4)
+        self.assertEqual(sum(1 for l in lines if l.endswith(": ok")), 7)
 
     def test_a_strategy_that_disagrees_fails(self):
         weak = report({"A": {"A", T}, "B": {"B", T}, T: {T}})
@@ -89,7 +92,7 @@ class RefLegsTest(unittest.TestCase):
         self.stub(na)
         _, bad_own = self.legs(self.own, self.good)
         _, bad_other = self.legs(self.other, self.good)
-        self.assertEqual(bad_own, 3)
+        self.assertEqual(bad_own, 6)  # three reference runs, three prototype runs
         self.assertEqual(bad_other, 0)
 
     def test_own_fixture_is_the_sriq_directory(self):
@@ -103,3 +106,26 @@ class RefLegsTest(unittest.TestCase):
         _, bad_other = elimcheck.ref_legs(self.other, "x", {"A", "B"}, side)
         self.assertEqual(bad_own, 1)
         self.assertEqual(bad_other, 0)
+
+    def test_a_prototype_that_disagrees_fails(self):
+        weak = report({"A": {"A", T}, "B": {"B", T}, T: {T}})
+        good = {st: (self.good, None) for st in elimcheck.STRATEGIES}
+        self.stub(good, dict(good, eager=(weak, None)))
+        lines, bad = self.legs(self.other, self.good)
+        self.assertEqual(bad, 1)
+        self.assertTrue(any("proto-eager~ref: MISMATCH" in l for l in lines))
+
+    def test_a_prototype_na_where_the_reference_answers_fails(self):
+        good = {st: (self.good, None) for st in elimcheck.STRATEGIES}
+        self.stub(good, dict(good, trivial=(None, "n/a: fuel")))
+        lines, bad = self.legs(self.other, self.good)
+        self.assertEqual(bad, 1)
+        self.assertTrue(any("proto-trivial~ref: FAILED" in l for l in lines))
+
+    def test_both_na_outside_the_rung_is_na(self):
+        good = {st: (self.good, None) for st in elimcheck.STRATEGIES}
+        both = dict(good, trivial=(None, "n/a: constants"))
+        self.stub(both, both)
+        lines, bad = self.legs(self.other, self.good)
+        self.assertEqual(bad, 0)
+        self.assertTrue(any("proto-trivial~ref: n/a" in l for l in lines))

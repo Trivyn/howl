@@ -1,6 +1,6 @@
 [package]
 name = "howl-reasoner"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 rust-version = "1.63"
 description = "Rust bindings for the HOWL consequence-based description-logic reasoner"
@@ -28,10 +28,12 @@ include = [
 name = "howl"
 
 [dependencies]
-# slop 0.4.0 and slop-rdf 0.5.0: the generation HOWL's csrc/ is built with.
-# build.rs checks that the runtime header matches byte for byte.
-slop-std-sys = "0.4.0"
-slop-rdf-sys = "0.5.0"
+# slop 0.4.2 and slop-rdf 0.5.1: the generation HOWL's csrc/ is built with.
+# build.rs checks that the runtime header matches byte for byte, so the pins
+# are exact: 0.1.0's caret let a fresh build resolve slop-std-sys 0.4.2 and
+# fail.
+slop-std-sys = "=0.4.2"
+slop-rdf-sys = "=0.5.1"
 
 [build-dependencies]
 cc = "1"

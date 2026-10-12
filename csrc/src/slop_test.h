@@ -22,6 +22,7 @@
 #include "slop_sriq.h"
 #include "slop_sriqctx.h"
 #include "slop_sriqref.h"
+#include "slop_sriqsat.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
 #include "slop_types.h"
@@ -43,6 +44,7 @@
 #include <string.h>
 
 typedef struct test_Expect test_Expect;
+typedef struct test_ProtoCase test_ProtoCase;
 typedef struct test_KscFixture test_KscFixture;
 typedef struct test_RunAs test_RunAs;
 
@@ -368,6 +370,24 @@ SLOP_OPTION_DEFINE(test_Expect, slop_option_test_Expect)
 #define SLOP_LIST_TEST_EXPECT_DEFINED
 #define SLOP_LIST_TEST_EXPECT_IMPL_DEFINED
 SLOP_LIST_DEFINE(test_Expect, slop_list_test_Expect)
+#endif
+
+struct test_ProtoCase {
+    slop_string label;
+    sriqref_RefIn in;
+    int64_t n;
+};
+typedef struct test_ProtoCase test_ProtoCase;
+
+#ifndef SLOP_OPTION_TEST_PROTOCASE_DEFINED
+#define SLOP_OPTION_TEST_PROTOCASE_DEFINED
+SLOP_OPTION_DEFINE(test_ProtoCase, slop_option_test_ProtoCase)
+#endif
+
+#ifndef SLOP_LIST_TEST_PROTOCASE_DEFINED
+#define SLOP_LIST_TEST_PROTOCASE_DEFINED
+#define SLOP_LIST_TEST_PROTOCASE_IMPL_DEFINED
+SLOP_LIST_DEFINE(test_ProtoCase, slop_list_test_ProtoCase)
 #endif
 
 struct test_KscFixture {
@@ -1144,6 +1164,11 @@ typedef struct { bool is_ok; union { sriqnormal_S0 ok; slop_string err; } data; 
 typedef struct { bool is_ok; union { sriqnames_SriqNormal ok; slop_string err; } data; } slop_result_sriqnames_SriqNormal_string;
 #endif
 
+#ifndef SLOP_RESULT_SRIQCLAUSES_SRIQCLAUSES_STRING_DEFINED
+#define SLOP_RESULT_SRIQCLAUSES_SRIQCLAUSES_STRING_DEFINED
+typedef struct { bool is_ok; union { sriqclauses_SriqClauses ok; slop_string err; } data; } slop_result_sriqclauses_SriqClauses_string;
+#endif
+
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
 howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
@@ -1522,13 +1547,36 @@ uint8_t test_test_sriq_ref_fixtures(slop_arena* arena);
 uint8_t test_test_sriq_ref_limits(slop_arena* arena);
 slop_list_u8 test_o4_answers(slop_arena* arena, sriqctx_Structure st);
 slop_list_types_Clause test_reversed_clauses(slop_arena* arena, slop_list_types_Clause cs);
+sriqsat_SatConfig test_sat_cfg(sriqctx_Strategy s, int64_t perm);
+sriqsat_SatConfig test_sat_fuel(sriqctx_Strategy s, int64_t fuel);
+slop_list_u8 test_answers_of(slop_arena* arena, sriqctx_Structure st, int64_t n);
+uint8_t test_implied(slop_list_u8 a, slop_list_u8 b);
+uint8_t test_proto_says(slop_arena* arena, slop_string label, sriqctx_Strategy s, uint8_t ok);
+uint8_t test_proto_agrees(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s);
+uint8_t test_proto_perms(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s, sriqsat_SatResult p);
+uint8_t test_perm_same(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s, sriqsat_SatResult p, int64_t perm);
+uint8_t test_proto_caps(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s, sriqsat_SatResult p);
+slop_list_types_Clause test_rpred_late_clauses(slop_arena* arena);
+uint8_t test_test_sriq_rpred_late(slop_arena* arena);
+slop_list_test_ProtoCase test_proto_cases(slop_arena* arena);
+uint8_t test_test_sriq_proto_rows(slop_arena* arena);
+uint8_t test_test_sriq_proto_work(slop_arena* arena);
+uint8_t test_qualified_max_rounds(slop_arena* arena);
+uint8_t test_test_sriq_proto_fixtures(slop_arena* arena);
+uint8_t test_fixture_proto(slop_arena* arena, slop_string name);
+uint8_t test_fixture_proto_sc(slop_arena* arena, slop_string name, sriqclauses_SriqClauses sc);
 slop_option_sriqctx_Strategy test_parse_strategy(slop_string name);
 slop_string test_status_name(sriqref_RefStatus s);
-int64_t test_print_ref_report(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, sriqctx_Strategy s, int64_t rounds);
+int64_t test_print_ref_report(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, slop_string who, sriqctx_Strategy s, int64_t rounds);
 int64_t test_print_thing_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, slop_string thing);
 int64_t test_print_class_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, uint32_t b, slop_string thing, slop_string nothing);
-int64_t test_sriq_ref(slop_arena* arena, slop_string path, slop_string strat);
+slop_result_sriqclauses_SriqClauses_string test_sriq_load(slop_arena* arena, slop_string path);
+int64_t test_sriq_ref(slop_arena* arena, slop_string path, slop_string strat, uint8_t proto, uint8_t counts);
 int64_t test_ref_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s);
+sriqsat_SatConfig test_proto_cfg(sriqctx_Strategy s);
+int64_t test_proto_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s, uint8_t counts);
+int64_t test_count_line(slop_arena* arena, slop_string name, int64_t n);
+int64_t test_print_counts(slop_arena* arena, sriqsat_SatResult p);
 uint8_t test_test_sriq_gate_table(slop_arena* arena);
 uint8_t test_test_el_plus_plus_gate_table(slop_arena* arena);
 uint8_t test_test_top_role_tautology_is_dropped(slop_arena* arena);
@@ -1716,6 +1764,7 @@ int64_t test_dump_ksc_classify(slop_arena* arena, test_KscFixture fx, int64_t w,
 int64_t test_dump_ksc_caps(slop_arena* arena, test_KscFixture fx, int64_t w);
 int64_t test_ksc_dump(slop_arena* arena, slop_string path);
 int main(int argc, char** _c_argv);
+int64_t test_sriq_run_args(slop_arena* arena, int64_t argc, uint8_t** argv);
 int64_t test_run_suite(void);
 
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
@@ -1841,6 +1890,11 @@ SLOP_OPTION_DEFINE(sriqctx_Strategy, slop_option_sriqctx_Strategy)
 #ifndef SLOP_OPTION_TEST_EXPECT_DEFINED
 #define SLOP_OPTION_TEST_EXPECT_DEFINED
 SLOP_OPTION_DEFINE(test_Expect, slop_option_test_Expect)
+#endif
+
+#ifndef SLOP_OPTION_TEST_PROTOCASE_DEFINED
+#define SLOP_OPTION_TEST_PROTOCASE_DEFINED
+SLOP_OPTION_DEFINE(test_ProtoCase, slop_option_test_ProtoCase)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
