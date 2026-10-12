@@ -10,6 +10,10 @@
  * matters: there the engine's only commit arena is the run's own, and a
  * run that freed it twice once crashed only under that configuration.
  *
+ * Then probe queries (SPEC §8.4, issue #68): a probe document as Turtle
+ * and another as triples, three queries, and their answers through every
+ * probe accessor, on both profiles.
+ *
  * Then the refusals: out-of-range options, an unbuilt profile, a term
  * HOWL does not take, and Turtle that does not parse.
  */
@@ -55,6 +59,11 @@ static char* report_of(howl_Run run) {
     for (int64_t i = 0; i < howl_run_sub_len(run); i++)
         touched += howl_run_sub(run, i).len + howl_run_super(run, i).len;
     for (int64_t i = 0; i < howl_run_omission_len(run); i++) touched += howl_run_omission(run, i).len;
+    for (int64_t i = 0; i < howl_run_probe_len(run); i++)
+        touched += howl_run_probe_sub(run, i).len + howl_run_probe_sup(run, i).len
+                 + (size_t)howl_run_probe_kind(run, i) + (size_t)howl_run_probe_answer(run, i);
+    for (int64_t i = 0; i < howl_run_probe_omission_len(run); i++) touched += howl_run_probe_omission(run, i).len;
+    (void)howl_run_probe_inconsistent(run);
     (void)howl_run_termination(run);
     (void)howl_run_rounds(run);
     (void)howl_run_inconsistent(run);
@@ -112,6 +121,87 @@ static void fixture(const char* path) {
         }
         free(first);
     }
+}
+
+/* `:p`'s two domains are disjoint, so it cannot have a value; `:q` can. */
+static const char* PROBE_MAIN =
+    "@prefix : <http://example.org/t#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+    "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+    ":p a owl:ObjectProperty . :q a owl:ObjectProperty .\n"
+    ":D a owl:Class . :E a owl:Class . :D owl:disjointWith :E . :p rdfs:domain :D , :E .\n";
+static const char* PROBE_DOC =
+    "@prefix : <http://example.org/t#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+    "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+    "<urn:probe:p> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom owl:Thing ] .\n"
+    "<urn:probe:q> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom owl:Thing ] .\n";
+
+static int answer_is(howl_Run r, int64_t i, probe_QueryKind k, const char* sub, const char* sup,
+                     probe_ProbeAnswer a) {
+    return howl_run_probe_kind(r, i) == k && msg_is(howl_run_probe_sub(r, i), sub)
+        && msg_is(howl_run_probe_sup(r, i), sup) && howl_run_probe_answer(r, i) == a;
+}
+
+static void probes(void) {
+    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus };
+    for (int p = 0; p < 2; p++) {
+        howl_Input in = howl_input_new();
+        CHECK(howl_input_add_turtle(in, str(PROBE_MAIN)).ok, "the probe scenario does not parse");
+        CHECK(howl_input_add_probe_turtle(in, str(PROBE_DOC)).ok, "the probe document does not parse");
+        /* A second probe document, as triples: urn:probe:t is under urn:probe:p. */
+        howl_input_begin_probe_document(in);
+        CHECK(howl_input_add_probe_triple(in, iri("urn:probe:t"),
+                                          iri("http://www.w3.org/2000/01/rdf-schema#subClassOf"),
+                                          iri("urn:probe:p")), "add a probe triple");
+        howl_input_ask_unsatisfiable(in, str("urn:probe:q"));
+        howl_input_ask_unsatisfiable(in, str("urn:probe:p"));
+        howl_input_ask_unsatisfiable(in, str("urn:probe:t"));
+        howl_input_ask_subsumed(in, str("urn:probe:t"), str("http://example.org/t#D"));
+        howl_input_ask_unsatisfiable(in, str("urn:probe:t"));  /* asked twice, answered once */
+        howl_Options o = howl_default_options();
+        o.profile = profiles[p];
+        howl_Run r = howl_run_classify(in, o);
+        CHECK(howl_run_ok(r) && howl_run_verdict(r) == types_Verdict_verdict_coherent,
+              "profile %d: the main run is not coherent", p);
+        CHECK(howl_run_unsat_len(r) == 0, "profile %d: a probe class reached unsatisfiable", p);
+        CHECK(howl_run_probe_len(r) == 4, "profile %d: %lld answers", p, (long long)howl_run_probe_len(r));
+        CHECK(answer_is(r, 0, probe_QueryKind_query_unsatisfiable, "urn:probe:p", "", probe_ProbeAnswer_answer_yes)
+              && answer_is(r, 1, probe_QueryKind_query_unsatisfiable, "urn:probe:q", "", probe_ProbeAnswer_answer_no)
+              && answer_is(r, 2, probe_QueryKind_query_unsatisfiable, "urn:probe:t", "", probe_ProbeAnswer_answer_yes)
+              && answer_is(r, 3, probe_QueryKind_query_subsumed, "urn:probe:t", "http://example.org/t#D",
+                           probe_ProbeAnswer_answer_yes),
+              "profile %d: wrong probe answers", p);
+        CHECK(!howl_run_probe_inconsistent(r) && howl_run_probe_omission_len(r) == 0,
+              "profile %d: the probe run was not clean", p);
+        CHECK(howl_run_probe_len(r) >= 0 && howl_run_probe_sub(r, 99).len == 0
+              && howl_run_probe_answer(r, 99) == probe_ProbeAnswer_answer_unknown,
+              "profile %d: an out-of-range probe answer is not empty and unknown", p);
+        free(report_of(r));
+        howl_run_free(r);
+        howl_input_free(in);
+    }
+    /* A probe document that faults its run takes the whole run with it,
+     * after the main run finished: its outcome must be released, once. */
+    {
+        howl_Input in = howl_input_new();
+        CHECK(howl_input_add_turtle(in, str(PROBE_MAIN)).ok, "the probe scenario does not parse");
+        CHECK(howl_input_add_probe_turtle(in, str("<urn:p> a <http://www.w3.org/2002/07/owl#ObjectProperty> , "
+                                                  "<http://www.w3.org/2002/07/owl#AnnotationProperty> .")).ok,
+              "the faulting probe document does not parse");
+        howl_input_ask_unsatisfiable(in, str("urn:P"));
+        howl_Run r = howl_run_classify(in, howl_default_options());
+        CHECK(!howl_run_ok(r) && howl_run_fault(r) == howl_FaultKind_fault_input_error
+              && howl_run_report_len(r) == 0 && howl_run_probe_len(r) == 0,
+              "a probe run's fault did not fault the run");
+        howl_run_free(r);
+        howl_input_free(in);
+    }
+    /* A query naming an empty IRI refuses the input. */
+    howl_Input in = howl_input_new();
+    howl_input_ask_subsumed(in, str("http://example.org/t#D"), str(""));
+    howl_Run r = howl_run_classify(in, howl_default_options());
+    CHECK(howl_run_fault(r) == howl_FaultKind_fault_input_error, "an empty query IRI did not refuse the input");
+    howl_run_free(r);
+    howl_input_free(in);
 }
 
 static void refusals(const char* path) {
@@ -193,11 +283,12 @@ int main(int argc, char** argv) {
         return 2;
     }
     for (int i = 1; i < argc; i++) fixture(argv[i]);
+    probes();
     refusals(argv[1]);
     if (failures) {
         fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;
     }
-    printf("C API: %d fixtures x {el, el++} x W in {1,2,4}, twice each; refusals: ok\n", argc - 1);
+    printf("C API: %d fixtures x {el, el++} x W in {1,2,4}, twice each; probes; refusals: ok\n", argc - 1);
     return 0;
 }

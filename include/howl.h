@@ -47,6 +47,17 @@ struct howl_TurtleResult {
 typedef struct howl_TurtleResult howl_TurtleResult;
 
 typedef enum {
+    probe_ProbeAnswer_answer_yes,
+    probe_ProbeAnswer_answer_no,
+    probe_ProbeAnswer_answer_unknown
+} probe_ProbeAnswer;
+
+typedef enum {
+    probe_QueryKind_query_unsatisfiable,
+    probe_QueryKind_query_subsumed
+} probe_QueryKind;
+
+typedef enum {
     rdf_TermKind_iri,
     rdf_TermKind_blank,
     rdf_TermKind_literal,
@@ -99,10 +110,15 @@ typedef enum {
 
 /* Public API */
 howl_Options howl_default_options(void);
+uint8_t howl_input_add_probe_triple(howl_Input in, howl_TermIn s, howl_TermIn p, howl_TermIn o);
+howl_TurtleResult howl_input_add_probe_turtle(howl_Input in, slop_string text);
 uint8_t howl_input_add_triple(howl_Input in, howl_TermIn s, howl_TermIn p, howl_TermIn o);
 howl_TurtleResult howl_input_add_turtle(howl_Input in, slop_string text);
+void howl_input_ask_subsumed(howl_Input in, slop_string sub, slop_string sup);
+void howl_input_ask_unsatisfiable(howl_Input in, slop_string cls);
 void howl_input_attest_import(howl_Input in, slop_string iri);
 void howl_input_begin_document(howl_Input in);
+void howl_input_begin_probe_document(howl_Input in);
 void howl_input_free(howl_Input in);
 howl_Input howl_input_new(void);
 howl_Run howl_run_classify(howl_Input in, howl_Options o);
@@ -114,6 +130,14 @@ uint8_t howl_run_inconsistent(howl_Run r);
 uint8_t howl_run_ok(howl_Run r);
 slop_string howl_run_omission(howl_Run r, int64_t i);
 int64_t howl_run_omission_len(howl_Run r);
+probe_ProbeAnswer howl_run_probe_answer(howl_Run r, int64_t i);
+uint8_t howl_run_probe_inconsistent(howl_Run r);
+probe_QueryKind howl_run_probe_kind(howl_Run r, int64_t i);
+int64_t howl_run_probe_len(howl_Run r);
+slop_string howl_run_probe_omission(howl_Run r, int64_t i);
+int64_t howl_run_probe_omission_len(howl_Run r);
+slop_string howl_run_probe_sub(howl_Run r, int64_t i);
+slop_string howl_run_probe_sup(howl_Run r, int64_t i);
 types_Profile howl_run_profile(howl_Run r);
 int64_t howl_run_report_len(howl_Run r);
 slop_string howl_run_report_line(howl_Run r, int64_t i);

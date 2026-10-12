@@ -63,7 +63,9 @@ input. The `Report` holds:
 - `omissions`: what the run did not cover. They are never dropped, and any omission makes an
   otherwise clean run `Inconclusive`.
 - `termination` and `rounds`.
-- `lines()`: the canonical report, the bytes `howl validate --report` prints.
+- `lines()`: the canonical report, the bytes `howl validate --report` prints, then the probe lines
+  when a query was asked.
+- `probes`, `probe_inconsistent` and `probe_omissions`: the answers to probe queries (below).
 
 Every list is in the engine's canonical order. The report is identical at every worker count, so it
 can be hashed.
@@ -76,6 +78,44 @@ refused. Asking for a rung that is not built yet (`Sriq`) returns `Fault::Profil
 is never run as another rung. `HornSriq` was dropped from the ladder: it is deprecated, always
 refused the same way, and kept only so the C enum is not renumbered. `Profile` is
 `#[non_exhaustive]`, so a later rung can be added without breaking your matches.
+
+## Probe queries
+
+Ask whether a named class is unsatisfiable, or whether one is subsumed by another, without adding
+anything to the report. Classes made up for the purpose go in a probe document, which the main run
+never sees:
+
+```rust
+use howl::{Answer, Query};
+
+input.add_probe_turtle(r#"
+    <urn:probe:1> <http://www.w3.org/2000/01/rdf-schema#subClassOf> [
+        a <http://www.w3.org/2002/07/owl#Restriction> ;
+        <http://www.w3.org/2002/07/owl#onProperty> <http://example.org/p> ;
+        <http://www.w3.org/2002/07/owl#someValuesFrom> <http://www.w3.org/2002/07/owl#Thing> ] .
+"#)?;
+input.ask_unsatisfiable("urn:probe:1");   // can :p have a value?
+input.ask_subsumed("http://example.org/A", "http://example.org/B");
+
+let report = Reasoner::new().classify(&input)?;
+for p in &report.probes {
+    println!("{:?}: {:?}", p.query, p.answer);
+}
+```
+
+A second classification answers them: the input, the probe documents, and a class declaration for
+every class a query names, so a queried class never needs declaring (any other class a probe
+document introduces does, as in any document). The main report is exactly the
+report without probes: probe classes never reach `unsatisfiable`, `subsumptions`, `omissions` or
+the verdict.
+
+- `report.probes` has each query once, in canonical order.
+- `Answer::Yes`: the inclusion is entailed. A `Yes` holds even when the probe run was incomplete.
+- `Answer::No`: it is not entailed, and the probe run was complete.
+- `Answer::Unknown`: anything else, for example an omission in the probe run
+  (`report.probe_omissions`) or the round budget running out.
+- `report.probe_inconsistent`: an inconsistent probe run entails everything, so every answer is a
+  vacuous `Yes`.
 
 ## Cancellation
 

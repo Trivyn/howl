@@ -93,6 +93,7 @@ That includes a property used without a declaration: in `:A :editorNote "x"` an 
 ```
 howl validate <ontology.ttl> [--profile P] [--strict] [--no-imports] [-I FILE]...
                              [--report] [--timings] [--max-iterations N] [--workers N]
+                             [--probe FILE]... [--ask-unsat C]... [--ask-sub A B]...
 howl --version
 ```
 
@@ -122,6 +123,13 @@ howl --version
 - **`--max-iterations N`** (0–10000, default 1000) caps the reasoning rounds. A run that hits the cap
   is inconclusive, unless it has already found an incoherence (which stands, exit 1).
 - **`--timings`** prints phase durations and peak memory to stderr, never into the report.
+- **`--ask-unsat C`** and **`--ask-sub A B`** ask whether class `C` is unsatisfiable, or whether `A`
+  is subsumed by `B`. **`--probe FILE`** adds a probe document, which defines classes to ask about
+  (`<urn:probe:1> rdfs:subClassOf [ owl:onProperty :p ; owl:someValuesFrom owl:Thing ]` asks whether
+  `:p` can have a value) and is never part of the main run. A second run answers each query `yes`,
+  `no` or `unknown`. The answers print after the report, which is unchanged, so a probe class never
+  shows up as unsatisfiable or changes the exit code. `yes` holds even when the probe run was
+  incomplete; `no` needs a complete one.
 
 ## What HOWL reasons over
 

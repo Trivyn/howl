@@ -77,11 +77,12 @@
   (import types (Outcome Fault Omission ReasonerConfig Profile ProfileSelection Verdict verdict default-config
                  copy-fault))
   (import owl2 (render-omission))
-  (import howl (Decoded decode-from own-decoded Prepared prepare-decoded reason))
+  (import howl (Decoded decode-from own-decoded Prepared prepare-decoded reason probe-encoded))
+  (import probe (QueryKind Query Probing sort-queries probe-document))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
-  (import report (report-lines))
+  (import report (report-lines probe-lines))
   (import select (parse-profile unavailable-message))
-  (import strlib (parse-int is-digit char-at))
+  (import strlib (parse-int is-digit char-at starts-with))
   (import ttl (parse-ttl-file-for-each-triple))
   (import vocab (RDF_TYPE OWL_ONTOLOGY))
   (import canon (string-cmp))
@@ -252,6 +253,11 @@
       (println "  --timings  print phase durations and peak memory on stderr (never part of a report)")
       (println "  --max-iterations N   the round budget, 0..10000 (default 1000)")
       (println "  --workers N          threads joining each round, 1..64 (default 4); never changes the report")
+      (println "  --probe FILE         a probe document: read only by the probe run; repeatable")
+      (println "  --ask-unsat C        ask whether class C is unsatisfiable; repeatable")
+      (println "  --ask-sub A B        ask whether A is subsumed by B; repeatable")
+      (println "                       answered yes, no or unknown by a probe run of their own,")
+      (println "                       printed after the report; the report is unchanged")
       (println "")
       (println "EXIT CODES:")
       (println "  0  coherent       checked, no incoherence found")
@@ -392,6 +398,67 @@
       ((error f) (error f))
       ((ok pp)   (reason arena pp config))))
 
+  (fn cli-query ((arena Arena) (kind QueryKind) (sub String) (sup String))
+    (@intent "A query from the command line")
+    (@spec ((Arena QueryKind String String) -> Query))
+    (@alloc arena)
+    (record-new Query (kind kind) (sub (record-new IRI (value sub))) (sup (record-new IRI (value sup)))))
+
+  (fn probe-input ((arena Arena) (main Encoded) (probes Encoded) (queries (List Query)))
+    (@intent "The probe run's input, or none when nothing was asked")
+    (@spec ((Arena Encoded Encoded (List Query)) -> (Option (Ptr Encoded))))
+    (@alloc arena)
+    ;; Built before the main decode frees the input's arena: it copies the
+    ;; input's triples rather than pointing into them.
+    (if (== (list-len queries) 0)
+      (none)
+      (some (probe-document arena main probes queries))))
+
+  (fn probe-of ((arena Arena) (doc (Option (Ptr Encoded))) (resolved (List IRI)) (queries (List Query))
+                (config ReasonerConfig) (main (Result Outcome Fault)))
+    (@intent "The probe run's result, when a query was asked and the main run has a result")
+    (@spec ((Arena (Option (Ptr Encoded)) (List IRI) (List Query) ReasonerConfig (Result Outcome Fault))
+            -> (Option (Result Probing Fault))))
+    (@alloc arena)
+    (match main
+      ((error _) (none))
+      ((ok _)
+        (match doc
+          ((none)   (none))
+          ((some d) (some (probe-encoded arena (deref d) resolved queries config)))))))
+
+  (fn with-probe ((arena Arena) (main (Result Outcome Fault)) (probed (Option (Result Probing Fault))))
+    (@intent "The run's result: the main run's, unless its probe run faulted")
+    (@spec ((Arena (Result Outcome Fault) (Option (Result Probing Fault))) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; As the library does it: a probe run that faults takes the run with
+    ;; it, so no report is printed for it, and its input error is named as
+    ;; the probe run's.
+    (match probed
+      ((none) main)
+      ((some pr)
+        (match pr
+          ((ok _)    main)
+          ((error f) (error (match f
+                              ((input-error m) (union-new Fault input-error (string-concat arena "probe run: " m)))
+                              (_               f))))))))
+
+  (fn print-probes ((arena Arena) (probed (Option (Result Probing Fault))))
+    (@intent "The probe run's lines, after the report, when it answered")
+    (@spec ((Arena (Option (Result Probing Fault))) -> Unit))
+    (@alloc arena)
+    (match probed
+      ((some pr)
+        (match pr
+          ((ok p)    (for-each (l (probe-lines arena p)) (println l)))
+          ((error _) (do))))
+      ((none) (do))))
+
+  (fn operand ((s String))
+    (@intent "Is this a query's class, rather than a missing one or the next flag?")
+    (@spec ((String) -> Bool))
+    (and (> (string-len s) 0) (not (starts-with s "-"))))
+
   (fn print-omissions ((arena Arena) (os (List Omission)))
     (@intent "List every omission, one per line")
     (@spec ((Arena (List Omission)) -> Unit))
@@ -429,6 +496,10 @@
                   (mut i 3)
                   (mut report-mode false)
                   (mut timings false)
+                  (pfront       (arena-new 16777216))   ; the probe documents and the probe run's input
+                  (penc         (new-encoded pfront))
+                  (mut pdocs 0)
+                  (mut queries  (list-new arena Query))
                   (t-start (now-ms))
                   (input (argv-to-string argv 2)))
               (do
@@ -507,6 +578,44 @@
                       (when (string-eq arg "--report")
                         (do (set! known true) (set! report-mode true)))
 
+                      ;; Probe documents and queries (§8.5 A4), answered by
+                      ;; a probe run of their own after the main run. The
+                      ;; main report is unchanged; the probe lines follow it.
+                      (when (string-eq arg "--probe")
+                        (do
+                          (set! known true)
+                          (set! step 2)
+                          (if (>= (+ i 1) argc)
+                            (do (println "howl: --probe needs a FILE") (set! failed true))
+                            (let ((path (argv-to-string argv (+ i 1))))
+                              (do
+                                (when (> pdocs 0) (encoded-next-document pfront penc))
+                                (set! pdocs (+ pdocs 1))
+                                (when (not (parse-into pfront penc path))
+                                  (do (print "howl: cannot parse probe document ") (println path)
+                                      (set! failed true))))))))
+
+                      (when (string-eq arg "--ask-unsat")
+                        (do
+                          (set! known true)
+                          (set! step 2)
+                          (if (or (>= (+ i 1) argc) (not (operand (argv-to-string argv (+ i 1)))))
+                            (do (println "howl: --ask-unsat needs a class IRI") (set! failed true))
+                            (list-push queries
+                              (cli-query arena 'query-unsatisfiable (argv-to-string argv (+ i 1)) "")))))
+
+                      (when (string-eq arg "--ask-sub")
+                        (do
+                          (set! known true)
+                          (set! step 3)
+                          (if (or (>= (+ i 2) argc)
+                                  (not (and (operand (argv-to-string argv (+ i 1)))
+                                            (operand (argv-to-string argv (+ i 2))))))
+                            (do (println "howl: --ask-sub needs two class IRIs") (set! failed true))
+                            (list-push queries
+                              (cli-query arena 'query-subsumed (argv-to-string argv (+ i 1))
+                                (argv-to-string argv (+ i 2)))))))
+
                       (when (string-eq arg "--timings")
                         (do (set! known true) (set! timings true)))
 
@@ -569,7 +678,9 @@
 
                 (if failed
                   EXIT_ERROR
-                  (let ((t-parsed   (now-ms))
+                  (let ((asked      (sort-queries arena queries))
+                        (pdoc       (probe-input pfront (deref enc) (deref penc) asked))
+                        (t-parsed   (now-ms))
                         (m-parsed   (peak-mb))
                         (held       (arena-new 16777216))   ; the owned Decoded: freed after prepare
                         (decoded    (decode-held held front (deref enc) resolved))
@@ -578,9 +689,13 @@
                         (prepared   (prepare-from arena held decoded cfg))
                         (t-prepared (now-ms))
                         (m-prepared (peak-mb))
-                        (result     (reason-prepared arena prepared cfg))
+                        (reasoned   (reason-prepared arena prepared cfg))
                         (t-reasoned (now-ms))
-                        (m-reasoned (peak-mb)))
+                        (m-reasoned (peak-mb))
+                        ;; The probe run, before anything is printed: one
+                        ;; that faults takes the run with it.
+                        (probed     (probe-of arena pdoc resolved asked cfg reasoned))
+                        (result     (with-probe arena reasoned probed)))
                     (do
                       (when timings
                         (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
@@ -621,6 +736,7 @@
                                   (print (int-to-string arena (cast Int (list-len os))))
                                   (println " omitted")
                                   (print-omissions arena os))))))
+                      (print-probes arena probed)
                       (when timings
                         (print-memory arena m-parsed m-decoded m-prepared m-reasoned (peak-mb)))
                       (exit-code-for result)))))))))))))
