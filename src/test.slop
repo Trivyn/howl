@@ -3177,15 +3177,57 @@
           (set! ok false))
         (when (not (s2-is arena "exists on the left"
                      "[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf :A ."
-                     "DL1 A[¬urn:x:B] ⊓ urn:x:B ⊑ ⊥\nDL1 ⊤ ⊑ urn:x:A ⊔ A[∀urn:x:r.¬urn:x:B]\nDL3 ∃bar(urn:x:r).A[∀urn:x:r.¬urn:x:B] ⊑ A[¬urn:x:B]\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
+                     "DL3 ∃urn:x:r.urn:x:B ⊑ urn:x:A\n"))
           (set! ok false))
         (when (not (s2-is arena "domain"
                      ":r rdfs:domain :A ."
-                     "DL1 A[⊥] ⊑ ⊥\nDL1 ⊤ ⊑ urn:x:A ⊔ A[∀urn:x:r.⊥]\nDL3 ∃bar(urn:x:r).A[∀urn:x:r.⊥] ⊑ A[⊥]\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
+                     "DL1 ⊤ ⊑ A[⊤]\nDL3 ∃urn:x:r.A[⊤] ⊑ urn:x:A\n"))
           (set! ok false))
         (when (not (s2-is arena "range"
                      ":r rdfs:range :A ."
-                     "DL1 ⊤ ⊑ A[∀urn:x:r.urn:x:A]\nDL3 ∃bar(urn:x:r).A[∀urn:x:r.urn:x:A] ⊑ urn:x:A\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
+                     "DL1 ⊤ ⊑ A[⊤]\nDL3 ∃bar(urn:x:r).A[⊤] ⊑ urn:x:A\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
+          (set! ok false))
+        ;; Choice 11's corners: an inverse's domain; complex C and D; the
+        ;; tautologies; D = ⊥; two ranges in one conjunction; T made once.
+        (when (not (s2-is arena "choice 11: the domain of an inverse, over its P̄"
+                     "[ owl:inverseOf :r ] rdfs:domain :A ."
+                     "DL1 ⊤ ⊑ A[⊤]\nDL3 ∃bar(urn:x:r).A[⊤] ⊑ urn:x:A\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: a complex filler is named above it, a complex right side below it"
+                     "[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:unionOf ( :B :C ) ] ] rdfs:subClassOf [ owl:intersectionOf ( :A :B ) ] ."
+                     "DL1 A[(urn:x:A ⊓ urn:x:B)] ⊑ urn:x:A\nDL1 A[(urn:x:A ⊓ urn:x:B)] ⊑ urn:x:B\nDL1 A[(¬urn:x:B ⊓ ¬urn:x:C)] ⊓ urn:x:B ⊑ ⊥\nDL1 A[(¬urn:x:B ⊓ ¬urn:x:C)] ⊓ urn:x:C ⊑ ⊥\nDL1 ⊤ ⊑ A[(urn:x:B ⊔ urn:x:C)] ⊔ A[(¬urn:x:B ⊓ ¬urn:x:C)]\nDL3 ∃urn:x:r.A[(urn:x:B ⊔ urn:x:C)] ⊑ A[(urn:x:A ⊓ urn:x:B)]\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: ∃R.⊥ ⊑ A and ∃R.B ⊑ ⊤ are tautologies, emitting nothing"
+                     "[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom owl:Nothing ] rdfs:subClassOf :A .\n[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf owl:Thing ."
+                     ""))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: the match is on canonical NNF, so ≥1 R.B on the left is ∃R.B"
+                     "[ a owl:Restriction ; owl:onProperty :r ; owl:minQualifiedCardinality \"1\"^^<http://www.w3.org/2001/XMLSchema#nonNegativeInteger> ; owl:onClass :B ] rdfs:subClassOf :A ."
+                     "DL3 ∃urn:x:r.urn:x:B ⊑ urn:x:A\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: the match is on NNF, so ¬∀R.¬B on the left is ∃R.B"
+                     "[ owl:complementOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom [ owl:complementOf :B ] ] ] rdfs:subClassOf :A ."
+                     "DL3 ∃urn:x:r.urn:x:B ⊑ urn:x:A\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: ⊤ ⊑ ∀R.⊤ is a tautology, and makes no T"
+                     ":r rdfs:range owl:Thing ."
+                     ""))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: two ∀ conjuncts of one ⊤ axiom are two ranges"
+                     "owl:Thing rdfs:subClassOf [ owl:intersectionOf ( [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :A ] [ a owl:Restriction ; owl:onProperty :s ; owl:allValuesFrom :B ] ) ] ."
+                     "DL1 ⊤ ⊑ A[⊤]\nDL3 ∃bar(urn:x:r).A[⊤] ⊑ urn:x:A\nDL3 ∃bar(urn:x:s).A[⊤] ⊑ urn:x:B\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 bar(urn:x:s) ⊑ urn:x:s⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\nDL8 urn:x:s ⊑ bar(urn:x:s)⁻\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: ⊤ ⊑ A ⊔ ∀R.B is not a range"
+                     "owl:Thing rdfs:subClassOf [ owl:unionOf ( :A [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ) ] ."
+                     "DL1 ⊤ ⊑ urn:x:A ⊔ A[∀urn:x:r.urn:x:B]\nDL3 ∃bar(urn:x:r).A[∀urn:x:r.urn:x:B] ⊑ urn:x:B\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: ∃R.B ⊑ ⊥ names ⊥ below"
+                     "[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] rdfs:subClassOf owl:Nothing ."
+                     "DL1 A[⊥] ⊑ ⊥\nDL3 ∃urn:x:r.urn:x:B ⊑ A[⊥]\n"))
+          (set! ok false))
+        (when (not (s2-is arena "choice 11: two ranges and two domains, T made once"
+                     ":r rdfs:range :A .\n:s rdfs:range :B .\n:r rdfs:domain :C .\n:s rdfs:domain :A ."
+                     "DL1 ⊤ ⊑ A[⊤]\nDL3 ∃bar(urn:x:r).A[⊤] ⊑ urn:x:A\nDL3 ∃bar(urn:x:s).A[⊤] ⊑ urn:x:B\nDL3 ∃urn:x:r.A[⊤] ⊑ urn:x:C\nDL3 ∃urn:x:s.A[⊤] ⊑ urn:x:A\nDL8 bar(urn:x:r) ⊑ urn:x:r⁻\nDL8 bar(urn:x:s) ⊑ urn:x:s⁻\nDL8 urn:x:r ⊑ bar(urn:x:r)⁻\nDL8 urn:x:s ⊑ bar(urn:x:s)⁻\n"))
           (set! ok false))
         (when (not (s2-is arena "Self"
                      ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasSelf true ] ."

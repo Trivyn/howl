@@ -1044,6 +1044,16 @@
   ;; ------------------------------------------------------------
 
   (fn s2-gci ((arena Arena) (p (Ptr S2State)) (l SConcept) (r SConcept))
+    (@intent "C ⊑ D: a top-level ∃ on the left as DL3, a ⊤ left with each ∀ conjunct as a range (choice 11); else ⊤ ⊑ NNF(¬C ⊔ D), a top-level ⊓ split")
+    (@spec ((Arena (Ptr S2State) SConcept SConcept) -> Bool))
+    (@alloc arena)
+    (let ((lc (sc-canon arena (nnf arena l true))))
+      (match lc
+        ((sc-some role f) (gci-dl3 arena p role (deref f) (sc-canon arena (nnf arena r true))))
+        ((sc-top)         (assert-top arena p (sc-canon arena (nnf arena r true)) true))
+        (_                (gci-nnf arena p l r)))))
+
+  (fn gci-nnf ((arena Arena) (p (Ptr S2State)) (l SConcept) (r SConcept))
     (@intent "C ⊑ D as ⊤ ⊑ NNF(¬C ⊔ D), a top-level ⊓ split")
     (@spec ((Arena (Ptr S2State) SConcept SConcept) -> Bool))
     (@alloc arena)
@@ -1051,15 +1061,75 @@
       (do
         (list-push both (union-new SConcept sc-not (sc arena l)))
         (list-push both r)
-        (assert-top arena p (sc-canon arena (nnf arena (union-new SConcept sc-or both) true))))))
+        (assert-top arena p (sc-canon arena (nnf arena (union-new SConcept sc-or both) true)) false))))
 
-  (fn assert-top ((arena Arena) (p (Ptr S2State)) (e SConcept))
-    (@intent "⊤ ⊑ e: each conjunct of a top-level ⊓ alone (choice 3), else one DL1")
-    (@spec ((Arena (Ptr S2State) SConcept) -> Bool))
+  (fn assert-top ((arena Arena) (p (Ptr S2State)) (e SConcept) (ranges Bool))
+    (@intent "⊤ ⊑ e: each conjunct of a top-level ⊓ alone (choice 3); with ranges, a ∀ conjunct as DL3 over inv(R) from T (choice 11); else one DL1")
+    (@spec ((Arena (Ptr S2State) SConcept Bool) -> Bool))
     (@alloc arena)
     (match e
-      ((sc-and xs) (do (for-each (c xs) (assert-top arena p c)) true))
+      ((sc-and xs) (do (for-each (c xs) (assert-top arena p c ranges)) true))
+      ((sc-all r f)
+        (cond ((not ranges) (disjunction arena p (none) (none) e))
+              ;; ⊤ ⊑ ∀R.⊤ is a tautology: nothing, and no T.
+              ((sc-is-top (deref f)) true)
+              (else (dl3-of arena p (inv-role r) (some (top-name arena p)) (deref f)))))
       (_           (disjunction arena p (none) (none) e))))
+
+  ;; ------------------------------------------------------------
+  ;; Choice 11: a top-level ∃ on a GCI's left, and a range, as DL3
+  ;; ------------------------------------------------------------
+
+  (fn sc-is-top ((c SConcept))
+    (@intent "Is c ⊤?")
+    (@spec ((SConcept) -> Bool))
+    (@pure)
+    (match c ((sc-top) true) (_ false)))
+
+  (fn sc-is-bottom ((c SConcept))
+    (@intent "Is c ⊥?")
+    (@spec ((SConcept) -> Bool))
+    (@pure)
+    (match c ((sc-bottom) true) (_ false)))
+
+  (fn top-name ((arena Arena) (p (Ptr S2State)))
+    (@intent "T, S2's fresh name for ⊤ (choice 11), with its one DL1 axiom ⊤ ⊑ T emitted on first use")
+    (@spec ((Arena (Ptr S2State)) -> DName))
+    (@alloc arena)
+    (let ((c (union-new SConcept sc-top))
+          (key (sc-key arena (union-new SConcept sc-top)))
+          (t (union-new DName dn-fresh (fresh-name arena p (union-new SConcept sc-top)))))
+      (do
+        (when (not (pos-defined (. (deref p) registry) key))
+          (do
+            (mark-pos arena (. (deref p) registry) key)
+            (emit arena p (union-new DlClause dl1 (record-new Dl1 (body (list-new arena DName)) (head (one-name arena t)))))))
+        t)))
+
+  (fn one-name ((arena Arena) (n DName))
+    (@intent "[n]")
+    (@spec ((Arena DName) -> (List DName)))
+    (@alloc arena)
+    (let ((mut xs (list-new arena DName))) (do (list-push xs n) xs)))
+
+  (fn gci-dl3 ((arena Arena) (p (Ptr S2State)) (r RoleId) (c SConcept) (d SConcept))
+    (@intent "∃R.C ⊑ D as DL3 ∃R.B₁ ⊑ B₂: B₁ the name above C (T for ⊤), B₂ the name below D; a tautology (C ⊥, D ⊤) emits nothing")
+    (@spec ((Arena (Ptr S2State) RoleId SConcept SConcept) -> Bool))
+    (@alloc arena)
+    (cond ((or (sc-is-bottom c) (sc-is-top d)) true)
+          ((sc-is-top c) (dl3-of arena p r (some (top-name arena p)) d))
+          (else       (dl3-of arena p r (neg-name arena p c) d))))
+
+  (fn dl3-of ((arena Arena) (p (Ptr S2State)) (r RoleId) (b1 (Option DName)) (d SConcept))
+    (@intent "DL3 ∃R.B₁ ⊑ B₂ with B₂ the name below d; nothing when d is ⊤ or B₁ is none")
+    (@spec ((Arena (Ptr S2State) RoleId (Option DName) SConcept) -> Bool))
+    (@alloc arena)
+    (match b1
+      ((none) true)
+      ((some x)
+        (match (pos-name arena p d)
+          ((none) true)
+          ((some y) (emit arena p (union-new DlClause dl3 (role-name arena p r) x y)))))))
 
   (fn role-prop ((r RoleId))
     (@intent "The property a role is or inverts; none for a fresh role")
