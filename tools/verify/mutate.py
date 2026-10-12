@@ -4,16 +4,26 @@
 # it does not compile or either target fails; SURVIVED means the tests miss it.
 # TREE is a scratch copy of the repository, never the working tree; SLOP_HOME must name the
 # toolchain that generates the committed C.
-import hashlib, os, sys, subprocess, runpy, time
+import hashlib, os, signal, sys, subprocess, runpy, time
 tree, spec, log = sys.argv[1:4]
+# A mutant's `make test` and `make golden` each get MUTATE_TIMEOUT seconds (default 3000). A timeout
+# is red: the suite did not pass. A mutant that keeps a run from reaching its fixpoint can take the
+# R7 cap test through every cap up to 10,000 rounds, so a short limit keeps such mutants cheap.
+LIMIT = int(os.environ.get("MUTATE_TIMEOUT", "3000"))
 muts = runpy.run_path(spec)["MUTANTS"]
 out = open(log, "a")
 
 def run(cmd, t):
+    # In its own process group, so a timeout kills make and the test binary under it, not only the
+    # shell: an orphaned howl-test would keep running and skew every later mutant's timing.
+    p = subprocess.Popen(cmd, cwd=tree, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                         text=True, start_new_session=True)
     try:
-        p = subprocess.run(cmd, cwd=tree, shell=True, capture_output=True, text=True, timeout=t)
-        return p.returncode, p.stdout + p.stderr
+        out, _ = p.communicate(timeout=t)
+        return p.returncode, out
     except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
         return 124, "timeout"
 
 def csrc_digest():
@@ -50,11 +60,11 @@ for name, f, old, new in muts:
         elif csrc_digest() == base:
             verdict = "NO-OP (the generated C did not change)"
         else:
-            rc, tail = run("make test", 3000)
+            rc, tail = run("make test", LIMIT)
             if rc != 0 or "Failed: 0" not in tail:
                 verdict = f"red (make test: {failing(tail) or tail[-200:]})"
             else:
-                rc, tail = run("make golden", 3000)
+                rc, tail = run("make golden", LIMIT)
                 verdict = "red (golden)" if rc != 0 else "SURVIVED"
     finally:
         open(path, "w", encoding="utf-8").write(orig)

@@ -2,16 +2,11 @@
 
 ## Unreleased
 
-### Specified
-
-- **`sriq`**, the SRIQ object fragment with an ABox, is specified in SPEC §5.5. It uses Simančík's
-  chain elimination, then Tena Cucala, Cuenca Grau and Horrocks's consequence-based calculus. It is
-  not built yet; `--profile sriq` exits 3.
-  - **Its gate is built** and tested, with the census's independent column beside it. It admits
-    inverses, `∀`, unions, full negation, number restrictions up to 16, Self, every property
-    characteristic, disjoint properties, `DisjointUnion`, equality and inequality, and negative
-    assertions. Its RBox condition is simple roles over every property expression, the collapse of
-    role-equivalence classes, and Simančík's ≺-regularity; a failure omits the whole RBox.
+- **`sriq`'s gate is built** and tested, with the census's independent column beside it. It admits
+  inverses, `∀`, unions, full negation, number restrictions up to 16, Self, every property
+  characteristic, disjoint properties, `DisjointUnion`, equality and inequality, and negative
+  assertions. Its RBox condition is simple roles over every property expression, the collapse of
+  role-equivalence classes, and Simančík's ≺-regularity; a failure omits the whole RBox.
   - On BFO-core and CCO it omits nothing. On RO and OBI it omits no RBox axiom; what it omits there
     is SWRL, class nominals and used data.
 - **BFO-core and CCO are in the pinned corpus** (`corpus/MANIFEST.toml`).
@@ -20,6 +15,27 @@
   - Each has `el` and `el++` projections, re-certified against HermiT.
   - Every entry also has a `sriq` projection (census only, until the engine runs `sriq`). BFO-core's,
     CCO's, GO's and EL-GALEN's are empty.
+
+## 0.2.1 — 2026-10-12
+
+A toolchain update. HOWL's answers do not change.
+
+- **Generated with slop 0.4.3 and slop-rdf 0.5.2,** and pinned exactly to `slop-std-sys = "=0.4.3"`
+  and `slop-rdf-sys = "=0.5.2"`. slop 0.4.3's runtime keeps gcc from inlining the list-growth slow
+  path at every push site, which made the stack frame of a recursive function with many pushes grow
+  several times over (a stack overflow in a sibling project's evaluator). clang builds are unchanged.
+
+## 0.2.0 — 2026-10-12
+
+Data restrictions are read as data: a qualified data cardinality (`owl:onDataRange`) no longer fails
+the whole run, and data axioms no longer pass for object ones. Idle data properties' axioms are set
+aside. One breaking change, in the Rust crate's `Profile`.
+
+### Specified
+
+- **`sriq`**, the SRIQ object fragment with an ABox, is specified in SPEC §5.5. It uses Simančík's
+  chain elimination, then Tena Cucala, Cuenca Grau and Horrocks's consequence-based calculus. It is
+  not built yet; `--profile sriq` exits 3.
 
 ### Changed
 
@@ -38,7 +54,7 @@
   - Asking for it is always refused (`unavailable`, exit 3), and the message names `sriq`.
 - **The C API's `howl_run_fault_message`** now says why an `unavailable` run was refused: "was
   dropped", or "is not implemented yet". It used to be empty.
-- **Rust (breaking, for the next minor release):**
+- **Rust (breaking):**
   - `Profile` is `#[non_exhaustive]`.
   - `Profile::HornSriq` is deprecated.
   - `Fault::ProfileUnavailable`'s message for it says it was dropped.
