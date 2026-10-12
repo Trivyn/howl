@@ -1,0 +1,16 @@
+# A qualified data cardinality: owl:onDataRange. Before 0.2.0 it faulted the
+# whole document (exit 3, no report). It is a data restriction, so it is an
+# omission, labelled DataExactCardinality; the rest of the document is still
+# classified. INCONCLUSIVE (exit 2).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:A rdfs:subClassOf :B .
+:dp a owl:DatatypeProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :dp ;
+                     owl:qualifiedCardinality "1"^^xsd:nonNegativeInteger ; owl:onDataRange xsd:string ] .

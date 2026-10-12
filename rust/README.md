@@ -7,7 +7,7 @@ cannot see.
 
 The crate builds the engine from vendored C. It needs a C compiler and pthreads, and no SLOP
 toolchain. The RDF and runtime C come from [`slop-rdf-sys`](https://crates.io/crates/slop-rdf-sys)
-0.5.1 and [`slop-std-sys`](https://crates.io/crates/slop-std-sys) 0.4.2.
+0.5.2 and [`slop-std-sys`](https://crates.io/crates/slop-std-sys) 0.4.3.
 
 ## Quick start
 

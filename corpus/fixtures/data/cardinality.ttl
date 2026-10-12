@@ -1,0 +1,15 @@
+# An unqualified data cardinality, and a functional data property, both used.
+# Before 0.2.0 they were labelled as their object twins (ObjectMaxCardinality,
+# FunctionalObjectProperty). They are data, and labelled so: omissions
+# DataMaxCardinality and a DataAxiom. INCONCLUSIVE (exit 2).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class .
+:A rdfs:subClassOf :B .
+:dp a owl:DatatypeProperty , owl:FunctionalProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :dp ; owl:maxCardinality "1"^^xsd:nonNegativeInteger ] .
