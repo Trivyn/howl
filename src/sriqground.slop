@@ -16,7 +16,7 @@
   (@doc "sriq's shared ground view: the root's ground clauses with no f(u), stored once and read by every other
          context, and M, the structure it stands for (SPEC 5.5, slice 9d)")
 
-  (import types (Lit Clause lit-cmp))
+  (import types (Lit LitForm Clause lit-cmp))
   (import sriqclauses (make-clause clause-cmp))
   (import sriqsubsume (subsumes))
   (import sriqindex (SubIndex sub-index some-subsumes commit-indexed))
@@ -25,7 +25,9 @@
   (import sriq (Premise SuccSig select succ-pre has-fterm))
   (import canon (sort-range))
 
-  (export Ground PIdx pidx-of pidx-find ground-clause ground-of g-visible g-fresh g-in-hat g-held g-premise-at
+  (export Ground PIdx pidx-of pidx-find pidx-key-range form-rank pick-ix ground-clause ground-of g-visible g-fresh
+          g-in-hat
+          g-held g-premise-at
           g-member-of
           g-sel-range g-body-members g-member g-root-units view-total materialise)
 
@@ -51,10 +53,7 @@
     (shown (List Bool))      ; per member: visible in some context other than the root
     (ps    (List Premise))   ; every member with each head literal selected in turn
     (pm    (List Int))       ; each premise's member
-    (bysel (List Int))       ; premise positions, by selected literal
-    (rall  PIdx)             ; the root's premises: Pred into v_r finds its side premises here
-    (rnew  PIdx)             ; those of Δ_{v_r}
-    (rold  PIdx)))           ; those of S_{v_r} \ Δ_{v_r}
+    (bysel (List Int))))     ; premise positions, by selected literal
 
   ;; Premises filed by selected literal: a Pred slot is met only by a
   ;; maximal premise selecting exactly Cᵢσ (pred-step's sound property), so
@@ -356,7 +355,7 @@
 
   (fn ground-of ((arena Arena) (tr Triggers) (st Structure) (root-news (List Clause)))
     (@intent "G at this boundary, from S_{v_r}, with Δ_{v_r} = root-news: its members, which are new, its indexes, and
-              each context's hidden members; and the root's premises, filed")
+              each context's hidden members")
     (@spec ((Arena Triggers Structure (List Clause)) -> Ground))
     (@alloc arena)
     (let ((nobody (list-new arena Clause))
@@ -365,8 +364,7 @@
           (posts (postings arena gs))
           (hides (all-hides arena st gs posts))
           (ps (member-premises arena (. st ord) gs))
-          (pm (premise-members arena gs))
-          (rset (set-at st 0 nobody)))
+          (pm (premise-members arena gs)))
       (record-new Ground
         (gs gs)
         (fresh (fresh-flags arena gs root-news))
@@ -376,17 +374,7 @@
         (shown (shown-flags arena st (cast Int (list-len gs)) hides))
         (ps ps)
         (pm pm)
-        (bysel (sel-sorted arena ps))
-        (rall (pidx-of arena (member-premises arena (. st ord) rset)))
-        (rnew (pidx-of arena (member-premises arena (. st ord) root-news)))
-        (rold (pidx-of arena (member-premises arena (. st ord) (not-in arena rset root-news)))))))
-
-  (fn not-in ((arena Arena) (cs (List Clause)) (news (List Clause)))
-    (@intent "The members of cs not in news (content order)")
-    (@spec ((Arena (List Clause) (List Clause)) -> (List Clause)))
-    (@alloc arena)
-    (let ((mut out (list-new arena Clause)))
-      (do (for-each (c cs) (when (not (sorted-has news c)) (list-push out c))) out)))
+        (bysel (sel-sorted arena ps)))))
 
   (fn pidx-of ((arena Arena) (ps (List Premise)))
     (@intent "ps filed by selected literal")
@@ -408,6 +396,54 @@
                             (list-push out (prem-at (. ix ps) (int-at bs k) p0)))
                       (set! k (+ k 1))))
                 out))))))
+
+  ;; A Hyper slot is met only by a maximal premise of the body atom's form
+  ;; and predicate (hyper-step's sound property). lit-cmp orders by form,
+  ;; then predicate, so those premises are one range of a PIdx.
+
+  (fn form-rank ((f LitForm))
+    (@intent "lit-cmp's order on forms: B(t), then S(s, t), then ≈, then ≉")
+    (@spec ((LitForm) -> Int))
+    (@pure)
+    (match f ('lf-unary 0) ('lf-binary 1) ('lf-eq 2) ('lf-neq 3)))
+
+  (fn key-cmp-lit ((l Lit) (rank Int) (pred U32))
+    (@intent "l's form and predicate against the key (rank, pred), in lit-cmp's order")
+    (@spec ((Lit Int U32) -> Int))
+    (@pure)
+    (let ((r (form-rank (. l form))))
+      (cond ((< r rank) -1) ((> r rank) 1) ((< (. l pred) pred) -1) ((> (. l pred) pred) 1) (else 0))))
+
+  (fn pidx-key-range ((arena Arena) (ix PIdx) (rank Int) (pred U32))
+    (@intent "The maximal premises of ix whose selected literal has form rank rank and predicate pred")
+    (@spec ((Arena PIdx Int U32) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)))
+      (match (list-get (. ix ps) 0)
+        ((none) out)
+        ((some p0)
+          (let ((bs (. ix bysel)) (mut k (key-lower ix rank pred p0)))
+            (do (while (and (< k (cast Int (list-len bs))) (== (key-cmp-lit (idx-sel ix (int-at bs k) p0) rank pred) 0))
+                  (do (when (. (prem-at (. ix ps) (int-at bs k) p0) maxed)
+                            (list-push out (prem-at (. ix ps) (int-at bs k) p0)))
+                      (set! k (+ k 1))))
+                out))))))
+
+  (fn key-lower ((ix PIdx) (rank Int) (pred U32) (p0 Premise))
+    (@intent "The first position in bysel whose premise's selected literal is not below the key (rank, pred)")
+    (@spec ((PIdx Int U32 Premise) -> Int))
+    (@pure)
+    (let ((bs (. ix bysel)) (mut lo 0) (mut hi (cast Int (list-len (. ix bysel)))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (key-cmp-lit (idx-sel ix (int-at bs mid) p0) rank pred) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  (fn pick-ix ((j Int) (i Int) (dix PIdx) (oix PIdx) (aix PIdx))
+    (@intent "Slot j's premises when slot i is the anchor: S \\ Δ before it, Δ at it, S after it")
+    (@spec ((Int Int PIdx PIdx PIdx) -> PIdx))
+    (@pure)
+    (cond ((< j i) oix) ((== j i) dix) (else aix)))
 
   (fn idx-sel ((ix PIdx) (k Int) (p0 Premise))
     (@intent "Premise k's selected literal")
