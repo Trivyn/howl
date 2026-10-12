@@ -210,6 +210,7 @@ slop_list_types_Lit sriq_nom_head(slop_arena* arena, slop_list_u32 kids);
 uint8_t sriq_nom_premises(sriq_Premise p1, sriq_Premise p2, uint32_t b1, uint32_t sb2);
 sriq_RConcl sriq_nom_rule(slop_arena* arena, sriqorder_SriqOrder ord, int64_t lam, uint32_t b1, uint32_t sb2, uint32_t n, sriq_Premise p1, sriq_Premise p2, slop_list_u32 kids);
 int64_t sriq_depth_limit(int64_t tsu, int64_t tpr, int64_t omega, int64_t omega_d);
+int64_t sriq_stored_lambda(int64_t tsu, int64_t tpr, int64_t omega, int64_t omega_d);
 uint8_t sriq_lits_same(slop_list_types_Lit a, slop_list_types_Lit b);
 uint8_t sriq_rconcl_eq(sriq_RConcl a, sriq_RConcl b);
 uint8_t sriq_fires_is(sriq_RConcl a, sriq_RConcl b);
