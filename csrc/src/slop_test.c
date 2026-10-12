@@ -5906,11 +5906,11 @@ int main(int argc, char** _c_argv) {
         #ifdef SLOP_DEBUG
         SLOP_PRE((4194304) > 0, "with-arena size must be positive");
         #endif
-        slop_arena _arena_4 = slop_arena_new(4194304);
+        slop_arena _arena_3 = slop_arena_new(4194304);
         #ifdef SLOP_DEBUG
-        SLOP_PRE(_arena_4.base != NULL, "arena allocation failed");
+        SLOP_PRE(_arena_3.base != NULL, "arena allocation failed");
         #endif
-        slop_arena* arena = &_arena_4;
+        slop_arena* arena = &_arena_3;
         {
             int64_t passed = 0;
             int64_t failed = 0;
@@ -6997,13 +6997,13 @@ int main(int argc, char** _c_argv) {
             if (failed == 0) {
                 {
                     int _wa_ret = 0;
-                    slop_arena_free(&_arena_4);
+                    slop_arena_free(&_arena_3);
                     return _wa_ret;
                 }
             } else {
                 {
                     int _wa_ret = 1;
-                    slop_arena_free(&_arena_4);
+                    slop_arena_free(&_arena_3);
                     return _wa_ret;
                 }
             }
