@@ -2915,7 +2915,9 @@ schedule is its own.
   - a new constant, of Nom (its children) and of the root's E4 instances (Hyper on a bodiless clause,
     and Pred into `v_r`).
 
-  A new context runs every instance. Running an instance none of whose premises is new concludes
+  A new context runs every instance: it reads all of its set as new (with Core and the bodiless
+  ontology clauses, and every root clause for r-Pred). In the first round the root runs the
+  reference's round. Running an instance none of whose premises is new concludes
   nothing new: it ran when its newest premise arrived, its conclusion is `∈̂ Sₙ` since (R2), and its
   actions were taken. So the anchoring may run more than `Δₙ` needs, never less.
 - **Create** follows the reference's round's end, and adds each new context's Core clauses to the
@@ -2950,6 +2952,151 @@ schedule is its own.
   selected literal is joinable and equal to the body literal. So the prototype pairs a premise only
   with the joinable body literals equal to its own, and builds no view of any other pair. These are the
   rule's own conditions, so no conclusion changes, as with the reference's slot filters.
+- **The shared ground view (slice 9d, AD 59e16962).** r-Pred with no `Cᵢ` copies a root clause into
+  every other context, with no edge needed (E3). After its first round, CCO's root holds about 9,800
+  such clauses, and its 1,424 contexts would each hold a copy. The prototype stores them once.
+  - **Definitions,** at each boundary `n`, so derive reads them frozen:
+    - **G** is the set of root clauses that are ground and mention no term `f(u)`. `Δ_G` is
+      `Δ_{v_r} ∩ G`.
+    - For `v ≠ v_r`, the members of G **visible** in v are `V_v = {g ∈ G : g ∉̂ S_v}`. The others are
+      *hidden* in v: `S_v` already holds a clause that subsumes them.
+    - **The view** of v is `S_v ∪ V_v`. G is stored once and shared. Each context keeps only the list
+      of its hidden members. A member is hidden only by a ground clause of `S_v`. So each boundary
+      finds, for each ground clause of `S_v`, the members it subsumes, through an index of G under
+      every literal of every member. `⊤ → ⊥` hides all of G.
+  - **Three facts:**
+    - *G1. A root clause that subsumes a member of G is in G.* Its body and head are subsets of the
+      member's. So for a ground clause `c` with no `f(u)`, `c ∈̂ S_{v_r}` exactly when `c ∈̂ G`. `∈̂ G`
+      persists from boundary to boundary (R2 at the root). No member of G is subsumed by an earlier
+      member: the root is a min set, and `∈̂` persists there.
+    - *G2. For `g ∈ G`, r-Pred into any `v ≠ v_r` concludes `g` itself.* Its body is all `Aᵢ`, so
+      there is no `Cᵢ` and no edge to meet (E3). `σ = {y ↦ x}` changes no ground literal, E5 refuses
+      nothing (no `f(u)`), and every ground `Lᵢ` is allowed.
+    - *G3. Hidden stays hidden.* `g ∈̂ S_v` persists (R2 in v). So a member newly visible in v is in
+      `Δ_G`, unless v itself is new.
+  - **The printed derivation.** Read the prototype's run as a derivation P of the printed calculus,
+    in which at each boundary every `v ≠ v_r` holds `P_v = S_v ∪ V_v` and `P_{v_r} = S_{v_r}`. Its
+    edges are the prototype's plus `E_G`: the edges `⟨v, v_r, u⟩` that P's own r-Succ steps (below)
+    have added, one for each constant `u` of a maximal literal `A ∈ Suʳ(O)` of a copy. `E_G` only
+    grows, as printed edges do. It is virtual: never stored, and read by no prototype rule.
+    - **From boundary `n` to `n + 1`,** P makes these steps, in this order:
+      1. The prototype's round and commit. Each inference is on premises in `P_vⁿ` (the view).
+      2. r-Pred copies each newly visible member into v. This is printed (G2): it is `∉̂ S_vⁿ⁺¹` by
+         visibility, and `∉̂` the existing copies by G1.
+      3. Elim deletes each copy that `S_vⁿ⁺¹` or another copy subsumes. This removes the copies that
+         are now hidden, and the copies of members the root has deleted: each such member has a
+         subsumer in G (G1), which is copied or hidden.
+      4. r-Succ on each new copy, on each of its maximal `A ∈ Suʳ(O)`. It adds `E_G`'s edges, and
+         `A → A` to `S_{v_r}` (redundantly after the first time). The prototype commits the same
+         `A → A` into `S_{v_r}` at this boundary, right after its commit (`with-units`): one for each
+         maximal `A ∈ Suʳ(O)` of a member visible in some context, when `A → A ∉̂ S_{v_r}`. A context
+         made later can be the first. Each `A → A` is itself a member of G, so steps 2 to 4 run once
+         more for them; their own r-Succ adds edges only, since their `A` is then held.
+
+      So `P_{v_r} = S_{v_r}` at every boundary.
+    - **A prototype r-Succ that P would not run** (its trigger is in `S_v`, `⟨v, v_r, u⟩ ∈ E_G`, and
+      `A → A ∈̂ S_{v_r}`) adds an edge P already has and a candidate the commit skips. It changes
+      nothing in P.
+    - So every inference is printed, P is derivable from the initial structure, and Theorem 1
+      applies. Clauses of `S_v` that a visible member subsumes stay in P with their Elim deferred,
+      which the calculus allows. They are premises the prototype keeps, and their conclusions are
+      sound. Building M performs the deferred Elims.
+  - **The final M** is P at the fixpoint after Elim: `M_v = min(S_v ∪ G)`, which equals
+    `min(S_v ∪ V_v)` since hidden members are `∈̂ S_v`. `M_{v_r} = S_{v_r}`, and the edges are the
+    prototype's plus `E_G`.
+  - **M is saturated.** Take any rule instance over M.
+    - **At the root,** premises come from `S_{v_r}` only, which the view leaves as it is. Root Succ's
+      coverage check reads the target `w` through its view, `S_w ∪ V_w`, which is `∈̂ M_w`. Root
+      instances run as before (R4), root Hyper with all its premises in G among them.
+    - **In `v ≠ v_r`,** premises come from `S_v` or `V_v`. The anchoring treats `Δ_G ∩ V_v` as new
+      beside `Δ_v`, and the rest of `V_v` as old (G3). A new context reads all of `V_v` as old. Every
+      branch that reruns all of an instance family (a new context, a new edge, new constants for
+      Nom) reads the view.
+    - **At least one premise in `S_v`:** the instance ran in the round its newest premise arrived.
+      Its conclusion is `∈̂ S_v ∪ V_v`, so `∈̂ M_v`, and its action was taken.
+    - **Every premise in `V_v`,** rule by rule:
+      - *Join, Factor, Ineq.* None depends on the context but through `≻`, and every context shares
+        one order (`premises-of` and `maximal-at` read `(. st ord)`). So the root ran the same
+        instance on the same premises (`V_v ⊆ G ⊆ S_{v_r}`). Its conclusion is ground, with no
+        `f(u)`, and `∈̂ S_{v_r}`, so `∈̂ G` (G1), and `∈̂ S_v ∪ V_v`.
+      - *Eq.* Away from the root Eq rewrites one position; at the root it rewrites every occurrence
+        of a constant. The two differ when the second premise selects a binary atom with the
+        constant in both arguments, as `S(u₁, u₁)` beside `u₁ ≈ u₂`. So Eq with both premises in
+        `V_v` is run in v. An existing context anchors it on `Δ_G ∩ V_v`. A new context runs it over
+        every pair, since nothing would anchor those pairs later (G3).
+      - *Hyper.* Every body atom of every Table 1 clause mentions `x`, and away from the root `x`
+        meets only `x` (`x-fits`). So no Hyper instance away from the root has a premise in G.
+      - *Nom, Succ, Pred and r-Pred side premises.* Nom's `S_{B₂}(o, x)`, Succ's trigger, and every
+        `Cᵢσ` mention `x` or `f(x)`, so none comes from G.
+      - *Pred, with `g ∈ V_v` as its main premise.* Into `w ≠ v_r` it concludes `g`, which is
+        `∈̂ S_w ∪ V_w`. Into `v_r`, its conclusion adds the core side premises' `Γᵢ` to the body
+        and their `Δᵢ` to the head, so `g ∈ S_{v_r}` subsumes it. Not run.
+      - *r-Pred, with `g ∈ G` as its main premise.* It concludes `g` (G2). Not run. Every other root
+        clause with no `Cᵢ` mentions an `f(u)`, and E5 refuses it:
+        - a root clause's non-ground body atoms are its `S(y, u)` and `S(u, y)` (E3);
+        - a `y` in its head comes with a `y` in its body. `y` enters the root only through r-Succ's
+          `S(y, u) → S(y, u)`, every root rule keeps its premises' bodies, Join drops only a ground
+          body atom, and Pred into `v_r` maps `y` to a constant;
+        - so a root clause with no `Cᵢ` is ground.
+      - *r-Succ on `g ∈ V_v`.* Its precondition fails in M: `E_G` has the edge, and `A → A ∈̂ S_{v_r}`
+        (it was added at the boundary where `g` became visible, or was already `∈̂`).
+    - **Hyper on DL10's `⊤ → B(o)`** away from the root concludes `⊤ → B(o)`. The root derives the
+      same clause by E4 in its first round, since `o` is one of O's individuals and so in `U_H`. It
+      is ground, with no `f(u)`, so `∈̂ G` (G1) from then on. Not run away from the root. DL1's
+      `⊤ → ⊥` (`n = m = 0`) names no constant, and the root need not derive it (`U_H` can be empty),
+      so it is still run in every context.
+    - **Succ.** `K₁` needs a unit mentioning `x`, so G adds nothing to it. Nor does G add to `K₂`:
+      - an atom it could add is a maximal ground Su(O) atom `A` of a visible member;
+      - a ground atom in Su(O) is in Suʳ(O): a class or role in a body is one of O's;
+      - so step 4 has put `A → A` into `S_{v_r}`, and `A → A ∈̂ G`;
+      - every target reads G, so `A` is covered there, and its `A → A` is `∈̂` there already.
+
+      For the same reason, Succ drops from `K₂` every atom `A′` with `A′ → A′ ∈̂ G`. Such an atom can
+      come from `S_v`, from a clause that a visible member subsumes and whose Elim P defers. P's
+      coverage holds for it, and P's Succ adds an `A′ → A′` that is `∈̂` already. The rest of `K₂`
+      needs `A′ → A′ ∈̂ S_w ∪ V_w`, which for an atom G does not hold is `∈̂ S_w`. `K₂` over the view
+      is a superset of `K₂` over `M_v`, so a fixpoint whose edges cover it covers M's too.
+    - **`E_G` enables nothing else.** Edges `⟨v, v_r, u⟩` are read only by r-Succ and r-Pred. An
+      r-Pred instance over one needs a side premise in `S_v` selecting a maximal `S(x, u)` or
+      `S(u, x)` in `Suʳ(O){y ↦ x}`. Its own r-Succ (a premise in `S_v`, so run) made the same edge a
+      prototype edge.
+    - **Elim** is not applicable to M, whose sets are min sets.
+    - So M is saturated in [TGH21]'s sense, and Theorem 2 applies as R4 says.
+  - **The read-off and the stop** read M through the view. Every raw query's clause mentions `x`
+    or is `⊤ → ⊥`, so a member of G can make one hold only by being `⊤ → ⊥`. When the root holds
+    `⊤ → ⊥`, every context's view does.
+  - **The commit** skips a candidate `∈̂ S_v ∪ G`, through an index of G built once per round. It does
+    not delete members of `S_v` that a visible member subsumes; M's `min` does.
+  - **What is unchanged:** every rule's function, E3 to E5, and the reference evaluator, which still
+    copies every member of G into every context. The tests:
+    - compare the two on their raw answers;
+    - check the prototype's fixpoint by building M and running one naive reference round over it, in
+      which nothing may change. The M they build has the edges of `E_G` for the members visible at
+      the end, not those of members since deleted. That is the stronger check: an edge `⟨v, v_r, u⟩`
+      only makes r-Succ's precondition fail, and enables no r-Pred instance (above). So if no rule
+      applies with fewer such edges, none applies with all of them;
+    - count the clause cap over what the view stands for (`view-total`): each context but the root
+      counts all of G, unless it holds `⊤ → ⊥`, which hides all of G. Members hidden by another
+      clause are still counted, so the count can run above M's. The cap is the tests' only, and on
+      every fixture and row the prototype completes where the reference does. The stop at `⊤ → ⊥`
+      reads the root as well, so it can come a round before the reference's.
+- **Filters that change no conclusion (slice 9d).** Each skips work by a condition the rule's own
+  `sound` property requires, as the reference's slot filters do:
+  - **Eq** is tried on a pair only when the second premise's selected literal holds the rewritten
+    term at one of Eq's four positions (`at-is`).
+  - **Join's sites** are sorted by literal, and a premise finds the sites equal to its selected
+    literal by search. Away from the root, G's sites are found through the same index of G that
+    finds hidden members.
+  - **Succ's K-sets** are indexed once per context (`k-index`, `src/sriqindex.slop`). K₂ has a part
+    no successor term changes (the maximal ground literals with no `f(u)` that are Su(O) atoms) and
+    the maximal literals that mention the term. The first is collected once; the second is filed by
+    the f-terms it mentions. Each literal goes through `k-sets`' own steps (`succ-pre`, `in-su`,
+    `mentions-x`), and a test diffs the two on every context and trigger of every finished run. The
+    triggers are taken in successor-term order, and each term's K-sets and coverage are found once.
+    Succ's re-check of an old trigger reads the index of `Δ_v` the same way.
+  - **Pred's and r-Pred's side slots** are met only by a maximal premise selecting exactly `Cᵢσ`
+    (`pred-step`). So their candidates are found through premises filed by selected literal. The
+    root's are filed once per round, for every context's Pred into `v_r` (once for each `u ∈ U_H`).
 - **Derive does not filter by ∈̂.** S6's derive keeps only conclusions not `∈̂ Sₙ`; the prototype
   leaves that to the commit, whose `commit-min` skips exactly those. `Δₙ₊₁` is the same, and its
   candidate counts include the conclusions the commit skips.
@@ -4306,7 +4453,7 @@ Owed, with the rows that stand in:
 - `pred-join`'s fold, as `hyper-join`'s;
 - the conclusions' assembly: `succ-step`'s added atoms (K₂ outside the core), and the body and head that `pred-step`, `pred-finish` and `rpred-finish` build. The contracts fix when each rule fires and which core it chooses, and the rows fix what it concludes;
 - that `succ-pre` inverts σ exactly, which `test-sriq-succ-pre-inverts` checks over every Su(O) shape at and away from the root (the constructors post only their form, so the checker does not see a rebuilt ground literal come back). Rows: Succ on O1's Figures 2 and 3 (K₁ and K₂, each strategy's core and adds (31), (39)–(40), (43), covered targets, a ground atom, the root's `f(u)`); r-Succ on Example 1's (114)–(116), one instance per constant; Pred on O1's (24) and (27), Example 1's (113), Example 2's (147), and into `v_r` for `u = a` but not `b` (E4, with the core as a side premise); r-Pred on Example 1's (118) carrying its ground atoms (E3), with no `Cᵢ`, and E5's refusal. 29 test mutants, all seen red, eight of them only after filling the test gaps they exposed: a non-maximal image, a non-unit clause in K₁, another constant's `f(u)` at the root, Succ on an equality, a non-maximal side premise, a slot outside Suʳ(O) that v could meet, two candidates for one slot, and a ground `f(u)` given to `succ-pre`. 27 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — `k-sets`, `pred-join`'s fold, the conclusions' assembly and `succ-pre`'s exact inversion are held by the rows |
-| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's and Table 3's rules, in the rows above), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. The literal reference evaluator (`src/sriqref.slop`, §5.5) is built. On every fixture, and on [TGH21]'s O1, O3 and O4, its trivial, eager and cautious runs agree wherever each completes (trivial can end n/a when Nom recurses), and HermiT agrees with it on every fixture. Its own 14 test mutants: 11 seen red, four of them only after filling the test gaps they exposed (root Hyper on a bodiless clause with `x`, for every constant; the fuel's count; Nom on a body like DL4's with another head). Three change no answer the tests can see: the root's `⟨v_r, w, u⟩` edges, which no rule reads; contexts numbered in discovery order; and r-Succ skipping a unary ground atom, whose answers reach the root another way in every row so far. 8d's HermiT leg runs the root on ABox fixtures. The prototype of S6's rounds (`src/sriqsat.slop`, slice 9) matches it: on every fixture and on O1, O3 and O4 under all three strategies, it gives the same answers, stops as it does, and passes its checks; it does so again with Δ permuted (R6), and its answers are monotone in the cap (R7). `make diff-elim` checks the same on every fixture. Its 18 test mutants: 16 seen red, three of them only through the work pin (an instance run twice; Succ's K₂ clauses as premises; a new context's Core at create), and one (r-Pred's side anchor) only after a row was built for it. Two survive: Pred into `v_r` anchored on a new constant alone, and r-Pred anchored on a new u-edge alone. Each fires only for an instance whose one new premise is that constant or edge: a slotless main clause whose head depends on u (the constant a Nom child, reusing an existing root f-edge), or a u-edge that r-Succ creates the round after the side premise that asked for it, when the root clause is older still. Both are reachable in the calculus, and the prototype runs them. No row reaches either, because in every row a ground fact about u gives each context its u-edge early, and neither has been shown to change an answer. The parallel engine (slice 10) must match it too | **Partly** — the prototype matches the reference; the parallel engine is to come |
+| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's and Table 3's rules, in the rows above), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. The literal reference evaluator (`src/sriqref.slop`, §5.5) is built. On every fixture, and on [TGH21]'s O1, O3 and O4, its trivial, eager and cautious runs agree wherever each completes (trivial can end n/a when Nom recurses), and HermiT agrees with it on every fixture. Its own 14 test mutants: 11 seen red, four of them only after filling the test gaps they exposed (root Hyper on a bodiless clause with `x`, for every constant; the fuel's count; Nom on a body like DL4's with another head). Three change no answer the tests can see: the root's `⟨v_r, w, u⟩` edges, which no rule reads; contexts numbered in discovery order; and r-Succ skipping a unary ground atom, whose answers reach the root another way in every row so far. 8d's HermiT leg runs the root on ABox fixtures. The prototype of S6's rounds (`src/sriqsat.slop`, slice 9) matches it: on every fixture and on O1, O3 and O4 under all three strategies, it gives the same answers, stops as it does, and passes its checks; it does so again with Δ permuted (R6), and its answers are monotone in the cap (R7). `make diff-elim` checks the same on every fixture. Its 18 test mutants: 16 seen red, three of them only through the work pin (an instance run twice; Succ's K₂ clauses as premises; a new context's Core at create), and one (r-Pred's side anchor) only after a row was built for it. Two survive: Pred into `v_r` anchored on a new constant alone, and r-Pred anchored on a new u-edge alone. Each fires only for an instance whose one new premise is that constant or edge: a slotless main clause whose head depends on u (the constant a Nom child, reusing an existing root f-edge), or a u-edge that r-Succ creates the round after the side premise that asked for it, when the root clause is older still. Both are reachable in the calculus, and the prototype runs them. No row reaches either, because in every row a ground fact about u gives each context its u-edge early, and neither has been shown to change an answer. Slice 9d's shared ground view and engine filters are checked the same way, and the prototype's fixpoint is checked through M (its view materialised). The K-set index is diffed against `k-sets` on every context and trigger. Three rows (the view's Eq, Join and units rows) reach the view's paths. 9d's 33 test mutants: 18 seen red, three of them only after a row was built or extended for them. 15 survive, none changing an answer or M's saturation. In five, every row also reaches the dropped instance's conclusion another way: G's equality into a context literal (old or new) and Eq inside an `f(u)` term are matched by r-Succ and r-Pred's round trip through the root, and G's premise into a context's carried ground atom by the root's own Join. Five change only the work done (storing copies: r-Pred from G, the commit's filter, DL10 in a new context; rerunning G as new). Four change only whether a step is printed: reading hidden members, hiding fewer, keeping held atoms in K₂, and an `A → A` for a member hidden everywhere. One is equivalent: a new context's r-Pred over old root clauses, since every root clause with no `Cᵢ` outside G mentions an `f(u)`. The parallel engine (slice 10) must match it too | **Partly** — the prototype matches the reference; the parallel engine is to come |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK for `el`; [Krö10] for `el++`; [Sim12] then [TGH21] for `sriq`) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
