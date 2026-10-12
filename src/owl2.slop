@@ -828,7 +828,9 @@
       ((unresolved-import i) (wrap arena "UnresolvedImport" (. i value)))
       ((missing-declaration md)
         (wrap arena "MissingDeclaration"
-          (wrap arena (render-entity-kind (. md kind)) (. (. md entity) value))))))
+          (wrap arena (render-entity-kind (. md kind)) (. (. md entity) value))))
+      ((undeclared-property u)
+        (wrap arena "UndeclaredProperty" (. (. u property) value)))))
 
   (fn render-axiom ((arena Arena) (ax RawAxiom))
     (@intent "An axiom in OWL functional syntax, annotations stripped")

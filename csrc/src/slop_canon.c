@@ -11,6 +11,8 @@ int64_t canon_entity_kind_rank(types_EntityKind k);
 int64_t canon_axiom_ref_cmp(types_AxiomRef a, types_AxiomRef b);
 int64_t canon_input_ref_cmp(types_InputRef a, types_InputRef b);
 int64_t canon_missing_declaration_cmp(types_MissingDeclaration a, types_MissingDeclaration b);
+int64_t canon_undeclared_property_cmp(types_UndeclaredProperty a, types_UndeclaredProperty b);
+int64_t canon_omission_rank(types_Omission o);
 int64_t canon_omission_cmp(types_Omission a, types_Omission b);
 int64_t canon_int_at(slop_list_int xs, int64_t i);
 slop_string canon_str_at(slop_list_string xs, int64_t i);
@@ -28,29 +30,29 @@ slop_list_types_SubPair canon_sort_sub_pairs(slop_arena* arena, slop_list_types_
 slop_list_types_AxiomRef canon_sort_axiom_refs(slop_arena* arena, slop_list_types_AxiomRef xs);
 slop_list_types_Omission canon_sort_omissions(slop_arena* arena, slop_list_types_Omission xs);
 
-typedef struct { slop_list_string xs; } canon__lambda_94_env_t;
+typedef struct { slop_list_string xs; } canon__lambda_96_env_t;
 
-static int64_t canon__lambda_94(canon__lambda_94_env_t* _env, int64_t i, int64_t j) { return canon_string_cmp(canon_str_at(_env->xs, i), canon_str_at(_env->xs, j)); }
+static int64_t canon__lambda_96(canon__lambda_96_env_t* _env, int64_t i, int64_t j) { return canon_string_cmp(canon_str_at(_env->xs, i), canon_str_at(_env->xs, j)); }
 
-typedef struct { slop_list_rdf_IRI xs; } canon__lambda_95_env_t;
+typedef struct { slop_list_rdf_IRI xs; } canon__lambda_97_env_t;
 
-static int64_t canon__lambda_95(canon__lambda_95_env_t* _env, int64_t i, int64_t j) { return canon_iri_cmp(canon_iri_at(_env->xs, i), canon_iri_at(_env->xs, j)); }
+static int64_t canon__lambda_97(canon__lambda_97_env_t* _env, int64_t i, int64_t j) { return canon_iri_cmp(canon_iri_at(_env->xs, i), canon_iri_at(_env->xs, j)); }
 
-typedef struct { slop_list_types_Node xs; } canon__lambda_96_env_t;
+typedef struct { slop_list_types_Node xs; } canon__lambda_98_env_t;
 
-static int64_t canon__lambda_96(canon__lambda_96_env_t* _env, int64_t i, int64_t j) { return canon_node_cmp(canon_node_at(_env->xs, i), canon_node_at(_env->xs, j)); }
+static int64_t canon__lambda_98(canon__lambda_98_env_t* _env, int64_t i, int64_t j) { return canon_node_cmp(canon_node_at(_env->xs, i), canon_node_at(_env->xs, j)); }
 
-typedef struct { slop_list_types_SubPair xs; } canon__lambda_97_env_t;
+typedef struct { slop_list_types_SubPair xs; } canon__lambda_99_env_t;
 
-static int64_t canon__lambda_97(canon__lambda_97_env_t* _env, int64_t i, int64_t j) { return canon_sub_pair_cmp(canon_sub_pair_at(_env->xs, i), canon_sub_pair_at(_env->xs, j)); }
+static int64_t canon__lambda_99(canon__lambda_99_env_t* _env, int64_t i, int64_t j) { return canon_sub_pair_cmp(canon_sub_pair_at(_env->xs, i), canon_sub_pair_at(_env->xs, j)); }
 
-typedef struct { slop_list_types_AxiomRef xs; } canon__lambda_98_env_t;
+typedef struct { slop_list_types_AxiomRef xs; } canon__lambda_100_env_t;
 
-static int64_t canon__lambda_98(canon__lambda_98_env_t* _env, int64_t i, int64_t j) { return canon_axiom_ref_cmp(canon_axiom_ref_at(_env->xs, i), canon_axiom_ref_at(_env->xs, j)); }
+static int64_t canon__lambda_100(canon__lambda_100_env_t* _env, int64_t i, int64_t j) { return canon_axiom_ref_cmp(canon_axiom_ref_at(_env->xs, i), canon_axiom_ref_at(_env->xs, j)); }
 
-typedef struct { slop_list_types_Omission xs; } canon__lambda_99_env_t;
+typedef struct { slop_list_types_Omission xs; } canon__lambda_101_env_t;
 
-static int64_t canon__lambda_99(canon__lambda_99_env_t* _env, int64_t i, int64_t j) { return canon_omission_cmp(canon_omission_at(_env->xs, i), canon_omission_at(_env->xs, j)); }
+static int64_t canon__lambda_101(canon__lambda_101_env_t* _env, int64_t i, int64_t j) { return canon_omission_cmp(canon_omission_at(_env->xs, i), canon_omission_at(_env->xs, j)); }
 
 int64_t canon_string_cmp(slop_string a, slop_string b) {
     int64_t _retval = {0};
@@ -458,90 +460,150 @@ int64_t canon_missing_declaration_cmp(types_MissingDeclaration a, types_MissingD
     }
 }
 
-int64_t canon_omission_cmp(types_Omission a, types_Omission b) {
-    __auto_type _mv_83 = a;
+int64_t canon_undeclared_property_cmp(types_UndeclaredProperty a, types_UndeclaredProperty b) {
+    {
+        __auto_type c = canon_iri_cmp(a.property, b.property);
+        if (c != 0) {
+            return c;
+        } else {
+            {
+                __auto_type la = ((int64_t)(((int64_t)((a.referring).len))));
+                __auto_type lb = ((int64_t)(((int64_t)((b.referring).len))));
+                __auto_type n = ((la) < (lb) ? (la) : (lb));
+                int64_t i = 0;
+                int64_t r = 0;
+                while ((i < n) && (r == 0)) {
+                    r = canon_string_cmp(canon_str_at(a.referring, i), canon_str_at(b.referring, i));
+                    i = (i + 1);
+                }
+                if (r != 0) {
+                    return r;
+                } else if (la < lb) {
+                    return -1;
+                } else if (la > lb) {
+                    return 1;
+                } else {
+                    return 0;
+                }
+            }
+        }
+    }
+}
+
+int64_t canon_omission_rank(types_Omission o) {
+    __auto_type _mv_83 = o;
     switch (_mv_83.tag) {
         case types_Omission_out_of_profile:
         {
-            __auto_type ra = _mv_83.data.out_of_profile;
-            __auto_type _mv_84 = b;
-            switch (_mv_84.tag) {
-                case types_Omission_out_of_profile:
-                {
-                    __auto_type rb = _mv_84.data.out_of_profile;
-                    return canon_input_ref_cmp(ra, rb);
-                }
-                case types_Omission_unresolved_import:
-                {
-                    __auto_type _ = _mv_84.data.unresolved_import;
-                    return -1;
-                }
-                case types_Omission_missing_declaration:
-                {
-                    __auto_type _ = _mv_84.data.missing_declaration;
-                    return -1;
-                }
-            }
-            SLOP_UNREACHABLE();
+            __auto_type _ = _mv_83.data.out_of_profile;
+            return 0;
         }
         case types_Omission_unresolved_import:
         {
-            __auto_type ia = _mv_83.data.unresolved_import;
-            __auto_type _mv_85 = b;
-            switch (_mv_85.tag) {
-                case types_Omission_out_of_profile:
-                {
-                    __auto_type _ = _mv_85.data.out_of_profile;
-                    return 1;
-                }
-                case types_Omission_unresolved_import:
-                {
-                    __auto_type ib = _mv_85.data.unresolved_import;
-                    return canon_iri_cmp(ia, ib);
-                }
-                case types_Omission_missing_declaration:
-                {
-                    __auto_type _ = _mv_85.data.missing_declaration;
-                    return -1;
-                }
-            }
-            SLOP_UNREACHABLE();
+            __auto_type _ = _mv_83.data.unresolved_import;
+            return 1;
         }
         case types_Omission_missing_declaration:
         {
-            __auto_type ma = _mv_83.data.missing_declaration;
-            __auto_type _mv_86 = b;
-            switch (_mv_86.tag) {
-                case types_Omission_out_of_profile:
-                {
-                    __auto_type _ = _mv_86.data.out_of_profile;
-                    return 1;
-                }
-                case types_Omission_unresolved_import:
-                {
-                    __auto_type _ = _mv_86.data.unresolved_import;
-                    return 1;
-                }
-                case types_Omission_missing_declaration:
-                {
-                    __auto_type mb = _mv_86.data.missing_declaration;
-                    return canon_missing_declaration_cmp(ma, mb);
-                }
-            }
-            SLOP_UNREACHABLE();
+            __auto_type _ = _mv_83.data.missing_declaration;
+            return 2;
+        }
+        case types_Omission_undeclared_property:
+        {
+            __auto_type _ = _mv_83.data.undeclared_property;
+            return 3;
         }
     }
     SLOP_UNREACHABLE();
 }
 
+int64_t canon_omission_cmp(types_Omission a, types_Omission b) {
+    {
+        __auto_type ra = canon_omission_rank(a);
+        __auto_type rb = canon_omission_rank(b);
+        if (ra != rb) {
+            if (ra < rb) {
+                return -1;
+            } else {
+                return 1;
+            }
+        } else {
+            __auto_type _mv_84 = a;
+            switch (_mv_84.tag) {
+                case types_Omission_out_of_profile:
+                {
+                    __auto_type x = _mv_84.data.out_of_profile;
+                    __auto_type _mv_85 = b;
+                    switch (_mv_85.tag) {
+                        case types_Omission_out_of_profile:
+                        {
+                            __auto_type y = _mv_85.data.out_of_profile;
+                            return canon_input_ref_cmp(x, y);
+                        }
+                        default: {
+                            return 0;
+                        }
+                    }
+                }
+                case types_Omission_unresolved_import:
+                {
+                    __auto_type x = _mv_84.data.unresolved_import;
+                    __auto_type _mv_86 = b;
+                    switch (_mv_86.tag) {
+                        case types_Omission_unresolved_import:
+                        {
+                            __auto_type y = _mv_86.data.unresolved_import;
+                            return canon_iri_cmp(x, y);
+                        }
+                        default: {
+                            return 0;
+                        }
+                    }
+                }
+                case types_Omission_missing_declaration:
+                {
+                    __auto_type x = _mv_84.data.missing_declaration;
+                    __auto_type _mv_87 = b;
+                    switch (_mv_87.tag) {
+                        case types_Omission_missing_declaration:
+                        {
+                            __auto_type y = _mv_87.data.missing_declaration;
+                            return canon_missing_declaration_cmp(x, y);
+                        }
+                        default: {
+                            return 0;
+                        }
+                    }
+                }
+                case types_Omission_undeclared_property:
+                {
+                    __auto_type x = _mv_84.data.undeclared_property;
+                    __auto_type _mv_88 = b;
+                    switch (_mv_88.tag) {
+                        case types_Omission_undeclared_property:
+                        {
+                            __auto_type y = _mv_88.data.undeclared_property;
+                            return canon_undeclared_property_cmp(x, y);
+                        }
+                        default: {
+                            return 0;
+                        }
+                    }
+                }
+            }
+            SLOP_UNREACHABLE();
+        }
+    }
+}
+
 int64_t canon_int_at(slop_list_int xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_87 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_87.has_value) {
-        __auto_type v = _mv_87.value;
+    __auto_type _mv_89 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_89.has_value) {
+        __auto_type v = _mv_89.value;
         return v;
-    } else if (!_mv_87.has_value) {
+    } else if (!_mv_89.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -550,11 +612,11 @@ int64_t canon_int_at(slop_list_int xs, int64_t i) {
 slop_string canon_str_at(slop_list_string xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_88 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_88.has_value) {
-        __auto_type v = _mv_88.value;
+    __auto_type _mv_90 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_string _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_90.has_value) {
+        __auto_type v = _mv_90.value;
         return v;
-    } else if (!_mv_88.has_value) {
+    } else if (!_mv_90.has_value) {
         return SLOP_STR("");
     }
     SLOP_UNREACHABLE();
@@ -563,11 +625,11 @@ slop_string canon_str_at(slop_list_string xs, int64_t i) {
 rdf_IRI canon_iri_at(slop_list_rdf_IRI xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_89 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_rdf_IRI _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_89.has_value) {
-        __auto_type v = _mv_89.value;
+    __auto_type _mv_91 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_rdf_IRI _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_91.has_value) {
+        __auto_type v = _mv_91.value;
         return v;
-    } else if (!_mv_89.has_value) {
+    } else if (!_mv_91.has_value) {
         return ((rdf_IRI){.value = SLOP_STR("")});
     }
     SLOP_UNREACHABLE();
@@ -576,11 +638,11 @@ rdf_IRI canon_iri_at(slop_list_rdf_IRI xs, int64_t i) {
 types_Node canon_node_at(slop_list_types_Node xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_90 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Node _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_90.has_value) {
-        __auto_type v = _mv_90.value;
+    __auto_type _mv_92 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Node _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_92.has_value) {
+        __auto_type v = _mv_92.value;
         return v;
-    } else if (!_mv_90.has_value) {
+    } else if (!_mv_92.has_value) {
         return ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = 0 });
     }
     SLOP_UNREACHABLE();
@@ -589,11 +651,11 @@ types_Node canon_node_at(slop_list_types_Node xs, int64_t i) {
 types_SubPair canon_sub_pair_at(slop_list_types_SubPair xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_91 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_SubPair _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_91.has_value) {
-        __auto_type v = _mv_91.value;
+    __auto_type _mv_93 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_SubPair _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_93.has_value) {
+        __auto_type v = _mv_93.value;
         return v;
-    } else if (!_mv_91.has_value) {
+    } else if (!_mv_93.has_value) {
         return ((types_SubPair){.sub = ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = 0 }), .super = ((types_Node){ .tag = types_Node_fresh_node, .data.fresh_node = 0 })});
     }
     SLOP_UNREACHABLE();
@@ -602,11 +664,11 @@ types_SubPair canon_sub_pair_at(slop_list_types_SubPair xs, int64_t i) {
 types_AxiomRef canon_axiom_ref_at(slop_list_types_AxiomRef xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_92 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_AxiomRef _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_92.has_value) {
-        __auto_type v = _mv_92.value;
+    __auto_type _mv_94 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_AxiomRef _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_94.has_value) {
+        __auto_type v = _mv_94.value;
         return v;
-    } else if (!_mv_92.has_value) {
+    } else if (!_mv_94.has_value) {
         return ((types_AxiomRef){.source = (slop_option_rdf_IRI){.has_value = false}, .text = SLOP_STR("")});
     }
     SLOP_UNREACHABLE();
@@ -615,11 +677,11 @@ types_AxiomRef canon_axiom_ref_at(slop_list_types_AxiomRef xs, int64_t i) {
 types_Omission canon_omission_at(slop_list_types_Omission xs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
     SLOP_PRE(((i < ((int64_t)((xs).len)))), "(< i (list-len xs))");
-    __auto_type _mv_93 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Omission _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_93.has_value) {
-        __auto_type v = _mv_93.value;
+    __auto_type _mv_95 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_types_Omission _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_95.has_value) {
+        __auto_type v = _mv_95.value;
         return v;
-    } else if (!_mv_93.has_value) {
+    } else if (!_mv_95.has_value) {
         return ((types_Omission){ .tag = types_Omission_unresolved_import, .data.unresolved_import = ((rdf_IRI){.value = SLOP_STR("")}) });
     }
     SLOP_UNREACHABLE();
@@ -691,7 +753,7 @@ slop_list_int canon_sort_range(slop_arena* arena, int64_t n, slop_closure_t cmp)
 
 slop_list_string canon_sort_strings(slop_arena* arena, slop_list_string xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_94_env_t* canon__lambda_94_env = (canon__lambda_94_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_94_env_t)); *canon__lambda_94_env = (canon__lambda_94_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_94, (void*)canon__lambda_94_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_96_env_t* canon__lambda_96_env = (canon__lambda_96_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_96_env_t)); *canon__lambda_96_env = (canon__lambda_96_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_96, (void*)canon__lambda_96_env }; }));
         __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -706,7 +768,7 @@ slop_list_string canon_sort_strings(slop_arena* arena, slop_list_string xs) {
 
 slop_list_rdf_IRI canon_sort_iris(slop_arena* arena, slop_list_rdf_IRI xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_95_env_t* canon__lambda_95_env = (canon__lambda_95_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_95_env_t)); *canon__lambda_95_env = (canon__lambda_95_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_95, (void*)canon__lambda_95_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_97_env_t* canon__lambda_97_env = (canon__lambda_97_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_97_env_t)); *canon__lambda_97_env = (canon__lambda_97_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_97, (void*)canon__lambda_97_env }; }));
         __auto_type out = ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -721,7 +783,7 @@ slop_list_rdf_IRI canon_sort_iris(slop_arena* arena, slop_list_rdf_IRI xs) {
 
 slop_list_types_Node canon_sort_nodes(slop_arena* arena, slop_list_types_Node xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_96_env_t* canon__lambda_96_env = (canon__lambda_96_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_96_env_t)); *canon__lambda_96_env = (canon__lambda_96_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_96, (void*)canon__lambda_96_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_98_env_t* canon__lambda_98_env = (canon__lambda_98_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_98_env_t)); *canon__lambda_98_env = (canon__lambda_98_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_98, (void*)canon__lambda_98_env }; }));
         __auto_type out = ((slop_list_types_Node){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -736,7 +798,7 @@ slop_list_types_Node canon_sort_nodes(slop_arena* arena, slop_list_types_Node xs
 
 slop_list_types_SubPair canon_sort_sub_pairs(slop_arena* arena, slop_list_types_SubPair xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_97_env_t* canon__lambda_97_env = (canon__lambda_97_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_97_env_t)); *canon__lambda_97_env = (canon__lambda_97_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_97, (void*)canon__lambda_97_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_99_env_t* canon__lambda_99_env = (canon__lambda_99_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_99_env_t)); *canon__lambda_99_env = (canon__lambda_99_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_99, (void*)canon__lambda_99_env }; }));
         __auto_type out = ((slop_list_types_SubPair){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -751,7 +813,7 @@ slop_list_types_SubPair canon_sort_sub_pairs(slop_arena* arena, slop_list_types_
 
 slop_list_types_AxiomRef canon_sort_axiom_refs(slop_arena* arena, slop_list_types_AxiomRef xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_98_env_t* canon__lambda_98_env = (canon__lambda_98_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_98_env_t)); *canon__lambda_98_env = (canon__lambda_98_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_98, (void*)canon__lambda_98_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_100_env_t* canon__lambda_100_env = (canon__lambda_100_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_100_env_t)); *canon__lambda_100_env = (canon__lambda_100_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_100, (void*)canon__lambda_100_env }; }));
         __auto_type out = ((slop_list_types_AxiomRef){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -766,7 +828,7 @@ slop_list_types_AxiomRef canon_sort_axiom_refs(slop_arena* arena, slop_list_type
 
 slop_list_types_Omission canon_sort_omissions(slop_arena* arena, slop_list_types_Omission xs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_99_env_t* canon__lambda_99_env = (canon__lambda_99_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_99_env_t)); *canon__lambda_99_env = (canon__lambda_99_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_99, (void*)canon__lambda_99_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((xs).len)))), ({ canon__lambda_101_env_t* canon__lambda_101_env = (canon__lambda_101_env_t*)slop_arena_alloc(arena, sizeof(canon__lambda_101_env_t)); *canon__lambda_101_env = (canon__lambda_101_env_t){ .xs = xs }; (slop_closure_t){ (void*)canon__lambda_101, (void*)canon__lambda_101_env }; }));
         __auto_type out = ((slop_list_types_Omission){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;

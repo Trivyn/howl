@@ -243,15 +243,16 @@
     (@intent "How many omissions are axioms out of the rung's profile")
     (@spec (((List Omission)) -> Int))
     (@pure)
-    ;; Unresolved imports and missing declarations are the same under
-    ;; every rung, so they never decide between rungs.
+    ;; Unresolved imports, missing declarations and undeclared properties
+    ;; are the same under every rung, so they never decide between rungs.
     (let ((mut n 0))
       (do
         (for-each (o oms)
           (match o
             ((out-of-profile _)      (set! n (+ n 1)))
             ((unresolved-import _)   (do))
-            ((missing-declaration _) (do))))
+            ((missing-declaration _) (do))
+            ((undeclared-property _) (do))))
         n)))
 
   (fn auto-profile ((d Decoded))

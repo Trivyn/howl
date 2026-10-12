@@ -18,6 +18,7 @@ typedef struct decode_Rebuilt decode_Rebuilt;
 typedef struct decode_IndividualTerm decode_IndividualTerm;
 typedef struct decode_NodeList decode_NodeList;
 typedef struct decode_Stage1 decode_Stage1;
+typedef struct decode_Step decode_Step;
 typedef struct decode_DataVocab decode_DataVocab;
 typedef struct decode_DataLemma decode_DataLemma;
 
@@ -225,12 +226,35 @@ struct decode_Stage1 {
     slop_list_owl2_RawAxiom axioms;
     owl2_Signature signature;
     int64_t inert;
+    slop_list_types_Omission omitted;
 };
 typedef struct decode_Stage1 decode_Stage1;
 
 #ifndef SLOP_OPTION_DECODE_STAGE1_DEFINED
 #define SLOP_OPTION_DECODE_STAGE1_DEFINED
 SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
+#endif
+
+typedef enum {
+    decode_Step_step_inert,
+    decode_Step_step_axiom,
+    decode_Step_step_undeclared,
+    decode_Step_step_fault
+} decode_Step_tag;
+
+struct decode_Step {
+    decode_Step_tag tag;
+    union {
+        owl2_RawAxiom step_axiom;
+        rdf_IRI step_undeclared;
+        slop_string step_fault;
+    } data;
+};
+typedef struct decode_Step decode_Step;
+
+#ifndef SLOP_OPTION_DECODE_STEP_DEFINED
+#define SLOP_OPTION_DECODE_STEP_DEFINED
+SLOP_OPTION_DEFINE(decode_Step, slop_option_decode_Step)
 #endif
 
 struct decode_DataVocab {
@@ -500,6 +524,11 @@ slop_result_decode_Stage1_types_Fault decode_decode_axioms(slop_arena* arena, te
 termstore_TermStore decode_decode_store(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_list_string decode_queried_predicates(slop_arena* arena);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+decode_Step decode_triple_step(slop_arena* arena, termstore_TermStore ig, owl2_Signature sig, decode_DataVocab dv, decode_DataLemma lemma, termstore_IdTriple it, rdf_Triple t);
+decode_Step decode_axiom_step(owl2_RawAxiom ax);
+slop_option_rdf_IRI decode_undeclared_predicate(owl2_Signature sig, rdf_Triple t);
+slop_list_types_Omission decode_undeclared_omissions(slop_arena* arena, slop_list_rdf_IRI ps, slop_list_string texts);
+types_Omission decode_undeclared_of(rdf_IRI p, slop_list_string refs);
 decode_DataVocab decode_data_vocab(slop_arena* arena, termstore_TermStore dict);
 decode_DataLemma decode_data_lemma(slop_arena* arena, termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_list_termstore_IdTriple triples);
 void decode_mark_data_uses(termstore_TermStore dict, owl2_Signature sig, decode_DataVocab v, slop_map* data, slop_map* used, termstore_IdTriple it);
@@ -598,6 +627,11 @@ SLOP_OPTION_DEFINE(types_EntityKind, slop_option_types_EntityKind)
 #ifndef SLOP_OPTION_OWL2_PROPCHARACTERISTIC_DEFINED
 #define SLOP_OPTION_OWL2_PROPCHARACTERISTIC_DEFINED
 SLOP_OPTION_DEFINE(owl2_PropCharacteristic, slop_option_owl2_PropCharacteristic)
+#endif
+
+#ifndef SLOP_OPTION_DECODE_STEP_DEFINED
+#define SLOP_OPTION_DECODE_STEP_DEFINED
+SLOP_OPTION_DEFINE(decode_Step, slop_option_decode_Step)
 #endif
 
 #ifndef SLOP_OPTION_DECODE_DATAVOCAB_DEFINED
