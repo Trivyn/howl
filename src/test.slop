@@ -47,13 +47,14 @@
                 eq-rule body-at join-rule nom-rule depth-limit stored-lambda
                 CSub SuccSig KSets SuccConcl RSuccConcl PredView PSlot PState PCands
                 csub-lit succ-csub succ-pre k-sets unit-held covers succ-step rsucc-rule
-                pred-view rpred-view pred-start pred-finish rpred-finish pred-join))
+                pred-view rpred-view pred-start pred-finish rpred-finish pred-join has-fterm succ-sig))
+  (import sriqground (ground-clause))
   (import sriqctx (Strategy Triggers CoreKind CoreChoice Ctx CtxSet Structure build-triggers triggers-of sole-at
                    in-su in-pr in-sur in-prr lit-ground mentions-x tau-su tau-pr omega omega-d pow2-sat has-lit strat-choice core-of
                    init-structure ctx-count ctx-at ctx-by-core ctx-clause-ok q-inconsistent q-unsat q-holds q-thing))
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
-  (import sriqsat (SatConfig SatResult Counts sat-run))
-  (import sriqindex (commit-indexed))
+  (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise))
+  (import sriqindex (commit-indexed KIdx k-index k-query))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt max-flags))
 
   (ffi "string.h"
@@ -6288,13 +6289,57 @@
           (p (sat-run arena in (sat-cfg s 0))))
       (if (not (complete-run r))
         (proto-says arena (string-concat arena label ": n/a, as the reference is") s (not (complete-run (. p res))))
-        (and (run-checks arena (string-concat arena label " (prototype)") in s (. p res))
+        (and (run-checks arena (string-concat arena label " (prototype, through M)") in s (as-m arena in (. p res)))
              (proto-says arena (string-concat arena label ": the reference's stop (S4's early stop included)") s
                          (== (. (. p res) status) (. r status)))
              (proto-says arena (string-concat arena label ": the reference's answers") s
                          (same-bools (answers-of arena (. r st) n) (answers-of arena (. (. p res) st) n)))
+             (proto-says arena (string-concat arena label ": the K-set index is k-sets, on every context and trigger") s
+                         (and (kidx-agrees arena in (. r st)) (kidx-agrees arena in (. (. p res) st))))
              (proto-perms arena label in n s p)
              (proto-caps arena label in n s p)))))
+
+  (fn kidx-agrees ((arena Arena) (in RefIn) (st Structure))
+    (@intent "On every context of st, for each maximal premise's successor term, the K-set index (k-index, k-query)
+              gives k-sets' K₁ and K₂")
+    (@spec ((Arena RefIn Structure) -> Bool))
+    (@alloc arena)
+    (let ((tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn))) (mut ok true) (mut v 0))
+      (do (for-each (s (. st sets))
+            (do (when (not (kidx-one arena tr st (== v 0) (. s cs))) (set! ok false))
+                (set! v (+ v 1))))
+          ok)))
+
+  (fn kidx-one ((arena Arena) (tr Triggers) (st Structure) (root Bool) (cs (List Clause)))
+    (@intent "kidx-agrees on one context's set cs")
+    (@spec ((Arena Triggers Structure Bool (List Clause)) -> Bool))
+    (@alloc arena)
+    (let ((kx (k-index arena (. st ord) tr cs)) (mut ok true))
+      (do (for-each (c cs) (when (not (kidx-clause arena tr st root cs kx c)) (set! ok false))) ok)))
+
+  (fn kidx-clause ((arena Arena) (tr Triggers) (st Structure) (root Bool) (cs (List Clause)) (kx KIdx) (c Clause))
+    (@intent "kidx-agrees for the successor term of each head literal of c, selected")
+    (@spec ((Arena Triggers Structure Bool (List Clause) KIdx Clause) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true) (mut i 0))
+      (do (while (< i (cast Int (list-len (. c head))))
+            (do (match (succ-sig root (. (select arena (. st ord) c i) sel))
+                  ((none) (set! i i))
+                  ((some sg) (when (not (same-ksets (k-query arena tr kx sg) (k-sets arena (. st ord) tr sg cs)))
+                               (set! ok false))))
+                (set! i (+ i 1))))
+          ok)))
+
+  (fn same-ksets ((a KSets) (b KSets))
+    (@intent "The same K₁ and the same K₂")
+    (@spec ((KSets KSets) -> Bool))
+    (and (lits-same-set (. a k1) (. b k1)) (lits-same-set (. a k2) (. b k2))))
+
+  (fn as-m ((arena Arena) (in RefIn) (r RefResult))
+    (@intent "The prototype's result with M, the structure its shared ground view stands for, in place of its own")
+    (@spec ((Arena RefIn RefResult) -> RefResult))
+    (@alloc arena)
+    (record-new RefResult (status (. r status)) (rounds (. r rounds)) (st (sat-materialise arena in (. r st)))))
 
   (fn proto-perms ((arena Arena) (label String) (in RefIn) (n Int) (s Strategy) (p SatResult))
     (@intent "R6: Δ reversed, and Δ rotated, give the same answers in the same rounds")
@@ -6353,6 +6398,91 @@
                 (set! ok false))))
           ok)))
 
+  (fn view-eq-clauses ((arena Arena))
+    (@intent "The shared ground view's Eq. G holds S(a, a), S(b, b) and B(a), and gains a ≈ b late (K(a), K ⊑ L,
+              L ⊑ {b}). v_C (C ⊑ {a}) holds S(x, a) and T(x, b) before it, and U(x, a) and U(x, b) after it (C ⊑ E ⊑
+              F ⊑ H). So Eq runs from G's equality into v_C's clauses old and new, from v_C's x ≈ a into G, and
+              between two members of G away from the root (one position, where the root rewrites both), whichever
+              constant is the larger. M(a), M(b) and M ⊑ ∃R.P put f(a) and f(b) into the root, where Eq rewrites
+              inside them. Expect C ⊑ B. Classes C 0, B 1, E 2, F 3, H 4, K 5, L 6, M 7, P 8; S 0, T 1, U 2, R 3; f 0;
+              a 0, b 1")
+    (@spec ((Arena) -> (List Clause)))
+    (@alloc arena)
+    (let ((x (at-x)) (a (at-u (cast U32 0))) (b (at-u (cast U32 1))) (mut out (list-new arena Clause)))
+      (do (list-push out (r-top arena (one-lit arena (r-role 0 a a))))
+          (list-push out (r-top arena (one-lit arena (r-role 0 b b))))
+          (list-push out (r-top arena (one-lit arena (r-atom 1 a))))
+          (list-push out (r-top arena (one-lit arena (r-atom 5 a))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 5 x)) (one-lit arena (r-atom 6 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 6 x)) (one-lit arena (eq-lit x b))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (eq-lit x a))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-role 0 x a))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-role 1 x b))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-atom 2 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 2 x)) (one-lit arena (r-atom 3 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 3 x)) (one-lit arena (r-atom 4 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 4 x)) (one-lit arena (r-role 2 x a))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 4 x)) (one-lit arena (r-role 2 x b))))
+          (list-push out (r-top arena (one-lit arena (r-atom 7 a))))
+          (list-push out (r-top arena (one-lit arena (r-atom 7 b))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 7 x)) (one-lit arena (r-role 3 x (r-fx 0)))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 7 x)) (one-lit arena (r-atom 8 (r-fx 0)))))
+          out)))
+
+  (fn view-join-clauses ((arena Arena))
+    (@intent "The shared ground view's Join of a context's premise into G. v_A holds ⊤ → F(x) ∨ C(o) and
+              ⊤ → G(x) ∨ E(o) directly (no x ≈ o, so nothing in v_A reaches C(o)'s or E(o)'s consequences
+              otherwise). r-Succ puts C(o) → C(o) and E(o) → E(o) into the root, and the root derives G's members
+              C(o) → D(o) (C ⊑ D) and C(o) ∧ E(o) → K(o) (C ⊓ E ⊑ K), whose sites v_A's premises join, the second
+              at its second body literal. A ⊑ ∃S.{o} at clause level and ∃S.N ⊑ H with C ⊑ N carry C(o) into v_A
+              by r-Pred: C(o) → H(x). v_P reaches ⊤ → Q(x) ∨ C(o) only after G holds C(o) → D(o) (P ⊑ P₁ ⊑ P₂ ⊑
+              P₃ ⊑ Q ⊔ C(o)), so a new premise joins an old site. Classes A 0, C 1, F 2, D 3, N 4, H 5, E 6, G 7,
+              K 8, P 9, P₁ 10, P₂ 11, P₃ 12, Q 13; S 0; o 0")
+    (@spec ((Arena) -> (List Clause)))
+    (@alloc arena)
+    (let ((x (at-x)) (z1 (at-z (cast U32 1))) (o (at-u (cast U32 0))) (mut out (list-new arena Clause)))
+      (do (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (lits2-of arena (r-atom 2 x) (r-atom 1 o))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (lits2-of arena (r-atom 7 x) (r-atom 6 o))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 1 x)) (one-lit arena (r-atom 3 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 1 x)) (one-lit arena (r-atom 4 x))))
+          (list-push out (r-clause arena (lits2-of arena (r-atom 1 x) (r-atom 6 x)) (one-lit arena (r-atom 8 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-role 0 x o))))
+          (list-push out (r-clause arena (lits2-of arena (r-role 0 z1 x) (r-atom 4 x)) (one-lit arena (r-atom 5 z1))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 9 x)) (one-lit arena (r-atom 10 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 10 x)) (one-lit arena (r-atom 11 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 11 x)) (one-lit arena (r-atom 12 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 12 x)) (lits2-of arena (r-atom 13 x) (r-atom 1 o))))
+          out)))
+
+  (fn view-units-clauses ((arena Arena))
+    (@intent "The shared ground view's root A → A: a disjunctive fact ⊤ → E(a) ∨ H(a) of G, both atoms in Su(O),
+              so every Succ trigger's K₂ would read them until the boundary puts E(a) → E(a) and H(a) → H(a) into
+              the root. A ⊑ ∃R.B gives v_A a trigger; E ⊑ D and H ⊑ D give D(a). Classes A 0, B 1, E 2, H 3, D 4; R 0;
+              f 0; a 0")
+    (@spec ((Arena) -> (List Clause)))
+    (@alloc arena)
+    (let ((x (at-x)) (a (at-u (cast U32 0))) (mut out (list-new arena Clause)))
+      (do (list-push out (r-top arena (lits2-of arena (r-atom 2 a) (r-atom 3 a))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 2 x)) (one-lit arena (r-atom 4 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 3 x)) (one-lit arena (r-atom 4 x))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-role 0 x (r-fx 0)))))
+          (list-push out (r-clause arena (one-lit arena (r-atom 0 x)) (one-lit arena (r-atom 1 (r-fx 0)))))
+          (list-push out (r-clause arena (lits2-of arena (r-atom 1 x) (r-atom 2 x)) (one-lit arena (r-atom 4 x))))
+          out)))
+
+  (fn test-sriq-view-eq ((arena Arena))
+    (@intent "The view's Eq row under the reference, every strategy: C ⊑ B")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true) (in (ref-in (view-eq-clauses arena) 9 9 4 1 2)))
+      (do (for-each (s (strategies arena))
+            (let ((r (ref-run arena in (ref-cfg s))))
+              (when (not (and (run-checks arena "view Eq row" in s r)
+                              (ref-says "view Eq row: C ⊑ B" s
+                                        (q-holds arena (. r st) (cast U32 0) (cast U32 1)) true)))
+                (set! ok false))))
+          ok)))
+
   (type ProtoCase (record (label String) (in RefIn) (n Int)))
 
   (fn proto-cases ((arena Arena))
@@ -6370,6 +6500,12 @@
           (list-push out (record-new ProtoCase (label "r-Succ row") (in (ref-in (rsucc-row-clauses arena) 4 4 0 0 1)) (n 4)))
           (list-push out (record-new ProtoCase (label "not-DL4 row") (in (ref-in (not-dl4-clauses arena) 2 2 1 0 1)) (n 2)))
           (list-push out (record-new ProtoCase (label "late r-Pred row") (in (ref-in (rpred-late-clauses arena) 10 10 1 0 1)) (n 10)))
+          (list-push out (record-new ProtoCase (label "view Eq row")
+                                           (in (ref-in (view-eq-clauses arena) 9 9 4 1 2)) (n 9)))
+          (list-push out (record-new ProtoCase (label "view units row")
+                                           (in (ref-in (view-units-clauses arena) 5 5 1 1 1)) (n 5)))
+          (list-push out (record-new ProtoCase (label "view Join row")
+                                           (in (ref-in (view-join-clauses arena) 14 14 1 0 1)) (n 14)))
           out)))
 
   (fn test-sriq-proto-rows ((arena Arena))
@@ -6687,6 +6823,30 @@
     (@alloc arena)
     (do (print "count ") (print name) (print " ") (println (int-to-string arena n)) 0))
 
+  (fn root-kinds ((arena Arena) (st Structure))
+    (@intent "The root's clauses by kind, as `count` lines: ground with no f(u) (the shared ground view's G), with an
+              f(u), and the rest")
+    (@spec ((Arena Structure) -> Int))
+    (@alloc arena)
+    (let ((mut g 0) (mut f 0) (mut other 0))
+      (do (match (list-get (. st sets) 0)
+            ((some r) (for-each (c (. r cs))
+                        (cond ((ground-clause c) (set! g (+ g 1)))
+                              ((clause-has-fterm c) (set! f (+ f 1)))
+                              (else (set! other (+ other 1))))))
+            ((none) (set! g 0)))
+          (count-line arena "root-ground" g)
+          (count-line arena "root-fu" f)
+          (count-line arena "root-other" other))))
+
+  (fn clause-has-fterm ((c Clause))
+    (@intent "Does a literal of c mention a term f(u)?")
+    (@spec ((Clause) -> Bool))
+    (let ((mut found false))
+      (do (for-each (l (. c body)) (when (has-fterm l) (set! found true)))
+          (for-each (l (. c head)) (when (has-fterm l) (set! found true)))
+          found)))
+
   (fn print-counts ((arena Arena) (p SatResult))
     (@intent "The prototype's work, one `count` line each, before the report (entdiff takes no such line: a reader strips them)")
     (@spec ((Arena SatResult) -> Int))
@@ -6702,6 +6862,7 @@
           (count-line arena "constants" (cast Int (list-len (. (. st ord) consts))))
           (count-line arena "clauses" total)
           (count-line arena "root-clauses" root)
+          (root-kinds arena st)
           (count-line arena "candidates" (. c cands))
           (count-line arena "root-candidates" (. c rcands))
           (count-line arena "committed" (. c added))
@@ -11006,6 +11167,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-rpred-late arena)))
             (print-test-result "9a: r-Pred whose only new premise is a late side premise: the reference's answers" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-view-eq arena)))
+            (print-test-result "9d: the shared ground view's Eq row: the reference's answer, C ⊑ B" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-proto-rows arena)))

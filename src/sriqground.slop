@@ -1,0 +1,625 @@
+;; ============================================================
+;; sriq's shared ground view  —  SPEC.md §5.5, the prototype (slice 9d)
+;;
+;; G is the root's ground clauses with no term f(u). r-Pred with no Cᵢ
+;; would copy each into every other context (E3); instead every context
+;; v ≠ v_r reads S_v ∪ V_v, V_v the members of G that S_v does not
+;; subsume (the others are hidden in v). G is taken from S_{v_r} at each
+;; boundary, so derive reads it frozen, and is indexed once per round.
+;;
+;; The tests read a finished run through M, the structure the view
+;; stands for: min(S_v ∪ G) in each v ≠ v_r, and the edges ⟨v, v_r, u⟩
+;; that r-Succ on the copies would have added (E_G).
+;; ============================================================
+
+(module sriqground
+  (@doc "sriq's shared ground view: the root's ground clauses with no f(u), stored once and read by every other
+         context, and M, the structure it stands for (SPEC 5.5, slice 9d)")
+
+  (import types (Lit Clause lit-cmp))
+  (import sriqclauses (make-clause clause-cmp))
+  (import sriqsubsume (subsumes))
+  (import sriqindex (SubIndex sub-index some-subsumes commit-indexed))
+  (import sriqctx (Triggers EdgeLabel Edge Ctx CtxSet Structure lit-ground in-su in-sur))
+  (import sriqorder (SriqOrder))
+  (import sriq (Premise SuccSig select succ-pre has-fterm))
+  (import canon (sort-range))
+
+  (export Ground PIdx pidx-of pidx-find ground-clause ground-of g-visible g-fresh g-in-hat g-held g-premise-at
+          g-member-of
+          g-sel-range g-body-members g-member g-root-units view-total materialise)
+
+  ;; One literal of one member, for finding the members a clause subsumes:
+  ;; side 0 is the body, 1 the head.
+  (type Post (record
+    (side Int)
+    (lit  Lit)
+    (i    Int)))
+
+  ;; The members hidden in one context, by position, sorted; all of them
+  ;; when S_v holds ⊤ → ⊥.
+  (type Hides (record
+    (all Bool)
+    (ids (List Int))))
+
+  (type Ground (record
+    (gs    (List Clause))    ; G, in content order
+    (fresh (List Bool))      ; per member: in Δ_G
+    (ix    SubIndex)         ; G by key literal: ∈̂ G
+    (posts (List Post))      ; every literal of every member, by side then literal
+    (hides (List Hides))     ; per context id; nothing hidden at the root
+    (shown (List Bool))      ; per member: visible in some context other than the root
+    (ps    (List Premise))   ; every member with each head literal selected in turn
+    (pm    (List Int))       ; each premise's member
+    (bysel (List Int))       ; premise positions, by selected literal
+    (rall  PIdx)             ; the root's premises: Pred into v_r finds its side premises here
+    (rnew  PIdx)             ; those of Δ_{v_r}
+    (rold  PIdx)))           ; those of S_{v_r} \ Δ_{v_r}
+
+  ;; Premises filed by selected literal: a Pred slot is met only by a
+  ;; maximal premise selecting exactly Cᵢσ (pred-step's sound property), so
+  ;; its candidates are found by that literal.
+  (type PIdx (record
+    (ps    (List Premise))
+    (bysel (List Int))))
+
+  ;; ============================================================
+  ;; Members
+  ;; ============================================================
+
+  (fn lit-gf ((l Lit))
+    (@intent "Is l ground, with no term f(u)?")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (and (lit-ground l) (not (has-fterm l))))
+
+  (fn ground-clause ((c Clause))
+    (@intent "Is c ground, with no term f(u): a member of G when it is a root clause?")
+    (@spec ((Clause) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (l (. c body)) (when (not (lit-gf l)) (set! ok false)))
+          (for-each (l (. c head)) (when (not (lit-gf l)) (set! ok false)))
+          ok)))
+
+  (fn set-at ((st Structure) (v Int) (nobody (List Clause)))
+    (@intent "S_v, or nobody")
+    (@spec ((Structure Int (List Clause)) -> (List Clause)))
+    (@pure)
+    (match (list-get (. st sets) v) ((some s) (. s cs)) ((none) nobody)))
+
+  (fn ctx-root ((st Structure) (v Int))
+    (@intent "Is v the root?")
+    (@spec ((Structure Int) -> Bool))
+    (@pure)
+    (match (list-get (. st ctxs) v) ((some c) (. c root)) ((none) false)))
+
+  (fn ground-part ((arena Arena) (cs (List Clause)))
+    (@intent "The members of cs that are ground with no f(u), in cs's order")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (c cs) (when (ground-clause c) (list-push out c))) out)))
+
+  (fn fresh-flags ((arena Arena) (gs (List Clause)) (news (List Clause)))
+    (@intent "For each member of gs, is it in news (content order)?")
+    (@spec ((Arena (List Clause) (List Clause)) -> (List Bool)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Bool)))
+      (do (for-each (g gs) (list-push out (sorted-has news g))) out)))
+
+  (fn clause-at ((cs (List Clause)) (k Int) (fallback Clause))
+    (@intent "Element k")
+    (@spec (((List Clause) Int Clause) -> Clause))
+    (@pure)
+    (match (list-get cs k) ((some c) c) ((none) fallback)))
+
+  (fn sorted-has ((cs (List Clause)) (c Clause))
+    (@intent "Is c in cs, which is in content order?")
+    (@spec (((List Clause) Clause) -> Bool))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len cs))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (clause-cmp (clause-at cs mid c) c) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          (and (< lo (cast Int (list-len cs))) (== (clause-cmp (clause-at cs lo c) c) 0)))))
+
+  ;; ============================================================
+  ;; The postings: which members contain a literal
+  ;; ============================================================
+
+  (fn post-cmp ((a Post) (b Post))
+    (@intent "By side, then literal")
+    (@spec ((Post Post) -> Int))
+    (@pure)
+    (cond ((< (. a side) (. b side)) -1) ((> (. a side) (. b side)) 1) (else (lit-cmp (. a lit) (. b lit)))))
+
+  (fn post-at ((ps (List Post)) (k Int) (fallback Post))
+    (@intent "Element k")
+    (@spec (((List Post) Int Post) -> Post))
+    (@pure)
+    (match (list-get ps k) ((some p) p) ((none) fallback)))
+
+  (fn postings ((arena Arena) (gs (List Clause)))
+    (@intent "Every literal of every member of gs, with its side and member, sorted by side then literal")
+    (@spec ((Arena (List Clause)) -> (List Post)))
+    (@alloc arena)
+    (let ((mut raw (list-new arena Post)) (mut i 0))
+      (do (for-each (g gs)
+            (do (for-each (l (. g body)) (list-push raw (record-new Post (side 0) (lit l) (i i))))
+                (for-each (l (. g head)) (list-push raw (record-new Post (side 1) (lit l) (i i))))
+                (set! i (+ i 1))))
+          (match (list-get raw 0)
+            ((none) raw)
+            ((some p0)
+              (let ((idx (sort-range arena (cast Int (list-len raw))
+                           (fn ((a Int) (b Int)) (post-cmp (post-at raw a p0) (post-at raw b p0)))))
+                    (mut out (list-new arena Post)))
+                (do (for-each (k idx) (list-push out (post-at raw k p0))) out)))))))
+
+  (fn post-key-cmp ((p Post) (side Int) (l Lit))
+    (@intent "p against the key (side, l)")
+    (@spec ((Post Int Lit) -> Int))
+    (@pure)
+    (cond ((< (. p side) side) -1) ((> (. p side) side) 1) (else (lit-cmp (. p lit) l))))
+
+  (fn post-lower ((ps (List Post)) (side Int) (l Lit) (fallback Post))
+    (@intent "The first position whose posting is not below (side, l)")
+    (@spec (((List Post) Int Lit Post) -> Int))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len ps))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (post-key-cmp (post-at ps mid fallback) side l) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  (fn subsumed-by ((arena Arena) (gs (List Clause)) (ps (List Post)) (c Clause))
+    (@intent "The members of gs that c subsumes, by position: those holding c's first literal on its side, confirmed
+              by subsumes. c is not the empty clause")
+    (@spec ((Arena (List Clause) (List Post) Clause) -> (List Int)))
+    (@alloc arena)
+    (match (key-lit c)
+      ((none) (list-new arena Int))
+      ((some kp) (match (list-get ps 0)
+                   ((none) (list-new arena Int))
+                   ((some p0) (subsumed-from arena gs ps c kp p0))))))
+
+  (fn subsumed-from ((arena Arena) (gs (List Clause)) (ps (List Post)) (c Clause) (kp Post) (p0 Post))
+    (@intent "subsumed-by, walking the postings under c's key kp")
+    (@spec ((Arena (List Clause) (List Post) Clause Post Post) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)) (mut k (post-lower ps (. kp side) (. kp lit) p0)) (mut going true))
+      (do (while (and going (< k (cast Int (list-len ps))))
+            (let ((p (post-at ps k p0)))
+              (do (set! going (== (post-key-cmp p (. kp side) (. kp lit)) 0))
+                  (when (and going (member-subsumed gs (. p i) c)) (list-push out (. p i)))
+                  (set! k (+ k 1)))))
+          out)))
+
+  (fn key-lit ((c Clause))
+    (@intent "c's first body literal, else its first head literal, as a posting key; none for the empty clause")
+    (@spec ((Clause) -> (Option Post)))
+    (@pure)
+    (match (list-get (. c body) 0)
+      ((some l) (some (record-new Post (side 0) (lit l) (i 0))))
+      ((none) (match (list-get (. c head) 0)
+                ((some l) (some (record-new Post (side 1) (lit l) (i 0))))
+                ((none) (none))))))
+
+  (fn member-subsumed ((gs (List Clause)) (i Int) (c Clause))
+    (@intent "Does c subsume member i?")
+    (@spec (((List Clause) Int Clause) -> Bool))
+    (@pure)
+    (match (list-get gs i) ((some g) (subsumes c g)) ((none) false)))
+
+  ;; ============================================================
+  ;; Hidden members, per context
+  ;; ============================================================
+
+  (fn hides-of ((arena Arena) (gs (List Clause)) (ps (List Post)) (cs (List Clause)))
+    (@intent "The members of gs that some clause of cs subsumes (a ground one: only those can), sorted, each once;
+              all of them when cs holds ⊤ → ⊥")
+    (@spec ((Arena (List Clause) (List Post) (List Clause)) -> Hides))
+    (@alloc arena)
+    (let ((mut all false) (mut raw (list-new arena Int)))
+      (do (for-each (c cs)
+            (when (ground-clause c)
+              (if (and (== (list-len (. c body)) 0) (== (list-len (. c head)) 0))
+                (set! all true)
+                (for-each (i (subsumed-by arena gs ps c)) (list-push raw i)))))
+          (record-new Hides (all all) (ids (int-set arena raw))))))
+
+  (fn int-at ((xs (List Int)) (k Int))
+    (@intent "Element k, or -1")
+    (@spec (((List Int) Int) -> Int))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) -1)))
+
+  (fn int-set ((arena Arena) (xs (List Int)))
+    (@intent "xs sorted, each once")
+    (@spec ((Arena (List Int)) -> (List Int)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len xs))
+                 (fn ((a Int) (b Int)) (cond ((< (int-at xs a) (int-at xs b)) -1)
+                                             ((> (int-at xs a) (int-at xs b)) 1)
+                                             (else 0)))))
+          (mut out (list-new arena Int)) (mut last -1))
+      (do (for-each (k idx)
+            (let ((x (int-at xs k)))
+              (when (!= x last) (do (list-push out x) (set! last x)))))
+          out)))
+
+  (fn int-has ((xs (List Int)) (x Int))
+    (@intent "Is x in xs, which is sorted?")
+    (@spec (((List Int) Int) -> Bool))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len xs))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (int-at xs mid) x) (set! lo (+ mid 1)) (set! hi mid))))
+          (== (int-at xs lo) x))))
+
+  (fn all-hides ((arena Arena) (st Structure) (gs (List Clause)) (ps (List Post)))
+    (@intent "Each context's hidden members, by context id; none at the root")
+    (@spec ((Arena Structure (List Clause) (List Post)) -> (List Hides)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Hides)) (mut v 0) (nobody (list-new arena Clause)))
+      (do (for-each (s (. st sets))
+            (do (if (ctx-root st v)
+                  (list-push out (record-new Hides (all false) (ids (list-new arena Int))))
+                  (list-push out (hides-of arena gs ps (. s cs))))
+                (set! v (+ v 1))))
+          out)))
+
+  (fn shown-flags ((arena Arena) (st Structure) (n Int) (hs (List Hides)))
+    (@intent "For each of the n members, is it visible in some context other than the root?")
+    (@spec ((Arena Structure Int (List Hides)) -> (List Bool)))
+    (@alloc arena)
+    (let ((mut counts (list-new arena Int)) (mut others 0) (mut v 0) (mut i 0) (mut out (list-new arena Bool)))
+      (do (while (< i n) (do (list-push counts 0) (set! i (+ i 1))))
+          (for-each (h hs)
+            (do (when (not (ctx-root st v))
+                  (do (set! others (+ others 1))
+                      (if (. h all) (bump-all counts n) (bump-ids counts (. h ids)))))
+                (set! v (+ v 1))))
+          (set! i 0)
+          (while (< i n) (do (list-push out (< (int-at counts i) others)) (set! i (+ i 1))))
+          out)))
+
+  (fn bump-ids ((counts (List Int)) (ids (List Int)))
+    (@intent "Add one to each count named in ids")
+    (@spec (((List Int) (List Int)) -> Unit))
+    (for-each (k ids) (list-set counts k (+ (int-at counts k) 1))))
+
+  (fn bump-all ((counts (List Int)) (n Int))
+    (@intent "Add one to each of the n counts")
+    (@spec (((List Int) Int) -> Unit))
+    (let ((mut i 0))
+      (while (< i n) (do (list-set counts i (+ (int-at counts i) 1)) (set! i (+ i 1))))))
+
+  ;; ============================================================
+  ;; Premises, K₂, and what G holds
+  ;; ============================================================
+
+  (fn prem-at ((ps (List Premise)) (k Int) (fallback Premise))
+    (@intent "Premise k")
+    (@spec (((List Premise) Int Premise) -> Premise))
+    (@pure)
+    (match (list-get ps k) ((some p) p) ((none) fallback)))
+
+  (fn sel-sorted ((arena Arena) (ps (List Premise)))
+    (@intent "The positions of ps, by selected literal")
+    (@spec ((Arena (List Premise)) -> (List Int)))
+    (@alloc arena)
+    (match (list-get ps 0)
+      ((none) (list-new arena Int))
+      ((some p0) (sort-range arena (cast Int (list-len ps))
+                   (fn ((a Int) (b Int)) (lit-cmp (. (prem-at ps a p0) sel) (. (prem-at ps b p0) sel)))))))
+
+  (fn unit-of ((arena Arena) (a Lit))
+    (@intent "A → A")
+    (@spec ((Arena Lit) -> Clause))
+    (@alloc arena)
+    (let ((mut b (list-new arena Lit)) (mut h (list-new arena Lit)))
+      (do (list-push b a) (list-push h a) (make-clause arena b h))))
+
+  (fn held-in ((arena Arena) (ix SubIndex) (a Lit))
+    (@intent "A → A ∈̂ the index's clauses: ⊤ → A, A → A, A → ⊥ or ⊤ → ⊥ among them")
+    (@spec ((Arena SubIndex Lit) -> Bool))
+    (@alloc arena)
+    (some-subsumes ix (unit-of arena a) -1))
+
+  (fn member-premises ((arena Arena) (ord SriqOrder) (gs (List Clause)))
+    (@intent "Every member with each head literal selected in turn, as premises-of gives them")
+    (@spec ((Arena SriqOrder (List Clause)) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)))
+      (do (for-each (g gs)
+            (let ((mut i 0))
+              (while (< i (cast Int (list-len (. g head))))
+                (do (list-push out (select arena ord g i)) (set! i (+ i 1))))))
+          out)))
+
+  (fn premise-members ((arena Arena) (gs (List Clause)))
+    (@intent "The member of each premise member-premises gives")
+    (@spec ((Arena (List Clause)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)) (mut k 0))
+      (do (for-each (g gs)
+            (do (for-each (l (. g head)) (list-push out k))
+                (set! k (+ k 1))))
+          out)))
+
+  ;; ============================================================
+  ;; G at one boundary
+  ;; ============================================================
+
+  (fn ground-of ((arena Arena) (tr Triggers) (st Structure) (root-news (List Clause)))
+    (@intent "G at this boundary, from S_{v_r}, with Δ_{v_r} = root-news: its members, which are new, its indexes, and
+              each context's hidden members; and the root's premises, filed")
+    (@spec ((Arena Triggers Structure (List Clause)) -> Ground))
+    (@alloc arena)
+    (let ((nobody (list-new arena Clause))
+          (gs (ground-part arena (set-at st 0 nobody)))
+          (ix (sub-index arena gs))
+          (posts (postings arena gs))
+          (hides (all-hides arena st gs posts))
+          (ps (member-premises arena (. st ord) gs))
+          (pm (premise-members arena gs))
+          (rset (set-at st 0 nobody)))
+      (record-new Ground
+        (gs gs)
+        (fresh (fresh-flags arena gs root-news))
+        (ix ix)
+        (posts posts)
+        (hides hides)
+        (shown (shown-flags arena st (cast Int (list-len gs)) hides))
+        (ps ps)
+        (pm pm)
+        (bysel (sel-sorted arena ps))
+        (rall (pidx-of arena (member-premises arena (. st ord) rset)))
+        (rnew (pidx-of arena (member-premises arena (. st ord) root-news)))
+        (rold (pidx-of arena (member-premises arena (. st ord) (not-in arena rset root-news)))))))
+
+  (fn not-in ((arena Arena) (cs (List Clause)) (news (List Clause)))
+    (@intent "The members of cs not in news (content order)")
+    (@spec ((Arena (List Clause) (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (c cs) (when (not (sorted-has news c)) (list-push out c))) out)))
+
+  (fn pidx-of ((arena Arena) (ps (List Premise)))
+    (@intent "ps filed by selected literal")
+    (@spec ((Arena (List Premise)) -> PIdx))
+    (@alloc arena)
+    (record-new PIdx (ps ps) (bysel (sel-sorted arena ps))))
+
+  (fn pidx-find ((arena Arena) (ix PIdx) (l Lit))
+    (@intent "The maximal premises of ix selecting exactly l")
+    (@spec ((Arena PIdx Lit) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)))
+      (match (list-get (. ix ps) 0)
+        ((none) out)
+        ((some p0)
+          (let ((bs (. ix bysel)) (mut k (idx-lower ix l p0)))
+            (do (while (and (< k (cast Int (list-len bs))) (== (lit-cmp (idx-sel ix (int-at bs k) p0) l) 0))
+                  (do (when (. (prem-at (. ix ps) (int-at bs k) p0) maxed)
+                            (list-push out (prem-at (. ix ps) (int-at bs k) p0)))
+                      (set! k (+ k 1))))
+                out))))))
+
+  (fn idx-sel ((ix PIdx) (k Int) (p0 Premise))
+    (@intent "Premise k's selected literal")
+    (@spec ((PIdx Int Premise) -> Lit))
+    (@pure)
+    (. (prem-at (. ix ps) k p0) sel))
+
+  (fn idx-lower ((ix PIdx) (l Lit) (p0 Premise))
+    (@intent "The first position in bysel whose premise's selected literal is not below l")
+    (@spec ((PIdx Lit Premise) -> Int))
+    (@pure)
+    (let ((bs (. ix bysel)) (mut lo 0) (mut hi (cast Int (list-len (. ix bysel)))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (lit-cmp (idx-sel ix (int-at bs mid) p0) l) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  ;; ============================================================
+  ;; Reading the view
+  ;; ============================================================
+
+  (fn g-visible ((gd Ground) (v Int) (i Int))
+    (@intent "Is member i visible in context v (not hidden there)?")
+    (@spec ((Ground Int Int) -> Bool))
+    (@pure)
+    (match (list-get (. gd hides) v)
+      ((some h) (and (not (. h all)) (not (int-has (. h ids) i))))
+      ((none) true)))
+
+  (fn g-fresh ((gd Ground) (i Int))
+    (@intent "Is member i in Δ_G?")
+    (@spec ((Ground Int) -> Bool))
+    (@pure)
+    (match (list-get (. gd fresh) i) ((some b) b) ((none) false)))
+
+  (fn g-in-hat ((gd Ground) (c Clause))
+    (@intent "c ∈̂ G")
+    (@spec ((Ground Clause) -> Bool))
+    (@pure)
+    (some-subsumes (. gd ix) c -1))
+
+  (fn g-held ((arena Arena) (gd Ground) (a Lit))
+    (@intent "A → A ∈̂ G")
+    (@spec ((Arena Ground Lit) -> Bool))
+    (@alloc arena)
+    (held-in arena (. gd ix) a))
+
+  (fn g-premise-at ((gd Ground) (k Int) (fallback Premise))
+    (@intent "Premise k of G")
+    (@spec ((Ground Int Premise) -> Premise))
+    (@pure)
+    (prem-at (. gd ps) k fallback))
+
+  (fn g-member-of ((gd Ground) (k Int))
+    (@intent "The member premise k selects in")
+    (@spec ((Ground Int) -> Int))
+    (@pure)
+    (int-at (. gd pm) k))
+
+  (fn g-sel-range ((arena Arena) (gd Ground) (l Lit))
+    (@intent "The positions of G's premises whose selected literal is l")
+    (@spec ((Arena Ground Lit) -> (List Int)))
+    (@alloc arena)
+    (match (list-get (. gd ps) 0)
+      ((none) (list-new arena Int))
+      ((some p0)
+        (let ((bs (. gd bysel)) (mut out (list-new arena Int)) (mut k (sel-lower gd l p0)))
+          (do (while (and (< k (cast Int (list-len bs))) (== (lit-cmp (sel-of gd (int-at bs k) p0) l) 0))
+                (do (list-push out (int-at bs k)) (set! k (+ k 1))))
+              out)))))
+
+  (fn sel-of ((gd Ground) (k Int) (p0 Premise))
+    (@intent "Premise k's selected literal")
+    (@spec ((Ground Int Premise) -> Lit))
+    (@pure)
+    (. (prem-at (. gd ps) k p0) sel))
+
+  (fn sel-lower ((gd Ground) (l Lit) (p0 Premise))
+    (@intent "The first position in bysel whose premise's selected literal is not below l")
+    (@spec ((Ground Lit Premise) -> Int))
+    (@pure)
+    (let ((bs (. gd bysel)) (mut lo 0) (mut hi (cast Int (list-len (. gd bysel)))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (lit-cmp (sel-of gd (int-at bs mid) p0) l) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  (fn g-body-members ((arena Arena) (gd Ground) (l Lit))
+    (@intent "The members of G with l in their body, by position (from the postings)")
+    (@spec ((Arena Ground Lit) -> (List Int)))
+    (@alloc arena)
+    (let ((ps (. gd posts)) (mut out (list-new arena Int)))
+      (match (list-get ps 0)
+        ((none) out)
+        ((some p0)
+          (let ((mut k (post-lower ps 0 l p0)))
+            (do (while (and (< k (cast Int (list-len ps))) (== (post-key-cmp (post-at ps k p0) 0 l) 0))
+                  (do (list-push out (. (post-at ps k p0) i)) (set! k (+ k 1))))
+                out))))))
+
+  (fn g-member ((gd Ground) (i Int) (fallback Clause))
+    (@intent "Member i of G")
+    (@spec ((Ground Int Clause) -> Clause))
+    (@pure)
+    (match (list-get (. gd gs) i) ((some g) g) ((none) fallback)))
+
+  (fn g-shown ((gd Ground) (i Int))
+    (@intent "Is member i visible in some context other than the root?")
+    (@spec ((Ground Int) -> Bool))
+    (@pure)
+    (match (list-get (. gd shown) i) ((some b) b) ((none) false)))
+
+  (fn g-root-units ((arena Arena) (tr Triggers) (gd Ground))
+    (@intent "r-Succ on the copies, at the root: A → A for each maximal A ∈ Suʳ(O) of a member visible in some
+              context, when A → A ∉̂ S_{v_r} (for a ground clause, ∉̂ G)")
+    (@spec ((Arena Triggers Ground) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)) (mut k 0))
+      (do (for-each (p (. gd ps))
+            (do (when (and (. p maxed) (g-shown gd (g-member-of gd k)) (in-sur tr (. p sel))
+                           (not (g-held arena gd (. p sel))))
+                  (list-push out (unit-of arena (. p sel))))
+                (set! k (+ k 1))))
+          out)))
+
+  (fn view-total ((st Structure))
+    (@intent "The clauses the view stands for: Σ |S_v|, plus |G| for each context but the root and those holding ⊤ → ⊥,
+              which hides all of G (the clause cap reads this). Members hidden by another clause are counted")
+    (@spec ((Structure) -> Int))
+    (@pure)
+    (let ((mut g 0) (mut n 0) (mut v 0))
+      (do (match (list-get (. st sets) 0)
+            ((some r) (for-each (c (. r cs)) (when (ground-clause c) (set! g (+ g 1)))))
+            ((none) (set! g 0)))
+          (for-each (s (. st sets))
+            (do (set! n (+ n (cast Int (list-len (. s cs)))))
+                (when (and (not (ctx-root st v)) (not (has-empty (. s cs)))) (set! n (+ n g)))
+                (set! v (+ v 1))))
+          n)))
+
+  (fn has-empty ((cs (List Clause)))
+    (@intent "Does cs hold ⊤ → ⊥?")
+    (@spec (((List Clause)) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (c cs) (when (and (== (list-len (. c body)) 0) (== (list-len (. c head)) 0)) (set! found true)))
+          found)))
+
+  ;; ============================================================
+  ;; M: the structure the view stands for
+  ;; ============================================================
+
+  (fn materialise ((arena Arena) (tr Triggers) (st Structure))
+    (@intent "M for a finished structure: min(S_v ∪ G) in each v ≠ v_r, and the edges plus ⟨v, v_r, u⟩ for each
+              constant u of a maximal A ∈ Suʳ(O) of a member visible in v (E_G)")
+    (@spec ((Arena Triggers Structure) -> Structure))
+    (@alloc arena)
+    (let ((gd (ground-of arena tr st (list-new arena Clause)))
+          (mut sets (list-new arena CtxSet)) (mut es (list-new arena Edge)) (mut v 0))
+      (do (for-each (e (. st edges)) (list-push es e))
+          (for-each (s (. st sets))
+            (do (if (ctx-root st v)
+                  (list-push sets s)
+                  (do (list-push sets (record-new CtxSet (cs (min-with arena (. s cs) (visible-of arena gd v)))))
+                      (for-each (e (eg-edges arena tr gd v)) (when (not (edge-in es e)) (list-push es e)))))
+                (set! v (+ v 1))))
+          (record-new Structure (ctxs (. st ctxs)) (sets sets) (edges es) (ord (. st ord))))))
+
+  (fn min-with ((arena Arena) (ws (List Clause)) (cs (List Clause)))
+    (@intent "min(ws ∪ cs) for a min set ws")
+    (@spec ((Arena (List Clause) (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (if (== (list-len cs) 0) ws (. (commit-indexed arena ws cs) set)))
+
+  (fn visible-of ((arena Arena) (gd Ground) (v Int))
+    (@intent "V_v: the members visible in v")
+    (@spec ((Arena Ground Int) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)) (mut i 0))
+      (do (for-each (g (. gd gs)) (do (when (g-visible gd v i) (list-push out g)) (set! i (+ i 1))))
+          out)))
+
+  (fn eg-edges ((arena Arena) (tr Triggers) (gd Ground) (v Int))
+    (@intent "⟨v, v_r, u⟩ for each constant u of a maximal A ∈ Suʳ(O) of a member visible in v")
+    (@spec ((Arena Triggers Ground Int) -> (List Edge)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Edge)) (mut k 0))
+      (do (for-each (p (. gd ps))
+            (do (when (and (. p maxed) (g-visible gd v (g-member-of gd k)) (in-sur tr (. p sel)))
+                  (for-each (u (consts-in arena (. p sel)))
+                    (list-push out (record-new Edge (from (cast U32 v)) (to (cast U32 0)) (lk 'el-const) (label u)))))
+                (set! k (+ k 1))))
+          out)))
+
+  (fn consts-in ((arena Arena) (l Lit))
+    (@intent "The constants l mentions as terms")
+    (@spec ((Arena Lit) -> (List U32)))
+    (@alloc arena)
+    (let ((mut out (list-new arena U32)))
+      (do (when (== (. (. l t1) kind) 'ak-u) (list-push out (. (. l t1) cst)))
+          (when (and (not (== (. l form) 'lf-unary)) (== (. (. l t2) kind) 'ak-u)) (list-push out (. (. l t2) cst)))
+          out)))
+
+  (fn edge-in ((es (List Edge)) (e Edge))
+    (@intent "Is e among es?")
+    (@spec (((List Edge) Edge) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (x es)
+            (when (and (== (. x from) (. e from)) (== (. x to) (. e to)) (== (. x lk) (. e lk))
+                       (== (. x label) (. e label)))
+              (set! found true)))
+          found)))
+
+)
