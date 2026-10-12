@@ -37,8 +37,8 @@ premise_RoleList premise_role_pushed(slop_arena* arena, slop_option_premise_Role
 slop_list_types_RoleId premise_axiom_roles(slop_arena* arena, types_NormAxiom ax) {
     {
         __auto_type rs = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_139 = ax;
-        switch (_mv_139.tag) {
+        __auto_type _mv_147 = ax;
+        switch (_mv_147.tag) {
             case types_NormAxiom_sub_name:
             {
                 break;
@@ -49,29 +49,29 @@ slop_list_types_RoleId premise_axiom_roles(slop_arena* arena, types_NormAxiom ax
             }
             case types_NormAxiom_sub_some_rhs:
             {
-                __auto_type r = _mv_139.data.sub_some_rhs.f1;
+                __auto_type r = _mv_147.data.sub_some_rhs.f1;
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
             case types_NormAxiom_sub_some_lhs:
             {
-                __auto_type r = _mv_139.data.sub_some_lhs.f0;
+                __auto_type r = _mv_147.data.sub_some_lhs.f0;
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
             case types_NormAxiom_sub_role:
             {
-                __auto_type r = _mv_139.data.sub_role.f0;
-                __auto_type s = _mv_139.data.sub_role.f1;
+                __auto_type r = _mv_147.data.sub_role.f0;
+                __auto_type s = _mv_147.data.sub_role.f1;
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 break;
             }
             case types_NormAxiom_role_chain:
             {
-                __auto_type r = _mv_139.data.role_chain.f0;
-                __auto_type s = _mv_139.data.role_chain.f1;
-                __auto_type t = _mv_139.data.role_chain.f2;
+                __auto_type r = _mv_147.data.role_chain.f0;
+                __auto_type s = _mv_147.data.role_chain.f1;
+                __auto_type t = _mv_147.data.role_chain.f2;
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 ({ __auto_type _lst_p = &(rs); __auto_type _item = (t); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -90,12 +90,12 @@ premise_RoleList premise_role_closure(slop_arena* arena, premise_RoleGraph g, ty
         ({ slop_map_put(NULL, seen, &(r), NULL, 0); });
         ({ __auto_type _lst_p = &(out); __auto_type _item = (r); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         while (i < ((int64_t)(((int64_t)((out).len))))) {
-            __auto_type _mv_141 = ({ __auto_type _lst = out; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_141.has_value) {
-                __auto_type q = _mv_141.value;
-                __auto_type _mv_143 = ({ void* _ptr = slop_map_get(g.up, &(q)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-                if (_mv_143.has_value) {
-                    __auto_type l = _mv_143.value;
+            __auto_type _mv_149 = ({ __auto_type _lst = out; size_t _idx = (size_t)i; slop_option_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_149.has_value) {
+                __auto_type q = _mv_149.value;
+                __auto_type _mv_151 = ({ void* _ptr = slop_map_get(g.up, &(q)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+                if (_mv_151.has_value) {
+                    __auto_type l = _mv_151.value;
                     {
                         __auto_type _coll = l.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -106,9 +106,9 @@ premise_RoleList premise_role_closure(slop_arena* arena, premise_RoleGraph g, ty
                             }
                         }
                     }
-                } else if (!_mv_143.has_value) {
+                } else if (!_mv_151.has_value) {
                 }
-            } else if (!_mv_141.has_value) {
+            } else if (!_mv_149.has_value) {
             }
             i = (i + 1);
         }
@@ -126,11 +126,11 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
             __auto_type _coll = axioms;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_146 = ax;
-                switch (_mv_146.tag) {
+                __auto_type _mv_154 = ax;
+                switch (_mv_154.tag) {
                     case types_NormAxiom_sub_name:
                     {
-                        __auto_type b = _mv_146.data.sub_name.f0;
+                        __auto_type b = _mv_154.data.sub_name.f0;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.sub_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ premise_AxList _val = l; slop_map_put(NULL, idx.sub_by_lhs, &(b), &_val, sizeof(_val)); });
@@ -139,8 +139,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_and:
                     {
-                        __auto_type b1 = _mv_146.data.sub_and.f0;
-                        __auto_type b2 = _mv_146.data.sub_and.f1;
+                        __auto_type b1 = _mv_154.data.sub_and.f0;
+                        __auto_type b2 = _mv_154.data.sub_and.f1;
                         {
                             __auto_type p1 = premise_partnered(arena, ({ void* _ptr = slop_map_get(idx.and_by_pair, &(b1)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; }), b2, ax);
                             ({ premise_Partners _val = p1; slop_map_put(NULL, idx.and_by_pair, &(b1), &_val, sizeof(_val)); });
@@ -155,7 +155,7 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_some_rhs:
                     {
-                        __auto_type b = _mv_146.data.sub_some_rhs.f0;
+                        __auto_type b = _mv_154.data.sub_some_rhs.f0;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.rhs_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ premise_AxList _val = l; slop_map_put(NULL, idx.rhs_by_lhs, &(b), &_val, sizeof(_val)); });
@@ -164,8 +164,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_some_lhs:
                     {
-                        __auto_type r = _mv_146.data.sub_some_lhs.f0;
-                        __auto_type b = _mv_146.data.sub_some_lhs.f1;
+                        __auto_type r = _mv_154.data.sub_some_lhs.f0;
+                        __auto_type b = _mv_154.data.sub_some_lhs.f1;
                         {
                             __auto_type l = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.lhs_by_filler, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ premise_AxList _val = l; slop_map_put(NULL, idx.lhs_by_filler, &(b), &_val, sizeof(_val)); });
@@ -178,8 +178,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_sub_role:
                     {
-                        __auto_type r = _mv_146.data.sub_role.f0;
-                        __auto_type s = _mv_146.data.sub_role.f1;
+                        __auto_type r = _mv_154.data.sub_role.f0;
+                        __auto_type s = _mv_154.data.sub_role.f1;
                         {
                             __auto_type l = premise_role_pushed(arena, ({ void* _ptr = slop_map_get(g.up, &(r)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; }), s);
                             ({ premise_RoleList _val = l; slop_map_put(NULL, g.up, &(r), &_val, sizeof(_val)); });
@@ -188,8 +188,8 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                     }
                     case types_NormAxiom_role_chain:
                     {
-                        __auto_type r = _mv_146.data.role_chain.f0;
-                        __auto_type s = _mv_146.data.role_chain.f1;
+                        __auto_type r = _mv_154.data.role_chain.f0;
+                        __auto_type s = _mv_154.data.role_chain.f1;
                         {
                             __auto_type l1 = premise_pushed(arena, ({ void* _ptr = slop_map_get(idx.chain_by_first, &(r)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; }), ax);
                             ({ premise_AxList _val = l1; slop_map_put(NULL, idx.chain_by_first, &(r), &_val, sizeof(_val)); });
@@ -233,9 +233,9 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
             __auto_type _coll = roles;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type r = _coll.data[_i];
-                __auto_type _mv_169 = ({ void* _ptr = slop_map_get(idx.roles.sups, &(r)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-                if (_mv_169.has_value) {
-                    __auto_type c = _mv_169.value;
+                __auto_type _mv_177 = ({ void* _ptr = slop_map_get(idx.roles.sups, &(r)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+                if (_mv_177.has_value) {
+                    __auto_type c = _mv_177.value;
                     {
                         __auto_type _coll = c.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -246,7 +246,7 @@ premise_RuleIndex premise_build_rule_index(slop_arena* arena, slop_list_types_No
                             }
                         }
                     }
-                } else if (!_mv_169.has_value) {
+                } else if (!_mv_177.has_value) {
                 }
             }
         }

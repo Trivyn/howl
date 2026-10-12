@@ -5,9 +5,9 @@ termination fixpoint
 rounds 1
 inconsistent false
 omitted 3
-omission ObjectInverseOf(<http://example.org/t#q> <http://www.w3.org/2000/01/rdf-schema#subPropertyOf> _:b3 .)
-omission ObjectInverseOf(<http://example.org/t#s> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:b1 .)
-omission SubClassOf(http://example.org/t#A AnonymousClass(restriction on an ObjectInverseOf property))
+omission SubClassOf(http://example.org/t#A ObjectSomeValuesFrom(ObjectInverseOf(http://example.org/t#p) http://example.org/t#B))
+omission SubObjectPropertyOf(ObjectPropertyChain(ObjectInverseOf(http://example.org/t#p) http://example.org/t#q) http://example.org/t#s)
+omission SubObjectPropertyOf(http://example.org/t#q ObjectInverseOf(http://example.org/t#p))
 unsatisfiable 0
 subsumptions 5
 sub http://example.org/t#A http://example.org/t#A

@@ -238,6 +238,10 @@ acceptance: cli
 	check() { f=$$1; want=$$2; shift 2; ./$(BIN)/howl validate $$f "$$@" >/dev/null 2>&1; rc=$$?; \
 	          if [ "$$rc" -eq "$$want" ]; then echo "  ok   $$f $$* -> $$rc"; \
 	          else echo "  FAIL $$f $$* -> $$rc (expected $$want)"; fail=1; fi; }; \
+	checkmsg() { f=$$1; want=$$2; msg=$$3; shift 3; out=$$(./$(BIN)/howl validate $$f "$$@" 2>&1); rc=$$?; \
+	          if [ "$$rc" -eq "$$want" ] && printf '%s\n' "$$out" | grep -qF -- "$$msg"; then \
+	            echo "  ok   $$f $$* -> $$rc, says \"$$msg\""; \
+	          else echo "  FAIL $$f $$* -> $$rc (expected $$want, saying \"$$msg\")"; fail=1; fi; }; \
 	check corpus/fixtures/v0/litmus.ttl 0; \
 	check corpus/fixtures/hazards/unattested-import.ttl 2; \
 	check corpus/fixtures/hazards/abox-disjoint-range.ttl 1; \
@@ -284,8 +288,14 @@ acceptance: cli
 	check corpus/fixtures/el++/ksc-07.ttl 1 --profile el++; \
 	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile auto; \
 	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile el++ --strict; \
-	check corpus/fixtures/v0/litmus.ttl 3 --profile horn-sriq; \
-	check corpus/fixtures/v0/litmus.ttl 3 --profile sriq; \
+	check corpus/fixtures/data/idle.ttl 0; \
+	check corpus/fixtures/data/idle.ttl 0 --profile el++; \
+	check corpus/fixtures/data/range-restriction.ttl 0; \
+	check corpus/fixtures/data/used-below.ttl 2; \
+	check corpus/fixtures/data/shared-filler.ttl 1; \
+	check corpus/fixtures/data/shared-filler.ttl 1 --profile el++; \
+	checkmsg corpus/fixtures/v0/litmus.ttl 3 "horn-sriq was dropped; sriq covers its language" --profile horn-sriq; \
+	checkmsg corpus/fixtures/v0/litmus.ttl 3 "sriq is not implemented yet" --profile sriq; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile sroiq; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi
@@ -337,13 +347,13 @@ corpus-acceptance: cli
 # also walks the committed reports and fails on any whose source is gone.
 # `golden-update` is for deliberate changes only.
 GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/out-of-profile/*.ttl \
-                              corpus/fixtures/probes/*.ttl corpus/fixtures/el++/*.ttl)
+                              corpus/fixtures/probes/*.ttl corpus/fixtures/el++/*.ttl corpus/fixtures/data/*.ttl)
 # THE el++ RUNS, `howl validate F --profile el++ --report`, pinned in
 # corpus/goldens/el++/: every el++ fixture and every v0 fixture (which el++
 # contains), and the corpus by report hash. Their source of truth for
 # correctness is the engine-vs-reference differential (make test) and the
 # oracle differential; these pin that nothing changes unnoticed.
-GOLDEN_ELPP_FIXTURES := $(wildcard corpus/fixtures/el++/*.ttl corpus/fixtures/v0/*.ttl)
+GOLDEN_ELPP_FIXTURES := $(wildcard corpus/fixtures/el++/*.ttl corpus/fixtures/v0/*.ttl corpus/fixtures/data/*.ttl)
 GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
 # IMPORT RUNS, `howl validate DOC.ttl -I IMPORT.ttl --report`, one per
 # DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
@@ -365,14 +375,14 @@ golden: cli
 	@fail=0; \
 	for g in corpus/goldens/fixtures/*.report; do \
 	  n=$$(basename $$g .report); src=""; \
-	  for d in out-of-profile hazards v0 probes el++; do \
+	  for d in out-of-profile hazards v0 probes el++ data; do \
 	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
 	  done; \
 	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
 	done; \
 	for g in corpus/goldens/el++/*.report; do \
 	  n=$$(basename $$g .report); src=""; \
-	  for d in v0 el++; do \
+	  for d in v0 el++ data; do \
 	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
 	  done; \
 	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \

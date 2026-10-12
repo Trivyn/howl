@@ -42,6 +42,9 @@ linear scan, which is quadratic on GO's 862,029 blank-node triples, and
 deterministic labels need canonical relabelling (9.3 h on OBI).
 """
 import hashlib, os, re, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import profiles  # noqa: E402
 from rdflib import Graph, BNode, URIRef
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -62,8 +65,8 @@ PROJ = os.path.join(HERE, "projections")
 def set_profile(p):
     """Project for one rung: el (the default, corpus/projections/) or el++."""
     global PROFILE, PROJ
-    if p not in ("el", "el++"):
-        sys.exit(f"unknown profile {p} (el or el++)")
+    if p not in profiles.BUILT:
+        sys.exit(f"unknown profile {p} ({profiles.expected()})")
     PROFILE = p
     PROJ = os.path.join(HERE, "projections") if p == "el" else os.path.join(HERE, "projections", p)
 

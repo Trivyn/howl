@@ -5,13 +5,13 @@
 # source                  ro-2025-12-17.owl
 # source_sha256           a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10aaf
 # source_triples          11,640
-# axioms_removed          380
-# triples_removed         1,586
+# axioms_removed          379
+# triples_removed         1,576
 # in_v0_swept_in          57   <- collateral from blank-node closures
-# projected_triples       10,054
+# projected_triples       10,064
 # projected_ground_sha256 7ef01ecc3cbbd2e06ff39e0694717b5f24445f1113534bdbac1ae9169995f979
-# projected_bnode_triples 2,590
-# projected_bnode_sha256  9428f0b2943ca329c263d3dda3e5ef8193e25eb4dffa4a0299251a97551c8f71
+# projected_bnode_triples 2,600
+# projected_bnode_sha256  e5ff58c586263d7835ce064a89393d09d53404b6b6dee5b36c03bace6948bc5e
 #
 # The ground hash covers every triple with no blank node on either
 # end, which is canonical as it stands. The blank-node hash covers the
@@ -65,7 +65,6 @@
 <http://purl.obolibrary.org/obo/RO_0002023> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002630> .    # InverseObjectProperties [74b80456]
 <http://purl.obolibrary.org/obo/RO_0002024> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002629> .    # InverseObjectProperties [e4e4b610]
 <http://purl.obolibrary.org/obo/RO_0002025> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [91d1e7db]
-<http://purl.obolibrary.org/obo/RO_0002029> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # DataPropertyDomain/Range + DatatypeDefinition + datatype / literal in logical position [16ca7858]  (+9 in blank-node closure)
 <http://purl.obolibrary.org/obo/RO_0002082> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [9ae94338]
 <http://purl.obolibrary.org/obo/RO_0002084> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002093> .    # InverseObjectProperties [bbcef099]
 <http://purl.obolibrary.org/obo/RO_0002085> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/RO_0002092> .    # InverseObjectProperties [96aea484]

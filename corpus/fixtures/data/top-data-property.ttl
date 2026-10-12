@@ -1,0 +1,15 @@
+# owl:topDataProperty is never idle. OWL 2 DL allows it only as a
+# super-property, where SubDataPropertyOf(P owl:topDataProperty) is a
+# tautology, and inert. A domain on it is outside OWL 2 DL and would put every
+# individual in the class, so it stays omitted. INCONCLUSIVE (exit 2).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class .
+:d a owl:DatatypeProperty ; rdfs:subPropertyOf owl:topDataProperty .
+owl:topDataProperty rdfs:domain :A .

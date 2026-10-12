@@ -1,0 +1,16 @@
+# RO's shape (RO_0002029): an idle data property whose range is a
+# DatatypeRestriction. The range is inert, and the restriction's blank-node
+# tree goes with it: no AnonymousIndividual and no ReservedVocabulary lines
+# for its internals. COHERENT (exit 0).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class .
+:pct a owl:DatatypeProperty ; rdfs:domain :A ;
+    rdfs:range [ a rdfs:Datatype ; owl:onDatatype xsd:short ;
+                 owl:withRestrictions ( [ xsd:minInclusive 0 ] [ xsd:maxInclusive 100 ] ) ] .

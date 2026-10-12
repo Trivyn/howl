@@ -1,5 +1,63 @@
 # Changelog
 
+## 0.2.0 — 2026-10-12
+
+Data restrictions are read as data: a qualified data cardinality (`owl:onDataRange`) no longer fails
+the whole run, and data axioms no longer pass for object ones. Idle data properties' axioms are set
+aside. One breaking change, in the Rust crate's `Profile`.
+
+### Specified
+
+- **`sriq`**, the SRIQ object fragment with an ABox, is specified in SPEC §5.5. It uses Simančík's
+  chain elimination, then Tena Cucala, Cuenca Grau and Horrocks's consequence-based calculus. It is
+  not built yet; `--profile sriq` exits 3.
+
+### Changed
+
+- **The data lemma** (SPEC §5.2): the domain, range, functionality, sub-property, equivalence and
+  disjointness axioms of a data property that nothing uses are set aside in every profile. "Used"
+  means used in a class expression, an assertion or a key, by the property or by any data property
+  below it. These axioms provably change no answer, so they are no longer omissions.
+  - On CCO, 16 omissions go: 220 → 204 under `el`, 218 → 202 under `el++`.
+  - On RO, 5 go, including the 4 lines its range's datatype restriction used to leak.
+  - On OBI, 2 go.
+  - The RO and OBI projections keep those axioms, and their pins were re-certified against HermiT.
+- **`horn-sriq` is dropped from the profile ladder.** On `sriq`'s calculus it would run at the same
+  cost, so it would only be a stricter gate.
+  - Its value keeps its place in the C `types_Profile` enum and in Rust's `Profile`, so neither is
+    renumbered.
+  - Asking for it is always refused (`unavailable`, exit 3), and the message names `sriq`.
+- **The C API's `howl_run_fault_message`** now says why an `unavailable` run was refused: "was
+  dropped", or "is not implemented yet". It used to be empty.
+- **Rust (breaking):**
+  - `Profile` is `#[non_exhaustive]`.
+  - `Profile::HornSriq` is deprecated.
+  - `Fault::ProfileUnavailable`'s message for it says it was dropped.
+
+### Fixed
+
+- **Data restrictions and data property axioms on a property that *is* used are now data.**
+  - **Accepted as object axioms before.** `DataSomeValuesFrom`, and `owl:equivalentProperty`
+    between data properties, were accepted by `el` and `el++`: the first as an existential over a
+    "role" whose datatype was taken for a class, the second as role inclusions. Both are now
+    omissions. On OBI, 5 such `DataSomeValuesFrom` axioms move from accepted to omitted: 506 → 508
+    omissions, because the 3 MissingDeclaration lines they used to cause go away.
+  - **Mislabelled before.** `FunctionalDataProperty`, `DisjointDataProperties` and the data
+    cardinalities were labelled as their object twins.
+  - **Faulted before.** `owl:onDataRange` and `owl:onProperties` faulted the whole document
+    (exit 3). They are now omissions.
+- **An ambiguous `owl:inverseOf` node is no longer dropped silently.** `_:x owl:inverseOf :p , :q`
+  makes no ObjectInverseOf, and no axiom could read it. Both triples vanished, with no axiom and no
+  omission, and the document came out coherent. Each is now an omission.
+
+### Changed (reports)
+
+- **`ObjectInverseOf` is represented**: `RoleId` has an inverse arm (SPEC §6.2), for `sriq`. Every
+  rung built so far still omits it, but the omission now reads as the axiom it is. Before, it was an
+  N-Triples fragment with blank-node labels, and every restriction on an inverse rendered as the
+  same constant string. RO's 11 inverse omissions are re-rendered; their count is unchanged.
+- **`DisjointUnion`** is read whole and rendered `DisjointUnion(C D₁ … Dₙ)`. It is still an omission.
+
 ## 0.1.1 — 2026-10-12
 
 A build fix. HOWL's answers do not change.
