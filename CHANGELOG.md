@@ -1,5 +1,42 @@
 # Changelog
 
+## 0.3.0 — 2026-10-12
+
+Probe queries ask HOWL whether a class is unsatisfiable, or one class subsumed by another, without
+touching the report. An undeclared property is now an omission instead of failing the whole run.
+The C API and the Rust crate only gain; nothing existing changes shape.
+
+### Added
+
+- **Probe queries** (SPEC §8.4, issue #68). A caller adds probe documents, which define classes to
+  ask about, and queries: is `C` unsatisfiable, is `A ⊑ B`. A second classification answers them,
+  over the input, the probe documents and a declaration of every class a query names. The main
+  report, verdict and exit code are exactly those of a run without probes: a probe class never
+  reaches `unsatisfiable`, the taxonomy, the omissions or the verdict.
+  - Answers are `yes` (entailed, whatever the probe run's coverage), `no` (not entailed, by a
+    complete probe run) or `unknown`. An inconsistent probe run answers `yes` to everything and
+    says so.
+  - Each query is answered once, in canonical order. The probe lines (`probes N`,
+    `probe-inconsistent`, `probe-omitted`, `probe unsatisfiable C yes`, `probe subsumed A B no`)
+    follow the report only when a query was asked, so no existing report changes.
+  - **C API:** `howl_input_add_probe_turtle`, `howl_input_begin_probe_document`,
+    `howl_input_add_probe_triple`, `howl_input_ask_unsatisfiable`, `howl_input_ask_subsumed`;
+    `howl_run_probe_len`, `_kind`, `_sub`, `_sup`, `_answer`, `_inconsistent`, `_omission_len`,
+    `_omission`; the enums `probe_QueryKind` and `probe_ProbeAnswer`.
+  - **Rust:** `Input::add_probe_turtle`, `add_probe_triples`, `ask_unsatisfiable`, `ask_subsumed`;
+    `Report::probes`, `probe_inconsistent`, `probe_omissions`; the types `ProbeAnswer` and the
+    `#[non_exhaustive]` enums `Query` and `Answer`. All additive.
+  - **CLI:** `--probe FILE`, `--ask-unsat C`, `--ask-sub A B`, each repeatable.
+
+### Changed
+
+- **An undeclared property is an omission, not an input error** (SPEC §5.2, issue #70). In
+  `:B :editorNote "x"` or `:B :seeAlsoClass :A`, with the predicate never declared, HOWL cannot
+  tell an annotation from a data or object property assertion. Such a triple used to fail the whole
+  run (exit 3). It is now an `UndeclaredProperty(<iri>)` omission, one per property: the rest of the
+  document is read, and the run is inconclusive (exit 2). HOWL still does not guess; declaring the
+  property clears it. Conflicting declarations are still an input error.
+
 ## 0.2.1 — 2026-10-12
 
 A toolchain update. HOWL's answers do not change.
