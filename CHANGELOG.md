@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1 — 2026-10-12
+
+A toolchain update. HOWL's answers do not change.
+
+- **Generated with slop 0.4.3 and slop-rdf 0.5.2,** and pinned exactly to `slop-std-sys = "=0.4.3"`
+  and `slop-rdf-sys = "=0.5.2"`. slop 0.4.3's runtime keeps gcc from inlining the list-growth slow
+  path at every push site, which made the stack frame of a recursive function with many pushes grow
+  several times over (a stack overflow in a sibling project's evaluator). clang builds are unchanged.
+
 ## 0.2.0 — 2026-10-12
 
 Data restrictions are read as data: a qualified data cardinality (`owl:onDataRange`) no longer fails
