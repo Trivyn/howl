@@ -1,0 +1,29 @@
+# sriq: predecessor relevance (SPEC §5.5 S6 R8, slice 9i), unit pushing.
+# deferred-retarget's ontology (cautious first sends v_⊤'s f-successor to
+# v_⊤, then K₁ grows and target refresh adds ⟨v_⊤, v_B, f⟩), with one more
+# step: K12 ⊑ K13 ⊑ K14 ⊑ ∀r.D adds D to trig(v_⊤, f) after the switch.
+# Pushing must put D → D into the stale target v_⊤ as well as into v_B.
+# No answer can show a missing one (v_B derives whatever v_⊤ would), so the
+# prototype's P5 check reads the units at the fixpoint directly.
+# Expect: Y ⊑ K1.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:B a owl:Class . :D a owl:Class . :P a owl:Class . :Y a owl:Class . :Z a owl:Class . :K13 a owl:Class . :K14 a owl:Class .
+:K1 a owl:Class . :K2 a owl:Class . :K3 a owl:Class . :K4 a owl:Class . :K5 a owl:Class . :K6 a owl:Class . :K7 a owl:Class . :K8 a owl:Class . :K9 a owl:Class . :K10 a owl:Class . :K11 a owl:Class . :K12 a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom owl:Thing ] .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:allValuesFrom :P ] .
+:P rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+:B rdfs:subClassOf :Z . :D rdfs:subClassOf :Z .
+owl:Thing rdfs:subClassOf :K1 .
+:K1 rdfs:subClassOf :K2 . :K2 rdfs:subClassOf :K3 . :K3 rdfs:subClassOf :K4 .
+:K4 rdfs:subClassOf :K5 . :K5 rdfs:subClassOf :K6 . :K6 rdfs:subClassOf :K7 .
+:K7 rdfs:subClassOf :K8 . :K8 rdfs:subClassOf :K9 . :K9 rdfs:subClassOf :K10 .
+:K10 rdfs:subClassOf :K11 . :K11 rdfs:subClassOf :K12 .
+:K12 rdfs:subClassOf :P .
+:K12 rdfs:subClassOf :K13 . :K13 rdfs:subClassOf :K14 .
+:K14 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :D ] .

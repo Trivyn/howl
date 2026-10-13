@@ -2920,7 +2920,7 @@ The argument, one short step at a time:
     bottom. So a larger cap that finds `A ⊑ ⊥` replaces `A`'s `sub` lines by its unsatisfiability,
     and one that finds inconsistency drops the hierarchy. Each report is still sound (S7).
 
-**R8 — predecessor relevance (slice 9i, under review).** *Status: drafted 2026-10-13. The first draft
+**R8 — predecessor relevance (slice 9i).** *Status: drafted 2026-10-13. The first draft
 was refereed by Codex the same day and did not close (constants, root units, Nom, the shared ground
 view, Factor's lifting, edge triggers, new edges). The second draft narrowed the scope and replaced the
 lifting argument. Its partial review found that a historical trigger can make a unit relevant in a
@@ -2935,7 +2935,7 @@ corrections, made here:
 - the forms of body atoms;
 - edge arrival as a Pred trigger.
 
-**The argument closes in scope, pending the owner's review.** The idea comes from the owner-reviewed clean-room report on Sequoia
+**The argument closes in scope. The owner reviewed it on 2026-10-13, and slice 9i implements it.** The idea comes from the owner-reviewed clean-room report on Sequoia
 (`~/code/research_report.md`, items 1 and 7; graph Consequences 7ff9c324 and dbf7ae4b), re-derived here
 in HOWL's terms.*
 
@@ -3105,6 +3105,34 @@ as usual, but it is a premise of no rule until it becomes supported.
 - **Determinism.** `trig` is a deterministic function of the run's rounds, all functions of sets
   (R1). So the augmented state's transition is deterministic, and every report is the same at every
   worker count (R6). The caps (R7) count rounds.
+- **The prototype** (`src/sriqsat.slop`, slice 9i). `SatConfig`'s `defer` asks for deferral, and
+  `defer-on` turns it on only in scope: no constant, and cautious or trivial.
+  - **Derive's view.** At each round's start, every context but the root is narrowed to its supported
+    clauses, in `S_v`, `Δ_v` and the rest alike (`projected`). The store itself is committed as S6
+    commits it.
+  - **Succ.** All the triggers of one successor term share its K-sets, so each term in a round is one
+    evaluation: an action naming `strat(f, K₁)` and carrying all of `K₂`. Succ's covered test is not
+    read; refresh and pushing do its work.
+  - **Create.** `trig` grows by the round's evaluations (`supplied`). The evaluations' targets are
+    created and their edges ensured as Succ's are, which is target refresh. Every f-edge out of an
+    evaluated `(w, f)` gets its target's units for all of `trig(w, f)` (`pushed`), in place of Succ's
+    own.
+  - **Activation.** After the commit, a stored clause of `S_v \ Δ_v` that is supported now, and was not
+    under the edges and `trig` before the round, joins `Δ_v` (`activated`). Only a context with a new
+    edge in, or a grown `trig` on one, is read. A round that only grew `trig` has changed.
+  - **Tests.**
+    - **P5 on every deferred fixture run.** One reference round over the supported clauses changes
+      nothing in the whole store (`defer-stable`), and every f-edge's target holds the units of its
+      `trig` (`units-pushed`).
+    - **Fixtures:**
+      - `deferred-reactivation`: under trivial, a merged body that is inert until `trig` grows, so a
+        run that never activates misses `X ⊑ Q`;
+      - `deferred-retarget`: under cautious, the edge to `v_B` that only target refresh adds;
+      - `deferred-stale-unit`: a unit that only pushing puts into a stale target.
+    - **Mutants seen red:** no activation; support over the union of the edges; no unit pushing; no
+      target refresh; deferral with constants.
+    - **A mutant that survives:** deferral at the root. In scope the root holds no clause, so no test
+      can see it. The constants mutant guards that scope.
 - **Out of scope:**
   - **Inputs with constants.** Deferral there needs root seeds, Nom's new constants, and a composition
     argument for the shared ground view (the first review's items 1–3, 7 and 8).
