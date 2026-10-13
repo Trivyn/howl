@@ -4241,10 +4241,10 @@
     (order-closure-on arena (ord-table arena) (ord-universe arena)))
 
   (fn test-sriq-ranked-order-closure ((arena Arena))
-    (@intent "The ranked table (B0 a query class; B1 and B2 fresh) is the least order containing Sequoia's and the precedence")
+    (@intent "The ranked table (B0, B1 query classes; B2, B3 fresh) is the least order containing Sequoia's and the precedence")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (order-closure-on arena (ranked (ord-table arena) 1) (ord-universe-n arena 3)))
+    (order-closure-on arena (ranked (ord-table arena) 2) (ord-universe-n arena 4)))
 
   (fn order-closure-on ((arena Arena) (ord SriqOrder) (u (List CTerm)))
     (@intent "The table under ord is the least order generated over u, pair by pair")
@@ -4285,10 +4285,10 @@
     (order-strict-on arena (ord-table arena) (ord-universe arena)))
 
   (fn test-sriq-ranked-order-strict-and-admissible ((arena Arena))
-    (@intent "The ranked table is a strict order and admissible (Definition 7, 1 to 3 and 5) over the three-class universe")
+    (@intent "The ranked table is a strict order and admissible (Definition 7, 1 to 3 and 5) over the four-class universe")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (order-strict-on arena (ranked (ord-table arena) 1) (ord-universe-n arena 3)))
+    (order-strict-on arena (ranked (ord-table arena) 2) (ord-universe-n arena 4)))
 
   (fn order-strict-on ((arena Arena) (ord SriqOrder) (u (List CTerm)))
     (@intent "Strict and admissible under ord over u")
@@ -4351,14 +4351,15 @@
     (order-c2-on arena (ord-table arena) (ord-universe arena)))
 
   (fn test-sriq-ranked-order-c2 ((arena Arena))
-    (@intent "C2 under the ranked order for every query class A (B0), while the fresh B1 and B2 do rank above it")
+    (@intent "C2 under the ranked order for every query class (B0, B1), which stay unranked, while the fresh B2 and B3 rank above")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (let ((ord (ranked (ord-table arena) 1)) (x (at-x)))
-      (and (order-c2-on arena ord (ord-universe-n arena 3))
-           (cterm-gt ord (ct-p (atom1 (cast U32 1) x)) (ct-p (atom1 (cast U32 0) x)))
+    (let ((ord (ranked (ord-table arena) 2)) (x (at-x)))
+      (and (order-c2-on arena ord (ord-universe-n arena 4))
            (cterm-gt ord (ct-p (atom1 (cast U32 2) x)) (ct-p (atom1 (cast U32 1) x)))
-           (not (cterm-gt ord (ct-p (atom1 (cast U32 0) x)) (ct-p (atom1 (cast U32 1) x)))))))
+           (cterm-gt ord (ct-p (atom1 (cast U32 3) x)) (ct-p (atom1 (cast U32 2) x)))
+           (not (cterm-gt ord (ct-p (atom1 (cast U32 0) x)) (ct-p (atom1 (cast U32 1) x))))
+           (not (cterm-gt ord (ct-p (atom1 (cast U32 1) x)) (ct-p (atom1 (cast U32 0) x)))))))
 
   (fn order-c2-on ((arena Arena) (ord SriqOrder) (u (List CTerm)))
     (@intent "C2 under ord for every query clause B(x) → A(x) over u, A a query class (below the rank, when ranked)")
@@ -4468,22 +4469,37 @@
         ok)))
 
   (fn test-sriq-ranked-max-flags-rows ((arena Arena))
-    (@intent "Δ ⊁ L under the ranked order (slice 9g): B0 a query class, B1 and B2 fresh")
+    (@intent "Δ ⊁ L under the ranked order (slice 9g): B0 and B1 query classes, B2 and B3 fresh")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (let ((ord (ranked (ord-table arena) 1))
-          (q (cast U32 0)) (f1 (cast U32 1)) (f2 (cast U32 2))
+    (let ((ord (ranked (ord-table arena) 2))
+          (q (cast U32 0)) (q1 (cast U32 1)) (f1 (cast U32 2)) (f2 (cast U32 3))
           (x (at-x)) (y (at-y)) (f0x (at-fx (cast U32 0))) (u2 (at-u (cast U32 2))))
       (and
         ;; A fresh name above a query class, and fresh names by id.
-        (flags-under arena ord "B0(x), B1(x)" (two-lits arena (atom1 f1 x) (atom1 q x)) "FT")
-        (flags-under arena ord "B1(x), B2(x)" (two-lits arena (atom1 f2 x) (atom1 f1 x)) "FT")
-        ;; Through item 7: B1(f0(x)) ≻ B1(x) ≻ B0(x) ≻ B0(y).
-        (flags-under arena ord "B0(y), B1(f0(x))" (two-lits arena (atom1 f1 f0x) (atom1 q y)) "FT")
+        (flags-under arena ord "B0(x), B2(x)" (two-lits arena (atom1 f1 x) (atom1 q x)) "FT")
+        (flags-under arena ord "B2(x), B3(x)" (two-lits arena (atom1 f2 x) (atom1 f1 x)) "FT")
+        ;; Query classes stay unranked: both maximal.
+        (flags-under arena ord "B0(x), B1(x)" (two-lits arena (atom1 q1 x) (atom1 q x)) "TT")
+        ;; Through item 7: B2(f0(x)) ≻ B2(x) ≻ B0(x) ≻ B0(y).
+        (flags-under arena ord "B0(y), B2(f0(x))" (two-lits arena (atom1 f1 f0x) (atom1 q y)) "FT")
         ;; Definition 7(5): an atom over y or a constant gains nothing.
-        (flags-under arena ord "B0(x), B1(y)" (two-lits arena (atom1 f1 y) (atom1 q x)) "TT")
-        (flags-under arena ord "B0(u2), B1(u2)" (two-lits arena (atom1 f1 u2) (atom1 q u2)) "TT")
-        (lits-strict arena ord (sample-lits arena)))))
+        (flags-under arena ord "B0(x), B2(y)" (two-lits arena (atom1 f1 y) (atom1 q x)) "TT")
+        (flags-under arena ord "B0(u2), B2(u2)" (two-lits arena (atom1 f1 u2) (atom1 q u2)) "TT")
+        (lits-strict arena ord (sample-lits arena))
+        (lits-strict arena ord (ranked-sample-lits arena)))))
+
+  (fn ranked-sample-lits ((arena Arena))
+    (@intent "Literals the precedence orders: two query classes and two fresh names over x, f0(x) and y, and a role")
+    (@spec ((Arena) -> (List Lit)))
+    (@alloc arena)
+    (let ((x (at-x)) (y (at-y)) (f0x (at-fx (cast U32 0))) (mut out (list-new arena Lit)) (mut b 0))
+      (do (while (< b 4)
+            (do (list-push out (atom1 (cast U32 b) x)) (list-push out (atom1 (cast U32 b) f0x))
+                (list-push out (atom1 (cast U32 b) y))
+                (set! b (+ b 1))))
+          (list-push out (atom2 (cast U32 0) x f0x)) (list-push out (atom2 (cast U32 1) y x))
+          out)))
 
   (fn sample-lits ((arena Arena))
     (@intent "One literal of each form over a few a-terms")

@@ -1442,6 +1442,7 @@ uint8_t test_flags_under(slop_arena* arena, sriqorder_SriqOrder ord, slop_string
 slop_list_types_Lit test_two_lits(slop_arena* arena, types_Lit a, types_Lit b);
 uint8_t test_test_sriq_max_flags_rows(slop_arena* arena);
 uint8_t test_test_sriq_ranked_max_flags_rows(slop_arena* arena);
+slop_list_types_Lit test_ranked_sample_lits(slop_arena* arena);
 slop_list_types_Lit test_sample_lits(slop_arena* arena);
 uint8_t test_lits_strict(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_types_Lit ls);
 slop_list_types_Lit test_letter_atoms(slop_arena* arena, slop_string letters);

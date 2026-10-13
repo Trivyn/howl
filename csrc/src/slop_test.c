@@ -260,6 +260,7 @@ uint8_t test_flags_under(slop_arena* arena, sriqorder_SriqOrder ord, slop_string
 slop_list_types_Lit test_two_lits(slop_arena* arena, types_Lit a, types_Lit b);
 uint8_t test_test_sriq_max_flags_rows(slop_arena* arena);
 uint8_t test_test_sriq_ranked_max_flags_rows(slop_arena* arena);
+slop_list_types_Lit test_ranked_sample_lits(slop_arena* arena);
 slop_list_types_Lit test_sample_lits(slop_arena* arena);
 uint8_t test_lits_strict(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_types_Lit ls);
 slop_list_types_Lit test_letter_atoms(slop_arena* arena, slop_string letters);
@@ -4914,7 +4915,7 @@ uint8_t test_test_sriq_order_closure(slop_arena* arena) {
 }
 
 uint8_t test_test_sriq_ranked_order_closure(slop_arena* arena) {
-    return test_order_closure_on(arena, sriqorder_ranked(test_ord_table(arena), 1), test_ord_universe_n(arena, 3));
+    return test_order_closure_on(arena, sriqorder_ranked(test_ord_table(arena), 2), test_ord_universe_n(arena, 4));
 }
 
 uint8_t test_order_closure_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u) {
@@ -4965,7 +4966,7 @@ uint8_t test_test_sriq_order_strict_and_admissible(slop_arena* arena) {
 }
 
 uint8_t test_test_sriq_ranked_order_strict_and_admissible(slop_arena* arena) {
-    return test_order_strict_on(arena, sriqorder_ranked(test_ord_table(arena), 1), test_ord_universe_n(arena, 3));
+    return test_order_strict_on(arena, sriqorder_ranked(test_ord_table(arena), 2), test_ord_universe_n(arena, 4));
 }
 
 uint8_t test_order_strict_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u) {
@@ -5063,9 +5064,9 @@ uint8_t test_test_sriq_order_c2(slop_arena* arena) {
 
 uint8_t test_test_sriq_ranked_order_c2(slop_arena* arena) {
     {
-        __auto_type ord = sriqorder_ranked(test_ord_table(arena), 1);
+        __auto_type ord = sriqorder_ranked(test_ord_table(arena), 2);
         __auto_type x = types_at_x();
-        return ((test_order_c2_on(arena, ord, test_ord_universe_n(arena, 3))) && (sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(1)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(0)), x)))) && (sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(2)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(1)), x)))) && (!(sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(0)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(1)), x))))));
+        return ((test_order_c2_on(arena, ord, test_ord_universe_n(arena, 4))) && (sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(2)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(1)), x)))) && (sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(3)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(2)), x)))) && (!(sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(0)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(1)), x))))) && (!(sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(1)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(0)), x))))));
     }
 }
 
@@ -5236,15 +5237,35 @@ uint8_t test_test_sriq_max_flags_rows(slop_arena* arena) {
 
 uint8_t test_test_sriq_ranked_max_flags_rows(slop_arena* arena) {
     {
-        __auto_type ord = sriqorder_ranked(test_ord_table(arena), 1);
+        __auto_type ord = sriqorder_ranked(test_ord_table(arena), 2);
         __auto_type q = ((uint32_t)(0));
-        __auto_type f1 = ((uint32_t)(1));
-        __auto_type f2 = ((uint32_t)(2));
+        __auto_type q1 = ((uint32_t)(1));
+        __auto_type f1 = ((uint32_t)(2));
+        __auto_type f2 = ((uint32_t)(3));
         __auto_type x = types_at_x();
         __auto_type y = types_at_y();
         __auto_type f0x = types_at_fx(((uint32_t)(0)));
         __auto_type u2 = types_at_u(((uint32_t)(2)));
-        return ((test_flags_under(arena, ord, SLOP_STR("B0(x), B1(x)"), test_two_lits(arena, types_atom1(f1, x), types_atom1(q, x)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B1(x), B2(x)"), test_two_lits(arena, types_atom1(f2, x), types_atom1(f1, x)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(y), B1(f0(x))"), test_two_lits(arena, types_atom1(f1, f0x), types_atom1(q, y)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(x), B1(y)"), test_two_lits(arena, types_atom1(f1, y), types_atom1(q, x)), SLOP_STR("TT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(u2), B1(u2)"), test_two_lits(arena, types_atom1(f1, u2), types_atom1(q, u2)), SLOP_STR("TT"))) && (test_lits_strict(arena, ord, test_sample_lits(arena))));
+        return ((test_flags_under(arena, ord, SLOP_STR("B0(x), B2(x)"), test_two_lits(arena, types_atom1(f1, x), types_atom1(q, x)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B2(x), B3(x)"), test_two_lits(arena, types_atom1(f2, x), types_atom1(f1, x)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(x), B1(x)"), test_two_lits(arena, types_atom1(q1, x), types_atom1(q, x)), SLOP_STR("TT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(y), B2(f0(x))"), test_two_lits(arena, types_atom1(f1, f0x), types_atom1(q, y)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(x), B2(y)"), test_two_lits(arena, types_atom1(f1, y), types_atom1(q, x)), SLOP_STR("TT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(u2), B2(u2)"), test_two_lits(arena, types_atom1(f1, u2), types_atom1(q, u2)), SLOP_STR("TT"))) && (test_lits_strict(arena, ord, test_sample_lits(arena))) && (test_lits_strict(arena, ord, test_ranked_sample_lits(arena))));
+    }
+}
+
+slop_list_types_Lit test_ranked_sample_lits(slop_arena* arena) {
+    {
+        __auto_type x = types_at_x();
+        __auto_type y = types_at_y();
+        __auto_type f0x = types_at_fx(((uint32_t)(0)));
+        __auto_type out = ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t b = 0;
+        while (b < 4) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom1(((uint32_t)(b)), x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom1(((uint32_t)(b)), f0x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom1(((uint32_t)(b)), y)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            b = (b + 1);
+        }
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom2(((uint32_t)(0)), x, f0x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom2(((uint32_t)(1)), y, x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        return out;
     }
 }
 
@@ -8979,7 +9000,7 @@ slop_string test_ksc_fixture_at(int64_t i) {
 types_ReasonerConfig test_cap_config(int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7488:59")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7504:59")));
         return cfg;
     }
 }
@@ -9899,8 +9920,8 @@ uint8_t test_test_ksc_commit_identical(slop_arena* arena) {
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:8058:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:8059:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:8074:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:8075:57")));
         return cfg;
     }
 }
@@ -13385,7 +13406,7 @@ int64_t test_bound_arg(slop_string s) {
         uint8_t ok = ((string_len(s) > 0) && (string_len(s) <= 9));
         int64_t i = 0;
         while (ok && (i < string_len(s))) {
-            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:10845:47"))))) {
+            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:10861:47"))))) {
                 ok = 0;
             }
             i = (i + 1);
@@ -13794,8 +13815,8 @@ int64_t test_dump_ksc_result(slop_arena* arena, types_KscResult r) {
 int64_t test_dump_ksc_classify(slop_arena* arena, test_KscFixture fx, int64_t w, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:11112:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11113:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:11128:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11129:57")));
         test_dump_num(arena, SLOP_STR("classify w="), w);
         test_dump_num(arena, SLOP_STR(" cap "), cap);
         printf("%s\n", "");

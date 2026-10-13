@@ -2774,7 +2774,10 @@ is fixed here so that reports are input-determined.
       `t″` is `y`, which is allowed;
     - the same predicate, then rank: `P(s) ≻ P(t) ≻ P′(t′)` needs `s ≻ t` with `t` in `{x, f(x)}`,
       so `s` is some `g(x)`, which is allowed;
-    - rank, then rank: the middle term is `x`, and rank is transitive.
+    - rank, then rank: the middle term is `x`, and rank is transitive;
+    - rank, then down to an a-term or `true`: `P(t) ≻ P′(t′) ≻ s` with `t′` in `{x, y}`, so `s` is
+      `x`, `y` or `true`, and `P(t)` is already above each of those by items 4 and 5 (for example
+      `F(x) ≻ Q(x) ≻ y`).
   - **Admissible (Definition 7).**
     - (1) to (3) concern `true`, p-terms against `x`, and a-terms, and are Sequoia's unchanged.
     - (4): p-terms do not nest, so monotonicity and the subterm property concern only a-terms
