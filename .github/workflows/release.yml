@@ -1,14 +1,17 @@
 name: Release
 
 # Pushing a tag vX.Y.Z builds the CLI and the C library (libhowl.a with its
-# generated include/howl.h) on Linux and macOS from the committed C, and
-# publishes them as a GitHub release whose notes are CHANGELOG.md's entry for
-# X.Y.Z. No SLOP toolchain is needed: csrc/ and include/howl.h are committed.
+# generated include/howl.h) on Linux, macOS and Windows from the committed C,
+# and publishes them as a GitHub release whose notes are CHANGELOG.md's entry
+# for X.Y.Z. No SLOP toolchain is needed: csrc/ and include/howl.h are
+# committed. Run by hand (workflow_dispatch), it builds every leg at the
+# version slop.toml declares and publishes nothing.
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -32,6 +35,7 @@ jobs:
       # A tag that disagrees with the version the sources declare would ship a
       # binary whose --version names one release and whose crate names another.
       - name: Tag matches slop.toml, the crate and CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           grep -qx "version = \"$VERSION\"" slop.toml || { echo "slop.toml is not $VERSION"; exit 1; }
@@ -50,8 +54,9 @@ jobs:
 
       - name: Build release CLI
         run: |
-          make release CC=${{ matrix.cc }} HOWL_VERSION="${GITHUB_REF_NAME#v}"
-          ./build/howl --version | grep -qx "howl ${GITHUB_REF_NAME#v}"
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' slop.toml | head -1)
+          make release CC=${{ matrix.cc }} HOWL_VERSION="$VERSION"
+          ./build/howl --version | grep -qx "howl $VERSION"
           ./build/howl validate corpus/fixtures/v0/litmus.ttl
           mv build/howl howl-${{ matrix.platform }}
 
@@ -65,8 +70,62 @@ jobs:
             howl-${{ matrix.platform }}
             libhowl-${{ matrix.platform }}.zip
 
+  # MinGW-w64 gcc through the same Makefile, as GROWL does: the generated C
+  # needs GNU extensions that MSVC's cl.exe rejects. MSVC callers have the
+  # Rust crate, which CI builds with clang-cl.
+  build-windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc make zip
+
+      - name: Tag matches slop.toml, the crate and CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          grep -qx "version = \"$VERSION\"" slop.toml || { echo "slop.toml is not $VERSION"; exit 1; }
+          grep -qx "version = \"$VERSION\"" rust/Cargo.toml || { echo "rust/Cargo.toml is not $VERSION"; exit 1; }
+          grep -q "^## $VERSION " CHANGELOG.md || { echo "CHANGELOG.md has no $VERSION entry"; exit 1; }
+
+      - name: Run tests
+        run: make test CC=gcc
+
+      # The .exe must run on a machine without MSYS2: it may import only
+      # Windows' own DLLs. And its report must be LF (cli/windows/lf_stdout.c).
+      - name: Build release CLI
+        run: |
+          set -e
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' slop.toml | head -1)
+          make release CC=gcc HOWL_VERSION="$VERSION"
+          ./build/howl --version | grep -qx "howl $VERSION"
+          ./build/howl validate corpus/fixtures/v0/litmus.ttl
+          if ./build/howl validate corpus/fixtures/v0/litmus.ttl --report | grep -q $'\r'; then
+            echo "FAIL: the report has CRLF line endings" >&2; exit 1; fi
+          objdump -p build/howl.exe | grep 'DLL Name'
+          if objdump -p build/howl.exe | grep 'DLL Name' | grep -qiE 'libgcc|libwinpthread|libstdc'; then
+            echo "FAIL: howl.exe imports a MinGW runtime DLL" >&2; exit 1; fi
+          mv build/howl.exe howl-windows-x86_64.exe
+
+      - name: Build and package the C library
+        run: make lib dist CC=gcc PLATFORM=windows-x86_64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: howl-windows-x86_64
+          path: |
+            howl-windows-x86_64.exe
+            libhowl-windows-x86_64.zip
+
   release:
-    needs: build
+    needs: [build, build-windows]
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

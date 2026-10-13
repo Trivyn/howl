@@ -21,7 +21,8 @@ HOWL is a consequence-based reasoner for the OWL 2 EL family. It is written in
 ## Quick start
 
 Each [GitHub release](https://github.com/Trivyn/howl/releases) has the `howl` binary and the C
-library for linux-x86_64 and macos-arm64. From Rust, use the
+library for linux-x86_64, macos-arm64 and windows-x86_64 (built with MinGW-w64, so its `libhowl.a`
+links with MinGW toolchains; on MSVC, the crate builds the C with clang-cl). From Rust, use the
 [`howl-reasoner`](https://crates.io/crates/howl-reasoner) crate ([below](#rust)). Anywhere else,
 HOWL builds from the committed C with nothing but a C compiler:
 
