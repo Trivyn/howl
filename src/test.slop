@@ -3764,9 +3764,10 @@
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; Classes A, B, C; roles r and s̄ (DL5 names r; s has a P̄); no
-    ;; function symbols; constants a and b.
+    ;; function symbols; constants a and b. Not `far`: MinGW's windows.h,
+    ;; which the runtime includes on Windows, defines it as a macro.
     (let ((ids (build-sriq-ids arena (row-normal arena (one-dl arena (union-new DlClause dl5 (dn arena "A") (dp arena "r"))) 0 0 0)))
-          (far (cast U32 99))
+          (out-of-range (cast U32 99))
           (x (at-x))
           (ok-clause (make-clause arena (one-lit arena (atom1 (cast U32 2) x)) (one-lit arena (atom2 (cast U32 1) x (at-u (cast U32 1))))))
           (mut swapped ids)
@@ -3776,8 +3777,8 @@
         (set! permuted class-of (reverse-dnames arena (. ids class-of)))
         (set! permuted class-ix (index-classes arena (. permuted class-of)))
         (and (not (flagged arena ids ok-clause))
-             (flagged arena ids (make-clause arena (one-lit arena (atom1 far x)) (no-lits arena)))
-             (flagged arena ids (make-clause arena (one-lit arena (atom2 far x x)) (no-lits arena)))
+             (flagged arena ids (make-clause arena (one-lit arena (atom1 out-of-range x)) (no-lits arena)))
+             (flagged arena ids (make-clause arena (one-lit arena (atom2 out-of-range x x)) (no-lits arena)))
              (flagged arena ids (make-clause arena (no-lits arena) (one-lit arena (atom1 (cast U32 0) (at-fx (cast U32 0))))))
              (flagged arena ids (make-clause arena (no-lits arena) (one-lit arena (atom1 (cast U32 0) (at-u (cast U32 2))))))
              (flagged arena ids (make-clause arena (no-lits arena) (one-lit arena (atom1 (cast U32 0) (at-z (cast U32 0))))))
