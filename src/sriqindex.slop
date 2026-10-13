@@ -54,6 +54,7 @@
 
   (type SubIndex (record
     (xs      (List Clause))
+    (sigs    (List Int))       ; sigs[i] is xs[i]'s signature (slice 9f)
     (entries (List Entry))     ; sorted by side, then literal
     (empty   Int)))            ; xs's empty clause, by position, or -1
 
@@ -91,11 +92,47 @@
               which is kept aside by position")
     (@spec ((Arena (List Clause)) -> SubIndex))
     (@alloc arena)
-    (let ((mut raw (list-new arena Entry)) (mut empty -1) (mut i 0))
+    (let ((mut raw (list-new arena Entry)) (mut sigs (list-new arena Int)) (mut empty -1) (mut i 0))
       (do (for-each (c xs)
             (do (match (key-of c i) ((some e) (list-push raw e)) ((none) (set! empty i)))
+                (list-push sigs (clause-sig c))
                 (set! i (+ i 1))))
-          (record-new SubIndex (xs xs) (entries (sorted-entries arena raw)) (empty empty)))))
+          (record-new SubIndex (xs xs) (sigs sigs) (entries (sorted-entries arena raw)) (empty empty)))))
+
+  ;; A clause's signature (slice 9f): bit h(side, l) for each of its
+  ;; literals, h into 0..63. If x ⊆ c side by side, then sig(x) ⊆ sig(c),
+  ;; so a clause with a bit c lacks cannot subsume c, and subsumes is not
+  ;; asked. On CCO's round 9 the probes asked it 133M times, and 392k held.
+  (fn clause-sig ((c Clause))
+    (@intent "The bits of c's literals, body and head apart")
+    (@spec ((Clause) -> Int))
+    (@pure)
+    (let ((mut sg 0))
+      (do (for-each (l (. c body)) (set! sg (| sg (lit-bit 0 l))))
+          (for-each (l (. c head)) (set! sg (| sg (lit-bit 1 l))))
+          sg)))
+
+  (fn lit-bit ((side Int) (l Lit))
+    (@intent "One bit for literal l on side (0 body, 1 head), of bits 0 to 62")
+    (@spec ((Int Lit) -> Int))
+    (@pure)
+    ;; A 64-bit 1, and never bit 63: in C, shifting an int 1 by 31 or more,
+    ;; or a signed 1 into the sign bit, is undefined. The mix is a sum of
+    ;; non-negative products, so % gives 0 to 62.
+    (let ((h (+ (+ (* side 37) (* (cast Int (. l pred)) 131)) (+ (* (term-mix (. l t1)) 7) (term-mix (. l t2))))))
+      (<< (cast Int 1) (% h 63))))
+
+  (fn term-mix ((t ATerm))
+    (@intent "An a-term's fields, mixed into one number for lit-bit")
+    (@spec ((ATerm) -> Int))
+    (@pure)
+    (+ (* (cast Int (. t fsym)) 17) (+ (* (cast Int (. t cst)) 29) (cast Int (. t zi)))))
+
+  (fn sig-at ((ix SubIndex) (i Int))
+    (@intent "Clause i's signature")
+    (@spec ((SubIndex Int) -> Int))
+    (@pure)
+    (match (list-get (. ix sigs) i) ((some x) x) ((none) 0)))
 
   (fn sorted-entries ((arena Arena) (raw (List Entry)))
     (@intent "raw sorted by side, then literal")
@@ -119,9 +156,9 @@
               (if (< (key-cmp (entry-at es mid fallback) side l) 0) (set! lo (+ mid 1)) (set! hi mid))))
           lo)))
 
-  (fn probe ((ix SubIndex) (side Int) (l Lit) (c Clause) (skip Int))
-    (@intent "Does a clause filed under (side, l), other than number skip, subsume c?")
-    (@spec ((SubIndex Int Lit Clause Int) -> Bool))
+  (fn probe ((ix SubIndex) (side Int) (l Lit) (c Clause) (csig Int) (skip Int))
+    (@intent "Does a clause filed under (side, l), other than number skip, subsume c, whose signature is csig?")
+    (@spec ((SubIndex Int Lit Clause Int Int) -> Bool))
     (@pure)
     (match (list-get (. ix entries) 0)
       ((none) false)
@@ -130,15 +167,15 @@
           (do (while (and going (not found) (< k (cast Int (list-len es))))
                 (let ((e (entry-at es k e0)))
                   (do (set! going (== (key-cmp e side l) 0))
-                      (set! found (and going (hit ix e c skip)))
+                      (set! found (and going (hit ix e c csig skip)))
                       (set! k (+ k 1)))))
               found)))))
 
-  (fn hit ((ix SubIndex) (e Entry) (c Clause) (skip Int))
-    (@intent "Does entry e's clause, unless it is number skip, subsume c?")
-    (@spec ((SubIndex Entry Clause Int) -> Bool))
+  (fn hit ((ix SubIndex) (e Entry) (c Clause) (csig Int) (skip Int))
+    (@intent "Does entry e's clause, unless it is number skip, subsume c? Not if it has a signature bit c lacks")
+    (@spec ((SubIndex Entry Clause Int Int) -> Bool))
     (@pure)
-    (and (!= (. e i) skip) (x-subsumes ix (. e i) c)))
+    (and (!= (. e i) skip) (== (& (sig-at ix (. e i)) (^ csig -1)) 0) (x-subsumes ix (. e i) c)))
 
   (fn x-subsumes ((ix SubIndex) (i Int) (c Clause))
     (@intent "Does clause i of the index subsume c?")
@@ -150,9 +187,9 @@
     (@intent "Does some clause of the index, other than number skip, subsume c? (skip below 0 skips none)")
     (@spec ((SubIndex Clause Int) -> Bool))
     (@pure)
-    (let ((mut found (and (>= (. ix empty) 0) (!= (. ix empty) skip))))
-      (do (for-each (l (. c body)) (when (and (not found) (probe ix 0 l c skip)) (set! found true)))
-          (for-each (l (. c head)) (when (and (not found) (probe ix 1 l c skip)) (set! found true)))
+    (let ((csig (clause-sig c)) (mut found (and (>= (. ix empty) 0) (!= (. ix empty) skip))))
+      (do (for-each (l (. c body)) (when (and (not found) (probe ix 0 l c csig skip)) (set! found true)))
+          (for-each (l (. c head)) (when (and (not found) (probe ix 1 l c csig skip)) (set! found true)))
           found)))
 
   (fn distinct ((arena Arena) (cs (List Clause)))

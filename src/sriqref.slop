@@ -50,7 +50,7 @@
           set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
           ref-core slot-cands x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
           dl4-of nom-first nom-second nom-pair ref-nom ref-succ ref-rsucc
-          pslot-cands pred-one pred-run pred-edge away-job root-job slots-of rpred-job ref-rpred ctx-round
+          pslot-cands pred-one pred-run pred-edge away-job root-job slots-of rpred-job rslots ref-rpred ctx-round
           edge-is add-consts add-contexts add-edges action-cands cand-at cand-cmp
           copy-clauses copy-structure env-of stop-status)
 

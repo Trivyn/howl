@@ -2950,7 +2950,10 @@ schedule is its own.
   same side, so probing c's literals finds every such x, and `subsumes` confirms each. The empty clause
   subsumes everything; it is kept aside by position, so that a query can skip it as it skips any
   clause. The index is complete by construction, and each index assumes at most one empty clause, as
-  a min set or a list without repeats has. The tests diff it against `commit-min` on hand rows and on
+  a min set or a list without repeats has. Each x also carries a signature, one bit of 63 per
+  (side, literal) hashed (slice 9f). If x ⊆ c, then x's bits are among c's, so `subsumes` is asked
+  only of an x with no bit c lacks. On CCO's round 9, the probes had asked it 133M times, and 392k
+  held. The tests diff it against `commit-min` on hand rows and on
   every context's final set of every run, split into a W and candidates. They also require each run
   through it to give the same status, rounds, answers and work counts as the run through `commit-min`,
   on every fixture and hand row under every strategy.
@@ -3126,6 +3129,20 @@ schedule is its own.
     reports the choices tried. The code is `src/sriqhyper.slop`.
   - **Nom's DL4 clauses** are found once per run, not in every context and round. When constants
     are new, Nom runs on every pair of `S_v`'s premises, as the reference's `ref-nom` does.
+  - **r-Pred's root clauses** are chosen once per round (slice 9f). `rpred-finish` fires exactly
+    when the side premises meet, the view is ok (E3, E5) and every `Lᵢ` is allowed (its proved
+    `sound`). The last two depend on the root clause alone, never on the context or the choice. So
+    each round keeps the root clauses outside G that pass them (`rpred-able`, whose `@post` is
+    those two conditions), with their views. A context builds only their slots' edges. On CCO,
+    r-Pred used to finish 19.5M choices in round 9 without one firing. A root clause set aside is
+    never counted against the choices cap, so a run the reference stops n/a at the cap, on a clause
+    that could not fire, can complete here, as with Hyper's per-constant cap. No conclusion of a
+    complete run changes.
+  - **Create's edges** are added through one stable sort of the new edges and a binary search of the
+    old ones (`edges-added`, slice 9f). The reference's `add-edges` folds `with-edge`, which copies
+    the edge list for every edge. The result is the same list: the old edges, then each new edge at
+    its first occurrence, in action order, when it is not already an edge. The prototype's scan
+    mode, which the tests diff against, keeps the fold, and the tests compare the final edges too.
 - **Derive does not filter by ∈̂.** S6's derive keeps only conclusions not `∈̂ Sₙ`; the prototype
   leaves that to the commit, whose `commit-min` skips exactly those. `Δₙ₊₁` is the same, and its
   candidate counts include the conclusions the commit skips.

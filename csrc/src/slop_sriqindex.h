@@ -65,6 +65,7 @@ SLOP_LIST_DEFINE(sriqindex_Entry, slop_list_sriqindex_Entry)
 
 struct sriqindex_SubIndex {
     slop_list_types_Clause xs;
+    slop_list_int sigs;
     slop_list_sriqindex_Entry entries;
     int64_t empty;
 };
@@ -120,10 +121,14 @@ int64_t sriqindex_key_cmp(sriqindex_Entry e, int64_t side, types_Lit l);
 sriqindex_Entry sriqindex_entry_at(slop_list_sriqindex_Entry es, int64_t k, sriqindex_Entry fallback);
 slop_option_sriqindex_Entry sriqindex_key_of(types_Clause c, int64_t i);
 sriqindex_SubIndex sriqindex_sub_index(slop_arena* arena, slop_list_types_Clause xs);
+int64_t sriqindex_clause_sig(types_Clause c);
+int64_t sriqindex_lit_bit(int64_t side, types_Lit l);
+int64_t sriqindex_term_mix(types_ATerm t);
+int64_t sriqindex_sig_at(sriqindex_SubIndex ix, int64_t i);
 slop_list_sriqindex_Entry sriqindex_sorted_entries(slop_arena* arena, slop_list_sriqindex_Entry raw);
 int64_t sriqindex_lower_bound(slop_list_sriqindex_Entry es, int64_t side, types_Lit l, sriqindex_Entry fallback);
-uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t skip);
-uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t skip);
+uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t csig, int64_t skip);
+uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t csig, int64_t skip);
 uint8_t sriqindex_x_subsumes(sriqindex_SubIndex ix, int64_t i, types_Clause c);
 uint8_t sriqindex_some_subsumes(sriqindex_SubIndex ix, types_Clause c, int64_t skip);
 slop_list_types_Clause sriqindex_distinct(slop_arena* arena, slop_list_types_Clause cs);

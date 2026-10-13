@@ -39,11 +39,12 @@
   (import sriqclauses (clause-cmp make-clause lit-set))
   (import sriqsubsume (Committed commit-min in-hat))
   (import sriqindex (commit-indexed KIdx k-index k-query))
-  (import sriqctx (Strategy Triggers EdgeLabel Edge Ctx CtxSet Structure build-triggers init-structure core-of))
+  (import sriqctx (Strategy Triggers EdgeLabel Edge Ctx CtxSet Structure build-triggers init-structure core-of
+                    ctx-by-core))
   (import canon (sort-range))
   (import sriq (Premise RConcl HState PredView PSlot CSub SuccSig KSets
-                hyper-start hyper-finish succ-sig k-sets covers succ-step pred-view rpred-view body-at joinable csub-lit
-                join-rule Pos subterm-at))
+                hyper-start hyper-finish succ-sig k-sets covers succ-step pred-view rpred-view rpred-heads-ok body-at
+                joinable csub-lit join-rule Pos subterm-at))
   (import sriqhyper (HIdx HCtx HOut h-index hyper-indexed))
   (import sriqground (Ground PIdx pidx-of pidx-find pick-ix ground-clause ground-of g-visible g-fresh
                              g-in-hat g-held
@@ -54,7 +55,7 @@
                    set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
                    ref-core x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
                    nom-first nom-second nom-pair ref-rsucc
-                   pred-one away-job root-job slots-of rpred-job ctx-round
+                   pred-one away-job root-job slots-of rslots ctx-round
                    edge-is add-consts add-contexts add-edges action-cands cand-at cand-cmp
                    copy-clauses copy-structure env-of ref-lambda))
 
@@ -62,8 +63,9 @@
 
   ;; perm: 0 runs Δₙ as committed; 1 reverses each Δ_v and the order
   ;; contexts are visited; 2 rotates both. R6: no report may change.
-  ;; scan: commit through commit-min's scans, not the index (9b's
-  ;; baseline, which the tests diff the index against).
+  ;; scan: commit through commit-min's scans, not the index, and add edges
+  ;; through add-edges's fold, not edges-added (9b's and 9f's baseline,
+  ;; which the tests diff the index and the sort against).
   (type SatConfig (record
     (base RefConfig)
     (perm Int)
@@ -116,7 +118,8 @@
     (oix   PIdx)
     (hx    HIdx)             ; O's clauses, Hyper's (slice 9e)
     (ixs   (List CIdx))      ; every context's premises, filed (Pred reads its predecessor's)
-    (gd    Ground)))
+    (gd    Ground)
+    (rs    RSrcs)))          ; the root clauses r-Pred can fire from, with their views (slice 9f)
 
   ;; The edges into and out of one context.
   (type Adj (record
@@ -203,10 +206,10 @@
                 (record-new CIdx (aps e) (dps e) (ops e) (aix (pidx-of arena e)) (dix (pidx-of arena e))
                                  (oix (pidx-of arena e)))))))
 
-  (fn here-of ((arena Arena) (env Env) (st Structure) (dl Delta) (gd Ground) (hx HIdx) (ixs (List CIdx)) (v Int)
-               (perm Int))
+  (fn here-of ((arena Arena) (env Env) (st Structure) (dl Delta) (gd Ground) (hx HIdx) (ixs (List CIdx)) (rs RSrcs)
+               (v Int) (perm Int))
     (@intent "Context v as derive reads it; a context new this round reads all of S_v as new")
-    (@spec ((Arena Env Structure Delta Ground HIdx (List CIdx) Int Int) -> Here))
+    (@spec ((Arena Env Structure Delta Ground HIdx (List CIdx) RSrcs Int Int) -> Here))
     (@alloc arena)
     (let ((all (set-of env st v))
           (fresh (>= v (. dl nctx)))
@@ -215,7 +218,7 @@
           (x (cix-at arena ixs v)))
       (record-new Here (v (cast U32 v)) (root (is-root st v)) (fresh fresh) (all all) (news news) (olds olds)
                        (aps (. x aps)) (dps (. x dps)) (ops (. x ops)) (dix (. x dix)) (aix (. x aix)) (oix (. x oix))
-                       (hx hx) (ixs ixs) (gd gd))))
+                       (hx hx) (ixs ixs) (gd gd) (rs rs))))
 
   (fn edge-new ((dl Delta) (e Edge))
     (@intent "Was e created this round?")
@@ -973,32 +976,80 @@
 
   (fn sat-rpred ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here))
     (@intent "r-Pred into v, never from a member of G (the view holds it): all of it when v is new or an edge ⟨v, v_r,
-              u⟩
-              is; else the new root clauses, and the old ones with a new side premise in S_v")
+              u⟩ is; else the new root clauses, and the old ones with a new side premise in S_v")
     (@spec ((Arena Env Structure Delta Here) -> Out))
     (@alloc arena)
     (if (or (. h fresh) (rpred-edge-new dl (. h v)))
-      (rpred-from arena env st h (set-of env st 0) (. h aps) false)
-      (let ((a (rpred-from arena env st h (cs-at (. dl news) 0 (. env nobody)) (. h aps) false))
+      (rpred-from arena env st h (. (. h rs) all) (. h aps) false)
+      (let ((a (rpred-from arena env st h (. (. h rs) news) (. h aps) false))
             (b (if (> (list-len (. h news)) 0)
-                 (rpred-from arena env st h (cs-at (. dl olds) 0 (. env nobody)) (. h aps) true)
+                 (rpred-from arena env st h (. (. h rs) olds) (. h aps) true)
                  (out-of (list-new arena Cand) false))))
         (out-of (append-cands arena (. a cands) (. b cands)) (or (. a over) (. b over))))))
 
-  (fn rpred-from ((arena Arena) (env Env) (st Structure) (h Here) (cs (List Clause)) (aps (List Premise))
+  (fn rpred-from ((arena Arena) (env Env) (st Structure) (h Here) (rs (List RSrc)) (aps (List Premise))
                   (anchored Bool))
-    (@intent "r-Pred into v from each root clause of cs not in G: over every choice, or (anchored) with a side premise
-              new in S_v")
-    (@spec ((Arena Env Structure Here (List Clause) (List Premise) Bool) -> Out))
+    (@intent "r-Pred into v from each source root clause: over every choice, or (anchored) with a side premise new in
+              S_v")
+    (@spec ((Arena Env Structure Here (List RSrc) (List Premise) Bool) -> Out))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut over false))
+      (do (for-each (r rs)
+            (let ((job (rsrc-job arena st (. h v) r))
+                  (o (if anchored (pred-anchored arena env job (. h dix) (. h oix) (. h aix))
+                       (pred-run-ix arena env job (. h aix)))))
+              (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true)))))
+          (out-of out over))))
+
+  ;; r-Pred's sources for one round (slice 9f). r-Pred fires on a root
+  ;; clause's view exactly when its side premises meet, the view is ok and
+  ;; every Lᵢ is allowed (rpred-finish's proved `sound`). The last two
+  ;; depend on the clause alone, never on the context or the choice. So a
+  ;; root clause that fails them is set aside once per round, instead of
+  ;; being viewed in every context and finished for every choice: on CCO,
+  ;; r-Pred finished 19.5M choices in round 9, and none fired. Members of
+  ;; G are set aside too; the view holds them.
+  (type RSrc (record
+    (c    Clause)
+    (view PredView)))
+
+  (type RSrcs (record
+    (all  (List RSrc))     ; from S_{v_r}, for a context new or with a new edge to the root
+    (news (List RSrc))     ; from Δ_{v_r}
+    (olds (List RSrc))))   ; from S_{v_r} \ Δ_{v_r}
+
+  (fn rpred-able ((tr Triggers) (v PredView))
+    (@intent "Can r-Pred fire on some choice from a clause with view v? Only when v is ok and every Lᵢ is allowed")
+    (@spec ((Triggers PredView) -> Bool))
+    (@pure)
+    (@post (== $result (and (. v ok) (rpred-heads-ok tr (. v head)))))
+    (and (. v ok) (rpred-heads-ok tr (. v head))))
+
+  (fn rsrcs-in ((arena Arena) (tr Triggers) (cs (List Clause)))
+    (@intent "The clauses of cs outside G that r-Pred can fire from, each with its view, in cs's order")
+    (@spec ((Arena Triggers (List Clause)) -> (List RSrc)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RSrc)))
       (do (for-each (c cs)
             (when (not (ground-clause c))
-              (let ((job (rpred-job arena env st (. h v) c))
-                    (o (if anchored (pred-anchored arena env job (. h dix) (. h oix) (. h aix))
-                         (pred-run-ix arena env job (. h aix)))))
-                (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true))))))
-          (out-of out over))))
+              (let ((v (rpred-view arena tr c)))
+                (when (rpred-able tr v) (list-push out (record-new RSrc (c c) (view v)))))))
+          out)))
+
+  (fn rsrcs-of ((arena Arena) (env Env) (st Structure) (dl Delta))
+    (@intent "This round's r-Pred sources: from S_{v_r}, Δ_{v_r} and the rest")
+    (@spec ((Arena Env Structure Delta) -> RSrcs))
+    (@alloc arena)
+    (record-new RSrcs (all (rsrcs-in arena (. env tr) (set-of env st 0)))
+                      (news (rsrcs-in arena (. env tr) (cs-at (. dl news) 0 (. env nobody))))
+                      (olds (rsrcs-in arena (. env tr) (cs-at (. dl olds) 0 (. env nobody))))))
+
+  (fn rsrc-job ((arena Arena) (st Structure) (v U32) (r RSrc))
+    (@intent "rpred-job from r's clause into v, its view already built: σ = {y ↦ x}")
+    (@spec ((Arena Structure U32 RSrc) -> PJob))
+    (@alloc arena)
+    (record-new PJob (view (. r view)) (s (record-new CSub (x (at-x)) (y (at-x))))
+                     (slots (rslots arena st v (. (. r view) slots))) (to v) (rpred true) (toroot false)))
 
   ;; ============================================================
   ;; One context, one round
@@ -1013,16 +1064,16 @@
           (for-each (e (. a ins)) (list-push es e))
           (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges es) (ord (. st ord))))))
 
-  (fn sat-ctx ((arena Arena) (env Env) (hx HIdx) (ixs (List CIdx)) (st Structure) (dl Delta) (gd Ground) (a Adj)
-               (v Int) (perm Int))
+  (fn sat-ctx ((arena Arena) (env Env) (hx HIdx) (ixs (List CIdx)) (rs RSrcs) (st Structure) (dl Delta) (gd Ground)
+               (a Adj) (v Int) (perm Int))
     (@intent "Derive in context v: every instance when v is new (the root, in the first round, as the reference does),
               else those anchored on Δ")
-    (@spec ((Arena Env HIdx (List CIdx) Structure Delta Ground Adj Int Int) -> CRound))
+    (@spec ((Arena Env HIdx (List CIdx) RSrcs Structure Delta Ground Adj Int Int) -> CRound))
     (@alloc arena)
     (let ((lst (local st a arena)))
       (if (and (>= v (. dl nctx)) (is-root st v))
         (record-new CRound (r (ctx-round arena env lst (cast U32 v))) (tried 0))
-        (sat-old arena env lst dl (. a ins) (here-of arena env lst dl gd hx ixs v perm)))))
+        (sat-old arena env lst dl (. a ins) (here-of arena env lst dl gd hx ixs rs v perm)))))
 
   (fn sat-old ((arena Arena) (env Env) (st Structure) (dl Delta) (ins (List Edge)) (h Here))
     (@intent "Derive in one context, anchored on Δ, or every instance when it is new")
@@ -1128,6 +1179,7 @@
     (@alloc arena)
     (let ((adj (adjacency arena st))
           (ixs (all-ixs arena env st dl perm))
+          (rs (rsrcs-of arena env st dl))
           (mut cands (list-new arena Cand)) (mut succs (list-new arena SuccAct))
           (mut rsuccs (list-new arena RSuccAct)) (mut noms (list-new arena NomAct))
           (mut over false) (mut tried 0))
@@ -1135,7 +1187,7 @@
             (match (list-get adj v)
               ((none) (set! over over))
               ((some a)
-                (let ((cr (sat-ctx arena env hx ixs st dl gd a v perm)) (r (. cr r)))
+                (let ((cr (sat-ctx arena env hx ixs rs st dl gd a v perm)) (r (. cr r)))
                   (do (set! tried (+ tried (. cr tried)))
                       (for-each (x (. r cands)) (list-push cands x))
                       (for-each (x (. r succs)) (list-push succs x))
@@ -1169,10 +1221,116 @@
           (s1 (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges (. st edges))
                                     (ord (add-consts arena (. st ord) (. r noms)))))
           (s2 (add-contexts arena s1 (. r succs)))
-          (s3 (add-edges arena s2 (. r succs) (. r rsuccs)))
+          (s3 (if scan (add-edges arena s2 (. r succs) (. r rsuccs)) (edges-added arena s2 (. r succs) (. r rsuccs))))
           (cands (append-cands arena (append-cands arena (. r cands) (action-cands arena s3 (. r succs) (. r rsuccs)))
                                      (new-cores arena s3 c0))))
       (commit-all arena s3 (outside-view arena s3 gd cands) c0 e0 n0 scan)))
+
+  ;; add-edges (sriqref) folds with-edge over the actions, and with-edge
+  ;; copies the whole edge list for every edge it adds: on CCO's round 9,
+  ;; a quarter of the arena. Its result is the existing edges, then each
+  ;; action's edges in action order, an edge only at its first occurrence
+  ;; and only when it is not among the existing ones. edges-added builds
+  ;; that list with one stable sort of the new edges and a binary search
+  ;; of the existing ones (slice 9f); a test diffs the two on every round.
+
+  (fn edges-added ((arena Arena) (st Structure) (succs (List SuccAct)) (rsuccs (List RSuccAct)))
+    (@intent "add-edges, through a sort: st with Succ's ⟨v, w, f⟩ (and the root's ⟨v_r, w, u⟩) and r-Succ's ⟨v, v_r,
+              u⟩, each once")
+    (@spec ((Arena Structure (List SuccAct) (List RSuccAct)) -> Structure))
+    (@alloc arena)
+    (let ((news (action-edges arena st succs rsuccs))
+          (mut es (list-new arena Edge)))
+      (do (for-each (e (. st edges)) (list-push es e))
+          (for-each (e (first-new arena (. st edges) news)) (list-push es e))
+          (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges es) (ord (. st ord))))))
+
+  (fn action-edges ((arena Arena) (st Structure) (succs (List SuccAct)) (rsuccs (List RSuccAct)))
+    (@intent "The edges the actions add, in the order add-edges folds them, repeats included")
+    (@spec ((Arena Structure (List SuccAct) (List RSuccAct)) -> (List Edge)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Edge)))
+      (do (for-each (a succs)
+            (let ((w (ctx-by-core st (. a core))))
+              (do (list-push out (record-new Edge (from (. a from)) (to w) (lk 'el-fn) (label (. (. a sg) f))))
+                  (when (. (. a sg) root)
+                    (list-push out (record-new Edge (from (. a from)) (to w) (lk 'el-const) (label (. (. a sg) u))))))))
+          (for-each (a rsuccs)
+            (list-push out (record-new Edge (from (. a from)) (to (cast U32 0)) (lk 'el-const) (label (. a u)))))
+          out)))
+
+  (fn first-new ((arena Arena) (old (List Edge)) (news (List Edge)))
+    (@intent "The edges of news at their first occurrence and not in old, in news's order")
+    (@spec ((Arena (List Edge) (List Edge)) -> (List Edge)))
+    (@alloc arena)
+    (match (list-get news 0)
+      ((none) (list-new arena Edge))
+      ((some e0) (in-news-order arena news (kept-positions arena old news e0) e0))))
+
+  (fn kept-positions ((arena Arena) (old (List Edge)) (news (List Edge)) (e0 Edge))
+    (@intent "The positions in news first-new keeps, in key order")
+    (@spec ((Arena (List Edge) (List Edge) Edge) -> (List Int)))
+    (@alloc arena)
+    ;; nidx is a stable sort, so the first of each run of equal edges is
+    ;; the earliest occurrence.
+    (let ((oidx (sort-range arena (cast Int (list-len old))
+                  (fn ((i Int) (j Int)) (edge-cmp (edge-at old i e0) (edge-at old j e0)))))
+          (nidx (sort-range arena (cast Int (list-len news))
+                  (fn ((i Int) (j Int)) (edge-cmp (edge-at news i e0) (edge-at news j e0)))))
+          (mut keep (list-new arena Int)) (mut prev -1))
+      (do (for-each (k nidx)
+            (do (when (run-first-new old oidx news prev k e0) (list-push keep k))
+                (set! prev k)))
+          keep)))
+
+  (fn run-first-new ((old (List Edge)) (oidx (List Int)) (news (List Edge)) (prev Int) (k Int) (e0 Edge))
+    (@intent "Is news's edge k the first of its run (prev is the one before it in key order, or -1) and not in old?")
+    (@spec (((List Edge) (List Int) (List Edge) Int Int Edge) -> Bool))
+    (@pure)
+    (let ((e (edge-at news k e0)))
+      (and (or (< prev 0) (!= (edge-cmp (edge-at news prev e0) e) 0))
+           (not (edge-in old oidx e e0)))))
+
+  (fn in-news-order ((arena Arena) (news (List Edge)) (keep (List Int)) (e0 Edge))
+    (@intent "The edges of news at the positions keep holds, in news's order")
+    (@spec ((Arena (List Edge) (List Int) Edge) -> (List Edge)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Edge)))
+      (do (for-each (k (sort-range arena (cast Int (list-len keep))
+                         (fn ((i Int) (j Int)) (int-cmp (idx-at keep i) (idx-at keep j)))))
+            (list-push out (edge-at news (idx-at keep k) e0)))
+          out)))
+
+  (fn edge-in ((es (List Edge)) (idx (List Int)) (e Edge) (e0 Edge))
+    (@intent "Is e among es, whose order under edge-cmp is idx?")
+    (@spec (((List Edge) (List Int) Edge Edge) -> Bool))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len idx))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (edge-cmp (edge-at es (idx-at idx mid) e0) e) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          (and (< lo (cast Int (list-len idx))) (== (edge-cmp (edge-at es (idx-at idx lo) e0) e) 0)))))
+
+  (fn edge-cmp ((a Edge) (b Edge))
+    (@intent "By from, to, kind, then label")
+    (@spec ((Edge Edge) -> Int))
+    (@pure)
+    (cond ((!= (. a from) (. b from)) (u32-cmp (. a from) (. b from)))
+          ((!= (. a to) (. b to)) (u32-cmp (. a to) (. b to)))
+          ((!= (lk-rank (. a lk)) (lk-rank (. b lk))) (int-cmp (lk-rank (. a lk)) (lk-rank (. b lk))))
+          (else (u32-cmp (. a label) (. b label)))))
+
+  (fn lk-rank ((lk EdgeLabel))
+    (@intent "el-fn before el-const")
+    (@spec ((EdgeLabel) -> Int))
+    (@pure)
+    (match lk ('el-fn 0) ('el-const 1)))
+
+  (fn int-cmp ((a Int) (b Int))
+    (@intent "-1, 0 or 1 as a is below, at or above b")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
 
   (fn outside-view ((arena Arena) (st Structure) (gd Ground) (cands (List Cand)))
     (@intent "The candidates not ∈̂ G, at the root all of them: a context but the root reads G already")
@@ -1449,9 +1607,10 @@
           (gd (ground-of arena tr st (. env nobody)))
           (dl (first-delta arena st))
           (ixs (all-ixs arena env st dl 0))
+          (rs (rsrcs-of arena env st dl))
           (mut ok true) (mut v 0))
       (do (for-each (c (. st ctxs))
-            (do (when (not (hyper-ix-one arena env hx (here-of arena env st dl gd hx ixs v 0))) (set! ok false))
+            (do (when (not (hyper-ix-one arena env hx (here-of arena env st dl gd hx ixs rs v 0))) (set! ok false))
                 (set! v (+ v 1))))
           ok)))
 

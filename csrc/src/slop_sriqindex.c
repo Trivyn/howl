@@ -6,10 +6,14 @@ int64_t sriqindex_key_cmp(sriqindex_Entry e, int64_t side, types_Lit l);
 sriqindex_Entry sriqindex_entry_at(slop_list_sriqindex_Entry es, int64_t k, sriqindex_Entry fallback);
 slop_option_sriqindex_Entry sriqindex_key_of(types_Clause c, int64_t i);
 sriqindex_SubIndex sriqindex_sub_index(slop_arena* arena, slop_list_types_Clause xs);
+int64_t sriqindex_clause_sig(types_Clause c);
+int64_t sriqindex_lit_bit(int64_t side, types_Lit l);
+int64_t sriqindex_term_mix(types_ATerm t);
+int64_t sriqindex_sig_at(sriqindex_SubIndex ix, int64_t i);
 slop_list_sriqindex_Entry sriqindex_sorted_entries(slop_arena* arena, slop_list_sriqindex_Entry raw);
 int64_t sriqindex_lower_bound(slop_list_sriqindex_Entry es, int64_t side, types_Lit l, sriqindex_Entry fallback);
-uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t skip);
-uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t skip);
+uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t csig, int64_t skip);
+uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t csig, int64_t skip);
 uint8_t sriqindex_x_subsumes(sriqindex_SubIndex ix, int64_t i, types_Clause c);
 uint8_t sriqindex_some_subsumes(sriqindex_SubIndex ix, types_Clause c, int64_t skip);
 slop_list_types_Clause sriqindex_distinct(slop_arena* arena, slop_list_types_Clause cs);
@@ -28,17 +32,17 @@ int64_t sriqindex_fpart_lower(slop_list_sriqindex_FPart ps, types_ATerm t, sriqi
 sriq_KSets sriqindex_k_query(slop_arena* arena, sriqctx_Triggers tr, sriqindex_KIdx kx, sriq_SuccSig sg);
 sriqindex_KPair sriqindex_k_walk(slop_arena* arena, sriqctx_Triggers tr, sriqindex_KIdx kx, sriq_SuccSig sg, types_ATerm t, sriqindex_FPart p0);
 
-typedef struct { slop_list_sriqindex_Entry raw; sriqindex_Entry e0; } sriqindex__lambda_692_env_t;
+typedef struct { slop_list_sriqindex_Entry raw; sriqindex_Entry e0; } sriqindex__lambda_693_env_t;
 
-static int64_t sriqindex__lambda_692(sriqindex__lambda_692_env_t* _env, int64_t a, int64_t b) { return sriqindex_entry_cmp(sriqindex_entry_at(_env->raw, a, _env->e0), sriqindex_entry_at(_env->raw, b, _env->e0)); }
+static int64_t sriqindex__lambda_693(sriqindex__lambda_693_env_t* _env, int64_t a, int64_t b) { return sriqindex_entry_cmp(sriqindex_entry_at(_env->raw, a, _env->e0), sriqindex_entry_at(_env->raw, b, _env->e0)); }
 
-typedef struct { slop_list_types_Clause cs; types_Clause c0; } sriqindex__lambda_696_env_t;
+typedef struct { slop_list_types_Clause cs; types_Clause c0; } sriqindex__lambda_697_env_t;
 
-static int64_t sriqindex__lambda_696(sriqindex__lambda_696_env_t* _env, int64_t a, int64_t b) { return sriqclauses_clause_cmp(sriqindex_clause_of(_env->cs, a, _env->c0), sriqindex_clause_of(_env->cs, b, _env->c0)); }
+static int64_t sriqindex__lambda_697(sriqindex__lambda_697_env_t* _env, int64_t a, int64_t b) { return sriqclauses_clause_cmp(sriqindex_clause_of(_env->cs, a, _env->c0), sriqindex_clause_of(_env->cs, b, _env->c0)); }
 
-typedef struct { slop_list_sriqindex_FPart raw; sriqindex_FPart p0; } sriqindex__lambda_705_env_t;
+typedef struct { slop_list_sriqindex_FPart raw; sriqindex_FPart p0; } sriqindex__lambda_706_env_t;
 
-static int64_t sriqindex__lambda_705(sriqindex__lambda_705_env_t* _env, int64_t a, int64_t b) { return types_aterm_cmp(sriqindex_fpart_at(_env->raw, a, _env->p0).t, sriqindex_fpart_at(_env->raw, b, _env->p0).t); }
+static int64_t sriqindex__lambda_706(sriqindex__lambda_706_env_t* _env, int64_t a, int64_t b) { return types_aterm_cmp(sriqindex_fpart_at(_env->raw, a, _env->p0).t, sriqindex_fpart_at(_env->raw, b, _env->p0).t); }
 
 int64_t sriqindex_entry_cmp(sriqindex_Entry a, sriqindex_Entry b) {
     if (a.side < b.side) {
@@ -92,6 +96,7 @@ slop_option_sriqindex_Entry sriqindex_key_of(types_Clause c, int64_t i) {
 sriqindex_SubIndex sriqindex_sub_index(slop_arena* arena, slop_list_types_Clause xs) {
     {
         __auto_type raw = ((slop_list_sriqindex_Entry){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type sigs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t empty = -1;
         int64_t i = 0;
         {
@@ -105,21 +110,65 @@ sriqindex_SubIndex sriqindex_sub_index(slop_arena* arena, slop_list_types_Clause
                 } else if (!_mv_690.has_value) {
                     empty = i;
                 }
+                ({ __auto_type _lst_p = &(sigs); __auto_type _item = (sriqindex_clause_sig(c)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 i = (i + 1);
             }
         }
-        return ((sriqindex_SubIndex){.xs = xs, .entries = sriqindex_sorted_entries(arena, raw), .empty = empty});
+        return ((sriqindex_SubIndex){.xs = xs, .sigs = sigs, .entries = sriqindex_sorted_entries(arena, raw), .empty = empty});
     }
 }
 
-slop_list_sriqindex_Entry sriqindex_sorted_entries(slop_arena* arena, slop_list_sriqindex_Entry raw) {
-    __auto_type _mv_691 = ({ __auto_type _lst = raw; size_t _idx = (size_t)0; slop_option_sriqindex_Entry _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (!_mv_691.has_value) {
-        return raw;
-    } else if (_mv_691.has_value) {
-        __auto_type e0 = _mv_691.value;
+int64_t sriqindex_clause_sig(types_Clause c) {
+    {
+        int64_t sg = 0;
         {
-            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((raw).len)))), ({ sriqindex__lambda_692_env_t* sriqindex__lambda_692_env = (sriqindex__lambda_692_env_t*)slop_arena_alloc(arena, sizeof(sriqindex__lambda_692_env_t)); *sriqindex__lambda_692_env = (sriqindex__lambda_692_env_t){ .raw = raw, .e0 = e0 }; (slop_closure_t){ (void*)sriqindex__lambda_692, (void*)sriqindex__lambda_692_env }; }));
+            __auto_type _coll = c.body;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type l = _coll.data[_i];
+                sg = (sg | sriqindex_lit_bit(0, l));
+            }
+        }
+        {
+            __auto_type _coll = c.head;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type l = _coll.data[_i];
+                sg = (sg | sriqindex_lit_bit(1, l));
+            }
+        }
+        return sg;
+    }
+}
+
+int64_t sriqindex_lit_bit(int64_t side, types_Lit l) {
+    {
+        __auto_type h = (((side * 37) + (((int64_t)(l.pred)) * 131)) + ((sriqindex_term_mix(l.t1) * 7) + sriqindex_term_mix(l.t2)));
+        return (((int64_t)(1)) << (h % 63));
+    }
+}
+
+int64_t sriqindex_term_mix(types_ATerm t) {
+    return ((((int64_t)(t.fsym)) * 17) + ((((int64_t)(t.cst)) * 29) + ((int64_t)(t.zi))));
+}
+
+int64_t sriqindex_sig_at(sriqindex_SubIndex ix, int64_t i) {
+    __auto_type _mv_691 = ({ __auto_type _lst = ix.sigs; size_t _idx = (size_t)i; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_691.has_value) {
+        __auto_type x = _mv_691.value;
+        return x;
+    } else if (!_mv_691.has_value) {
+        return 0;
+    }
+    SLOP_UNREACHABLE();
+}
+
+slop_list_sriqindex_Entry sriqindex_sorted_entries(slop_arena* arena, slop_list_sriqindex_Entry raw) {
+    __auto_type _mv_692 = ({ __auto_type _lst = raw; size_t _idx = (size_t)0; slop_option_sriqindex_Entry _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (!_mv_692.has_value) {
+        return raw;
+    } else if (_mv_692.has_value) {
+        __auto_type e0 = _mv_692.value;
+        {
+            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((raw).len)))), ({ sriqindex__lambda_693_env_t* sriqindex__lambda_693_env = (sriqindex__lambda_693_env_t*)slop_arena_alloc(arena, sizeof(sriqindex__lambda_693_env_t)); *sriqindex__lambda_693_env = (sriqindex__lambda_693_env_t){ .raw = raw, .e0 = e0 }; (slop_closure_t){ (void*)sriqindex__lambda_693, (void*)sriqindex__lambda_693_env }; }));
             __auto_type out = ((slop_list_sriqindex_Entry){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
             {
                 __auto_type _coll = idx;
@@ -152,12 +201,12 @@ int64_t sriqindex_lower_bound(slop_list_sriqindex_Entry es, int64_t side, types_
     }
 }
 
-uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t skip) {
-    __auto_type _mv_693 = ({ __auto_type _lst = ix.entries; size_t _idx = (size_t)0; slop_option_sriqindex_Entry _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (!_mv_693.has_value) {
+uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t csig, int64_t skip) {
+    __auto_type _mv_694 = ({ __auto_type _lst = ix.entries; size_t _idx = (size_t)0; slop_option_sriqindex_Entry _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (!_mv_694.has_value) {
         return 0;
-    } else if (_mv_693.has_value) {
-        __auto_type e0 = _mv_693.value;
+    } else if (_mv_694.has_value) {
+        __auto_type e0 = _mv_694.value;
         {
             __auto_type es = ix.entries;
             int64_t k = sriqindex_lower_bound(ix.entries, side, l, e0);
@@ -167,7 +216,7 @@ uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_
                 {
                     __auto_type e = sriqindex_entry_at(es, k, e0);
                     going = (sriqindex_key_cmp(e, side, l) == 0);
-                    found = (going && sriqindex_hit(ix, e, c, skip));
+                    found = (going && sriqindex_hit(ix, e, c, csig, skip));
                     k = (k + 1);
                 }
             }
@@ -177,16 +226,16 @@ uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_
     SLOP_UNREACHABLE();
 }
 
-uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t skip) {
-    return ((e.i != skip) && sriqindex_x_subsumes(ix, e.i, c));
+uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t csig, int64_t skip) {
+    return (((e.i != skip)) && (((sriqindex_sig_at(ix, e.i) & (csig ^ -1)) == 0)) && (sriqindex_x_subsumes(ix, e.i, c)));
 }
 
 uint8_t sriqindex_x_subsumes(sriqindex_SubIndex ix, int64_t i, types_Clause c) {
-    __auto_type _mv_694 = ({ __auto_type _lst = ix.xs; size_t _idx = (size_t)i; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_694.has_value) {
-        __auto_type x = _mv_694.value;
+    __auto_type _mv_695 = ({ __auto_type _lst = ix.xs; size_t _idx = (size_t)i; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_695.has_value) {
+        __auto_type x = _mv_695.value;
         return sriqsubsume_subsumes(x, c);
-    } else if (!_mv_694.has_value) {
+    } else if (!_mv_695.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -194,12 +243,13 @@ uint8_t sriqindex_x_subsumes(sriqindex_SubIndex ix, int64_t i, types_Clause c) {
 
 uint8_t sriqindex_some_subsumes(sriqindex_SubIndex ix, types_Clause c, int64_t skip) {
     {
+        __auto_type csig = sriqindex_clause_sig(c);
         uint8_t found = ((ix.empty >= 0) && (ix.empty != skip));
         {
             __auto_type _coll = c.body;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type l = _coll.data[_i];
-                if (!(found) && sriqindex_probe(ix, 0, l, c, skip)) {
+                if (!(found) && sriqindex_probe(ix, 0, l, c, csig, skip)) {
                     found = 1;
                 }
             }
@@ -208,7 +258,7 @@ uint8_t sriqindex_some_subsumes(sriqindex_SubIndex ix, types_Clause c, int64_t s
             __auto_type _coll = c.head;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type l = _coll.data[_i];
-                if (!(found) && sriqindex_probe(ix, 1, l, c, skip)) {
+                if (!(found) && sriqindex_probe(ix, 1, l, c, csig, skip)) {
                     found = 1;
                 }
             }
@@ -218,13 +268,13 @@ uint8_t sriqindex_some_subsumes(sriqindex_SubIndex ix, types_Clause c, int64_t s
 }
 
 slop_list_types_Clause sriqindex_distinct(slop_arena* arena, slop_list_types_Clause cs) {
-    __auto_type _mv_695 = ({ __auto_type _lst = cs; size_t _idx = (size_t)0; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (!_mv_695.has_value) {
+    __auto_type _mv_696 = ({ __auto_type _lst = cs; size_t _idx = (size_t)0; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (!_mv_696.has_value) {
         return cs;
-    } else if (_mv_695.has_value) {
-        __auto_type c0 = _mv_695.value;
+    } else if (_mv_696.has_value) {
+        __auto_type c0 = _mv_696.value;
         {
-            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((cs).len)))), ({ sriqindex__lambda_696_env_t* sriqindex__lambda_696_env = (sriqindex__lambda_696_env_t*)slop_arena_alloc(arena, sizeof(sriqindex__lambda_696_env_t)); *sriqindex__lambda_696_env = (sriqindex__lambda_696_env_t){ .cs = cs, .c0 = c0 }; (slop_closure_t){ (void*)sriqindex__lambda_696, (void*)sriqindex__lambda_696_env }; }));
+            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((cs).len)))), ({ sriqindex__lambda_697_env_t* sriqindex__lambda_697_env = (sriqindex__lambda_697_env_t*)slop_arena_alloc(arena, sizeof(sriqindex__lambda_697_env_t)); *sriqindex__lambda_697_env = (sriqindex__lambda_697_env_t){ .cs = cs, .c0 = c0 }; (slop_closure_t){ (void*)sriqindex__lambda_697, (void*)sriqindex__lambda_697_env }; }));
             __auto_type out = ((slop_list_types_Clause){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
             uint8_t have = 0;
             __auto_type last = c0;
@@ -249,11 +299,11 @@ slop_list_types_Clause sriqindex_distinct(slop_arena* arena, slop_list_types_Cla
 }
 
 types_Clause sriqindex_clause_of(slop_list_types_Clause cs, int64_t k, types_Clause fallback) {
-    __auto_type _mv_697 = ({ __auto_type _lst = cs; size_t _idx = (size_t)k; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_697.has_value) {
-        __auto_type c = _mv_697.value;
+    __auto_type _mv_698 = ({ __auto_type _lst = cs; size_t _idx = (size_t)k; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_698.has_value) {
+        __auto_type c = _mv_698.value;
         return c;
-    } else if (!_mv_697.has_value) {
+    } else if (!_mv_698.has_value) {
         return fallback;
     }
     SLOP_UNREACHABLE();
@@ -268,11 +318,11 @@ slop_list_types_Clause sriqindex_merged(slop_arena* arena, slop_list_types_Claus
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type x = _coll.data[_i];
                 while (({ __auto_type _mv = ({ __auto_type _lst = b; size_t _idx = (size_t)j; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type y = _mv.value; (sriqclauses_clause_cmp(y, x) < 0); }) : (0); })) {
-                    __auto_type _mv_698 = ({ __auto_type _lst = b; size_t _idx = (size_t)j; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                    if (_mv_698.has_value) {
-                        __auto_type y = _mv_698.value;
+                    __auto_type _mv_699 = ({ __auto_type _lst = b; size_t _idx = (size_t)j; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                    if (_mv_699.has_value) {
+                        __auto_type y = _mv_699.value;
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (y); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                    } else if (!_mv_698.has_value) {
+                    } else if (!_mv_699.has_value) {
                     }
                     j = (j + 1);
                 }
@@ -280,11 +330,11 @@ slop_list_types_Clause sriqindex_merged(slop_arena* arena, slop_list_types_Claus
             }
         }
         while (j < ((int64_t)(((int64_t)((b).len))))) {
-            __auto_type _mv_699 = ({ __auto_type _lst = b; size_t _idx = (size_t)j; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_699.has_value) {
-                __auto_type y = _mv_699.value;
+            __auto_type _mv_700 = ({ __auto_type _lst = b; size_t _idx = (size_t)j; slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_700.has_value) {
+                __auto_type y = _mv_700.value;
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (y); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            } else if (!_mv_699.has_value) {
+            } else if (!_mv_700.has_value) {
             }
             j = (j + 1);
         }
@@ -348,11 +398,11 @@ slop_option_types_ATerm sriqindex_fterm_key(types_ATerm t) {
 }
 
 sriqindex_FPart sriqindex_fpart_at(slop_list_sriqindex_FPart ps, int64_t k, sriqindex_FPart fallback) {
-    __auto_type _mv_700 = ({ __auto_type _lst = ps; size_t _idx = (size_t)k; slop_option_sriqindex_FPart _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_700.has_value) {
-        __auto_type p = _mv_700.value;
+    __auto_type _mv_701 = ({ __auto_type _lst = ps; size_t _idx = (size_t)k; slop_option_sriqindex_FPart _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_701.has_value) {
+        __auto_type p = _mv_701.value;
         return p;
-    } else if (!_mv_700.has_value) {
+    } else if (!_mv_701.has_value) {
         return fallback;
     }
     SLOP_UNREACHABLE();
@@ -418,20 +468,20 @@ uint8_t sriqindex_no_fterm(types_Lit l) {
 slop_list_sriqindex_FPart sriqindex_fparts_of(slop_arena* arena, types_Lit l, uint8_t single) {
     {
         __auto_type out = ((slop_list_sriqindex_FPart){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_701 = sriqindex_fterm_key(l.t1);
-        if (_mv_701.has_value) {
-            __auto_type t = _mv_701.value;
+        __auto_type _mv_702 = sriqindex_fterm_key(l.t1);
+        if (_mv_702.has_value) {
+            __auto_type t = _mv_702.value;
             ({ __auto_type _lst_p = &(out); __auto_type _item = (((sriqindex_FPart){.t = t, .lit = l, .single = single})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        } else if (!_mv_701.has_value) {
+        } else if (!_mv_702.has_value) {
         }
         if (!((l.form == types_LitForm_lf_unary))) {
-            __auto_type _mv_702 = sriqindex_fterm_key(l.t2);
-            if (_mv_702.has_value) {
-                __auto_type t = _mv_702.value;
+            __auto_type _mv_703 = sriqindex_fterm_key(l.t2);
+            if (_mv_703.has_value) {
+                __auto_type t = _mv_703.value;
                 if (!(sriqindex_first_is(out, t))) {
                     ({ __auto_type _lst_p = &(out); __auto_type _item = (((sriqindex_FPart){.t = t, .lit = l, .single = single})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
-            } else if (!_mv_702.has_value) {
+            } else if (!_mv_703.has_value) {
             }
         }
         return out;
@@ -439,24 +489,24 @@ slop_list_sriqindex_FPart sriqindex_fparts_of(slop_arena* arena, types_Lit l, ui
 }
 
 uint8_t sriqindex_first_is(slop_list_sriqindex_FPart ps, types_ATerm t) {
-    __auto_type _mv_703 = ({ __auto_type _lst = ps; size_t _idx = (size_t)0; slop_option_sriqindex_FPart _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_703.has_value) {
-        __auto_type p = _mv_703.value;
+    __auto_type _mv_704 = ({ __auto_type _lst = ps; size_t _idx = (size_t)0; slop_option_sriqindex_FPart _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_704.has_value) {
+        __auto_type p = _mv_704.value;
         return (types_aterm_cmp(p.t, t) == 0);
-    } else if (!_mv_703.has_value) {
+    } else if (!_mv_704.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 slop_list_sriqindex_FPart sriqindex_fparts_sorted(slop_arena* arena, slop_list_sriqindex_FPart raw) {
-    __auto_type _mv_704 = ({ __auto_type _lst = raw; size_t _idx = (size_t)0; slop_option_sriqindex_FPart _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (!_mv_704.has_value) {
+    __auto_type _mv_705 = ({ __auto_type _lst = raw; size_t _idx = (size_t)0; slop_option_sriqindex_FPart _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (!_mv_705.has_value) {
         return raw;
-    } else if (_mv_704.has_value) {
-        __auto_type p0 = _mv_704.value;
+    } else if (_mv_705.has_value) {
+        __auto_type p0 = _mv_705.value;
         {
-            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((raw).len)))), ({ sriqindex__lambda_705_env_t* sriqindex__lambda_705_env = (sriqindex__lambda_705_env_t*)slop_arena_alloc(arena, sizeof(sriqindex__lambda_705_env_t)); *sriqindex__lambda_705_env = (sriqindex__lambda_705_env_t){ .raw = raw, .p0 = p0 }; (slop_closure_t){ (void*)sriqindex__lambda_705, (void*)sriqindex__lambda_705_env }; }));
+            __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((raw).len)))), ({ sriqindex__lambda_706_env_t* sriqindex__lambda_706_env = (sriqindex__lambda_706_env_t*)slop_arena_alloc(arena, sizeof(sriqindex__lambda_706_env_t)); *sriqindex__lambda_706_env = (sriqindex__lambda_706_env_t){ .raw = raw, .p0 = p0 }; (slop_closure_t){ (void*)sriqindex__lambda_706, (void*)sriqindex__lambda_706_env }; }));
             __auto_type out = ((slop_list_sriqindex_FPart){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
             {
                 __auto_type _coll = idx;

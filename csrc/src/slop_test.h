@@ -187,6 +187,12 @@ SLOP_LIST_DEFINE(sriq_SuccSig, slop_list_sriq_SuccSig)
 SLOP_LIST_DEFINE(sriqctx_Strategy, slop_list_sriqctx_Strategy)
 #endif
 
+#ifndef SLOP_LIST_SRIQCTX_EDGE_DEFINED
+#define SLOP_LIST_SRIQCTX_EDGE_DEFINED
+#define SLOP_LIST_SRIQCTX_EDGE_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqctx_Edge, slop_list_sriqctx_Edge)
+#endif
+
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
@@ -324,6 +330,11 @@ SLOP_OPTION_DEFINE(sriq_SuccSig, slop_option_sriq_SuccSig)
 #ifndef SLOP_OPTION_SRIQCTX_STRATEGY_DEFINED
 #define SLOP_OPTION_SRIQCTX_STRATEGY_DEFINED
 SLOP_OPTION_DEFINE(sriqctx_Strategy, slop_option_sriqctx_Strategy)
+#endif
+
+#ifndef SLOP_OPTION_SRIQCTX_EDGE_DEFINED
+#define SLOP_OPTION_SRIQCTX_EDGE_DEFINED
+SLOP_OPTION_DEFINE(sriqctx_Edge, slop_option_sriqctx_Edge)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1588,6 +1599,7 @@ uint8_t test_split_agrees(slop_arena* arena, slop_list_types_Clause s);
 uint8_t test_structure_agrees(slop_arena* arena, sriqctx_Structure st);
 uint8_t test_commit_edge_row(slop_arena* arena);
 uint8_t test_scan_same(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s);
+uint8_t test_same_edges(slop_list_sriqctx_Edge a, slop_list_sriqctx_Edge b);
 uint8_t test_test_sriq_index(slop_arena* arena);
 uint8_t test_fixture_scan_same(slop_arena* arena, slop_string name);
 slop_option_sriqctx_Strategy test_parse_strategy(slop_string name);
@@ -1949,6 +1961,11 @@ SLOP_OPTION_DEFINE(test_Expect, slop_option_test_Expect)
 #ifndef SLOP_OPTION_TEST_PROTOCASE_DEFINED
 #define SLOP_OPTION_TEST_PROTOCASE_DEFINED
 SLOP_OPTION_DEFINE(test_ProtoCase, slop_option_test_ProtoCase)
+#endif
+
+#ifndef SLOP_OPTION_SRIQCTX_EDGE_DEFINED
+#define SLOP_OPTION_SRIQCTX_EDGE_DEFINED
+SLOP_OPTION_DEFINE(sriqctx_Edge, slop_option_sriqctx_Edge)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED

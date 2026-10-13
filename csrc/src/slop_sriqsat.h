@@ -27,6 +27,8 @@ typedef struct sriqsat_CIdx sriqsat_CIdx;
 typedef struct sriqsat_JoinSite sriqsat_JoinSite;
 typedef struct sriqsat_Trig sriqsat_Trig;
 typedef struct sriqsat_SuccView sriqsat_SuccView;
+typedef struct sriqsat_RSrc sriqsat_RSrc;
+typedef struct sriqsat_RSrcs sriqsat_RSrcs;
 typedef struct sriqsat_Cut sriqsat_Cut;
 typedef struct sriqsat_CRound sriqsat_CRound;
 typedef struct sriqsat_Run sriqsat_Run;
@@ -108,6 +110,12 @@ SLOP_LIST_DEFINE(sriqref_PJob, slop_list_sriqref_PJob)
 SLOP_LIST_DEFINE(sriqref_Out, slop_list_sriqref_Out)
 #endif
 
+#ifndef SLOP_LIST_SRIQREF_RSUCCACT_DEFINED
+#define SLOP_LIST_SRIQREF_RSUCCACT_DEFINED
+#define SLOP_LIST_SRIQREF_RSUCCACT_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqref_RSuccAct, slop_list_sriqref_RSuccAct)
+#endif
+
 #ifndef SLOP_OPTION_SRIQCTX_CTXSET_DEFINED
 #define SLOP_OPTION_SRIQCTX_CTXSET_DEFINED
 SLOP_OPTION_DEFINE(sriqctx_CtxSet, slop_option_sriqctx_CtxSet)
@@ -161,6 +169,11 @@ SLOP_OPTION_DEFINE(sriqref_PJob, slop_option_sriqref_PJob)
 #ifndef SLOP_OPTION_SRIQREF_OUT_DEFINED
 #define SLOP_OPTION_SRIQREF_OUT_DEFINED
 SLOP_OPTION_DEFINE(sriqref_Out, slop_option_sriqref_Out)
+#endif
+
+#ifndef SLOP_OPTION_SRIQREF_RSUCCACT_DEFINED
+#define SLOP_OPTION_SRIQREF_RSUCCACT_DEFINED
+SLOP_OPTION_DEFINE(sriqref_RSuccAct, slop_option_sriqref_RSuccAct)
 #endif
 
 struct sriqsat_SatConfig {
@@ -327,6 +340,35 @@ typedef struct sriqsat_SuccView sriqsat_SuccView;
 SLOP_OPTION_DEFINE(sriqsat_SuccView, slop_option_sriqsat_SuccView)
 #endif
 
+struct sriqsat_RSrc {
+    types_Clause c;
+    sriq_PredView view;
+};
+typedef struct sriqsat_RSrc sriqsat_RSrc;
+
+#ifndef SLOP_OPTION_SRIQSAT_RSRC_DEFINED
+#define SLOP_OPTION_SRIQSAT_RSRC_DEFINED
+SLOP_OPTION_DEFINE(sriqsat_RSrc, slop_option_sriqsat_RSrc)
+#endif
+
+#ifndef SLOP_LIST_SRIQSAT_RSRC_DEFINED
+#define SLOP_LIST_SRIQSAT_RSRC_DEFINED
+#define SLOP_LIST_SRIQSAT_RSRC_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriqsat_RSrc, slop_list_sriqsat_RSrc)
+#endif
+
+struct sriqsat_RSrcs {
+    slop_list_sriqsat_RSrc all;
+    slop_list_sriqsat_RSrc news;
+    slop_list_sriqsat_RSrc olds;
+};
+typedef struct sriqsat_RSrcs sriqsat_RSrcs;
+
+#ifndef SLOP_OPTION_SRIQSAT_RSRCS_DEFINED
+#define SLOP_OPTION_SRIQSAT_RSRCS_DEFINED
+SLOP_OPTION_DEFINE(sriqsat_RSrcs, slop_option_sriqsat_RSrcs)
+#endif
+
 struct sriqsat_Cut {
     slop_list_sriqctx_Edge es;
     int64_t k;
@@ -380,6 +422,7 @@ struct sriqsat_Here {
     sriqhyper_HIdx hx;
     slop_list_sriqsat_CIdx ixs;
     sriqground_Ground gd;
+    sriqsat_RSrcs rs;
 };
 typedef struct sriqsat_Here sriqsat_Here;
 
@@ -394,7 +437,7 @@ slop_list_int sriqsat_ctx_order(slop_arena* arena, int64_t n, int64_t perm);
 sriqsat_CIdx sriqsat_ctx_ix(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, int64_t v, int64_t perm);
 slop_list_sriqsat_CIdx sriqsat_all_ixs(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, int64_t perm);
 sriqsat_CIdx sriqsat_cix_at(slop_arena* arena, slop_list_sriqsat_CIdx ixs, int64_t v);
-sriqsat_Here sriqsat_here_of(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, int64_t v, int64_t perm);
+sriqsat_Here sriqsat_here_of(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, sriqsat_RSrcs rs, int64_t v, int64_t perm);
 uint8_t sriqsat_edge_new(sriqsat_Delta dl, sriqctx_Edge e);
 uint8_t sriqsat_consts_new(sriqctx_Structure st, sriqsat_Delta dl);
 slop_list_sriqref_Cand sriqsat_hyper_new_consts(slop_arena* arena, sriqctx_Structure st, sriqsat_Delta dl, uint32_t v, types_Clause oc);
@@ -464,9 +507,13 @@ sriqref_Out sriqsat_sat_pred(slop_arena* arena, sriqref_Env env, sriqctx_Structu
 slop_list_sriqref_Out sriqsat_pred_over(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, sriqctx_Edge e);
 uint8_t sriqsat_rpred_edge_new(sriqsat_Delta dl, uint32_t v);
 sriqref_Out sriqsat_sat_rpred(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h);
-sriqref_Out sriqsat_rpred_from(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, slop_list_types_Clause cs, slop_list_sriq_Premise aps, uint8_t anchored);
+sriqref_Out sriqsat_rpred_from(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, slop_list_sriqsat_RSrc rs, slop_list_sriq_Premise aps, uint8_t anchored);
+uint8_t sriqsat_rpred_able(sriqctx_Triggers tr, sriq_PredView v);
+slop_list_sriqsat_RSrc sriqsat_rsrcs_in(slop_arena* arena, sriqctx_Triggers tr, slop_list_types_Clause cs);
+sriqsat_RSrcs sriqsat_rsrcs_of(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl);
+sriqref_PJob sriqsat_rsrc_job(slop_arena* arena, sriqctx_Structure st, uint32_t v, sriqsat_RSrc r);
 sriqctx_Structure sriqsat_local(sriqctx_Structure st, sriqsat_Adj a, slop_arena* arena);
-sriqsat_CRound sriqsat_sat_ctx(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqsat_Adj a, int64_t v, int64_t perm);
+sriqsat_CRound sriqsat_sat_ctx(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, sriqsat_RSrcs rs, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqsat_Adj a, int64_t v, int64_t perm);
 sriqsat_CRound sriqsat_sat_old(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, slop_list_sriqctx_Edge ins, sriqsat_Here h);
 sriqctx_Edge sriqsat_edge_at(slop_list_sriqctx_Edge es, int64_t k, sriqctx_Edge fallback);
 slop_list_sriqsat_Adj sriqsat_adjacency(slop_arena* arena, sriqctx_Structure st);
@@ -478,6 +525,16 @@ int64_t sriqsat_idx_at(slop_list_int idx, int64_t k);
 sriqsat_CRound sriqsat_sat_round(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, int64_t perm);
 slop_list_sriqref_Cand sriqsat_new_cores(slop_arena* arena, sriqctx_Structure st, int64_t from);
 sriqsat_Step sriqsat_sat_apply(slop_arena* arena, sriqctx_Structure st, sriqground_Ground gd, sriqref_Round r, uint8_t scan);
+sriqctx_Structure sriqsat_edges_added(slop_arena* arena, sriqctx_Structure st, slop_list_sriqref_SuccAct succs, slop_list_sriqref_RSuccAct rsuccs);
+slop_list_sriqctx_Edge sriqsat_action_edges(slop_arena* arena, sriqctx_Structure st, slop_list_sriqref_SuccAct succs, slop_list_sriqref_RSuccAct rsuccs);
+slop_list_sriqctx_Edge sriqsat_first_new(slop_arena* arena, slop_list_sriqctx_Edge old, slop_list_sriqctx_Edge news);
+slop_list_int sriqsat_kept_positions(slop_arena* arena, slop_list_sriqctx_Edge old, slop_list_sriqctx_Edge news, sriqctx_Edge e0);
+uint8_t sriqsat_run_first_new(slop_list_sriqctx_Edge old, slop_list_int oidx, slop_list_sriqctx_Edge news, int64_t prev, int64_t k, sriqctx_Edge e0);
+slop_list_sriqctx_Edge sriqsat_in_news_order(slop_arena* arena, slop_list_sriqctx_Edge news, slop_list_int keep, sriqctx_Edge e0);
+uint8_t sriqsat_edge_in(slop_list_sriqctx_Edge es, slop_list_int idx, sriqctx_Edge e, sriqctx_Edge e0);
+int64_t sriqsat_edge_cmp(sriqctx_Edge a, sriqctx_Edge b);
+int64_t sriqsat_lk_rank(sriqctx_EdgeLabel lk);
+int64_t sriqsat_int_cmp(int64_t a, int64_t b);
 slop_list_sriqref_Cand sriqsat_outside_view(slop_arena* arena, sriqctx_Structure st, sriqground_Ground gd, slop_list_sriqref_Cand cands);
 sriqsat_Step sriqsat_commit_all(slop_arena* arena, sriqctx_Structure st, slop_list_sriqref_Cand cands, int64_t c0, int64_t e0, int64_t n0, uint8_t scan);
 slop_list_types_Clause sriqsat_run_of(slop_arena* arena, slop_list_sriqref_Cand cands, slop_list_int idx, int64_t k, uint32_t v, sriqref_Cand none_such);
@@ -627,6 +684,16 @@ SLOP_OPTION_DEFINE(sriqref_PJob, slop_option_sriqref_PJob)
 SLOP_OPTION_DEFINE(sriqref_Out, slop_option_sriqref_Out)
 #endif
 
+#ifndef SLOP_OPTION_SRIQSAT_RSRC_DEFINED
+#define SLOP_OPTION_SRIQSAT_RSRC_DEFINED
+SLOP_OPTION_DEFINE(sriqsat_RSrc, slop_option_sriqsat_RSrc)
+#endif
+
+#ifndef SLOP_OPTION_SRIQSAT_RSRCS_DEFINED
+#define SLOP_OPTION_SRIQSAT_RSRCS_DEFINED
+SLOP_OPTION_DEFINE(sriqsat_RSrcs, slop_option_sriqsat_RSrcs)
+#endif
+
 #ifndef SLOP_OPTION_SRIQSAT_CUT_DEFINED
 #define SLOP_OPTION_SRIQSAT_CUT_DEFINED
 SLOP_OPTION_DEFINE(sriqsat_Cut, slop_option_sriqsat_Cut)
@@ -635,6 +702,11 @@ SLOP_OPTION_DEFINE(sriqsat_Cut, slop_option_sriqsat_Cut)
 #ifndef SLOP_OPTION_SRIQSAT_CROUND_DEFINED
 #define SLOP_OPTION_SRIQSAT_CROUND_DEFINED
 SLOP_OPTION_DEFINE(sriqsat_CRound, slop_option_sriqsat_CRound)
+#endif
+
+#ifndef SLOP_OPTION_SRIQREF_RSUCCACT_DEFINED
+#define SLOP_OPTION_SRIQREF_RSUCCACT_DEFINED
+SLOP_OPTION_DEFINE(sriqref_RSuccAct, slop_option_sriqref_RSuccAct)
 #endif
 
 #ifndef SLOP_OPTION_SRIQSAT_RUN_DEFINED
@@ -647,21 +719,10 @@ SLOP_OPTION_DEFINE(sriqsat_Run, slop_option_sriqsat_Run)
 SLOP_OPTION_DEFINE(sriqref_NomAct, slop_option_sriqref_NomAct)
 #endif
 
-#ifndef SLOP_OPTION_SRIQREF_RSUCCACT_DEFINED
-#define SLOP_OPTION_SRIQREF_RSUCCACT_DEFINED
-SLOP_OPTION_DEFINE(sriqref_RSuccAct, slop_option_sriqref_RSuccAct)
-#endif
-
 #ifndef SLOP_LIST_SRIQREF_NOMACT_DEFINED
 #define SLOP_LIST_SRIQREF_NOMACT_DEFINED
 #define SLOP_LIST_SRIQREF_NOMACT_IMPL_DEFINED
 SLOP_LIST_DEFINE(sriqref_NomAct, slop_list_sriqref_NomAct)
-#endif
-
-#ifndef SLOP_LIST_SRIQREF_RSUCCACT_DEFINED
-#define SLOP_LIST_SRIQREF_RSUCCACT_DEFINED
-#define SLOP_LIST_SRIQREF_RSUCCACT_IMPL_DEFINED
-SLOP_LIST_DEFINE(sriqref_RSuccAct, slop_list_sriqref_RSuccAct)
 #endif
 
 
