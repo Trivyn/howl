@@ -1609,7 +1609,7 @@ sriqorder_SriqOrder sriq_ex_kids_ord(slop_arena* arena) {
             }
         }
         ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqorder_aux_const(sriqorder_const_entry(base, ((uint32_t)(0))), ((uint32_t)(0)), ((uint32_t)(2)), ((uint32_t)(1)))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        return ((sriqorder_SriqOrder){.consts = cs});
+        return ((sriqorder_SriqOrder){.consts = cs, .rank = -1});
     }
 }
 

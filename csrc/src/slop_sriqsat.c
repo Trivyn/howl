@@ -132,6 +132,7 @@ uint8_t sriqsat_same_cands(slop_arena* arena, slop_list_sriqref_Cand a, slop_lis
 slop_list_types_Clause sriqsat_distinct_clauses(slop_arena* arena, slop_list_sriqref_Cand cs);
 slop_list_types_Clause sriqsat_sorted_distinct(slop_arena* arena, slop_list_types_Clause raw, types_Clause c0);
 types_Clause sriqsat_clause_of_l(slop_list_types_Clause cs, int64_t k, types_Clause fallback);
+sriqctx_Structure sriqsat_ranked_structure(sriqctx_Structure st, int64_t nquery);
 sriqsat_SatResult sriqsat_sat_run(slop_arena* arena, sriqref_RefIn in, sriqsat_SatConfig cfg);
 
 typedef struct { slop_list_sriqsat_JoinSite raw; sriqsat_JoinSite s0; } sriqsat__lambda_1532_env_t;
@@ -2644,6 +2645,11 @@ types_Clause sriqsat_clause_of_l(slop_list_types_Clause cs, int64_t k, types_Cla
     SLOP_UNREACHABLE();
 }
 
+sriqctx_Structure sriqsat_ranked_structure(sriqctx_Structure st, int64_t nquery) {
+    SLOP_PRE(((nquery >= 0)), "(>= nquery 0)");
+    return ((sriqctx_Structure){.ctxs = st.ctxs, .sets = st.sets, .edges = st.edges, .ord = sriqorder_ranked(st.ord, nquery)});
+}
+
 sriqsat_SatResult sriqsat_sat_run(slop_arena* arena, sriqref_RefIn in, sriqsat_SatConfig cfg) {
     {
         __auto_type base = cfg.base;
@@ -2651,7 +2657,7 @@ sriqsat_SatResult sriqsat_sat_run(slop_arena* arena, sriqref_RefIn in, sriqsat_S
         __auto_type lam = (((base.lam >= 0)) ? base.lam : sriqref_ref_lambda(tr, base.strat, in.nquery));
         __auto_type env = sriqref_env_of(arena, in, base, tr, lam);
         __auto_type hx = sriqhyper_h_index(arena, in.onto);
-        __auto_type st0 = sriqctx_init_structure(arena, in.nquery, in.nconst);
+        __auto_type st0 = sriqsat_ranked_structure(sriqctx_init_structure(arena, in.nquery, in.nconst), in.nquery);
         __auto_type held = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(1048576); _new_arena; });
         __auto_type run = ((sriqsat_Run){.st = st0, .dl = sriqsat_first_delta(arena, st0), .status = sriqref_RefStatus_rs_fuel, .rounds = 0, .going = 1, .counts = ((sriqsat_Counts){.cands = 0, .rcands = 0, .succs = 0, .rsuccs = 0, .noms = 0, .added = 0, .hyper = 0})});
         while (run.going && (run.rounds < base.fuel)) {

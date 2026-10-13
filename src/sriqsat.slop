@@ -42,6 +42,7 @@
   (import sriqctx (Strategy Triggers EdgeLabel Edge Ctx CtxSet Structure build-triggers init-structure core-of
                     ctx-by-core))
   (import canon (sort-range))
+  (import sriqorder (ranked))
   (import sriq (Premise RConcl HState PredView PSlot CSub SuccSig KSets
                 hyper-start hyper-finish succ-sig k-sets covers succ-step pred-view rpred-view rpred-heads-ok body-at
                 joinable csub-lit join-rule Pos subterm-at))
@@ -1668,6 +1669,17 @@
     (@pure)
     (match (list-get cs k) ((some c) c) ((none) fallback)))
 
+  ;; The engine runs the ranked order (slice 9g, SPEC §5.5 S5): fresh class
+  ;; names above the query classes, so a head of several fresh disjuncts has
+  ;; one maximal literal among them. The reference runs Sequoia's order as
+  ;; printed, and the tests require the same raw answers from both.
+  (fn ranked-structure ((st Structure) (nquery Int))
+    (@intent "st with its order ranked from nquery")
+    (@spec ((Structure Int) -> Structure))
+    (@pure)
+    (@pre (>= nquery 0))
+    (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges (. st edges)) (ord (ranked (. st ord) nquery))))
+
   (fn sat-run ((arena Arena) (in RefIn) (cfg SatConfig))
     (@intent "Algorithm 1 under S6's schedule at one worker: initialise, then rounds of derive, create and commit to a
               stop. Each round runs in a scratch arena, and what it leaves is copied into an arena of its own")
@@ -1678,7 +1690,7 @@
           (lam (if (>= (. base lam) 0) (. base lam) (ref-lambda tr (. base strat) (. in nquery))))
           (env (env-of arena in base tr lam))
           (hx (h-index arena (. in onto)))
-          (st0 (init-structure arena (. in nquery) (. in nconst)))
+          (st0 (ranked-structure (init-structure arena (. in nquery) (. in nconst)) (. in nquery)))
           (mut held (arena-new 1048576))
           (mut run (record-new Run (st st0) (dl (first-delta arena st0)) (status 'rs-fuel) (rounds 0) (going true)
                                    (counts (record-new Counts (cands 0) (rcands 0) (succs 0) (rsuccs 0) (noms 0)

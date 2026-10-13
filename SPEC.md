@@ -2721,10 +2721,11 @@ is fixed here so that reports are input-determined.
   Completeness holds for any admissible strategy (Theorem 2). Capped reports and `rounds` depend on
   which strategy runs, though, so the strategy is not a runtime option. The feasibility checkpoint
   measures eager against it, and a change is an amendment to this paragraph.
-- **One context order, for every context:** [TGH21] §4.2's Sequoia order, admissible by Appendix A.
-  It is the least order containing the lexicographic path order on a-terms induced by `⋗`, plus
-  that section's seven comparisons. It compares two p-terms only when one is the other with smaller
-  a-terms, so distinct class names are never ordered against each other.
+- **One context order, for every context:** [TGH21] §4.2's Sequoia order, admissible by Appendix A,
+  as the reference evaluator runs it; the engine runs it ranked (below). It is the least order
+  containing the lexicographic path order on a-terms induced by `⋗`, plus that section's seven
+  comparisons. It compares two p-terms only when one is the other with smaller a-terms, so distinct
+  class names are never ordered against each other.
 
   `⋗` orders `Σf ∪ Σu`. In each comparison below, the greater id, the later IRI and the longer label
   are the greater:
@@ -2747,6 +2748,54 @@ is fixed here so that reports are input-determined.
   `≻`. In Table 2's side conditions, "`Δ ⊁ L`" means that no literal of `Δ` is `≻ L`, so `L` is
   maximal in `Δ ∨ L`; "`t ⊁ s`" means that `t ≻ s` does not hold. The paper's text extraction
   loses the symbol; the PDF prints `⊁`.
+- **The ranked order (slice 9g, AD 1ffa7a22).** The engine adds a precedence on class names to
+  Sequoia's order: every fresh name ranks above every query class, and fresh names rank among
+  themselves by id. A query class is one of the input's, an id below `nquery`; the fresh names are
+  S1's and S2's, at or above it. Query classes stay unordered among themselves.
+  - **Why.** Sequoia's order makes every disjunct of a head `F₁(x) ∨ F₂(x) ∨ Q(x)` maximal, so
+    Hyper resolves on each one. On CCO after 9f, context 41's DL3 clauses `A(x) ∧ R(z, x) → B(z)`
+    met 1,000 to 2,600 premises selecting a fresh `A(x)`, times ~300 selecting `R(z, x)`, and every
+    choice fired: more than 10.6M conclusions in round 10. [TGH21] §8 names the cause: most
+    timeouts were on ontologies "where saturation produced many clauses with large numbers of
+    disjuncts in the head".
+  - **The order.** It is the least order containing Sequoia's and `F(x) ≻ G(x)` for every pair of
+    class names where `F` ranks above `G`. Between unary atoms with different predicates, that
+    closure is exactly: `P(t) ≻ P′(t′)` iff `P` ranks above `P′`, `t` is `x` or some `f(x)`, and
+    `t′` is `x` or `y`.
+    - A chain from `P(t)` to `P′(t′)` stays among unary atoms: Sequoia's order puts a p-term only
+      above a-terms and above the same predicate with smaller a-terms, and never an a-term above a
+      p-term.
+    - So it reads `P(t) ⪰ P(x)`, one or more rank steps (rank is transitive), then
+      `P′(x) ⪰ P′(t′)`. `t ⪰ x` holds only for `x` and `f(x)` (item 3; `x` is never compared with a
+      constant). `x ⪰ t′` holds only for `x` and `y` (item 1).
+  - **Strict.** The order is irreflexive, since no name ranks above itself and Sequoia's is strict.
+    It is transitive, case by case:
+    - rank, then the same predicate: `P(t) ≻ P′(t′) ≻ P′(t″)` needs `t′ ≻ t″`, so `t′` is `x` and
+      `t″` is `y`, which is allowed;
+    - the same predicate, then rank: `P(s) ≻ P(t) ≻ P′(t′)` needs `s ≻ t` with `t` in `{x, f(x)}`,
+      so `s` is some `g(x)`, which is allowed;
+    - rank, then rank: the middle term is `x`, and rank is transitive.
+  - **Admissible (Definition 7).**
+    - (1) to (3) concern `true`, p-terms against `x`, and a-terms, and are Sequoia's unchanged.
+    - (4): p-terms do not nest, so monotonicity and the subterm property concern only a-terms
+      inside one p-term, as before.
+    - (5) constrains what a function-free p-term mentioning `y` or a constant may dominate. The new
+      comparisons' greater side is `P(x)` or `P(f(x))`, neither of which is such a p-term, and no
+      atom over `y` or a constant gains a comparison as the greater.
+  - **C2 for every raw query** (Theorem 2):
+    - `unsat` and `inconsistent` have `ΔQ = ∅`, so C2 holds vacuously.
+    - `holds(B, A)` and `holds(⊤, A)` have `ΔQ = {A(x)}` with `A` a query class. `A` ranks above
+      nothing, so `A(x)` dominates only `x`, `y`, `true` and atoms over `y`, all of which C2
+      excludes.
+    - This is why fresh names rank **above** the query classes. [TGH21] §7.1 says Sequoia makes
+      them smaller. Read literally, that breaks C2: with `B ⊑ T ⊔ A` and `T ⊑ ⊥`, `T` fresh and
+      `A ≻ T`, the clause `⊤ → T(x) ∨ A(x)` never resolves `T(x)`, so `B ⊑ A` is missed. A test row
+      runs that ontology. Bate+18 §5.4's "smallest" advice is for a consistency check, where
+      `ΔQ = ∅`.
+  - **One order still serves every context**, so S6's single-order arguments (the shared ground
+    view, D4) are untouched. Theorem 2 then gives completeness for the engine as for the reference.
+    The reference keeps Sequoia's order as printed, and the tests require both to give the same raw
+    answers, which checks this independently.
 - **Ids are created from content.** These get dense ids in the canonical order of what they name,
   never in input order, as the gate's canonical forms already are
   ([§6.8](#68-determinism-binding)):
@@ -4467,7 +4516,7 @@ row below sits on one side of that line.
 | **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract; each part of the read-through was seen to fail under a mutation, caught by that differential or a pinned entailment ([§5.4](#54-the-el-calculus), K7's gate). Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
 | **`el++` translation and sharing** — K0–K7: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, the shared saturation for safe classes, and role inclusions read through the told closure (rule (13) is the dispatcher's `sup*`/`sub*` reads, not a rule function, so its coverage is held by the reference differential, not a per-rule contract) | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
 | **`sriq` clause boundary** — [TGH21] Table 1 is expanded exactly into DL-clauses, over dense ids from content | `src/sriqclauses.slop`: one function per Table 1 form, checked row by row against Table 1 (`test-sriq-table1-rows`, with DL2 over three symbols and over a ⊤ filler, and DL4 over three neighbours, over `n = 0` and with a shared `S_{B₂}` clause). On every tracked `sriq` fixture (`make test`), every clause is a DL-clause (§2.3) in its one canonical record, every id is in range and maps back, every table is in content order, and reordered input gives the same clauses. The shape, canonical-record, range, round-trip and order checks (not the reordering) also pass on all 18 vendored documents, run by hand (`howl-test sriq-dump clauses-check`). The checks themselves reject a malformed clause, record and table (`test-sriq-clause-checks-reject`). 56 mutants: 53 seen red; the other 3 each exposed a check that another already made, now removed | **Owed** — the expansions build lists in loops, whose lengths and contents the checker does not track (as `sort-range`); the tests stand in |
-| **`sriq` context order** — Sequoia's order (§5.5 S5) is implemented exactly, and is admissible | `src/sriqorder.slop`'s case table. Z3 proves [TGH21] §4.2's items 1 to 3 on a-terms, item 4 (everything else is above `true`), item 5 (a p-term is above `x` and `y`), that `x` and `y` are never compared with a constant or `f(u)`, that no a-term is above a p-term, that distinct predicates are never compared, and that `⋗` on constants is irreflexive. Every guarded post was checked for vacuity: its negation fails. (Before slop 0.4.2, the posts of `fx-over` and `fu-over` leaked onto `aterm-gt`'s result, so item 1 and the constant-above-`x` case held only vacuously: slop-lang/slop#340, graph Lesson b9d4a569.) `test-sriq-order-closure` builds the least order containing a literal LPO and items 1 to 7, by closure over a bounded universe of Definition 2's context terms (eight constants, labels up to length 2, every `f(u)`), and requires the table to equal it pair by pair. Over the same universe the table is irreflexive, asymmetric and transitive, and meets Definition 7 (1) to (3) and Theorem 2's C2. Maximality is checked row by row, and the literal order is strict. 25 mutants, all seen red | **Partly** — the items above are proved. Transitivity, asymmetry and irreflexivity beyond constants, the multiset extension and the label walk (loops) are held by the tests |
+| **`sriq` context order** — Sequoia's order (§5.5 S5) is implemented exactly, and is admissible | `src/sriqorder.slop`'s case table. Z3 proves [TGH21] §4.2's items 1 to 3 on a-terms, item 4 (everything else is above `true`), item 5 (a p-term is above `x` and `y`), that `x` and `y` are never compared with a constant or `f(u)`, that no a-term is above a p-term, that distinct predicates are never compared, and that `⋗` on constants is irreflexive. Every guarded post was checked for vacuity: its negation fails. The engine's ranked order (slice 9g) is proved the same way. Z3 proves that a query class ranks above nothing, that no name ranks above itself, and that a p-term of another predicate is below only a higher-ranked one. `test-sriq-ranked-order-closure` builds the least order with an independent copy of the precedence, over a universe with one query class and two fresh names, and requires the table to equal it. The ranked strictness test adds Definition 7(5), and the ranked C2 and max-flags tests check the query classes and the precedence row by row. Three mutants were all seen red: fresh names below query classes, a fresh atom over a constant ranked, and `f(x)` dropped. The first also makes the prototype disagree with the Sequoia-order reference on five fixtures. (Before slop 0.4.2, the posts of `fx-over` and `fu-over` leaked onto `aterm-gt`'s result, so item 1 and the constant-above-`x` case held only vacuously: slop-lang/slop#340, graph Lesson b9d4a569.) `test-sriq-order-closure` builds the least order containing a literal LPO and items 1 to 7, by closure over a bounded universe of Definition 2's context terms (eight constants, labels up to length 2, every `f(u)`), and requires the table to equal it pair by pair. Over the same universe the table is irreflexive, asymmetric and transitive, and meets Definition 7 (1) to (3) and Theorem 2's C2. Maximality is checked row by row, and the literal order is strict. 25 mutants, all seen red | **Partly** — the items above are proved. Transitivity, asymmetry and irreflexivity beyond constants, the multiset extension and the label walk (loops) are held by the tests |
 | **`sriq` redundancy and commit** — `∈̂` is [TGH21] §2.1's, and S6's commit leaves `min(W ∪ C)` | `src/sriqsubsume.slop`. Z3 proves `in-hat` both ways through a checked `@loop-invariant` over `(list-visited ws)`, as `ksc-join`: it holds exactly when `c` is a tautology or some member subsumes it. The same way, it proves `tautology` (some head literal is `s ≈ s`, or `s ≉ t` beside `s ≈ t`; through `taut-in`), `has-eq-of`, and `holds-clause` (membership), and that Elim's `without-subsumed` keeps nothing `c` subsumes. `subsumes` (merge walks over canonical clauses) is held by rows of each case of `∈̂`, with no substitution. R1: in every one of the 720 orders of six candidates (a tautology, a subsumed and a subsuming candidate, and an insertion undone later in the same commit), the commit leaves `min(W ∪ C)` as its definition computes it, and adds exactly the new members. R2: whatever is `∈̂` before the commit is `∈̂` after it, though its subsumers are deleted. 15 mutants, all seen red. Contract mutants: 4, each refuted by exactly the contract it targets | **Partly** — `in-hat` and `tautology` are proved relative to `subsumes`; that and the commit are held by the tests |
 | **`sriq` single-context rules** — [TGH21] Table 2's Core, Hyper, Ineq and Factor are implemented exactly | `src/rules/sriq.slop`: one loop-free function per rule instance over premise views (`select` gives a clause's body Γ, the selected literal L, the rest of its head Δ, and whether `Δ ⊁ L`), returning the conclusion's parts and whether it fires. Z3 proves `sound` and `complete` for Ineq and Factor, each stating the rule's side conditions, and for Hyper's step (one body atom against one premise) relative to `atom-matches`, which decides whether the premise's literal is the atom under σ; `head` for Ineq; and `complete` for Core, which takes each atom of `core_v` from its caller. Hyper's fold over the body atoms (`hyper-join`) keeps the step's verdict (`hyper-finish`) and only firing steps (`extend-one`), both proved; that it reaches every choice of premises is held by rows: O1's (16) to (21) under HOWL's order, each from its premises and ontology clause, a premise's body carried, a literal that is not maximal, DL4 with a repeated neighbour (it fires, and ∈̂ (i) drops the conclusion), Example 1's root Hypers (117) and (118) (`x` bound to `o`, `z₁` to `y`), a bodiless clause on a given constant (E4), `f(x)` at the root as `f(u)`, and `S(x, x)` on one constant twice. Ineq fires on a `t ≉ t` that is not maximal. Z3 also proves the helpers' contracts:
 - `select`'s `@pre` (the index is in the head) and that its view keeps the body;

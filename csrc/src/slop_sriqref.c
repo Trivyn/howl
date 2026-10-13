@@ -1441,7 +1441,7 @@ sriqorder_SriqOrder sriqref_push_const(slop_arena* arena, sriqorder_SriqOrder or
             }
         }
         ({ __auto_type _lst_p = &(cs); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        return ((sriqorder_SriqOrder){.consts = cs});
+        return ((sriqorder_SriqOrder){.consts = cs, .rank = ord.rank});
     }
 }
 
@@ -1900,7 +1900,7 @@ sriqctx_Structure sriqref_copy_structure(slop_arena* arena, sriqctx_Structure st
                 ({ __auto_type _lst_p = &(consts); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
-        return ((sriqctx_Structure){.ctxs = ctxs, .sets = sets, .edges = edges, .ord = ((sriqorder_SriqOrder){.consts = consts})});
+        return ((sriqctx_Structure){.ctxs = ctxs, .sets = sets, .edges = edges, .ord = ((sriqorder_SriqOrder){.consts = consts, .rank = st.ord.rank})});
     }
 }
 

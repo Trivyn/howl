@@ -55,7 +55,8 @@
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
   (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees))
   (import sriqindex (commit-indexed KIdx k-index k-query))
-  (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt max-flags))
+  (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts ranked aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt
+                     max-flags))
 
   (ffi "string.h"
     (strlen ((s (Ptr U8))) U64))
@@ -3917,7 +3918,7 @@
         (list-push cs (aux-const a2 (cast U32 2) (cast U32 0) (cast U32 1)))
         (list-push cs (aux-const a1 (cast U32 4) (cast U32 1) (cast U32 1)))
         (list-push cs (aux-const a (cast U32 0) (cast U32 1) (cast U32 1)))
-        (record-new SriqOrder (consts cs)))))
+        (record-new SriqOrder (consts cs) (rank -1)))))
 
   (fn ord-label ((arena Arena) (ord SriqOrder) (u U32))
     (@intent "u's label as letters S·1000 + i, from the base")
@@ -4043,12 +4044,20 @@
     (@intent "Definition 2's context terms over the test signature: true, the a-terms, B0 and B1 of each, and S0's two families")
     (@spec ((Arena) -> (List CTerm)))
     (@alloc arena)
+    (ord-universe-n arena 2))
+
+  (fn ord-universe-n ((arena Arena) (npred Int))
+    (@intent "ord-universe with classes B0 to B(npred - 1)")
+    (@spec ((Arena Int) -> (List CTerm)))
+    (@alloc arena)
     (let ((as (ord-aterms arena))
           (mut out (list-new arena CTerm)))
       (do
         (list-push out (ct-true))
         (for-each (t as) (list-push out (ct-a t)))
-        (for-each (t as) (do (list-push out (ct-p (atom1 (cast U32 0) t))) (list-push out (ct-p (atom1 (cast U32 1) t)))))
+        (for-each (t as)
+          (let ((mut b 0))
+            (while (< b npred) (do (list-push out (ct-p (atom1 (cast U32 b) t))) (set! b (+ b 1))))))
         ;; S(x, t) and S(t, x) for t in x, y, f(x), u.
         (for-each (t as)
           (when (not (== (. t kind) 'ak-fu))
@@ -4122,8 +4131,20 @@
           (or (ref-is-var (. t a))
               (ord-arg-ge m n u (. (. s p) t1) j)
               (and (== (. (. s p) form) 'lf-binary) (ord-arg-ge m n u (. (. s p) t2) j))))
-        ((and (== (. s ck) 'ck-p) (== (. t ck) 'ck-p)) (ord-p-args-le m n u (. s p) (. t p)))
+        ((and (== (. s ck) 'ck-p) (== (. t ck) 'ck-p))
+          (or (ord-p-args-le m n u (. s p) (. t p)) (ord-rank-step ord (. s p) (. t p))))
         (else false))))
+
+  (fn ord-rank-step ((ord SriqOrder) (a Lit) (b Lit))
+    (@intent "The ranked order's generating comparison (slice 9g): F(x) ≻ G(x) when F ranks above G")
+    (@spec ((SriqOrder Lit Lit) -> Bool))
+    (@pure)
+    ;; Written from SPEC §5.5 S5, not from rank-gt: F is fresh (id from the
+    ;; rank), and G is a query class or a fresh name of smaller id.
+    (let ((r (. ord rank)) (f (cast Int (. a pred))) (g (cast Int (. b pred))))
+      (and (== (. a form) 'lf-unary) (== (. b form) 'lf-unary)
+           (== (. (. a t1) kind) 'ak-x) (== (. (. b t1) kind) 'ak-x)
+           (>= r 0) (>= f r) (or (< g r) (> f g)))))
 
   (fn ord-items-1-3 ((arena Arena) (ord SriqOrder) (s ATerm) (t ATerm))
     (@intent "§4.2's items 1 to 3: x ≻ y; f(x) ≻ g(x) for f ⋗ g; f(x) ≻ each constant, x and y")
@@ -4217,9 +4238,19 @@
     (@intent "The case table is the least order containing the LPO and §4.2's items 1 to 7, pair by pair over Definition 2's terms")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (let ((ord (ord-table arena))
-          (u (ord-universe arena))
-          (n (cast Int (list-len u)))
+    (order-closure-on arena (ord-table arena) (ord-universe arena)))
+
+  (fn test-sriq-ranked-order-closure ((arena Arena))
+    (@intent "The ranked table (B0 a query class; B1 and B2 fresh) is the least order containing Sequoia's and the precedence")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (order-closure-on arena (ranked (ord-table arena) 1) (ord-universe-n arena 3)))
+
+  (fn order-closure-on ((arena Arena) (ord SriqOrder) (u (List CTerm)))
+    (@intent "The table under ord is the least order generated over u, pair by pair")
+    (@spec ((Arena SriqOrder (List CTerm)) -> Bool))
+    (@alloc arena)
+    (let ((n (cast Int (list-len u)))
           (m (ord-least arena ord u))
           (mut bad 0)
           (mut i 0))
@@ -4248,12 +4279,22 @@
         bad)))
 
   (fn test-sriq-order-strict-and-admissible ((arena Arena))
-    (@intent "Over the universe the table is a strict order, and admissible (Definition 7, 1 to 3) with ⋗ as S5 pins it")
+    (@intent "Over the universe the table is a strict order, and admissible (Definition 7, 1 to 3 and 5) with ⋗ as S5 pins it")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (let ((ord (ord-table arena))
-          (u (ord-universe arena))
-          (mut ok true))
+    (order-strict-on arena (ord-table arena) (ord-universe arena)))
+
+  (fn test-sriq-ranked-order-strict-and-admissible ((arena Arena))
+    (@intent "The ranked table is a strict order and admissible (Definition 7, 1 to 3 and 5) over the three-class universe")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (order-strict-on arena (ranked (ord-table arena) 1) (ord-universe-n arena 3)))
+
+  (fn order-strict-on ((arena Arena) (ord SriqOrder) (u (List CTerm)))
+    (@intent "Strict and admissible under ord over u")
+    (@spec ((Arena SriqOrder (List CTerm)) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
       (do
         (for-each (s u)
           (do
@@ -4287,19 +4328,47 @@
                        (and (== (. (. s a) kind) 'ak-u) (ref-is-var (. t a))))
                    st)
           (set! ok false))
+        ;; Def. 7(5): a function-free p-term mentioning y or a constant is
+        ;; above a p-term only when that is itself with smaller a-terms.
+        (when (and st (== (. s ck) 'ck-p) (== (. t ck) 'ck-p) (ord-def7-5-bound (. s p))
+                   (or (!= (. (. s p) pred) (. (. t p) pred)) (!= (. (. s p) form) (. (. t p) form))))
+          (set! ok false))
         (when (not ok) (do (print "  [order] pair ") (print (ct-text arena s)) (print " ") (println (ct-text arena t))))
         ok)))
+
+  (fn ord-def7-5-bound ((l Lit))
+    (@intent "Is l function-free and mentioning y or a constant (Definition 7(5)'s premise)?")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (let ((k1 (. (. l t1) kind)) (k2 (. (. l t2) kind)) (bin (== (. l form) 'lf-binary)))
+      (and (not (or (== k1 'ak-fx) (== k1 'ak-fu) (and bin (or (== k2 'ak-fx) (== k2 'ak-fu)))))
+           (or (== k1 'ak-y) (== k1 'ak-u) (and bin (or (== k2 'ak-y) (== k2 'ak-u)))))))
 
   (fn test-sriq-order-c2 ((arena Arena))
     (@intent "Theorem 2's C2 for every query clause B(x) → A(x): every s with A(x) ≻ s is x, true or mentions y")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (let ((ord (ord-table arena))
-          (u (ord-universe arena))
-          (mut ok true))
+    (order-c2-on arena (ord-table arena) (ord-universe arena)))
+
+  (fn test-sriq-ranked-order-c2 ((arena Arena))
+    (@intent "C2 under the ranked order for every query class A (B0), while the fresh B1 and B2 do rank above it")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((ord (ranked (ord-table arena) 1)) (x (at-x)))
+      (and (order-c2-on arena ord (ord-universe-n arena 3))
+           (cterm-gt ord (ct-p (atom1 (cast U32 1) x)) (ct-p (atom1 (cast U32 0) x)))
+           (cterm-gt ord (ct-p (atom1 (cast U32 2) x)) (ct-p (atom1 (cast U32 1) x)))
+           (not (cterm-gt ord (ct-p (atom1 (cast U32 0) x)) (ct-p (atom1 (cast U32 1) x)))))))
+
+  (fn order-c2-on ((arena Arena) (ord SriqOrder) (u (List CTerm)))
+    (@intent "C2 under ord for every query clause B(x) → A(x) over u, A a query class (below the rank, when ranked)")
+    (@spec ((Arena SriqOrder (List CTerm)) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true))
       (do
         (for-each (a u)
-          (when (and (== (. a ck) 'ck-p) (== (. (. a p) form) 'lf-unary) (== (. (. (. a p) t1) kind) 'ak-x))
+          (when (and (== (. a ck) 'ck-p) (== (. (. a p) form) 'lf-unary) (== (. (. (. a p) t1) kind) 'ak-x)
+                     (or (< (. ord rank) 0) (< (cast Int (. (. a p) pred)) (. ord rank))))
             (for-each (s u)
               (when (and (cterm-gt ord a s) (not (ord-c2-exempt s)))
                 (do (print "  [order] C2 fails: ") (print (ct-text arena a)) (print " > ") (println (ct-text arena s))
@@ -4355,7 +4424,13 @@
     (@intent "One row: the head as a set, its flags exactly `want`")
     (@spec ((Arena String (List Lit) String) -> Bool))
     (@alloc arena)
-    (let ((got (flags-text arena (max-flags arena (ord-table arena) (. (make-clause arena (list-new arena Lit) head) head)))))
+    (flags-under arena (ord-table arena) label head want))
+
+  (fn flags-under ((arena Arena) (ord SriqOrder) (label String) (head (List Lit)) (want String))
+    (@intent "flags-are under ord")
+    (@spec ((Arena SriqOrder String (List Lit) String) -> Bool))
+    (@alloc arena)
+    (let ((got (flags-text arena (max-flags arena ord (. (make-clause arena (list-new arena Lit) head) head)))))
       (if (string-eq got want)
         true
         (do (print "  [max] ") (print label) (print ": got ") (println got) false))))
@@ -4391,6 +4466,24 @@
         (when (not (flags-are arena "B0(y), x ≈ y" (two-lits arena (eq-lit y x) (atom1 b0 y)) "TF")) (set! ok false))
         (when (not (lits-strict arena (ord-table arena) (sample-lits arena))) (set! ok false))
         ok)))
+
+  (fn test-sriq-ranked-max-flags-rows ((arena Arena))
+    (@intent "Δ ⊁ L under the ranked order (slice 9g): B0 a query class, B1 and B2 fresh")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((ord (ranked (ord-table arena) 1))
+          (q (cast U32 0)) (f1 (cast U32 1)) (f2 (cast U32 2))
+          (x (at-x)) (y (at-y)) (f0x (at-fx (cast U32 0))) (u2 (at-u (cast U32 2))))
+      (and
+        ;; A fresh name above a query class, and fresh names by id.
+        (flags-under arena ord "B0(x), B1(x)" (two-lits arena (atom1 f1 x) (atom1 q x)) "FT")
+        (flags-under arena ord "B1(x), B2(x)" (two-lits arena (atom1 f2 x) (atom1 f1 x)) "FT")
+        ;; Through item 7: B1(f0(x)) ≻ B1(x) ≻ B0(x) ≻ B0(y).
+        (flags-under arena ord "B0(y), B1(f0(x))" (two-lits arena (atom1 f1 f0x) (atom1 q y)) "FT")
+        ;; Definition 7(5): an atom over y or a constant gains nothing.
+        (flags-under arena ord "B0(x), B1(y)" (two-lits arena (atom1 f1 y) (atom1 q x)) "TT")
+        (flags-under arena ord "B0(u2), B1(u2)" (two-lits arena (atom1 f1 u2) (atom1 q u2)) "TT")
+        (lits-strict arena ord (sample-lits arena)))))
 
   (fn sample-lits ((arena Arena))
     (@intent "One literal of each form over a few a-terms")
@@ -5097,7 +5190,7 @@
               (list-push cs (aux-const e0 (cast U32 0) (cast U32 2) (cast U32 2)))
               (list-push cs (aux-const (aux-const e0 (cast U32 0) (cast U32 2) (cast U32 1)) (cast U32 2) (cast U32 2) (cast U32 1)))
               (list-push cs (aux-const e0 (cast U32 0) (cast U32 3) (cast U32 1)))))
-        (record-new SriqOrder (consts cs)))))
+        (record-new SriqOrder (consts cs) (rank -1)))))
 
   (fn r-ids ((arena Arena) (a Int) (b Int))
     (@intent "[a] when b < 0, else [a, b]")
@@ -6126,6 +6219,7 @@
           (list-push out (record-new Expect (file "symmetric") (kind 0) (a "A") (b "C")))
           (list-push out (record-new Expect (file "union-negation") (kind 0) (a "A") (b "C")))
           (list-push out (record-new Expect (file "tgh21-o1") (kind 0) (a "A") (b "D")))
+          (list-push out (record-new Expect (file "ranked-fresh-disjunct") (kind 0) (a "B") (b "A")))
           (for-each (e (abox-expects arena)) (list-push out e))
           out)))
 
@@ -6636,9 +6730,12 @@
     (@alloc arena)
     (let ((in (ref-input arena sc)) (mut ok true))
       (do (for-each (s (strategies arena))
-            (when (not (and (proto-agrees arena name in (. (. sc ids) nclass) s)
-                            (expects-met arena name (. sc ids) s (. (sat-run arena in (sat-cfg s 0)) res))))
-              (set! ok false)))
+            (let ((r (. (sat-run arena in (sat-cfg s 0)) res)))
+              (when (not (and (proto-agrees arena name in (. (. sc ids) nclass) s)
+                              (expects-met arena name (. sc ids) s r)
+                              ;; The engine runs the ranked order (9g); the reference does not.
+                              (== (. (. (. r st) ord) rank) (cast Int (. (. sc ids) nclass)))))
+                (set! ok false))))
           ok)))
 
   ;; ------------------------------------------------------------
@@ -11506,6 +11603,22 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-max-flags-rows arena)))
             (print-test-result "7c: maximality (Δ ⊁ L), row by row" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ranked-order-closure arena)))
+            (print-test-result "9g: the ranked order is the least order containing Sequoia's and the class precedence" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ranked-order-strict-and-admissible arena)))
+            (print-test-result "9g: the ranked order is strict and admissible (TGH21 Def. 7)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ranked-order-c2 arena)))
+            (print-test-result "9g: the ranked order meets C2 for every query class" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-ranked-max-flags-rows arena)))
+            (print-test-result "9g: maximality under the ranked order, row by row" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-inhat-rows arena)))
