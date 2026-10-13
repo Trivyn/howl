@@ -129,6 +129,10 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
+      # Check out LF, as on Linux and macOS: the version checks read
+      # slop.toml line by line, and a CR would end up in --version.
+      - run: git config --global core.autocrlf false
+        shell: pwsh
       - uses: actions/checkout@v4
       - uses: msys2/setup-msys2@v2
         with:
@@ -142,17 +146,14 @@ jobs:
         run: |
           set -e
           make release CC=gcc
-          if ./build/howl validate corpus/fixtures/v0/litmus.ttl --report | grep -q $'\r'; then
-            echo "FAIL: the report has CRLF line endings" >&2; exit 1; fi
-          objdump -p build/howl.exe | grep 'DLL Name'
-          if objdump -p build/howl.exe | grep 'DLL Name' | grep -qiE 'libgcc|libwinpthread|libstdc'; then
-            echo "FAIL: howl.exe imports a MinGW runtime DLL" >&2; exit 1; fi
+          sh cli/windows/check-exe.sh
       - name: Build the C library
         run: make lib CC=gcc
       - name: Assert CLI exit codes
         run: make acceptance CC=gcc
+      # determinism.py hashes the binary itself, by its full name.
       - name: Reports identical across worker counts
-        run: make determinism CC=gcc
+        run: HOWL=build/howl.exe make determinism CC=gcc
 
   verify:
     # Z3 weakest-precondition contract checking (SPEC §7). This proves

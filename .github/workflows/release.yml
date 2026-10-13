@@ -79,6 +79,10 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
+      # Check out LF, as on Linux and macOS: the version checks read
+      # slop.toml line by line, and a CR would end up in --version.
+      - run: git config --global core.autocrlf false
+        shell: pwsh
       - uses: actions/checkout@v4
 
       - uses: msys2/setup-msys2@v2
@@ -106,11 +110,7 @@ jobs:
           make release CC=gcc HOWL_VERSION="$VERSION"
           ./build/howl --version | grep -qx "howl $VERSION"
           ./build/howl validate corpus/fixtures/v0/litmus.ttl
-          if ./build/howl validate corpus/fixtures/v0/litmus.ttl --report | grep -q $'\r'; then
-            echo "FAIL: the report has CRLF line endings" >&2; exit 1; fi
-          objdump -p build/howl.exe | grep 'DLL Name'
-          if objdump -p build/howl.exe | grep 'DLL Name' | grep -qiE 'libgcc|libwinpthread|libstdc'; then
-            echo "FAIL: howl.exe imports a MinGW runtime DLL" >&2; exit 1; fi
+          sh cli/windows/check-exe.sh
           mv build/howl.exe howl-windows-x86_64.exe
 
       - name: Build and package the C library
