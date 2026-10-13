@@ -14,7 +14,8 @@
 
   (import rdf (Triple IRI Term TermKind make-iri make-blank make-literal make-triple))
   (import ttl (parse-ttl-string-for-each-triple))
-  (import report (report-lines node-text))
+  (import report (report-lines probe-lines node-text))
+  (import probe (QueryKind ProbeAnswer Query Answered Probing sort-queries probe-document answer-queries))
   (import owl2 (render-omission))
   (import types (Node RoleId Concept NormAxiom
                  Derived Addressed Context Saturation
@@ -243,15 +244,16 @@
     (@intent "How many omissions are axioms out of the rung's profile")
     (@spec (((List Omission)) -> Int))
     (@pure)
-    ;; Unresolved imports and missing declarations are the same under
-    ;; every rung, so they never decide between rungs.
+    ;; Unresolved imports, missing declarations and undeclared properties
+    ;; are the same under every rung, so they never decide between rungs.
     (let ((mut n 0))
       (do
         (for-each (o oms)
           (match o
             ((out-of-profile _)      (set! n (+ n 1)))
             ((unresolved-import _)   (do))
-            ((missing-declaration _) (do))))
+            ((missing-declaration _) (do))
+            ((undeclared-property _) (do))))
         n)))
 
   (fn auto-profile ((d Decoded))
@@ -467,6 +469,50 @@
       ((error f) (error f))
       ((ok p)    (reason arena p config))))
 
+  (fn probe-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (queries (List Query))
+                     (config ReasonerConfig))
+    (@intent "Answer probe queries from a classification of their own input (probe-document's)")
+    (@spec ((Arena Encoded (List IRI) (List Query) ReasonerConfig) -> (Result Probing Fault)))
+    (@alloc arena)
+    ;; The classification runs in a scratch arena and only the answers and
+    ;; the coverage are copied out. Never strict: a probe run's omissions
+    ;; make its answers unknown, they do not refuse them.
+    (let ((scratch (arena-new 16777216))
+          (mut cfg config))
+      (do
+        (set! cfg strict-profile false)
+        (let ((res (probe-outcome arena (classify-encoded scratch doc imports-resolved cfg) queries)))
+          (do
+            (arena-free scratch)
+            res)))))
+
+  (fn probe-outcome ((arena Arena) (r (Result Outcome Fault)) (queries (List Query)))
+    (@intent "The probe run's result, owned in arena: its answers, or its fault")
+    (@spec ((Arena (Result Outcome Fault) (List Query)) -> (Result Probing Fault)))
+    (@alloc arena)
+    (match r
+      ((ok o)    (ok (probing-of arena o queries)))
+      ((error f) (error (copy-fault arena f)))))
+
+  (fn probing-of ((arena Arena) (o Outcome) (queries (List Query)))
+    (@intent "A probe run's answers and coverage, owned in arena; the run's own arenas released")
+    (@spec ((Arena Outcome (List Query)) -> Probing))
+    (@alloc arena)
+    (let ((p (record-new Probing
+               (answers      (answer-queries arena o queries))
+               (inconsistent (. (. o findings) inconsistent))
+               (omissions    (copy-omissions arena (. (. o coverage) omitted))))))
+      (do
+        (release-outcome o)
+        p)))
+
+  (fn no-probing ((arena Arena))
+    (@intent "The probe result of a run that asked nothing")
+    (@spec ((Arena) -> Probing))
+    (@alloc arena)
+    (record-new Probing (answers (list-new arena Answered)) (inconsistent false)
+      (omissions (list-new arena Omission))))
+
   ;; ============================================================
   ;; The public C API
   ;;
@@ -501,6 +547,9 @@
     (enc       (Ptr Encoded))
     (imports   (List IRI))
     (documents Int)
+    (probes    (Ptr Encoded))      ; the probe documents (§8.5 A4), classified only by the probe run
+    (probe-docs Int)
+    (queries   (List Query))       ; as asked; sorted and deduplicated when a run reads them
     (failed    (Option String))))  ; set: a document or term was refused, and the input with it
 
   ;; The options a caller sets. Plain integers, not SLOP's range types: a
@@ -542,6 +591,7 @@
     (message       String)
     (fault-profile Profile)
     (verdict       Verdict)
+    (probing       Probing)        ; empty unless a query was asked
     (lines         (List String))))
 
   (fn input-state ((in Input))
@@ -567,6 +617,9 @@
                           (enc       (new-encoded a))
                           (imports   (list-new a IRI))
                           (documents 0)
+                          (probes    (new-encoded a))
+                          (probe-docs 0)
+                          (queries   (list-new a Query))
                           (failed    (none))))
         (record-new Input (p (cast (Ptr Void) p))))))
 
@@ -583,14 +636,33 @@
     (@intent "Begin the next document: its blank nodes are kept apart from the ones before")
     (@spec ((Input) -> Unit))
     :c-name "howl_input_begin_document"
+    (begin-in in false))
+
+  (fn input-begin-probe-document ((in Input))
+    (@intent "Begin the next probe document (§8.5 A4): read only by the probe run")
+    (@spec ((Input) -> Unit))
+    :c-name "howl_input_begin_probe_document"
+    (begin-in in true))
+
+  (fn target ((st InputState) (probe Bool))
+    (@intent "Where a document goes: the input, or its probe documents")
+    (@spec ((InputState Bool) -> (Ptr Encoded)))
+    (if probe (. st probes) (. st enc)))
+
+  (fn begin-in ((in Input) (probe Bool))
+    (@intent "Begin the next document of the input or of its probe documents")
+    (@spec ((Input Bool) -> Unit))
     ;; As `howl validate ROOT -I FILE` does: every document after the first
     ;; has its blank ids shifted past everything already encoded.
     (let ((p (input-state in))
-          (mut s (deref p)))
+          (mut s (deref p))
+          (n (if probe (. s probe-docs) (. s documents))))
       (do
-        (when (> (. s documents) 0)
-          (encoded-next-document (. s arena) (. s enc)))
-        (set! s documents (+ (. s documents) 1))
+        (when (> n 0)
+          (encoded-next-document (. s arena) (target s probe)))
+        (if probe
+          (set! s probe-docs (+ n 1))
+          (set! s documents (+ n 1)))
         (set! (deref p) s))))
 
   (fn optional-string ((s String))
@@ -618,6 +690,17 @@
     (@intent "Add one triple to the current document; false, and the input refused, for a term it cannot take")
     (@spec ((Input TermIn TermIn TermIn) -> Bool))
     :c-name "howl_input_add_triple"
+    (add-triple-to in false s p o))
+
+  (fn input-add-probe-triple ((in Input) (s TermIn) (p TermIn) (o TermIn))
+    (@intent "Add one triple to the current probe document; refused as input-add-triple refuses")
+    (@spec ((Input TermIn TermIn TermIn) -> Bool))
+    :c-name "howl_input_add_probe_triple"
+    (add-triple-to in true s p o))
+
+  (fn add-triple-to ((in Input) (probe Bool) (s TermIn) (p TermIn) (o TermIn))
+    (@intent "Add one triple to the current document of the input or of its probe documents")
+    (@spec ((Input Bool TermIn TermIn TermIn) -> Bool))
     ;; The terms are built in the scratch arena and emptied after the call:
     ;; `encoded-add` copies every string it keeps into the input's arena.
     (let ((ptr (input-state in))
@@ -632,7 +715,7 @@
                       (match (make-term sc o)
                         ((none) false)
                         ((some to)
-                          (do (encoded-add (. st arena) (. st enc) (make-triple sc ts tp to))
+                          (do (encoded-add (. st arena) (target st probe) (make-triple sc ts tp to))
                               true)))))))))
       (do
         (reuse-arena sc)
@@ -647,18 +730,29 @@
     (@intent "Add one Turtle document; a document that does not parse refuses the input")
     (@spec ((Input String) -> TurtleResult))
     :c-name "howl_input_add_turtle"
+    (add-turtle-to in false text))
+
+  (fn input-add-probe-turtle ((in Input) (text String))
+    (@intent "Add one probe document as Turtle (§8.5 A4); one that does not parse refuses the input")
+    (@spec ((Input String) -> TurtleResult))
+    :c-name "howl_input_add_probe_turtle"
+    (add-turtle-to in true text))
+
+  (fn add-turtle-to ((in Input) (probe Bool) (text String))
+    (@intent "Add one Turtle document to the input or to its probe documents")
+    (@spec ((Input Bool String) -> TurtleResult))
     ;; As the CLI's `parse-into`: slop-rdf's streaming parser, its memory a
     ;; scratch arena freed on return; only what `encoded-add` copies
     ;; survives. The triples before a parse error stay encoded, which is
     ;; why the input is refused rather than classified short.
     (do
-      (input-begin-document in)
+      (begin-in in probe)
       (if (== (string-len text) 0)
         (record-new TurtleResult (ok true) (message "") (line 0) (column 0))
         (let ((ptr   (input-state in))
               (mut st (deref ptr))
               (arena (. st arena))
-              (enc   (. st enc))
+              (enc   (target st probe))
               (parse (arena-new 16777216))
               (res   (match (parse-ttl-string-for-each-triple parse text
                               (fn ((t Triple)) (encoded-add arena enc t)))
@@ -686,6 +780,37 @@
           (mut st (deref ptr)))
       (do
         (list-push (. st imports) (record-new IRI (value (string-concat (. st arena) "" iri))))
+        (set! (deref ptr) st))))
+
+  (fn input-ask-unsatisfiable ((in Input) (cls String))
+    (@intent "Ask whether a class is unsatisfiable: the probe run answers it (§8.5 A4)")
+    (@spec ((Input String) -> Unit))
+    :c-name "howl_input_ask_unsatisfiable"
+    (ask in 'query-unsatisfiable cls ""))
+
+  (fn input-ask-subsumed ((in Input) (sub String) (sup String))
+    (@intent "Ask whether sub ⊑ sup: the probe run answers it (§8.5 A4)")
+    (@spec ((Input String String) -> Unit))
+    :c-name "howl_input_ask_subsumed"
+    (ask in 'query-subsumed sub sup))
+
+  (fn ask ((in Input) (kind QueryKind) (sub String) (sup String))
+    (@intent "Record a query; one naming an empty IRI refuses the input")
+    (@spec ((Input QueryKind String String) -> Unit))
+    ;; The IRIs are copied: the caller's strings need not outlive the call.
+    (let ((ptr (input-state in))
+          (mut st (deref ptr))
+          (a (. st arena))
+          (empty (match kind
+                   ('query-unsatisfiable (== (string-len sub) 0))
+                   ('query-subsumed      (or (== (string-len sub) 0) (== (string-len sup) 0))))))
+      (do
+        (if empty
+          (set! st failed (some "a probe query names an empty IRI"))
+          (list-push (. st queries)
+            (record-new Query (kind kind)
+              (sub (record-new IRI (value (string-concat a "" sub))))
+              (sup (record-new IRI (value (string-concat a "" sup)))))))
         (set! (deref ptr) st))))
 
   (fn default-options ()
@@ -747,7 +872,7 @@
     (new-run a (record-new RunState
                  (arena a) (outcome (none)) (fault kind) (message message)
                  (fault-profile profile) (verdict 'verdict-inconclusive)
-                 (lines (list-new a String)))))
+                 (probing (no-probing a)) (lines (list-new a String)))))
 
   (fn run-classify ((in Input) (o Options))
     (@intent "Classify an input: coherence, unsatisfiable classes, and the subsumption hierarchy")
@@ -765,20 +890,53 @@
             ((some why) (faulted a 'fault-input-error (string-concat a "" why) (. o profile)))
             ((none)
               (match (classify-encoded a (deref (. st enc)) (. st imports) (options-config o))
-                ((ok out)
-                  (new-run a (record-new RunState
-                               (arena a) (outcome (some out)) (fault 'fault-none) (message "")
-                               (fault-profile (. out profile)) (verdict (verdict out))
-                               (lines (report-lines a out)))))
-                ((error f)
-                  (match f
-                    ((cancelled)       (faulted a 'fault-cancelled "" (. o profile)))
-                    ((input-error m)   (faulted a 'fault-input-error m (. o profile)))
-                    ((unavailable p)   (faulted a 'fault-unavailable (unavailable-message a p) p))
-                    ;; Only a strict run refuses, and this API never runs
-                    ;; strict; should it happen it is an input error, never
-                    ;; a verdict.
-                    ((refused _) (faulted a 'fault-input-error "refused under a strict profile" (. o profile))))))))))))
+                ((ok out)   (with-probes a st out o))
+                ((error f)  (run-faulted a f "" (. o profile))))))))))
+
+  (fn run-faulted ((a Arena) (f Fault) (prefix String) (profile Profile))
+    (@intent "A run with no result, for the engine's fault")
+    (@spec ((Arena Fault String Profile) -> Run))
+    (match f
+      ((cancelled)       (faulted a 'fault-cancelled "" profile))
+      ((input-error m)   (faulted a 'fault-input-error (string-concat a prefix m) profile))
+      ((unavailable p)   (faulted a 'fault-unavailable (unavailable-message a p) p))
+      ;; Only a strict run refuses, and this API never runs strict; should
+      ;; it happen it is an input error, never a verdict.
+      ((refused _)       (faulted a 'fault-input-error "refused under a strict profile" profile))))
+
+  (fn with-probes ((a Arena) (st InputState) (out Outcome) (o Options))
+    (@intent "The run over a finished outcome, its probe queries answered by a run of their own")
+    (@spec ((Arena InputState Outcome Options) -> Run))
+    ;; The probe run's input is built in an arena freed once it has run.
+    ;; A probe run that faults takes the whole run with it: cancelled is
+    ;; cancelled, and an input error (a probe document HOWL cannot decode)
+    ;; is the caller's, named as the probe run's.
+    (if (== (list-len (. st queries)) 0)
+      (finished a out (no-probing a) false)
+      (let ((qs  (sort-queries a (. st queries)))
+            (pa  (arena-new 16777216))
+            (doc (probe-document pa (deref (. st enc)) (deref (. st probes)) qs))
+            (res (probe-encoded a (deref doc) (. st imports) qs (options-config o))))
+        (do
+          (arena-free pa)
+          (match res
+            ((ok p)    (finished a out p true))
+            ((error f)
+              (do
+                (release-outcome out)
+                (run-faulted a f "probe run: " (. o profile)))))))))
+
+  (fn finished ((a Arena) (out Outcome) (p Probing) (asked Bool))
+    (@intent "A run with a result: the report's lines, then the probe lines when a query was asked")
+    (@spec ((Arena Outcome Probing Bool) -> Run))
+    (let ((mut lines (report-lines a out)))
+      (do
+        (when asked
+          (for-each (l (probe-lines a p)) (list-push lines l)))
+        (new-run a (record-new RunState
+                     (arena a) (outcome (some out)) (fault 'fault-none) (message "")
+                     (fault-profile (. out profile)) (verdict (verdict out))
+                     (probing p) (lines lines))))))
 
   (fn run-free ((r Run))
     (@intent "Free a run and every string it returned")
@@ -913,6 +1071,71 @@
                     ((some om) (render-omission (. st arena) om))
                     ((none)    "")))
         ((none)   ""))))
+
+  ;; The probe run's answers (§8.5 A4): empty when nothing was asked.
+  (fn run-probe-len ((r Run))
+    (@intent "How many queries the probe run answered, each once")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_probe_len"
+    (cast Int (list-len (. (. (run-state r) probing) answers))))
+
+  (fn probe-at ((r Run) (i Int))
+    (@intent "The i-th answer, in canonical order")
+    (@spec ((Run Int) -> (Option Answered)))
+    (list-get (. (. (run-state r) probing) answers) i))
+
+  (fn run-probe-kind ((r Run) (i Int))
+    (@intent "The i-th query's kind")
+    (@spec ((Run Int) -> QueryKind))
+    :c-name "howl_run_probe_kind"
+    (match (probe-at r i)
+      ((some a) (. (. a query) kind))
+      ((none)   'query-unsatisfiable)))
+
+  (fn run-probe-sub ((r Run) (i Int))
+    (@intent "The i-th query's class: the one asked unsatisfiable, or the subclass")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_probe_sub"
+    (match (probe-at r i)
+      ((some a) (. (. (. a query) sub) value))
+      ((none)   "")))
+
+  (fn run-probe-sup ((r Run) (i Int))
+    (@intent "The i-th query's superclass; empty for an unsatisfiability query")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_probe_sup"
+    (match (probe-at r i)
+      ((some a) (. (. (. a query) sup) value))
+      ((none)   "")))
+
+  (fn run-probe-answer ((r Run) (i Int))
+    (@intent "The i-th answer: yes (entailed), no (not, by a complete probe run) or unknown")
+    (@spec ((Run Int) -> ProbeAnswer))
+    :c-name "howl_run_probe_answer"
+    (match (probe-at r i)
+      ((some a) (. a answer))
+      ((none)   'answer-unknown)))
+
+  (fn run-probe-inconsistent ((r Run))
+    (@intent "Whether the probe run was inconsistent, making every answer a vacuous yes")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_probe_inconsistent"
+    (. (. (run-state r) probing) inconsistent))
+
+  (fn run-probe-omission-len ((r Run))
+    (@intent "How many inputs the probe run did not cover; any rules out a no")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_probe_omission_len"
+    (cast Int (list-len (. (. (run-state r) probing) omissions))))
+
+  (fn run-probe-omission ((r Run) (i Int))
+    (@intent "The probe run's i-th omission, rendered as its `probe-omission` line renders it")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_probe_omission"
+    (let ((st (run-state r)))
+      (match (list-get (. (. st probing) omissions) i)
+        ((some om) (render-omission (. st arena) om))
+        ((none)    ""))))
 
   (fn run-report-len ((r Run))
     (@intent "How many lines the canonical report has")

@@ -104,9 +104,14 @@ pub const TERM_BLANK: c_int = 1;
 pub const TERM_LITERAL: c_int = 2;
 pub const TERMINATION_FIXPOINT: c_int = 0;
 pub const TERMINATION_RESOURCE_LIMIT: c_int = 1;
+pub const QUERY_UNSATISFIABLE: c_int = 0;
+pub const QUERY_SUBSUMED: c_int = 1;
+pub const ANSWER_YES: c_int = 0;
+pub const ANSWER_NO: c_int = 1;
+pub const ANSWER_UNKNOWN: c_int = 2;
 
 /// Every constant above, in `howl_layout_constant`'s order.
-pub const CONSTANTS: [(&str, c_int); 17] = [
+pub const CONSTANTS: [(&str, c_int); 22] = [
     ("VERDICT_COHERENT", VERDICT_COHERENT),
     ("VERDICT_INCOHERENT", VERDICT_INCOHERENT),
     ("VERDICT_INCONCLUSIVE", VERDICT_INCONCLUSIVE),
@@ -124,6 +129,11 @@ pub const CONSTANTS: [(&str, c_int); 17] = [
     ("TERM_LITERAL", TERM_LITERAL),
     ("TERMINATION_FIXPOINT", TERMINATION_FIXPOINT),
     ("TERMINATION_RESOURCE_LIMIT", TERMINATION_RESOURCE_LIMIT),
+    ("QUERY_UNSATISFIABLE", QUERY_UNSATISFIABLE),
+    ("QUERY_SUBSUMED", QUERY_SUBSUMED),
+    ("ANSWER_YES", ANSWER_YES),
+    ("ANSWER_NO", ANSWER_NO),
+    ("ANSWER_UNKNOWN", ANSWER_UNKNOWN),
 ];
 
 extern "C" {
@@ -133,6 +143,11 @@ extern "C" {
     pub fn howl_input_add_triple(input: Input, s: TermIn, p: TermIn, o: TermIn) -> u8;
     pub fn howl_input_add_turtle(input: Input, text: SlopString) -> TurtleResult;
     pub fn howl_input_attest_import(input: Input, iri: SlopString);
+    pub fn howl_input_begin_probe_document(input: Input);
+    pub fn howl_input_add_probe_triple(input: Input, s: TermIn, p: TermIn, o: TermIn) -> u8;
+    pub fn howl_input_add_probe_turtle(input: Input, text: SlopString) -> TurtleResult;
+    pub fn howl_input_ask_unsatisfiable(input: Input, class: SlopString);
+    pub fn howl_input_ask_subsumed(input: Input, sub: SlopString, sup: SlopString);
 
     pub fn howl_default_options() -> Options;
     pub fn howl_run_classify(input: Input, options: Options) -> Run;
@@ -156,6 +171,14 @@ extern "C" {
     pub fn howl_run_omission(run: Run, i: i64) -> SlopString;
     pub fn howl_run_report_len(run: Run) -> i64;
     pub fn howl_run_report_line(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_probe_len(run: Run) -> i64;
+    pub fn howl_run_probe_kind(run: Run, i: i64) -> c_int;
+    pub fn howl_run_probe_sub(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_probe_sup(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_probe_answer(run: Run, i: i64) -> c_int;
+    pub fn howl_run_probe_inconsistent(run: Run) -> u8;
+    pub fn howl_run_probe_omission_len(run: Run) -> i64;
+    pub fn howl_run_probe_omission(run: Run, i: i64) -> SlopString;
 }
 
 #[cfg(test)]

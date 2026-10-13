@@ -28,7 +28,17 @@ CFLAGS  ?= -O2 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
            -DSLOP_INTERN_THREADSAFE \
            -DSLOP_INTERN_BUCKET_COUNT=65536 \
            -DHOWL_VERSION=\"$(HOWL_VERSION)\"
+# slop_runtime.h threads through pthreads on POSIX and Win32 on Windows. The
+# Windows CLI also links cli/windows/lf_stdout.c, which puts stdout in binary
+# mode: a report is the same bytes on every platform, LF and never CRLF. And
+# it finds cli/windows/sys/resource.h, which answers peak-mb's getrusage.
+ifeq ($(OS),Windows_NT)
+LDFLAGS ?=
+CLI_EXTRA = -Icli/windows cli/windows/lf_stdout.c
+else
 LDFLAGS ?= -lpthread
+CLI_EXTRA =
+endif
 AR      ?= ar
 
 CSRC    = csrc/src
@@ -90,7 +100,7 @@ c-example: lib
 
 cli: $(BIN)
 	@echo "Building howl..."
-	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl
+	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(CLI_EXTRA) $(LDFLAGS) -o $(BIN)/howl
 	@echo "  -> $(BIN)/howl"
 
 # NO CLOCK UNDER src/. HOWL never consults a clock inside a reasoning call
@@ -282,6 +292,7 @@ acceptance: cli
 	check corpus/fixtures/hazards/annotated-annotation.ttl 0; \
 	check corpus/fixtures/hazards/smaller-side-join.ttl 0; \
 	check corpus/fixtures/hazards/undeclared-filler.ttl 2; \
+	check corpus/fixtures/hazards/undeclared-property.ttl 2; \
 	check corpus/fixtures/hazards/disjoint-repeated-member.ttl 1; \
 	check corpus/fixtures/hazards/logical-triple-on-header-node.ttl 2; \
 	check corpus/fixtures/hazards/unsatisfiable-consistent.ttl 1; \
@@ -385,6 +396,13 @@ GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011
 # an attested import - its blank nodes standardized apart from the root's -
 # which no single-file golden reaches.
 GOLDEN_IMPORTS  := root:imported
+# THE PROBE RUN, `howl validate MAIN --probe PROBE --ask-... --report` over
+# corpus/fixtures/probe-queries/ (SPEC §8.4): the main report unchanged, then
+# the probe lines. Each query once and in canonical order, whatever the order
+# and repetition here.
+PROBE_ARGS := corpus/fixtures/probe-queries/main.ttl --probe corpus/fixtures/probe-queries/probe.ttl \
+  --ask-sub http://example.org/t\#A urn:probe:re --ask-unsat urn:probe:q --ask-unsat urn:probe:p \
+  --ask-sub http://example.org/t\#A urn:probe:rc --ask-unsat urn:probe:p
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
@@ -440,6 +458,9 @@ golden: cli
 	  out=$$({ $(HOWL) validate corpus/fixtures/imports/$$d.ttl -I corpus/fixtures/imports/$$i.ttl --report 2>/dev/null; echo "exit $$?"; }); \
 	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL imports $$d -I $$i differs from $$g"; fail=1; fi; \
 	done; \
+	g=corpus/goldens/probe-queries/main.report; \
+	out=$$({ $(HOWL) validate $(PROBE_ARGS) --report 2>/dev/null; echo "exit $$?"; }); \
+	if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL probe queries differ from $$g"; fail=1; fi; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/$$c.sha256; \
 	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
@@ -466,6 +487,10 @@ golden-update: cli
 	  case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > corpus/goldens/imports/$$d.report;; \
 	    *) echo "  NOT A REPORT imports $$d -- golden not written"; fail=1;; esac; \
 	done; \
+	mkdir -p corpus/goldens/probe-queries; \
+	out=$$({ $(HOWL) validate $(PROBE_ARGS) --report 2>/dev/null; echo "exit $$?"; }); \
+	case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > corpus/goldens/probe-queries/main.report;; \
+	  *) echo "  NOT A REPORT probe queries -- golden not written"; fail=1;; esac; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; \
 	  if [ ! -f "$$f" ]; then echo "  skip $$c (no $$f)"; continue; fi; \

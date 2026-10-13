@@ -226,6 +226,7 @@ struct decode_Stage1 {
     slop_list_owl2_RawAxiom axioms;
     owl2_Signature signature;
     int64_t inert;
+    slop_list_types_Omission omitted;
 };
 typedef struct decode_Stage1 decode_Stage1;
 
@@ -274,6 +275,8 @@ struct decode_Decoding {
     slop_map* npa_parts;
     slop_list_owl2_RawAxiom out;
     int64_t inert;
+    slop_list_rdf_IRI uprops;
+    slop_list_string utexts;
     slop_option_string fault;
 };
 typedef struct decode_Decoding decode_Decoding;
@@ -552,6 +555,9 @@ slop_list_string decode_queried_predicates(slop_arena* arena);
 uint8_t decode_keep_axiom(decode_Decoding* c, owl2_RawAxiom ax);
 uint8_t decode_decode_triple(slop_arena* arena, decode_Decoding* c, termstore_IdTriple it, rdf_Triple t);
 slop_result_decode_Stage1_types_Fault decode_decode_axioms_with(slop_arena* arena, termstore_TermStore ig, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
+slop_option_rdf_IRI decode_undeclared_predicate(owl2_Signature sig, rdf_Triple t);
+slop_list_types_Omission decode_undeclared_omissions(slop_arena* arena, slop_list_rdf_IRI ps, slop_list_string texts);
+types_Omission decode_undeclared_of(rdf_IRI p, slop_list_string refs);
 decode_DataVocab decode_data_vocab(slop_arena* arena, termstore_TermStore dict);
 uint8_t decode_promote_use(decode_DataVocab v, slop_map* used, termstore_IdTriple it);
 uint8_t decode_promote_uses(decode_DataVocab v, slop_map* data, slop_map* used, slop_list_termstore_IdTriple triples);

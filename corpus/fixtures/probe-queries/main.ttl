@@ -1,0 +1,16 @@
+# The main document of the probe-query golden (SPEC §8.4, issue #68); its
+# probe document is probe.ttl. `:p`'s two domains are disjoint, so `:p` can
+# have no value, and `:q` can; A has an r-successor in B, and B is under C.
+# The report is this document's alone: the probe lines follow it.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:p a owl:ObjectProperty . :q a owl:ObjectProperty . :r a owl:ObjectProperty .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:D a owl:Class . :E a owl:Class . :D owl:disjointWith :E .
+:p rdfs:domain :D , :E .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+:B rdfs:subClassOf :C .

@@ -331,10 +331,10 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   `auto` gates under each built rung in the order `el < el++ < sriq`, which is by cost, and runs
   the first that leaves nothing out of profile. If every rung leaves something out, it runs the one
   that leaves the fewest logical axioms out, a tie going to the earlier rung (`choose-auto`,
-  `src/select.slop`, whose postconditions pin the cases). Unresolved imports and missing
-  declarations are the same under every rung, so they never decide. With `el` and `el++` built,
-  that is today's rule: `el` when nothing is out of `el`'s profile, else the one of the two that
-  omits fewer, ties going to `el`.
+  `src/select.slop`, whose postconditions pin the cases). Unresolved imports, missing
+  declarations and undeclared properties are the same under every rung, so they never decide.
+  With `el` and `el++` built, that is today's rule: `el` when nothing is out of `el`'s profile,
+  else the one of the two that omits fewer, ties going to `el`.
 - **The report states the resolved profile** (`profile el`, [§6.7](#67-output--classification)).
   A report is a function of (input, budget, profile). Its findings are complete for that rung's
   logic and no other.
@@ -476,16 +476,22 @@ Position and declaration are *additive*, never exclusive — an IRI appearing as
 subject and a class name yields **both** `individual-node(x)` and `class-node(x)`, which is exactly
 the punning case the tags exist to keep apart.
 
-**An undeclared property whose kind cannot be determined is an `input-error`, not an omission.**
-The `missing-declaration` omission is recoverable only where **structural position uniquely fixes the
-entity kind**. It often does not: `:a :p :b` with `:p` undeclared is ambiguous between an object
-property assertion and an annotation assertion, and the same ambiguity affects `rdfs:subPropertyOf`,
-`rdfs:domain` and `rdfs:range` triples. OWL's RDF parsing uses declarations precisely to settle
-object vs. data vs. annotation, and requires that disambiguation to succeed. Guessing means either
-reasoning over an intended annotation or silently dropping an intended logical assertion — and
-neither can be represented as `missing-declaration(EntityKind, …)`, since there is no determinate
-`EntityKind` to report. So: unique position ⇒ `missing-declaration`; ambiguous ⇒ `input-error`,
-alongside the conflicting-declaration case below.
+**An undeclared property whose kind cannot be determined is an `undeclared-property` omission.**
+The `missing-declaration` omission names an `EntityKind`, so it applies only where **structural
+position uniquely fixes the entity kind** — `owl:onProperty`, a chain or `owl:inverseOf`, read as
+an object property. (An undeclared subject of `rdfs:subPropertyOf`, `rdfs:domain` or `rdfs:range`
+is read as an object property too; a declaration as a data or annotation property selects that
+reading instead.) A predicate does not: `:a :p :b` with `:p` undeclared is ambiguous between an object property
+assertion and an annotation assertion, and `:a :p "x"` between a data property assertion and an
+annotation. OWL's RDF parsing uses declarations precisely to settle object vs. data vs. annotation.
+Guessing means either reasoning over an intended annotation or silently dropping an intended
+logical assertion while the run says `coherent`. So HOWL does not guess: every triple whose
+predicate is an undeclared user property (an IRI outside the reserved namespaces, declared under no
+property kind) contributes nothing, and is reported as one `undeclared-property(IRI, triples)` per
+property, citing each such triple. The omission keeps the run from a pass, and the rest of the
+document is still read. It was an `input-error` until 0.3.0, which failed a whole editor document
+over one tool-specific annotation predicate (issue #70); an omission is no less honest and the run
+goes on. So: unique position ⇒ `missing-declaration`; ambiguous ⇒ `undeclared-property`.
 
 **Declaration *combinations* are checked too, not just presence.** OWL 2 DL forbids an IRI from
 being typed as more than one property kind (object / data / annotation) or as both a class and a
@@ -3383,10 +3389,14 @@ GROWL's `Delta`.
                                   ; supplying. Same disposition as out-of-profile — axioms
                                   ; are missing — reached by a different route.
   (missing-declaration            ; a class/property used without the declaration OWL 2 DL
-    EntityKind IRI (List AxiomRef)))  ; requires. NOT an out-of-profile AxiomRef: the missing
+    EntityKind IRI (List AxiomRef))   ; requires. NOT an out-of-profile AxiomRef: the missing
                                   ; declaration is by definition not an input axiom, so there
                                   ; is nothing to reference. Carries the entity and every
                                   ; referring axiom (canonically sorted) instead.
+  (undeclared-property            ; a predicate no declaration gives a property kind (§5.2):
+    IRI (List Text)))             ; the property, and the canonical N-Triples of every triple
+                                  ; using it (sorted). Not a missing-declaration: there is no
+                                  ; determinate EntityKind to name.
 
 ;; AxiomRef — the identity of an input axiom. Load-bearing: it is what omissions name, what
 ;; repairs remove, and what gets hashed into the consumer's verdict identity (§6.8), so it
@@ -3417,9 +3427,10 @@ GROWL's `Delta`.
 ;;     is meaningless without both.
 ;;   - RoleId: named-role < inverse-role < fresh-role, then by payload.
 ;;   - InputRef: owl-axiom < rdf-fragment < synthetic, then by payload.
-;;   - Omission: out-of-profile < unresolved-import < missing-declaration, then by payload;
-;;     missing-declaration compares (EntityKind, IRI, referring-list) with the list compared
-;;     element-wise after its own canonical sort.
+;;   - Omission: out-of-profile < unresolved-import < missing-declaration < undeclared-property,
+;;     then by payload; missing-declaration compares (EntityKind, IRI, referring-list) and
+;;     undeclared-property (IRI, triple-list), each list compared element-wise after its own
+;;     canonical sort.
 ;;   - EntityKind: class < object-property < data-property < annotation-property < individual
 ;;     < datatype.
 ;;   - AxiomRef: lexicographic by (source, text) under the rules above.
@@ -3448,7 +3459,7 @@ GROWL's `Delta`.
 (union InputRef
   (owl-axiom   AxiomRef)      ; repairs (§12 M4) require THIS variant specifically
   (rdf-fragment Text)         ; canonical N-Triples of the offending triples, sorted
-  (synthetic   Text))         ; the reserved forms below (unresolved-import, missing-declaration)
+  (synthetic   Text))         ; the reserved forms below (unresolved-import, missing-declaration, …)
 ;; Ordering across variants is by tag in the order declared, then by payload.
 
 ;; Crossing to the frozen port (§8.4), out_of_profile_axioms is Vec<AxiomRef>, so EVERY Omission
@@ -3461,6 +3472,8 @@ GROWL's `Delta`.
 ;;     out-of-profile(synthetic t)      -> "synthetic:<len>:<t>"
 ;;     unresolved-import(iri)           -> "unresolved-import:<iri>"
 ;;     missing-declaration(k,iri,refs)  -> "missing-declaration:<k>:<iri>:<len>:<refs ';'-joined,
+;;                                          canonically sorted>"
+;;     undeclared-property(iri,ts)      -> "undeclared-property:<iri>:<len>:<ts ';'-joined,
 ;;                                          canonically sorted>"
 ;; Specified here rather than left to the adapter because these are hashed into the consumer's
 ;; verdict identity: two adapters spelling them differently produce different verdict ids for
@@ -4690,6 +4703,37 @@ Five things the port constrains that are easy to get wrong:
   the per-document hashes before flattening. That is a port change, so it is deferred with the other
   two rather than half-implemented here.
 
+**Probe queries are HOWL's side of A4** ([§8.5](#85-required-port-amendments)), on the C API, the
+crate and the CLI (`--probe FILE`, `--ask-unsat C`, `--ask-sub A B`). A caller adds *probe
+documents*, which define classes for the purpose (`:P rdfs:subClassOf ∃p.⊤` asks whether `p` can
+have a value), and *queries*: is `C` unsatisfiable, is `A ⊑ B`, for named classes.
+
+- **A second classification answers them.** Its input is the input, then the probe documents (one
+  more document, standardized apart), then `C rdf:type owl:Class` for every class a query names, so
+  a probe class never becomes a `missing-declaration`. Any other class a probe document
+  introduces needs its own declaration, as in any document. It runs under the same options and
+  cancellation, never strict. The main run is untouched: its report, verdict, omissions, rounds and
+  termination are byte-identical to a run without probes. The rejected alternative, probe classes
+  filtered out of one run, still lets them change the main run's rounds, its termination at the
+  cap, its coverage and `auto`'s choice of profile.
+- **Answers are three-valued, and both queries ask for an entailment.** `yes`: the probe run
+  entails the inclusion (`entails-sub`, [§6.4](#64-completion-rules); unsatisfiable is
+  `C ⊑ owl:Nothing`). That is sound whatever its coverage or budget, because adding back what it
+  left out only adds conclusions. `no`: it does not, and the probe run was complete (no omission,
+  fixpoint) — the condition `coherent` needs. `unknown`: anything else, including a class with no
+  context or answer. `owl:Nothing ⊑ B`, `A ⊑ owl:Thing` and `A ⊑ A` are `yes` in every ontology.
+- **An inconsistent probe run** entails every inclusion, so every answer is `yes`, and the run says
+  it was inconsistent so the caller can tell a vacuous `yes` from a real one.
+- **Answers are input-determined** ([§6.8](#68-determinism-binding)): each query once, in
+  canonical order — unsatisfiability before subsumption, then by class, then by superclass.
+- **Probe lines follow the report, and only when a query was asked:** `probes N`,
+  `probe-inconsistent`, `probe-omitted N` with a `probe-omission` line each, then
+  `probe unsatisfiable C yes|no|unknown` or `probe subsumed A B …` per query. A run that asks
+  nothing prints exactly the report it printed before probes existed.
+- **A probe run that faults takes the run with it:** cancelled is cancelled, and an input error in
+  a probe document is the caller's, named as the probe run's. A query naming an empty IRI, or a
+  probe document that does not parse, refuses the input as a bad document does.
+
 **Dual-engine cross-check changes §8.2's story.** The pipeline runs an agreement stage that
 cross-checks the TBox and ABox engines on a deterministic probe set **in the EL ∩ RL entailment
 overlap**, where disagreement is an *engine fault* — never resolved by preferring one engine. So
@@ -4738,7 +4782,7 @@ struct and thereby specified a fix that could not be built. **`TBoxInput` is
 | **A1** | Per-document triple buffers, or a source IRI on every triple | `AxiomRef.source` ([§6.2](#62-data-model)); blank-node standardization apart ([§6.3](#63-normalization) step 0) | Flattening loses document identity, so equivalent axioms from different mapping documents are indistinguishable and blank nodes from different documents can merge |
 | **A2** | `imports_resolved` closure attestation | Import reconciliation ([§6.3](#63-normalization) step 0) | A root document with a dangling import yields empty omissions, a fixpoint, and a **false coherent** — the failure the mechanism exists to close |
 | **A3** | A baseline theory (or a supplied baseline classification with its fingerprint and input hash) **and** `subsumption_delta: Option<Vec<_>>` | `subsumption_delta` ([§6.7](#67-output--classification)) | No baseline can be identified, and `classify` is pure, so the delta cannot be computed at all |
-| **A4** | Probe-set entailment readback | The consumer's agreement stage (below) | A non-stub engine fails that stage closed, so landing HOWL makes the pipeline *less* usable |
+| **A4** | Probe-set entailment readback | The consumer's agreement stage (below) | A non-stub engine fails that stage closed, so landing HOWL makes the pipeline *less* usable. HOWL's side is built (probe queries, [§8.4](#84-the-moose-tboxreasoner-port)); the port's is not |
 
 **Until an amendment lands, the capability it unblocks is not delivered — it is not approximated.**
 A2's absence means HOWL cannot verify closure and must not imply it does. The adapter never
@@ -4867,7 +4911,8 @@ makes an out-of-profile ontology *fail louder*, never *pass*: it cannot turn `2`
 ([§6.8](#68-determinism-binding)) — so the three routes to `2` differ only in the diagnostic line,
 which is correct: the *verdict* is identical. `input-error` stays on `3` with the usage failures,
 because a file that will not parse is a different kind of problem from a theory that could not be
-decided.
+decided. An undeclared property is the second kind ([§5.2](#52-the-exact-v0-language)): an
+`undeclared-property` omission, so `2`.
 
 The subtle row is `1`. An earlier draft sent every out-of-profile run to `2`, which contradicted the
 port's fault precedence and was simply wrong: monotonicity means a `⊥` derived from part of the

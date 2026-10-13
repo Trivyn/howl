@@ -816,6 +816,12 @@ def classify_triple(sig, s, p, o):
         return IN, "ObjectComplementOf (positive position)"
     if p in OUT_PRED:
         return OUT, OUT_PRED[p]
+    # A user property no declaration gives a kind: object or annotation
+    # assertion, data or annotation assertion. HOWL omits it rather than guess
+    # (SPEC.md §5.2, UndeclaredProperty), so it is out, never inert.
+    if (_named(p) and p not in sig["obj"] and p not in sig["data"]
+            and p not in sig["ann"]):
+        return OUT, "undeclared property"
     if p in sig["data"] or isinstance(o, Literal):
         return OUT, "datatype / literal in logical position"
     if p in IN_V0_EXPR:

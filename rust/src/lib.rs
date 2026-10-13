@@ -303,15 +303,7 @@ impl Input {
 
     /// Add one document given as triples.
     pub fn add_triples(&mut self, triples: &[(Term, Term, Term)]) {
-        let mut blanks: HashMap<&str, i64> = HashMap::new();
-        unsafe { ffi::howl_input_begin_document(self.raw) };
-        for (s, p, o) in triples {
-            let (s, p, o) = (term_in(s, &mut blanks), term_in(p, &mut blanks), term_in(o, &mut blanks));
-            // Every Term this crate can build is one HOWL takes, so this
-            // never refuses; were it to, the engine refuses the input and
-            // classify says so.
-            unsafe { ffi::howl_input_add_triple(self.raw, s, p, o) };
-        }
+        self.add(triples, ffi::howl_input_begin_document, ffi::howl_input_add_triple)
     }
 
     /// Add one document given as Turtle.
@@ -320,16 +312,57 @@ impl Input {
     /// so is every later [`Reasoner::classify`] of this input: the
     /// triples before the error were already added.
     pub fn add_turtle(&mut self, text: &str) -> Result<(), Fault> {
-        let r = unsafe { ffi::howl_input_add_turtle(self.raw, ffi::SlopString::borrow(text)) };
-        if r.ok != 0 {
-            return Ok(());
+        turtle_result(unsafe { ffi::howl_input_add_turtle(self.raw, ffi::SlopString::borrow(text)) })
+    }
+
+    /// Add one probe document given as triples: read only by the probe
+    /// run that answers this input's queries, never by the main run.
+    ///
+    /// A probe document is where a query's classes are defined, e.g.
+    /// `urn:probe:1 rdfs:subClassOf [ owl:onProperty :p ; owl:someValuesFrom owl:Thing ]`
+    /// to ask whether `:p` can have a value. Each is standardized apart
+    /// from the input and from the other probe documents.
+    pub fn add_probe_triples(&mut self, triples: &[(Term, Term, Term)]) {
+        self.add(triples, ffi::howl_input_begin_probe_document, ffi::howl_input_add_probe_triple)
+    }
+
+    /// Add one probe document given as Turtle; see
+    /// [`add_probe_triples`](Self::add_probe_triples). One that does not
+    /// parse refuses the input, as [`add_turtle`](Self::add_turtle) does.
+    pub fn add_probe_turtle(&mut self, text: &str) -> Result<(), Fault> {
+        turtle_result(unsafe { ffi::howl_input_add_probe_turtle(self.raw, ffi::SlopString::borrow(text)) })
+    }
+
+    /// Ask whether a named class is unsatisfiable. Answered in
+    /// [`Report::probes`] by a probe run; the main report is unchanged.
+    pub fn ask_unsatisfiable(&mut self, class: &str) {
+        unsafe { ffi::howl_input_ask_unsatisfiable(self.raw, ffi::SlopString::borrow(class)) }
+    }
+
+    /// Ask whether `sub` is subsumed by `sup`, both named classes.
+    /// Answered in [`Report::probes`] by a probe run; the main report is
+    /// unchanged.
+    pub fn ask_subsumed(&mut self, sub: &str, sup: &str) {
+        unsafe {
+            ffi::howl_input_ask_subsumed(self.raw, ffi::SlopString::borrow(sub), ffi::SlopString::borrow(sup))
         }
-        Err(Fault::InputError(format!(
-            "Turtle does not parse at line {}, column {}: {}",
-            r.line,
-            r.column,
-            unsafe { owned(r.message) }
-        )))
+    }
+
+    fn add(
+        &mut self,
+        triples: &[(Term, Term, Term)],
+        begin: unsafe extern "C" fn(ffi::Input),
+        add: unsafe extern "C" fn(ffi::Input, ffi::TermIn, ffi::TermIn, ffi::TermIn) -> u8,
+    ) {
+        let mut blanks: HashMap<&str, i64> = HashMap::new();
+        unsafe { begin(self.raw) };
+        for (s, p, o) in triples {
+            let (s, p, o) = (term_in(s, &mut blanks), term_in(p, &mut blanks), term_in(o, &mut blanks));
+            // Every Term this crate can build is one HOWL takes, so this
+            // never refuses; were it to, the engine refuses the input and
+            // classify says so.
+            unsafe { add(self.raw, s, p, o) };
+        }
     }
 
     /// Attest that `iri`, an `owl:imports` target, is resolved: its
@@ -357,6 +390,18 @@ impl Drop for Input {
     fn drop(&mut self) {
         unsafe { ffi::howl_input_free(self.raw) }
     }
+}
+
+fn turtle_result(r: ffi::TurtleResult) -> Result<(), Fault> {
+    if r.ok != 0 {
+        return Ok(());
+    }
+    Err(Fault::InputError(format!(
+        "Turtle does not parse at line {}, column {}: {}",
+        r.line,
+        r.column,
+        unsafe { owned(r.message) }
+    )))
 }
 
 fn term_in<'a>(t: &'a Term, blanks: &mut HashMap<&'a str, i64>) -> ffi::TermIn {
@@ -424,6 +469,37 @@ pub enum Termination {
     ResourceLimit(u64),
 }
 
+/// A probe query: does the probe run entail this inclusion?
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Query {
+    /// Is the class unsatisfiable (`C ⊑ owl:Nothing`)?
+    Unsatisfiable(String),
+    /// Is `.0` subsumed by `.1`?
+    Subsumed(String, String),
+}
+
+/// A probe query's answer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Answer {
+    /// Entailed. Sound whatever the probe run's coverage or budget, since
+    /// covering more only adds conclusions.
+    Yes,
+    /// Not entailed, by a probe run that was complete: no omission, and
+    /// a fixpoint.
+    No,
+    /// Not shown entailed, by a probe run that was not complete.
+    Unknown,
+}
+
+/// One query and its answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProbeAnswer {
+    pub query: Query,
+    pub answer: Answer,
+}
+
 /// A completed run, copied out of the engine.
 ///
 /// Every list is in the engine's canonical order, which the report
@@ -445,6 +521,17 @@ pub struct Report {
     pub omissions: Vec<String>,
     pub termination: Termination,
     pub rounds: u64,
+    /// The input's queries, each once, in canonical order (unsatisfiable
+    /// before subsumed, then by class), answered by a probe run of the
+    /// input plus its probe documents. Empty when nothing was asked.
+    /// Nothing above comes from the probe run.
+    pub probes: Vec<ProbeAnswer>,
+    /// Whether the probe run was inconsistent: every answer is then a
+    /// vacuous `Yes`.
+    pub probe_inconsistent: bool,
+    /// What the probe run did not cover, rendered as `omissions` are. Any
+    /// rules out a `No`.
+    pub probe_omissions: Vec<String>,
     lines: Vec<String>,
 }
 
@@ -539,10 +626,32 @@ impl Run {
                 omissions: (0..ffi::howl_run_omission_len(r)).map(|i| owned(ffi::howl_run_omission(r, i))).collect(),
                 termination,
                 rounds: ffi::howl_run_rounds(r) as u64,
+                probes: (0..ffi::howl_run_probe_len(r)).map(|i| probe_answer(r, i)).collect(),
+                probe_inconsistent: ffi::howl_run_probe_inconsistent(r) != 0,
+                probe_omissions: (0..ffi::howl_run_probe_omission_len(r))
+                    .map(|i| owned(ffi::howl_run_probe_omission(r, i)))
+                    .collect(),
                 lines: (0..ffi::howl_run_report_len(r)).map(|i| owned(ffi::howl_run_report_line(r, i))).collect(),
             })
         }
     }
+}
+
+/// The run's i-th probe answer.
+unsafe fn probe_answer(r: ffi::Run, i: i64) -> ProbeAnswer {
+    let sub = owned(ffi::howl_run_probe_sub(r, i));
+    let query = match ffi::howl_run_probe_kind(r, i) {
+        ffi::QUERY_UNSATISFIABLE => Query::Unsatisfiable(sub),
+        ffi::QUERY_SUBSUMED => Query::Subsumed(sub, owned(ffi::howl_run_probe_sup(r, i))),
+        k => panic!("the engine returned query kind {k}"),
+    };
+    let answer = match ffi::howl_run_probe_answer(r, i) {
+        ffi::ANSWER_YES => Answer::Yes,
+        ffi::ANSWER_NO => Answer::No,
+        ffi::ANSWER_UNKNOWN => Answer::Unknown,
+        a => panic!("the engine returned answer {a}"),
+    };
+    ProbeAnswer { query, answer }
 }
 
 /// Copy a string out of an engine arena.

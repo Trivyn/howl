@@ -73,12 +73,12 @@ slop_list_types_Addressed el_cr_sub_name_on_sub(slop_arena* arena, types_Context
     slop_list_types_Addressed _retval = {0};
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_203 = ax;
-        switch (_mv_203.tag) {
+        __auto_type _mv_205 = ax;
+        switch (_mv_205.tag) {
             case types_NormAxiom_sub_name:
             {
-                __auto_type b2 = _mv_203.data.sub_name.f0;
-                __auto_type a = _mv_203.data.sub_name.f1;
+                __auto_type b2 = _mv_205.data.sub_name.f0;
+                __auto_type a = _mv_205.data.sub_name.f1;
                 if (types_node_eq(b, b2)) {
                     ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = ctx.root, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
@@ -117,13 +117,13 @@ slop_list_types_Addressed el_cr_and_on_sub(slop_arena* arena, types_Context ctx,
     slop_list_types_Addressed _retval = {0};
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_204 = ax;
-        switch (_mv_204.tag) {
+        __auto_type _mv_206 = ax;
+        switch (_mv_206.tag) {
             case types_NormAxiom_sub_and:
             {
-                __auto_type a1 = _mv_204.data.sub_and.f0;
-                __auto_type a2 = _mv_204.data.sub_and.f1;
-                __auto_type a = _mv_204.data.sub_and.f2;
+                __auto_type a1 = _mv_206.data.sub_and.f0;
+                __auto_type a2 = _mv_206.data.sub_and.f1;
+                __auto_type a = _mv_206.data.sub_and.f2;
                 {
                     uint8_t fire = 0;
                     if (types_node_eq(b, a1)) {
@@ -176,13 +176,13 @@ slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context
     slop_list_types_Addressed _retval = {0};
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_207 = ax;
-        switch (_mv_207.tag) {
+        __auto_type _mv_209 = ax;
+        switch (_mv_209.tag) {
             case types_NormAxiom_sub_some_rhs:
             {
-                __auto_type b2 = _mv_207.data.sub_some_rhs.f0;
-                __auto_type r = _mv_207.data.sub_some_rhs.f1;
-                __auto_type a = _mv_207.data.sub_some_rhs.f2;
+                __auto_type b2 = _mv_209.data.sub_some_rhs.f0;
+                __auto_type r = _mv_209.data.sub_some_rhs.f1;
+                __auto_type a = _mv_209.data.sub_some_rhs.f2;
                 if (types_node_eq(b, b2)) {
                     {
                         __auto_type pair = types_emit_edge(arena, ((types_LogicalEdge){.from = ctx.root, .role = r, .to = a}));
@@ -224,17 +224,17 @@ slop_list_types_Addressed el_cr_some_rhs_on_sub(slop_arena* arena, types_Context
 slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Context ctx, types_Node b, types_NormAxiom ax) {
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_208 = ax;
-        switch (_mv_208.tag) {
+        __auto_type _mv_210 = ax;
+        switch (_mv_210.tag) {
             case types_NormAxiom_sub_some_lhs:
             {
-                __auto_type r = _mv_208.data.sub_some_lhs.f0;
-                __auto_type b2 = _mv_208.data.sub_some_lhs.f1;
-                __auto_type a = _mv_208.data.sub_some_lhs.f2;
+                __auto_type r = _mv_210.data.sub_some_lhs.f0;
+                __auto_type b2 = _mv_210.data.sub_some_lhs.f1;
+                __auto_type a = _mv_210.data.sub_some_lhs.f2;
                 if (types_node_eq(b, b2)) {
-                    __auto_type _mv_210 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-                    if (_mv_210.has_value) {
-                        __auto_type xs = _mv_210.value;
+                    __auto_type _mv_212 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+                    if (_mv_212.has_value) {
+                        __auto_type xs = _mv_212.value;
                         {
                             slop_map* _coll = (slop_map*)xs;
                             for (size_t _i = 0; _i < _coll->len; _i++) {
@@ -244,7 +244,7 @@ slop_list_types_Addressed el_cr_exists_lhs_on_sub(slop_arena* arena, types_Conte
                                 }
                             }
                         }
-                    } else if (!_mv_210.has_value) {
+                    } else if (!_mv_212.has_value) {
                     }
                 }
                 break;
@@ -278,13 +278,13 @@ slop_list_types_Addressed el_cr_exists_lhs_on_pred(slop_arena* arena, types_Cont
     slop_list_types_Addressed _retval = {0};
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_211 = ax;
-        switch (_mv_211.tag) {
+        __auto_type _mv_213 = ax;
+        switch (_mv_213.tag) {
             case types_NormAxiom_sub_some_lhs:
             {
-                __auto_type r2 = _mv_211.data.sub_some_lhs.f0;
-                __auto_type b = _mv_211.data.sub_some_lhs.f1;
-                __auto_type a = _mv_211.data.sub_some_lhs.f2;
+                __auto_type r2 = _mv_213.data.sub_some_lhs.f0;
+                __auto_type b = _mv_213.data.sub_some_lhs.f1;
+                __auto_type a = _mv_213.data.sub_some_lhs.f2;
                 if (types_role_eq(r, r2)) {
                     if (slop_map_has(ctx.subsumers, &(b))) {
                         ({ __auto_type _lst_p = &(result); __auto_type _item = (((types_Addressed){.to = x, .what = ((types_Derived){ .tag = types_Derived_derived_sub, .data.derived_sub = a })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -368,17 +368,17 @@ slop_list_types_Addressed el_cr_bottom_on_pred(slop_arena* arena, types_Context 
 slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context ctx, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_214 = ax;
-        switch (_mv_214.tag) {
+        __auto_type _mv_216 = ax;
+        switch (_mv_216.tag) {
             case types_NormAxiom_role_chain:
             {
-                __auto_type r2 = _mv_214.data.role_chain.f0;
-                __auto_type s = _mv_214.data.role_chain.f1;
-                __auto_type t = _mv_214.data.role_chain.f2;
+                __auto_type r2 = _mv_216.data.role_chain.f0;
+                __auto_type s = _mv_216.data.role_chain.f1;
+                __auto_type t = _mv_216.data.role_chain.f2;
                 if (types_role_eq(r, r2)) {
-                    __auto_type _mv_216 = ({ void* _ptr = slop_map_get(ctx.succs, &(s)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-                    if (_mv_216.has_value) {
-                        __auto_type zs = _mv_216.value;
+                    __auto_type _mv_218 = ({ void* _ptr = slop_map_get(ctx.succs, &(s)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+                    if (_mv_218.has_value) {
+                        __auto_type zs = _mv_218.value;
                         {
                             slop_map* _coll = (slop_map*)zs;
                             for (size_t _i = 0; _i < _coll->len; _i++) {
@@ -392,7 +392,7 @@ slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context c
                                 }
                             }
                         }
-                    } else if (!_mv_216.has_value) {
+                    } else if (!_mv_218.has_value) {
                     }
                 }
                 break;
@@ -425,17 +425,17 @@ slop_list_types_Addressed el_cr_chain_on_pred(slop_arena* arena, types_Context c
 slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context ctx, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
         __auto_type result = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_217 = ax;
-        switch (_mv_217.tag) {
+        __auto_type _mv_219 = ax;
+        switch (_mv_219.tag) {
             case types_NormAxiom_role_chain:
             {
-                __auto_type r = _mv_217.data.role_chain.f0;
-                __auto_type s2 = _mv_217.data.role_chain.f1;
-                __auto_type t = _mv_217.data.role_chain.f2;
+                __auto_type r = _mv_219.data.role_chain.f0;
+                __auto_type s2 = _mv_219.data.role_chain.f1;
+                __auto_type t = _mv_219.data.role_chain.f2;
                 if (types_role_eq(s, s2)) {
-                    __auto_type _mv_219 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-                    if (_mv_219.has_value) {
-                        __auto_type xs = _mv_219.value;
+                    __auto_type _mv_221 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+                    if (_mv_221.has_value) {
+                        __auto_type xs = _mv_221.value;
                         {
                             slop_map* _coll = (slop_map*)xs;
                             for (size_t _i = 0; _i < _coll->len; _i++) {
@@ -449,7 +449,7 @@ slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context c
                                 }
                             }
                         }
-                    } else if (!_mv_219.has_value) {
+                    } else if (!_mv_221.has_value) {
                     }
                 }
                 break;
@@ -480,11 +480,11 @@ slop_list_types_Addressed el_cr_chain_on_succ(slop_arena* arena, types_Context c
 }
 
 slop_list_types_RoleId el_sups_of(slop_arena* arena, premise_RoleClosure rc, types_RoleId e) {
-    __auto_type _mv_221 = ({ void* _ptr = slop_map_get(rc.sups, &(e)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-    if (_mv_221.has_value) {
-        __auto_type l = _mv_221.value;
+    __auto_type _mv_223 = ({ void* _ptr = slop_map_get(rc.sups, &(e)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+    if (_mv_223.has_value) {
+        __auto_type l = _mv_223.value;
         return l.items;
-    } else if (!_mv_221.has_value) {
+    } else if (!_mv_223.has_value) {
         {
             __auto_type one = ((slop_list_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
             ({ __auto_type _lst_p = &(one); __auto_type _item = (e); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -497,16 +497,16 @@ slop_list_types_RoleId el_sups_of(slop_arena* arena, premise_RoleClosure rc, typ
 slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_Node b, types_NormAxiom ax) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_222 = ax;
-        switch (_mv_222.tag) {
+        __auto_type _mv_224 = ax;
+        switch (_mv_224.tag) {
             case types_NormAxiom_sub_some_lhs:
             {
-                __auto_type r = _mv_222.data.sub_some_lhs.f0;
-                __auto_type b2 = _mv_222.data.sub_some_lhs.f1;
-                __auto_type a = _mv_222.data.sub_some_lhs.f2;
-                __auto_type _mv_224 = ({ void* _ptr = slop_map_get(rc.subs, &(r)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-                if (_mv_224.has_value) {
-                    __auto_type es = _mv_224.value;
+                __auto_type r = _mv_224.data.sub_some_lhs.f0;
+                __auto_type b2 = _mv_224.data.sub_some_lhs.f1;
+                __auto_type a = _mv_224.data.sub_some_lhs.f2;
+                __auto_type _mv_226 = ({ void* _ptr = slop_map_get(rc.subs, &(r)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+                if (_mv_226.has_value) {
+                    __auto_type es = _mv_226.value;
                     {
                         __auto_type _coll = es.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -523,7 +523,7 @@ slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context
                             }
                         }
                     }
-                } else if (!_mv_224.has_value) {
+                } else if (!_mv_226.has_value) {
                     {
                         __auto_type _coll = el_cr_exists_lhs_on_sub(arena, ctx, b, ax);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -562,16 +562,16 @@ slop_list_types_Addressed el_cr4_on_sub_through(slop_arena* arena, types_Context
 slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_225 = ax;
-        switch (_mv_225.tag) {
+        __auto_type _mv_227 = ax;
+        switch (_mv_227.tag) {
             case types_NormAxiom_role_chain:
             {
-                __auto_type r2 = _mv_225.data.role_chain.f0;
-                __auto_type s2 = _mv_225.data.role_chain.f1;
-                __auto_type t = _mv_225.data.role_chain.f2;
-                __auto_type _mv_227 = ({ void* _ptr = slop_map_get(rc.subs, &(s2)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-                if (_mv_227.has_value) {
-                    __auto_type es = _mv_227.value;
+                __auto_type r2 = _mv_227.data.role_chain.f0;
+                __auto_type s2 = _mv_227.data.role_chain.f1;
+                __auto_type t = _mv_227.data.role_chain.f2;
+                __auto_type _mv_229 = ({ void* _ptr = slop_map_get(rc.subs, &(s2)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+                if (_mv_229.has_value) {
+                    __auto_type es = _mv_229.value;
                     {
                         __auto_type _coll = es.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -588,7 +588,7 @@ slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Contex
                             }
                         }
                     }
-                } else if (!_mv_227.has_value) {
+                } else if (!_mv_229.has_value) {
                     {
                         __auto_type _coll = el_cr_chain_on_pred(arena, ctx, r, x, ax);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -627,16 +627,16 @@ slop_list_types_Addressed el_cr7_on_pred_through(slop_arena* arena, types_Contex
 slop_list_types_Addressed el_cr7_on_succ_through(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_228 = ax;
-        switch (_mv_228.tag) {
+        __auto_type _mv_230 = ax;
+        switch (_mv_230.tag) {
             case types_NormAxiom_role_chain:
             {
-                __auto_type r2 = _mv_228.data.role_chain.f0;
-                __auto_type s2 = _mv_228.data.role_chain.f1;
-                __auto_type t = _mv_228.data.role_chain.f2;
-                __auto_type _mv_230 = ({ void* _ptr = slop_map_get(rc.subs, &(r2)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-                if (_mv_230.has_value) {
-                    __auto_type es = _mv_230.value;
+                __auto_type r2 = _mv_230.data.role_chain.f0;
+                __auto_type s2 = _mv_230.data.role_chain.f1;
+                __auto_type t = _mv_230.data.role_chain.f2;
+                __auto_type _mv_232 = ({ void* _ptr = slop_map_get(rc.subs, &(r2)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+                if (_mv_232.has_value) {
+                    __auto_type es = _mv_232.value;
                     {
                         __auto_type _coll = es.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -653,7 +653,7 @@ slop_list_types_Addressed el_cr7_on_succ_through(slop_arena* arena, types_Contex
                             }
                         }
                     }
-                } else if (!_mv_230.has_value) {
+                } else if (!_mv_232.has_value) {
                     {
                         __auto_type _coll = el_cr_chain_on_succ(arena, ctx, s, z, ax);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -726,12 +726,12 @@ premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_Nor
                             __auto_type _coll = axioms;
                             for (size_t _i = 0; _i < _coll.len; _i++) {
                                 __auto_type ax = _coll.data[_i];
-                                __auto_type _mv_234 = ax;
-                                switch (_mv_234.tag) {
+                                __auto_type _mv_236 = ax;
+                                switch (_mv_236.tag) {
                                     case types_NormAxiom_sub_role:
                                     {
-                                        __auto_type a = _mv_234.data.sub_role.f0;
-                                        __auto_type c = _mv_234.data.sub_role.f1;
+                                        __auto_type a = _mv_236.data.sub_role.f0;
+                                        __auto_type c = _mv_236.data.sub_role.f1;
                                         if (slop_map_has(have, &(a)) && !(slop_map_has(have, &(c)))) {
                                             ({ slop_map_put(NULL, have, &(c), NULL, 0); });
                                             ({ __auto_type _lst_p = &(up); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -775,9 +775,9 @@ premise_RoleClosure el_role_closure_naive(slop_arena* arena, slop_list_types_Nor
 }
 
 uint8_t el_in_sups(premise_RoleClosure rc, types_RoleId e, types_RoleId r) {
-    __auto_type _mv_240 = ({ void* _ptr = slop_map_get(rc.sups, &(e)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
-    if (_mv_240.has_value) {
-        __auto_type l = _mv_240.value;
+    __auto_type _mv_242 = ({ void* _ptr = slop_map_get(rc.sups, &(e)); _ptr ? (slop_option_premise_RoleList){ .has_value = true, .value = *(premise_RoleList*)_ptr } : (slop_option_premise_RoleList){ .has_value = false }; });
+    if (_mv_242.has_value) {
+        __auto_type l = _mv_242.value;
         {
             uint8_t found = 0;
             {
@@ -791,7 +791,7 @@ uint8_t el_in_sups(premise_RoleClosure rc, types_RoleId e, types_RoleId r) {
             }
             return found;
         }
-    } else if (!_mv_240.has_value) {
+    } else if (!_mv_242.has_value) {
         return types_role_eq(e, r);
     }
     SLOP_UNREACHABLE();
@@ -800,13 +800,13 @@ uint8_t el_in_sups(premise_RoleClosure rc, types_RoleId e, types_RoleId r) {
 slop_list_types_Addressed el_ref_cr4_on_sub(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_Node b, types_NormAxiom ax) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_241 = ax;
-        switch (_mv_241.tag) {
+        __auto_type _mv_243 = ax;
+        switch (_mv_243.tag) {
             case types_NormAxiom_sub_some_lhs:
             {
-                __auto_type r = _mv_241.data.sub_some_lhs.f0;
-                __auto_type b2 = _mv_241.data.sub_some_lhs.f1;
-                __auto_type a = _mv_241.data.sub_some_lhs.f2;
+                __auto_type r = _mv_243.data.sub_some_lhs.f0;
+                __auto_type b2 = _mv_243.data.sub_some_lhs.f1;
+                __auto_type a = _mv_243.data.sub_some_lhs.f2;
                 {
                     slop_map* _coll = (slop_map*)ctx.preds;
                     for (size_t _i = 0; _i < _coll->len; _i++) {
@@ -855,13 +855,13 @@ slop_list_types_Addressed el_ref_cr4_on_sub(slop_arena* arena, types_Context ctx
 slop_list_types_Addressed el_ref_cr7_on_pred(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId r, types_Node x, types_NormAxiom ax) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_242 = ax;
-        switch (_mv_242.tag) {
+        __auto_type _mv_244 = ax;
+        switch (_mv_244.tag) {
             case types_NormAxiom_role_chain:
             {
-                __auto_type r2 = _mv_242.data.role_chain.f0;
-                __auto_type s2 = _mv_242.data.role_chain.f1;
-                __auto_type t = _mv_242.data.role_chain.f2;
+                __auto_type r2 = _mv_244.data.role_chain.f0;
+                __auto_type s2 = _mv_244.data.role_chain.f1;
+                __auto_type t = _mv_244.data.role_chain.f2;
                 {
                     slop_map* _coll = (slop_map*)ctx.succs;
                     for (size_t _i = 0; _i < _coll->len; _i++) {
@@ -910,13 +910,13 @@ slop_list_types_Addressed el_ref_cr7_on_pred(slop_arena* arena, types_Context ct
 slop_list_types_Addressed el_ref_cr7_on_succ(slop_arena* arena, types_Context ctx, premise_RoleClosure rc, types_RoleId s, types_Node z, types_NormAxiom ax) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_243 = ax;
-        switch (_mv_243.tag) {
+        __auto_type _mv_245 = ax;
+        switch (_mv_245.tag) {
             case types_NormAxiom_role_chain:
             {
-                __auto_type r2 = _mv_243.data.role_chain.f0;
-                __auto_type s2 = _mv_243.data.role_chain.f1;
-                __auto_type t = _mv_243.data.role_chain.f2;
+                __auto_type r2 = _mv_245.data.role_chain.f0;
+                __auto_type s2 = _mv_245.data.role_chain.f1;
+                __auto_type t = _mv_245.data.role_chain.f2;
                 {
                     slop_map* _coll = (slop_map*)ctx.preds;
                     for (size_t _i = 0; _i < _coll->len; _i++) {
@@ -965,14 +965,14 @@ slop_list_types_Addressed el_ref_cr7_on_succ(slop_arena* arena, types_Context ct
 slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx, types_Derived incoming, premise_RuleIndex idx) {
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_244 = incoming;
-        switch (_mv_244.tag) {
+        __auto_type _mv_246 = incoming;
+        switch (_mv_246.tag) {
             case types_Derived_derived_sub:
             {
-                __auto_type b = _mv_244.data.derived_sub;
-                __auto_type _mv_246 = ({ void* _ptr = slop_map_get(idx.sub_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                if (_mv_246.has_value) {
-                    __auto_type l = _mv_246.value;
+                __auto_type b = _mv_246.data.derived_sub;
+                __auto_type _mv_248 = ({ void* _ptr = slop_map_get(idx.sub_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                if (_mv_248.has_value) {
+                    __auto_type l = _mv_248.value;
                     {
                         __auto_type _coll = l.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -986,20 +986,20 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                             }
                         }
                     }
-                } else if (!_mv_246.has_value) {
+                } else if (!_mv_248.has_value) {
                 }
-                __auto_type _mv_248 = ({ void* _ptr = slop_map_get(idx.and_by_pair, &(b)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; });
-                if (_mv_248.has_value) {
-                    __auto_type p = _mv_248.value;
+                __auto_type _mv_250 = ({ void* _ptr = slop_map_get(idx.and_by_pair, &(b)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; });
+                if (_mv_250.has_value) {
+                    __auto_type p = _mv_250.value;
                     if (((int64_t)(ctx.subsumers)->len) <= p.count) {
                         {
                             slop_map* _coll = (slop_map*)ctx.subsumers;
                             for (size_t _i = 0; _i < _coll->len; _i++) {
                                 {
                                     types_Node c = *(types_Node*)slop_map_key_at(_coll, _i);
-                                    __auto_type _mv_250 = ({ void* _ptr = slop_map_get(p.by_other, &(c)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                                    if (_mv_250.has_value) {
-                                        __auto_type l = _mv_250.value;
+                                    __auto_type _mv_252 = ({ void* _ptr = slop_map_get(p.by_other, &(c)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                                    if (_mv_252.has_value) {
+                                        __auto_type l = _mv_252.value;
                                         {
                                             __auto_type _coll = l.items;
                                             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1013,7 +1013,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                                 }
                                             }
                                         }
-                                    } else if (!_mv_250.has_value) {
+                                    } else if (!_mv_252.has_value) {
                                     }
                                 }
                             }
@@ -1044,11 +1044,11 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                             }
                         }
                     }
-                } else if (!_mv_248.has_value) {
+                } else if (!_mv_250.has_value) {
                 }
-                __auto_type _mv_253 = ({ void* _ptr = slop_map_get(idx.rhs_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                if (_mv_253.has_value) {
-                    __auto_type l = _mv_253.value;
+                __auto_type _mv_255 = ({ void* _ptr = slop_map_get(idx.rhs_by_lhs, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                if (_mv_255.has_value) {
+                    __auto_type l = _mv_255.value;
                     {
                         __auto_type _coll = l.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1062,11 +1062,11 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                             }
                         }
                     }
-                } else if (!_mv_253.has_value) {
+                } else if (!_mv_255.has_value) {
                 }
-                __auto_type _mv_255 = ({ void* _ptr = slop_map_get(idx.lhs_by_filler, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                if (_mv_255.has_value) {
-                    __auto_type l = _mv_255.value;
+                __auto_type _mv_257 = ({ void* _ptr = slop_map_get(idx.lhs_by_filler, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                if (_mv_257.has_value) {
+                    __auto_type l = _mv_257.value;
                     {
                         __auto_type _coll = l.items;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1080,7 +1080,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                             }
                         }
                     }
-                } else if (!_mv_255.has_value) {
+                } else if (!_mv_257.has_value) {
                 }
                 {
                     __auto_type _coll = el_cr_bottom_on_sub(arena, ctx, b);
@@ -1093,24 +1093,24 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
             }
             case types_Derived_derived_pred:
             {
-                __auto_type e = _mv_244.data.derived_pred.f0;
-                __auto_type x = _mv_244.data.derived_pred.f1;
+                __auto_type e = _mv_246.data.derived_pred.f0;
+                __auto_type x = _mv_246.data.derived_pred.f1;
                 {
                     __auto_type _coll = el_sups_of(arena, idx.roles, e);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type r = _coll.data[_i];
-                        __auto_type _mv_257 = ({ void* _ptr = slop_map_get(idx.lhs_by_role, &(r)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; });
-                        if (_mv_257.has_value) {
-                            __auto_type p = _mv_257.value;
+                        __auto_type _mv_259 = ({ void* _ptr = slop_map_get(idx.lhs_by_role, &(r)); _ptr ? (slop_option_premise_Partners){ .has_value = true, .value = *(premise_Partners*)_ptr } : (slop_option_premise_Partners){ .has_value = false }; });
+                        if (_mv_259.has_value) {
+                            __auto_type p = _mv_259.value;
                             if (((int64_t)(ctx.subsumers)->len) <= p.count) {
                                 {
                                     slop_map* _coll = (slop_map*)ctx.subsumers;
                                     for (size_t _i = 0; _i < _coll->len; _i++) {
                                         {
                                             types_Node b = *(types_Node*)slop_map_key_at(_coll, _i);
-                                            __auto_type _mv_259 = ({ void* _ptr = slop_map_get(p.by_other, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                                            if (_mv_259.has_value) {
-                                                __auto_type l = _mv_259.value;
+                                            __auto_type _mv_261 = ({ void* _ptr = slop_map_get(p.by_other, &(b)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                                            if (_mv_261.has_value) {
+                                                __auto_type l = _mv_261.value;
                                                 {
                                                     __auto_type _coll = l.items;
                                                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1124,7 +1124,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                                         }
                                                     }
                                                 }
-                                            } else if (!_mv_259.has_value) {
+                                            } else if (!_mv_261.has_value) {
                                             }
                                         }
                                     }
@@ -1155,11 +1155,11 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                     }
                                 }
                             }
-                        } else if (!_mv_257.has_value) {
+                        } else if (!_mv_259.has_value) {
                         }
-                        __auto_type _mv_262 = ({ void* _ptr = slop_map_get(idx.chain_by_first, &(r)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                        if (_mv_262.has_value) {
-                            __auto_type l = _mv_262.value;
+                        __auto_type _mv_264 = ({ void* _ptr = slop_map_get(idx.chain_by_first, &(r)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                        if (_mv_264.has_value) {
+                            __auto_type l = _mv_264.value;
                             {
                                 __auto_type _coll = l.items;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1173,7 +1173,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                     }
                                 }
                             }
-                        } else if (!_mv_262.has_value) {
+                        } else if (!_mv_264.has_value) {
                         }
                     }
                 }
@@ -1188,15 +1188,15 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
             }
             case types_Derived_derived_succ:
             {
-                __auto_type e = _mv_244.data.derived_succ.f0;
-                __auto_type z = _mv_244.data.derived_succ.f1;
+                __auto_type e = _mv_246.data.derived_succ.f0;
+                __auto_type z = _mv_246.data.derived_succ.f1;
                 {
                     __auto_type _coll = el_sups_of(arena, idx.roles, e);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type s = _coll.data[_i];
-                        __auto_type _mv_264 = ({ void* _ptr = slop_map_get(idx.chain_by_second, &(s)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
-                        if (_mv_264.has_value) {
-                            __auto_type l = _mv_264.value;
+                        __auto_type _mv_266 = ({ void* _ptr = slop_map_get(idx.chain_by_second, &(s)); _ptr ? (slop_option_premise_AxList){ .has_value = true, .value = *(premise_AxList*)_ptr } : (slop_option_premise_AxList){ .has_value = false }; });
+                        if (_mv_266.has_value) {
+                            __auto_type l = _mv_266.value;
                             {
                                 __auto_type _coll = l.items;
                                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1210,7 +1210,7 @@ slop_list_types_Addressed el_apply_el_rules(slop_arena* arena, types_Context ctx
                                     }
                                 }
                             }
-                        } else if (!_mv_264.has_value) {
+                        } else if (!_mv_266.has_value) {
                         }
                     }
                 }
@@ -1225,11 +1225,11 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
     {
         __auto_type out = ((slop_list_types_Addressed){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type rc = el_role_closure_naive(arena, axioms);
-        __auto_type _mv_265 = incoming;
-        switch (_mv_265.tag) {
+        __auto_type _mv_267 = incoming;
+        switch (_mv_267.tag) {
             case types_Derived_derived_sub:
             {
-                __auto_type b = _mv_265.data.derived_sub;
+                __auto_type b = _mv_267.data.derived_sub;
                 {
                     __auto_type _coll = axioms;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1275,8 +1275,8 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
             }
             case types_Derived_derived_pred:
             {
-                __auto_type e = _mv_265.data.derived_pred.f0;
-                __auto_type x = _mv_265.data.derived_pred.f1;
+                __auto_type e = _mv_267.data.derived_pred.f0;
+                __auto_type x = _mv_267.data.derived_pred.f1;
                 {
                     __auto_type _coll = el_sups_of(arena, rc, e);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1314,8 +1314,8 @@ slop_list_types_Addressed el_apply_el_rules_reference(slop_arena* arena, types_C
             }
             case types_Derived_derived_succ:
             {
-                __auto_type e = _mv_265.data.derived_succ.f0;
-                __auto_type z = _mv_265.data.derived_succ.f1;
+                __auto_type e = _mv_267.data.derived_succ.f0;
+                __auto_type z = _mv_267.data.derived_succ.f1;
                 {
                     __auto_type _coll = el_sups_of(arena, rc, e);
                     for (size_t _i = 0; _i < _coll.len; _i++) {

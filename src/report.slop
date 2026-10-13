@@ -29,8 +29,10 @@
   (import types (Node SubPair Omission Outcome Termination Verdict verdict))
   (import owl2 (render-omission))
   (import select (profile-name))
+  (import strlib (string-build))
+  (import probe (Probing Answered ProbeAnswer))
 
-  (export report-lines node-text)
+  (export report-lines probe-lines node-text)
 
   (fn node-text ((arena Arena) (n Node))
     (@intent "A node as report text — injective across the three node kinds")
@@ -67,6 +69,47 @@
     (match t
       ((fixpoint)         "termination fixpoint")
       ((resource-limit _) "termination resource-limit")))
+
+  ;; THE PROBE LINES FOLLOW THE REPORT, and only when a query was asked: a
+  ;; run without queries prints exactly the lines it did before probes
+  ;; existed, so no golden moves. They describe the probe run (§8.5 A4),
+  ;; which is a classification of its own; nothing in them comes from the
+  ;; main run, and nothing in the main run's lines comes from it.
+  (fn probe-lines ((arena Arena) (p Probing))
+    (@intent "The probe run's answers, one line per query, after its coverage")
+    (@spec ((Arena Probing) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (list-push out (keyed arena "probes" (int-to-string arena (cast Int (list-len (. p answers))))))
+        (list-push out (if (. p inconsistent) "probe-inconsistent true" "probe-inconsistent false"))
+        (list-push out (keyed arena "probe-omitted" (int-to-string arena (cast Int (list-len (. p omissions))))))
+        (for-each (om (. p omissions))
+          (list-push out (keyed arena "probe-omission" (render-omission arena om))))
+        (for-each (a (. p answers))
+          (list-push out (keyed arena "probe" (answer-text arena a))))
+        out)))
+
+  (fn answer-text ((arena Arena) (a Answered))
+    (@intent "`unsatisfiable C yes`, or `subsumed A B no`")
+    (@spec ((Arena Answered) -> String))
+    (@alloc arena)
+    (let ((q (. a query)))
+      (match (. q kind)
+        ('query-unsatisfiable
+          (string-build arena (list String "unsatisfiable " (. (. q sub) value) " " (answer-name (. a answer)))))
+        ('query-subsumed
+          (string-build arena (list String "subsumed " (. (. q sub) value) " " (. (. q sup) value) " "
+                                (answer-name (. a answer))))))))
+
+  (fn answer-name ((a ProbeAnswer))
+    (@intent "A probe answer as the report spells it")
+    (@spec ((ProbeAnswer) -> String))
+    (@pure)
+    (match a
+      ('answer-yes     "yes")
+      ('answer-no      "no")
+      ('answer-unknown "unknown")))
 
   (fn report-lines ((arena Arena) (o Outcome))
     (@intent "The canonical report of an Outcome, one line per fact")

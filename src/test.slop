@@ -69,15 +69,18 @@
                  Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
                  outcome-is-complete findings-are-incoherent))
-  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at str-at sort-range
+  (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes iri-at int-at str-at omission-at sort-range
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
   (import classify (extract-findings entails-sub))
   (import howl (Verdict verdict classify classify-encoded Input Run Options FaultKind
                 input-new input-free input-add-turtle default-options run-classify run-free
                 run-ok run-fault run-fault-message run-fault-profile run-verdict run-report-len run-report-line
+                input-add-probe-turtle input-ask-unsatisfiable input-ask-subsumed
+                run-probe-len run-probe-kind run-probe-sub run-probe-sup run-probe-answer run-probe-inconsistent
                 Prepared ElWork prepare reason decode-owned prepare-in-profile))
   (import el (apply-el-rules apply-el-rules-reference))
+  (import probe (QueryKind ProbeAnswer))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
   (import strlib (starts-with parse-int is-digit char-at substring))
@@ -1838,7 +1841,7 @@
               ((error _) -1)
               ((ok s1)
                 (cast Int (list-len (. (gate-axioms arena (. s1 axioms) (. s1 signature)
-                                         (. s0 omissions) 'profile-el) accepted))))))))))
+                                         (carried-of arena s0 s1) 'profile-el) accepted))))))))))
 
   (fn test-reserved-iri-as-individual-is-out-of-profile ((arena Arena))
     (@intent "owl:Nothing used as a named individual is REPORTED, not consumed")
@@ -1894,22 +1897,62 @@
               ((error _) false)
               ((ok _)    true)))))))
 
-  (fn test-undeclared-property-is-an-input-error ((arena Arena))
-    (@intent "`:a :p :b` with :p undeclared is ambiguous, so it FAULTS")
+  (fn carried-of ((arena Arena) (s0 Stage0) (s1 Stage1))
+    (@intent "What decode-encoded hands the gate as carried coverage: stage 0's, then stage 1's")
+    (@spec ((Arena Stage0 Stage1) -> (List Omission)))
+    (@alloc arena)
+    (let ((mut oms (list-new arena Omission)))
+      (do
+        (for-each (o (. s0 omissions)) (list-push oms o))
+        (for-each (o (. s1 omitted)) (list-push oms o))
+        oms)))
+
+  (fn test-undeclared-property-is-an-omission ((arena Arena))
+    (@intent "`:a :p :b` with :p undeclared is ambiguous, so it is OMITTED, never guessed")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    ;; `missing-declaration` is recoverable only where structural
-    ;; position uniquely fixes the entity kind. Here it does not: :p
-    ;; could be an object property or an annotation property, and
-    ;; neither reading can be reported as missing-declaration(kind, …)
-    ;; because there is no determinate kind to name.
-    (let ((pre "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n:a a owl:NamedIndividual . :b a owl:NamedIndividual .\n"))
-      (and (not (decodes-ok arena (string-concat arena pre ":a :p :b .")))
-           ;; THE ACCEPTING HALF: declare it and the same document is
-           ;; fine. Without this the test passes for an implementation
-           ;; that rejects every property assertion in existence.
-           (decodes-ok arena (string-concat arena pre
-             ":p a owl:ObjectProperty . :a :p :b .")))))
+    ;; `missing-declaration` names a kind, and here no position fixes one:
+    ;; :p could be an object property or an annotation property, and with
+    ;; a literal a data property or an annotation property. The run must
+    ;; still go on (issue #70), so the triples are one omission per
+    ;; property, citing them all, and the theory is read without them.
+    (let ((pre (string-concat arena "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n"
+                 ":c a owl:Class . :d a owl:Class . :c rdfs:subClassOf :d .\n")))
+      (and (omits-exactly arena "undeclared, IRI and literal objects"
+             (string-concat arena pre
+               ":a :p :b . :c :editorNote \"x\" . :d :editorNote \"y\" .")
+             "UndeclaredProperty(http://example.org/t#editorNote)\nUndeclaredProperty(http://example.org/t#p)\n")
+           ;; the rest of the document is still read
+           (== (string-cmp (gate-accepted-of-ttl arena (string-concat arena (eq-prefix)
+                 (string-concat arena pre ":c :editorNote \"x\" .")))
+               "SubClassOf(http://example.org/t#c http://example.org/t#d)\n") 0)
+           ;; one omission per property, citing every triple, sorted
+           (undeclared-cites arena (string-concat arena (eq-prefix)
+             (string-concat arena pre ":d :editorNote \"y\" . :c :editorNote \"x\" ."))
+             "<http://example.org/t#c> <http://example.org/t#editorNote> \"x\" ."
+             "<http://example.org/t#d> <http://example.org/t#editorNote> \"y\" .")
+           ;; THE ACCEPTING HALF: declare it and nothing is omitted.
+           ;; Without this the test passes for an implementation that
+           ;; omits every property assertion in existence.
+           (omits-exactly arena "declared"
+             (string-concat arena pre
+               ":p a owl:ObjectProperty . :a :p :b . :editorNote a owl:AnnotationProperty . :c :editorNote \"x\" .")
+             ""))))
+
+  (fn undeclared-cites ((arena Arena) (ttl String) (first String) (second String))
+    (@intent "Is the document's one omission an undeclared property citing exactly these two triples?")
+    (@spec ((Arena String String String) -> Bool))
+    (@alloc arena)
+    (match (gate-ttl arena ttl)
+      ((none) false)
+      ((some gr)
+        (and (== (list-len (. gr omissions)) 1)
+             (match (omission-at (. gr omissions) 0)
+               ((undeclared-property u)
+                 (and (== (list-len (. u referring)) 2)
+                      (== (string-cmp (str-at (. u referring) 0) first) 0)
+                      (== (string-cmp (str-at (. u referring) 1) second) 0)))
+               (_ false))))))
 
   (fn test-unknown-owl-vocabulary-still-decodes ((arena Arena))
     (@intent "Reserved vocabulary HOWL does not implement gates, never faults")
@@ -1957,7 +2000,7 @@
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions) p)))))))))
+                        (carried-of arena s0 s1) p)))))))))
 
   (fn gate-omissions-of-ttl ((arena Arena) (ttl String))
     (@intent "Gate an inline Turtle document and count its omissions")
@@ -3721,9 +3764,10 @@
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; Classes A, B, C; roles r and s̄ (DL5 names r; s has a P̄); no
-    ;; function symbols; constants a and b.
+    ;; function symbols; constants a and b. Not `far`: MinGW's windows.h,
+    ;; which the runtime includes on Windows, defines it as a macro.
     (let ((ids (build-sriq-ids arena (row-normal arena (one-dl arena (union-new DlClause dl5 (dn arena "A") (dp arena "r"))) 0 0 0)))
-          (far (cast U32 99))
+          (out-of-range (cast U32 99))
           (x (at-x))
           (ok-clause (make-clause arena (one-lit arena (atom1 (cast U32 2) x)) (one-lit arena (atom2 (cast U32 1) x (at-u (cast U32 1))))))
           (mut swapped ids)
@@ -3733,8 +3777,8 @@
         (set! permuted class-of (reverse-dnames arena (. ids class-of)))
         (set! permuted class-ix (index-classes arena (. permuted class-of)))
         (and (not (flagged arena ids ok-clause))
-             (flagged arena ids (make-clause arena (one-lit arena (atom1 far x)) (no-lits arena)))
-             (flagged arena ids (make-clause arena (one-lit arena (atom2 far x x)) (no-lits arena)))
+             (flagged arena ids (make-clause arena (one-lit arena (atom1 out-of-range x)) (no-lits arena)))
+             (flagged arena ids (make-clause arena (one-lit arena (atom2 out-of-range x x)) (no-lits arena)))
              (flagged arena ids (make-clause arena (no-lits arena) (one-lit arena (atom1 (cast U32 0) (at-fx (cast U32 0))))))
              (flagged arena ids (make-clause arena (no-lits arena) (one-lit arena (atom1 (cast U32 0) (at-u (cast U32 2))))))
              (flagged arena ids (make-clause arena (no-lits arena) (one-lit arena (atom1 (cast U32 0) (at-z (cast U32 0))))))
@@ -8840,7 +8884,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           ((error _) (none))
           ((ok s1)
             (some (normalize-accepted arena
-                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (. s0 omissions) 'profile-el)
+                    (. (gate-axioms arena (. s1 axioms) (. s1 signature) (carried-of arena s0 s1) 'profile-el)
                        accepted))))))))
 
   (fn same-normal-form ((a NormOutput) (b NormOutput))
@@ -9079,6 +9123,362 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
         (let ((mut o d)) (do (set! o workers 64) (set! o max-iterations 0)
           (when (not (== (api-fault o) 'fault-none)) (set! ok false))))
         ok)))
+
+  ;; ------------------------------------------------------------
+  ;; PROBE QUERIES (§8.5 A4, issue #68), through the public API.
+  ;;
+  ;; The answers are checked against the MAIN run's report, read the way
+  ;; the differential reads it (report-entails), not against the code that
+  ;; computes them: on every ordered pair of the report's classes, and
+  ;; every class's unsatisfiability, a probe run that adds nothing answers
+  ;; yes exactly where the report entails the inclusion, no where it does
+  ;; not and the run was complete, and unknown otherwise. The main report's
+  ;; lines are those of a run without probes, and the probe lines follow.
+  ;; ------------------------------------------------------------
+
+  (fn classify-in ((arena Arena) (path String) (profile Profile))
+    (@intent "A fixture classified by the engine under one profile")
+    (@spec ((Arena String Profile) -> (Option Outcome)))
+    (@alloc arena)
+    (let ((mut cfg (default-config)))
+      (do
+        (set! cfg selection (union-new ProfileSelection explicit profile))
+        (match (parse-ttl-file arena path)
+          ((error _) (none))
+          ((ok g)
+            (match (classify arena (. g triples) (list-new arena IRI) cfg)
+              ((ok o)    (some o))
+              ((error _) (none))))))))
+
+  (fn report-classes ((arena Arena) (f Findings))
+    (@intent "owl:Thing and every named class the report mentions, owl:Nothing aside, each once, in order")
+    (@spec ((Arena Findings) -> (List IRI)))
+    (@alloc arena)
+    ;; owl:Thing always: an inconsistent run's lists are empty, and its
+    ;; probe run must still be asked something.
+    (let ((mut xs (list-new arena IRI)))
+      (do
+        (list-push xs (record-new IRI (value "http://www.w3.org/2002/07/owl#Thing")))
+        (for-each (c (. f unsatisfiable)) (list-push xs c))
+        (for-each (p (. f subsumptions))
+          (do
+            (match (. p sub)   ((class-node i) (list-push xs i)) (_ (do)))
+            (match (. p super) ((class-node i) (list-push xs i)) (_ (do)))))
+        (unique-classes arena (sort-iris arena xs)))))
+
+  (fn unique-classes ((arena Arena) (sorted (List IRI)))
+    (@intent "A sorted list's distinct IRIs, owl:Nothing dropped")
+    (@spec ((Arena (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)))
+      (do
+        (for-each (i sorted)
+          (let ((n (cast Int (list-len out))))
+            (when (and (not (string-eq (. i value) "http://www.w3.org/2002/07/owl#Nothing"))
+                       (or (== n 0) (!= (iri-cmp (iri-at out (- n 1)) i) 0)))
+              (list-push out i))))
+        out)))
+
+  (fn expected-answer ((o Outcome) (a String) (b String))
+    (@intent "What the main report says about A ⊑ B, as a probe answer")
+    (@spec ((Outcome String String) -> ProbeAnswer))
+    (if (report-entails (. o findings) (cls a) (cls b))
+      'answer-yes
+      (if (outcome-is-complete o) 'answer-no 'answer-unknown)))
+
+  (fn probe-answer-is ((r Run) (i Int) (kind QueryKind) (a String) (b String) (want ProbeAnswer))
+    (@intent "Is the run's i-th answer this query, answered this way?")
+    (@spec ((Run Int QueryKind String String ProbeAnswer) -> Bool))
+    (and (== (run-probe-kind r i) kind)
+         (string-eq (run-probe-sub r i) a)
+         (string-eq (run-probe-sup r i) b)
+         (== (run-probe-answer r i) want)))
+
+  (fn answers-agree ((r Run) (o Outcome) (cs (List IRI)))
+    (@intent "Every unsatisfiability query, then every pair, in canonical order, each as the report says")
+    (@spec ((Run Outcome (List IRI)) -> Bool))
+    (let ((n (cast Int (list-len cs)))
+          (mut ok (== (run-probe-len r) (+ n (* n n))))
+          (mut i 0))
+      (do
+        (for-each (a cs)
+          (do
+            (when (not (probe-answer-is r i 'query-unsatisfiable (. a value) ""
+                         (expected-answer o (. a value) "http://www.w3.org/2002/07/owl#Nothing")))
+              (set! ok false))
+            (set! i (+ i 1))))
+        (for-each (a cs)
+          (for-each (b cs)
+            (do
+              (when (not (probe-answer-is r i 'query-subsumed (. a value) (. b value)
+                           (expected-answer o (. a value) (. b value))))
+                (set! ok false))
+              (set! i (+ i 1)))))
+        ok)))
+
+  (fn main-lines-unchanged ((arena Arena) (r Run) (want (List String)))
+    (@intent "The run's lines are the main report's, then the probe lines")
+    (@spec ((Arena Run (List String)) -> Bool))
+    (@alloc arena)
+    (let ((got (api-lines arena r))
+          (n   (cast Int (list-len want)))
+          (mut ok (> (cast Int (list-len got)) n))
+          (mut i 0))
+      (do
+        (while (and ok (< i n))
+          (do
+            (when (not (string-eq (str-at got i) (str-at want i))) (set! ok false))
+            (set! i (+ i 1))))
+        (and ok (starts-with (str-at got n) "probes ")))))
+
+  (fn probes-agree-with-report ((arena Arena) (path String) (profile Profile))
+    (@intent "Probe answers equal the main report's on every class pair, and leave its lines alone")
+    (@spec ((Arena String Profile) -> Bool))
+    (@alloc arena)
+    (match (file-text arena path)
+      ((none) false)
+      ((some text)
+        (match (classify-in arena path profile)
+          ((none)   false)
+          ((some o) (probes-agree-on arena text o path profile))))))
+
+  (fn probes-agree-on ((arena Arena) (text String) (o Outcome) (path String) (profile Profile))
+    (@intent "Ask every pair of o's classes through the API, and hold the answers to o's report")
+    (@spec ((Arena String Outcome String Profile) -> Bool))
+    (@alloc arena)
+    (let ((cs (report-classes arena (. o findings)))
+          (in (input-new))
+          (mut opts (default-options)))
+      (do
+        (set! opts profile profile)
+        (input-add-turtle in text)
+        (ask-every-pair in (reversed-iris arena cs) cs)
+        (let ((r  (run-classify in opts))
+              (ok (and (run-ok r)
+                       (answers-agree r o cs)
+                       (main-lines-unchanged arena r (report-lines arena o))
+                       (== (run-probe-inconsistent r) (. (. o findings) inconsistent)))))
+          (do
+            (run-free r)
+            (input-free in)
+            (when (not ok)
+              (do (print "  [probe] disagrees with the report: ") (print (profile-name profile))
+                  (print " ") (println path)))
+            ok)))))
+
+  (fn ask-every-pair ((in Input) (subs (List IRI)) (cs (List IRI)))
+    (@intent "Ask each sub's unsatisfiability, twice, and its subsumption under every class")
+    (@spec ((Input (List IRI) (List IRI)) -> Unit))
+    ;; Asked out of order, and twice: the answers come back in canonical
+    ;; order, each once.
+    (for-each (k subs)
+      (do
+        (input-ask-unsatisfiable in (. k value))
+        (input-ask-unsatisfiable in (. k value))
+        (for-each (b cs) (input-ask-subsumed in (. k value) (. b value))))))
+
+  (fn reversed-iris ((arena Arena) (xs (List IRI)))
+    (@intent "The list backwards")
+    (@spec ((Arena (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI))
+          (mut i (- (cast Int (list-len xs)) 1)))
+      (do
+        (while (>= i 0)
+          (do (list-push out (iri-at xs i)) (set! i (- i 1))))
+        out)))
+
+  (fn test-probes-agree-with-report ((arena Arena))
+    (@intent "§8.5 A4: probe answers equal the main report's, under el and el++")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The fixtures entails-sub is held to (test-entails-sub-agrees-with-
+    ;; report), for the same corners, under both profiles; and the el++
+    ;; fixtures under el++, where nothing held ksc-entails-sub to the
+    ;; report before.
+    (let ((mut ok true)
+          (paths (list String
+                   "corpus/fixtures/v0/litmus.ttl"
+                   "corpus/fixtures/v0/top-bottom.ttl"
+                   "corpus/fixtures/hazards/unsatisfiable-consistent.ttl"
+                   "corpus/fixtures/hazards/inconsistent-via-individual.ttl"
+                   "corpus/fixtures/hazards/abox-disjoint-range.ttl"
+                   "corpus/fixtures/hazards/cyclic-hierarchy.ttl"
+                   "corpus/fixtures/hazards/punning.ttl"
+                   "corpus/fixtures/hazards/owl-nothing-present.ttl"
+                   "corpus/fixtures/hazards/declared-unused-class.ttl"
+                   "corpus/fixtures/hazards/undeclared-property.ttl"
+                   "corpus/fixtures/probes/some-unsat-filler.ttl"
+                   "corpus/fixtures/probes/top-subsumes-everything.ttl"))
+          (mut i 0))
+      (do
+        (for-each (p paths)
+          (when (not (and (probes-agree-with-report arena p 'profile-el)
+                          (probes-agree-with-report arena p 'profile-el-plus-plus)))
+            (set! ok false)))
+        (while (< i (ksc-fixture-count))
+          (do
+            (when (not (probes-agree-with-report arena (ksc-fixture-at i) 'profile-el-plus-plus))
+              (set! ok false))
+            (set! i (+ i 1))))
+        ok)))
+
+  ;; The scenarios: a host's own probe documents.
+
+  (fn probe-prefixes ()
+    (@intent "The prefixes the probe scenarios share")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n")
+
+  (fn probe-tail ((arena Arena) (r Run))
+    (@intent "The run's probe lines, from `probes` on, one per line")
+    (@spec ((Arena Run) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut on false))
+      (do
+        (for-each (l (api-lines arena r))
+          (do
+            (when (starts-with l "probes ") (set! on true))
+            (when on (set! out (string-concat arena out (string-concat arena l "\n"))))))
+        out)))
+
+  (fn tail-is ((arena Arena) (label String) (r Run) (want String))
+    (@intent "Are the run's probe lines exactly these? Prints what they were when not")
+    (@spec ((Arena String Run String) -> Bool))
+    (@alloc arena)
+    (let ((got (probe-tail arena r)))
+      (if (string-eq got want)
+        true
+        (do (print "  [probe] ") (print label) (println ": got") (print got) false))))
+
+  (fn scenario-main ()
+    (@intent "The main document of the probe scenarios: p must be empty, q need not be")
+    (@spec (() -> String))
+    (@pure)
+    ":p a owl:ObjectProperty . :q a owl:ObjectProperty . :r a owl:ObjectProperty .\n:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :E a owl:Class .\n:D rdfs:subClassOf owl:Nothing . :p rdfs:domain :D .\n:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .\n:B rdfs:subClassOf :C .\n")
+
+  (fn scenario-probes ()
+    (@intent "The probe document of the scenarios: issue #68's probe, and two complex classes")
+    (@spec (() -> String))
+    (@pure)
+    "<urn:probe:p> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom owl:Thing ] .\n<urn:probe:q> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom owl:Thing ] .\n<urn:probe:rc> owl:equivalentClass [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .\n<urn:probe:re> owl:equivalentClass [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :E ] .\n")
+
+  (fn scenario-input ((arena Arena) (extra String))
+    (@intent "The scenario input, its probe document plus `extra`, and its queries")
+    (@spec ((Arena String) -> Input))
+    (@alloc arena)
+    (let ((in (input-new)))
+      (do
+        (input-add-turtle in (string-concat arena (probe-prefixes) (scenario-main)))
+        (input-add-probe-turtle in (string-concat arena (probe-prefixes)
+                                     (string-concat arena (scenario-probes) extra)))
+        (input-ask-unsatisfiable in "urn:probe:q")
+        (input-ask-unsatisfiable in "urn:probe:p")
+        (input-ask-subsumed in "http://example.org/t#A" "urn:probe:re")
+        (input-ask-subsumed in "http://example.org/t#A" "urn:probe:rc")
+        (input-ask-subsumed in "http://example.org/t#A" "urn:probe:rc")
+        (input-ask-subsumed in "http://example.org/t#A" "http://example.org/t#A")
+        ;; owl:Nothing is under everything and unsatisfiable in every
+        ;; ontology, with or without a context of its own.
+        (input-ask-subsumed in "http://www.w3.org/2002/07/owl#Nothing" "urn:probe:re")
+        (input-ask-unsatisfiable in "http://www.w3.org/2002/07/owl#Nothing")
+        in)))
+
+  (fn scenario-tail ((arena Arena) (label String) (extra String) (profile Profile) (cap Int) (want String))
+    (@intent "Run the scenario; are its probe lines these, and its main lines a run without probes'?")
+    (@spec ((Arena String String Profile Int String) -> Bool))
+    (@alloc arena)
+    (let ((in    (scenario-input arena extra))
+          (plain (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile profile)
+        (set! o max-iterations cap)
+        (input-add-turtle plain (string-concat arena (probe-prefixes) (scenario-main)))
+        (let ((r  (run-classify in o))
+              (r0 (run-classify plain o))
+              (ok (and (run-ok r)
+                       (tail-is arena label r want)
+                       (main-lines-unchanged arena r (api-lines arena r0))
+                       (== (run-verdict r) (run-verdict r0)))))
+          (do
+            (run-free r) (run-free r0) (input-free in) (input-free plain)
+            ok)))))
+
+  (fn test-probe-scenarios ((arena Arena))
+    (@intent "§8.5 A4: issue #68's probe, a complex subsumption, and each way an answer is unknown")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The answers: urn:probe:p is unsatisfiable because p's domain is
+    ;; empty (issue #68's case) and urn:probe:q is not; A ⊑ ∃r.C through
+    ;; A ⊑ ∃r.B and B ⊑ C, and not A ⊑ ∃r.E. The main report has D
+    ;; unsatisfiable and nothing of the probes'. Both documents name a
+    ;; blank node first, so this also holds that the probe document's are
+    ;; kept apart from the input's.
+    (let ((answers (string-concat arena
+                     "probe unsatisfiable http://www.w3.org/2002/07/owl#Nothing yes\nprobe unsatisfiable urn:probe:p yes\nprobe unsatisfiable urn:probe:q no\n"
+                     "probe subsumed http://example.org/t#A http://example.org/t#A yes\nprobe subsumed http://example.org/t#A urn:probe:rc yes\nprobe subsumed http://example.org/t#A urn:probe:re no\nprobe subsumed http://www.w3.org/2002/07/owl#Nothing urn:probe:re yes\n")))
+      (and
+        (scenario-tail arena "el" "" 'profile-el 1000
+          (string-concat arena "probes 7\nprobe-inconsistent false\nprobe-omitted 0\n" answers))
+        (scenario-tail arena "el++" "" 'profile-el-plus-plus 1000
+          (string-concat arena "probes 7\nprobe-inconsistent false\nprobe-omitted 0\n" answers))
+        ;; An omission in the probe run turns every no into unknown, and
+        ;; leaves every yes standing.
+        (scenario-tail arena "probe omission"
+          "<urn:probe:u> rdfs:subClassOf [ owl:unionOf ( :B :C ) ] .\n" 'profile-el 1000
+          (string-concat arena "probes 7\nprobe-inconsistent false\nprobe-omitted 1\n"
+            (string-concat arena "probe-omission SubClassOf(urn:probe:u ObjectUnionOf(http://example.org/t#B http://example.org/t#C))\n"
+              "probe unsatisfiable http://www.w3.org/2002/07/owl#Nothing yes\nprobe unsatisfiable urn:probe:p yes\nprobe unsatisfiable urn:probe:q unknown\nprobe subsumed http://example.org/t#A http://example.org/t#A yes\nprobe subsumed http://example.org/t#A urn:probe:rc yes\nprobe subsumed http://example.org/t#A urn:probe:re unknown\nprobe subsumed http://www.w3.org/2002/07/owl#Nothing urn:probe:re yes\n")))
+        ;; So does the round cap; at 0 rounds only what holds in every
+        ;; ontology is yes.
+        (scenario-tail arena "cap 0" "" 'profile-el 0
+          (string-concat arena "probes 7\nprobe-inconsistent false\nprobe-omitted 0\n"
+            "probe unsatisfiable http://www.w3.org/2002/07/owl#Nothing yes\nprobe unsatisfiable urn:probe:p unknown\nprobe unsatisfiable urn:probe:q unknown\nprobe subsumed http://example.org/t#A http://example.org/t#A yes\nprobe subsumed http://example.org/t#A urn:probe:rc unknown\nprobe subsumed http://example.org/t#A urn:probe:re unknown\nprobe subsumed http://www.w3.org/2002/07/owl#Nothing urn:probe:re yes\n"))
+        ;; el++ capped before W completes keeps no answers at all.
+        (scenario-tail arena "cap 0, el++" "" 'profile-el-plus-plus 0
+          (string-concat arena "probes 7\nprobe-inconsistent false\nprobe-omitted 0\n"
+            "probe unsatisfiable http://www.w3.org/2002/07/owl#Nothing yes\nprobe unsatisfiable urn:probe:p unknown\nprobe unsatisfiable urn:probe:q unknown\nprobe subsumed http://example.org/t#A http://example.org/t#A yes\nprobe subsumed http://example.org/t#A urn:probe:rc unknown\nprobe subsumed http://example.org/t#A urn:probe:re unknown\nprobe subsumed http://www.w3.org/2002/07/owl#Nothing urn:probe:re yes\n"))
+        ;; An inconsistent probe run entails everything, and says so; the
+        ;; main run never sees the assertion that made it so.
+        (scenario-tail arena "inconsistent" ":x a owl:NamedIndividual , owl:Nothing .\n" 'profile-el 1000
+          (string-concat arena "probes 7\nprobe-inconsistent true\nprobe-omitted 0\n"
+            "probe unsatisfiable http://www.w3.org/2002/07/owl#Nothing yes\nprobe unsatisfiable urn:probe:p yes\nprobe unsatisfiable urn:probe:q yes\nprobe subsumed http://example.org/t#A http://example.org/t#A yes\nprobe subsumed http://example.org/t#A urn:probe:rc yes\nprobe subsumed http://example.org/t#A urn:probe:re yes\nprobe subsumed http://www.w3.org/2002/07/owl#Nothing urn:probe:re yes\n")))))
+
+  (fn test-probe-refusals ((arena Arena))
+    (@intent "An empty query IRI, an unparseable probe document, or a probe run's fault fails the run")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The third: a probe document HOWL parses but cannot decode faults the
+    ;; probe run after the main run has finished, and takes the run with
+    ;; it, named as the probe run's.
+    (let ((a (input-new))
+          (b (input-new))
+          (c (input-new)))
+      (do
+        (input-ask-subsumed a "http://example.org/t#A" "")
+        (input-add-probe-turtle b "<urn:x> <urn:y> .")
+        (input-add-probe-turtle c (string-concat arena (probe-prefixes)
+                                    "<urn:p> a owl:ObjectProperty , owl:AnnotationProperty ."))
+        (input-ask-unsatisfiable c "urn:P")
+        (let ((ra (run-classify a (default-options)))
+              (rb (run-classify b (default-options)))
+              (rc (run-classify c (default-options)))
+              (ok (and (== (run-fault ra) 'fault-input-error)
+                       (string-eq (run-fault-message ra) "a probe query names an empty IRI")
+                       (== (run-fault rb) 'fault-input-error)
+                       (starts-with (run-fault-message rb) "a Turtle document does not parse")
+                       (== (run-fault rc) 'fault-input-error)
+                       (starts-with (run-fault-message rc) "probe run: IRI declared under two disjoint")
+                       (not (run-ok rc))
+                       (== (run-report-len rc) 0)
+                       (== (run-probe-len rc) 0))))
+          (do
+            (run-free ra) (run-free rb) (run-free rc)
+            (input-free a) (input-free b) (input-free c)
+            ok)))))
 
   (fn order-independent ((arena Arena) (path String))
     (@intent "The same document with its triples reversed: identical normal form and report")
@@ -9509,7 +9909,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
               ((error _) (none))
               ((ok s1)
                 (some (gate-axioms arena (. s1 axioms) (. s1 signature)
-                        (. s0 omissions) p)))))))))
+                        (carried-of arena s0 s1) p)))))))))
 
   (fn count-variant-chain ((axs (List RawAxiom)))
     (@intent "How many property-chain axioms survived the gate")
@@ -11297,8 +11697,8 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (print-test-result "negation: a negative range is ∃r.B ⊑ ⊥, on the left" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
-          (let ((r (test-undeclared-property-is-an-input-error arena)))
-            (print-test-result "declarations: an ambiguous undeclared property FAULTS" r)
+          (let ((r (test-undeclared-property-is-an-omission arena)))
+            (print-test-result "declarations: an ambiguous undeclared property is OMITTED" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-unknown-owl-vocabulary-still-decodes arena)))
@@ -11379,6 +11779,18 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-public-api arena)))
             (print-test-result "§8.4: the public C API reports what classify does, and refuses what it must" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-probes-agree-with-report arena)))
+            (print-test-result "§8.5 A4: probe answers equal the report's on every class pair, el and el++" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-probe-scenarios arena)))
+            (print-test-result "§8.5 A4: a probe run answers yes, no or unknown, and the main report is unchanged" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-probe-refusals arena)))
+            (print-test-result "§8.5 A4: an empty query IRI or an unparseable probe document refuses the input" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-indexed-dispatch-matches-reference arena)))
