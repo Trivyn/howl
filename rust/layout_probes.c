@@ -53,6 +53,8 @@ long howl_layout_constant(int which) {
         howl_FaultKind_fault_unavailable, howl_FaultKind_fault_invalid_options,
         rdf_TermKind_iri, rdf_TermKind_blank, rdf_TermKind_literal,
         types_Termination_fixpoint, types_Termination_resource_limit,
+        probe_QueryKind_query_unsatisfiable, probe_QueryKind_query_subsumed,
+        probe_ProbeAnswer_answer_yes, probe_ProbeAnswer_answer_no, probe_ProbeAnswer_answer_unknown,
     };
     return (which >= 0 && which < (int)(sizeof values / sizeof values[0])) ? values[which] : -1;
 }

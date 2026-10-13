@@ -33,6 +33,7 @@
 #include "slop_classify.h"
 #include "slop_howl.h"
 #include "slop_el.h"
+#include "slop_probe.h"
 #include "slop_premise.h"
 #include "slop_report.h"
 #include "slop_strlib.h"
@@ -100,6 +101,12 @@ SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #define SLOP_LIST_TYPES_AXIOMREF_DEFINED
 #define SLOP_LIST_TYPES_AXIOMREF_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_AxiomRef, slop_list_types_AxiomRef)
+#endif
+
+#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_DEFINED
+#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
 #ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
@@ -204,12 +211,6 @@ SLOP_LIST_DEFINE(types_KFact, slop_list_types_KFact)
 SLOP_LIST_DEFINE(types_Addressed, slop_list_types_Addressed)
 #endif
 
-#ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
-#define SLOP_LIST_TYPES_OMISSION_DEFINED
-#define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
-#endif
-
 #ifndef SLOP_OPTION_TYPES_OUTCOME_DEFINED
 #define SLOP_OPTION_TYPES_OUTCOME_DEFINED
 SLOP_OPTION_DEFINE(types_Outcome, slop_option_types_Outcome)
@@ -243,6 +244,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 #ifndef SLOP_OPTION_TYPES_AXIOMREF_DEFINED
 #define SLOP_OPTION_TYPES_AXIOMREF_DEFINED
 SLOP_OPTION_DEFINE(types_AxiomRef, slop_option_types_AxiomRef)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
@@ -348,11 +354,6 @@ SLOP_OPTION_DEFINE(types_Addressed, slop_option_types_Addressed)
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 #define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
-#define SLOP_OPTION_TYPES_OMISSION_DEFINED
-SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 struct test_Expect {
@@ -1266,7 +1267,9 @@ int64_t test_accepted_count_of_ttl(slop_arena* arena, slop_string ttl);
 uint8_t test_test_reserved_iri_as_individual_is_out_of_profile(slop_arena* arena);
 uint8_t test_test_annotation_property_axioms_are_inert(slop_arena* arena);
 uint8_t test_decodes_ok(slop_arena* arena, slop_string ttl);
-uint8_t test_test_undeclared_property_is_an_input_error(slop_arena* arena);
+slop_list_types_Omission test_carried_of(slop_arena* arena, decode_Stage0 s0, decode_Stage1 s1);
+uint8_t test_test_undeclared_property_is_an_omission(slop_arena* arena);
+uint8_t test_undeclared_cites(slop_arena* arena, slop_string ttl, slop_string first, slop_string second);
 uint8_t test_test_unknown_owl_vocabulary_still_decodes(slop_arena* arena);
 uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena);
 slop_option_gate_GateResult test_gate_ttl(slop_arena* arena, slop_string ttl);
@@ -1692,6 +1695,27 @@ slop_list_string test_api_lines(slop_arena* arena, howl_Run r);
 uint8_t test_api_agrees(slop_arena* arena, slop_string path, types_Profile profile);
 howl_FaultKind test_api_fault(howl_Options o);
 uint8_t test_test_public_api(slop_arena* arena);
+slop_option_types_Outcome test_classify_in(slop_arena* arena, slop_string path, types_Profile profile);
+slop_list_rdf_IRI test_report_classes(slop_arena* arena, types_Findings f);
+slop_list_rdf_IRI test_unique_classes(slop_arena* arena, slop_list_rdf_IRI sorted);
+probe_ProbeAnswer test_expected_answer(types_Outcome o, slop_string a, slop_string b);
+uint8_t test_probe_answer_is(howl_Run r, int64_t i, probe_QueryKind kind, slop_string a, slop_string b, probe_ProbeAnswer want);
+uint8_t test_answers_agree(howl_Run r, types_Outcome o, slop_list_rdf_IRI cs);
+uint8_t test_main_lines_unchanged(slop_arena* arena, howl_Run r, slop_list_string want);
+uint8_t test_probes_agree_with_report(slop_arena* arena, slop_string path, types_Profile profile);
+uint8_t test_probes_agree_on(slop_arena* arena, slop_string text, types_Outcome o, slop_string path, types_Profile profile);
+void test_ask_every_pair(howl_Input in, slop_list_rdf_IRI subs, slop_list_rdf_IRI cs);
+slop_list_rdf_IRI test_reversed_iris(slop_arena* arena, slop_list_rdf_IRI xs);
+uint8_t test_test_probes_agree_with_report(slop_arena* arena);
+slop_string test_probe_prefixes(void);
+slop_string test_probe_tail(slop_arena* arena, howl_Run r);
+uint8_t test_tail_is(slop_arena* arena, slop_string label, howl_Run r, slop_string want);
+slop_string test_scenario_main(void);
+slop_string test_scenario_probes(void);
+howl_Input test_scenario_input(slop_arena* arena, slop_string extra);
+uint8_t test_scenario_tail(slop_arena* arena, slop_string label, slop_string extra, types_Profile profile, int64_t cap, slop_string want);
+uint8_t test_test_probe_scenarios(slop_arena* arena);
+uint8_t test_test_probe_refusals(slop_arena* arena);
 uint8_t test_order_independent(slop_arena* arena, slop_string path);
 uint8_t test_test_triple_order_independence(slop_arena* arena);
 uint8_t test_addressed_subset(slop_list_types_Addressed xs, slop_list_types_Addressed ys);
@@ -1827,6 +1851,11 @@ SLOP_OPTION_DEFINE(decode_Stage1, slop_option_decode_Stage1)
 SLOP_OPTION_DEFINE(types_AxiomRef, slop_option_types_AxiomRef)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
+#define SLOP_OPTION_TYPES_OMISSION_DEFINED
+SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
 #ifndef SLOP_OPTION_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
@@ -1960,11 +1989,6 @@ SLOP_OPTION_DEFINE(test_RunAs, slop_option_test_RunAs)
 #ifndef SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 #define SLOP_OPTION_OWL2_SIGNATURE_DEFINED
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
-#endif
-
-#ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
-#define SLOP_OPTION_TYPES_OMISSION_DEFINED
-SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED

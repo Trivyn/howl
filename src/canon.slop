@@ -51,7 +51,7 @@
 
   (import rdf (IRI))
   (import types (Node RoleId SubPair AxiomRef InputRef EntityKind
-                 MissingDeclaration Omission))
+                 MissingDeclaration UndeclaredProperty Omission))
 
   ;; Length-safe by construction: memcmp takes an explicit n, so it can
   ;; never read past the shorter operand. See the header note.
@@ -61,11 +61,11 @@
   (export
     string-cmp iri-cmp node-cmp role-cmp sub-pair-cmp
     entity-kind-rank axiom-ref-cmp input-ref-cmp
-    missing-declaration-cmp omission-cmp
+    missing-declaration-cmp undeclared-property-cmp omission-cmp
     sort-range
     sort-strings sort-iris sort-nodes sort-sub-pairs
     sort-axiom-refs sort-omissions
-    int-at str-at iri-at)
+    int-at str-at iri-at omission-at)
 
   ;; ============================================================
   ;; The primitive
@@ -262,23 +262,57 @@
                     ((> la lb)  1)
                     (else       0))))))))))
 
+  (fn undeclared-property-cmp ((a UndeclaredProperty) (b UndeclaredProperty))
+    (@intent "Canonical order: property, then referring element-wise")
+    (@spec ((UndeclaredProperty UndeclaredProperty) -> Int))
+    (@pure)
+    ;; Element-wise over `referring`, which is sorted by construction, as
+    ;; missing-declaration-cmp's is.
+    (let ((c (iri-cmp (. a property) (. b property))))
+      (if (!= c 0)
+        c
+        (let ((la (cast Int (list-len (. a referring))))
+              (lb (cast Int (list-len (. b referring))))
+              (n  (min la lb))
+              (mut i 0)
+              (mut r 0))
+          (do
+            (while (and (< i n) (== r 0))
+              (do
+                (set! r (string-cmp (str-at (. a referring) i) (str-at (. b referring) i)))
+                (set! i (+ i 1))))
+            (cond
+              ((!= r 0)  r)
+              ((< la lb) -1)
+              ((> la lb)  1)
+              (else       0)))))))
+
+  (fn omission-rank ((o Omission))
+    (@intent "The tag's place in the canonical order")
+    (@spec ((Omission) -> Int))
+    (@pure)
+    (match o
+      ((out-of-profile _)      0)
+      ((unresolved-import _)   1)
+      ((missing-declaration _) 2)
+      ((undeclared-property _) 3)))
+
   (fn omission-cmp ((a Omission) (b Omission))
     (@intent "Canonical order on omissions — tag first, then payload")
     (@spec ((Omission Omission) -> Int))
     (@pure)
-    (match a
-      ((out-of-profile ra)
-        (match b ((out-of-profile rb)      (input-ref-cmp ra rb))
-                 ((unresolved-import _)    -1)
-                 ((missing-declaration _)  -1)))
-      ((unresolved-import ia)
-        (match b ((out-of-profile _)        1)
-                 ((unresolved-import ib)   (iri-cmp ia ib))
-                 ((missing-declaration _)  -1)))
-      ((missing-declaration ma)
-        (match b ((out-of-profile _)        1)
-                 ((unresolved-import _)     1)
-                 ((missing-declaration mb) (missing-declaration-cmp ma mb))))))
+    (let ((ra (omission-rank a)) (rb (omission-rank b)))
+      (if (!= ra rb)
+        (if (< ra rb) -1 1)
+        (match a
+          ((out-of-profile x)
+            (match b ((out-of-profile y) (input-ref-cmp x y)) (_ 0)))
+          ((unresolved-import x)
+            (match b ((unresolved-import y) (iri-cmp x y)) (_ 0)))
+          ((missing-declaration x)
+            (match b ((missing-declaration y) (missing-declaration-cmp x y)) (_ 0)))
+          ((undeclared-property x)
+            (match b ((undeclared-property y) (undeclared-property-cmp x y)) (_ 0)))))))
 
   ;; ============================================================
   ;; Element access

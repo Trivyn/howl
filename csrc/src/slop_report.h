@@ -8,11 +8,16 @@
 #include "slop_types.h"
 #include "slop_owl2.h"
 #include "slop_select.h"
+#include "slop_strlib.h"
+#include "slop_probe.h"
 
 slop_string report_node_text(slop_arena* arena, types_Node n);
 slop_string report_keyed(slop_arena* arena, slop_string key, slop_string text);
 slop_string report_verdict_line(types_Outcome o);
 slop_string report_termination_line(types_Termination t);
+slop_list_string report_probe_lines(slop_arena* arena, probe_Probing p);
+slop_string report_answer_text(slop_arena* arena, probe_Answered a);
+slop_string report_answer_name(probe_ProbeAnswer a);
 slop_list_string report_report_lines(slop_arena* arena, types_Outcome o);
 
 

@@ -73,6 +73,8 @@ int64_t canon_entity_kind_rank(types_EntityKind k);
 int64_t canon_axiom_ref_cmp(types_AxiomRef a, types_AxiomRef b);
 int64_t canon_input_ref_cmp(types_InputRef a, types_InputRef b);
 int64_t canon_missing_declaration_cmp(types_MissingDeclaration a, types_MissingDeclaration b);
+int64_t canon_undeclared_property_cmp(types_UndeclaredProperty a, types_UndeclaredProperty b);
+int64_t canon_omission_rank(types_Omission o);
 int64_t canon_omission_cmp(types_Omission a, types_Omission b);
 int64_t canon_int_at(slop_list_int xs, int64_t i);
 slop_string canon_str_at(slop_list_string xs, int64_t i);

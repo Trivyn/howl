@@ -867,6 +867,21 @@ types_Omission types_copy_omission(slop_arena* arena, types_Omission o) {
                 return ((types_Omission){ .tag = types_Omission_missing_declaration, .data.missing_declaration = ((types_MissingDeclaration){.kind = m.kind, .entity = types_copy_iri(arena, m.entity), .referring = refs}) });
             }
         }
+        case types_Omission_undeclared_property:
+        {
+            __auto_type u = _mv_47.data.undeclared_property;
+            {
+                __auto_type refs = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+                {
+                    __auto_type _coll = u.referring;
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type s = _coll.data[_i];
+                        ({ __auto_type _lst_p = &(refs); __auto_type _item = (types_copy_string(arena, s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    }
+                }
+                return ((types_Omission){ .tag = types_Omission_undeclared_property, .data.undeclared_property = ((types_UndeclaredProperty){.property = types_copy_iri(arena, u.property), .referring = refs}) });
+            }
+        }
     }
     SLOP_UNREACHABLE();
 }

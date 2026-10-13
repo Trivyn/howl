@@ -119,6 +119,69 @@ fn imports_need_attestation() {
     assert_eq!(r.verdict, Verdict::Coherent, "{:?}", r.omissions);
 }
 
+/// An undeclared property is an omission naming it (issue #70): the run
+/// goes on and reads the rest, but is inconclusive, never a pass.
+#[test]
+fn an_undeclared_property_is_an_omission() {
+    let r = Reasoner::new().classify(&turtle(&fixture("hazards/undeclared-property.ttl"))).unwrap();
+    assert_eq!(r.verdict, Verdict::Inconclusive);
+    assert_eq!(
+        r.omissions,
+        vec![
+            format!("UndeclaredProperty({EX}editorNote)"),
+            format!("UndeclaredProperty({EX}p)"),
+        ]
+    );
+    assert!(r.subsumptions.iter().any(|(s, t)| s == &format!("{EX}B") && t == &format!("{EX}A")));
+}
+
+/// Issue #68: whether `:p` can have a value, asked through a probe class
+/// the host never has to declare, filter out or re-verdict. `:p`'s two
+/// domains are disjoint, so it cannot; `:q` can.
+#[test]
+fn probes_are_answered_apart_from_the_report() {
+    let main = r#"
+        @prefix : <http://example.org/t#> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        :p a owl:ObjectProperty . :q a owl:ObjectProperty .
+        :D a owl:Class . :E a owl:Class . :D owl:disjointWith :E .
+        :p rdfs:domain :D , :E .
+    "#;
+    let probes = r#"
+        @prefix : <http://example.org/t#> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        <urn:probe:p> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom owl:Thing ] .
+        <urn:probe:q> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom owl:Thing ] .
+    "#;
+    let mut input = turtle(main);
+    let plain = Reasoner::new().classify(&input).unwrap();
+    input.add_probe_turtle(probes).unwrap();
+    input.ask_unsatisfiable("urn:probe:q");
+    input.ask_unsatisfiable("urn:probe:p");
+    input.ask_subsumed("urn:probe:p", &format!("{EX}D"));
+    let r = Reasoner::new().classify(&input).unwrap();
+
+    use howl::{Answer, ProbeAnswer, Query};
+    assert_eq!(
+        r.probes,
+        vec![
+            ProbeAnswer { query: Query::Unsatisfiable("urn:probe:p".into()), answer: Answer::Yes },
+            ProbeAnswer { query: Query::Unsatisfiable("urn:probe:q".into()), answer: Answer::No },
+            ProbeAnswer { query: Query::Subsumed("urn:probe:p".into(), format!("{EX}D")), answer: Answer::Yes },
+        ]
+    );
+    assert!(!r.probe_inconsistent);
+    assert!(r.probe_omissions.is_empty());
+    // The main run is the run without probes, line for line.
+    assert_eq!(r.verdict, Verdict::Coherent);
+    assert_eq!((&r.unsatisfiable, &r.subsumptions, &r.omissions), (&plain.unsatisfiable, &plain.subsumptions, &plain.omissions));
+    assert_eq!(&r.lines()[..plain.lines().len()], plain.lines());
+    assert_eq!(r.lines()[plain.lines().len()], "probes 3");
+    assert!(plain.probes.is_empty());
+}
+
 #[test]
 fn bad_turtle_is_an_input_error_and_poisons_the_input() {
     let mut input = Input::new();

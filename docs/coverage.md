@@ -124,6 +124,10 @@ that `match`.
 | **inert** | semantically empty in OWL 2 | `AnnotationAssertion`, `SubAnnotationPropertyOf`, `AnnotationProperty{Domain,Range}`, the ontology header, axiom-annotation reification |
 | **out-of-profile** | recognized, **enumerated**, never silently dropped | every other row above |
 
+A triple whose predicate is an undeclared user property is none of these: no declaration says
+whether it is an object, data or annotation assertion. It is an `UndeclaredProperty(<iri>)` omission
+(one per property), so it too keeps the run from a pass.
+
 **Why "recognized and enumerated" rather than "unsupported".** A rejected axiom lands in
 `coverage.omitted` with a canonical `AxiomRef`, which forces the verdict to **inconclusive**. That is
 the whole safety property: HOWL will not report *coherent* over an ontology it only partly read. The

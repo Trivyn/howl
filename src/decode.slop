@@ -127,9 +127,9 @@
                 signature-has-annotation-property
                 signature-has-object-property
                 signature-has-data-property))
-  (import types (Omission Fault Node RoleId InputRef EntityKind))
+  (import types (Omission UndeclaredProperty Fault Node RoleId InputRef EntityKind))
   (import strlib (parse-int starts-with))
-  (import canon (string-cmp iri-cmp sort-iris sort-omissions))
+  (import canon (string-cmp iri-cmp sort-iris sort-omissions sort-range str-at iri-at))
 
   (export
     ListFault LookupFault Stage0
@@ -1318,7 +1318,8 @@
   (type Stage1 (record
     (axioms    (List RawAxiom))
     (signature Signature)
-    (inert     Int)))       ; inert axioms recognized and dropped (annotations, the data lemma's)
+    (inert     Int)         ; inert axioms recognized and dropped (annotations, the data lemma's)
+    (omitted   (List Omission))))  ; (undeclared-property ...), one per property, canonically sorted
 
   ;; Deterministic N-Triples-ish rendering, for the InputRef an
   ;; out-of-profile or unrecognized axiom carries.
@@ -2102,18 +2103,12 @@
             ((signature-has-data-property sig p)
               (ok (union-new RawAxiom ra-data-axiom (frag arena t))))
 
-            ;; AN UNDECLARED USER PROPERTY IS AN input-error, NOT AN
-            ;; OMISSION. `:a :p :b` with `:p` undeclared is ambiguous
-            ;; between an object property assertion and an annotation
-            ;; assertion, and `:a :p "x"` between a data property and an
-            ;; annotation property. OWL's RDF parsing uses declarations
-            ;; precisely to settle this. Neither reading can be reported
-            ;; as `missing-declaration(EntityKind, …)`, because there is
-            ;; no determinate EntityKind to name — so the recoverable
-            ;; omission is unavailable and the honest answer is a fault.
+            ;; An undeclared user property never gets here:
+            ;; decode-triple takes its triples first, as an
+            ;; undeclared-property omission (undeclared-predicate).
             (else
               (error (string-concat arena
-                       "undeclared property, ambiguous between object, data and annotation property: "
+                       "unreachable: undeclared property reached decode-axiom: "
                        pv)))))))) 
 
   (fn decode-axioms ((arena Arena) (dict TermStore) (triples (List IdTriple)))
@@ -2200,7 +2195,8 @@
         ps)))
 
   ;; Stage 1's walk: what it reads for every triple, and what it has made
-  ;; so far (the axioms kept, the inert count, the fault), written through
+  ;; so far (the axioms kept, the inert count, the undeclared properties'
+  ;; triples, the fault), written through
   ;; the pointer so that no triple copies the stores, as passing them by
   ;; value would.
   (type Decoding (record
@@ -2212,6 +2208,8 @@
     (npa-parts (Set Int))
     (out       (List RawAxiom))
     (inert     Int)
+    (uprops    (List IRI))       ; undeclared properties, one per triple naming one
+    (utexts    (List String))    ; utexts[i] renders the triple uprops[i] came from
     (fault     (Option String))))
 
   (fn keep-axiom ((c (Ptr Decoding)) (ax RawAxiom))
@@ -2226,7 +2224,7 @@
       true))
 
   (fn decode-triple ((arena Arena) (c (Ptr Decoding)) (it IdTriple) (t Triple))
-    (@intent "What stage 1 makes of one triple: an axiom kept or counted, nothing, or the fault")
+    (@intent "What stage 1 makes of one triple: an axiom, an undeclared property's use, nothing, or a fault")
     (@spec ((Arena (Ptr Decoding) IdTriple Triple) -> Bool))
     (@alloc arena)
     (cond
@@ -2241,9 +2239,15 @@
       ((inert-data-axiom (. (deref c) dv) (. (deref c) lemma) it)
         (keep-axiom c (union-new RawAxiom ra-inert-data)))
       (else
-        (match (decode-axiom arena (. (deref c) ig) (. (deref c) sig) t)
-          ((error m) (do (set! (. (deref c) fault) (some m)) true))
-          ((ok ax)   (keep-axiom c ax))))))
+        (match (undeclared-predicate (. (deref c) sig) t)
+          ((some up)
+            (do (list-push (. (deref c) uprops) up)
+                (list-push (. (deref c) utexts) (render-triple arena t))
+                true))
+          ((none)
+            (match (decode-axiom arena (. (deref c) ig) (. (deref c) sig) t)
+              ((error m) (do (set! (. (deref c) fault) (some m)) true))
+              ((ok ax)   (keep-axiom c ax))))))))
 
   (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)))
     (@intent "Stage 1 over a store built by the caller")
@@ -2270,12 +2274,75 @@
         (set! (deref c) (record-new Decoding
                           (ig ig) (sig sig) (dv dv) (lemma lemma)
                           (npa-nodes npa-nodes) (npa-parts npa-parts)
-                          (out (list-new arena RawAxiom)) (inert 0) (fault conflict)))
+                          (out (list-new arena RawAxiom)) (inert 0)
+                          (uprops (list-new arena IRI)) (utexts (list-new arena String))
+                          (fault conflict)))
         (for-each (it triples) (decode-triple arena c it (triple-of dict it)))
         (match (. (deref c) fault)
           ((some m) (error (union-new Fault input-error m)))
           ((none)   (ok (record-new Stage1 (axioms (. (deref c) out)) (signature sig)
-                          (inert (. (deref c) inert)))))))))
+                          (inert (. (deref c) inert))
+                          (omitted (undeclared-omissions arena (. (deref c) uprops) (. (deref c) utexts))))))))))
+
+  ;; AN UNDECLARED USER PROPERTY IS AN OMISSION, NOT A GUESS (§5.2).
+  ;; `:a :p :b` with `:p` undeclared is ambiguous between an object
+  ;; property assertion and an annotation assertion, and `:a :p "x"`
+  ;; between a data property assertion and an annotation. OWL's RDF
+  ;; mapping uses declarations precisely to settle this. Either guess is
+  ;; wrong somewhere: reasoning over an intended annotation, or dropping
+  ;; an intended logical assertion while the run says COHERENT. So the
+  ;; triple contributes nothing and is reported, which keeps the run from
+  ;; claiming coherence. Every predicate decode-axiom dispatches on by
+  ;; name is reserved, so this is exactly its fall-through case.
+  (fn undeclared-predicate ((sig Signature) (t Triple))
+    (@intent "The predicate, when it is a user property no declaration gives a kind")
+    (@spec ((Signature Triple) -> (Option IRI)))
+    (match (term-iri-value (. t predicate))
+      ((none) (none))
+      ((some p)
+        (if (or (is-reserved-iri (. p value))
+                (or (signature-has-annotation-property sig p)
+                    (or (signature-has-object-property sig p)
+                        (signature-has-data-property sig p))))
+          (none)
+          (some p)))))
+
+  (fn undeclared-omissions ((arena Arena) (ps (List IRI)) (texts (List String)))
+    (@intent "One undeclared-property omission per property, citing its triples")
+    (@spec ((Arena (List IRI) (List String)) -> (List Omission)))
+    (@alloc arena)
+    ;; ps[i] is the predicate of the triple rendered texts[i]. Sorting by
+    ;; (property, text) leaves each property's triples adjacent and in
+    ;; canonical order, which is UndeclaredProperty.referring's invariant.
+    (let ((idx (sort-range arena (cast Int (list-len ps))
+                 (fn ((i Int) (j Int))
+                   (let ((c (iri-cmp (iri-at ps i) (iri-at ps j))))
+                     (if (!= c 0) c (string-cmp (str-at texts i) (str-at texts j)))))))
+          (mut out (list-new arena Omission))
+          (mut refs (list-new arena String))
+          (mut cur (Option IRI) (none)))
+      (do
+        (for-each (k idx)
+          (do
+            (match cur
+              ((some p)
+                (when (!= (iri-cmp p (iri-at ps k)) 0)
+                  (do
+                    (list-push out (undeclared-of p refs))
+                    (set! refs (list-new arena String)))))
+              ((none) (do)))
+            (set! cur (some (iri-at ps k)))
+            (list-push refs (str-at texts k))))
+        (match cur
+          ((some p) (list-push out (undeclared-of p refs)))
+          ((none)   (do)))
+        out)))
+
+  (fn undeclared-of ((p IRI) (refs (List String)))
+    (@intent "The omission for one undeclared property")
+    (@spec ((IRI (List String)) -> Omission))
+    (union-new Omission undeclared-property
+      (record-new UndeclaredProperty (property p) (referring refs))))
 
 ;; ============================================================
   ;; The data lemma (§5.2): the property axioms of an IDLE data property
