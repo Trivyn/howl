@@ -30,10 +30,11 @@ CFLAGS  ?= -O2 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
            -DHOWL_VERSION=\"$(HOWL_VERSION)\"
 # slop_runtime.h threads through pthreads on POSIX and Win32 on Windows. The
 # Windows CLI also links cli/windows/lf_stdout.c, which puts stdout in binary
-# mode: a report is the same bytes on every platform, LF and never CRLF.
+# mode: a report is the same bytes on every platform, LF and never CRLF. And
+# it finds cli/windows/sys/resource.h, which answers peak-mb's getrusage.
 ifeq ($(OS),Windows_NT)
 LDFLAGS ?=
-CLI_EXTRA = cli/windows/lf_stdout.c
+CLI_EXTRA = -Icli/windows cli/windows/lf_stdout.c
 else
 LDFLAGS ?= -lpthread
 CLI_EXTRA =
