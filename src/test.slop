@@ -49,7 +49,7 @@
                 csub-lit succ-csub succ-pre k-sets unit-held covers succ-step rsucc-rule
                 pred-view rpred-view pred-start pred-finish rpred-finish pred-join has-fterm succ-sig))
   (import sriqground (ground-clause))
-  (import sriqctx (Strategy Triggers CoreKind CoreChoice Ctx CtxSet Structure build-triggers triggers-of sole-at
+  (import sriqctx (Strategy Triggers CoreKind CoreChoice Edge Ctx CtxSet Structure build-triggers triggers-of sole-at
                    in-su in-pr in-sur in-prr lit-ground mentions-x tau-su tau-pr omega omega-d pow2-sat has-lit strat-choice core-of
                    init-structure ctx-count ctx-at ctx-by-core ctx-clause-ok q-inconsistent q-unsat q-holds q-thing))
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
@@ -6719,7 +6719,7 @@
                (commits-agree arena (. (commit-min arena (list-new arena Clause) cs) set) cs2)))))
 
   (fn scan-same ((arena Arena) (label String) (in RefIn) (n Int) (s Strategy))
-    (@intent "The prototype through the index and through commit-min's scans: the same status, rounds, answers, candidates and commits; and the index's commit agrees with commit-min on every final set")
+    (@intent "The prototype through the index and through commit-min's scans: the same status, rounds, answers, candidates, commits and edges; and the index's commit agrees with commit-min on every final set")
     (@spec ((Arena String RefIn Int Strategy) -> Bool))
     (@alloc arena)
     (let ((p (sat-run arena in (sat-cfg s 0)))
@@ -6730,7 +6730,22 @@
                        (same-bools (answers-of arena (. (. p res) st) n) (answers-of arena (. (. q res) st) n))
                        (== (. (. p counts) cands) (. (. q counts) cands))
                        (== (. (. p counts) added) (. (. q counts) added))
+                       (same-edges (. (. (. p res) st) edges) (. (. (. q res) st) edges))
                        (structure-agrees arena (. (. p res) st))))))
+
+  (fn same-edges ((a (List Edge)) (b (List Edge)))
+    (@intent "The same edges in the same order (edges-added against add-edges's fold, 9f)")
+    (@spec (((List Edge) (List Edge)) -> Bool))
+    (@pure)
+    (let ((mut ok (== (list-len a) (list-len b))) (mut i 0))
+      (do (for-each (x a)
+            (do (match (list-get b i)
+                  ((some y) (when (not (and (== (. x from) (. y from)) (== (. x to) (. y to)) (== (. x lk) (. y lk))
+                                            (== (. x label) (. y label))))
+                              (set! ok false)))
+                  ((none) (set! ok false)))
+                (set! i (+ i 1))))
+          ok)))
 
   (fn test-sriq-index ((arena Arena))
     (@intent "The indexed commit: commit-min's result on the edge row and on every final set, and the prototype through it exactly as through commit-min, on the hand rows and every fixture, under every strategy")
