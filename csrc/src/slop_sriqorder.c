@@ -2,6 +2,7 @@
 #include "slop_sriqorder.h"
 
 sriqorder_SriqOrder sriqorder_named_consts(slop_arena* arena, int64_t n);
+sriqorder_SriqOrder sriqorder_ranked(sriqorder_SriqOrder ord, int64_t nquery);
 sriqorder_ConstEntry sriqorder_aux_const(sriqorder_ConstEntry p, uint32_t pid, uint32_t s, uint32_t i);
 sriqorder_ConstEntry sriqorder_const_entry(sriqorder_SriqOrder ord, uint32_t u);
 uint8_t sriqorder_fn_gt(uint32_t f, uint32_t g);
@@ -14,6 +15,8 @@ uint8_t sriqorder_fu_over(sriqorder_SriqOrder ord, uint32_t f, uint32_t u, types
 uint8_t sriqorder_aterm_gt(sriqorder_SriqOrder ord, types_ATerm a, types_ATerm b);
 uint8_t sriqorder_aterm_same(types_ATerm a, types_ATerm b);
 uint8_t sriqorder_aterm_ge(sriqorder_SriqOrder ord, types_ATerm a, types_ATerm b);
+uint8_t sriqorder_rank_gt(sriqorder_SriqOrder ord, uint32_t p, uint32_t q);
+uint8_t sriqorder_ranked_unary_gt(sriqorder_SriqOrder ord, types_Lit a, types_Lit b);
 uint8_t sriqorder_pterm_gt(sriqorder_SriqOrder ord, types_Lit a, types_Lit b);
 uint8_t sriqorder_pterm_over_aterm(sriqorder_SriqOrder ord, types_Lit a, types_ATerm s);
 sriqorder_CTerm sriqorder_ct_true(void);
@@ -38,8 +41,18 @@ sriqorder_SriqOrder sriqorder_named_consts(slop_arena* arena, int64_t n) {
             ({ __auto_type _lst_p = &(cs); __auto_type _item = (((sriqorder_ConstEntry){.base = ((uint32_t)(k)), .parent = ((uint32_t)(k)), .srole = ((uint32_t)(0)), .i = ((uint32_t)(0)), .len = ((uint32_t)(0))})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             k = (k + 1);
         }
-        return ((sriqorder_SriqOrder){.consts = cs});
+        return ((sriqorder_SriqOrder){.consts = cs, .rank = -1});
     }
+}
+
+sriqorder_SriqOrder sriqorder_ranked(sriqorder_SriqOrder ord, int64_t nquery) {
+    SLOP_PRE(((nquery >= 0)), "(>= nquery 0)");
+    sriqorder_SriqOrder _retval = {0};
+    _retval = ((sriqorder_SriqOrder){.consts = ord.consts, .rank = nquery});
+    goto _slop_post;
+    _slop_post: ;
+    SLOP_POST(((_retval.rank == nquery)), "(== (. $result rank) nquery)");
+    return _retval;
 }
 
 sriqorder_ConstEntry sriqorder_aux_const(sriqorder_ConstEntry p, uint32_t pid, uint32_t s, uint32_t i) {
@@ -229,10 +242,29 @@ uint8_t sriqorder_aterm_ge(sriqorder_SriqOrder ord, types_ATerm a, types_ATerm b
     return (sriqorder_aterm_same(a, b) || sriqorder_aterm_gt(ord, a, b));
 }
 
+uint8_t sriqorder_rank_gt(sriqorder_SriqOrder ord, uint32_t p, uint32_t q) {
+    uint8_t _retval = {0};
+    _retval = (((ord.rank >= 0)) && ((((int64_t)(p)) >= ord.rank)) && (((((int64_t)(q)) < ord.rank) || (p > q))));
+    goto _slop_post;
+    _slop_post: ;
+    return _retval;
+}
+
+uint8_t sriqorder_ranked_unary_gt(sriqorder_SriqOrder ord, types_Lit a, types_Lit b) {
+    uint8_t _retval = {0};
+    _retval = ((sriqorder_rank_gt(ord, a.pred, b.pred)) && (((a.t1.kind == types_AKind_ak_x) || (a.t1.kind == types_AKind_ak_fx))) && (((b.t1.kind == types_AKind_ak_x) || (b.t1.kind == types_AKind_ak_y))));
+    goto _slop_post;
+    _slop_post: ;
+    return _retval;
+}
+
 uint8_t sriqorder_pterm_gt(sriqorder_SriqOrder ord, types_Lit a, types_Lit b) {
     uint8_t _retval = {0};
-    if ((a.form != b.form) || (a.pred != b.pred)) {
+    if (a.form != b.form) {
         _retval = 0;
+        goto _slop_post;
+    } else if (a.pred != b.pred) {
+        _retval = ((a.form == types_LitForm_lf_unary) && sriqorder_ranked_unary_gt(ord, a, b));
         goto _slop_post;
     } else if (a.form == types_LitForm_lf_unary) {
         _retval = sriqorder_aterm_gt(ord, a.t1, b.t1);

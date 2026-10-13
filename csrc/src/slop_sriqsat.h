@@ -10,6 +10,7 @@
 #include "slop_sriqindex.h"
 #include "slop_sriqctx.h"
 #include "slop_canon.h"
+#include "slop_sriqorder.h"
 #include "slop_sriq.h"
 #include "slop_sriqhyper.h"
 #include "slop_sriqground.h"
@@ -562,6 +563,7 @@ uint8_t sriqsat_same_cands(slop_arena* arena, slop_list_sriqref_Cand a, slop_lis
 slop_list_types_Clause sriqsat_distinct_clauses(slop_arena* arena, slop_list_sriqref_Cand cs);
 slop_list_types_Clause sriqsat_sorted_distinct(slop_arena* arena, slop_list_types_Clause raw, types_Clause c0);
 types_Clause sriqsat_clause_of_l(slop_list_types_Clause cs, int64_t k, types_Clause fallback);
+sriqctx_Structure sriqsat_ranked_structure(sriqctx_Structure st, int64_t nquery);
 sriqsat_SatResult sriqsat_sat_run(slop_arena* arena, sriqref_RefIn in, sriqsat_SatConfig cfg);
 
 #ifndef SLOP_OPTION_SRIQSAT_SATCONFIG_DEFINED

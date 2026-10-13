@@ -221,6 +221,7 @@ uint8_t test_ord_aterm_same(types_ATerm a, types_ATerm b);
 slop_list_types_ATerm test_ord_aterms(slop_arena* arena);
 slop_list_sriqorder_CTerm test_ord_push_binary(slop_arena* arena, slop_list_sriqorder_CTerm out, types_ATerm l, types_ATerm r);
 slop_list_sriqorder_CTerm test_ord_universe(slop_arena* arena);
+slop_list_sriqorder_CTerm test_ord_universe_n(slop_arena* arena, int64_t npred);
 sriqorder_CTerm test_ord_ct_at(slop_list_sriqorder_CTerm xs, int64_t i);
 uint8_t test_ord_get(slop_list_u8 m, int64_t n, int64_t i, int64_t j);
 uint8_t test_ord_ge(slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, int64_t i, int64_t j);
@@ -228,6 +229,7 @@ int64_t test_ord_index(slop_list_sriqorder_CTerm u, types_ATerm t);
 uint8_t test_ord_arg_ge(slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, types_ATerm arg, int64_t j);
 uint8_t test_ord_p_args_le(slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, types_Lit a, types_Lit b);
 uint8_t test_ord_generated(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u, int64_t i, int64_t j);
+uint8_t test_ord_rank_step(sriqorder_SriqOrder ord, types_Lit a, types_Lit b);
 uint8_t test_ord_items_1_3(slop_arena* arena, sriqorder_SriqOrder ord, types_ATerm s, types_ATerm t);
 slop_list_u8 test_ord_step(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_u8 m, int64_t n, slop_list_sriqorder_CTerm u);
 slop_list_u8 test_ord_close(slop_list_u8 m, int64_t n);
@@ -238,17 +240,27 @@ slop_string test_ct_text(slop_arena* arena, sriqorder_CTerm c);
 slop_string test_aterm_code(slop_arena* arena, types_ATerm t);
 int64_t test_akind_code(types_AKind k);
 uint8_t test_test_sriq_order_closure(slop_arena* arena);
+uint8_t test_test_sriq_ranked_order_closure(slop_arena* arena);
+uint8_t test_order_closure_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u);
 int64_t test_ord_row_mismatches(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u, slop_list_u8 m, int64_t i, int64_t seen);
 uint8_t test_test_sriq_order_strict_and_admissible(slop_arena* arena);
+uint8_t test_test_sriq_ranked_order_strict_and_admissible(slop_arena* arena);
+uint8_t test_order_strict_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u);
 uint8_t test_ord_pair_ok(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u, sriqorder_CTerm s, sriqorder_CTerm t);
+uint8_t test_ord_def7_5_bound(types_Lit l);
 uint8_t test_test_sriq_order_c2(slop_arena* arena);
+uint8_t test_test_sriq_ranked_order_c2(slop_arena* arena);
+uint8_t test_order_c2_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u);
 uint8_t test_ord_c2_exempt(sriqorder_CTerm s);
 uint8_t test_test_sriq_const_order(slop_arena* arena);
 uint8_t test_const_row_ok(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_int ranks, int64_t a);
 slop_string test_flags_text(slop_arena* arena, slop_list_u8 fs);
 uint8_t test_flags_are(slop_arena* arena, slop_string label, slop_list_types_Lit head, slop_string want);
+uint8_t test_flags_under(slop_arena* arena, sriqorder_SriqOrder ord, slop_string label, slop_list_types_Lit head, slop_string want);
 slop_list_types_Lit test_two_lits(slop_arena* arena, types_Lit a, types_Lit b);
 uint8_t test_test_sriq_max_flags_rows(slop_arena* arena);
+uint8_t test_test_sriq_ranked_max_flags_rows(slop_arena* arena);
+slop_list_types_Lit test_ranked_sample_lits(slop_arena* arena);
 slop_list_types_Lit test_sample_lits(slop_arena* arena);
 uint8_t test_lits_strict(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_types_Lit ls);
 slop_list_types_Lit test_letter_atoms(slop_arena* arena, slop_string letters);
@@ -800,8 +812,8 @@ slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string p
 slop_option_types_Outcome test_classify_fixture_with(slop_arena* arena, slop_string path, int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:295:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:296:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:296:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:297:57")));
         __auto_type _mv_1586 = ttl_parse_ttl_file(arena, path);
         if (!_mv_1586.is_ok) {
             __auto_type _ = _mv_1586.data.err;
@@ -3839,9 +3851,9 @@ slop_list_string test_strs(slop_arena* arena, slop_string text) {
         int64_t start = 0;
         int64_t i = 0;
         while (i <= n) {
-            if ((i == n) || (((int64_t)(strlib_char_at(text, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3384:60")))) == 32)) {
+            if ((i == n) || (((int64_t)(strlib_char_at(text, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3385:60")))) == 32)) {
                 if (i > start) {
-                    ({ __auto_type _lst_p = &(out); __auto_type _item = (strlib_substring(arena, text, ((int64_t)(SLOP_RANGE(int64_t, start, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3385:91"))), ((int64_t)(SLOP_RANGE(int64_t, (i - start), 1, 0, 0, 0, "(Int 0 ..) at test.slop:3385:115"))))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (strlib_substring(arena, text, ((int64_t)(SLOP_RANGE(int64_t, start, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3386:91"))), ((int64_t)(SLOP_RANGE(int64_t, (i - start), 1, 0, 0, 0, "(Int 0 ..) at test.slop:3386:115"))))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
                 start = (i + 1);
             }
@@ -3876,7 +3888,7 @@ sriqnames_SriqNormal test_row_normal(slop_arena* arena, slop_list_types_DlClause
             ({ __auto_type _lst_p = &(sfills); __auto_type _item = (top_filler); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             k = (k + 1);
         }
-        return ((sriqnames_SriqNormal){.clauses = cs, .concepts = concepts, .sroles = sroles, .sfills = sfills, .bars = test_iris_of(arena, test_strs(arena, SLOP_STR("s"))), .fns = ((int64_t)(SLOP_RANGE(int64_t, nfns, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3415:41"))), .classes = test_iris_of(arena, test_strs(arena, SLOP_STR("A B C"))), .individuals = test_iris_of(arena, test_strs(arena, SLOP_STR("a b"))), .omitted = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
+        return ((sriqnames_SriqNormal){.clauses = cs, .concepts = concepts, .sroles = sroles, .sfills = sfills, .bars = test_iris_of(arena, test_strs(arena, SLOP_STR("s"))), .fns = ((int64_t)(SLOP_RANGE(int64_t, nfns, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3416:41"))), .classes = test_iris_of(arena, test_strs(arena, SLOP_STR("A B C"))), .individuals = test_iris_of(arena, test_strs(arena, SLOP_STR("a b"))), .omitted = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
     }
 }
 
@@ -3981,7 +3993,7 @@ slop_list_int test_fn_ids(slop_arena* arena, int64_t n) {
         __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t i = 0;
         while (i < n) {
-            ({ __auto_type _lst_p = &(out); __auto_type _item = (((int64_t)(SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3476:62")))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (((int64_t)(SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3477:62")))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             i = (i + 1);
         }
         return out;
@@ -3989,11 +4001,11 @@ slop_list_int test_fn_ids(slop_arena* arena, int64_t n) {
 }
 
 types_DlClause test_dl4_of(slop_arena* arena, slop_string sub, int64_t n, slop_option_types_DName filler) {
-    return ((types_DlClause){ .tag = types_DlClause_dl4, .data.dl4 = ((types_Dl4){.sub = test_dn(arena, sub), .role = test_dp(arena, SLOP_STR("r")), .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3482:112"))), .filler = filler, .srole = ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 })}) });
+    return ((types_DlClause){ .tag = types_DlClause_dl4, .data.dl4 = ((types_Dl4){.sub = test_dn(arena, sub), .role = test_dp(arena, SLOP_STR("r")), .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3483:112"))), .filler = filler, .srole = ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 })}) });
 }
 
 types_DlClause test_dl2_of(slop_arena* arena, slop_string sub, types_DRole role, int64_t n, slop_option_types_DName filler) {
-    return ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = test_dn(arena, sub), .role = role, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at test.slop:3489:102"))), .filler = filler, .fns = test_fn_ids(arena, n)}) });
+    return ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = test_dn(arena, sub), .role = role, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at test.slop:3490:102"))), .filler = filler, .fns = test_fn_ids(arena, n)}) });
 }
 
 uint8_t test_table1_rows_names(slop_arena* arena) {
@@ -4478,7 +4490,7 @@ sriqorder_SriqOrder test_ord_table(slop_arena* arena) {
         ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqorder_aux_const(a2, ((uint32_t)(2)), ((uint32_t)(0)), ((uint32_t)(1)))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqorder_aux_const(a1, ((uint32_t)(4)), ((uint32_t)(1)), ((uint32_t)(1)))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqorder_aux_const(a, ((uint32_t)(0)), ((uint32_t)(1)), ((uint32_t)(1)))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        return ((sriqorder_SriqOrder){.consts = cs});
+        return ((sriqorder_SriqOrder){.consts = cs, .rank = -1});
     }
 }
 
@@ -4620,6 +4632,10 @@ slop_list_sriqorder_CTerm test_ord_push_binary(slop_arena* arena, slop_list_sriq
 }
 
 slop_list_sriqorder_CTerm test_ord_universe(slop_arena* arena) {
+    return test_ord_universe_n(arena, 2);
+}
+
+slop_list_sriqorder_CTerm test_ord_universe_n(slop_arena* arena, int64_t npred) {
     {
         __auto_type as = test_ord_aterms(arena);
         __auto_type out = ((slop_list_sriqorder_CTerm){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -4635,8 +4651,13 @@ slop_list_sriqorder_CTerm test_ord_universe(slop_arena* arena) {
             __auto_type _coll = as;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type t = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqorder_ct_p(types_atom1(((uint32_t)(0)), t))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqorder_ct_p(types_atom1(((uint32_t)(1)), t))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                {
+                    int64_t b = 0;
+                    while (b < npred) {
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqorder_ct_p(types_atom1(((uint32_t)(b)), t))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        b = (b + 1);
+                    }
+                }
             }
         }
         {
@@ -4753,10 +4774,19 @@ uint8_t test_ord_generated(slop_arena* arena, sriqorder_SriqOrder ord, slop_list
         } else if ((s.ck == sriqorder_CKind_ck_p) && (t.ck == sriqorder_CKind_ck_a)) {
             return ((test_ref_is_var(t.a)) || (test_ord_arg_ge(m, n, u, s.p.t1, j)) || (((s.p.form == types_LitForm_lf_binary) && test_ord_arg_ge(m, n, u, s.p.t2, j))));
         } else if ((s.ck == sriqorder_CKind_ck_p) && (t.ck == sriqorder_CKind_ck_p)) {
-            return test_ord_p_args_le(m, n, u, s.p, t.p);
+            return (test_ord_p_args_le(m, n, u, s.p, t.p) || test_ord_rank_step(ord, s.p, t.p));
         } else {
             return 0;
         }
+    }
+}
+
+uint8_t test_ord_rank_step(sriqorder_SriqOrder ord, types_Lit a, types_Lit b) {
+    {
+        __auto_type r = ord.rank;
+        __auto_type f = ((int64_t)(a.pred));
+        __auto_type g = ((int64_t)(b.pred));
+        return (((a.form == types_LitForm_lf_unary)) && ((b.form == types_LitForm_lf_unary)) && ((a.t1.kind == types_AKind_ak_x)) && ((b.t1.kind == types_AKind_ak_x)) && ((r >= 0)) && ((f >= r)) && (((g < r) || (f > g))));
     }
 }
 
@@ -4881,9 +4911,15 @@ int64_t test_akind_code(types_AKind k) {
 }
 
 uint8_t test_test_sriq_order_closure(slop_arena* arena) {
+    return test_order_closure_on(arena, test_ord_table(arena), test_ord_universe(arena));
+}
+
+uint8_t test_test_sriq_ranked_order_closure(slop_arena* arena) {
+    return test_order_closure_on(arena, sriqorder_ranked(test_ord_table(arena), 2), test_ord_universe_n(arena, 4));
+}
+
+uint8_t test_order_closure_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u) {
     {
-        __auto_type ord = test_ord_table(arena);
-        __auto_type u = test_ord_universe(arena);
         __auto_type n = ((int64_t)(((int64_t)((u).len))));
         __auto_type m = test_ord_least(arena, ord, u);
         int64_t bad = 0;
@@ -4926,9 +4962,15 @@ int64_t test_ord_row_mismatches(slop_arena* arena, sriqorder_SriqOrder ord, slop
 }
 
 uint8_t test_test_sriq_order_strict_and_admissible(slop_arena* arena) {
+    return test_order_strict_on(arena, test_ord_table(arena), test_ord_universe(arena));
+}
+
+uint8_t test_test_sriq_ranked_order_strict_and_admissible(slop_arena* arena) {
+    return test_order_strict_on(arena, sriqorder_ranked(test_ord_table(arena), 2), test_ord_universe_n(arena, 4));
+}
+
+uint8_t test_order_strict_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u) {
     {
-        __auto_type ord = test_ord_table(arena);
-        __auto_type u = test_ord_universe(arena);
         uint8_t ok = 1;
         {
             __auto_type _coll = u;
@@ -4994,6 +5036,9 @@ uint8_t test_ord_pair_ok(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_s
         if (((s.ck == sriqorder_CKind_ck_a)) && ((t.ck == sriqorder_CKind_ck_a)) && (((test_ref_is_var(s.a) && (t.a.kind == types_AKind_ak_u)) || ((s.a.kind == types_AKind_ak_u) && test_ref_is_var(t.a)))) && (st)) {
             ok = 0;
         }
+        if ((st) && ((s.ck == sriqorder_CKind_ck_p)) && ((t.ck == sriqorder_CKind_ck_p)) && (test_ord_def7_5_bound(s.p)) && (((s.p.pred != t.p.pred) || (s.p.form != t.p.form)))) {
+            ok = 0;
+        }
         if (!(ok)) {
             printf("%s", "  [order] pair ");
             printf("%.*s", (int)(test_ct_text(arena, s)).len, (test_ct_text(arena, s)).data);
@@ -5004,16 +5049,35 @@ uint8_t test_ord_pair_ok(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_s
     }
 }
 
-uint8_t test_test_sriq_order_c2(slop_arena* arena) {
+uint8_t test_ord_def7_5_bound(types_Lit l) {
     {
-        __auto_type ord = test_ord_table(arena);
-        __auto_type u = test_ord_universe(arena);
+        __auto_type k1 = l.t1.kind;
+        __auto_type k2 = l.t2.kind;
+        __auto_type bin = (l.form == types_LitForm_lf_binary);
+        return (!((((k1 == types_AKind_ak_fx)) || ((k1 == types_AKind_ak_fu)) || ((bin && ((k2 == types_AKind_ak_fx) || (k2 == types_AKind_ak_fu)))))) && (((k1 == types_AKind_ak_y)) || ((k1 == types_AKind_ak_u)) || ((bin && ((k2 == types_AKind_ak_y) || (k2 == types_AKind_ak_u))))));
+    }
+}
+
+uint8_t test_test_sriq_order_c2(slop_arena* arena) {
+    return test_order_c2_on(arena, test_ord_table(arena), test_ord_universe(arena));
+}
+
+uint8_t test_test_sriq_ranked_order_c2(slop_arena* arena) {
+    {
+        __auto_type ord = sriqorder_ranked(test_ord_table(arena), 2);
+        __auto_type x = types_at_x();
+        return ((test_order_c2_on(arena, ord, test_ord_universe_n(arena, 4))) && (sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(2)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(1)), x)))) && (sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(3)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(2)), x)))) && (!(sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(0)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(1)), x))))) && (!(sriqorder_cterm_gt(ord, sriqorder_ct_p(types_atom1(((uint32_t)(1)), x)), sriqorder_ct_p(types_atom1(((uint32_t)(0)), x))))));
+    }
+}
+
+uint8_t test_order_c2_on(slop_arena* arena, sriqorder_SriqOrder ord, slop_list_sriqorder_CTerm u) {
+    {
         uint8_t ok = 1;
         {
             __auto_type _coll = u;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type a = _coll.data[_i];
-                if (((a.ck == sriqorder_CKind_ck_p)) && ((a.p.form == types_LitForm_lf_unary)) && ((a.p.t1.kind == types_AKind_ak_x))) {
+                if (((a.ck == sriqorder_CKind_ck_p)) && ((a.p.form == types_LitForm_lf_unary)) && ((a.p.t1.kind == types_AKind_ak_x)) && (((ord.rank < 0) || (((int64_t)(a.p.pred)) < ord.rank)))) {
                     {
                         __auto_type _coll = u;
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -5105,8 +5169,12 @@ slop_string test_flags_text(slop_arena* arena, slop_list_u8 fs) {
 }
 
 uint8_t test_flags_are(slop_arena* arena, slop_string label, slop_list_types_Lit head, slop_string want) {
+    return test_flags_under(arena, test_ord_table(arena), label, head, want);
+}
+
+uint8_t test_flags_under(slop_arena* arena, sriqorder_SriqOrder ord, slop_string label, slop_list_types_Lit head, slop_string want) {
     {
-        __auto_type got = test_flags_text(arena, sriqorder_max_flags(arena, test_ord_table(arena), sriqclauses_make_clause(arena, ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), head).head));
+        __auto_type got = test_flags_text(arena, sriqorder_max_flags(arena, ord, sriqclauses_make_clause(arena, ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), head).head));
         if (string_eq(got, want)) {
             return 1;
         } else {
@@ -5164,6 +5232,40 @@ uint8_t test_test_sriq_max_flags_rows(slop_arena* arena) {
             ok = 0;
         }
         return ok;
+    }
+}
+
+uint8_t test_test_sriq_ranked_max_flags_rows(slop_arena* arena) {
+    {
+        __auto_type ord = sriqorder_ranked(test_ord_table(arena), 2);
+        __auto_type q = ((uint32_t)(0));
+        __auto_type q1 = ((uint32_t)(1));
+        __auto_type f1 = ((uint32_t)(2));
+        __auto_type f2 = ((uint32_t)(3));
+        __auto_type x = types_at_x();
+        __auto_type y = types_at_y();
+        __auto_type f0x = types_at_fx(((uint32_t)(0)));
+        __auto_type u2 = types_at_u(((uint32_t)(2)));
+        return ((test_flags_under(arena, ord, SLOP_STR("B0(x), B2(x)"), test_two_lits(arena, types_atom1(f1, x), types_atom1(q, x)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B2(x), B3(x)"), test_two_lits(arena, types_atom1(f2, x), types_atom1(f1, x)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(x), B1(x)"), test_two_lits(arena, types_atom1(q1, x), types_atom1(q, x)), SLOP_STR("TT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(y), B2(f0(x))"), test_two_lits(arena, types_atom1(f1, f0x), types_atom1(q, y)), SLOP_STR("FT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(x), B2(y)"), test_two_lits(arena, types_atom1(f1, y), types_atom1(q, x)), SLOP_STR("TT"))) && (test_flags_under(arena, ord, SLOP_STR("B0(u2), B2(u2)"), test_two_lits(arena, types_atom1(f1, u2), types_atom1(q, u2)), SLOP_STR("TT"))) && (test_lits_strict(arena, ord, test_sample_lits(arena))) && (test_lits_strict(arena, ord, test_ranked_sample_lits(arena))));
+    }
+}
+
+slop_list_types_Lit test_ranked_sample_lits(slop_arena* arena) {
+    {
+        __auto_type x = types_at_x();
+        __auto_type y = types_at_y();
+        __auto_type f0x = types_at_fx(((uint32_t)(0)));
+        __auto_type out = ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t b = 0;
+        while (b < 4) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom1(((uint32_t)(b)), x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom1(((uint32_t)(b)), f0x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom1(((uint32_t)(b)), y)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            b = (b + 1);
+        }
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom2(((uint32_t)(0)), x, f0x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (types_atom2(((uint32_t)(1)), y, x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        return out;
     }
 }
 
@@ -5903,7 +6005,7 @@ sriqorder_SriqOrder test_r_kids_order(slop_arena* arena) {
             ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqorder_aux_const(sriqorder_aux_const(e0, ((uint32_t)(0)), ((uint32_t)(2)), ((uint32_t)(1))), ((uint32_t)(2)), ((uint32_t)(2)), ((uint32_t)(1)))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqorder_aux_const(e0, ((uint32_t)(0)), ((uint32_t)(3)), ((uint32_t)(1)))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         }
-        return ((sriqorder_SriqOrder){.consts = cs});
+        return ((sriqorder_SriqOrder){.consts = cs, .rank = -1});
     }
 }
 
@@ -7270,6 +7372,7 @@ slop_list_test_Expect test_expects(slop_arena* arena) {
         ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("symmetric"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("C")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("union-negation"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("C")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("tgh21-o1"), .kind = 0, .a = SLOP_STR("A"), .b = SLOP_STR("D")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        ({ __auto_type _lst_p = &(out); __auto_type _item = (((test_Expect){.file = SLOP_STR("ranked-fresh-disjunct"), .kind = 0, .a = SLOP_STR("B"), .b = SLOP_STR("A")})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         {
             __auto_type _coll = test_abox_expects(arena);
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -7952,8 +8055,11 @@ uint8_t test_fixture_proto_sc(slop_arena* arena, slop_string name, sriqclauses_S
             __auto_type _coll = test_strategies(arena);
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type s = _coll.data[_i];
-                if (!((test_proto_agrees(arena, name, in, sc.ids.nclass, s) && test_expects_met(arena, name, sc.ids, s, sriqsat_sat_run(arena, in, test_sat_cfg(s, 0)).res)))) {
-                    ok = 0;
+                {
+                    __auto_type r = sriqsat_sat_run(arena, in, test_sat_cfg(s, 0)).res;
+                    if (!(((test_proto_agrees(arena, name, in, sc.ids.nclass, s)) && (test_expects_met(arena, name, sc.ids, s, r)) && ((r.st.ord.rank == ((int64_t)(sc.ids.nclass))))))) {
+                        ok = 0;
+                    }
                 }
             }
         }
@@ -8894,7 +9000,7 @@ slop_string test_ksc_fixture_at(int64_t i) {
 types_ReasonerConfig test_cap_config(int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7391:59")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7504:59")));
         return cfg;
     }
 }
@@ -9814,8 +9920,8 @@ uint8_t test_test_ksc_commit_identical(slop_arena* arena) {
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:7961:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7962:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:8074:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:8075:57")));
         return cfg;
     }
 }
@@ -13300,7 +13406,7 @@ int64_t test_bound_arg(slop_string s) {
         uint8_t ok = ((string_len(s) > 0) && (string_len(s) <= 9));
         int64_t i = 0;
         while (ok && (i < string_len(s))) {
-            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:10748:47"))))) {
+            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:10861:47"))))) {
                 ok = 0;
             }
             i = (i + 1);
@@ -13709,8 +13815,8 @@ int64_t test_dump_ksc_result(slop_arena* arena, types_KscResult r) {
 int64_t test_dump_ksc_classify(slop_arena* arena, test_KscFixture fx, int64_t w, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:11015:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11016:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:11128:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11129:57")));
         test_dump_num(arena, SLOP_STR("classify w="), w);
         test_dump_num(arena, SLOP_STR(" cap "), cap);
         printf("%s\n", "");
@@ -14843,6 +14949,42 @@ int64_t test_run_suite(void) {
             {
                 __auto_type r = test_test_sriq_max_flags_rows(arena);
                 test_print_test_result(SLOP_STR("7c: maximality (Δ ⊁ L), row by row"), r);
+                if (r) {
+                    passed = (passed + 1);
+                } else {
+                    failed = (failed + 1);
+                }
+            }
+            {
+                __auto_type r = test_test_sriq_ranked_order_closure(arena);
+                test_print_test_result(SLOP_STR("9g: the ranked order is the least order containing Sequoia's and the class precedence"), r);
+                if (r) {
+                    passed = (passed + 1);
+                } else {
+                    failed = (failed + 1);
+                }
+            }
+            {
+                __auto_type r = test_test_sriq_ranked_order_strict_and_admissible(arena);
+                test_print_test_result(SLOP_STR("9g: the ranked order is strict and admissible (TGH21 Def. 7)"), r);
+                if (r) {
+                    passed = (passed + 1);
+                } else {
+                    failed = (failed + 1);
+                }
+            }
+            {
+                __auto_type r = test_test_sriq_ranked_order_c2(arena);
+                test_print_test_result(SLOP_STR("9g: the ranked order meets C2 for every query class"), r);
+                if (r) {
+                    passed = (passed + 1);
+                } else {
+                    failed = (failed + 1);
+                }
+            }
+            {
+                __auto_type r = test_test_sriq_ranked_max_flags_rows(arena);
+                test_print_test_result(SLOP_STR("9g: maximality under the ranked order, row by row"), r);
                 if (r) {
                     passed = (passed + 1);
                 } else {

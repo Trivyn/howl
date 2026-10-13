@@ -19,6 +19,13 @@
 ;; one is the other with smaller a-terms, so distinct class names are
 ;; never ordered against each other (S5).
 ;;
+;; THE RANKED ORDER (slice 9g) adds a precedence on class names: fresh
+;; names above query classes, and by id among themselves. Its closure
+;; with the table orders unary atoms with different predicates, and
+;; nothing else (rank-gt, pterm-gt). The reference runs the order as
+;; printed (rank -1); the engine runs it ranked. SPEC §5.5 S5 proves it
+;; admissible, and Theorem 2's C2 for every raw query.
+;;
 ;; ⋗ on Σf ∪ Σu (S5; "the greater id is the greater" throughout):
 ;;   - every function symbol is above every constant;
 ;;   - function symbols by id;
@@ -43,7 +50,7 @@
   (import types (AKind ATerm LitForm Lit at-x atom1))
 
   (export ConstEntry SriqOrder CKind CTerm
-          named-consts aux-const const-entry
+          named-consts ranked rank-gt aux-const const-entry
           fn-gt const-gt aterm-gt pterm-gt cterm-gt
           ct-true ct-a ct-p lit-ms lit-gt maximal-at max-flags)
 
@@ -56,9 +63,11 @@
     (i      U32)     ; the letter's index
     (len    U32)))   ; |ρ·S^i|; 0 when named
 
-  ;; What the order reads beyond the a-terms themselves: the constants.
+  ;; What the order reads beyond the a-terms themselves: the constants, and
+  ;; where the fresh class names start (slice 9g, the ranked order).
   (type SriqOrder (record
-    (consts (List ConstEntry))))   ; by constant id
+    (consts (List ConstEntry))     ; by constant id
+    (rank   Int)))                 ; the first fresh class id; -1 for Sequoia's order as printed
 
   ;; ============================================================
   ;; The constants and ⋗
@@ -75,7 +84,15 @@
           (do (list-push cs (record-new ConstEntry (base (cast U32 k)) (parent (cast U32 k)) (srole (cast U32 0))
                                                    (i (cast U32 0)) (len (cast U32 0))))
               (set! k (+ k 1))))
-        (record-new SriqOrder (consts cs)))))
+        (record-new SriqOrder (consts cs) (rank -1)))))
+
+  (fn ranked ((ord SriqOrder) (nquery Int))
+    (@intent "ord with the class precedence on: fresh names (ids from nquery) above the query classes, and by id")
+    (@spec ((SriqOrder Int) -> SriqOrder))
+    (@pure)
+    (@pre (>= nquery 0))
+    (@post (== (. $result rank) nquery))
+    (record-new SriqOrder (consts (. ord consts)) (rank nquery)))
 
   (fn aux-const ((p ConstEntry) (pid U32) (s U32) (i U32))
     (@intent "o_{ρ·S^i} for the constant pid, o_ρ, whose entry is p")
@@ -218,13 +235,41 @@
   ;; p-terms (an atom B(t) or S(s, t), read as a term of sort p)
   ;; ============================================================
 
-  (fn pterm-gt ((ord SriqOrder) (a Lit) (b Lit))
-    (@intent "Item 7: b is a with a-terms replaced by smaller ones; so the same predicate, never equal")
+  ;; The ranked order (slice 9g, SPEC §5.5 S5). Between unary atoms with
+  ;; different predicates, the least order containing Sequoia's and the
+  ;; precedence is: P(t) ≻ P′(t′) iff P ranks above P′, t is x or f(x), and
+  ;; t′ is x or y. A query class ranks above nothing, which is Theorem 2's
+  ;; C2; with rank -1 nothing ranks, and this is Sequoia's order as printed.
+  (fn rank-gt ((ord SriqOrder) (p U32) (q U32))
+    (@intent "Does class p rank above class q: p fresh, and q a query class or a fresh name of smaller id?")
+    (@spec ((SriqOrder U32 U32) -> Bool))
+    (@pure)
+    (@post (implies (< (. ord rank) 0) (not $result)))
+    (@post (implies (< (cast Int p) (. ord rank)) (not $result)))
+    (@post (implies (== p q) (not $result)))
+    (and (>= (. ord rank) 0)
+         (>= (cast Int p) (. ord rank))
+         (or (< (cast Int q) (. ord rank)) (> p q))))
+
+  (fn ranked-unary-gt ((ord SriqOrder) (a Lit) (b Lit))
+    (@intent "a ≻ b for unary atoms with different predicates: by rank, a over x or f(x), b over x or y")
     (@spec ((SriqOrder Lit Lit) -> Bool))
-    (@post (implies (!= (. a pred) (. b pred)) (not $result)))
+    (@pure)
+    (@post (implies (not (rank-gt ord (. a pred) (. b pred))) (not $result)))
+    (and (rank-gt ord (. a pred) (. b pred))
+         (or (== (. (. a t1) kind) 'ak-x) (== (. (. a t1) kind) 'ak-fx))
+         (or (== (. (. b t1) kind) 'ak-x) (== (. (. b t1) kind) 'ak-y))))
+
+  (fn pterm-gt ((ord SriqOrder) (a Lit) (b Lit))
+    (@intent "Item 7: b is a with a-terms replaced by smaller ones; or, ranked, a unary a over a unary b of a lower
+              class")
+    (@spec ((SriqOrder Lit Lit) -> Bool))
+    (@post (implies (and (!= (. a pred) (. b pred)) (not (rank-gt ord (. a pred) (. b pred)))) (not $result)))
     (@post (implies (!= (. a form) (. b form)) (not $result)))
     (cond
-      ((or (!= (. a form) (. b form)) (!= (. a pred) (. b pred))) false)
+      ((!= (. a form) (. b form)) false)
+      ((!= (. a pred) (. b pred))
+        (and (== (. a form) 'lf-unary) (ranked-unary-gt ord a b)))
       ((== (. a form) 'lf-unary) (aterm-gt ord (. a t1) (. b t1)))
       (else (and (aterm-ge ord (. a t1) (. b t1))
                  (aterm-ge ord (. a t2) (. b t2))

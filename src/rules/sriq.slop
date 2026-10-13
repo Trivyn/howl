@@ -1472,7 +1472,7 @@
           (mut cs (list-new arena ConstEntry)))
       (do (for-each (e (. base consts)) (list-push cs e))
           (list-push cs (aux-const (const-entry base (cast U32 0)) (cast U32 0) (cast U32 2) (cast U32 1)))
-          (record-new SriqOrder (consts cs)))))
+          (record-new SriqOrder (consts cs) (rank -1)))))
 
   (fn ex-ids ((arena Arena) (k Int))
     (@intent "[k]")

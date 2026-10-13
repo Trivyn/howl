@@ -894,7 +894,7 @@
     (@alloc arena)
     (let ((mut cs (list-new arena ConstEntry)))
       (do (for-each (x (. ord consts)) (list-push cs x)) (list-push cs e)
-          (record-new SriqOrder (consts cs)))))
+          (record-new SriqOrder (consts cs) (rank (. ord rank))))))
 
   (fn lits-cmp ((a (List Lit)) (b (List Lit)))
     (@intent "Content order of cores: by length, then literal by literal")
@@ -1170,7 +1170,8 @@
           (for-each (x (. st sets)) (list-push sets (record-new CtxSet (cs (copy-clauses arena (. x cs))))))
           (for-each (e (. st edges)) (list-push edges e))
           (for-each (e (. (. st ord) consts)) (list-push consts e))
-          (record-new Structure (ctxs ctxs) (sets sets) (edges edges) (ord (record-new SriqOrder (consts consts)))))))
+          (record-new Structure (ctxs ctxs) (sets sets) (edges edges)
+                                (ord (record-new SriqOrder (consts consts) (rank (. (. st ord) rank))))))))
 
   (fn env-of ((arena Arena) (in RefIn) (cfg RefConfig) (tr Triggers) (lam Int))
     (@intent "What every round reads besides the structure")

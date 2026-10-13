@@ -1,0 +1,16 @@
+# sriq: a fresh name in a disjunction, which the ranked order (SPEC §5.5 S5,
+# slice 9g) puts above the query class beside it. B ⊑ A ⊔ ∃R.C and C ⊑ ⊥,
+# so ∃R.C is empty and B ⊑ A. ∃R.C gets a fresh name F, and B(x) → A(x) ∨ F(x)
+# must resolve F(x) away to reach B(x) → A(x). Ranking F below A (TGH21 §7.1
+# read literally) would leave F(x) unresolvable and miss B ⊑ A.
+# Expect: B ⊑ A.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:R a owl:ObjectProperty .
+:B rdfs:subClassOf [ owl:unionOf ( :A [ a owl:Restriction ; owl:onProperty :R ; owl:someValuesFrom :C ] ) ] .
+:C rdfs:subClassOf owl:Nothing .
