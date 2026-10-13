@@ -4285,7 +4285,7 @@ uint8_t test_flagged(slop_arena* arena, sriqclauses_SriqIds ids, types_Clause c)
 uint8_t test_ids_dense_rejects(slop_arena* arena) {
     {
         __auto_type ids = sriqclauses_build_sriq_ids(arena, test_row_normal(arena, test_one_dl(arena, ((types_DlClause){ .tag = types_DlClause_dl5, .data.dl5 = { .f0 = test_dn(arena, SLOP_STR("A")), .f1 = test_dp(arena, SLOP_STR("r")) } })), 0, 0, 0));
-        __auto_type far = ((uint32_t)(99));
+        __auto_type out_of_range = ((uint32_t)(99));
         __auto_type x = types_at_x();
         __auto_type ok_clause = sriqclauses_make_clause(arena, test_one_lit(arena, types_atom1(((uint32_t)(2)), x)), test_one_lit(arena, types_atom2(((uint32_t)(1)), x, types_at_u(((uint32_t)(1))))));
         __auto_type swapped = ids;
@@ -4293,7 +4293,7 @@ uint8_t test_ids_dense_rejects(slop_arena* arena) {
         swapped.class_of = test_reverse_dnames(arena, ids.class_of);
         permuted.class_of = test_reverse_dnames(arena, ids.class_of);
         permuted.class_ix = test_index_classes(arena, permuted.class_of);
-        return ((!(test_flagged(arena, ids, ok_clause))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_one_lit(arena, types_atom1(far, x)), test_no_lits(arena)))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_one_lit(arena, types_atom2(far, x, x)), test_no_lits(arena)))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_no_lits(arena), test_one_lit(arena, types_atom1(((uint32_t)(0)), types_at_fx(((uint32_t)(0)))))))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_no_lits(arena), test_one_lit(arena, types_atom1(((uint32_t)(0)), types_at_u(((uint32_t)(2)))))))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_no_lits(arena), test_one_lit(arena, types_atom1(((uint32_t)(0)), types_at_z(((uint32_t)(0)))))))) && (test_flagged(arena, swapped, ok_clause)) && (test_flagged(arena, permuted, ok_clause)) && (test_permuted_tables_flagged(arena, ok_clause)));
+        return ((!(test_flagged(arena, ids, ok_clause))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_one_lit(arena, types_atom1(out_of_range, x)), test_no_lits(arena)))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_one_lit(arena, types_atom2(out_of_range, x, x)), test_no_lits(arena)))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_no_lits(arena), test_one_lit(arena, types_atom1(((uint32_t)(0)), types_at_fx(((uint32_t)(0)))))))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_no_lits(arena), test_one_lit(arena, types_atom1(((uint32_t)(0)), types_at_u(((uint32_t)(2)))))))) && (test_flagged(arena, ids, sriqclauses_make_clause(arena, test_no_lits(arena), test_one_lit(arena, types_atom1(((uint32_t)(0)), types_at_z(((uint32_t)(0)))))))) && (test_flagged(arena, swapped, ok_clause)) && (test_flagged(arena, permuted, ok_clause)) && (test_permuted_tables_flagged(arena, ok_clause)));
     }
 }
 
@@ -8869,7 +8869,7 @@ slop_string test_ksc_fixture_at(int64_t i) {
 types_ReasonerConfig test_cap_config(int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7375:59")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7376:59")));
         return cfg;
     }
 }
@@ -9789,8 +9789,8 @@ uint8_t test_test_ksc_commit_identical(slop_arena* arena) {
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:7945:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7946:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:7946:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7947:57")));
         return cfg;
     }
 }
@@ -13275,7 +13275,7 @@ int64_t test_bound_arg(slop_string s) {
         uint8_t ok = ((string_len(s) > 0) && (string_len(s) <= 9));
         int64_t i = 0;
         while (ok && (i < string_len(s))) {
-            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:10732:47"))))) {
+            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:10733:47"))))) {
                 ok = 0;
             }
             i = (i + 1);
@@ -13684,8 +13684,8 @@ int64_t test_dump_ksc_result(slop_arena* arena, types_KscResult r) {
 int64_t test_dump_ksc_classify(slop_arena* arena, test_KscFixture fx, int64_t w, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:10999:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11000:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:11000:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11001:57")));
         test_dump_num(arena, SLOP_STR("classify w="), w);
         test_dump_num(arena, SLOP_STR(" cap "), cap);
         printf("%s\n", "");
