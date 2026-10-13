@@ -28,7 +28,17 @@ CFLAGS  ?= -O2 -Wall -Werror=switch -Wno-unused-function -Wno-unused-variable \
            -DSLOP_INTERN_THREADSAFE \
            -DSLOP_INTERN_BUCKET_COUNT=65536 \
            -DHOWL_VERSION=\"$(HOWL_VERSION)\"
+# slop_runtime.h threads through pthreads on POSIX and Win32 on Windows. The
+# Windows CLI also links cli/windows/lf_stdout.c, which puts stdout in binary
+# mode: a report is the same bytes on every platform, LF and never CRLF. And
+# it finds cli/windows/sys/resource.h, which answers peak-mb's getrusage.
+ifeq ($(OS),Windows_NT)
+LDFLAGS ?=
+CLI_EXTRA = -Icli/windows cli/windows/lf_stdout.c
+else
 LDFLAGS ?= -lpthread
+CLI_EXTRA =
+endif
 AR      ?= ar
 
 CSRC    = csrc/src
@@ -90,7 +100,7 @@ c-example: lib
 
 cli: $(BIN)
 	@echo "Building howl..."
-	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl
+	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(CLI_EXTRA) $(LDFLAGS) -o $(BIN)/howl
 	@echo "  -> $(BIN)/howl"
 
 # NO CLOCK UNDER src/. HOWL never consults a clock inside a reasoning call

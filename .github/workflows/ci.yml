@@ -120,6 +120,41 @@ jobs:
       - run: cargo test --target ${{ matrix.target }}
         working-directory: rust
 
+  # The CLI and libhowl.a on Windows, as release.yml builds them: MinGW-w64 gcc
+  # through the Makefile. Checked on every PR so a Windows break shows before a
+  # tag. The sanitizer jobs stay on Linux and macOS.
+  windows-cli:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # Check out LF, as on Linux and macOS: the version checks read
+      # slop.toml line by line, and a CR would end up in --version.
+      - run: git config --global core.autocrlf false
+        shell: pwsh
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-python make zip
+      - name: Run tests
+        run: make test CC=gcc
+      # A report is LF on every platform (cli/windows/lf_stdout.c), and the
+      # .exe imports only Windows' own DLLs, so it runs without MSYS2.
+      - name: Build release CLI
+        run: |
+          set -e
+          make release CC=gcc
+          sh cli/windows/check-exe.sh
+      - name: Build the C library
+        run: make lib CC=gcc
+      - name: Assert CLI exit codes
+        run: make acceptance CC=gcc
+      # determinism.py hashes the binary itself, by its full name.
+      - name: Reports identical across worker counts
+        run: HOWL=build/howl.exe make determinism CC=gcc
+
   verify:
     # Z3 weakest-precondition contract checking (SPEC §7). This proves
     # the implementation cannot drift from the calculus without a

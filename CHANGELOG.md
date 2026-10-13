@@ -27,6 +27,9 @@ The C API and the Rust crate only gain; nothing existing changes shape.
     `Report::probes`, `probe_inconsistent`, `probe_omissions`; the types `ProbeAnswer` and the
     `#[non_exhaustive]` enums `Query` and `Answer`. All additive.
   - **CLI:** `--probe FILE`, `--ask-unsat C`, `--ask-sub A B`, each repeatable.
+- **Windows builds.** The release has `howl-windows-x86_64.exe` and `libhowl-windows-x86_64.zip`,
+  built with MinGW-w64 from the same C, and attached to v0.3.0 after the tag. The Windows CLI writes
+  its report with LF line endings, so it is the same bytes as on Linux and macOS.
 
 ### Changed
 
