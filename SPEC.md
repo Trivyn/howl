@@ -2920,6 +2920,196 @@ The argument, one short step at a time:
     bottom. So a larger cap that finds `A ⊑ ⊥` replaces `A`'s `sub` lines by its unsatisfiability,
     and one that finds inconsistency drops the hierarchy. Each report is still sound (S7).
 
+**R8 — predecessor relevance (slice 9i, under review).** *Status: drafted 2026-10-13. The first draft
+was refereed by Codex the same day and did not close (constants, root units, Nom, the shared ground
+view, Factor's lifting, edge triggers, new edges). The second draft narrowed the scope and replaced the
+lifting argument. Its partial review found that a historical trigger can make a unit relevant in a
+stale target, and that a filtered `K₂` changes Succ's conclusion. The third draft pushed units to
+every target and rested on Theorem 2's hypotheses. Its review confirmed that use of Theorem 2, closed
+the argument for trivial, and found that unrestricted Succ can still switch an `f` to a new cautious
+target. The fourth draft refreshed the target, and
+its review (the fourth) found no remaining counterexample in scope. It asked for these local
+corrections, made here:
+- a source holding `⊤ → ⊥`;
+- the continuation's Λ;
+- the forms of body atoms;
+- edge arrival as a Pred trigger.
+
+**The argument closes in scope, pending the owner's review.** The idea comes from the owner-reviewed clean-room report on Sequoia
+(`~/code/research_report.md`, items 1 and 7; graph Consequences 7ff9c324 and dbf7ae4b), re-derived here
+in HOWL's terms.*
+
+Derive may ignore a clause whose body no single predecessor supplies. The clause is kept and committed
+as usual, but it is a premise of no rule until it becomes supported.
+
+- **Scope.** Deferral is on only when the input has **no constants**: no individual of O, hence
+  `Σ_u^O = ∅`. The strategy must be cautious or trivial.
+  - Then `v_r` is inert. Hyper at the root binds `x` only to `U_H = ∅` (E4), and the root holds no
+    clause.
+  - Nom never fires (it needs an `o_ρ`), r-Succ and r-Pred have no constant to name, the shared ground
+    view is empty, and no literal is ground.
+  - With any constant present, deferral is off and S6 runs unchanged.
+- **Definitions.**
+  - **The triggers of a predecessor and a function symbol.** For a context `w` and a function symbol
+    `f`, `trig(w, f)` is the union of `K₂` over **every** evaluation of Succ for `(w, f)`, whatever
+    target it names and whether or not it adds a unit. `K₂` is computed, as derive reads it, over
+    `w`'s supported clauses.
+    - S6 already re-evaluates Succ for `(w, f)` whenever a clause contributing to its `K₁` or `K₂`
+      arrives. Here, becoming supported counts as arriving.
+    - `trig(w, f)` only grows. It is history: it belongs to the run's state beside the store.
+  - **Unit pushing.** At every evaluation of Succ for `(w, f)`, after `trig(w, f)` absorbs `K₂`, the
+    engine adds `A′ → A′` to `S_v` for every `A′ ∈ trig(w, f) \ core_v` and every edge
+    `⟨w, v, f⟩ ∈ E`, unless it is already `∈̂ S_v`.
+    - This covers the edge Succ creates or confirms, and any older edge, for instance one into `v_⊤`
+      that cautious made before `K₁` grew.
+    - A unit `A′ → A′` is a tautology, so the structure stays sound (Definition 6).
+  - **Target refresh.** At the same evaluation, the engine makes sure `⟨w, strat(f, K₁), f⟩ ∈ E`,
+    creating that context if needed, even when an older edge covers `K₂`. Pushing then fills it too.
+    - `K₁` reads only clauses with an empty body, which are always supported. So it is the printed
+      `K₁`, and the refreshed edge is sound exactly as Succ's own edge would be (Definition 6, S2):
+      its target core lies in `K₁`, which the source's empty-body clauses entail.
+    - An older edge stays sound when `K₁` grows later.
+  - **Support.** A clause `c ∈ S_v` with body `Γ` is *supported* when `Γ ⊆ core_v ∪ trig(w, f)` for
+    some edge `⟨w, v, f⟩ ∈ E`, or when `Γ ⊆ core_v`.
+    - Every body atom is non-ground (there are no constants).
+    - For a fixed run's final store `F`, *relevant* means supported with `F`'s edges and `F`'s
+      final `trig`, frozen.
+  - **The schedule.**
+    - Derive reads, in each context, only the clauses supported at the round's boundary, as premises
+      and side premises of every rule, with Succ's `K₁` and `K₂` read the same way.
+    - When a stored clause becomes supported because some `trig(w, f)` grew or an edge arrived, it
+      joins the next round's `Δ`. Activation is arrival, even when the round commits no clause.
+    - The fixpoint is a round with no new clause, edge, context, activation or growth of `trig`.
+- **P1 — bodies only grow,** in the conclusion's own context.
+  - **Hyper, Eq, Ineq and Factor** conclude a body that is the union of their premises' bodies.
+  - **Join** does too here: its `A` is ground, and none occurs.
+  - **Core** concludes an empty body.
+  - **Pred** concludes in the predecessor `w` the union of its side premises' bodies in `w`.
+  - **Corollary.** "Unsupported" is upward closed under body inclusion, so an instance with an
+    unsupported premise in the conclusion's context concludes an unsupported clause.
+- **P2 — Pred reads supported clauses.** Pred along `⟨w, v, f⟩` takes `c ∈ S_v` and, for each atom `Cᵢ`
+  of its body, a side premise in `S_w` with `Cᵢσ` maximal.
+  - If those side premises are supported, then each `Cᵢσ` is maximal in a supported clause of `w`, so
+    `Cᵢ ∈ K₂(w, f)` at Succ's evaluation on that clause's arrival. Hence `Cᵢ ∈ trig(w, f)`, and `c` is
+    supported through that edge.
+  - This holds for every edge out of `w` labelled `f`, including one an earlier cautious choice
+    created before `K₁` grew. That is why `trig` is keyed by `(w, f)` and not by the target.
+- **P3 — subsumers of supported clauses are supported:** if `D ⊆ C`, then `D`'s body is in `C`'s.
+- **P4 — `y` needs a `y`-atom in the body.** Every clause of a context that mentions `y` has a body
+  atom mentioning `y`. Cautious and trivial cores have no `y`, and every rule keeps it so:
+  - units carry their atom in the body;
+  - Hyper takes its `y` from a side premise through `σ(zᵢ) = y`, and keeps that premise's body;
+  - Eq, Ineq, Factor and Join keep their premises' bodies;
+  - Pred maps `y` to `x`;
+  - Core and bodiless Hyper introduce none.
+
+  Without constants, every non-ground literal of Pr(O) mentions `y` (`B(y)`, `S(x, y)`, `S(y, x)`,
+  and `x ≈ y` if any). So a clause with an empty body and a Pr(O)-only head has an **empty** head.
+- **P5 — saturation for supported premises.** At the fixpoint, every rule instance whose premises are
+  all supported clauses of `F`, over edges of `F`, has its conclusion `∈̂ F`, and every Succ action it
+  calls for is taken.
+  - This is R4's argument. The latest premise to become supported entered `Δ`, on arrival or on
+    activation. The others were present (R3) and supported, since support only grows.
+  - **Edges are premises of Pred.** An edge's arrival schedules its Pred instances, as in S6.
+  - **Succ, when the source does not hold `⊤ → ⊥`.** The clauses with an empty body that make up
+    `K₁` are subsumed only by `⊤ → ⊥` or by themselves, so they persist once present.
+    - The last arriving or activating contributor triggered an evaluation with `F`'s final `K₁` and
+      supported `K₂`.
+    - So `F` holds the edge to `strat(f, K₁(F))` (target refresh), and its target holds every unit
+      of `trig(w, f)` (pushing).
+  - **A source holding `⊤ → ⊥`.** There `F_w = {⊤ → ⊥}`, which subsumes every clause, so no clause
+    can be added and no Succ trigger exists. Its old edges may name a target that `K₁` no longer
+    picks, and nothing needs the current one.
+  - **Units at the fixpoint.** By pushing, for every edge `⟨w, v, f⟩ ∈ F` and every
+    `A′ ∈ trig(w, f) \ core_v`, `A′ → A′ ∈̂ F_v`. The last evaluation for `(w, f)` pushed all of
+    `trig(w, f)`, and an edge created later was created by an evaluation, which pushed to it.
+- **The theorem.** Let `F` be the final store of a deferred run on a constant-free input, under
+  cautious or trivial. Then either `⊤ → ⊥ ∈̂ F_{v_⊤}`, in which case the run reports the ontology
+  inconsistent (S4), or every raw query `Q` of context `q` with `O ⊨ Q` has `Q ∈̂ F_q`.
+- **Proof.**
+  - **Setup.** Let `S′` be any fair continuation of `F` under [TGH21]'s rules, with no deferral,
+    until it saturates.
+    - **Theorem 2's hypotheses** ([TGH21] p. 16, Definitions 5–7 and 9; checked against the PDF in the
+      third review):
+      - a structure derivable by the printed rules from a sound structure mentioning no auxiliary
+        constant;
+      - orders admissible relative to one a-admissible total order;
+      - saturation under Tables 2 and 3;
+      - `Λ ≥ 2^{τSu}·2^{τPr}·ω`;
+      - C1 and C2 for the query context.
+
+      There is no requirement that every edge's target be the strategy's current choice, nor that the
+      derivation start from Algorithm 1's initial structure.
+    - **Take `F` as the starting structure.**
+      - It is sound for O:
+        - every clause is a sound conclusion or a tautological unit;
+        - every edge satisfies S2, because each was created or refreshed with its target core inside
+          the printed `K₁`.
+      - It mentions no auxiliary constant, since there are no constants at all.
+      - S5's orders apply.
+      - **Λ.** Take, for the continuation, a mathematical Λ meeting Theorem 2's bound. With no
+        constants Nom never fires, so Λ changes no step of `F` or `S′`. HOWL's stored Λ, capped at
+        2⁶², need not meet the bound.
+
+      `S′` is derivable from `F` by the printed rules and is saturated, so Theorem 2 gives
+      `Q ∈̂ S′_q`. Deferral's filtered `K₂` and the pushed units do not affect `S′`: `F` need not be
+      derivable from S4's initial structure by the printed rules.
+    - No Nom constant exists, so the continuation terminates (Theorem 5).
+  - **Invariant.** Induction over the continuation's steps shows:
+    - **(I1)** every clause it adds is irrelevant;
+    - **(I2)** it adds no context;
+    - **(I3)** every edge it adds has the form `⟨w, v_⊤, f⟩`, where `F_w` holds no relevant clause
+      with an `f(x)`-atom maximal;
+    - **(I4)** the relevant clauses of `S′` are exactly those of `F`.
+
+    Each step:
+    - **Elim.** It deletes a relevant clause only for a subsumer that is relevant too (P3), so the
+      subsumer is in `F`, by (I1) and (I4). But `F_v` is a `min` set. So nothing relevant is deleted,
+      which keeps (I4).
+    - **A local rule in context `t`.**
+      - If every premise is relevant, they are clauses of `F` (I4) and supported, so the instance ran
+        in `F` (P5). Its conclusion is `∈̂ F ⊆̂ S′`, and the continuation does not add it.
+      - Otherwise its conclusion is irrelevant (P1). No lifting to subsumers is needed, because
+        relevant premises are literally in `F`.
+    - **Pred along `e = ⟨w, v, f⟩` into `w`.**
+      - *All side premises relevant, and `e ∈ F`.* The successor clause `c` is relevant (P2, with
+        `F`'s `trig`), so it is in `F` (I4). The instance ran in `F` (P5).
+      - *A side premise irrelevant.* The conclusion is irrelevant (P1).
+      - *`e` new.* By (I3), `v = v_⊤` and `F_w` has no relevant clause with an `f(x)`-atom maximal.
+        - **Body atoms in scope** are `B(x)`, `R(x, y)` or `R(y, x)`. Units have these forms, and the
+          rules only combine bodies.
+        - If `c` has a body atom `C₁`, then `C₁σ` mentions `f(x)`, so the side premise for it is a
+          clause of `w` with an `f(x)`-atom maximal, which is irrelevant. So is the conclusion.
+        - If `c` has an empty body, P4 makes `c = ⊤ → ⊥`. It is relevant, so `c ∈ F_{v_⊤}`, which
+          is the theorem's first case.
+    - **Succ for `(w, f)`.** `K₁` is read off clauses with an empty body. Those are relevant, and by
+      (I1) and (I4) never added or deleted, so `K₁(S′_w) = K₁(F_w)`.
+      - *`F` evaluated Succ for `(w, f)`.* `F` holds the edge to `strat(f, K₁(F))`, and that is the
+        continuation's target too, so no new context or edge (target refresh, P5).
+        - If the continuation's Succ applies anyway, its new `K₂` atoms come from irrelevant
+          contributors (I1).
+        - A unit `A′ → A′` it would add to a context `v` is relevant only if
+          `A′ ∈ core_v ∪ trig(w′, f′)` for some edge `⟨w′, v, f′⟩ ∈ F`.
+          - If `A′ ∈ core_v`, Core's `⊤ → A′` subsumes the unit.
+          - Otherwise pushing put it there.
+
+          Either way it is `∈̂ F_v`, so it is not added. Whatever is added is irrelevant (I1).
+        - So every Pred it enables runs along an edge of `F`, and is covered by the Pred case.
+      - *`F` never evaluated Succ for `(w, f)`.* Then `F_w` has no relevant clause with an `f(x)`-atom
+        maximal. `K₁` consists of such clauses, so it is empty, and both strategies choose `v_⊤`,
+        which exists. That gives (I2) and (I3). Its units are irrelevant, as above.
+    - **Core and bodiless Hyper** run only in contexts of `F` (I2), where `F` ran them.
+  - **Conclusion.** `Q ∈̂ S′_q` through some `D ∈ S′_q`. Every raw query has its body inside the core
+    (`B(x) → A(x)` in `v_B`; `⊤ → ⊥` and `⊤ → A(x)` in `v_⊤`), so `D` is relevant (P3). By (I4),
+    `D ∈ F_q`, so `Q ∈̂ F_q`.
+- **Determinism.** `trig` is a deterministic function of the run's rounds, all functions of sets
+  (R1). So the augmented state's transition is deterministic, and every report is the same at every
+  worker count (R6). The caps (R7) count rounds.
+- **Out of scope:**
+  - **Inputs with constants.** Deferral there needs root seeds, Nom's new constants, and a composition
+    argument for the shared ground view (the first review's items 1–3, 7 and 8).
+  - **The eager strategy,** whose cores can mention `y` (P4).
+
 **The literal reference evaluator** (`src/sriqref.slop`; D7, D5(a), D10's fuel cap). The engine of
 slices 9 and 10 must answer every fixture as this does. It is S6's semantics without S6's schedule:
 - **Each round is naive.** It reads a frozen structure, and applies every Table 2 and Table 3 rule to
