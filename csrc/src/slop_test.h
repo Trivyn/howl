@@ -49,6 +49,7 @@
 
 typedef struct test_Expect test_Expect;
 typedef struct test_ProtoCase test_ProtoCase;
+typedef struct test_RoundAt test_RoundAt;
 typedef struct test_KscFixture test_KscFixture;
 typedef struct test_RunAs test_RunAs;
 
@@ -414,6 +415,23 @@ SLOP_OPTION_DEFINE(test_ProtoCase, slop_option_test_ProtoCase)
 #define SLOP_LIST_TEST_PROTOCASE_DEFINED
 #define SLOP_LIST_TEST_PROTOCASE_IMPL_DEFINED
 SLOP_LIST_DEFINE(test_ProtoCase, slop_list_test_ProtoCase)
+#endif
+
+struct test_RoundAt {
+    int64_t total;
+    int64_t next;
+};
+typedef struct test_RoundAt test_RoundAt;
+
+#ifndef SLOP_OPTION_TEST_ROUNDAT_DEFINED
+#define SLOP_OPTION_TEST_ROUNDAT_DEFINED
+SLOP_OPTION_DEFINE(test_RoundAt, slop_option_test_RoundAt)
+#endif
+
+#ifndef SLOP_LIST_TEST_ROUNDAT_DEFINED
+#define SLOP_LIST_TEST_ROUNDAT_DEFINED
+#define SLOP_LIST_TEST_ROUNDAT_IMPL_DEFINED
+SLOP_LIST_DEFINE(test_RoundAt, slop_list_test_RoundAt)
 #endif
 
 struct test_KscFixture {
@@ -1657,6 +1675,10 @@ int64_t test_h_rounds_of(types_Outcome o);
 uint8_t test_wired_cap_rows(slop_arena* arena);
 uint8_t test_wired_shared_budget(slop_arena* arena, types_Outcome o);
 uint8_t test_wired_budget_row(slop_arena* arena);
+uint8_t test_wired_abandon_scan(slop_arena* arena, slop_string name, uint8_t run_c);
+slop_list_test_RoundAt test_round_profile(slop_arena* arena, sriqref_RefIn h);
+int64_t test_expected_stop(slop_list_test_RoundAt ps, int64_t b);
+int64_t test_abandon_at(slop_arena* arena, sriqref_RefIn run, slop_list_rdf_IRI classes, slop_list_test_RoundAt ps, int64_t b);
 uint8_t test_wired_cancel_row(slop_arena* arena);
 uint8_t test_is_cancelled(slop_result_types_Outcome_types_Fault r);
 uint8_t test_wired_omission_rows(slop_arena* arena);
@@ -1728,6 +1750,10 @@ uint8_t test_test_ksc_entailments(slop_arena* arena);
 slop_option_types_Outcome test_classify_fixture_in(slop_arena* arena, slop_string path, types_Profile profile);
 slop_list_string test_rung_neutral_lines(slop_arena* arena, types_Outcome o);
 uint8_t test_rungs_agree_on(slop_arena* arena, slop_string path);
+uint8_t test_rung_pair_agrees(slop_arena* arena, slop_string path, types_Profile x, types_Profile y);
+uint8_t test_test_el_plus_plus_and_sriq_agree(slop_arena* arena);
+int64_t test_pp_sriq_compare(slop_arena* arena, slop_string path);
+uint8_t test_complete_outcome(types_Outcome o);
 uint8_t test_test_el_and_el_plus_plus_agree(slop_arena* arena);
 types_KscResult test_ksc_run(slop_arena* arena, slop_list_types_KscAxiom axioms, slop_list_types_KName classes, types_ReasonerConfig config);
 int64_t test_cancel_flag_set(void);
@@ -1827,6 +1853,16 @@ test_RunAs test_profile_run(slop_arena* arena, slop_string path, types_ProfileSe
 uint8_t test_ran_as(test_RunAs r, types_Profile want);
 uint8_t test_refused_as(test_RunAs r, types_Profile want);
 uint8_t test_test_profile_selection(slop_arena* arena);
+uint8_t test_test_auto_step_down(slop_arena* arena);
+uint8_t test_step_says(slop_arena* arena, slop_string label, uint8_t ok);
+types_ReasonerConfig test_with_budget(types_ProfileSelection sel, int64_t rounds, int64_t budget);
+types_ReasonerConfig test_cancelled_cfg(types_ReasonerConfig cfg);
+slop_result_types_Outcome_types_Fault test_classify_cfg(slop_arena* arena, slop_string path, types_ReasonerConfig cfg);
+uint8_t test_answered_by(slop_result_types_Outcome_types_Fault r, types_Profile p, uint8_t stepped);
+uint8_t test_capped_sriq(slop_result_types_Outcome_types_Fault r);
+uint8_t test_step_scan(slop_arena* arena, slop_string path);
+int64_t test_step_at(slop_arena* arena, slop_string path, int64_t b);
+uint8_t test_step_agrees(slop_result_types_Outcome_types_Fault a, uint8_t want);
 uint8_t test_test_profile_names_round_trip(slop_arena* arena);
 uint8_t test_test_dropped_rung_refusal(slop_arena* arena);
 uint8_t test_name_round_trips(types_Profile p);
@@ -2058,6 +2094,11 @@ SLOP_OPTION_DEFINE(sriqctx_Edge, slop_option_sriqctx_Edge)
 #ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
 #define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
 SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
+#endif
+
+#ifndef SLOP_OPTION_TEST_ROUNDAT_DEFINED
+#define SLOP_OPTION_TEST_ROUNDAT_DEFINED
+SLOP_OPTION_DEFINE(test_RoundAt, slop_option_test_RoundAt)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED

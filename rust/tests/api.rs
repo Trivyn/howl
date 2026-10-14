@@ -204,12 +204,20 @@ fn an_empty_input_is_coherent() {
 }
 
 #[test]
-fn an_unbuilt_profile_is_refused_by_name() {
+fn sriq_runs_as_asked() {
     let config = Config { selection: ProfileSelection::Explicit(Profile::Sriq), ..Config::default() };
-    match Reasoner::with_config(config).classify(&turtle(UNSAT_TTL)) {
-        Err(Fault::ProfileUnavailable(Profile::Sriq)) => {}
-        other => panic!("expected ProfileUnavailable(Sriq), got {other:?}"),
-    }
+    let r = classify_with(&turtle(UNSAT_TTL), config);
+    assert_eq!(r.profile, Profile::Sriq);
+    assert_eq!(r.verdict, classify_with(&turtle(UNSAT_TTL), Config::default()).verdict);
+}
+
+/// A union is outside el and el++ and inside sriq, so auto runs sriq.
+#[test]
+fn auto_chooses_sriq_for_a_union() {
+    let config = Config { selection: ProfileSelection::Auto, ..Config::default() };
+    let r = classify_with(&turtle(&fixture("out-of-profile/union.ttl")), config);
+    assert_eq!(r.profile, Profile::Sriq);
+    assert_eq!(r.verdict, Verdict::Coherent);
 }
 
 #[test]
@@ -257,11 +265,11 @@ fn a_round_cap_is_inconclusive() {
 }
 
 /// M1 (e) at the binding: the report is identical at every worker
-/// count, on both built rungs.
+/// count, on every built rung.
 #[test]
 fn reports_are_identical_across_worker_counts() {
     let input = turtle(&fixture("imports/root.ttl"));
-    for p in [Profile::El, Profile::ElPlusPlus] {
+    for p in [Profile::El, Profile::ElPlusPlus, Profile::Sriq] {
         let at = |w: u8| {
             classify_with(&input, Config { worker_count: w, selection: ProfileSelection::Explicit(p), ..Config::default() })
         };

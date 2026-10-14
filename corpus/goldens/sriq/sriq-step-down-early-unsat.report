@@ -1,0 +1,33 @@
+howl-report 2
+profile sriq
+verdict incoherent
+termination fixpoint
+rounds 7
+inconsistent false
+omitted 0
+unsatisfiable 1
+unsat http://example.org/t#A
+subsumptions 22
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Nothing
+sub http://example.org/t#B http://example.org/t#B
+sub http://example.org/t#B http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#C http://example.org/t#C
+sub http://example.org/t#C http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K1 http://example.org/t#K1
+sub http://example.org/t#K1 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K2 http://example.org/t#K2
+sub http://example.org/t#K2 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K3 http://example.org/t#K3
+sub http://example.org/t#K3 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K4 http://example.org/t#K4
+sub http://example.org/t#K4 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K5 http://example.org/t#K5
+sub http://example.org/t#K5 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K6 http://example.org/t#K6
+sub http://example.org/t#K6 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K7 http://example.org/t#K7
+sub http://example.org/t#K7 http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#K8 http://example.org/t#K8
+sub http://example.org/t#K8 http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 1

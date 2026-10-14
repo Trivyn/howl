@@ -62,10 +62,10 @@ PROFILE = "el"
 PROJ = os.path.join(HERE, "projections")
 
 
-# The rungs a projection can be taken for: every built rung, and sriq, whose
-# census column exists before the engine does (census.PROFILES). Projecting
-# needs only the census; running HOWL on the projection needs the rung built.
-PROJECTABLE = profiles.BUILT + ("sriq",)
+# The rungs a projection can be taken for: every rung the census judges
+# (census.PROFILES). Projecting needs only the census; running HOWL on the
+# projection needs the rung built, as every rung now is.
+PROJECTABLE = profiles.RUNGS
 
 
 def set_profile(p):

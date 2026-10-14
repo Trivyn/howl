@@ -165,6 +165,7 @@ struct sriqref_Env {
     int64_t prod;
     int64_t nconst;
     slop_list_types_Clause nobody;
+    int64_t room;
 };
 typedef struct sriqref_Env sriqref_Env;
 
@@ -366,9 +367,11 @@ slop_list_sriq_Premise sriqref_slot_cands(slop_arena* arena, uint8_t root, types
 sriq_HState sriqref_hyper_choice(slop_arena* arena, sriq_HState start, slop_list_types_Lit atoms, slop_list_list_sriq_Premise cs, int64_t t, sriq_Premise fallback);
 sriqref_Out sriqref_hyper_with(slop_arena* arena, sriqref_Env env, uint32_t v, uint8_t root, sriq_HState start, types_Clause oc, slop_list_sriq_Premise ps);
 slop_list_sriqref_Cand sriqref_hyper_choices(slop_arena* arena, uint32_t v, sriq_HState start, types_Clause oc, slop_list_list_sriq_Premise cs, int64_t n, sriq_Premise p0);
+sriqref_Cand sriqref_copy_cand(slop_arena* arena, sriqref_Cand c);
 slop_list_sriqref_Cand sriqref_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc);
 slop_list_sriqref_Cand sriqref_hyper_consts(slop_arena* arena, sriqctx_Structure st, uint32_t v, types_Clause oc);
 sriqref_Out sriqref_ref_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_sriq_Premise ps);
+sriqref_Out sriqref_hyper_one(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc, slop_list_sriq_Premise ps);
 slop_list_sriqref_Cand sriqref_eq_positions(slop_arena* arena, sriqorder_SriqOrder ord, uint32_t v, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2);
 slop_list_sriqref_Cand sriqref_eq_at(slop_arena* arena, sriqorder_SriqOrder ord, uint32_t v, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2, uint32_t a);
 slop_list_u8 sriqref_bools(slop_arena* arena);
@@ -416,6 +419,7 @@ sriqref_Out sriqref_ref_rpred(slop_arena* arena, sriqref_Env env, sriqctx_Struct
 sriqref_PJob sriqref_rpred_job(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, types_Clause c);
 sriqref_Out sriqref_ctx_table2(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_types_Clause cs, slop_list_sriq_Premise ps);
 sriqref_Round sriqref_ctx_round(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v);
+sriqref_Round sriqref_ctx_round_rest(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_types_Clause cs, slop_list_sriq_Premise ps, sriqref_Out t2);
 sriqref_Round sriqref_ref_round(slop_arena* arena, sriqref_Env env, sriqctx_Structure st);
 int64_t sriqref_nom_cmp(sriqref_NomAct a, sriqref_NomAct b);
 sriqref_NomAct sriqref_nom_at(slop_list_sriqref_NomAct xs, int64_t k, sriqref_NomAct fallback);
@@ -450,6 +454,7 @@ slop_list_types_Lit sriqref_copy_lits(slop_arena* arena, slop_list_types_Lit ls)
 slop_list_types_Clause sriqref_copy_clauses(slop_arena* arena, slop_list_types_Clause cs);
 sriqctx_Structure sriqref_copy_structure(slop_arena* arena, sriqctx_Structure st);
 sriqref_Env sriqref_env_of(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg, sriqctx_Triggers tr, int64_t lam);
+sriqref_Env sriqref_with_room(sriqref_Env env, int64_t room);
 sriqref_Env sriqref_env_for(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg);
 uint8_t sriqref_ref_stable(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg, sriqctx_Structure st);
 sriqref_RefStatus sriqref_stop_status(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqref_Committing cm, sriqref_RefConfig cfg);

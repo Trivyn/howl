@@ -286,8 +286,6 @@ slop_list_int sriqabox_holds_in(slop_arena* arena, sriqctx_Structure st, int64_t
 types_Node sriqabox_class_at(slop_list_rdf_IRI classes, int64_t a);
 slop_list_types_SubPair sriqabox_distinct_pairs(slop_arena* arena, slop_list_types_SubPair ps);
 
-#define sriqabox_SRIQ_CLAUSE_BUDGET (1000000)
-
 #ifndef SLOP_OPTION_SRIQABOX_SPLIT_DEFINED
 #define SLOP_OPTION_SRIQABOX_SPLIT_DEFINED
 SLOP_OPTION_DEFINE(sriqabox_Split, slop_option_sriqabox_Split)

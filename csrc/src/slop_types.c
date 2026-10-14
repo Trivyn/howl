@@ -1,6 +1,7 @@
 #include "../runtime/slop_runtime.h"
 #include "slop_types.h"
 
+
 types_ReasonerConfig types_default_config(void);
 uint8_t types_cancel_requested(int64_t cancel);
 types_Node types_node_top(void);
@@ -63,7 +64,7 @@ types_Verdict types_verdict(types_Outcome o);
 
 types_ReasonerConfig types_default_config(void) {
     types_ReasonerConfig _retval = {0};
-    _retval = ((types_ReasonerConfig){.worker_count = 4, .channel_buffer = 256, .max_iterations = 1000, .selection = ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = types_Profile_profile_el }), .strict_profile = 0, .cancel_ptr = 0, .verbose = 0});
+    _retval = ((types_ReasonerConfig){.worker_count = 4, .channel_buffer = 256, .max_iterations = 1000, .selection = ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = types_Profile_profile_el }), .strict_profile = 0, .cancel_ptr = 0, .verbose = 0, .clause_budget = 500000});
     goto _slop_post;
     _slop_post: ;
     SLOP_POST(((_retval.worker_count == 4)), "(== (. $result worker-count) 4)");
@@ -71,6 +72,7 @@ types_ReasonerConfig types_default_config(void) {
     SLOP_POST(((_retval.max_iterations == 1000)), "(== (. $result max-iterations) 1000)");
     SLOP_POST(((_retval.cancel_ptr == 0)), "(== (. $result cancel-ptr) 0)");
     SLOP_POST(((_retval.verbose == 0)), "(== (. $result verbose) false)");
+    SLOP_POST(((_retval.clause_budget == 500000)), "(== (. $result clause-budget) 500000)");
     SLOP_POST(((_retval.strict_profile == 0)), "(== (. $result strict-profile) false)");
     SLOP_POST((({ __auto_type _mv = _retval.selection; uint8_t _mr = {0}; int _mm = 0; switch (_mv.tag) { case types_ProfileSelection_slop_auto: { _mr = 0; _mm = 1; break; } case types_ProfileSelection_explicit: { __auto_type p = _mv.data.explicit; _mr = (p == types_Profile_profile_el); _mm = 1; break; }  } if (!_mm) { SLOP_UNREACHABLE(); } _mr; })), "(match (. $result selection) ((auto) false) ((explicit p) (== p (quote profile-el))))");
     return _retval;

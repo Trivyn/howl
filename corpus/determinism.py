@@ -3,9 +3,11 @@
 
     python3 corpus/determinism.py [--profile P] [--repeat N]            # every committed fixture
     python3 corpus/determinism.py [--profile P] --corpus [--repeat N]   # the materialized corpus projections
-                                                                      # (NAME.v0.ttl, or NAME.el++.ttl under el++)
+                                                                      # (NAME.v0.ttl, or NAME.el++.ttl under el++;
+                                                                      # BFO-core and CCO themselves under sriq)
 
---profile el (the default) or el++ is passed to every run.
+--profile el (the default), el++ or sriq is passed to every run. Under sriq the
+fixtures include corpus/fixtures/sriq.
 
 For each input, R is read from a default run's `rounds` line. Then for every
 cap in {0, 1, R/2, R-1, R, 10000} and every worker count W in {1, 2, 4, 8},
@@ -30,6 +32,10 @@ corpus keeps the cap set above (on OBI, R = 35 with G = 9 and W = 17, so caps
 1, R/2 and R-1 land in G, W and phase Q). Each W > 1 run is repeated (--repeat, default 2),
 since an intermittent scheduling divergence could pass a single comparison.
 
+UNDER sriq A RUN IS RUN H THEN RUN C (SPEC §5.5), on one budget, so the
+fixtures run every cap from 0 to R as el++'s do. sriq runs single-threaded
+until slice 10, so this gate checks that W is accepted and changes nothing.
+
 Exit 0 when every input agrees at every cap and some cap bit; 1 otherwise.
 """
 import hashlib
@@ -49,6 +55,13 @@ UNCAPPED = 10000
 
 
 def inputs(corpus):
+    if corpus and PROFILE == "sriq":
+        vendor = os.path.join(HERE, "vendor")
+        files = [os.path.join(vendor, f"{n}.ttl") for n in SRIQ_CORPUS]
+        missing = [f for f in files if not os.path.exists(f)]
+        if missing:
+            sys.exit(f"missing {', '.join(missing)} (run ./corpus/fetch.sh)")
+        return files
     if corpus:
         vendor = os.path.join(HERE, "vendor")
         suffix = ".v0.ttl" if PROFILE == "el" else f".{PROFILE}.ttl"
@@ -57,13 +70,18 @@ def inputs(corpus):
             sys.exit(f"no materialized {PROFILE} corpus under corpus/vendor/ (run make materialize)")
         return files
     out = []
-    for d in ("v0", "hazards", "probes", "out-of-profile", "el++", "probes-el++", "data"):
+    dirs = ("v0", "hazards", "probes", "out-of-profile", "el++", "probes-el++", "data")
+    for d in dirs + (("sriq",) if PROFILE == "sriq" else ()):
         base = os.path.join(HERE, "fixtures", d)
         out += sorted(os.path.join(base, f) for f in os.listdir(base) if f.endswith(".ttl"))
     return out
 
 
 PROFILE = "el"
+
+# sriq's corpus: the ontologies it classifies whole within the clause budget
+# (M5 (g)). RO is left out for time (54 s a run), OBI as out of reach.
+SRIQ_CORPUS = ("bfo-core-2024-02-07", "cco-2024-11-06")
 
 
 def run(path, cap, workers):
@@ -97,7 +115,7 @@ def main(argv):
         rel = os.path.relpath(path, ROOT)
         base, _ = run(path, UNCAPPED, 1)
         rounds = int(re.search(rb"^rounds (\d+)$", base, re.M).group(1))
-        if PROFILE == "el++" and not corpus:
+        if PROFILE in ("el++", "sriq") and not corpus:
             caps = sorted(set(range(0, rounds + 1)) | {UNCAPPED})
         else:
             caps = sorted({0, 1, rounds // 2, max(rounds - 1, 0), rounds, UNCAPPED})

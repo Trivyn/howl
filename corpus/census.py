@@ -336,12 +336,9 @@ def inadmissible_chains(g, sig=None):
     return bad
 
 
-# The census judges sriq (SPEC.md §5.5) before the engine runs it: its gate
-# is built and tested (test.slop's three-rung table, mirrored in
-# test_project.py's SriqTest) while `--profile sriq` still exits 3. So the
-# census lists it, and profiles.BUILT, which every harness that runs HOWL
-# checks, does not. The el++ precedent did the same.
-PROFILES = profiles.BUILT + ("sriq",)
+# Every rung of the ladder. The census judged sriq (SPEC.md §5.5) before the
+# engine ran it, as it did el++; since slice 11b every rung is also built.
+PROFILES = profiles.RUNGS
 
 
 def signature(g, profile="el"):

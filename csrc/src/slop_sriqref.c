@@ -19,9 +19,11 @@ slop_list_sriq_Premise sriqref_slot_cands(slop_arena* arena, uint8_t root, types
 sriq_HState sriqref_hyper_choice(slop_arena* arena, sriq_HState start, slop_list_types_Lit atoms, slop_list_list_sriq_Premise cs, int64_t t, sriq_Premise fallback);
 sriqref_Out sriqref_hyper_with(slop_arena* arena, sriqref_Env env, uint32_t v, uint8_t root, sriq_HState start, types_Clause oc, slop_list_sriq_Premise ps);
 slop_list_sriqref_Cand sriqref_hyper_choices(slop_arena* arena, uint32_t v, sriq_HState start, types_Clause oc, slop_list_list_sriq_Premise cs, int64_t n, sriq_Premise p0);
+sriqref_Cand sriqref_copy_cand(slop_arena* arena, sriqref_Cand c);
 slop_list_sriqref_Cand sriqref_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc);
 slop_list_sriqref_Cand sriqref_hyper_consts(slop_arena* arena, sriqctx_Structure st, uint32_t v, types_Clause oc);
 sriqref_Out sriqref_ref_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_sriq_Premise ps);
+sriqref_Out sriqref_hyper_one(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc, slop_list_sriq_Premise ps);
 slop_list_sriqref_Cand sriqref_eq_positions(slop_arena* arena, sriqorder_SriqOrder ord, uint32_t v, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2);
 slop_list_sriqref_Cand sriqref_eq_at(slop_arena* arena, sriqorder_SriqOrder ord, uint32_t v, uint8_t root, sriq_Premise p1, uint32_t k1, sriq_Premise p2, uint32_t a);
 slop_list_u8 sriqref_bools(slop_arena* arena);
@@ -69,6 +71,7 @@ sriqref_Out sriqref_ref_rpred(slop_arena* arena, sriqref_Env env, sriqctx_Struct
 sriqref_PJob sriqref_rpred_job(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, types_Clause c);
 sriqref_Out sriqref_ctx_table2(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_types_Clause cs, slop_list_sriq_Premise ps);
 sriqref_Round sriqref_ctx_round(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v);
+sriqref_Round sriqref_ctx_round_rest(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_types_Clause cs, slop_list_sriq_Premise ps, sriqref_Out t2);
 sriqref_Round sriqref_ref_round(slop_arena* arena, sriqref_Env env, sriqctx_Structure st);
 int64_t sriqref_nom_cmp(sriqref_NomAct a, sriqref_NomAct b);
 sriqref_NomAct sriqref_nom_at(slop_list_sriqref_NomAct xs, int64_t k, sriqref_NomAct fallback);
@@ -103,6 +106,7 @@ slop_list_types_Lit sriqref_copy_lits(slop_arena* arena, slop_list_types_Lit ls)
 slop_list_types_Clause sriqref_copy_clauses(slop_arena* arena, slop_list_types_Clause cs);
 sriqctx_Structure sriqref_copy_structure(slop_arena* arena, sriqctx_Structure st);
 sriqref_Env sriqref_env_of(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg, sriqctx_Triggers tr, int64_t lam);
+sriqref_Env sriqref_with_room(sriqref_Env env, int64_t room);
 sriqref_Env sriqref_env_for(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg);
 uint8_t sriqref_ref_stable(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg, sriqctx_Structure st);
 sriqref_RefStatus sriqref_stop_status(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqref_Committing cm, sriqref_RefConfig cfg);
@@ -355,16 +359,24 @@ slop_list_sriqref_Cand sriqref_hyper_choices(slop_arena* arena, uint32_t v, sriq
         int64_t t = 0;
         while (t < n) {
             {
-                __auto_type _coll = sriqref_conclusion(arena, v, sriq_hyper_finish(arena, sriqref_hyper_choice(arena, start, oc.body, cs, t, p0), oc.head));
-                for (size_t _i = 0; _i < _coll.len; _i++) {
-                    __auto_type c = _coll.data[_i];
-                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                __auto_type tmp = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(65536); _new_arena; });
+                {
+                    __auto_type _coll = sriqref_conclusion(tmp, v, sriq_hyper_finish(tmp, sriqref_hyper_choice(tmp, start, oc.body, cs, t, p0), oc.head));
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type c = _coll.data[_i];
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqref_copy_cand(arena, c)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    }
                 }
+                ({ slop_arena_free(tmp); free(tmp); });
+                t = (t + 1);
             }
-            t = (t + 1);
         }
         return out;
     }
+}
+
+sriqref_Cand sriqref_copy_cand(slop_arena* arena, sriqref_Cand c) {
+    return ((sriqref_Cand){.ctx = c.ctx, .c = ((types_Clause){.body = sriqref_copy_lits(arena, c.c.body), .head = sriqref_copy_lits(arena, c.c.head)})});
 }
 
 slop_list_sriqref_Cand sriqref_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc) {
@@ -401,17 +413,9 @@ sriqref_Out sriqref_ref_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Struct
             __auto_type _coll = env.onto;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type oc = _coll.data[_i];
-                if (((int64_t)((oc.body).len)) == 0) {
+                if (((int64_t)(((int64_t)((out).len)))) <= env.room) {
                     {
-                        __auto_type _coll = sriqref_hyper_bodiless(arena, st, v, root, oc);
-                        for (size_t _i = 0; _i < _coll.len; _i++) {
-                            __auto_type c = _coll.data[_i];
-                            ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        }
-                    }
-                } else {
-                    {
-                        __auto_type o = sriqref_hyper_with(arena, env, v, root, sriq_hyper_start(arena, types_at_x(), !(root)), oc, ps);
+                        __auto_type o = sriqref_hyper_one(arena, env, st, v, root, oc, ps);
                         {
                             __auto_type _coll = o.cands;
                             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -427,6 +431,14 @@ sriqref_Out sriqref_ref_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Struct
             }
         }
         return sriqref_out_of(out, over);
+    }
+}
+
+sriqref_Out sriqref_hyper_one(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc, slop_list_sriq_Premise ps) {
+    if (((int64_t)((oc.body).len)) == 0) {
+        return sriqref_out_of(sriqref_hyper_bodiless(arena, st, v, root, oc), 0);
+    } else {
+        return sriqref_hyper_with(arena, env, v, root, sriq_hyper_start(arena, types_at_x(), !(root)), oc, ps);
     }
 }
 
@@ -1247,32 +1259,34 @@ sriqref_Out sriqref_ctx_table2(slop_arena* arena, sriqref_Env env, sriqctx_Struc
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
-        {
-            __auto_type _coll = sriqref_ref_eq(arena, ord, v, root, ps);
-            for (size_t _i = 0; _i < _coll.len; _i++) {
-                __auto_type c = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        if (((int64_t)(((int64_t)((out).len)))) <= env.room) {
+            {
+                __auto_type _coll = sriqref_ref_eq(arena, ord, v, root, ps);
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type c = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
             }
-        }
-        {
-            __auto_type _coll = sriqref_ref_ineq(arena, v, ps);
-            for (size_t _i = 0; _i < _coll.len; _i++) {
-                __auto_type c = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            {
+                __auto_type _coll = sriqref_ref_ineq(arena, v, ps);
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type c = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
             }
-        }
-        {
-            __auto_type _coll = sriqref_ref_factor(arena, ord, v, ps);
-            for (size_t _i = 0; _i < _coll.len; _i++) {
-                __auto_type c = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            {
+                __auto_type _coll = sriqref_ref_factor(arena, ord, v, ps);
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type c = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
             }
-        }
-        {
-            __auto_type _coll = sriqref_ref_join(arena, v, ps, cs);
-            for (size_t _i = 0; _i < _coll.len; _i++) {
-                __auto_type c = _coll.data[_i];
-                ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            {
+                __auto_type _coll = sriqref_ref_join(arena, v, ps, cs);
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type c = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
             }
         }
         return sriqref_out_of(out, h.over);
@@ -1285,6 +1299,16 @@ sriqref_Round sriqref_ctx_round(slop_arena* arena, sriqref_Env env, sriqctx_Stru
         __auto_type cs = sriqref_set_of(env, st, ((int64_t)(v)));
         __auto_type ps = sriqref_premises_of(arena, st.ord, sriqref_set_of(env, st, ((int64_t)(v))));
         __auto_type t2 = sriqref_ctx_table2(arena, env, st, v, root, cs, ps);
+        if (((int64_t)(((int64_t)((t2.cands).len)))) > env.room) {
+            return sriqref_round_of(t2.cands, ((slop_list_sriqref_SuccAct){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), ((slop_list_sriqref_RSuccAct){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), ((slop_list_sriqref_NomAct){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), t2.over);
+        } else {
+            return sriqref_ctx_round_rest(arena, env, st, v, root, cs, ps, t2);
+        }
+    }
+}
+
+sriqref_Round sriqref_ctx_round_rest(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_types_Clause cs, slop_list_sriq_Premise ps, sriqref_Out t2) {
+    {
         __auto_type nom = sriqref_ref_nom(arena, env, st.ord, v, ps);
         __auto_type pr = ((root) ? sriqref_out_of(((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), 0) : sriqref_ref_pred(arena, env, st, v, cs));
         __auto_type rp = ((root) ? sriqref_out_of(((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), 0) : sriqref_ref_rpred(arena, env, st, v, ps));
@@ -1915,7 +1939,11 @@ sriqctx_Structure sriqref_copy_structure(slop_arena* arena, sriqctx_Structure st
 }
 
 sriqref_Env sriqref_env_of(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg, sriqctx_Triggers tr, int64_t lam) {
-    return ((sriqref_Env){.onto = in.onto, .tr = tr, .strat = cfg.strat, .lam = lam, .prod = cfg.prod, .nconst = in.nconst, .nobody = ((slop_list_types_Clause){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
+    return ((sriqref_Env){.onto = in.onto, .tr = tr, .strat = cfg.strat, .lam = lam, .prod = cfg.prod, .nconst = in.nconst, .nobody = ((slop_list_types_Clause){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .room = 2147483647});
+}
+
+sriqref_Env sriqref_with_room(sriqref_Env env, int64_t room) {
+    return ((sriqref_Env){.onto = env.onto, .tr = env.tr, .strat = env.strat, .lam = env.lam, .prod = env.prod, .nconst = env.nconst, .nobody = env.nobody, .room = room});
 }
 
 sriqref_Env sriqref_env_for(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg) {

@@ -81,7 +81,7 @@
   (import probe (QueryKind Query Probing sort-queries probe-document))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
   (import report (report-lines probe-lines))
-  (import select (parse-profile unavailable-message))
+  (import select (parse-profile unavailable-message profile-name))
   (import strlib (parse-int is-digit char-at starts-with))
   (import ttl (parse-ttl-file-for-each-triple))
   (import vocab (RDF_TYPE OWL_ONTOLOGY))
@@ -246,8 +246,9 @@
       (println "")
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
       (println "  --profile P  the calculus: el (default), el++, sriq, or auto;")
-      (println "               el and el++ are implemented, and sriq exits 3;")
-      (println "               auto runs el, or el++ when it omits fewer axioms")
+      (println "               auto runs the first of el, el++, sriq that omits nothing,")
+      (println "               else the one omitting fewest; if sriq passes its clause")
+      (println "               budget with nothing definitive, auto steps down to el or el++")
       (println "  --strict   refuse to run past any omission (exit 2, no report)")
       (println "  --report   print the canonical report instead of the summary")
       (println "  --timings  print phase durations and peak memory on stderr (never part of a report)")
@@ -267,6 +268,18 @@
       (println "")
       (println "Treat 0 alone as the pass condition. A CI job that accepts 2")
       (println "reintroduces the silent-false-pass hazard the gate exists to prevent.")))
+
+  (fn print-step-down ((arena Arena) (r (Result Outcome Fault)))
+    (@intent "auto's step-down, if the run took one, on stderr: never part of a report (§5.1)")
+    (@spec ((Arena (Result Outcome Fault)) -> Unit))
+    (@alloc arena)
+    (match r
+      ((ok o)
+        (when (. o stepped-down)
+          (eprint (string-concat arena "howl: auto stepped down from sriq to "
+                    (string-concat arena (profile-name (. o profile))
+                      ": sriq's run passed its clause budget with nothing definitive\n")))))
+      ((error _) (do))))
 
   (fn eprint ((s String))
     (@intent "Write a string to stderr")
@@ -701,6 +714,7 @@
                     (do
                       (when timings
                         (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
+                      (print-step-down arena result)
                       (match result
                         ((ok o)
                           (if report-mode

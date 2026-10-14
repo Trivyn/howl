@@ -1,7 +1,6 @@
 #include "../runtime/slop_runtime.h"
 #include "slop_sriqabox.h"
 
-
 slop_option_rdf_IRI sriqabox_individual_of(types_Node n);
 void sriqabox_put_node(slop_map* s, types_Node n);
 slop_map* sriqabox_unfoldable(slop_arena* arena, slop_list_owl2_RawAxiom axs);

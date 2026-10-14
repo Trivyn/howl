@@ -1,0 +1,19 @@
+howl-report 2
+profile sriq
+verdict coherent
+termination fixpoint
+rounds 8
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 9
+sub http://example.org/t#P http://example.org/t#P
+sub http://example.org/t#P http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Q http://example.org/t#Q
+sub http://example.org/t#Q http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#X http://example.org/t#X
+sub http://example.org/t#X http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Y http://example.org/t#Y
+sub http://example.org/t#Y http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

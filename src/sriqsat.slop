@@ -60,7 +60,7 @@
                              g-premise-at g-member-of
                       g-sel-range g-body-members g-member g-root-units view-total materialise))
   (import types (lit-eq cancel-requested))
-  (import sriqref (RefStatus RefConfig RefResult RefIn Cand Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
+  (import sriqref (RefStatus RefConfig RefResult RefIn Cand Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing with-room copy-cand
                    set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
                    ref-core x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
                    nom-first nom-second nom-pair ref-rsucc
@@ -167,7 +167,8 @@
     (gd    Ground)
     (rs    RSrcs)            ; the root clauses r-Pred can fire from, with their views (slice 9f)
     (dfr   Bool)             ; deferral (R8): Succ evaluates, and its covered test is not read
-    (views Bool)))           ; premise views from the store (9k): Succ's K-sets read the premises' flags
+    (views Bool)             ; premise views from the store (9k): Succ's K-sets read the premises' flags
+    (room  Int)))            ; conclusions this context may add before its pairing loops stop (11b)
 
   ;; The edges into and out of one context.
   (type Adj (record
@@ -266,7 +267,22 @@
           (x (cix-at arena ixs v)))
       (record-new Here (v (cast U32 v)) (root (is-root st v)) (fresh fresh) (all all) (news news) (olds olds)
                        (aps (. x aps)) (dps (. x dps)) (ops (. x ops)) (dix (. x dix)) (aix (. x aix)) (oix (. x oix))
-                       (hx hx) (ixs ixs) (gd gd) (rs rs) (dfr dfr) (views views))))
+                       (hx hx) (ixs ixs) (gd gd) (rs rs) (dfr dfr) (views views) (room ROOM_OFF))))
+
+  (fn here-room ((h Here) (room Int))
+    (@intent "h with its room set")
+    (@spec ((Here Int) -> Here))
+    (@pure)
+    (record-new Here (v (. h v)) (root (. h root)) (fresh (. h fresh)) (all (. h all)) (news (. h news)) (olds (. h olds))
+                     (aps (. h aps)) (dps (. h dps)) (ops (. h ops)) (dix (. h dix)) (aix (. h aix)) (oix (. h oix))
+                     (hx (. h hx)) (ixs (. h ixs)) (gd (. h gd)) (rs (. h rs)) (dfr (. h dfr)) (views (. h views))
+                     (room room)))
+
+  (fn roomy ((out (List Cand)) (h Here))
+    (@intent "Is out still within h's room?")
+    (@spec (((List Cand) Here) -> Bool))
+    (@pure)
+    (<= (cast Int (list-len out)) (. h room)))
 
   (fn edge-new ((dl Delta) (e Edge))
     (@intent "Was e created this round?")
@@ -322,14 +338,18 @@
     (record-new HCtx (v (. h v)) (root (. h root)) (dps (. h dps)) (aps (. h aps)) (dix (. h dix)) (oix (. h oix))
                      (aix (. h aix))))
 
-  (fn sat-hyper ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here))
+  ;; No room limit: a test's runs, and the reference's comparisons.
+  (const ROOM_OFF Int 2147483647)
+
+  (fn sat-hyper ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here) (room Int))
     (@intent "Hyper anchored on Δ_v (indexed); on the bodiless clauses, at the root for the new constants, and in a new
-              context")
-    (@spec ((Arena Env Structure Delta Here) -> HOut))
+              context. Past room, what is left is skipped")
+    (@spec ((Arena Env Structure Delta Here Int) -> HOut))
     (@alloc arena)
-    (let ((hy (hyper-indexed arena env (. h hx) (hctx-of h))) (mut out (list-new arena Cand)))
+    (let ((hy (hyper-indexed arena env (. h hx) (hctx-of h) room)) (mut out (list-new arena Cand)))
       (do (for-each (oc (. (. h hx) bodiless))
-            (for-each (c (hyper-bodiless arena st dl h oc)) (list-push out c)))
+            (when (<= (+ (list-len out) (list-len (. (. hy out) cands))) room)
+              (for-each (c (hyper-bodiless arena st dl h oc)) (list-push out c))))
           (for-each (c (. (. hy out) cands)) (list-push out c))
           (record-new HOut (out (out-of out (. (. hy out) over))) (tried (. hy tried))))))
 
@@ -339,7 +359,7 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (p1 p1s)
-            (when (and (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq))
+            (when (and (roomy out h) (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq))
               (for-each (p2 p2s)
                 (when (. p2 maxed)
                   (do (for-each (c (eq-side arena st h p1 (cast U32 1) p2)) (list-push out c))
@@ -355,9 +375,21 @@
     (@intent "Eq from side k1 of p1's equality into p2, if p2's selected literal holds that side at some position")
     (@spec ((Arena Structure Here Premise U32 Premise) -> (List Cand)))
     (@alloc arena)
+    ;; A firing builds its conclusions in a scratch arena of its own, and
+    ;; only they are copied out: kept for the round, the rewriting's
+    ;; intermediate lists cost some 20 KB a conclusion, and a W3C pigeonhole
+    ;; test's Eq passed 9 GB on them (slice 11b).
     (if (holds-term (. p2 sel) (if (== k1 (cast U32 1)) (. (. p1 sel) t1) (. (. p1 sel) t2)))
-      (eq-positions arena (. st ord) (. h v) (. h root) p1 k1 p2)
+      (let ((tmp (arena-new 65536))
+            (out (copy-cands arena (eq-positions tmp (. st ord) (. h v) (. h root) p1 k1 p2))))
+        (do (arena-free tmp) out))
       (list-new arena Cand)))
+
+  (fn copy-cands ((arena Arena) (cs (List Cand)))
+    (@intent "cs, each conclusion copied into arena")
+    (@spec ((Arena (List Cand)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand))) (do (for-each (c cs) (list-push out (copy-cand arena c))) out)))
 
   (fn holds-term ((l Lit) (s ATerm))
     (@intent "Is s the subterm of l at one of Eq's four positions (either argument, outer or inner)?")
@@ -372,26 +404,47 @@
     (@pure)
     (match (subterm-at l (record-new Pos (arg a) (inner inner))) ((some t) (aterm-eq t s)) ((none) false)))
 
-  (fn sat-table2 ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here))
+  (fn sat-table2 ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here) (room Int))
     (@intent "Table 2 but Nom, anchored on Δ_v: Core in a new context; Hyper; Eq with either premise new; Ineq and
-              Factor on the new; Join with either side new; and, away from the root, Eq and Join with a premise from G")
-    (@spec ((Arena Env Structure Delta Here) -> HOut))
+              Factor on the new; Join with either side new; and, away from the root, Eq and Join with a premise from G.
+              Once the conclusions pass room, the later steps are skipped")
+    (@spec ((Arena Env Structure Delta Here Int) -> HOut))
     (@alloc arena)
-    (let ((hy (sat-hyper arena env st dl h))
+    (let ((hy (sat-hyper arena env st dl h room))
           (mut out (list-new arena Cand)))
       (do (when (. h fresh) (for-each (c (ref-core arena (. h v) (core-at env st arena (cast Int (. h v)))))
                               (list-push out c)))
-          (when (not (. h root))
+          (when (and (not (. h root)) (within out (. (. hy out) cands) room))
             (do (for-each (c (eq-ground arena st h)) (list-push out c))
-                (for-each (c (join-ground arena h)) (list-push out c))))
+                (when (within out (. (. hy out) cands) room)
+                  (for-each (c (join-ground arena h)) (list-push out c)))))
           (for-each (c (. (. hy out) cands)) (list-push out c))
-          (for-each (c (eq-pairs arena st h (. h dps) (. h aps))) (list-push out c))
-          (for-each (c (eq-pairs arena st h (. h ops) (. h dps))) (list-push out c))
-          (for-each (c (ref-ineq arena (. h v) (. h dps))) (list-push out c))
-          (for-each (c (ref-factor arena (. st ord) (. h v) (. h dps))) (list-push out c))
-          (for-each (c (sat-join arena (. h v) (. h dps) (join-sites arena (. h all)))) (list-push out c))
-          (for-each (c (sat-join arena (. h v) (. h ops) (join-sites arena (. h news)))) (list-push out c))
+          (when (<= (cast Int (list-len out)) room) (set! out (t2-rest arena st h out room)))
           (record-new HOut (out (out-of out (. (. hy out) over))) (tried (. hy tried))))))
+
+  (fn within ((a (List Cand)) (b (List Cand)) (room Int))
+    (@intent "Are a and b together within room?")
+    (@spec (((List Cand) (List Cand) Int) -> Bool))
+    (@pure)
+    (<= (+ (cast Int (list-len a)) (cast Int (list-len b))) room))
+
+  (fn t2-rest ((arena Arena) (st Structure) (h Here) (sofar (List Cand)) (room Int))
+    (@intent "sofar, then Eq, Ineq, Factor and Join, each while the list is within room")
+    (@spec ((Arena Structure Here (List Cand) Int) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out sofar))
+    (do (for-each (c (eq-pairs arena st h (. h dps) (. h aps))) (list-push out c))
+        (when (<= (cast Int (list-len out)) room)
+          (for-each (c (eq-pairs arena st h (. h ops) (. h dps))) (list-push out c)))
+        (when (<= (cast Int (list-len out)) room)
+          (for-each (c (ref-ineq arena (. h v) (. h dps))) (list-push out c)))
+        (when (<= (cast Int (list-len out)) room)
+          (for-each (c (ref-factor arena (. st ord) (. h v) (. h dps))) (list-push out c)))
+        (when (<= (cast Int (list-len out)) room)
+          (for-each (c (sat-join arena (. h v) (. h dps) (join-sites arena (. h all)) room)) (list-push out c)))
+        (when (<= (cast Int (list-len out)) room)
+          (for-each (c (sat-join arena (. h v) (. h ops) (join-sites arena (. h news)) room)) (list-push out c)))
+        out)))
 
   ;; ============================================================
   ;; The shared ground view, in Table 2 (SPEC §5.5, slice 9d)
@@ -436,9 +489,9 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (p1 p1s)
-            (when (and (. p1 maxed) (joinable (. p1 sel)))
+            (when (and (roomy out h) (. p1 maxed) (joinable (. p1 sel)))
               (for-each (i (g-body-members arena (. h gd) (. p1 sel)))
-                (when (g-counts h i which)
+                (when (and (roomy out h) (g-counts h i which))
                   (for-each (c (join-into-member arena h p1 (g-member (. h gd) i (empty-clause arena))))
                     (list-push out c))))))
           out)))
@@ -475,12 +528,13 @@
     (let ((gn (g-prems arena h 1 true)) (go (g-prems arena h 2 true)) (mut out (list-new arena Cand)))
       (do (when (has-eq (. h dps)) (for-each (c (eq-pairs arena st h (. h dps) (g-prems arena h 0 false)))
                                      (list-push out c)))
-          (when (has-eq (. h ops))
+          (when (and (roomy out h) (has-eq (. h ops)))
             (for-each (c (eq-pairs arena st h (. h ops) (g-prems arena h 1 false))) (list-push out c)))
-          (for-each (c (eq-pairs arena st h gn (. h aps))) (list-push out c))
-          (for-each (c (eq-pairs arena st h go (. h dps))) (list-push out c))
-          (when (> (list-len gn) 0) (for-each (c (eq-pairs arena st h gn (g-prems arena h 0 false))) (list-push out c)))
-          (when (> (list-len go) 0)
+          (when (roomy out h) (for-each (c (eq-pairs arena st h gn (. h aps))) (list-push out c)))
+          (when (roomy out h) (for-each (c (eq-pairs arena st h go (. h dps))) (list-push out c)))
+          (when (and (roomy out h) (> (list-len gn) 0))
+            (for-each (c (eq-pairs arena st h gn (g-prems arena h 0 false))) (list-push out c)))
+          (when (and (roomy out h) (> (list-len go) 0))
             (for-each (c (eq-pairs arena st h go (g-prems arena h (if (. h fresh) 0 1) false))) (list-push out c)))
           out)))
 
@@ -490,9 +544,9 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (c (join-into-g arena h (. h dps) 0)) (list-push out c))
-          (for-each (c (join-into-g arena h (. h ops) 1)) (list-push out c))
-          (for-each (c (join-from-g arena h (join-sites arena (. h all)) 1)) (list-push out c))
-          (for-each (c (join-from-g arena h (join-sites arena (. h news)) 2)) (list-push out c))
+          (when (roomy out h) (for-each (c (join-into-g arena h (. h ops) 1)) (list-push out c)))
+          (when (roomy out h) (for-each (c (join-from-g arena h (join-sites arena (. h all)) 1)) (list-push out c)))
+          (when (roomy out h) (for-each (c (join-from-g arena h (join-sites arena (. h news)) 2)) (list-push out c)))
           out)))
 
   (fn join-from-g ((arena Arena) (h Here) (sites (List JoinSite)) (which Int))
@@ -504,7 +558,7 @@
       (do (for-each (s sites)
             (match (site-lit s)
               ((none) (set! out out))
-              ((some l) (for-each (c (join-site-g arena h s l which)) (list-push out c)))))
+              ((some l) (when (roomy out h) (for-each (c (join-site-g arena h s l which)) (list-push out c))))))
           out)))
 
   (fn join-site-g ((arena Arena) (h Here) (s JoinSite) (l Lit) (which Int))
@@ -513,7 +567,7 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (k (g-sel-range arena (. h gd) l))
-            (when (g-picks h k which)
+            (when (and (roomy out h) (g-picks h k which))
               (for-each (c (join-g-one arena h s (g-premise-at (. h gd) k (fallback-premise arena))))
                 (list-push out c))))
           out)))
@@ -594,14 +648,14 @@
     (@pure)
     (list-get (. (. s c) body) (. s j)))
 
-  (fn sat-join ((arena Arena) (v U32) (p1s (List Premise)) (sites (List JoinSite)))
+  (fn sat-join ((arena Arena) (v U32) (p1s (List Premise)) (sites (List JoinSite)) (room Int))
     (@intent "Join of each maximal premise of p1s with a joinable selected literal against each site holding that
               literal")
-    (@spec ((Arena U32 (List Premise) (List JoinSite)) -> (List Cand)))
+    (@spec ((Arena U32 (List Premise) (List JoinSite) Int) -> (List Cand)))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (p1 p1s)
-            (when (and (. p1 maxed) (joinable (. p1 sel)))
+            (when (and (<= (cast Int (list-len out)) room) (. p1 maxed) (joinable (. p1 sel)))
               (for-each (c (join-one arena v p1 sites)) (list-push out c))))
           out)))
 
@@ -1129,36 +1183,57 @@
           (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges es) (ord (. st ord))))))
 
   (fn sat-ctx ((arena Arena) (env Env) (hx HIdx) (ixs (List CIdx)) (rs RSrcs) (st Structure) (dl Delta) (gd Ground)
-               (a Adj) (v Int) (perm Int) (dfr Bool) (views Bool))
+               (a Adj) (v Int) (perm Int) (dfr Bool) (views Bool) (room Int))
     (@intent "Derive in context v: every instance when v is new (the root, in the first round, as the reference does),
               else those anchored on Δ")
-    (@spec ((Arena Env HIdx (List CIdx) RSrcs Structure Delta Ground Adj Int Int Bool Bool) -> CRound))
+    (@spec ((Arena Env HIdx (List CIdx) RSrcs Structure Delta Ground Adj Int Int Bool Bool Int) -> CRound))
     (@alloc arena)
     (let ((lst (local st a arena)))
       (if (and (>= v (. dl nctx)) (is-root st v))
-        (record-new CRound (r (ctx-round arena env lst (cast U32 v))) (tried 0))
-        (sat-old arena env lst dl (. a ins) (here-of arena env lst dl gd hx ixs rs v perm dfr views)))))
+        (let ((r (ctx-round arena (with-room env room) lst (cast U32 v))))
+          (record-new CRound (r r) (tried 0) (big (> (cast Int (list-len (. r cands))) room))))
+        (sat-old arena env lst dl (. a ins) (here-room (here-of arena env lst dl gd hx ixs rs v perm dfr views) room)
+                 room))))
 
-  (fn sat-old ((arena Arena) (env Env) (st Structure) (dl Delta) (ins (List Edge)) (h Here))
-    (@intent "Derive in one context, anchored on Δ, or every instance when it is new")
-    (@spec ((Arena Env Structure Delta (List Edge) Here) -> CRound))
+  (fn sat-old ((arena Arena) (env Env) (st Structure) (dl Delta) (ins (List Edge)) (h Here) (room Int))
+    (@intent "Derive in one context, anchored on Δ, or every instance when it is new; past room, big, with the rest
+              skipped")
+    (@spec ((Arena Env Structure Delta (List Edge) Here Int) -> CRound))
     (@alloc arena)
-    (let ((t2 (sat-table2 arena env st dl h))
+    (let ((t2 (sat-table2 arena env st dl h room)))
+      (if (> (cast Int (list-len (. (. t2 out) cands))) room)
+        (record-new CRound (r (round-of (. (. t2 out) cands) (list-new arena SuccAct) (list-new arena RSuccAct)
+                                        (list-new arena NomAct) (. (. t2 out) over)))
+                           (tried (. t2 tried)) (big true))
+        (sat-old-rest arena env st dl ins h room t2))))
+
+  (fn sat-old-rest ((arena Arena) (env Env) (st Structure) (dl Delta) (ins (List Edge)) (h Here) (room Int) (t2 HOut))
+    (@intent "sat-old after Table 2: Nom, Pred, r-Pred and the Succ actions; big when the conclusions pass room")
+    (@spec ((Arena Env Structure Delta (List Edge) Here Int HOut) -> CRound))
+    (@alloc arena)
+    ;; Each step runs only while the conclusions so far are within room;
+    ;; past it the round is abandoned, so the rest, Succ's actions included,
+    ;; would be work thrown away.
+    (let ((t2c (. (. t2 out) cands))
           (nom (sat-nom arena env st dl h))
-          (pr (if (. h root) (out-of (list-new arena Cand) false) (sat-pred arena env st dl h ins)))
-          (rp (if (. h root) (out-of (list-new arena Cand) false) (sat-rpred arena env st dl h)))
+          (skip (out-of (list-new arena Cand) false))
+          (pr (if (or (. h root) (not (within t2c (. nom cands) room))) skip (sat-pred arena env st dl h ins)))
+          (rp (if (or (. h root) (not (within t2c (append-cands arena (. nom cands) (. pr cands)) room))) skip
+                (sat-rpred arena env st dl h)))
           (mut cands (list-new arena Cand)))
-      (do (for-each (c (. (. t2 out) cands)) (list-push cands c))
+      (do (for-each (c t2c) (list-push cands c))
           (for-each (c (. nom cands)) (list-push cands c))
           (for-each (c (. pr cands)) (list-push cands c))
           (for-each (c (. rp cands)) (list-push cands c))
-          (record-new CRound
-            (r (round-of cands
-                         (sat-succ arena env st h (succ-premises arena env st h))
-                         (if (. h root) (list-new arena RSuccAct) (ref-rsucc arena env st (. h v) (. h dps)))
-                         (. nom noms)
-                         (or (. (. t2 out) over) (. pr over) (. rp over))))
-            (tried (. t2 tried))))))
+          (let ((big (> (cast Int (list-len cands)) room)))
+            (record-new CRound
+              (r (round-of cands
+                           (if big (list-new arena SuccAct) (sat-succ arena env st h (succ-premises arena env st h)))
+                           (if (or big (. h root)) (list-new arena RSuccAct) (ref-rsucc arena env st (. h v) (. h dps)))
+                           (. nom noms)
+                           (or (. (. t2 out) over) (. pr over) (. rp over))))
+              (tried (. t2 tried))
+              (big big))))))
 
   (fn edge-at ((es (List Edge)) (k Int) (fallback Edge))
     (@intent "Element k")
@@ -1235,33 +1310,52 @@
   ;; A round's derive, or one context's, and the Hyper choices it tried.
   (type CRound (record
     (r     Round)
-    (tried Int)))
+    (tried Int)
+    (big   Bool)))   ; the round's conclusions passed the room the clause budget left: abandoned (sat-round)
+
+  (fn passes ((cr CRound) (cands (List Cand)) (room Int))
+    (@intent "Has the round passed its room: this context big, or the conclusions so far past room?")
+    (@spec ((CRound (List Cand) Int) -> Bool))
+    (@pure)
+    (or (. cr big) (> (cast Int (list-len cands)) room)))
 
   (fn sat-round ((arena Arena) (env Env) (hx HIdx) (st Structure) (dl Delta) (gd Ground) (perm Int) (dfr Bool)
-                  (vw (List View)))
+                  (vw (List View)) (room Int))
     (@intent "Derive over every context of the frozen structure, each but the root reading G beside its own set; with
-              views (vw), each clause's premise flags come from the store")
-    (@spec ((Arena Env HIdx Structure Delta Ground Int Bool (List View)) -> CRound))
+              views (vw), each clause's premise flags come from the store. Once the round's conclusions pass room, the
+              rest are skipped and the round is big")
+    (@spec ((Arena Env HIdx Structure Delta Ground Int Bool (List View) Int) -> CRound))
     (@alloc arena)
+    ;; THE CLAUSE BUDGET INSIDE A ROUND (SPEC §5.5, slice 11b). A round can
+    ;; outgrow memory long before the store, read at its boundary, passes
+    ;; the budget: OBI's seventh does, from 716k stored clauses. So the
+    ;; count of conclusions is read after each context. It only grows, and a
+    ;; round's conclusions depend only on the store it starts from, so
+    ;; whether it passes room does not depend on the context order or the
+    ;; worker count, only how soon that is seen.
     (let ((adj (adjacency arena st))
           (views (> (list-len vw) 0))
           (ixs (all-ixs arena env st dl perm vw))
           (rs (rsrcs-of arena env st dl))
           (mut cands (list-new arena Cand)) (mut succs (list-new arena SuccAct))
           (mut rsuccs (list-new arena RSuccAct)) (mut noms (list-new arena NomAct))
-          (mut over false) (mut tried 0))
+          (mut over false) (mut tried 0) (mut big false))
       (do (for-each (v (ctx-order arena (cast Int (list-len (. st ctxs))) perm))
             (match (list-get adj v)
               ((none) (set! over over))
               ((some a)
-                (let ((cr (sat-ctx arena env hx ixs rs st dl gd a v perm dfr views)) (r (. cr r)))
-                  (do (set! tried (+ tried (. cr tried)))
-                      (for-each (x (. r cands)) (list-push cands x))
-                      (for-each (x (. r succs)) (list-push succs x))
-                      (for-each (x (. r rsuccs)) (list-push rsuccs x))
-                      (for-each (x (. r noms)) (list-push noms x))
-                      (when (. r over) (set! over true)))))))
-          (record-new CRound (r (round-of cands succs rsuccs noms over)) (tried tried)))))
+                (when (not big)
+                  (let ((cr (sat-ctx arena env hx ixs rs st dl gd a v perm dfr views
+                                     (- room (cast Int (list-len cands)))))
+                        (r (. cr r)))
+                    (do (set! tried (+ tried (. cr tried)))
+                        (for-each (x (. r cands)) (list-push cands x))
+                        (for-each (x (. r succs)) (list-push succs x))
+                        (for-each (x (. r rsuccs)) (list-push rsuccs x))
+                        (for-each (x (. r noms)) (list-push noms x))
+                        (when (. r over) (set! over true))
+                        (when (passes cr cands room) (set! big true))))))))
+          (record-new CRound (r (round-of cands succs rsuccs noms over)) (tried tried) (big big)))))
 
   ;; ============================================================
   ;; Create and commit
@@ -2134,10 +2228,14 @@
           (seen (if dfr (projected scratch (. run st) (. run dl) (. run trig))
                   (record-new Seen (st (. run st)) (dl (. run dl)))))
           (vw (if (. cfg views) (views-of scratch (. run st) (. run flags)) (list-new scratch View)))
-          (sr (sat-round scratch env hx (. seen st) (. seen dl) gd (. cfg perm) dfr vw))
+          (sr (sat-round scratch env hx (. seen st) (. seen dl) gd (. cfg perm) dfr vw
+                         (- (. (. cfg base) cls) (view-total (. run st)))))
           (r (. sr r)))
-      (if (. r over)
-        (record-new Run (st (. run st)) (dl (. run dl)) (status 'rs-product) (rounds (. run rounds)) (going false)
+      ;; A round stopped by a cap inside it is not committed: the run is as
+      ;; it was, and its round count unchanged (sat-run reads that).
+      (if (or (. r over) (. sr big))
+        (record-new Run (st (. run st)) (dl (. run dl)) (status (if (. sr big) 'rs-clauses 'rs-product))
+                        (rounds (. run rounds)) (going false)
                         (trig (. run trig)) (flags (. run flags)) (counts (. run counts)))
         (let ((sp (with-units scratch (. env tr) (sat-apply scratch (. run st) gd r (. cfg scan) dfr (. run trig)
                                                             (. run flags))))
@@ -2238,7 +2336,7 @@
     (@intent "hyper-ix-agrees on one context")
     (@spec ((Arena Env HIdx Here) -> Bool))
     (@alloc arena)
-    (let ((mine (hyper-indexed arena env hx (hctx-of h)))
+    (let ((mine (hyper-indexed arena env hx (hctx-of h) ROOM_OFF))
           (start (hyper-start arena (at-x) (not (. h root))))
           (mut theirs (list-new arena Cand)) (mut over (. (. mine out) over)))
       (do (for-each (oc (. hx bodied))
@@ -2326,7 +2424,7 @@
                     (let ((scratch (arena-new 1048576))
                           (next (arena-new 1048576))
                           (nr (sat-once next scratch env hx cfg dfr run)))
-                      (do (if (== (. nr status) 'rs-product)
+                      (do (if (== (. nr rounds) (. run rounds))
                             (arena-free next)
                             (do (arena-free held) (set! held next)))
                           (arena-free scratch)

@@ -1,0 +1,26 @@
+# sriq: auto's step-down (§5.1) must not discard a definitive finding. A is
+# unsatisfiable at once (B and C are disjoint), while a chain of r-successors
+# under a functional r (out of el and el++, so auto chooses sriq) keeps the
+# run going for rounds after. A clause budget that stops the run after A's
+# clash keeps sriq's incoherent answer; one that stops it before steps down.
+# Expect: A unsatisfiable.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:K1 a owl:Class . :K2 a owl:Class . :K3 a owl:Class . :K4 a owl:Class .
+:K5 a owl:Class . :K6 a owl:Class . :K7 a owl:Class . :K8 a owl:Class .
+:r a owl:ObjectProperty , owl:FunctionalProperty .
+:B owl:disjointWith :C .
+:A rdfs:subClassOf :B , :C .
+:K1 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K2 ] .
+:K2 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K3 ] .
+:K3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K4 ] .
+:K4 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K5 ] .
+:K5 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K6 ] .
+:K6 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K7 ] .
+:K7 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K8 ] .
+:K8 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :K1 ] .

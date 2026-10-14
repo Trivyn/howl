@@ -949,6 +949,7 @@ struct types_ReasonerConfig {
     uint8_t strict_profile;
     int64_t cancel_ptr;
     uint8_t verbose;
+    int64_t clause_budget;
 };
 typedef struct types_ReasonerConfig types_ReasonerConfig;
 
@@ -979,6 +980,7 @@ struct types_Outcome {
     int64_t rounds;
     types_Names names;
     slop_list_arena_ptr owned;
+    uint8_t stepped_down;
 };
 typedef struct types_Outcome types_Outcome;
 
@@ -1208,6 +1210,8 @@ types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
 types_Verdict types_verdict(types_Outcome o);
+
+#define types_SRIQ_CLAUSE_BUDGET (500000)
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED

@@ -50,7 +50,7 @@
           ;; so both order ids, choices and conclusions the same way.
           Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
           set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
-          ref-core slot-cands x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
+          with-room copy-cand ref-core slot-cands x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
           dl4-of nom-first nom-second nom-pair ref-nom ref-succ ref-rsucc
           pslot-cands pred-one pred-run pred-edge away-job root-job slots-of rpred-job rslots ref-rpred ctx-round
           edge-is add-consts add-contexts add-edges action-cands unit-clause cand-at cand-cmp
@@ -75,7 +75,9 @@
     (lam    Int)
     (prod   Int)
     (nconst Int)               ; O's individuals: the constants Nom did not make
-    (nobody (List Clause))))   ; an empty list: the set of a missing context
+    (nobody (List Clause))     ; an empty list: the set of a missing context
+    (room   Int)))             ; conclusions a context may derive before the rest is skipped: the
+                               ; prototype's clause budget (sriqsat); unlimited in the reference
 
   (type Cand (record
     (ctx U32)
@@ -295,13 +297,27 @@
     (@intent "Hyper's conclusions into v for one ontology clause, over choices 0 to n - 1 of its slots' premises")
     (@spec ((Arena U32 HState Clause (List (List Premise)) Int Premise) -> (List Cand)))
     (@alloc arena)
+    ;; Each choice's state is built in a scratch arena of its own and only
+    ;; the conclusion is copied out: a choice folds hyper-step over every
+    ;; body atom, and kept for the round its intermediate lists cost far
+    ;; more than its conclusion (a W3C pigeonhole test's 59,049 choices
+    ;; passed 8 GB). Lit holds only scalars, so the copy is complete.
     (let ((mut out (list-new arena Cand)) (mut t 0))
       (do (while (< t n)
-            (do (for-each (c (conclusion arena v (hyper-finish arena (hyper-choice arena start (. oc body) cs t p0)
+            (let ((tmp (arena-new 65536)))
+              (do (for-each (c (conclusion tmp v (hyper-finish tmp (hyper-choice tmp start (. oc body) cs t p0)
                                                                (. oc head))))
-                  (list-push out c))
-                (set! t (+ t 1))))
+                    (list-push out (copy-cand arena c)))
+                  (arena-free tmp)
+                  (set! t (+ t 1)))))
           out)))
+
+  (fn copy-cand ((arena Arena) (c Cand))
+    (@intent "c, its clause's body and head copied into arena")
+    (@spec ((Arena Cand) -> Cand))
+    (@alloc arena)
+    (record-new Cand (ctx (. c ctx)) (c (record-new Clause (body (copy-lits arena (. (. c c) body)))
+                                                         (head (copy-lits arena (. (. c c) head)))))))
 
   (fn hyper-bodiless ((arena Arena) (st Structure) (v U32) (root Bool) (oc Clause))
     (@intent "Hyper on a bodiless ontology clause: x itself away from the root; at the root each constant of U_H (E4)")
@@ -329,12 +345,19 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut over false))
       (do (for-each (oc (. env onto))
-            (if (== (list-len (. oc body)) 0)
-              (for-each (c (hyper-bodiless arena st v root oc)) (list-push out c))
-              (let ((o (hyper-with arena env v root (hyper-start arena (at-x) (not root)) oc ps)))
+            (when (<= (cast Int (list-len out)) (. env room))
+              (let ((o (hyper-one arena env st v root oc ps)))
                 (do (for-each (c (. o cands)) (list-push out c))
                     (when (. o over) (set! over true))))))
           (out-of out over))))
+
+  (fn hyper-one ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (oc Clause) (ps (List Premise)))
+    (@intent "Hyper on one ontology clause, bodiless or not")
+    (@spec ((Arena Env Structure U32 Bool Clause (List Premise)) -> Out))
+    (@alloc arena)
+    (if (== (list-len (. oc body)) 0)
+      (out-of (hyper-bodiless arena st v root oc) false)
+      (hyper-with arena env v root (hyper-start arena (at-x) (not root)) oc ps)))
 
   (fn eq-positions ((arena Arena) (ord SriqOrder) (v U32) (root Bool) (p1 Premise) (k1 U32) (p2 Premise))
     (@intent "Eq for one equality side k1 of p1 into p2, at each of the four positions")
@@ -807,10 +830,12 @@
           (h (ref-hyper arena env st v root ps))
           (mut out (ref-core arena v (core-at env st arena (cast Int v)))))
       (do (for-each (c (. h cands)) (list-push out c))
-          (for-each (c (ref-eq arena ord v root ps)) (list-push out c))
-          (for-each (c (ref-ineq arena v ps)) (list-push out c))
-          (for-each (c (ref-factor arena ord v ps)) (list-push out c))
-          (for-each (c (ref-join arena v ps cs)) (list-push out c))
+          ;; Past the room (the prototype's budget), the rest is skipped.
+          (when (<= (cast Int (list-len out)) (. env room))
+            (do (for-each (c (ref-eq arena ord v root ps)) (list-push out c))
+                (for-each (c (ref-ineq arena v ps)) (list-push out c))
+                (for-each (c (ref-factor arena ord v ps)) (list-push out c))
+                (for-each (c (ref-join arena v ps cs)) (list-push out c))))
           (out-of out (. h over)))))
 
   (fn ctx-round ((arena Arena) (env Env) (st Structure) (v U32))
@@ -820,8 +845,17 @@
     (let ((root (is-root st (cast Int v)))
           (cs (set-of env st (cast Int v)))
           (ps (premises-of arena (. st ord) (set-of env st (cast Int v))))
-          (t2 (ctx-table2 arena env st v root cs ps))
-          (nom (ref-nom arena env (. st ord) v ps))
+          (t2 (ctx-table2 arena env st v root cs ps)))
+      (if (> (cast Int (list-len (. t2 cands))) (. env room))
+        (round-of (. t2 cands) (list-new arena SuccAct) (list-new arena RSuccAct) (list-new arena NomAct) (. t2 over))
+        (ctx-round-rest arena env st v root cs ps t2))))
+
+  (fn ctx-round-rest ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (cs (List Clause)) (ps (List Premise))
+                      (t2 Out))
+    (@intent "ctx-round after Table 2: Nom, Pred, r-Pred and the Succ actions")
+    (@spec ((Arena Env Structure U32 Bool (List Clause) (List Premise) Out) -> Round))
+    (@alloc arena)
+    (let ((nom (ref-nom arena env (. st ord) v ps))
           (pr (if root (out-of (list-new arena Cand) false) (ref-pred arena env st v cs)))
           (rp (if root (out-of (list-new arena Cand) false) (ref-rpred arena env st v ps)))
           (mut cands (list-new arena Cand)))
@@ -1194,7 +1228,14 @@
     (@spec ((Arena RefIn RefConfig Triggers Int) -> Env))
     (@alloc arena)
     (record-new Env (onto (. in onto)) (tr tr) (strat (. cfg strat)) (lam lam) (prod (. cfg prod))
-                    (nconst (. in nconst)) (nobody (list-new arena Clause))))
+                    (nconst (. in nconst)) (nobody (list-new arena Clause)) (room 2147483647)))
+
+  (fn with-room ((env Env) (room Int))
+    (@intent "env with its room set: past room conclusions, a context's remaining work is skipped")
+    (@spec ((Env Int) -> Env))
+    (@pure)
+    (record-new Env (onto (. env onto)) (tr (. env tr)) (strat (. env strat)) (lam (. env lam)) (prod (. env prod))
+                    (nconst (. env nconst)) (nobody (. env nobody)) (room room)))
 
   (fn env-for ((arena Arena) (in RefIn) (cfg RefConfig))
     (@intent "The run's Env, rebuilt for a check after the run")

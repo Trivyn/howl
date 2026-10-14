@@ -28,7 +28,7 @@
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document))
-  (import select (select-profile choose-auto profile-implemented unavailable-message))
+  (import select (select-profile choose-auto choose-auto-low profile-implemented unavailable-message))
   (import saturate (RoundResult saturate reuse-arena))
   (import classify (extract-findings entails-sub extract-ksc-findings))
   (import gate (gate-axioms axiom-input-ref))
@@ -36,7 +36,7 @@
   (import owl2 (RawAxiom))
   (import sriqclauses (SriqIds))
   (import sriqref (RefIn copy-clauses))
-  (import sriqabox (Inputs SplitRun split-inputs split-run-of split-findings sriq-config SRIQ_CLAUSE_BUDGET))
+  (import sriqabox (Inputs SplitRun split-inputs split-run-of split-findings sriq-config))
   (import kscnormal (normalize-ksc copy-ksc-axioms copy-kname))
   (import kscsat (ksc-classify input-classes))
   (import premise (RuleIndex build-rule-index))
@@ -173,7 +173,20 @@
     (h       RefIn)
     (c       RefIn)
     (has-c   Bool)
-    (classes (List IRI))))
+    (classes (List IRI))
+    (step    (Option StepDown))))   ; auto's step-down (§5.1), when auto chose sriq
+
+  ;; What auto steps down to when sriq's run passes the clause budget
+  ;; without a definitive finding: the rung el and el++ alone would choose,
+  ;; and the input, owned, to prepare it from. Only an auto run keeps it.
+  (type StepDown (record
+    (profile Profile)
+    (decoded Decoded)))
+
+  ;; auto's choice (§5.1), and the rung it steps down to if that is sriq.
+  (type AutoChoice (record
+    (profile Profile)
+    (low     Profile)))
 
   (type Work (union
     (el-work   ElWork)
@@ -252,7 +265,28 @@
           (error (union-new Fault unavailable profile))
           (prepare-in-profile arena d config profile)))
       ((none)
-        (prepare-in-profile arena d config (auto-profile d)))))
+        (let ((ch (auto-profile d)))
+          (match (prepare-in-profile arena d config (. ch profile))
+            ((ok p)    (ok (with-step-down arena p d (. ch low))))
+            ((error f) (error f)))))))
+
+  (fn with-step-down ((arena Arena) (p Prepared) (d Decoded) (low Profile))
+    (@intent "An auto run's Prepared: under sriq, it keeps the input, owned, and the rung to step down to")
+    (@spec ((Arena Prepared Decoded Profile) -> Prepared))
+    (@alloc arena)
+    ;; The copy costs a Decoded's size for the run's length, and only an
+    ;; auto run that chose sriq pays it.
+    (match (. p work)
+      ((sriq-work w)
+        (record-new Prepared
+          (profile  (. p profile))
+          (work     (union-new Work sriq-work
+                      (record-new SriqWork (h (. w h)) (c (. w c)) (has-c (. w has-c)) (classes (. w classes))
+                                           (step (some (record-new StepDown (profile low)
+                                                                            (decoded (copy-decoded arena d))))))))
+          (coverage (. p coverage))
+          (names    (. p names))))
+      (_ p)))
 
   (fn out-of-profile-count ((oms (List Omission)))
     (@intent "How many omissions are axioms out of the rung's profile")
@@ -271,23 +305,30 @@
         n)))
 
   (fn auto-profile ((d Decoded))
-    (@intent "§5.1's auto for this ontology: el if it omits nothing, else whichever of el and el++ omits fewer")
-    (@spec ((Decoded) -> Profile))
+    (@intent "§5.1's auto for this ontology: the first of el, el++, sriq that omits nothing, else the one omitting
+              fewest; and the rung el and el++ alone would choose, for the step-down")
+    (@spec ((Decoded) -> AutoChoice))
     ;; The gates run in a scratch arena, freed here: only the counts are
-    ;; kept, and the chosen rung's own prepare gates again. el++ is gated
-    ;; only when el leaves something out.
+    ;; kept, and the chosen rung's own prepare gates again. Each rung is
+    ;; gated only when the ones before it leave something out. The counts
+    ;; are the gate's: S1's guard is a size limit, not a language, and
+    ;; does not decide between rungs.
     (let ((scratch (arena-new 16777216))
-          (out-el  (out-of-profile-count
-                     (. (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el) omissions)))
-          (out-pp  (if (== out-el 0)
-                     0
-                     (out-of-profile-count
-                       (. (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el-plus-plus)
-                          omissions))))
-          (chosen  (choose-auto (cast (Int 0 ..) out-el) (cast (Int 0 ..) out-pp))))
+          (out-el  (rung-count scratch d 'profile-el))
+          (out-pp  (if (== out-el 0) 0 (rung-count scratch d 'profile-el-plus-plus)))
+          (out-sq  (if (== out-pp 0) 0 (rung-count scratch d 'profile-sriq)))
+          (chosen  (record-new AutoChoice
+                     (profile (choose-auto (cast (Int 0 ..) out-el) (cast (Int 0 ..) out-pp) (cast (Int 0 ..) out-sq)))
+                     (low     (choose-auto-low (cast (Int 0 ..) out-el) (cast (Int 0 ..) out-pp))))))
       (do
         (arena-free scratch)
         chosen)))
+
+  (fn rung-count ((scratch Arena) (d Decoded) (p Profile))
+    (@intent "How many logical axioms p's gate leaves out of profile")
+    (@spec ((Arena Decoded Profile) -> Int))
+    (@alloc scratch)
+    (out-of-profile-count (. (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) p) omissions)))
 
   (fn prepare-in-profile ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
     (@intent "prepare-decoded once the profile is resolved and implemented")
@@ -393,7 +434,8 @@
               (profile  profile)
               (work     (union-new Work sriq-work
                           (record-new SriqWork (h (copy-refin arena (. in h))) (c (copy-refin arena (. in c)))
-                                               (has-c (. in has-c)) (classes (query-iris arena (. in ids))))))
+                                               (has-c (. in has-c)) (classes (query-iris arena (. in ids)))
+                                               (step (none)))))
               (coverage cov)
               (names    (empty-names arena)))))))
 
@@ -486,7 +528,8 @@
                   (evidence    (union-new Evidence el-evidence (. rr saturation)))
                   (rounds      (. (. rr saturation) iteration))
                   (names       (. p names))
-                  (owned       (. rr arenas)))))))
+                  (owned       (. rr arenas))
+                  (stepped-down false))))))
       ((ksc-work w)
         (match (ksc-classify arena (. w axioms) (. w classes) config)
           ((error f) (error f))
@@ -499,7 +542,8 @@
                   (evidence    (union-new Evidence ksc-evidence r))
                   (rounds      (. r rounds))
                   (names       (. p names))
-                  (owned       (list-new arena Arena)))))))
+                  (owned       (list-new arena Arena))
+                  (stepped-down false))))))
       ((sriq-work w) (sriq-reason arena p w config))))
 
   (fn sriq-reason ((arena Arena) (p Prepared) (w SriqWork) (config ReasonerConfig))
@@ -512,10 +556,51 @@
     ;; resource-limit. An inconsistency is definitive whatever stopped the
     ;; other run, and §6.2's verdict reads it from the findings.
     (let ((sp (split-run-of arena (. w h) (. w c) (. w has-c) false
-                            (sriq-config (cast Int (. config max-iterations)) SRIQ_CLAUSE_BUDGET (. config cancel-ptr)))))
+                            (sriq-config (cast Int (. config max-iterations)) (cast Int (. config clause-budget)) (. config cancel-ptr)))))
       (if (. sp cancelled)
         (error (union-new Fault cancelled))
-        (ok (sriq-outcome arena p w sp)))))
+        (let ((o (sriq-outcome arena p w sp)))
+          (match (. w step)
+            ((some s) (if (steps-down sp o) (step-down arena s config) (ok o)))
+            ((none)   (ok o)))))))
+
+  (fn steps-down ((sp SplitRun) (o Outcome))
+    (@intent "Does auto step down (§5.1)? The run passed the clause budget, and found nothing definitive")
+    (@spec ((SplitRun Outcome) -> Bool))
+    ;; A round cap is the caller's, and is reported as it binds; only the
+    ;; budget means the calculus is too expensive for this input. An
+    ;; inconsistency or an unsatisfiable class is definitive (§6.2), and
+    ;; the run that found it is reported.
+    (and (or (== (. (. (. sp h) res) status) 'rs-clauses)
+             (and (. sp ran-c) (== (. (. (. sp c) res) status) 'rs-clauses)))
+         (not (findings-are-incoherent (. o findings)))))
+
+  (fn step-down ((arena Arena) (s StepDown) (config ReasonerConfig))
+    (@intent "auto's step-down: the input prepared and run under the rung el and el++ alone would choose")
+    (@spec ((Arena StepDown ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; The rerun has the whole round budget: it is the run that answers.
+    (match (prepare-in-profile arena (. s decoded) config (. s profile))
+      ((ok lp)
+        (match (reason arena lp config)
+          ((ok o)    (ok (stepped arena o)))
+          ((error f) (error f))))
+      ((error f) (error f))))
+
+  (fn stepped ((arena Arena) (o Outcome))
+    (@intent "o, marked as auto's step-down")
+    (@spec ((Arena Outcome) -> Outcome))
+    (@alloc arena)
+    (record-new Outcome
+      (profile     (. o profile))
+      (coverage    (. o coverage))
+      (termination (. o termination))
+      (findings    (. o findings))
+      (evidence    (. o evidence))
+      (rounds      (. o rounds))
+      (names       (. o names))
+      (owned       (. o owned))
+      (stepped-down true)))
 
   (fn sriq-outcome ((arena Arena) (p Prepared) (w SriqWork) (sp SplitRun))
     (@intent "The Outcome of a split run that was not cancelled")
@@ -534,7 +619,8 @@
                                               (ran-c (. sp ran-c)))))
       (rounds      (. sp rounds))
       (names       (. p names))
-      (owned       (list-new arena Arena))))
+      (owned       (list-new arena Arena))
+      (stepped-down false)))
 
   (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")
