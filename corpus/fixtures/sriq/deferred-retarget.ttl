@@ -1,0 +1,31 @@
+# sriq: predecessor relevance (SPEC §5.5 S6 R8, slice 9i), target refresh.
+# Y ⊑ ∃s.⊤ and Y ⊑ ∀s.P: s's function symbol has no unary filler in O, so
+# cautious sends Y's successor to v_⊤, which then holds P → P (P(g(x)) is
+# in Y's K₂). There P ⊑ ∃r.B gives
+# P(x) → B(f(x)) and P(x) → r(x, f(x)): a Succ trigger for f whose K₁ is
+# empty, so cautious targets v_⊤ again (B ⊑ Z puts B(x) in Su(O), so K₁
+# can hold it). A delayed chain ⊤ ⊑ K1 ⊑ … ⊑ K12 ⊑ P
+# later gives ⊤ → B(f(x)), so K₁ holds B, f's only filler, and cautious now
+# picks v_B. The old edge's target still covers K₂, so the printed Succ
+# does not fire; deferral's target refresh must add the edge ⟨v_⊤, v_B, f⟩
+# all the same (R8; the third review's counterexample to I3 needs it).
+# Expect: Y ⊑ K1 (and, under cautious with deferral, that edge).
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:B a owl:Class . :P a owl:Class . :Y a owl:Class . :Z a owl:Class .
+:K1 a owl:Class . :K2 a owl:Class . :K3 a owl:Class . :K4 a owl:Class . :K5 a owl:Class . :K6 a owl:Class . :K7 a owl:Class . :K8 a owl:Class . :K9 a owl:Class . :K10 a owl:Class . :K11 a owl:Class . :K12 a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom owl:Thing ] .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:allValuesFrom :P ] .
+:P rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] .
+:B rdfs:subClassOf :Z .
+owl:Thing rdfs:subClassOf :K1 .
+:K1 rdfs:subClassOf :K2 . :K2 rdfs:subClassOf :K3 . :K3 rdfs:subClassOf :K4 .
+:K4 rdfs:subClassOf :K5 . :K5 rdfs:subClassOf :K6 . :K6 rdfs:subClassOf :K7 .
+:K7 rdfs:subClassOf :K8 . :K8 rdfs:subClassOf :K9 . :K9 rdfs:subClassOf :K10 .
+:K10 rdfs:subClassOf :K11 . :K11 rdfs:subClassOf :K12 .
+:K12 rdfs:subClassOf :P .

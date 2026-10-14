@@ -53,7 +53,7 @@
                    in-su in-pr in-sur in-prr lit-ground mentions-x tau-su tau-pr omega omega-d pow2-sat has-lit strat-choice core-of
                    init-structure ctx-count ctx-at ctx-by-core ctx-clause-ok q-inconsistent q-unsat q-holds q-thing))
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
-  (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees))
+  (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees defer-on defer-stable))
   (import sriqindex (commit-indexed KIdx k-index k-query))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts ranked aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt
                      max-flags))
@@ -5985,11 +5985,17 @@
     (@intent "Every finished run: complete, its clauses context clauses (Definitions 2 and 3), its sets min, one more round changing nothing, and the combinators agreeing with the reference")
     (@spec ((Arena String RefIn Strategy RefResult) -> Bool))
     (@alloc arena)
+    (run-checks-with arena label in s r true))
+
+  (fn run-checks-with ((arena Arena) (label String) (in RefIn) (s Strategy) (r RefResult) (stable Bool))
+    (@intent "run-checks; without stable, one more round is not run (a deferred run is saturated only for its supported clauses, which proto-agrees checks)")
+    (@spec ((Arena String RefIn Strategy RefResult Bool) -> Bool))
+    (@alloc arena)
     (and (ref-says (string-concat arena (string-concat arena label ": complete, but stopped on ") (status-name (. r status))) s (complete-run r) true)
          (ref-says (string-concat arena label ": context clauses") s (all-ctx-clauses arena (. r st)) true)
          (ref-says (string-concat arena label ": min sets") s (all-min arena (. r st)) true)
          (ref-says (string-concat arena label ": saturated after Elim") s
-                   (or (== (. r status) 'rs-inconsistent) (ref-stable arena in (ref-cfg s) (. r st))) true)
+                   (or (not stable) (== (. r status) 'rs-inconsistent) (ref-stable arena in (ref-cfg s) (. r st))) true)
          (ref-says (string-concat arena label ": combinators agree") s (combinators-agree arena in (ref-cfg s) (. r st)) true)))
 
   (fn all-ctx-clauses ((arena Arena) (st Structure))
@@ -6219,7 +6225,7 @@
   (type Expect (record (file String) (kind Int) (a String) (b String)))
 
   (fn expects ((arena Arena))
-    (@intent "The 9 sriq fixtures' expectations")
+    (@intent "The sriq fixtures' expectations")
     (@spec ((Arena) -> (List Expect)))
     (@alloc arena)
     (let ((mut out (list-new arena Expect)))
@@ -6236,6 +6242,9 @@
           (list-push out (record-new Expect (file "union-negation") (kind 0) (a "A") (b "C")))
           (list-push out (record-new Expect (file "tgh21-o1") (kind 0) (a "A") (b "D")))
           (list-push out (record-new Expect (file "ranked-fresh-disjunct") (kind 0) (a "B") (b "A")))
+          (list-push out (record-new Expect (file "deferred-reactivation") (kind 0) (a "X") (b "Q")))
+          (list-push out (record-new Expect (file "deferred-retarget") (kind 0) (a "Y") (b "K1")))
+          (list-push out (record-new Expect (file "deferred-stale-unit") (kind 0) (a "Y") (b "K1")))
           (for-each (e (abox-expects arena)) (list-push out e))
           out)))
 
@@ -6397,15 +6406,20 @@
   ;; ------------------------------------------------------------
 
   (fn sat-cfg ((s Strategy) (perm Int))
-    (@intent "The prototype under the reference's configuration, Δ permuted by perm")
+    (@intent "The prototype under the reference's configuration, Δ permuted by perm, deferral asked for (R8: on in its scope)")
     (@spec ((Strategy Int) -> SatConfig))
-    (record-new SatConfig (base (ref-cfg s)) (perm perm) (scan false)))
+    (sat-cfg-at s perm true))
+
+  (fn sat-cfg-at ((s Strategy) (perm Int) (defer Bool))
+    (@intent "sat-cfg, with deferral asked for or not")
+    (@spec ((Strategy Int Bool) -> SatConfig))
+    (record-new SatConfig (base (ref-cfg s)) (perm perm) (scan false) (defer defer)))
 
   (fn sat-fuel ((s Strategy) (fuel Int))
     (@intent "The prototype capped at fuel rounds")
     (@spec ((Strategy Int) -> SatConfig))
     (record-new SatConfig (base (record-new RefConfig (strat s) (fuel fuel) (lam -1) (ctxs 512) (cls 4000) (prod 1000000) (cnst 8)))
-                          (perm 0) (scan false)))
+                          (perm 0) (scan false) (defer true)))
 
   (fn answers-of ((arena Arena) (st Structure) (n Int))
     (@intent "The raw answers over n query classes: inconsistent, then unsat(B) and holds(B, A) for each pair")
@@ -6443,7 +6457,11 @@
           (p (sat-run arena in (sat-cfg s 0))))
       (if (not (complete-run r))
         (proto-says arena (string-concat arena label ": n/a, as the reference is") s (not (complete-run (. p res))))
-        (and (run-checks arena (string-concat arena label " (prototype, through M)") in s (as-m arena in (. p res)))
+        (and (run-checks-with arena (string-concat arena label " (prototype, through M)") in s (as-m arena in (. p res))
+                              (not (defer-on (sat-cfg s 0) in)))
+             (proto-says arena (string-concat arena label ": deferred, saturated for its supported clauses (R8's P5)") s
+                         (or (not (defer-on (sat-cfg s 0) in)) (== (. (. p res) status) 'rs-inconsistent)
+                             (defer-stable arena in (sat-cfg s 0) p)))
              (proto-says arena (string-concat arena label ": the reference's stop (S4's early stop included)") s
                          (== (. (. p res) status) (. r status)))
              (proto-says arena (string-concat arena label ": the reference's answers") s
@@ -6696,14 +6714,21 @@
           ok)))
 
   (fn test-sriq-proto-work ((arena Arena))
-    (@intent "A pin on the prototype's work: O1 under cautious, in its rounds, candidates, Succ actions and commits, and qualified-max's rounds. Answers cannot see an instance run twice, or one skipped and recovered later; this can. A change to the schedule updates it on purpose")
+    (@intent "A pin on the prototype's work: O1 under cautious, in its rounds, candidates, Succ actions and commits, without deferral and with it (R8: one Succ evaluation per successor term, where S6 takes an action per trigger), and qualified-max's rounds. Answers cannot see an instance run twice, or one skipped and recovered later; this can. A change to the schedule updates it on purpose")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
-    (let ((p (sat-run arena (ref-in (o1-clauses arena) 9 9 2 3 0) (sat-cfg 'st-cautious 0)))
+    (and (o1-work arena false 11) (o1-work arena true 5) (qualified-max-rounds arena)))
+
+  (fn o1-work ((arena Arena) (defer Bool) (succs Int))
+    (@intent "O1 under cautious takes 11 rounds, 36 candidates, succs Succ actions and 33 commits")
+    (@spec ((Arena Bool Int) -> Bool))
+    (@alloc arena)
+    (let ((p (sat-run arena (ref-in (o1-clauses arena) 9 9 2 3 0) (sat-cfg-at 'st-cautious 0 defer)))
           (c (. p counts)))
-      (if (and (== (. (. p res) rounds) 11) (== (. c cands) 36) (== (. c succs) 11) (== (. c added) 33))
-        (qualified-max-rounds arena)
-        (do (print "  [sriq 9a] O1 cautious: rounds ") (print (int-to-string arena (. (. p res) rounds)))
+      (if (and (== (. (. p res) rounds) 11) (== (. c cands) 36) (== (. c succs) succs) (== (. c added) 33))
+        true
+        (do (print "  [sriq 9a] O1 cautious") (when defer (print " (deferred)")) (print ": rounds ")
+            (print (int-to-string arena (. (. p res) rounds)))
             (print ", candidates ") (print (int-to-string arena (. c cands)))
             (print ", succ ") (print (int-to-string arena (. c succs)))
             (print ", committed ") (println (int-to-string arena (. c added)))
@@ -6837,7 +6862,7 @@
     (@spec ((Arena String RefIn Int Strategy) -> Bool))
     (@alloc arena)
     (let ((p (sat-run arena in (sat-cfg s 0)))
-          (q (sat-run arena in (record-new SatConfig (base (ref-cfg s)) (perm 0) (scan true)))))
+          (q (sat-run arena in (record-new SatConfig (base (ref-cfg s)) (perm 0) (scan true) (defer true)))))
       (proto-says arena (string-concat arena label ": the index commits as commit-min does (9b)") s
                   (and (== (. (. p res) status) (. (. q res) status))
                        (== (. (. p res) rounds) (. (. q res) rounds))
@@ -6860,6 +6885,55 @@
                   ((none) (set! ok false)))
                 (set! i (+ i 1))))
           ok)))
+
+  ;; ------------------------------------------------------------
+  ;; Slice 9i: predecessor relevance (SPEC §5.5 S6 R8). The fixture rows
+  ;; check both fixtures' answers under every strategy against the
+  ;; reference; these check the work deferral does on them.
+  ;; ------------------------------------------------------------
+
+  (fn test-sriq-defer-rows ((arena Arena))
+    (@intent "R8 on its fixtures: deferred-reactivation under trivial activates a stored clause; deferred-retarget under cautious holds the edge ⟨v_⊤, v_B, f⟩ that only target refresh adds")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (defer-activates arena) (defer-retargets arena)))
+
+  (fn defer-activates ((arena Arena))
+    (@intent "deferred-reactivation under trivial, deferred: some stored clause became supported and was activated")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (fixture-sc arena (fixture-path arena "deferred-reactivation"))
+      ((none) (proto-says arena "deferred-reactivation: no clauses" 'st-trivial false))
+      ((some sc)
+        (let ((n (. (. (sat-run arena (ref-input arena sc) (sat-cfg 'st-trivial 0)) counts) acts)))
+          (proto-says arena (string-concat arena "deferred-reactivation: activated " (int-to-string arena n)) 'st-trivial
+                      (> n 0))))))
+
+  (fn defer-retargets ((arena Arena))
+    (@intent "deferred-retarget under cautious: the edge ⟨v_⊤, v_B, f⟩ with deferral (target refresh), and not without (the old target covers K₂)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (fixture-sc arena (fixture-path arena "deferred-retarget"))
+      ((none) (proto-says arena "deferred-retarget: no clauses" 'st-cautious false))
+      ((some sc)
+        (let ((b (class-named arena (. sc ids) "B"))
+              (on (sat-run arena (ref-input arena sc) (sat-cfg-at 'st-cautious 0 true)))
+              (off (sat-run arena (ref-input arena sc) (sat-cfg-at 'st-cautious 0 false))))
+          (and (proto-says arena "deferred-retarget: ⟨v_⊤, v_B, f⟩ with deferral" 'st-cautious
+                           (top-edge-to arena (. (. on res) st) b))
+               (proto-says arena "deferred-retarget: no ⟨v_⊤, v_B, f⟩ without deferral" 'st-cautious
+                           (not (top-edge-to arena (. (. off res) st) b))))))))
+
+  (fn top-edge-to ((arena Arena) (st Structure) (b U32))
+    (@intent "Does st hold an f-edge from v_⊤ into the context with core {B(x)}, b being B?")
+    (@spec ((Arena Structure U32) -> Bool))
+    (@alloc arena)
+    (let ((mut core (list-new arena Lit)) (mut found false))
+      (do (list-push core (atom1 b (at-x)))
+          (for-each (e (. st edges))
+            (when (and (== (. e from) (cast U32 1)) (== (. e to) (ctx-by-core st core)) (== (. e lk) 'el-fn))
+              (set! found true)))
+          found)))
 
   (fn test-sriq-index ((arena Arena))
     (@intent "The indexed commit: commit-min's result on the edge row and on every final set, and the prototype through it exactly as through commit-min, on the hand rows and every fixture, under every strategy")
@@ -6973,18 +7047,18 @@
       ((some s)
         (match (sriq-load arena path)
           ((error m) (do (print "n/a: ") (println m) 4))
-          ((ok sc) (if proto (proto-report arena sc s counts 10000) (ref-report arena sc s)))))))
+          ((ok sc) (if proto (proto-report arena sc s counts 10000 true) (ref-report arena sc s)))))))
 
-  (fn sriq-proto ((arena Arena) (path String) (strat String) (counts Bool) (rounds Int))
-    (@intent "The prototype on one file, at most rounds rounds: gate, normalise, the clause boundary, then the run, printed as an oracle report; exit 4 when n/a")
-    (@spec ((Arena String String Bool Int) -> Int))
+  (fn sriq-proto ((arena Arena) (path String) (strat String) (counts Bool) (rounds Int) (defer Bool))
+    (@intent "The prototype on one file, at most rounds rounds, deferral asked for or not: gate, normalise, the clause boundary, then the run, printed as an oracle report; exit 4 when n/a")
+    (@spec ((Arena String String Bool Int Bool) -> Int))
     (@alloc arena)
     (match (parse-strategy strat)
       ((none) (do (println "strategy: trivial, eager or cautious") 2))
       ((some s)
         (match (sriq-load arena path)
           ((error m) (do (print "n/a: ") (println m) 4))
-          ((ok sc) (proto-report arena sc s counts rounds))))))
+          ((ok sc) (proto-report arena sc s counts rounds defer))))))
 
   (fn ref-report ((arena Arena) (sc SriqClauses) (s Strategy))
     (@intent "Run the reference and print its report, or n/a")
@@ -6995,18 +7069,18 @@
         (print-ref-report arena (. sc ids) (. r st) "ref" s (. r rounds))
         (do (print "n/a: ") (println (status-name (. r status))) 4))))
 
-  (fn proto-cfg ((s Strategy) (rounds Int))
+  (fn proto-cfg ((s Strategy) (rounds Int) (defer Bool))
     (@intent "The prototype outside the tests: the round cap only (10,000 unless asked for fewer); no cap on contexts, clauses, choices or constants")
-    (@spec ((Strategy Int) -> SatConfig))
+    (@spec ((Strategy Int Bool) -> SatConfig))
     (record-new SatConfig (base (record-new RefConfig (strat s) (fuel rounds) (lam -1) (ctxs 2147483647) (cls 2147483647)
                                                       (prod 2147483647) (cnst 2147483647)))
-                          (perm 0) (scan false)))
+                          (perm 0) (scan false) (defer defer)))
 
-  (fn proto-report ((arena Arena) (sc SriqClauses) (s Strategy) (counts Bool) (rounds Int))
+  (fn proto-report ((arena Arena) (sc SriqClauses) (s Strategy) (counts Bool) (rounds Int) (defer Bool))
     (@intent "Run the prototype and print its report, or n/a; with counts, its work as `count` lines after the report")
-    (@spec ((Arena SriqClauses Strategy Bool Int) -> Int))
+    (@spec ((Arena SriqClauses Strategy Bool Int Bool) -> Int))
     (@alloc arena)
-    (let ((p (sat-run arena (ref-input arena sc) (proto-cfg s rounds))) (r (. p res)))
+    (let ((p (sat-run arena (ref-input arena sc) (proto-cfg s rounds defer))) (r (. p res)))
       (do (when counts (print-counts arena p))
           (if (complete-run r)
             (print-ref-report arena (. sc ids) (. r st) "proto" s (. r rounds))
@@ -7061,6 +7135,7 @@
           (count-line arena "candidates" (. c cands))
           (count-line arena "root-candidates" (. c rcands))
           (count-line arena "committed" (. c added))
+          (count-line arena "activated" (. c acts))
           (count-line arena "succ" (. c succs))
           (count-line arena "rsucc" (. c rsuccs))
           (count-line arena "nom-children" (. c noms))
@@ -11186,25 +11261,26 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
       ((and (== argc 4) (string-eq (arg-text argv 1) "sriq-ref"))
         (with-arena 4194304 (sriq-ref arena (arg-text argv 2) (arg-text argv 3) false false)))
       ;; The prototype: howl-test sriq-run FILE [STRATEGY] [--counts].
-      ((and (>= argc 3) (<= argc 7) (string-eq (arg-text argv 1) "sriq-run"))
+      ((and (>= argc 3) (<= argc 8) (string-eq (arg-text argv 1) "sriq-run"))
         (with-arena 4194304 (sriq-run-args arena argc argv)))
-      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE | ksc-dump FILE | sriq-ref FILE [STRATEGY] | sriq-run FILE [STRATEGY] [--counts] [--rounds N]]") 2))))
+      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE | ksc-dump FILE | sriq-ref FILE [STRATEGY] | sriq-run FILE [STRATEGY] [--counts] [--rounds N] [--no-defer]]") 2))))
 
   (fn sriq-run-args ((arena Arena) (argc Int) (argv (Ptr (Ptr U8))))
-    (@intent "sriq-run FILE [STRATEGY] [--counts] [--rounds N]: cautious unless a strategy is named; --rounds caps the run (n/a if it stops there), for probing a large input")
+    (@intent "sriq-run FILE [STRATEGY] [--counts] [--rounds N] [--no-defer]: cautious unless a strategy is named; --rounds caps the run (n/a if it stops there), for probing a large input; --no-defer runs S6 without R8's deferral")
     (@spec ((Arena Int (Ptr (Ptr U8))) -> Int))
     (@alloc arena)
-    (let ((mut strat "cautious") (mut counts false) (mut rounds 10000) (mut ok true) (mut i 3))
+    (let ((mut strat "cautious") (mut counts false) (mut rounds 10000) (mut defer true) (mut ok true) (mut i 3))
       (do (while (< i argc)
             (let ((a (arg-text argv i)))
               (cond ((string-eq a "--counts") (do (set! counts true) (set! i (+ i 1))))
+                    ((string-eq a "--no-defer") (do (set! defer false) (set! i (+ i 1))))
                     ((string-eq a "--rounds")
                       (do (set! rounds (if (< (+ i 1) argc) (bound-arg (arg-text argv (+ i 1))) -1))
                           (when (< rounds 0) (set! ok false))
                           (set! i (+ i 2))))
                     (else (do (set! strat a) (set! i (+ i 1)))))))
           (if ok
-            (sriq-proto arena (arg-text argv 2) strat counts rounds)
+            (sriq-proto arena (arg-text argv 2) strat counts rounds defer)
             (do (println "--rounds takes a whole number") 2)))))
 
   (fn run-suite ()
@@ -11747,6 +11823,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-proto-work arena)))
             (print-test-result "9a: the prototype's work on O1, pinned" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-defer-rows arena)))
+            (print-test-result "9i: deferral activates a stored clause, and refreshes a stale target" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-index arena)))
