@@ -1833,6 +1833,13 @@ uint8_t test_probes_agree_on(slop_arena* arena, slop_string text, types_Outcome 
 void test_ask_every_pair(howl_Input in, slop_list_rdf_IRI subs, slop_list_rdf_IRI cs);
 slop_list_rdf_IRI test_reversed_iris(slop_arena* arena, slop_list_rdf_IRI xs);
 uint8_t test_test_probes_agree_with_report(slop_arena* arena);
+uint8_t test_test_answer_equals_two_run(slop_arena* arena);
+uint8_t test_answer_equals_two_run(slop_arena* arena, slop_string path, types_Profile profile);
+uint8_t test_answer_equals_on(slop_arena* arena, slop_string text, slop_list_rdf_IRI cs, slop_string path, types_Profile profile);
+uint8_t test_same_answers(howl_Run r, howl_Run a);
+uint8_t test_answer_run_shape(slop_arena* arena, howl_Run a, howl_Run r);
+slop_string test_lines_text(slop_arena* arena, howl_Run r);
+uint8_t test_test_answer_run_edges(slop_arena* arena);
 slop_string test_probe_prefixes(void);
 slop_string test_probe_tail(slop_arena* arena, howl_Run r);
 uint8_t test_tail_is(slop_arena* arena, slop_string label, howl_Run r, slop_string want);

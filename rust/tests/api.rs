@@ -182,6 +182,45 @@ fn probes_are_answered_apart_from_the_report() {
     assert!(plain.probes.is_empty());
 }
 
+/// The answer run (SPEC §8.4): the same answers as `classify`'s probe
+/// run, under every profile, with no main run and no report.
+#[test]
+fn answer_gives_classify_probe_answers_alone() {
+    let main = r#"
+        @prefix : <http://example.org/t#> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        :p a owl:ObjectProperty . :q a owl:ObjectProperty .
+        :D a owl:Class . :E a owl:Class . :D owl:disjointWith :E .
+        :p rdfs:domain :D , :E .
+    "#;
+    let probes = r#"
+        @prefix : <http://example.org/t#> .
+        @prefix owl: <http://www.w3.org/2002/07/owl#> .
+        @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+        <urn:probe:p> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom owl:Thing ] .
+        <urn:probe:q> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom owl:Thing ] .
+    "#;
+    let mut input = turtle(main);
+    let nothing = Reasoner::new().answer(&input).unwrap();
+    assert_eq!((nothing.profile, nothing.probes.len()), (None, 0));
+    input.add_probe_turtle(probes).unwrap();
+    input.ask_unsatisfiable("urn:probe:q");
+    input.ask_unsatisfiable("urn:probe:p");
+    input.ask_subsumed("urn:probe:p", &format!("{EX}D"));
+    for p in [Profile::El, Profile::ElPlusPlus, Profile::Sriq] {
+        let config = Config { selection: ProfileSelection::Explicit(p), ..Config::default() };
+        let r = Reasoner::with_config(config).classify(&input).unwrap();
+        let a = Reasoner::with_config(config).answer(&input).unwrap();
+        assert_eq!(a.profile, Some(p));
+        assert_eq!((&a.probes, a.inconsistent, &a.omissions), (&r.probes, r.probe_inconsistent, &r.probe_omissions));
+        // `profile P`, then exactly the probe lines classify prints after its report.
+        let tail = &r.lines()[r.lines().iter().position(|l| l.starts_with("probes ")).unwrap()..];
+        assert_eq!(&a.lines()[0], r.lines().iter().find(|l| l.starts_with("profile ")).unwrap());
+        assert_eq!(&a.lines()[1..], tail);
+    }
+}
+
 #[test]
 fn bad_turtle_is_an_input_error_and_poisons_the_input() {
     let mut input = Input::new();
@@ -237,6 +276,40 @@ fn auto_names_the_rung_that_ran() {
     let config = Config { selection: ProfileSelection::Auto, ..Config::default() };
     let r = classify_with(&turtle(UNSAT_TTL), config);
     assert_eq!(r.profile, Profile::El);
+}
+
+/// An answer run is cancelled as a classify run is: no answers, at any cap.
+#[test]
+fn a_cancelled_answer_run_answers_nothing() {
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    let mut input = turtle(&fixture("v0/litmus.ttl"));
+    input.ask_subsumed(&format!("{EX}Mother"), &format!("{EX}Parent"));
+    for cap in [1000, 0] {
+        let config = Config { max_iterations: cap, ..Config::default() };
+        match Reasoner::with_config(config).answer_cancellable(&input, &cancel) {
+            Err(Fault::Cancelled) => {}
+            other => panic!("cap {cap}: expected Cancelled, got {other:?}"),
+        }
+    }
+    // An unset token changes nothing.
+    let fresh = CancelToken::new();
+    assert_eq!(Reasoner::new().answer_cancellable(&input, &fresh).unwrap(), Reasoner::new().answer(&input).unwrap());
+}
+
+/// Under `Auto`, the answer run names the profile that answered: the
+/// probe documents can move the choice. Here a union in the probe document
+/// takes the probe run to sriq while the main run stays in el.
+#[test]
+fn answer_under_auto_names_the_profile_that_answered() {
+    let mut input = turtle(&fixture("v0/litmus.ttl"));
+    input.add_probe_turtle(&fixture("out-of-profile/union.ttl")).unwrap();
+    input.ask_subsumed(&format!("{EX}Mother"), &format!("{EX}Parent"));
+    let config = Config { selection: ProfileSelection::Auto, ..Config::default() };
+    let r = Reasoner::with_config(config).classify(&input).unwrap();
+    let a = Reasoner::with_config(config).answer(&input).unwrap();
+    assert_eq!((r.profile, a.profile), (Profile::El, Some(Profile::Sriq)));
+    assert_eq!((&a.probes, a.inconsistent, &a.omissions), (&r.probes, r.probe_inconsistent, &r.probe_omissions));
 }
 
 #[test]

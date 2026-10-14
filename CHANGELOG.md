@@ -1,5 +1,29 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Answering probe queries without classifying first** (SPEC §8.4). The answer run is the probe
+  run alone, with no main run, so it costs one classification instead of two and gives the same
+  answers. It is additive: nothing existing changes.
+  - **C API:** `howl_run_answer(input, options)`, read with the existing `howl_run_probe_*`
+    accessors. The run has no report, its verdict is `inconclusive`, and `howl_run_profile` names
+    the profile that answered.
+  - **Rust:** `Reasoner::answer` and `answer_cancellable`, returning `Answers` (the profile,
+    `probes`, `inconsistent`, `omissions` and `lines()`).
+  - **CLI:** `howl ask FILE [--probe F]... --ask-unsat C | --ask-sub A B ...` prints `profile P` and
+    the probe lines. It exits 0 when it answered, whatever the answers; 2 if cancelled; 3 on an
+    error.
+
+### Changed
+
+- **The Rust crate compiles the engine with the release CLI's flags**: `-O3` and 65,536 intern
+  buckets, where it used `-O2` and 4,096. The crate pins these whatever the host's Cargo profile.
+  It is 0–3% faster on the corpus, and every report is identical.
+- **`howl_run_ok` means the run has a result**, now including an answer run's answers. It is
+  unchanged for every `howl_run_classify` run: it is false exactly when the run faulted.
+
 ## 0.4.0 — 2026-10-14
 
 `sriq` ships: the SRIQ object fragment with an ABox, so inverses, unions, `∀`, full negation and

@@ -1,0 +1,9 @@
+profile el
+probes 4
+probe-inconsistent false
+probe-omitted 0
+probe unsatisfiable urn:probe:p yes
+probe unsatisfiable urn:probe:q no
+probe subsumed http://example.org/t#A urn:probe:rc yes
+probe subsumed http://example.org/t#A urn:probe:re no
+exit 0

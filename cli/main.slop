@@ -80,7 +80,7 @@
   (import howl (Decoded decode-from own-decoded Prepared prepare-decoded reason probe-encoded))
   (import probe (QueryKind Query Probing sort-queries probe-document))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
-  (import report (report-lines probe-lines))
+  (import report (report-lines probe-lines answer-lines))
   (import select (parse-profile unavailable-message profile-name))
   (import strlib (parse-int is-digit char-at starts-with))
   (import ttl (parse-ttl-file-for-each-triple))
@@ -242,6 +242,7 @@
       (println "USAGE:")
       (println "  howl validate    <ontology.ttl> [--profile P] [--strict] [--no-imports] [-I FILE]...")
       (println "  howl classify    <ontology.ttl>          (--reduce, --emit: not until M3)")
+      (println "  howl ask         <ontology.ttl> [--profile P] [-I FILE]... [--probe FILE]... --ask-unsat C | --ask-sub A B ...")
       (println "  howl --version")
       (println "")
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
@@ -259,6 +260,9 @@
       (println "  --ask-sub A B        ask whether A is subsumed by B; repeatable")
       (println "                       answered yes, no or unknown by a probe run of their own,")
       (println "                       printed after the report; the report is unchanged")
+      (println "  howl ask             answers the queries alone, with no main run or report: it prints")
+      (println "                       `profile P` and the probe lines, and exits 0 when it answered")
+      (println "                       (whatever the answers), 2 if cancelled, 3 on an error")
       (println "")
       (println "EXIT CODES:")
       (println "  0  coherent       checked, no incoherence found")
@@ -480,6 +484,135 @@
       (for-each (o os)
         (do (print "  omitted: ") (println (render-omission arena o))))))
 
+  (fn validate-run ((arena Arena) (front Arena) (enc (Ptr Encoded)) (pfront Arena) (penc (Ptr Encoded))
+                    (resolved (List IRI)) (queries (List Query)) (cfg ReasonerConfig) (report-mode Bool)
+                    (timings Bool) (t-start Int))
+    (@intent "howl validate: decode, prepare and reason, then the probe run; the report or summary; the exit code")
+    (@spec ((Arena Arena (Ptr Encoded) Arena (Ptr Encoded) (List IRI) (List Query) ReasonerConfig Bool Bool Int)
+            -> Int))
+    (@alloc arena)
+    (let ((asked      (sort-queries arena queries))
+          (pdoc       (probe-input pfront (deref enc) (deref penc) asked))
+          (t-parsed   (now-ms))
+          (m-parsed   (peak-mb))
+          (held       (arena-new 16777216))   ; the owned Decoded: freed after prepare
+          (decoded    (decode-held held front (deref enc) resolved))
+          (t-decoded  (now-ms))
+          (m-decoded  (peak-mb))
+          (prepared   (prepare-from arena held decoded cfg))
+          (t-prepared (now-ms))
+          (m-prepared (peak-mb))
+          (reasoned   (reason-prepared arena prepared cfg))
+          (t-reasoned (now-ms))
+          (m-reasoned (peak-mb))
+          ;; The probe run, before anything is printed: one
+          ;; that faults takes the run with it.
+          (probed     (probe-of arena pdoc resolved asked cfg reasoned))
+          (result     (with-probe arena reasoned probed)))
+      (do
+        (when timings
+          (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
+        (print-step-down arena result)
+        (match result
+          ((ok o)
+            (if report-mode
+              (for-each (l (report-lines arena o)) (println l))
+            (do
+              (print "howl: ")
+              (print (int-to-string arena
+                       (cast Int (list-len (. (. o findings) subsumptions)))))
+              (print " subsumptions, ")
+              (print (int-to-string arena
+                       (cast Int (list-len (. (. o findings) unsatisfiable)))))
+              (print " unsatisfiable, ")
+              (print (int-to-string arena
+                       (cast Int (list-len (. (. o coverage) omitted)))))
+              (println " omitted")
+              (print-omissions arena (. (. o coverage) omitted))
+              (match (verdict o)
+                ('verdict-coherent     (println "howl: coherent"))
+                ('verdict-incoherent   (println "howl: INCOHERENT"))
+                ;; Spelled out, because 2 is the code a CI
+                ;; job is most tempted to accept as a pass.
+                ('verdict-inconclusive
+                  (println "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass"))))))
+          ((error f)
+            (match f
+              ((input-error msg) (do (print "howl: ") (println msg)))
+              ((cancelled)       (println "howl: cancelled"))
+              ((unavailable p)
+                (do (print "howl: ") (println (unavailable-message arena p))))
+              ;; §9: the refused omissions are listed, and there
+              ;; is NO report body — no counts a reader could
+              ;; mistake for a partial result.
+              ((refused os)
+                (do (print "howl: refused (--strict), no report — ")
+                    (print (int-to-string arena (cast Int (list-len os))))
+                    (println " omitted")
+                    (print-omissions arena os))))))
+        (print-probes arena probed)
+        (when timings
+          (print-memory arena m-parsed m-decoded m-prepared m-reasoned (peak-mb)))
+        (exit-code-for result))))
+
+  (fn ask-run ((arena Arena) (front Arena) (enc (Ptr Encoded)) (pfront Arena) (penc (Ptr Encoded))
+               (resolved (List IRI)) (queries (List Query)) (cfg ReasonerConfig))
+    (@intent "howl ask: the probe run alone (SPEC §8.4's answer mode), its lines, and the exit code")
+    (@spec ((Arena Arena (Ptr Encoded) Arena (Ptr Encoded) (List IRI) (List Query) ReasonerConfig) -> Int))
+    (@alloc arena)
+    ;; The library's howl_run_answer, as the CLI runs it: the same probe
+    ;; input (probe-document), the same probe run (probe-encoded), and no
+    ;; main run before it. A run that asks nothing is refused as a usage
+    ;; error rather than answered with `probes 0`: on the command line it
+    ;; is a mistake.
+    (if (== (list-len queries) 0)
+      (do (println "howl ask: nothing asked; give --ask-unsat C or --ask-sub A B") EXIT_ERROR)
+      (let ((asked (sort-queries arena queries))
+            (doc   (probe-document pfront (deref enc) (deref penc) asked))
+            (res   (probe-encoded arena (deref doc) resolved asked cfg)))
+        (do
+          (arena-free front)
+          (match res
+            ((ok p)    (for-each (l (answer-lines arena p true)) (println l)))
+            ((error f) (print-ask-fault arena f)))
+          (ask-exit-code res)))))
+
+  (fn print-ask-fault ((arena Arena) (f Fault))
+    (@intent "Why an answer run has no answers")
+    (@spec ((Arena Fault) -> Unit))
+    (@alloc arena)
+    (match f
+      ((input-error msg) (do (print "howl: ") (println msg)))
+      ((cancelled)       (println "howl: cancelled"))
+      ((unavailable p)   (do (print "howl: ") (println (unavailable-message arena p))))
+      ;; A probe run is never strict, so it never refuses; should it, it is
+      ;; still no answer.
+      ((refused _)       (println "howl: refused, no answers"))))
+
+  (fn ask-exit-code ((r (Result Probing Fault)))
+    (@intent "howl ask's exit code: 0 when the run answered, whatever the answers; 2 cancelled; 3 could not run")
+    (@spec (((Result Probing Fault)) -> Int))
+    ;; The answers are the output, never the exit code: `no` is not a
+    ;; failure and `yes` is not a pass. As exit-code-for, no fault exits 0,
+    ;; and the arms are integer literals so the table is proved.
+    (@post {$result >= 0})
+    (@post {$result <= 3})
+    (@post (match r
+             ((ok p)    {$result == 0})
+             ((error f) (match f
+                          ((cancelled)     {$result == 2})
+                          ((refused _)     {$result == 2})
+                          ((input-error _) {$result == 3})
+                          ((unavailable _) {$result == 3})))))
+    (match r
+      ((ok _) 0)
+      ((error f)
+        (match f
+          ((cancelled)     2)
+          ((refused _)     2)
+          ((input-error _) 3)
+          ((unavailable _) 3)))))
+
   (fn main ((argc Int) (argv (Ptr (Ptr U8))))
     (@intent "CLI entry point: load, run the library, map the result to an exit code")
     (@spec ((Int (Ptr (Ptr U8))) -> Int))
@@ -498,10 +631,11 @@
       (if (< argc 3)
         (do (print-usage) EXIT_ERROR)
         (let ((command (argv-to-string argv 1)))
-          (if (not (or (string-eq command "validate") (string-eq command "classify")))
+          (if (not (or (string-eq command "validate") (or (string-eq command "classify") (string-eq command "ask"))))
             (do (print "howl: unknown or unimplemented command: ") (println command)
                 EXIT_ERROR)
-            (let ((front        (arena-new 16777216))   ; the encoded input and its decode: freed after decode
+            (let ((ask          (string-eq command "ask"))
+                  (front        (arena-new 16777216))   ; the encoded input and its decode: freed after decode
                   (enc          (new-encoded front))
                   (mut resolved (list-new arena IRI))
                   (mut cfg      (default-config))
@@ -691,68 +825,11 @@
 
                       (set! i (+ i step)))))
 
-                (if failed
-                  EXIT_ERROR
-                  (let ((asked      (sort-queries arena queries))
-                        (pdoc       (probe-input pfront (deref enc) (deref penc) asked))
-                        (t-parsed   (now-ms))
-                        (m-parsed   (peak-mb))
-                        (held       (arena-new 16777216))   ; the owned Decoded: freed after prepare
-                        (decoded    (decode-held held front (deref enc) resolved))
-                        (t-decoded  (now-ms))
-                        (m-decoded  (peak-mb))
-                        (prepared   (prepare-from arena held decoded cfg))
-                        (t-prepared (now-ms))
-                        (m-prepared (peak-mb))
-                        (reasoned   (reason-prepared arena prepared cfg))
-                        (t-reasoned (now-ms))
-                        (m-reasoned (peak-mb))
-                        ;; The probe run, before anything is printed: one
-                        ;; that faults takes the run with it.
-                        (probed     (probe-of arena pdoc resolved asked cfg reasoned))
-                        (result     (with-probe arena reasoned probed)))
-                    (do
-                      (when timings
-                        (print-timings arena t-start t-parsed t-decoded t-prepared t-reasoned))
-                      (print-step-down arena result)
-                      (match result
-                        ((ok o)
-                          (if report-mode
-                            (for-each (l (report-lines arena o)) (println l))
-                          (do
-                            (print "howl: ")
-                            (print (int-to-string arena
-                                     (cast Int (list-len (. (. o findings) subsumptions)))))
-                            (print " subsumptions, ")
-                            (print (int-to-string arena
-                                     (cast Int (list-len (. (. o findings) unsatisfiable)))))
-                            (print " unsatisfiable, ")
-                            (print (int-to-string arena
-                                     (cast Int (list-len (. (. o coverage) omitted)))))
-                            (println " omitted")
-                            (print-omissions arena (. (. o coverage) omitted))
-                            (match (verdict o)
-                              ('verdict-coherent     (println "howl: coherent"))
-                              ('verdict-incoherent   (println "howl: INCOHERENT"))
-                              ;; Spelled out, because 2 is the code a CI
-                              ;; job is most tempted to accept as a pass.
-                              ('verdict-inconclusive
-                                (println "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass"))))))
-                        ((error f)
-                          (match f
-                            ((input-error msg) (do (print "howl: ") (println msg)))
-                            ((cancelled)       (println "howl: cancelled"))
-                            ((unavailable p)
-                              (do (print "howl: ") (println (unavailable-message arena p))))
-                            ;; §9: the refused omissions are listed, and there
-                            ;; is NO report body — no counts a reader could
-                            ;; mistake for a partial result.
-                            ((refused os)
-                              (do (print "howl: refused (--strict), no report — ")
-                                  (print (int-to-string arena (cast Int (list-len os))))
-                                  (println " omitted")
-                                  (print-omissions arena os))))))
-                      (print-probes arena probed)
-                      (when timings
-                        (print-memory arena m-parsed m-decoded m-prepared m-reasoned (peak-mb)))
-                      (exit-code-for result)))))))))))))
+                ;; An answer run prints its answers and is never strict.
+                (when (and ask (or report-mode (or timings (. cfg strict-profile))))
+                  (do (println "howl ask: --report, --strict and --timings do not apply to an answer run")
+                      (set! failed true)))
+                (cond (failed EXIT_ERROR)
+                      (ask    (ask-run arena front enc pfront penc resolved queries cfg))
+                      (else   (validate-run arena front enc pfront penc resolved queries cfg report-mode
+                                timings t-start))))))))))))

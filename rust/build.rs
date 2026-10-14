@@ -46,7 +46,13 @@ fn main() {
         .include(&std_inc)
         .define("SLOP_ARENA_NO_CAP", None)
         .define("SLOP_INTERN_THREADSAFE", None)
-        .opt_level(2)
+        // The release CLI's flags (Makefile RELEASE_CFLAGS), so the crate
+        // runs the engine as built and tested for release. Pinned here
+        // rather than taken from the host's profile: a debug build of the
+        // host still gets an optimised engine. Measured 2026-10-14 against
+        // -O2 and 4096 buckets: 0-3% faster, reports identical.
+        .define("SLOP_INTERN_BUCKET_COUNT", Some("65536"))
+        .opt_level(3)
         .warnings(false);
     for src in &sources {
         build.file(src);
