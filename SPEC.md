@@ -2684,7 +2684,13 @@ omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ 
   so.
 
 **The ABox split (slice 9j, under review).** *Status: drafted 2026-10-14, for Codex's and the owner's review before
-any engine code.*
+any engine code. Codex's first review confirmed L1–L3, L1′, the hidden queries and Run C's order. It found that a
+tautological assertion names no nominal, so not every representative has a DL10 (now the set `E`). It also asked for:
+- the universal role's reading in a union;
+- clearing every individual at the boundary;
+- the verdict's handling of caps and omissions.
+
+All four are made here.*
 
 `sriq` decides consistency, unsatisfiability and subsumption, and nothing about individuals (Requirement c0f9bfb3).
 Class nominals are out of profile, so an individual occurs only in assertions. So an input is answered by two runs, and
@@ -2706,9 +2712,15 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
     list is kept only with its members that are not foldable, and only when two of them remain.
   - **Representatives:** for each distinct non-empty type, the least individual by IRI with that type.
   - `K_H = (T, {C(o) | o a representative, C in its type})`, and `K_C = (T, A_rest)`.
-- **L1 — disjoint unions.** Let `I_j`, for `j ∈ J`, be interpretations with pairwise disjoint domains. Their disjoint
-  union `U` has domain `⊎ Δ^{I_j}`, `A^U = ⊎ A^{I_j}` and `R^U = ⊎ R^{I_j}`. Then:
-  - **(i) Concepts.** `C^U = ⊎ C^{I_j}` for every concept of the language (§5.5, without nominals). By induction:
+- **L1 — disjoint unions.** Let `I_j`, for `j` in a non-empty set `J`, be interpretations with pairwise disjoint domains.
+  Their disjoint union `U` has:
+  - domain `⊎ Δ^{I_j}`;
+  - `A^U = ⊎ A^{I_j}` for each class, and `R^U = ⊎ R^{I_j}` for each ordinary role;
+  - `owl:topObjectProperty` as `Δ^U × Δ^U` and `owl:bottomObjectProperty` as `∅`, as OWL fixes them.
+
+  Then:
+  - **(i) Concepts.** `C^U = ⊎ C^{I_j}` for every concept of the accepted language (no nominals, and no universal
+    role outside a super-role). By induction:
     - names, `⊤` and `⊥` are immediate;
     - `¬`, `⊓` and `⊔` act part by part;
     - an element's `R`-successors in `U` (for `R` or `R⁻`) are exactly its successors in its own part. So `∃`, `∀`,
@@ -2720,14 +2732,14 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
       inverse-functional, and disjoint roles, each read part by part;
     - `R ⊑ owl:topObjectProperty`, the universal role's only accepted use, which holds in every interpretation.
   - **(iii) Assertions.** An individual interpreted inside part `j` satisfies the class assertions that `I_j` gives it.
-    Two individuals in different parts are different, and are related by no role.
+    Two individuals in different parts are different, and related by no ordinary role.
 - **L1′ — clauses.** A set of [TGH21] Table 1 clauses of the forms DL1–DL9 (no constant) is closed under disjoint
   union, with each function symbol read part by part.
   - In every one of these forms, each variable `zᵢ` occurs in a body atom `S(x, zᵢ)` or `S(zᵢ, x)`.
   - So an assignment that puts some `zᵢ` in another part than `x` falsifies the body.
   - Any other assignment stays inside one part, which is a model.
 - **L2 — the hierarchy needs no ABox.** If `K` is consistent, then `K ⊨ B ⊑ A` iff `T ⊨ B ⊑ A`, for any concepts `B` and
-  `A`, and so for unsatisfiability.
+  `A` of the accepted language, and so for unsatisfiability.
   - **⇐:** monotonicity.
   - **⇒:** take a model `I` of `T` with `e ∈ B^I \ A^I`, and a model `J` of `K`. Interpret every individual in `J`'s
     part of `I ⊎ J`. That is a model of `K` (L1 (ii), (iii)), and `e` is a counterexample there (L1 (i)).
@@ -2749,9 +2761,14 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
       `{o}`, and `A_o(x)` appears in the bodies of the rest.
     - A DL11 clause comes only from a positive nominal (`define-pos`): a property assertion or `SameIndividual`, and
       `K_H` has neither. Nor does S1 make or move a nominal.
-    - So `NF(K_H) = O′ ∪ {⊤ → A_o(o) | o a representative}`. `O′` holds only DL1–DL9 clauses, `A_o` is a fresh name, a
-      different one for each `o`, and `o` occurs in no clause of `O′`.
-  - **The fold.** The boundary drops each `⊤ → A_o(o)` and the constant `o`. The run reads `O′`, and each `A_o` is a
+    - **A tautological assertion names nothing.** `ClassAssertion(owl:Thing a)`, or any `C` whose NNF holds `⊤` as a
+      disjunct, gives `¬{a} ⊔ ⊤`, which `gci-nnf` canonicalises to `⊤` before the nominal is named. So no `A_a` and no
+      DL10 exist for `a`. Let `E` be the representatives for which S2 does emit `dl10(o, A_o)`.
+    - So `NF(K_H) = O′ ∪ {⊤ → A_o(o) | o ∈ E}`. `O′` holds only DL1–DL9 clauses, `A_o` is a fresh name, a different one
+      for each `o`, and no individual occurs in any clause of `O′`.
+  - **The fold.** The boundary drops each `⊤ → A_o(o)`, and clears **every** individual from the constants. The
+    signature's individuals become constants on their own (`individuals-of`), so dropping the units alone would leave
+    some. The run reads `O′`, with the input's class names still its query classes, and each `A_o` for `o ∈ E` is a
     **hidden query class**:
     - it gets a context `v_{A_o}` with core `{A_o(x)}`, after the query contexts;
     - its one raw query is `unsat(A_o)`: `A_o(x) → ⊥ ∈̂ S_{v_{A_o}}`;
@@ -2764,8 +2781,8 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
       unsatisfiability and `owl:Thing`.
     - **Proof.** By S0–S2's correctness, `K_H`'s answers are `NF(K_H)`'s.
       - **(a) ⇒:** a model of `NF(K_H)` is a model of `O′` in which each `A_o` holds `o`.
-      - **(a) ⇐:** take a model `M_o` of `O′` with an element `d_o ∈ A_o` for each `o`. Their disjoint union is a model of
-        `O′` (L1′), and interpreting each `o` as `d_o` makes it a model of `NF(K_H)`. With no representative, a model of
+      - **(a) ⇐:** take a model `M_o` of `O′` with an element `d_o ∈ A_o` for each `o ∈ E`. Their disjoint union is a model
+        of `O′` (L1′), and interpreting each `o` as `d_o` makes it a model of `NF(K_H)`. When `E` is empty, a model of
         `O′` is one of `NF(K_H)`.
       - **(b) ⇐:** monotonicity.
       - **(b) ⇒:** take a model `M` of `O′` with a counterexample, and `M*` of `NF(K_H)`. `M ⊎ M*`, with the constants in
@@ -2778,10 +2795,15 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
     has an empty head, so C2 holds vacuously in `v_⊤`.
   - Run C reads only `inconsistent` (S4, with the root's early stop). It has constants, so R8's deferral stays off.
 - **The verdict.** By L3 and Claim F (a):
-  - `K` is **inconsistent** iff Run H derives `⊤ → ⊥` in `v_⊤`, or `unsat(A_o)` for some `o`, or Run C derives
-    `⊤ → ⊥`.
+  - `K` is **inconsistent** iff Run H derives `⊤ → ⊥` in `v_⊤`, or `unsat(A_o)` for some `o ∈ E`, or Run C derives
+    `⊤ → ⊥`. Run C's early stop at the root counts, read through the shared ground view as S4 reads it.
   - **Otherwise,** `K`'s raw answers are Run H's (L2 for `K` and for `K_H`, then Claim F (b)).
-  - **A cap:** if either run stops at a cap or out of fuel, the input is n/a.
+  - **Order:** Run H runs first. If it finds `K` inconsistent, Run C does not run.
+  - **An inconsistency is an answer** from whichever run derives it, since every derivation is sound. It stands even when
+    the other run stopped at a cap.
+  - **A cap:** with no inconsistency found, a run that stops at a cap or out of fuel makes the input n/a.
+  - **Omissions:** the input's report carries every axiom either run omitted, as S1's size guard and the gate do today
+    (S7). A run with an omission is complete only for the smaller theory it read, so the report stays inconclusive.
 
   Both runs are deterministic, and the split is a function of the accepted axioms' content, so every report stays the
   same at every worker count (R6).
