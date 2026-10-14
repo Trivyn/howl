@@ -23,6 +23,12 @@
   It is 0–3% faster on the corpus, and every report is identical.
 - **`howl_run_ok` means the run has a result**, now including an answer run's answers. It is
   unchanged for every `howl_run_classify` run: it is false exactly when the run faulted.
+- **The macOS release binary and library are built with Apple clang**, where they used Homebrew
+  gcc-14 (a choice inherited from GROWL's CI, never measured).
+  - On the corpus, a clang build of the engine runs 14–21% faster than a gcc build (gcc-16 locally,
+    release flags), with identical reports.
+  - CI's macOS job builds and tests with clang too.
+  - Linux and Windows are unchanged (gcc, MinGW gcc).
 
 ## 0.4.0 — 2026-10-14
 

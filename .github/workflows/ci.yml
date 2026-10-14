@@ -14,16 +14,17 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x86_64
             cc: gcc
+          # Apple clang on macOS, the platform's own compiler: on the corpus the
+          # engine it builds runs 14-21% faster than a Homebrew gcc build (gcc-16,
+          # release flags, 2026-10-14), and it is the compiler every local
+          # measurement is taken with. Linux keeps gcc, so CI still compiles the
+          # generated C with a second compiler family.
           - os: macos-26
             platform: macos-arm64
-            cc: gcc-14
+            cc: clang
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install GCC 14 (macOS)
-        if: runner.os == 'macOS'
-        run: brew install gcc@14
 
       # Builds from the committed C in csrc/ — no SLOP toolchain needed.
       - name: Run tests
@@ -38,8 +39,8 @@ jobs:
 
       # The public C API as a C caller sees it: the example built against
       # the generated include/howl.h and libhowl.a alone, and every entry
-      # point under ASan and UBSan. clang on both runners: Homebrew gcc on
-      # macOS does not ship the sanitizer runtimes.
+      # point under ASan and UBSan. clang on both runners, so both run one
+      # sanitizer toolchain.
       - name: C API example and sanitizer test
         run: make c-example CC=clang
 
