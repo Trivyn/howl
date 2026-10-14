@@ -35,7 +35,7 @@
   (import sriqorder (ConstEntry SriqOrder aux-const const-entry))
   (import sriqsubsume (Committed in-hat commit-min))
   (import sriqctx (Strategy Triggers CoreKind CoreChoice EdgeLabel Edge Ctx CtxSet Structure
-                   build-triggers tau-su tau-pr omega omega-d init-structure ctx-by-core core-of lit-ground))
+                   build-triggers tau-su tau-pr omega omega-d init-structure with-hidden ctx-by-core core-of lit-ground))
   (import canon (sort-range))
   (import sriq (Premise RConcl HState Cands Pos BodyView select assemble core-rule ineq-rule factor-rule
                 hyper-start hyper-step hyper-finish hyper-join eq-rule body-at join-rule nom-rule stored-lambda
@@ -44,6 +44,7 @@
                 pred-view rpred-view pred-start pred-step pred-finish rpred-finish PCands pred-join))
 
   (export RefStatus RefConfig RefResult RefIn Cand ref-run ref-input ref-set ref-lambda ref-stable ref-round ref-apply
+          initial-queries init-of
           combinators-agree
           ;; The per-instance plumbing slice 9's prototype (sriqsat) shares,
           ;; so both order ids, choices and conclusions the same way.
@@ -139,7 +140,8 @@
     (nquery Int)
     (nrole  Int)
     (nfn    Int)
-    (nconst Int)))
+    (nconst Int)
+    (hidden (List U32))))   ; the ABox split's hidden query classes (Run H), by id; else none
 
   (type RefResult (record
     (status RefStatus)
@@ -1094,8 +1096,21 @@
             (list-push sets (record-new CtxSet (cs (. (commit-min arena (list-new arena Clause) (. s cs)) set)))))
           (record-new Structure (ctxs (. st ctxs)) (sets sets) (edges (. st edges)) (ord (. st ord))))))
 
+  (fn initial-queries ((in RefIn))
+    (@intent "The query contexts initialisation makes besides v_r and v_⊤: the query classes and the hidden ones (ω_D
+              less 2)")
+    (@spec ((RefIn) -> Int))
+    (@pure)
+    (+ (. in nquery) (cast Int (list-len (. in hidden)))))
+
+  (fn init-of ((arena Arena) (in RefIn))
+    (@intent "A1–A2's structure for in: v_r, v_⊤, a v_B per query class, then a context per hidden query class")
+    (@spec ((Arena RefIn) -> Structure))
+    (@alloc arena)
+    (with-hidden arena (init-structure arena (. in nquery) (. in nconst)) (. in hidden)))
+
   (fn ref-lambda ((tr Triggers) (s Strategy) (nquery Int))
-    (@intent "The Λ HOWL stores for this ontology and strategy")
+    (@intent "The Λ HOWL stores for this ontology and strategy; nquery counts the query contexts, hidden ones too")
     (@spec ((Triggers Strategy Int) -> Int))
     (@pure)
     (stored-lambda (tau-su tr) (tau-pr tr) (omega s tr) (omega-d nquery)))
@@ -1108,7 +1123,7 @@
     (let ((ids (. sc ids)))
       (record-new RefIn (onto (. sc clauses)) (nclass (cast Int (list-len (. ids class-of)))) (nquery (. ids nclass))
                         (nrole (cast Int (list-len (. ids role-of)))) (nfn (. ids nfns))
-                        (nconst (cast Int (list-len (. ids const-of)))))))
+                        (nconst (cast Int (list-len (. ids const-of)))) (hidden (list-new arena U32)))))
 
 
   (fn ref-run ((arena Arena) (in RefIn) (cfg RefConfig))
@@ -1118,10 +1133,10 @@
     (@spec ((Arena RefIn RefConfig) -> RefResult))
     (@alloc arena)
     (let ((tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn)))
-          (lam (if (>= (. cfg lam) 0) (. cfg lam) (ref-lambda tr (. cfg strat) (. in nquery))))
+          (lam (if (>= (. cfg lam) 0) (. cfg lam) (ref-lambda tr (. cfg strat) (initial-queries in))))
           (env (env-of arena in cfg tr lam))
           (mut held (arena-new 1048576))
-          (mut st (init-structure arena (. in nquery) (. in nconst)))
+          (mut st (init-of arena in))
           (mut status RefStatus 'rs-fuel)
           (mut rounds 0)
           (mut going true))
@@ -1186,7 +1201,7 @@
     (@spec ((Arena RefIn RefConfig) -> Env))
     (@alloc arena)
     (let ((tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn))))
-      (env-of arena in cfg tr (if (>= (. cfg lam) 0) (. cfg lam) (ref-lambda tr (. cfg strat) (. in nquery))))))
+      (env-of arena in cfg tr (if (>= (. cfg lam) 0) (. cfg lam) (ref-lambda tr (. cfg strat) (initial-queries in))))))
 
   (fn ref-stable ((arena Arena) (in RefIn) (cfg RefConfig) (st Structure))
     (@intent "Is a finished, Elim-ed structure saturated: does one more round change nothing (D5(a)'s argument)?")

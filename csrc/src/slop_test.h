@@ -24,6 +24,7 @@
 #include "slop_sriqctx.h"
 #include "slop_sriqref.h"
 #include "slop_sriqsat.h"
+#include "slop_sriqabox.h"
 #include "slop_sriqindex.h"
 #include "slop_sriqorder.h"
 #include "slop_file.h"
@@ -1183,6 +1184,11 @@ typedef struct { bool is_ok; union { sriqnames_SriqNormal ok; slop_string err; }
 typedef struct { bool is_ok; union { sriqclauses_SriqClauses ok; slop_string err; } data; } slop_result_sriqclauses_SriqClauses_string;
 #endif
 
+#ifndef SLOP_RESULT_SRIQABOX_INPUTS_STRING_DEFINED
+#define SLOP_RESULT_SRIQABOX_INPUTS_STRING_DEFINED
+typedef struct { bool is_ok; union { sriqabox_Inputs ok; slop_string err; } data; } slop_result_sriqabox_Inputs_string;
+#endif
+
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
 howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
@@ -1538,7 +1544,7 @@ uint8_t test_slot_has_edge(types_Lit l, slop_list_u32 edges);
 uint8_t test_test_sriq_rpred_rows(slop_arena* arena);
 slop_list_u32 test_r_u32s(slop_arena* arena, int64_t u);
 sriqref_RefConfig test_ref_cfg(sriqctx_Strategy s);
-sriqref_RefIn test_ref_in(slop_list_types_Clause onto, int64_t nclass, int64_t nquery, int64_t nrole, int64_t nfn, int64_t nconst);
+sriqref_RefIn test_ref_in(slop_arena* arena, slop_list_types_Clause onto, int64_t nclass, int64_t nquery, int64_t nrole, int64_t nfn, int64_t nconst);
 slop_list_sriqctx_Strategy test_strategies(slop_arena* arena);
 slop_string test_strat_name(sriqctx_Strategy s);
 uint8_t test_complete_run(sriqref_RefResult r);
@@ -1615,6 +1621,18 @@ uint8_t test_structure_agrees(slop_arena* arena, sriqctx_Structure st);
 uint8_t test_commit_edge_row(slop_arena* arena);
 uint8_t test_scan_same(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s);
 uint8_t test_same_edges(slop_list_sriqctx_Edge a, slop_list_sriqctx_Edge b);
+uint8_t test_test_sriq_split_fixtures(slop_arena* arena);
+uint8_t test_fixture_split(slop_arena* arena, slop_string name);
+uint8_t test_split_says(slop_arena* arena, slop_string label, sriqctx_Strategy s, uint8_t ok);
+uint8_t test_split_run_agrees(slop_arena* arena, slop_string name, sriqclauses_SriqClauses sc, sriqabox_Inputs in, sriqctx_Strategy s);
+uint8_t test_split_expects(slop_arena* arena, slop_string name, sriqclauses_SriqIds ids, sriqctx_Strategy s, sriqabox_SplitRun sp);
+uint8_t test_test_sriq_split_rows(slop_arena* arena);
+uint8_t test_split_omitted_row(slop_arena* arena, slop_string name, uint8_t incons);
+rdf_IRI test_t_iri(slop_string local);
+uint8_t test_split_odd_list_row(slop_arena* arena);
+owl2_RawConcept* test_boxed(slop_arena* arena, owl2_RawConcept c);
+uint8_t test_list_has_different(slop_list_owl2_RawAxiom axs, int64_t n);
+uint8_t test_split_h_as_ref(slop_arena* arena, slop_string name, sriqabox_Inputs in, sriqctx_Strategy s, sriqabox_SplitRun sp);
 uint8_t test_test_sriq_defer_rows(slop_arena* arena);
 uint8_t test_defer_activates(slop_arena* arena);
 uint8_t test_defer_retargets(slop_arena* arena);
@@ -1624,11 +1642,16 @@ uint8_t test_fixture_scan_same(slop_arena* arena, slop_string name);
 slop_option_sriqctx_Strategy test_parse_strategy(slop_string name);
 slop_string test_status_name(sriqref_RefStatus s);
 int64_t test_print_ref_report(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, slop_string who, sriqctx_Strategy s, int64_t rounds);
+int64_t test_print_report_as(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, uint8_t inconsistent, slop_string who, sriqctx_Strategy s, int64_t rounds);
 int64_t test_print_thing_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, slop_string thing);
 int64_t test_print_class_rows(slop_arena* arena, sriqclauses_SriqIds ids, sriqctx_Structure st, uint32_t b, slop_string thing, slop_string nothing);
 slop_result_sriqclauses_SriqClauses_string test_sriq_load(slop_arena* arena, slop_string path);
 int64_t test_sriq_ref(slop_arena* arena, slop_string path, slop_string strat, uint8_t proto, uint8_t counts);
-int64_t test_sriq_proto(slop_arena* arena, slop_string path, slop_string strat, uint8_t counts, int64_t rounds, uint8_t defer);
+int64_t test_sriq_proto(slop_arena* arena, slop_string path, slop_string strat, uint8_t counts, int64_t rounds, uint8_t defer, uint8_t split);
+slop_result_sriqabox_Inputs_string test_split_load(slop_arena* arena, slop_string path);
+int64_t test_split_report(slop_arena* arena, slop_string path, sriqctx_Strategy s, uint8_t counts, int64_t rounds, uint8_t defer);
+slop_string test_split_na(slop_arena* arena, sriqabox_SplitRun sp);
+uint8_t test_finished_run(sriqref_RefResult r);
 int64_t test_ref_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s);
 sriqsat_SatConfig test_proto_cfg(sriqctx_Strategy s, int64_t rounds, uint8_t defer);
 int64_t test_proto_report(slop_arena* arena, sriqclauses_SriqClauses sc, sriqctx_Strategy s, uint8_t counts, int64_t rounds, uint8_t defer);

@@ -45,6 +45,7 @@ sriqctx_CoreChoice sriqctx_cautious_choice(sriqctx_Triggers tr, uint32_t f, slop
 sriqctx_CoreChoice sriqctx_strat_choice(sriqctx_Strategy s, sriqctx_Triggers tr, uint32_t f, slop_list_types_Lit k1);
 slop_list_types_Lit sriqctx_core_of(slop_arena* arena, sriqctx_CoreChoice cc, slop_list_types_Lit k1);
 sriqctx_Structure sriqctx_init_structure(slop_arena* arena, int64_t nquery, int64_t nconst);
+sriqctx_Structure sriqctx_with_hidden(slop_arena* arena, sriqctx_Structure st, slop_list_u32 hidden);
 int64_t sriqctx_ctx_count(sriqctx_Structure st);
 slop_option_sriqctx_Ctx sriqctx_ctx_at(sriqctx_Structure st, int64_t v);
 slop_option_sriqctx_CtxSet sriqctx_set_at(sriqctx_Structure st, int64_t v);
@@ -63,6 +64,7 @@ uint8_t sriqctx_q_of(slop_arena* arena, sriqctx_Structure st, int64_t v, slop_li
 slop_list_types_Lit sriqctx_atom_x(slop_arena* arena, uint32_t b);
 uint8_t sriqctx_q_inconsistent(slop_arena* arena, sriqctx_Structure st);
 uint8_t sriqctx_q_unsat(slop_arena* arena, sriqctx_Structure st, uint32_t b);
+uint8_t sriqctx_q_hidden_unsat(slop_arena* arena, sriqctx_Structure st, int64_t nquery, slop_list_u32 hidden);
 uint8_t sriqctx_q_holds(slop_arena* arena, sriqctx_Structure st, uint32_t b, uint32_t a);
 uint8_t sriqctx_q_thing(slop_arena* arena, sriqctx_Structure st, uint32_t a);
 
@@ -581,6 +583,44 @@ sriqctx_Structure sriqctx_init_structure(slop_arena* arena, int64_t nquery, int6
     }
 }
 
+sriqctx_Structure sriqctx_with_hidden(slop_arena* arena, sriqctx_Structure st, slop_list_u32 hidden) {
+    if (((int64_t)((hidden).len)) == 0) {
+        return st;
+    } else {
+        {
+            __auto_type ctxs = ((slop_list_sriqctx_Ctx){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+            __auto_type sets = ((slop_list_sriqctx_CtxSet){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+            {
+                __auto_type _coll = st.ctxs;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type c = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(ctxs); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
+            }
+            {
+                __auto_type _coll = st.sets;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type s = _coll.data[_i];
+                    ({ __auto_type _lst_p = &(sets); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                }
+            }
+            {
+                __auto_type _coll = hidden;
+                for (size_t _i = 0; _i < _coll.len; _i++) {
+                    __auto_type a = _coll.data[_i];
+                    {
+                        __auto_type core = ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+                        ({ __auto_type _lst_p = &(core); __auto_type _item = (types_atom1(a, types_at_x())); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(ctxs); __auto_type _item = (((sriqctx_Ctx){.core = core, .root = 0})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        ({ __auto_type _lst_p = &(sets); __auto_type _item = (((sriqctx_CtxSet){.cs = ((slop_list_types_Clause){ .data = NULL, .len = 0, .cap = 0, .arena = arena })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    }
+                }
+            }
+            return ((sriqctx_Structure){.ctxs = ctxs, .sets = sets, .edges = st.edges, .ord = st.ord});
+        }
+    }
+}
+
 int64_t sriqctx_ctx_count(sriqctx_Structure st) {
     return ((int64_t)(((int64_t)((st.ctxs).len))));
 }
@@ -744,6 +784,24 @@ uint8_t sriqctx_q_inconsistent(slop_arena* arena, sriqctx_Structure st) {
 
 uint8_t sriqctx_q_unsat(slop_arena* arena, sriqctx_Structure st, uint32_t b) {
     return sriqctx_q_of(arena, st, (2 + ((int64_t)(b))), sriqctx_atom_x(arena, b), ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena }));
+}
+
+uint8_t sriqctx_q_hidden_unsat(slop_arena* arena, sriqctx_Structure st, int64_t nquery, slop_list_u32 hidden) {
+    {
+        uint8_t found = 0;
+        int64_t k = 0;
+        {
+            __auto_type _coll = hidden;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type a = _coll.data[_i];
+                if (sriqctx_q_of(arena, st, ((2 + nquery) + k), sriqctx_atom_x(arena, a), ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena }))) {
+                    found = 1;
+                }
+                k = (k + 1);
+            }
+        }
+        return found;
+    }
 }
 
 uint8_t sriqctx_q_holds(slop_arena* arena, sriqctx_Structure st, uint32_t b, uint32_t a) {

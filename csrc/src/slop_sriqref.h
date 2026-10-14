@@ -37,6 +37,12 @@ typedef enum {
     sriqref_RefStatus_rs_constants
 } sriqref_RefStatus;
 
+#ifndef SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint32_t, slop_list_u32)
+#endif
+
 #ifndef SLOP_LIST_LIST_SRIQ_PREMISE_DEFINED
 #define SLOP_LIST_LIST_SRIQ_PREMISE_DEFINED
 #define SLOP_LIST_LIST_SRIQ_PREMISE_IMPL_DEFINED
@@ -49,26 +55,20 @@ SLOP_LIST_DEFINE(slop_list_sriq_Premise, slop_list_list_sriq_Premise)
 SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #endif
 
-#ifndef SLOP_LIST_U32_DEFINED
-#define SLOP_LIST_U32_DEFINED
-#define SLOP_LIST_U32_IMPL_DEFINED
-SLOP_LIST_DEFINE(uint32_t, slop_list_u32)
-#endif
-
 #ifndef SLOP_LIST_LIST_TYPES_LIT_DEFINED
 #define SLOP_LIST_LIST_TYPES_LIT_DEFINED
 #define SLOP_LIST_LIST_TYPES_LIT_IMPL_DEFINED
 SLOP_LIST_DEFINE(slop_list_types_Lit, slop_list_list_types_Lit)
 #endif
 
-#ifndef SLOP_OPTION_U8_DEFINED
-#define SLOP_OPTION_U8_DEFINED
-SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
-#endif
-
 #ifndef SLOP_OPTION_U32_DEFINED
 #define SLOP_OPTION_U32_DEFINED
 SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
 #ifndef SLOP_LIST_TYPES_CLAUSE_DEFINED
@@ -327,6 +327,7 @@ struct sriqref_RefIn {
     int64_t nrole;
     int64_t nfn;
     int64_t nconst;
+    slop_list_u32 hidden;
 };
 typedef struct sriqref_RefIn sriqref_RefIn;
 
@@ -440,6 +441,8 @@ sriqref_Committing sriqref_ref_apply(slop_arena* arena, sriqctx_Structure st, sr
 int64_t sriqref_total_clauses(sriqctx_Structure st);
 uint8_t sriqref_inconsistent_now(slop_arena* arena, sriqref_Env env, sriqctx_Structure st);
 sriqctx_Structure sriqref_ref_elim(slop_arena* arena, sriqctx_Structure st);
+int64_t sriqref_initial_queries(sriqref_RefIn in);
+sriqctx_Structure sriqref_init_of(slop_arena* arena, sriqref_RefIn in);
 int64_t sriqref_ref_lambda(sriqctx_Triggers tr, sriqctx_Strategy s, int64_t nquery);
 sriqref_RefIn sriqref_ref_input(slop_arena* arena, sriqclauses_SriqClauses sc);
 sriqref_RefResult sriqref_ref_run(slop_arena* arena, sriqref_RefIn in, sriqref_RefConfig cfg);
@@ -535,6 +538,11 @@ SLOP_OPTION_DEFINE(sriqref_Committing, slop_option_sriqref_Committing)
 SLOP_OPTION_DEFINE(sriqref_Grown, slop_option_sriqref_Grown)
 #endif
 
+#ifndef SLOP_OPTION_U32_DEFINED
+#define SLOP_OPTION_U32_DEFINED
+SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
+
 #ifndef SLOP_OPTION_SRIQREF_REFIN_DEFINED
 #define SLOP_OPTION_SRIQREF_REFIN_DEFINED
 SLOP_OPTION_DEFINE(sriqref_RefIn, slop_option_sriqref_RefIn)
@@ -563,11 +571,6 @@ SLOP_OPTION_DEFINE(slop_list_sriq_Premise, slop_option_list_sriq_Premise)
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
-#endif
-
-#ifndef SLOP_OPTION_U32_DEFINED
-#define SLOP_OPTION_U32_DEFINED
-SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
 #endif
 
 #ifndef SLOP_OPTION_LIST_TYPES_LIT_DEFINED

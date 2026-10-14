@@ -1,0 +1,14 @@
+# sriq ABox split (slice 9j): a folded individual whose types clash only through ∃ and ∀.
+# a : A ⊓ B with A ⊑ ∃r.C and B ⊑ ∀r.¬C. a occurs in class assertions only, so the split folds it
+# into a hidden query class, whose unsat makes the input inconsistent.
+# Expect: inconsistent.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :r a owl:ObjectProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .
+:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom [ owl:complementOf :C ] ] .
+:a a owl:NamedIndividual , :A , :B .

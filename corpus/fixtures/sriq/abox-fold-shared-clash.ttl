@@ -1,0 +1,16 @@
+# sriq ABox split (slice 9j): individuals sharing a type set. a1, a2 and a3 are all X; b is Y.
+# Y is unsatisfiable through Y ⊑ ∃s.P and Y ⊑ ∀s.¬P. One representative per type set is checked,
+# and b's makes the input inconsistent.
+# Expect: inconsistent.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:X a owl:Class . :Y a owl:Class . :P a owl:Class . :s a owl:ObjectProperty .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :P ] .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:allValuesFrom [ owl:complementOf :P ] ] .
+:a1 a owl:NamedIndividual , :X . :a2 a owl:NamedIndividual , :X . :a3 a owl:NamedIndividual , :X .
+:b a owl:NamedIndividual , :Y .

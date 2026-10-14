@@ -51,9 +51,9 @@
           build-triggers triggers-of sole-at in-su in-pr in-sur in-prr lit-ground mentions-x
           tau-su tau-pr omega omega-d pow2-sat
           has-lit strat-choice core-of
-          init-structure ctx-count ctx-at set-at ctx-by-core
+          init-structure with-hidden ctx-count ctx-at set-at ctx-by-core
           lit-ok ctx-clause-ok
-          q-inconsistent q-unsat q-holds q-thing)
+          q-inconsistent q-unsat q-hidden-unsat q-holds q-thing)
 
   (type Strategy (enum st-trivial st-eager st-cautious))
 
@@ -509,6 +509,26 @@
         (record-new Structure (ctxs ctxs) (sets sets) (edges (list-new arena Edge))
                               (ord (named-consts arena nconst))))))
 
+  ;; The ABox split's Run H (SPEC §5.5): a hidden query class A, S2's name
+  ;; for an individual's type, gets a context v_A with core {A(x)} after the
+  ;; query contexts, and only unsat(A) is read of it.
+  (fn with-hidden ((arena Arena) (st Structure) (hidden (List U32)))
+    (@intent "st with a context of core {A(x)} and an empty set appended for each hidden query class A, in hidden's
+              order")
+    (@spec ((Arena Structure (List U32)) -> Structure))
+    (@alloc arena)
+    (if (== (list-len hidden) 0)
+      st
+      (let ((mut ctxs (list-new arena Ctx)) (mut sets (list-new arena CtxSet)))
+        (do (for-each (c (. st ctxs)) (list-push ctxs c))
+            (for-each (s (. st sets)) (list-push sets s))
+            (for-each (a hidden)
+              (let ((mut core (list-new arena Lit)))
+                (do (list-push core (atom1 a (at-x)))
+                    (list-push ctxs (record-new Ctx (core core) (root false)))
+                    (list-push sets (record-new CtxSet (cs (list-new arena Clause)))))))
+            (record-new Structure (ctxs ctxs) (sets sets) (edges (. st edges)) (ord (. st ord)))))))
+
   (fn ctx-count ((st Structure))
     (@intent "How many contexts")
     (@spec ((Structure) -> Int))
@@ -655,6 +675,17 @@
     (@spec ((Arena Structure U32) -> Bool))
     (@alloc arena)
     (q-of arena st (+ 2 (cast Int b)) (atom-x arena b) (list-new arena Lit)))
+
+  (fn q-hidden-unsat ((arena Arena) (st Structure) (nquery Int) (hidden (List U32)))
+    (@intent "Is some hidden query class A unsatisfiable: A(x) → ⊥ ∈̂ S_{v_A}, v_A the k-th context after the nquery
+              query contexts for A the k-th hidden class?")
+    (@spec ((Arena Structure Int (List U32)) -> Bool))
+    (@alloc arena)
+    (let ((mut found false) (mut k 0))
+      (do (for-each (a hidden)
+            (do (when (q-of arena st (+ (+ 2 nquery) k) (atom-x arena a) (list-new arena Lit)) (set! found true))
+                (set! k (+ k 1))))
+          found)))
 
   (fn q-holds ((arena Arena) (st Structure) (b U32) (a U32))
     (@intent "holds(B, A) iff B(x) → A(x) ∈̂ S_{v_B}")
