@@ -5389,17 +5389,20 @@ have a value), and *queries*: is `C` unsatisfiable, is `A ⊑ B`, for named clas
   a probe document is the caller's, named as the probe run's. A query naming an empty IRI, or a
   probe document that does not parse, refuses the input as a bad document does.
 - **The answer run asks without classifying first** (`howl_run_answer`, `Reasoner::answer`,
-  `howl ask`). It is the probe run alone, with no main run before it, so it costs one
-  classification instead of two (Requirement e99fc9a2).
-  - **Its answers are the two-run mode's**, for the same input and options (Constraint 499c3842).
-    It is the same probe run. The tests hold the two modes equal on every class pair of the
+  `howl ask`). It is the probe run alone, with no main run before it: one classification, of the
+  queries' module, instead of two of the whole input. When the module's run falls short it
+  classifies the whole input too (below) (Requirement e99fc9a2).
+  - **It keeps every `yes` and `no` the two-run mode gives**, for the same input and options
+    (Constraint 499c3842). It runs the same probe input, over its module for the queries (below),
+    so where the two-run mode is held back by an omission outside the module, it can answer `yes`
+    or `no` instead of `unknown`. The tests hold the two modes to that on every class pair of the
     fixtures under el, el++ and sriq, and on the probe scenarios: an omission, a cap of 0 and an
     inconsistent run.
   - **It has no main outcome, so no report.**
     - Its verdict is `inconclusive`, and its findings, omissions and rounds are empty or 0.
     - Its probe accessors answer as the two-run mode's do.
-    - Its profile is the one the probe run ran; under `auto`, the probe documents can move that
-      choice.
+    - Its profile is the one the run that answered ran. Under `auto` that is chosen for the
+      module, or, on the fallback, for the whole input with its probe documents.
     - `howl_run_ok` is true. It reads "the run has a result", and an answer run's result is its
       answers.
   - **Its lines are `profile P`, then the probe lines.** With nothing asked, nothing runs: the lines
@@ -5408,6 +5411,123 @@ have a value), and *queries*: is `C` unsatisfiable, is `A ⊑ B`, for named clas
   - **`howl ask` exits 0 when it answered, whatever the answers.** A `no` is not a failure and a
     `yes` is not a pass. It exits 2 when cancelled and 3 when it could not run. It refuses a run
     that asks nothing, and refuses `--report`, `--strict` and `--timings`, since none applies to it.
+
+**The answer run classifies a module, not the whole input** (Requirement e99fc9a2; Track P, P2).
+With queries naming the classes Σ₀, the answer run classifies M, the **syntactic ⊥-locality
+module** of O for Σ₀ [CGHKS08]. O is the probe run's input: the input, the probe documents and the
+query declarations. The two-run mode is unchanged.
+- **Why.** When HOWL can read every axiom of M, M entails exactly what O entails over the symbols
+  that matter, and is consistent exactly when O is (L2 below). When it cannot, M's run is
+  incomplete (L3), and the answer run falls back to O. So a complete run on M answers `no` soundly for O, even when O has
+  omissions outside M. M is usually far smaller than O. `auto` gates M, not O, so a module inside
+  `el` runs under `el`.
+- **Locality.** S is a set of IRIs (classes, properties and individuals alike: a punned IRI is in S
+  once). A role R, or its inverse, is *outside* S when its property IRI is not in S. A fresh role
+  or name never counts as outside, and nor does any IRI in OWL's namespace: `owl:Thing` is the
+  whole domain and `owl:topObjectProperty` relates every pair in every interpretation, so neither
+  can be emptied (`owl:Nothing` and the bottom property are empty anyway). Two sets of concepts are defined by simultaneous induction:
+  Con⊥(S), whose members are empty, and Con⊤(S), whose members are everything, in every
+  interpretation that leaves the symbols outside S empty (L0).
+  - **Con⊥(S):**
+    - `owl:Nothing`;
+    - a class not in S;
+    - `ObjectOneOf()` with no member;
+    - a conjunction with a conjunct in Con⊥;
+    - a disjunction whose disjuncts are all in Con⊥;
+    - `¬C` with C in Con⊤;
+    - `∃R.C` with R outside S or C in Con⊥;
+    - `∃R.{a}` and `∃R.Self` with R outside S;
+    - `≥n R` and `=n R` with n ≥ 1 and R outside S;
+    - `≥n R.C` and `=n R.C` with n ≥ 1 and R outside S or C in Con⊥.
+  - **Con⊤(S):**
+    - `owl:Thing`;
+    - a conjunction whose conjuncts are all in Con⊤;
+    - a disjunction with a disjunct in Con⊤;
+    - `¬C` with C in Con⊥;
+    - `∀R.C` with R outside S or C in Con⊤;
+    - `≥0 R` and `≥0 R.C`;
+    - `≤n R` and `=0 R` with R outside S;
+    - `≤n R.C` and `=0 R.C` with R outside S or C in Con⊥.
+  - **Neither:** a data range or an undecodable class expression (`rc-data`, `rc-anon`) is in
+    neither set, and nor is anything not listed.
+
+  An axiom is **local** for S when:
+
+  | Axiom | Local for S when |
+  |---|---|
+  | `C ⊑ D` | C ∈ Con⊥ or D ∈ Con⊤ |
+  | `≡(C₁…Cₙ)` | all Cᵢ ∈ Con⊥, or all ∈ Con⊤ |
+  | `Disjoint(C₁…Cₙ)` | all but at most one Cᵢ ∈ Con⊥ |
+  | `DisjointUnion(A, C₁…Cₙ)` | A ∉ S and every Cᵢ ∈ Con⊥ |
+  | `R ⊑ S′`; `Trans(R)`; `Func`, `InvFunc`, `Sym`, `Asym`, `Irr(R)` | R outside S |
+  | `R₁∘…∘Rₙ ⊑ S′` | some Rᵢ outside S |
+  | `≡(R₁…Rₙ)`; `R ≡ S′⁻` | every role outside S |
+  | `Disjoint(R₁…Rₙ)` | all but at most one outside S |
+  | `Domain(R, C)`, `Range(R, C)` | R outside S, or C ∈ Con⊤ |
+  | `C(a)` | C ∈ Con⊤ |
+  | `¬R(a, b)` | R outside S |
+  | `Same(a…)`, `Different(a…)` | it names at most one individual |
+  | declarations | always |
+
+  Never local: `R(a, b)`; `Ref(R)`; keys; data axioms; SWRL; anonymous individuals; reserved
+  vocabulary; unrecognized triples. These are the arms that carry only an `InputRef`.
+- **The module.** Start with M = ∅ and S = Σ₀. While some axiom of O outside M is not local for S,
+  add it to M and its signature to S. Each axiom is re-tested only when a symbol it mentions joins S,
+  since locality can only be lost as S grows.
+  - **The result is a function of O and Σ₀**: M keeps O's axiom order, so answers stay
+    input-determined (§6.8).
+  - **Signatures:** an axiom's signature is every IRI it names. An `InputRef`'s text is not read, so
+    an axiom carrying one adds only what it names structurally.
+  - **The decoded input.** M's decoded input is M's axioms, plus the input signature restricted to
+    S and the built-ins. A class outside the module gets no context and no query.
+  - **Decode-level omissions are kept whole:** unresolved imports and undeclared properties. They
+    name no axiom, so they cannot be placed inside or outside M.
+  - **Data lemma and S1's guard:** the data lemma has already run over O, so the inert data axioms
+    are gone. S1's guard runs on M.
+- **Proof** (HOWL's, for this representation; [CGHKS08] proves the general case):
+  - **L0.** Let I be any interpretation, and I′ the one that agrees with I on S, on OWL's own
+    vocabulary, and on every individual and datatype, and is empty on every other class and
+    property. Then every concept in
+    Con⊥(S) is empty in I′, and every concept in Con⊤(S) is the whole domain. This follows by
+    induction over the two definitions together, with one case per row above; for example,
+    `(≤n R.C)^{I′}` is everything when R^{I′} or C^{I′} is empty.
+  - **L1.** I′ satisfies every axiom that is local for S, by L0 and the table, one row at a time.
+    For example, `C ⊑ D` holds when C^{I′} = ∅ or D^{I′} = Δ.
+  - **L2.** Let M be the module and S = Σ₀ ∪ sig(M), every symbol of M known.
+    - Every model I of M gives a model I′ of O. I′ agrees with I on sig(M) ⊆ S, so it satisfies M;
+      every axiom outside M is local for S, so by L1 it satisfies those too.
+    - Hence O ⊨ β exactly when M ⊨ β, for every β whose symbols lie in S. The direction from O to M
+      holds because I′ falsifies β whenever I does, as they agree on S. The other direction holds
+      because M ⊆ O.
+    - Hence O is consistent exactly when M is.
+  - **L3.** Whenever M contains an axiom whose signature HOWL cannot read in full, the run on M is
+    incomplete. Such an axiom has an `InputRef` arm, or a concept with `rc-data` or `rc-anon` in it.
+    Neither is in any rung's profile (`disposition`, `concept-in-profile`), so the axiom is an
+    omission in M's run, and that run answers no `no`. A test pins this for every rung.
+    - So L2's condition "every symbol of M known" holds whenever a `no` is given.
+    - `yes` needs only M ⊆ O, as does an inconsistency.
+  - **L4.** The answers follow §8.4's three-valued rules over M's run:
+    - `yes` is sound because M ⊆ O.
+    - `no` needs M's run complete. Then M ⊭ β by the calculus's completeness, so O ⊭ β by L2, and O
+      is consistent by L2, so the `no` is not vacuous.
+    - An inconsistent M makes O inconsistent too, so every answer is a flagged, vacuous `yes`.
+- **The module run is used only when it is complete, or found an inconsistency.** Otherwise (an
+  omission inside M, a round cap or the clause budget stopping it) the answer run classifies the
+  whole of O instead, which is exactly the two-run mode's probe run. The second run costs time only
+  when the module's falls short.
+- **So it keeps every `yes` and `no` the two-run mode gives** (Constraint 499c3842):
+  - When the module run is used and complete, its answers are exact (L4), and so is every
+    two-run `yes` and `no`.
+  - An inconsistency the module run finds is O's (M ⊆ O). Every answer is then a flagged `yes`, as
+    the two-run mode's would be.
+  - Otherwise the answers are the two-run mode's own.
+  - Where the module run is complete but the two-run mode is not (an omission outside M), it
+    answers where that mode says `unknown`.
+  - The tests hold the two modes to this on every class pair of the fixtures, under el, el++ and
+    sriq.
+
+[CGHKS08] Cuenca Grau, Horrocks, Kazakov, Sattler, *Modular Reuse of Ontologies: Theory and
+Practice*, JAIR 31 (2008), 273–318.
 
 **Dual-engine cross-check changes §8.2's story.** The pipeline runs an agreement stage that
 cross-checks the TBox and ABox engines on a deterministic probe set **in the EL ∩ RL entailment

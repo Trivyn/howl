@@ -442,7 +442,7 @@
       ((ok _)
         (match doc
           ((none)   (none))
-          ((some d) (some (probe-encoded arena (deref d) resolved queries config)))))))
+          ((some d) (some (probe-encoded arena (deref d) resolved queries config false)))))))
 
   (fn with-probe ((arena Arena) (main (Result Outcome Fault)) (probed (Option (Result Probing Fault))))
     (@intent "The run's result: the main run's, unless its probe run faulted")
@@ -569,7 +569,7 @@
       (do (println "howl ask: nothing asked; give --ask-unsat C or --ask-sub A B") EXIT_ERROR)
       (let ((asked (sort-queries arena queries))
             (doc   (probe-document pfront (deref enc) (deref penc) asked))
-            (res   (probe-encoded arena (deref doc) resolved asked cfg)))
+            (res   (probe-encoded arena (deref doc) resolved asked cfg true)))
         (do
           (arena-free front)
           (match res

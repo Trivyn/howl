@@ -35,6 +35,7 @@
 #include "slop_howl.h"
 #include "slop_el.h"
 #include "slop_probe.h"
+#include "slop_locality.h"
 #include "slop_premise.h"
 #include "slop_report.h"
 #include "slop_strlib.h"
@@ -111,16 +112,16 @@ SLOP_LIST_DEFINE(types_AxiomRef, slop_list_types_AxiomRef)
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
 #endif
 
-#ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
-#define SLOP_LIST_SROIQ_SAXIOM_DEFINED
-#define SLOP_LIST_SROIQ_SAXIOM_IMPL_DEFINED
-SLOP_LIST_DEFINE(sroiq_SAxiom, slop_list_sroiq_SAxiom)
-#endif
-
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
+#endif
+
+#ifndef SLOP_LIST_SROIQ_SAXIOM_DEFINED
+#define SLOP_LIST_SROIQ_SAXIOM_DEFINED
+#define SLOP_LIST_SROIQ_SAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(sroiq_SAxiom, slop_list_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_LIST_TYPES_DLCLAUSE_DEFINED
@@ -270,14 +271,14 @@ SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
-#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
-#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
-SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
-#endif
-
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
@@ -1326,6 +1327,18 @@ uint8_t test_test_unknown_owl_vocabulary_still_decodes(slop_arena* arena);
 uint8_t test_test_conflicting_declarations_are_an_input_error(slop_arena* arena);
 slop_option_gate_GateResult test_gate_ttl(slop_arena* arena, slop_string ttl);
 slop_option_gate_GateResult test_gate_ttl_in(slop_arena* arena, slop_string ttl, types_Profile p);
+slop_list_owl2_RawAxiom test_axioms_of_ttl(slop_arena* arena, slop_string ttl);
+uint8_t test_is_declaration(owl2_RawAxiom ax);
+slop_map* test_t_iris(slop_arena* arena, slop_list_string names);
+uint8_t test_loc(slop_arena* arena, slop_string label, slop_string ttl, slop_list_string names, uint8_t want);
+uint8_t test_test_locality_table(slop_arena* arena);
+uint8_t test_test_unreadable_is_omitted(slop_arena* arena);
+uint8_t test_test_module_order_free(slop_arena* arena);
+slop_list_string test_rendered_sorted(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+uint8_t test_lines_equal(slop_list_string a, slop_list_string b);
+slop_string test_module_answer(slop_arena* arena, slop_string text, slop_string sub, slop_string sup);
+uint8_t test_test_module_answers(slop_arena* arena);
+uint8_t test_ends_with_line(slop_arena* arena, slop_string text, slop_string line);
 int64_t test_gate_omissions_of_ttl(slop_arena* arena, slop_string ttl);
 slop_string test_gate_accepted_of_ttl(slop_arena* arena, slop_string ttl);
 slop_string test_rc_prefix(void);
@@ -1836,8 +1849,8 @@ uint8_t test_test_probes_agree_with_report(slop_arena* arena);
 uint8_t test_test_answer_equals_two_run(slop_arena* arena);
 uint8_t test_answer_equals_two_run(slop_arena* arena, slop_string path, types_Profile profile);
 uint8_t test_answer_equals_on(slop_arena* arena, slop_string text, slop_list_rdf_IRI cs, slop_string path, types_Profile profile);
-uint8_t test_same_answers(howl_Run r, howl_Run a);
-uint8_t test_answer_run_shape(slop_arena* arena, howl_Run a, howl_Run r);
+uint8_t test_answer_run_shape(slop_arena* arena, howl_Run a);
+uint8_t test_answer_run_agrees(howl_Run r, howl_Run a);
 slop_string test_lines_text(slop_arena* arena, howl_Run r);
 uint8_t test_test_answer_run_edges(slop_arena* arena);
 slop_string test_probe_prefixes(void);
@@ -2006,14 +2019,14 @@ SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
 SLOP_OPTION_DEFINE(gate_GateResult, slop_option_gate_GateResult)
 #endif
 
-#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
-#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
-SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
-#endif
-
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+#define SLOP_OPTION_SROIQ_SAXIOM_DEFINED
+SLOP_OPTION_DEFINE(sroiq_SAxiom, slop_option_sroiq_SAxiom)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED

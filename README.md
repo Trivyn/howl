@@ -133,8 +133,11 @@ howl --version
   shows up as unsatisfiable or changes the exit code. `yes` holds even when the probe run was
   incomplete; `no` needs a complete one.
 - **`howl ask FILE --ask-unsat C | --ask-sub A B ...`** answers the queries alone. It runs only the
-  probe run, with no main run and no report, so it costs one classification instead of two, and
-  gives the same answers. It prints `profile P` and the probe lines, and exits 0 when it answered,
+  probe run, with no main run and no report: one classification of the queries' ⊥-locality
+  module, instead of two of the whole ontology (the whole ontology is classified too only when the
+  module's run falls short). Because only the module counts, an omission elsewhere in the ontology does
+  not hold back a `no`: it gives every `yes` and `no` the two-run mode gives, and may answer where
+  that mode says `unknown`. It prints `profile P` and the probe lines, and exits 0 when it answered,
   whatever the answers (2 if cancelled, 3 on an error). The library's `howl_run_answer` and the
   crate's `Reasoner::answer` do the same.
 

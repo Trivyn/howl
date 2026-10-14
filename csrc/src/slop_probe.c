@@ -17,15 +17,15 @@ slop_option_u8 probe_el_holds(types_Saturation sat, types_Outcome o, rdf_IRI a, 
 uint8_t probe_has_context(types_Saturation sat, types_Outcome o, types_Node n);
 slop_option_u8 probe_ksc_holds(types_KscResult r, rdf_IRI a, rdf_IRI b);
 
-typedef struct { slop_list_probe_Query qs; } probe__lambda_1380_env_t;
+typedef struct { slop_list_probe_Query qs; } probe__lambda_1409_env_t;
 
-static int64_t probe__lambda_1380(probe__lambda_1380_env_t* _env, int64_t i, int64_t j) { return probe_query_cmp(probe_query_at(_env->qs, i), probe_query_at(_env->qs, j)); }
+static int64_t probe__lambda_1409(probe__lambda_1409_env_t* _env, int64_t i, int64_t j) { return probe_query_cmp(probe_query_at(_env->qs, i), probe_query_at(_env->qs, j)); }
 
 int64_t probe_kind_rank(probe_QueryKind k) {
-    __auto_type _mv_1378 = k;
-    if (_mv_1378 == probe_QueryKind_query_unsatisfiable) {
+    __auto_type _mv_1407 = k;
+    if (_mv_1407 == probe_QueryKind_query_unsatisfiable) {
         return 0;
-    } else if (_mv_1378 == probe_QueryKind_query_subsumed) {
+    } else if (_mv_1407 == probe_QueryKind_query_subsumed) {
         return 1;
     }
     SLOP_UNREACHABLE();
@@ -56,11 +56,11 @@ int64_t probe_query_cmp(probe_Query a, probe_Query b) {
 
 probe_Query probe_query_at(slop_list_probe_Query qs, int64_t i) {
     SLOP_PRE(((i >= 0)), "(>= i 0)");
-    __auto_type _mv_1379 = ({ __auto_type _lst = qs; size_t _idx = (size_t)i; slop_option_probe_Query _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1379.has_value) {
-        __auto_type q = _mv_1379.value;
+    __auto_type _mv_1408 = ({ __auto_type _lst = qs; size_t _idx = (size_t)i; slop_option_probe_Query _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_1408.has_value) {
+        __auto_type q = _mv_1408.value;
         return q;
-    } else if (!_mv_1379.has_value) {
+    } else if (!_mv_1408.has_value) {
         return ((probe_Query){.kind = probe_QueryKind_query_unsatisfiable, .sub = ((rdf_IRI){.value = SLOP_STR("")}), .sup = ((rdf_IRI){.value = SLOP_STR("")})});
     }
     SLOP_UNREACHABLE();
@@ -68,7 +68,7 @@ probe_Query probe_query_at(slop_list_probe_Query qs, int64_t i) {
 
 slop_list_probe_Query probe_sort_queries(slop_arena* arena, slop_list_probe_Query qs) {
     {
-        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((qs).len)))), ({ probe__lambda_1380_env_t* probe__lambda_1380_env = (probe__lambda_1380_env_t*)slop_arena_alloc(arena, sizeof(probe__lambda_1380_env_t)); *probe__lambda_1380_env = (probe__lambda_1380_env_t){ .qs = qs }; (slop_closure_t){ (void*)probe__lambda_1380, (void*)probe__lambda_1380_env }; }));
+        __auto_type idx = canon_sort_range(arena, ((int64_t)(((int64_t)((qs).len)))), ({ probe__lambda_1409_env_t* probe__lambda_1409_env = (probe__lambda_1409_env_t*)slop_arena_alloc(arena, sizeof(probe__lambda_1409_env_t)); *probe__lambda_1409_env = (probe__lambda_1409_env_t){ .qs = qs }; (slop_closure_t){ (void*)probe__lambda_1409, (void*)probe__lambda_1409_env }; }));
         __auto_type out = ((slop_list_probe_Query){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
             __auto_type _coll = idx;
@@ -111,10 +111,10 @@ termstore_Encoded* probe_probe_document(slop_arena* arena, termstore_Encoded mai
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type q = _coll.data[_i];
                 termstore_encoded_add(arena, p, probe_class_declaration(arena, q.sub));
-                __auto_type _mv_1381 = q.kind;
-                if (_mv_1381 == probe_QueryKind_query_subsumed) {
+                __auto_type _mv_1410 = q.kind;
+                if (_mv_1410 == probe_QueryKind_query_subsumed) {
                     termstore_encoded_add(arena, p, probe_class_declaration(arena, q.sup));
-                } else if (_mv_1381 == probe_QueryKind_query_unsatisfiable) {
+                } else if (_mv_1410 == probe_QueryKind_query_unsatisfiable) {
                 }
             }
         }
@@ -141,9 +141,9 @@ slop_list_probe_Answered probe_answer_queries(slop_arena* arena, types_Outcome o
 }
 
 probe_ProbeAnswer probe_answer_of(types_Outcome o, probe_Query q) {
-    __auto_type _mv_1382 = probe_query_holds(o, q);
-    if (_mv_1382.has_value) {
-        __auto_type h = _mv_1382.value;
+    __auto_type _mv_1411 = probe_query_holds(o, q);
+    if (_mv_1411.has_value) {
+        __auto_type h = _mv_1411.value;
         if (h) {
             return probe_ProbeAnswer_answer_yes;
         } else if (types_outcome_is_complete(o)) {
@@ -151,17 +151,17 @@ probe_ProbeAnswer probe_answer_of(types_Outcome o, probe_Query q) {
         } else {
             return probe_ProbeAnswer_answer_unknown;
         }
-    } else if (!_mv_1382.has_value) {
+    } else if (!_mv_1411.has_value) {
         return probe_ProbeAnswer_answer_unknown;
     }
     SLOP_UNREACHABLE();
 }
 
 rdf_IRI probe_query_target(probe_Query q) {
-    __auto_type _mv_1383 = q.kind;
-    if (_mv_1383 == probe_QueryKind_query_subsumed) {
+    __auto_type _mv_1412 = q.kind;
+    if (_mv_1412 == probe_QueryKind_query_subsumed) {
         return q.sup;
-    } else if (_mv_1383 == probe_QueryKind_query_unsatisfiable) {
+    } else if (_mv_1412 == probe_QueryKind_query_unsatisfiable) {
         return ((rdf_IRI){.value = vocab_OWL_NOTHING});
     }
     SLOP_UNREACHABLE();
@@ -177,21 +177,21 @@ slop_option_u8 probe_query_holds(types_Outcome o, probe_Query q) {
         } else if (canon_iri_cmp(q.sub, b) == 0) {
             return (slop_option_u8){.has_value = 1, .value = 1};
         } else {
-            __auto_type _mv_1384 = o.evidence;
-            switch (_mv_1384.tag) {
+            __auto_type _mv_1413 = o.evidence;
+            switch (_mv_1413.tag) {
                 case types_Evidence_el_evidence:
                 {
-                    __auto_type sat = _mv_1384.data.el_evidence;
+                    __auto_type sat = _mv_1413.data.el_evidence;
                     return probe_el_holds(sat, o, q.sub, b);
                 }
                 case types_Evidence_ksc_evidence:
                 {
-                    __auto_type r = _mv_1384.data.ksc_evidence;
+                    __auto_type r = _mv_1413.data.ksc_evidence;
                     return probe_ksc_holds(r, q.sub, b);
                 }
                 case types_Evidence_sriq_evidence:
                 {
-                    __auto_type _ = _mv_1384.data.sriq_evidence;
+                    __auto_type _ = _mv_1413.data.sriq_evidence;
                     return probe_findings_hold(o.findings, q.sub, b);
                 }
             }
@@ -238,11 +238,11 @@ slop_option_u8 probe_findings_hold(types_Findings f, rdf_IRI a, rdf_IRI b) {
 }
 
 uint8_t probe_node_is(types_Node n, rdf_IRI i) {
-    __auto_type _mv_1385 = n;
-    switch (_mv_1385.tag) {
+    __auto_type _mv_1414 = n;
+    switch (_mv_1414.tag) {
         case types_Node_class_node:
         {
-            __auto_type s = _mv_1385.data.class_node;
+            __auto_type s = _mv_1414.data.class_node;
             return (canon_iri_cmp(s, i) == 0);
         }
         default: {
@@ -268,16 +268,16 @@ slop_option_u8 probe_el_holds(types_Saturation sat, types_Outcome o, rdf_IRI a, 
 }
 
 uint8_t probe_has_context(types_Saturation sat, types_Outcome o, types_Node n) {
-    __auto_type _mv_1386 = types_renamed_node(o.names, n);
-    if (!_mv_1386.has_value) {
+    __auto_type _mv_1415 = types_renamed_node(o.names, n);
+    if (!_mv_1415.has_value) {
         return 0;
-    } else if (_mv_1386.has_value) {
-        __auto_type r = _mv_1386.value;
-        __auto_type _mv_1388 = ({ void* _ptr = slop_map_get(sat.contexts, &(r)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
-        if (_mv_1388.has_value) {
-            __auto_type _ = _mv_1388.value;
+    } else if (_mv_1415.has_value) {
+        __auto_type r = _mv_1415.value;
+        __auto_type _mv_1417 = ({ void* _ptr = slop_map_get(sat.contexts, &(r)); _ptr ? (slop_option_types_Context){ .has_value = true, .value = *(types_Context*)_ptr } : (slop_option_types_Context){ .has_value = false }; });
+        if (_mv_1417.has_value) {
+            __auto_type _ = _mv_1417.value;
             return 1;
-        } else if (!_mv_1388.has_value) {
+        } else if (!_mv_1417.has_value) {
             return 0;
         }
         SLOP_UNREACHABLE();
