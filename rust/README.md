@@ -117,10 +117,30 @@ the verdict.
 - `report.probe_inconsistent`: an inconsistent probe run entails everything, so every answer is a
   vacuous `Yes`.
 
+### Answers alone (`howl ask`)
+
+When you need only the answers, `Reasoner::answer` runs the probe run alone, with no main
+classification before it. That is one classification instead of two, and the answers are the ones
+`classify` puts in `report.probes`:
+
+```rust
+let answers = Reasoner::new().answer(&input)?;
+for p in &answers.probes {
+    println!("{:?}: {:?}", p.query, p.answer);
+}
+```
+
+- `answers.probes`, `answers.inconsistent` and `answers.omissions` mean what `report.probes`,
+  `report.probe_inconsistent` and `report.probe_omissions` do.
+- `answers.profile` is the profile the probe run ran. Under `ProfileSelection::Auto` the probe
+  documents can move it. It is `None` when nothing was asked, so nothing ran.
+- `answers.lines()` are what `howl ask` prints: `profile P`, then the probe lines.
+- There is no verdict: an answer run makes no claim about the ontology's coherence.
+
 ## Cancellation
 
 HOWL never reads a clock, so a timeout is the host's job. Pass a `CancelToken` to
-`classify_cancellable` and call `cancel()` from your watchdog. The engine checks the token at each
+`classify_cancellable` (or `answer_cancellable`) and call `cancel()` from your watchdog. The engine checks the token at each
 round boundary and returns `Fault::Cancelled`. A cancelled run carries no partial result, because
 where it stopped depends on scheduling.
 
