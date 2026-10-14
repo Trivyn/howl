@@ -1,0 +1,13 @@
+# sriq ABox split (slice 9j): abox-fold-shared-clash's control. Y ⊑ ∀s.Q instead, so Y is satisfiable.
+# Expect: consistent; Y ⊑ Y.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:X a owl:Class . :Y a owl:Class . :P a owl:Class . :Q a owl:Class . :s a owl:ObjectProperty .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :P ] .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:allValuesFrom :Q ] .
+:a1 a owl:NamedIndividual , :X . :a2 a owl:NamedIndividual , :X . :a3 a owl:NamedIndividual , :X .
+:b a owl:NamedIndividual , :Y .

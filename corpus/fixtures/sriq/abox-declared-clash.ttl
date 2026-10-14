@@ -1,0 +1,12 @@
+# sriq ABox split (slice 9j): an individual with only a declaration, in an inconsistent TBox
+# (⊤ ⊑ A, A ⊑ ⊥). The individual folds to nothing; the hierarchy run finds ⊤ → ⊥.
+# Expect: inconsistent.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:A a owl:Class .
+owl:Thing rdfs:subClassOf :A . :A rdfs:subClassOf owl:Nothing .
+:a a owl:NamedIndividual .
