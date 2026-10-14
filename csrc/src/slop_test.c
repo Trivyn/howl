@@ -630,6 +630,8 @@ uint8_t test_answer_run_shape(slop_arena* arena, howl_Run a);
 uint8_t test_answer_run_agrees(howl_Run r, howl_Run a);
 slop_string test_lines_text(slop_arena* arena, howl_Run r);
 uint8_t test_test_answer_run_edges(slop_arena* arena);
+howl_Run test_du_run(slop_arena* arena, slop_string text);
+uint8_t test_test_disjoint_union_builtin_head(slop_arena* arena);
 slop_string test_probe_prefixes(void);
 slop_string test_probe_tail(slop_arena* arena, howl_Run r);
 uint8_t test_tail_is(slop_arena* arena, slop_string label, howl_Run r, slop_string want);
@@ -919,8 +921,8 @@ slop_option_types_Outcome test_classify_fixture(slop_arena* arena, slop_string p
 slop_option_types_Outcome test_classify_fixture_with(slop_arena* arena, slop_string path, int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:312:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:313:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:313:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:314:57")));
         __auto_type _mv_1692 = ttl_parse_ttl_file(arena, path);
         if (!_mv_1692.is_ok) {
             __auto_type _ = _mv_1692.data.err;
@@ -2753,7 +2755,7 @@ uint8_t test_ends_with_line(slop_arena* arena, slop_string text, slop_string lin
     {
         __auto_type n = string_len(text);
         __auto_type m = string_len(line);
-        return ((n >= (m + 1)) && string_eq(strlib_substring(arena, text, ((int64_t)(SLOP_RANGE(int64_t, (n - (m + 1)), 1, 0, 0, 0, "(Int 0 ..) at test.slop:2237:62"))), ((int64_t)(SLOP_RANGE(int64_t, m, 1, 0, 0, 0, "(Int 0 ..) at test.slop:2237:94")))), line));
+        return ((n >= (m + 1)) && string_eq(strlib_substring(arena, text, ((int64_t)(SLOP_RANGE(int64_t, (n - (m + 1)), 1, 0, 0, 0, "(Int 0 ..) at test.slop:2238:62"))), ((int64_t)(SLOP_RANGE(int64_t, m, 1, 0, 0, 0, "(Int 0 ..) at test.slop:2238:94")))), line));
     }
 }
 
@@ -4159,9 +4161,9 @@ slop_list_string test_strs(slop_arena* arena, slop_string text) {
         int64_t start = 0;
         int64_t i = 0;
         while (i <= n) {
-            if ((i == n) || (((int64_t)(strlib_char_at(text, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3618:60")))) == 32)) {
+            if ((i == n) || (((int64_t)(strlib_char_at(text, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3619:60")))) == 32)) {
                 if (i > start) {
-                    ({ __auto_type _lst_p = &(out); __auto_type _item = (strlib_substring(arena, text, ((int64_t)(SLOP_RANGE(int64_t, start, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3619:91"))), ((int64_t)(SLOP_RANGE(int64_t, (i - start), 1, 0, 0, 0, "(Int 0 ..) at test.slop:3619:115"))))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    ({ __auto_type _lst_p = &(out); __auto_type _item = (strlib_substring(arena, text, ((int64_t)(SLOP_RANGE(int64_t, start, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3620:91"))), ((int64_t)(SLOP_RANGE(int64_t, (i - start), 1, 0, 0, 0, "(Int 0 ..) at test.slop:3620:115"))))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
                 start = (i + 1);
             }
@@ -4196,7 +4198,7 @@ sriqnames_SriqNormal test_row_normal(slop_arena* arena, slop_list_types_DlClause
             ({ __auto_type _lst_p = &(sfills); __auto_type _item = (top_filler); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             k = (k + 1);
         }
-        return ((sriqnames_SriqNormal){.clauses = cs, .concepts = concepts, .sroles = sroles, .sfills = sfills, .bars = test_iris_of(arena, test_strs(arena, SLOP_STR("s"))), .fns = ((int64_t)(SLOP_RANGE(int64_t, nfns, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3649:41"))), .classes = test_iris_of(arena, test_strs(arena, SLOP_STR("A B C"))), .individuals = test_iris_of(arena, test_strs(arena, SLOP_STR("a b"))), .omitted = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
+        return ((sriqnames_SriqNormal){.clauses = cs, .concepts = concepts, .sroles = sroles, .sfills = sfills, .bars = test_iris_of(arena, test_strs(arena, SLOP_STR("s"))), .fns = ((int64_t)(SLOP_RANGE(int64_t, nfns, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3650:41"))), .classes = test_iris_of(arena, test_strs(arena, SLOP_STR("A B C"))), .individuals = test_iris_of(arena, test_strs(arena, SLOP_STR("a b"))), .omitted = ((slop_list_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
     }
 }
 
@@ -4301,7 +4303,7 @@ slop_list_int test_fn_ids(slop_arena* arena, int64_t n) {
         __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t i = 0;
         while (i < n) {
-            ({ __auto_type _lst_p = &(out); __auto_type _item = (((int64_t)(SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3710:62")))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (((int64_t)(SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3711:62")))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             i = (i + 1);
         }
         return out;
@@ -4309,11 +4311,11 @@ slop_list_int test_fn_ids(slop_arena* arena, int64_t n) {
 }
 
 types_DlClause test_dl4_of(slop_arena* arena, slop_string sub, int64_t n, slop_option_types_DName filler) {
-    return ((types_DlClause){ .tag = types_DlClause_dl4, .data.dl4 = ((types_Dl4){.sub = test_dn(arena, sub), .role = test_dp(arena, SLOP_STR("r")), .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3716:112"))), .filler = filler, .srole = ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 })}) });
+    return ((types_DlClause){ .tag = types_DlClause_dl4, .data.dl4 = ((types_Dl4){.sub = test_dn(arena, sub), .role = test_dp(arena, SLOP_STR("r")), .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 0, 0, "(Int 0 ..) at test.slop:3717:112"))), .filler = filler, .srole = ((types_DRole){ .tag = types_DRole_dr_sub, .data.dr_sub = 0 })}) });
 }
 
 types_DlClause test_dl2_of(slop_arena* arena, slop_string sub, types_DRole role, int64_t n, slop_option_types_DName filler) {
-    return ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = test_dn(arena, sub), .role = role, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at test.slop:3723:102"))), .filler = filler, .fns = test_fn_ids(arena, n)}) });
+    return ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = test_dn(arena, sub), .role = role, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at test.slop:3724:102"))), .filler = filler, .fns = test_fn_ids(arena, n)}) });
 }
 
 uint8_t test_table1_rows_names(slop_arena* arena) {
@@ -8843,7 +8845,7 @@ slop_result_types_Outcome_types_Fault test_sriq_run_cfg(slop_arena* arena, slop_
 types_ReasonerConfig test_with_rounds(int64_t k) {
     {
         __auto_type cfg = types_default_config();
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, k, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7290:91")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, k, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:7291:91")));
         return cfg;
     }
 }
@@ -10252,7 +10254,7 @@ slop_string test_ksc_fixture_at(int64_t i) {
 types_ReasonerConfig test_cap_config(int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:8386:59")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:8387:59")));
         return cfg;
     }
 }
@@ -11231,8 +11233,8 @@ uint8_t test_test_ksc_commit_identical(slop_arena* arena) {
 types_ReasonerConfig test_ksc_config(int64_t workers, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:9000:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:9001:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, workers, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:9001:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:9002:57")));
         return cfg;
     }
 }
@@ -13088,6 +13090,39 @@ uint8_t test_test_answer_run_edges(slop_arena* arena) {
     }
 }
 
+howl_Run test_du_run(slop_arena* arena, slop_string text) {
+    {
+        __auto_type in = howl_input_new();
+        __auto_type o = howl_default_options();
+        o.profile = types_Profile_profile_sriq;
+        howl_input_add_turtle(in, string_concat(arena, test_probe_prefixes(), text));
+        {
+            __auto_type r = howl_run_classify(in, o);
+            howl_input_free(in);
+            return r;
+        }
+    }
+}
+
+uint8_t test_test_disjoint_union_builtin_head(slop_arena* arena) {
+    {
+        __auto_type thing = test_du_run(arena, SLOP_STR(":P a owl:Class . :Q a owl:Class . :P rdfs:subClassOf owl:Nothing . :Q rdfs:subClassOf owl:Nothing . owl:Thing owl:disjointUnionOf ( :P :Q ) .\n"));
+        __auto_type nothing = test_du_run(arena, SLOP_STR(":P a owl:Class . :Q a owl:Class . owl:Nothing owl:disjointUnionOf ( :P :Q ) .\n"));
+        {
+            __auto_type ok = ((howl_run_ok(thing)) && (howl_run_inconsistent(thing)) && (howl_run_ok(nothing)) && (!(howl_run_inconsistent(nothing))) && ((howl_run_unsat_len(nothing) == 2)) && (string_eq(howl_run_unsat(nothing, 0), SLOP_STR("http://example.org/t#P"))) && (string_eq(howl_run_unsat(nothing, 1), SLOP_STR("http://example.org/t#Q"))));
+            if (!(ok)) {
+                printf("%s", "  [du] owl:Thing head ok/inconsistent: ");
+                printf("%s", (howl_run_ok(thing)) ? "true" : "false");
+                printf("%s", " ");
+                printf("%s\n", (howl_run_inconsistent(thing)) ? "true" : "false");
+            }
+            howl_run_free(thing);
+            howl_run_free(nothing);
+            return ok;
+        }
+    }
+}
+
 slop_string test_probe_prefixes(void) {
     return SLOP_STR("@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n");
 }
@@ -13689,8 +13724,8 @@ types_ReasonerConfig test_with_budget(types_ProfileSelection sel, int64_t rounds
     {
         __auto_type cfg = types_default_config();
         cfg.selection = sel;
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, rounds, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11025:59")));
-        cfg.clause_budget = ((int64_t)(SLOP_RANGE(int64_t, budget, 1, 0, 1, 0, "(Int 1 ..) at test.slop:11026:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, rounds, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:11057:59")));
+        cfg.clause_budget = ((int64_t)(SLOP_RANGE(int64_t, budget, 1, 0, 1, 0, "(Int 1 ..) at test.slop:11058:52")));
         return cfg;
     }
 }
@@ -15034,7 +15069,7 @@ int64_t test_bound_arg(slop_string s) {
         uint8_t ok = ((string_len(s) > 0) && (string_len(s) <= 9));
         int64_t i = 0;
         while (ok && (i < string_len(s))) {
-            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:12070:47"))))) {
+            if (!(strlib_is_digit(strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at test.slop:12102:47"))))) {
                 ok = 0;
             }
             i = (i + 1);
@@ -15443,8 +15478,8 @@ int64_t test_dump_ksc_result(slop_arena* arena, types_KscResult r) {
 int64_t test_dump_ksc_classify(slop_arena* arena, test_KscFixture fx, int64_t w, int64_t cap) {
     {
         __auto_type cfg = types_default_config();
-        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:12337:52")));
-        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:12338:57")));
+        cfg.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, w, 1, 1, 1, 64, "(Int 1 .. 64) at test.slop:12369:52")));
+        cfg.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, cap, 1, 1, 0, 10000, "(Int 0 .. 10000) at test.slop:12370:57")));
         test_dump_num(arena, SLOP_STR("classify w="), w);
         test_dump_num(arena, SLOP_STR(" cap "), cap);
         printf("%s\n", "");
@@ -17408,6 +17443,15 @@ int64_t test_run_suite(void) {
             {
                 __auto_type r = test_test_answer_run_edges(arena);
                 test_print_test_result(SLOP_STR("§8.4: an answer run asking nothing runs nothing; refusals and bad options as classify's"), r);
+                if (r) {
+                    passed = (passed + 1);
+                } else {
+                    failed = (failed + 1);
+                }
+            }
+            {
+                __auto_type r = test_test_disjoint_union_builtin_head(arena);
+                test_print_test_result(SLOP_STR("§5.5 S0: a DisjointUnion headed by owl:Thing or owl:Nothing lowers to ⊤ or ⊥"), r);
                 if (r) {
                     passed = (passed + 1);
                 } else {

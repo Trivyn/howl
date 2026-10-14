@@ -34,6 +34,7 @@ slop_result_list_sroiq_SAxiom_string sriqnormal_s0_assertion(slop_arena* arena, 
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_same_individual(slop_arena* arena, slop_list_types_Node ns);
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_different_individuals(slop_arena* arena, slop_list_types_Node ns);
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_disjoint_union(slop_arena* arena, owl2_RawDisjointUnion du);
+sroiq_SConcept sriqnormal_named_class(rdf_IRI i);
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_axiom(slop_arena* arena, owl2_RawAxiom ax);
 int64_t sriqnormal_rep_at(sriqrbox_SriqRbox rb, int64_t n);
 types_RoleId sriqnormal_collapse_role(sriqrbox_SriqRbox rb, types_RoleId r);
@@ -728,7 +729,7 @@ slop_result_list_sroiq_SAxiom_string sriqnormal_s0_disjoint_union(slop_arena* ar
     } else if (_mv_251.is_ok) {
         __auto_type xs = _mv_251.data.ok;
         {
-            __auto_type c = ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_name, .data.sc_name = du.class });
+            __auto_type c = sriqnormal_named_class(du.class);
             __auto_type uni = ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_or, .data.sc_or = xs });
             __auto_type out = ((slop_list_sroiq_SAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
             ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqnormal_gci(arena, c, uni)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -744,6 +745,16 @@ slop_result_list_sroiq_SAxiom_string sriqnormal_s0_disjoint_union(slop_arena* ar
         }
     }
     SLOP_UNREACHABLE();
+}
+
+sroiq_SConcept sriqnormal_named_class(rdf_IRI i) {
+    if (string_eq(i.value, vocab_OWL_THING)) {
+        return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_top });
+    } else if (string_eq(i.value, vocab_OWL_NOTHING)) {
+        return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_bottom });
+    } else {
+        return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_name, .data.sc_name = i });
+    }
 }
 
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_axiom(slop_arena* arena, owl2_RawAxiom ax) {
@@ -1377,7 +1388,7 @@ int64_t sriqnormal_fresh_name(slop_arena* arena, sriqnormal_S2State* p, sroiq_SC
                 (*p) = s;
             }
         }
-        return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:734:9");
+        return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:744:9");
     }
 }
 
@@ -1523,11 +1534,11 @@ int64_t sriqnormal_fn_id(slop_arena* arena, sriqnormal_S2State* p, slop_string k
     } else if (!_mv_274.has_value) {
         {
             __auto_type s = (*p);
-            __auto_type id = ((int64_t)(SLOP_RANGE(int64_t, ((int64_t)(((*p).fnkeys).len)), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:824:36")));
+            __auto_type id = ((int64_t)(SLOP_RANGE(int64_t, ((int64_t)(((*p).fnkeys).len)), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:834:36")));
             ({ __auto_type _lst_p = &(s.fnkeys); __auto_type _item = (key); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-            ({ int64_t _val = SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:827:40"); slop_map_put(NULL, s.fnindex, &(key), &_val, sizeof(_val)); });
+            ({ int64_t _val = SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:837:40"); slop_map_put(NULL, s.fnindex, &(key), &_val, sizeof(_val)); });
             (*p) = s;
-            return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:829:13");
+            return SLOP_RANGE(int64_t, id, 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:839:13");
         }
     }
     SLOP_UNREACHABLE();
@@ -1698,7 +1709,7 @@ sroiq_SConcept sriqnormal_nnf(slop_arena* arena, sroiq_SConcept c, uint8_t pos) 
                 if (n == 0) {
                     return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_bottom });
                 } else {
-                    return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_atmost, .data.sc_atmost = { .f0 = ((int64_t)(SLOP_RANGE(int64_t, (n - 1), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:891:60"))), .f1 = r, .f2 = sriqnormal_sc(arena, sriqnormal_nnf(arena, (*f), 1)) } });
+                    return ((sroiq_SConcept){ .tag = sroiq_SConcept_sc_atmost, .data.sc_atmost = { .f0 = ((int64_t)(SLOP_RANGE(int64_t, (n - 1), 1, 0, 0, 0, "(Int 0 ..) at sriqnormal.slop:901:60"))), .f1 = r, .f2 = sriqnormal_sc(arena, sriqnormal_nnf(arena, (*f), 1)) } });
                 }
             }
             case sroiq_SConcept_sc_atmost:
@@ -1979,7 +1990,7 @@ uint8_t sriqnormal_define_dl2(slop_arena* arena, sriqnormal_S2State* p, types_DN
         ({ __auto_type _lst_p = &(parts); __auto_type _item = (int_to_string(arena, n)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(parts); __auto_type _item = (sriqnormal_drole_key(arena, p, s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
         ({ __auto_type _lst_p = &(parts); __auto_type _item = (sriqnormal_filler_key(arena, p, b)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-        return sriqnormal_emit(arena, p, ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = x, .role = s, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at sriqnormal.slop:1042:82"))), .filler = b, .fns = sriqnormal_fn_ids(arena, p, sriqnormal_key_of(arena, SLOP_STR("dl2"), parts), ((int64_t)(n)))}) }));
+        return sriqnormal_emit(arena, p, ((types_DlClause){ .tag = types_DlClause_dl2, .data.dl2 = ((types_Dl2){.sub = x, .role = s, .count = ((int64_t)(SLOP_RANGE(int64_t, n, 1, 0, 1, 0, "(Int 1 ..) at sriqnormal.slop:1052:82"))), .filler = b, .fns = sriqnormal_fn_ids(arena, p, sriqnormal_key_of(arena, SLOP_STR("dl2"), parts), ((int64_t)(n)))}) }));
     }
 }
 
