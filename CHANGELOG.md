@@ -66,8 +66,9 @@ The report grammar, the C ABI and the Rust API are unchanged.
 ### Known limits
 
 - **RO is inconclusive under `sriq`.** One of its runs passes the clause budget. `auto` steps down to
-  `el++`, whose run omits RO's inverses and so is inconclusive too. The parallel engine (slice 10) is
-  meant to lift this.
+  `el++`, whose run omits RO's inverses and so is inconclusive too. Almost all of RO's stored clauses
+  are copies of facts that hold everywhere. Storing them once, and counting the budget on what is
+  stored, should bring RO under it; neither is built yet. Running in parallel would not change it.
 - **OBI is out of `sriq`'s reach** (SPEC §12, M5 (c)). `--profile sriq` reports it inconclusive, and
   `auto` steps down to `el++`.
 - **`sriq`'s performance against HermiT and Sequoia is not yet recorded** (M5 (h)).
