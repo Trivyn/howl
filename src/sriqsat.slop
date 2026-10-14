@@ -46,11 +46,11 @@
   (import types (Lit Clause LitForm ATerm at-x at-u atom1 aterm-eq lit-cmp))
   (import sriqclauses (clause-cmp make-clause lit-set))
   (import sriqsubsume (Committed commit-min in-hat))
-  (import sriqindex (commit-indexed KIdx k-index k-query))
+  (import sriqindex (commit-indexed KIdx k-index k-index-premises k-query))
   (import sriqctx (Strategy Triggers EdgeLabel Edge Ctx CtxSet Structure build-triggers init-structure core-of
                     ctx-by-core strat-choice))
   (import canon (sort-range))
-  (import sriqorder (ranked))
+  (import sriqorder (SriqOrder ranked max-flags))
   (import sriq (Premise RConcl HState PredView PSlot CSub SuccSig KSets
                 hyper-start hyper-finish succ-sig k-sets covers succ-step pred-view rpred-view rpred-heads-ok body-at
                 joinable csub-lit join-rule Pos subterm-at))
@@ -77,11 +77,17 @@
   ;; which the tests diff the index and the sort against).
   ;; defer: predecessor relevance (R8), asked for; it is on only in its
   ;; scope (defer-on).
+  ;; views: read each stored clause's maximal flags from the store (slice
+  ;; 9k); false recomputes them every round, the baseline the tests diff.
+  ;; check: compare the kept flags with a recomputation after every round,
+  ;; counted in Counts' stale (a test's).
   (type SatConfig (record
     (base  RefConfig)
     (perm  Int)
     (scan  Bool)
-    (defer Bool)))
+    (defer Bool)
+    (views Bool)
+    (check Bool)))
 
   ;; Work counted over the run (no clock is read under src/).
   (type Counts (record
@@ -92,7 +98,8 @@
     (noms   Int)      ; Nom's children asked for
     (added  Int)      ; clauses committed: the sum of every Δ
     (acts   Int)      ; stored clauses that became supported (R8)
-    (hyper  Int)))    ; Hyper's choices tried
+    (hyper  Int)      ; Hyper's choices tried
+    (stale  Int)))    ; with check: kept flags that differ from a recomputation
 
   (type SatResult (record
     (res    RefResult)
@@ -108,7 +115,7 @@
     (nctx  Int)
     (ncst  Int)))
 
-;; trig(w, f) (R8): the atoms of K₂ that every evaluation of Succ for
+  ;; trig(w, f) (R8): the atoms of K₂ that every evaluation of Succ for
   ;; (w, f) has read, as a set in lit-cmp's order. A run's trig is sorted
   ;; by (w, f), each pair once.
   (type Supply (record
@@ -116,12 +123,25 @@
     (f    U32)
     (lits (List Lit))))
 
+  ;; One context's premise views as the store keeps them (slice 9k): for
+  ;; each clause of S_v, in S_v's content order, its head literals' maximal
+  ;; flags. A clause's flags are a function of the clause and the run's one
+  ;; order, which no round changes for a clause already stored (SPEC §5.5).
+  (type Flags (record
+    (fs (List (List Bool)))))
+
+  ;; S_v beside its flags, for derive to find a clause's flags by content.
+  (type View (record
+    (cs (List Clause))
+    (fs (List (List Bool)))))
+
   (type Step (record
     (st      Structure)
     (dl      Delta)
     (changed Bool)
     (trig    (List Supply))   ; R8's trig after the round; empty without deferral
-    (acts    Int)))           ; of Δₙ₊₁, the clauses activation added
+    (acts    Int)             ; of Δₙ₊₁, the clauses activation added
+    (flags   (List Flags))))  ; each context's flags, aligned with its new set
 
   ;; One context as derive reads it: S_v, Δ_v and S_v \ Δ_v, as clauses
   ;; and as premises, and G, which every context but the root reads beside
@@ -144,7 +164,8 @@
     (ixs   (List CIdx))      ; every context's premises, filed (Pred reads its predecessor's)
     (gd    Ground)
     (rs    RSrcs)            ; the root clauses r-Pred can fire from, with their views (slice 9f)
-    (dfr   Bool)))           ; deferral (R8): Succ evaluates, and its covered test is not read
+    (dfr   Bool)             ; deferral (R8): Succ evaluates, and its covered test is not read
+    (views Bool)))           ; premise views from the store (9k): Succ's K-sets read the premises' flags
 
   ;; The edges into and out of one context.
   (type Adj (record
@@ -198,27 +219,27 @@
     (dix PIdx)
     (oix PIdx)))
 
-  (fn ctx-ix ((arena Arena) (env Env) (st Structure) (dl Delta) (v Int) (perm Int))
+  (fn ctx-ix ((arena Arena) (env Env) (st Structure) (dl Delta) (v Int) (perm Int) (vw (List View)))
     (@intent "Context v's premises, all, of Δ_v and of the rest, each filed; a context new this round has all of S_v as
-              Δ_v")
-    (@spec ((Arena Env Structure Delta Int Int) -> CIdx))
+              Δ_v. With views (vw), each clause's flags come from the store; with none, premises-of computes them")
+    (@spec ((Arena Env Structure Delta Int Int (List View)) -> CIdx))
     (@alloc arena)
     (let ((all (set-of env st v))
           (fresh (>= v (. dl nctx)))
           (news (permuted arena (if fresh all (cs-at (. dl news) v (. env nobody))) perm))
           (olds (if fresh (. env nobody) (cs-at (. dl olds) v (. env nobody))))
-          (aps (premises-of arena (. st ord) all))
-          (dps (premises-of arena (. st ord) news))
-          (ops (premises-of arena (. st ord) olds)))
+          (aps (premises-in arena st vw v all))
+          (dps (premises-in arena st vw v news))
+          (ops (premises-in arena st vw v olds)))
       (record-new CIdx (aps aps) (dps dps) (ops ops)
                        (aix (pidx-of arena aps)) (dix (pidx-of arena dps)) (oix (pidx-of arena ops)))))
 
-  (fn all-ixs ((arena Arena) (env Env) (st Structure) (dl Delta) (perm Int))
+  (fn all-ixs ((arena Arena) (env Env) (st Structure) (dl Delta) (perm Int) (vw (List View)))
     (@intent "ctx-ix for every context, by id")
-    (@spec ((Arena Env Structure Delta Int) -> (List CIdx)))
+    (@spec ((Arena Env Structure Delta Int (List View)) -> (List CIdx)))
     (@alloc arena)
     (let ((mut out (list-new arena CIdx)) (mut v 0))
-      (do (for-each (c (. st ctxs)) (do (list-push out (ctx-ix arena env st dl v perm)) (set! v (+ v 1))))
+      (do (for-each (c (. st ctxs)) (do (list-push out (ctx-ix arena env st dl v perm vw)) (set! v (+ v 1))))
           out)))
 
   (fn cix-at ((arena Arena) (ixs (List CIdx)) (v Int))
@@ -232,9 +253,9 @@
                                  (oix (pidx-of arena e)))))))
 
   (fn here-of ((arena Arena) (env Env) (st Structure) (dl Delta) (gd Ground) (hx HIdx) (ixs (List CIdx)) (rs RSrcs)
-               (v Int) (perm Int) (dfr Bool))
+               (v Int) (perm Int) (dfr Bool) (views Bool))
     (@intent "Context v as derive reads it; a context new this round reads all of S_v as new")
-    (@spec ((Arena Env Structure Delta Ground HIdx (List CIdx) RSrcs Int Int Bool) -> Here))
+    (@spec ((Arena Env Structure Delta Ground HIdx (List CIdx) RSrcs Int Int Bool Bool) -> Here))
     (@alloc arena)
     (let ((all (set-of env st v))
           (fresh (>= v (. dl nctx)))
@@ -243,7 +264,7 @@
           (x (cix-at arena ixs v)))
       (record-new Here (v (cast U32 v)) (root (is-root st v)) (fresh fresh) (all all) (news news) (olds olds)
                        (aps (. x aps)) (dps (. x dps)) (ops (. x ops)) (dix (. x dix)) (aix (. x aix)) (oix (. x oix))
-                       (hx hx) (ixs ixs) (gd gd) (rs rs) (dfr dfr))))
+                       (hx hx) (ixs ixs) (gd gd) (rs rs) (dfr dfr) (views views))))
 
   (fn edge-new ((dl Delta) (e Edge))
     (@intent "Was e created this round?")
@@ -720,7 +741,7 @@
               of S_v touches (G adds nothing to K₂: see sat-succ)")
     (@spec ((Arena Env Structure Here) -> (List Premise)))
     (@alloc arena)
-    (let ((kn (k-index arena (. st ord) (. env tr) (. h news)))
+    (let ((kn (if (. h views) (k-index-premises arena (. env tr) (. h dps)) (k-index arena (. st ord) (. env tr) (. h news))))
           (gnew (> (list-len (. kn ground)) 0))
           (mut out (list-new arena Premise)))
       (do (for-each (p (. h dps)) (list-push out p))
@@ -753,7 +774,7 @@
               term: triggers are taken in term order")
     (@spec ((Arena Env Structure Here (List Premise)) -> (List SuccAct)))
     (@alloc arena)
-    (let ((kx (k-index arena (. st ord) (. env tr) (. h all)))
+    (let ((kx (if (. h views) (k-index-premises arena (. env tr) (. h aps)) (k-index arena (. st ord) (. env tr) (. h all))))
           (base (unheld arena (. h gd) (. kx ground)))
           (bare (record-new KIdx (ground (list-new arena Lit)) (fparts (. kx fparts))))
           (ts (triggers-of arena h ps))
@@ -1106,15 +1127,15 @@
           (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges es) (ord (. st ord))))))
 
   (fn sat-ctx ((arena Arena) (env Env) (hx HIdx) (ixs (List CIdx)) (rs RSrcs) (st Structure) (dl Delta) (gd Ground)
-               (a Adj) (v Int) (perm Int) (dfr Bool))
+               (a Adj) (v Int) (perm Int) (dfr Bool) (views Bool))
     (@intent "Derive in context v: every instance when v is new (the root, in the first round, as the reference does),
               else those anchored on Δ")
-    (@spec ((Arena Env HIdx (List CIdx) RSrcs Structure Delta Ground Adj Int Int Bool) -> CRound))
+    (@spec ((Arena Env HIdx (List CIdx) RSrcs Structure Delta Ground Adj Int Int Bool Bool) -> CRound))
     (@alloc arena)
     (let ((lst (local st a arena)))
       (if (and (>= v (. dl nctx)) (is-root st v))
         (record-new CRound (r (ctx-round arena env lst (cast U32 v))) (tried 0))
-        (sat-old arena env lst dl (. a ins) (here-of arena env lst dl gd hx ixs rs v perm dfr)))))
+        (sat-old arena env lst dl (. a ins) (here-of arena env lst dl gd hx ixs rs v perm dfr views)))))
 
   (fn sat-old ((arena Arena) (env Env) (st Structure) (dl Delta) (ins (List Edge)) (h Here))
     (@intent "Derive in one context, anchored on Δ, or every instance when it is new")
@@ -1214,12 +1235,15 @@
     (r     Round)
     (tried Int)))
 
-  (fn sat-round ((arena Arena) (env Env) (hx HIdx) (st Structure) (dl Delta) (gd Ground) (perm Int) (dfr Bool))
-    (@intent "Derive over every context of the frozen structure, each but the root reading G beside its own set")
-    (@spec ((Arena Env HIdx Structure Delta Ground Int Bool) -> CRound))
+  (fn sat-round ((arena Arena) (env Env) (hx HIdx) (st Structure) (dl Delta) (gd Ground) (perm Int) (dfr Bool)
+                  (vw (List View)))
+    (@intent "Derive over every context of the frozen structure, each but the root reading G beside its own set; with
+              views (vw), each clause's premise flags come from the store")
+    (@spec ((Arena Env HIdx Structure Delta Ground Int Bool (List View)) -> CRound))
     (@alloc arena)
     (let ((adj (adjacency arena st))
-          (ixs (all-ixs arena env st dl perm))
+          (views (> (list-len vw) 0))
+          (ixs (all-ixs arena env st dl perm vw))
           (rs (rsrcs-of arena env st dl))
           (mut cands (list-new arena Cand)) (mut succs (list-new arena SuccAct))
           (mut rsuccs (list-new arena RSuccAct)) (mut noms (list-new arena NomAct))
@@ -1228,7 +1252,7 @@
             (match (list-get adj v)
               ((none) (set! over over))
               ((some a)
-                (let ((cr (sat-ctx arena env hx ixs rs st dl gd a v perm dfr)) (r (. cr r)))
+                (let ((cr (sat-ctx arena env hx ixs rs st dl gd a v perm dfr views)) (r (. cr r)))
                   (do (set! tried (+ tried (. cr tried)))
                       (for-each (x (. r cands)) (list-push cands x))
                       (for-each (x (. r succs)) (list-push succs x))
@@ -1251,11 +1275,13 @@
                 (set! v (+ v 1))))
           out)))
 
-  (fn sat-apply ((arena Arena) (st Structure) (gd Ground) (r Round) (scan Bool) (dfr Bool) (trig (List Supply)))
+  (fn sat-apply ((arena Arena) (st Structure) (gd Ground) (r Round) (scan Bool) (dfr Bool) (trig (List Supply))
+                  (fl (List Flags)))
     (@intent "Create, then commit: new constants, contexts and edges in content order; then each context's min over its
               candidates, less those ∈̂ G away from the root (the view holds them), which gives Δₙ₊₁. With deferral,
-              trig grows by the round's evaluations, their units are pushed, and what becomes supported is activated")
-    (@spec ((Arena Structure Ground Round Bool Bool (List Supply)) -> Step))
+              trig grows by the round's evaluations, their units are pushed, and what becomes supported is activated.
+              fl is st's kept flags; the step carries the new sets'")
+    (@spec ((Arena Structure Ground Round Bool Bool (List Supply) (List Flags)) -> Step))
     (@alloc arena)
     (let ((sup (if dfr (supplied arena trig (. r succs))
                  (record-new Supplied (trig trig) (evals (list-new arena Supply)) (grew false))))
@@ -1268,7 +1294,7 @@
           (s3 (if scan (add-edges arena s2 (. r succs) (. r rsuccs)) (edges-added arena s2 (. r succs) (. r rsuccs))))
           (cands (append-cands arena (append-cands arena (. r cands) (succ-cands arena s3 r sup dfr))
                                      (new-cores arena s3 c0)))
-          (sp (commit-all arena s3 (outside-view arena s3 gd cands) c0 e0 n0 scan)))
+          (sp (commit-all arena s3 (outside-view arena s3 gd cands) c0 e0 n0 scan fl)))
       (if dfr (deferred-step arena sp e0 trig sup) sp)))
 
   (fn succ-cands ((arena Arena) (st Structure) (r Round) (sup Supplied) (dfr Bool))
@@ -1395,21 +1421,25 @@
             (when (or (is-root st (cast Int (. c ctx))) (not (g-in-hat gd (. c c)))) (list-push out c)))
           out)))
 
-  (fn commit-all ((arena Arena) (st Structure) (cands (List Cand)) (c0 Int) (e0 Int) (n0 Int) (scan Bool))
+  (fn commit-all ((arena Arena) (st Structure) (cands (List Cand)) (c0 Int) (e0 Int) (n0 Int) (scan Bool)
+                   (fl (List Flags)))
     (@intent "Each context's set and Δ: candidates sorted by context and content, each context committed through
-              commit-min over its own run of them")
-    (@spec ((Arena Structure (List Cand) Int Int Int Bool) -> Step))
+              commit-min over its own run of them; and each new set's flags, walked from fl (st's)")
+    (@spec ((Arena Structure (List Cand) Int Int Int Bool (List Flags)) -> Step))
     (@alloc arena)
     (let ((none-such (record-new Cand (ctx (cast U32 0))
                                  (c (record-new Clause (body (list-new arena Lit)) (head (list-new arena Lit))))))
           (idx (sort-range arena (cast Int (list-len cands))
                  (fn ((i Int) (j Int)) (cand-cmp (cand-at cands i none-such) (cand-at cands j none-such)))))
           (mut sets (list-new arena CtxSet)) (mut news (list-new arena CtxSet)) (mut olds (list-new arena CtxSet))
+          (mut nfl (list-new arena Flags)) (none-fs (list-new arena (List Bool)))
           (mut k 0) (mut v 0) (mut grew false))
       (do (for-each (s (. st sets))
             (let ((mine (run-of arena cands idx k (cast U32 v) none-such)))
               (let ((cm (commit-one arena (. s cs) mine scan)))
                 (do (list-push sets (record-new CtxSet (cs (. cm set))))
+                    (list-push nfl (record-new Flags (fs (new-flags arena (. st ord) (. s cs) (fs-at fl v none-fs) cm
+                                                                    (list-len mine)))))
                     (list-push news (record-new CtxSet (cs (. cm added))))
                     (list-push olds (record-new CtxSet (cs (minus-sorted arena (. cm set) (. cm added)))))
                     (when (> (list-len (. cm added)) 0) (set! grew true))
@@ -1424,7 +1454,15 @@
                          (!= (cast Int (list-len (. st edges))) e0)
                          (!= (consts-of st) n0)))
             (trig (list-new arena Supply))
-            (acts 0)))))
+            (acts 0)
+            (flags nfl)))))
+
+  (fn new-flags ((arena Arena) (ord SriqOrder) (ws (List Clause)) (wf (List (List Bool))) (cm Committed) (ncands Int))
+    (@intent "The flags of a context's new set: its old flags when it had no candidate (the set is unchanged), else
+              walked from the old set's")
+    (@spec ((Arena SriqOrder (List Clause) (List (List Bool)) Committed Int) -> (List (List Bool))))
+    (@alloc arena)
+    (if (== ncands 0) wf (walked-flags arena ord ws wf (. cm set))))
 
   (fn run-of ((arena Arena) (cands (List Cand)) (idx (List Int)) (k Int) (v U32) (none-such Cand))
     (@intent "The clauses of the sorted candidates from position k on while their context is v")
@@ -1465,6 +1503,167 @@
     (let ((mut out (list-new arena Edge)) (mut i 0))
       (do (for-each (e es) (do (when (>= i k) (list-push out e)) (set! i (+ i 1))))
           out)))
+
+  ;; ============================================================
+  ;; Premise views kept with the store (slice 9k)
+  ;;
+  ;; A premise's maxed flag is maximal-at of its clause's head, under the
+  ;; run's one order. The order's rank is fixed at the start, and its
+  ;; constants only grow, each added before any clause naming it commits.
+  ;; So a stored clause's flags never change: they are computed once, when
+  ;; the clause commits, and kept beside S_v in its content order.
+  ;; ============================================================
+
+  (fn views-of ((arena Arena) (st Structure) (fl (List Flags)))
+    (@intent "Each context's set beside its kept flags, by id")
+    (@spec ((Arena Structure (List Flags)) -> (List View)))
+    (@alloc arena)
+    (let ((mut out (list-new arena View)) (mut v 0) (none-fs (list-new arena (List Bool))))
+      (do (for-each (x (. st sets))
+            (do (list-push out (record-new View (cs (. x cs)) (fs (match (list-get fl v) ((some f) (. f fs)) ((none) none-fs)))))
+                (set! v (+ v 1))))
+          out)))
+
+  (fn premises-in ((arena Arena) (st Structure) (vw (List View)) (v Int) (cs (List Clause)))
+    (@intent "The premises of cs, clauses of context v: with views, each clause's flags found in v's view (premises-of's
+              records, with no order work); with none, premises-of itself")
+    (@spec ((Arena Structure (List View) Int (List Clause)) -> (List Premise)))
+    (@alloc arena)
+    (match (list-get vw v)
+      ((none) (premises-of arena (. st ord) cs))
+      ((some w)
+        (let ((mut out (list-new arena Premise)))
+          (do (for-each (c cs) (for-each (p (clause-premises arena c (flags-of arena (. st ord) w c))) (list-push out p)))
+              out)))))
+
+  (fn clause-premises ((arena Arena) (c Clause) (fs (List Bool)))
+    (@intent "c's premises, one per head literal, as select builds them, maxed from c's flags fs")
+    (@spec ((Arena Clause (List Bool)) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)) (mut i 0))
+      (do (for-each (l (. c head))
+            (do (list-push out (record-new Premise (body (. c body)) (sel l) (rest (head-without arena (. c head) i))
+                                                   (maxed (flag-at fs i))))
+                (set! i (+ i 1))))
+          out)))
+
+  (fn head-without ((arena Arena) (xs (List Lit)) (i Int))
+    (@intent "xs without element i (select's rest)")
+    (@spec ((Arena (List Lit) Int) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit)) (mut k 0))
+      (do (for-each (x xs) (do (when (!= k i) (list-push out x)) (set! k (+ k 1)))) out)))
+
+  (fn flag-at ((fs (List Bool)) (i Int))
+    (@intent "Flag i")
+    (@spec (((List Bool) Int) -> Bool))
+    (@pure)
+    (match (list-get fs i) ((some b) b) ((none) false)))
+
+  (fn flags-of ((arena Arena) (ord SriqOrder) (w View) (c Clause))
+    (@intent "c's kept flags, found by content in the view; computed when c is not there (a clause derive reads is
+              always stored, so a test counts that)")
+    (@spec ((Arena SriqOrder View Clause) -> (List Bool)))
+    (@alloc arena)
+    (let ((k (clause-pos (. w cs) c)))
+      (match (list-get (. w fs) k)
+        ((some fs) (if (sorted-at (. w cs) k c) fs (max-flags arena ord (. c head))))
+        ((none) (max-flags arena ord (. c head))))))
+
+  (fn clause-pos ((cs (List Clause)) (c Clause))
+    (@intent "The first position of cs, in content order, whose clause is not below c")
+    (@spec (((List Clause) Clause) -> Int))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len cs))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (match (list-get cs mid)
+                ((some x) (if (< (clause-cmp x c) 0) (set! lo (+ mid 1)) (set! hi mid)))
+                ((none) (set! hi mid)))))
+          lo)))
+
+  (fn sorted-at ((cs (List Clause)) (k Int) (c Clause))
+    (@intent "Is cs's clause k c?")
+    (@spec (((List Clause) Int Clause) -> Bool))
+    (@pure)
+    (match (list-get cs k) ((some x) (== (clause-cmp x c) 0)) ((none) false)))
+
+  (fn walked-flags ((arena Arena) (ord SriqOrder) (ws (List Clause)) (wf (List (List Bool))) (set (List Clause)))
+    (@intent "The flags of set (content order) from those of ws (content order, aligned with wf): a clause kept from ws
+              keeps its flags, a new one gets max-flags once")
+    (@spec ((Arena SriqOrder (List Clause) (List (List Bool)) (List Clause)) -> (List (List Bool))))
+    (@alloc arena)
+    (let ((mut out (list-new arena (List Bool))) (mut j 0))
+      (do (for-each (c set)
+            (do (while (below-at ws j c) (set! j (+ j 1)))
+                (list-push out (if (sorted-at ws j c)
+                                 (match (list-get wf j) ((some f) f) ((none) (max-flags arena ord (. c head))))
+                                 (max-flags arena ord (. c head))))))
+          out)))
+
+  (fn below-at ((cs (List Clause)) (j Int) (c Clause))
+    (@intent "Is cs's clause j below c in content order?")
+    (@spec (((List Clause) Int Clause) -> Bool))
+    (@pure)
+    (match (list-get cs j) ((some w) (< (clause-cmp w c) 0)) ((none) false)))
+
+  (fn fs-at ((fl (List Flags)) (v Int) (none-fs (List (List Bool))))
+    (@intent "Context v's flags, or none")
+    (@spec (((List Flags) Int (List (List Bool))) -> (List (List Bool))))
+    (@pure)
+    (match (list-get fl v) ((some f) (. f fs)) ((none) none-fs)))
+
+  (fn empty-flags ((arena Arena) (st Structure))
+    (@intent "Flags for st's sets, which initialisation leaves empty: none, per context")
+    (@spec ((Arena Structure) -> (List Flags)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Flags)))
+      (do (for-each (x (. st sets)) (list-push out (record-new Flags (fs (walked-flags arena (. st ord) (list-new arena Clause)
+                                                                                        (list-new arena (List Bool)) (. x cs))))))
+          out)))
+
+  (fn copy-flags ((arena Arena) (fl (List Flags)))
+    (@intent "fl, deep-copied into arena")
+    (@spec ((Arena (List Flags)) -> (List Flags)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Flags)))
+      (do (for-each (f fl)
+            (let ((mut fs (list-new arena (List Bool))))
+              (do (for-each (x (. f fs))
+                    (let ((mut b (list-new arena Bool))) (do (for-each (y x) (list-push b y)) (list-push fs b))))
+                  (list-push out (record-new Flags (fs fs))))))
+          out)))
+
+  (fn stale-flags ((arena Arena) (st Structure) (fl (List Flags)))
+    (@intent "How many clauses of st's sets have kept flags (or none) that differ from max-flags recomputed now: 0 when
+              the store's views are right (a test's check)")
+    (@spec ((Arena Structure (List Flags)) -> Int))
+    (@alloc arena)
+    (let ((mut n 0) (mut v 0) (none-fs (list-new arena (List Bool))))
+      (do (for-each (x (. st sets))
+            (do (set! n (+ n (stale-in arena (. st ord) (. x cs) (fs-at fl v none-fs))))
+                (set! v (+ v 1))))
+          n)))
+
+  (fn stale-in ((arena Arena) (ord SriqOrder) (cs (List Clause)) (fs (List (List Bool))))
+    (@intent "One context's stale count: 1 if its flags are not one per clause, plus each clause whose flags differ from
+              max-flags now")
+    (@spec ((Arena SriqOrder (List Clause) (List (List Bool))) -> Int))
+    (@alloc arena)
+    (let ((mut n (if (== (list-len fs) (list-len cs)) 0 1)) (mut k 0))
+      (do (for-each (c cs)
+            (do (when (not (same-flags (match (list-get fs k) ((some f) f) ((none) (list-new arena Bool)))
+                                       (max-flags arena ord (. c head))))
+                  (set! n (+ n 1)))
+                (set! k (+ k 1))))
+          n)))
+
+  (fn same-flags ((a (List Bool)) (b (List Bool)))
+    (@intent "The same flags")
+    (@spec (((List Bool) (List Bool)) -> Bool))
+    (@pure)
+    (let ((mut ok (== (list-len a) (list-len b))) (mut i 0))
+      (do (for-each (x a) (do (when (!= x (flag-at b i)) (set! ok false)) (set! i (+ i 1)))) ok)))
 
   ;; ============================================================
   ;; Deferral: predecessor relevance (SPEC §5.5 S6 R8, slice 9i)
@@ -1679,7 +1878,7 @@
     (@alloc arena)
     (let ((a (activated arena (. sp st) (. sp dl) e0 old (. sup trig))))
       (record-new Step (st (. sp st)) (dl (. a dl)) (changed (or (. sp changed) (. sup grew))) (trig (. sup trig))
-                       (acts (. a n)))))
+                       (acts (. a n)) (flags (. sp flags)))))
 
   (type Acted (record
     (dl Delta)
@@ -1813,11 +2012,13 @@
     (rounds Int)
     (going  Bool)
     (trig   (List Supply))   ; R8's trig; empty without deferral
+    (flags  (List Flags))    ; each context's premise flags, aligned with st's sets (9k)
     (counts Counts)))
 
-  (fn tally ((c Counts) (r Round) (dl Delta) (tried Int) (acts Int))
-    (@intent "c with one round's work added; acts of dl's new clauses were activated, not committed")
-    (@spec ((Counts Round Delta Int Int) -> Counts))
+  (fn tally ((c Counts) (r Round) (dl Delta) (tried Int) (acts Int) (stale Int))
+    (@intent "c with one round's work added; acts of dl's new clauses were activated, not committed; stale is the
+              check's count of kept flags that differ from a recomputation")
+    (@spec ((Counts Round Delta Int Int Int) -> Counts))
     (@pure)
     (record-new Counts (cands (+ (. c cands) (cast Int (list-len (. r cands)))))
                        (rcands (+ (. c rcands) (into-v (. r cands) (cast U32 0))))
@@ -1826,7 +2027,8 @@
                        (noms (+ (. c noms) (cast Int (list-len (. r noms)))))
                        (added (+ (. c added) (- (sum-added dl) acts)))
                        (acts (+ (. c acts) acts))
-                       (hyper (+ (. c hyper) tried))))
+                       (hyper (+ (. c hyper) tried))
+                       (stale (+ (. c stale) stale))))
 
   ;; r-Succ on the copies, at the boundary. A member of G that is visible
   ;; in some context has a copy there in the printed derivation, and r-Succ
@@ -1848,7 +2050,18 @@
             sp
             (record-new Step (st (with-root-set arena st (. cm set)))
                              (dl (with-root-news arena dl (. cm set) (. cm added) nobody))
-                             (changed true) (trig (. sp trig)) (acts (. sp acts))))))))
+                             (changed true) (trig (. sp trig)) (acts (. sp acts))
+                             (flags (with-root-flags arena (. st ord) (cs-at (. st sets) 0 nobody) (. sp flags) (. cm set)))))))))
+
+  (fn with-root-flags ((arena Arena) (ord SriqOrder) (ws (List Clause)) (fl (List Flags)) (set (List Clause)))
+    (@intent "fl with the root's flags walked from its old set ws to its re-committed set")
+    (@spec ((Arena SriqOrder (List Clause) (List Flags) (List Clause)) -> (List Flags)))
+    (@alloc arena)
+    (let ((none-fs (list-new arena (List Bool))) (mut out (list-new arena Flags)) (mut v 0))
+      (do (for-each (f fl)
+            (do (list-push out (if (== v 0) (record-new Flags (fs (walked-flags arena ord ws (fs-at fl 0 none-fs) set))) f))
+                (set! v (+ v 1))))
+          out)))
 
   (fn with-root-set ((arena Arena) (st Structure) (cs (List Clause)))
     (@intent "st with S_{v_r} = cs")
@@ -1918,17 +2131,21 @@
     (let ((gd (ground-of scratch (. env tr) (. run st) (cs-at (. (. run dl) news) 0 (. env nobody))))
           (seen (if dfr (projected scratch (. run st) (. run dl) (. run trig))
                   (record-new Seen (st (. run st)) (dl (. run dl)))))
-          (sr (sat-round scratch env hx (. seen st) (. seen dl) gd (. cfg perm) dfr))
+          (vw (if (. cfg views) (views-of scratch (. run st) (. run flags)) (list-new scratch View)))
+          (sr (sat-round scratch env hx (. seen st) (. seen dl) gd (. cfg perm) dfr vw))
           (r (. sr r)))
       (if (. r over)
         (record-new Run (st (. run st)) (dl (. run dl)) (status 'rs-product) (rounds (. run rounds)) (going false)
-                        (trig (. run trig)) (counts (. run counts)))
-        (let ((sp (with-units scratch (. env tr) (sat-apply scratch (. run st) gd r (. cfg scan) dfr (. run trig))))
+                        (trig (. run trig)) (flags (. run flags)) (counts (. run counts)))
+        (let ((sp (with-units scratch (. env tr) (sat-apply scratch (. run st) gd r (. cfg scan) dfr (. run trig)
+                                                            (. run flags))))
               (st (copy-structure next (. sp st)))
+              (stale (if (. cfg check) (stale-flags scratch (. sp st) (. sp flags)) 0))
               (status (sat-stop scratch env st (. sp changed) (. cfg base))))
           (record-new Run (st st) (dl (copy-delta next (. sp dl))) (status status) (rounds (+ (. run rounds) 1))
                           (going (== status 'rs-fuel)) (trig (copy-trig next (. sp trig)))
-                          (counts (tally (. run counts) r (. sp dl) (. sr tried) (. sp acts))))))))
+                          (flags (copy-flags next (. sp flags)))
+                          (counts (tally (. run counts) r (. sp dl) (. sr tried) (. sp acts) stale)))))))
 
   (fn read-view ((arena Arena) (st Structure))
     (@intent "st as the read-off reads it through the view: when the root holds ⊤ → ⊥, so does G, and every context
@@ -2007,11 +2224,11 @@
           (hx (h-index arena (. in onto)))
           (gd (ground-of arena tr st (. env nobody)))
           (dl (first-delta arena st))
-          (ixs (all-ixs arena env st dl 0))
+          (ixs (all-ixs arena env st dl 0 (list-new arena View)))
           (rs (rsrcs-of arena env st dl))
           (mut ok true) (mut v 0))
       (do (for-each (c (. st ctxs))
-            (do (when (not (hyper-ix-one arena env hx (here-of arena env st dl gd hx ixs rs v 0 false))) (set! ok false))
+            (do (when (not (hyper-ix-one arena env hx (here-of arena env st dl gd hx ixs rs v 0 false false))) (set! ok false))
                 (set! v (+ v 1))))
           ok)))
 
@@ -2094,9 +2311,9 @@
           (dfr (defer-on cfg in))
           (mut held (arena-new 1048576))
           (mut run (record-new Run (st st0) (dl (first-delta arena st0)) (status 'rs-fuel) (rounds 0) (going true)
-                                   (trig (list-new arena Supply))
+                                   (trig (list-new arena Supply)) (flags (empty-flags arena st0))
                                    (counts (record-new Counts (cands 0) (rcands 0) (succs 0) (rsuccs 0) (noms 0)
-                                                       (added 0) (acts 0) (hyper 0))))))
+                                                       (added 0) (acts 0) (hyper 0) (stale 0))))))
       (do (while (and (. run going) (< (. run rounds) (. base fuel)))
             (let ((scratch (arena-new 1048576))
                   (next (arena-new 1048576))

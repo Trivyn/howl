@@ -3369,6 +3369,27 @@ schedule is its own.
   reference's round. Running an instance none of whose premises is new concludes
   nothing new: it ran when its newest premise arrived, its conclusion is `∈̂ Sₙ` since (R2), and its
   actions were taken. So the anchoring may run more than `Δₙ` needs, never less.
+- **Premise views are kept with the store** (slice 9k). Every rule reads a clause through its
+  premises, `select`'s views. Their one costly part, whether the selected literal is maximal in the
+  head, is a function of the clause and the run's one order (S5).
+  - **That order is fixed for a stored clause.** Its rank is set once, and its constants only grow.
+    `add-consts` runs before the commit, so every constant a stored clause names is already there.
+  - **So the flags are kept, not recomputed.** A clause's maximal flags are computed once, when it
+    commits, and kept beside `S_v` in its content order.
+    - The commit walks them from the old set to the new one, and so does the root's re-commit at the
+      boundary.
+    - Derive builds the same `Premise` records from them, finding a clause's flags by content.
+    - Succ's K-sets read the premises' flags (`k-index-premises`) instead of re-running the order over
+      every clause.
+    - **One place still recomputes:** the shared ground view selects its members afresh each round, in
+      `ground-of`, twice. Only a run with constants has a ground view, so the ABox split's Run H never
+      meets it.
+  - **Nothing a run does changes.** On every fixture and hand-built case under every strategy, the
+    tests require the same status, rounds, counts and answers as recomputing the flags every round
+    (`SatConfig`'s `views` off). They also require the kept flags to equal a recomputation after every
+    round (`check`).
+  - **Mutants seen red:** a kept clause given its neighbour's flags, a new clause given none, the
+    root's re-commit not walked, `single` read from the body alone, and flags from the wrong context.
 - **Create** follows the reference's round's end, and adds each new context's Core clauses to the
   candidates (step 2). The reference derives them the round after, so the prototype can finish in
   fewer rounds.
