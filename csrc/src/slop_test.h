@@ -1840,6 +1840,8 @@ uint8_t test_same_answers(howl_Run r, howl_Run a);
 uint8_t test_answer_run_shape(slop_arena* arena, howl_Run a, howl_Run r);
 slop_string test_lines_text(slop_arena* arena, howl_Run r);
 uint8_t test_test_answer_run_edges(slop_arena* arena);
+howl_Run test_du_run(slop_arena* arena, slop_string text);
+uint8_t test_test_disjoint_union_builtin_head(slop_arena* arena);
 slop_string test_probe_prefixes(void);
 slop_string test_probe_tail(slop_arena* arena, howl_Run r);
 uint8_t test_tail_is(slop_arena* arena, slop_string label, howl_Run r, slop_string want);

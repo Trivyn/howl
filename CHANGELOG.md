@@ -30,6 +30,14 @@
   - CI's macOS job builds and tests with clang too.
   - Linux and Windows are unchanged (gcc, MinGW gcc).
 
+### Fixed
+
+- **`sriq`: a `DisjointUnion` headed by `owl:Thing` or `owl:Nothing` no longer faults.** The head
+  reached the clause boundary as a plain class name, which has no id for a built-in, so a valid
+  ontology was refused as an input error. It now lowers to `⊤` or `⊥`, as decode reads those names
+  everywhere else: `DisjointUnion(owl:Thing, P, Q)` with P and Q empty is inconsistent, and
+  `DisjointUnion(owl:Nothing, P, Q)` makes P and Q unsatisfiable.
+
 ## 0.4.0 — 2026-10-14
 
 `sriq` ships: the SRIQ object fragment with an ABox, so inverses, unions, `∀`, full negation and

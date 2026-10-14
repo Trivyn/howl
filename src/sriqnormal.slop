@@ -19,7 +19,7 @@
   (@doc "sriq's normaliser: S0, the collapse, and S1's hook (SPEC 5.5)")
 
   (import rdf (IRI))
-  (import vocab (OWL_BOTTOM_OBJECT_PROPERTY))
+  (import vocab (OWL_BOTTOM_OBJECT_PROPERTY OWL_THING OWL_NOTHING))
   (import types (RoleId Node DName DRole Dl1 Dl2 Dl4 DlClause))
   (import owl2 (RawAxiom RawConcept RawChain RawEdge RawClassAssertion RawDisjointUnion
                 PropCharacteristic CardKind SRIQ_MAX_COUNT))
@@ -411,7 +411,7 @@
     (match (s0-concepts arena (. du members))
       ((error m) (error m))
       ((ok xs)
-        (let ((c   (union-new SConcept sc-name (. du class)))
+        (let ((c   (named-class (. du class)))
               (uni (union-new SConcept sc-or xs))
               (mut out (list-new arena SAxiom)))
           (do
@@ -419,6 +419,16 @@
             (list-push out (gci arena uni c))
             (for-each (a (pairwise-disjoint arena xs)) (list-push out a))
             (ok out))))))
+
+  (fn named-class ((i IRI))
+    (@intent "A class IRI as S0's concept: owl:Thing is ⊤ and owl:Nothing is ⊥, as decode reads them elsewhere")
+    (@spec ((IRI) -> SConcept))
+    ;; DisjointUnion's head is the one class decode passes on as a bare
+    ;; IRI. As sc-name, owl:Thing reached the clause boundary, which has no
+    ;; id for it, and a valid ontology faulted as an input error.
+    (cond ((string-eq (. i value) OWL_THING)   (union-new SConcept sc-top))
+          ((string-eq (. i value) OWL_NOTHING) (union-new SConcept sc-bottom))
+          (else                                (union-new SConcept sc-name i))))
 
   (fn s0-axiom ((arena Arena) (ax RawAxiom))
     (@intent "One accepted axiom as S0's axioms: one row per variant, as §5.5's table")

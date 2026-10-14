@@ -82,6 +82,7 @@
                 run-ok run-fault run-fault-message run-fault-profile run-verdict run-report-len run-report-line
                 input-add-probe-turtle input-ask-unsatisfiable input-ask-subsumed
                 run-probe-len run-probe-kind run-probe-sub run-probe-sup run-probe-answer run-probe-inconsistent
+                run-inconsistent run-unsat-len run-unsat
                 run-probe-omission-len run-probe-omission run-answer run-profile run-rounds
                 run-sub-len run-unsat-len run-omission-len
                 Prepared ElWork prepare reason decode-owned prepare-in-profile sriq-omissions))
@@ -10306,6 +10307,37 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
                 (when (not ok2) (println "  [answer] bad options are not refused"))
                 (and ok1 ok2))))))))
 
+  (fn du-run ((arena Arena) (text String))
+    (@intent "An inline document classified under sriq through the public API")
+    (@spec ((Arena String) -> Run))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile 'profile-sriq)
+        (input-add-turtle in (string-concat arena (probe-prefixes) text))
+        (let ((r (run-classify in o)))
+          (do (input-free in) r)))))
+
+  (fn test-disjoint-union-builtin-head ((arena Arena))
+    (@intent "§5.5 S0: DisjointUnion(owl:Thing, P, Q) with P and Q empty is inconsistent; DisjointUnion(owl:Nothing, P, Q) makes P and Q unsatisfiable")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; owl:Thing as DisjointUnion's head reached the clause boundary as a
+    ;; plain name, which has no id for it: a valid ontology faulted.
+    (let ((thing   (du-run arena ":P a owl:Class . :Q a owl:Class . :P rdfs:subClassOf owl:Nothing . :Q rdfs:subClassOf owl:Nothing . owl:Thing owl:disjointUnionOf ( :P :Q ) .\n"))
+          (nothing (du-run arena ":P a owl:Class . :Q a owl:Class . owl:Nothing owl:disjointUnionOf ( :P :Q ) .\n")))
+      (let ((ok (and (run-ok thing) (run-inconsistent thing)
+                     (run-ok nothing) (not (run-inconsistent nothing))
+                     (== (run-unsat-len nothing) 2) (string-eq (run-unsat nothing 0) "http://example.org/t#P")
+                     (string-eq (run-unsat nothing 1) "http://example.org/t#Q"))))
+        (do
+          (when (not ok)
+            (do (print "  [du] owl:Thing head ok/inconsistent: ") (print (run-ok thing)) (print " ")
+                (println (run-inconsistent thing))))
+          (run-free thing) (run-free nothing)
+          ok))))
+
   ;; The scenarios: a host's own probe documents.
 
   (fn probe-prefixes ()
@@ -12964,6 +12996,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-answer-run-edges arena)))
             (print-test-result "§8.4: an answer run asking nothing runs nothing; refusals and bad options as classify's" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-disjoint-union-builtin-head arena)))
+            (print-test-result "§5.5 S0: a DisjointUnion headed by owl:Thing or owl:Nothing lowers to ⊤ or ⊥" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-probes-agree-with-report arena)))

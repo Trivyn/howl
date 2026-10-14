@@ -245,6 +245,7 @@ slop_result_list_sroiq_SAxiom_string sriqnormal_s0_assertion(slop_arena* arena, 
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_same_individual(slop_arena* arena, slop_list_types_Node ns);
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_different_individuals(slop_arena* arena, slop_list_types_Node ns);
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_disjoint_union(slop_arena* arena, owl2_RawDisjointUnion du);
+sroiq_SConcept sriqnormal_named_class(rdf_IRI i);
 slop_result_list_sroiq_SAxiom_string sriqnormal_s0_axiom(slop_arena* arena, owl2_RawAxiom ax);
 int64_t sriqnormal_rep_at(sriqrbox_SriqRbox rb, int64_t n);
 types_RoleId sriqnormal_collapse_role(sriqrbox_SriqRbox rb, types_RoleId r);
