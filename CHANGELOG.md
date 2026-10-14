@@ -1,42 +1,76 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-10-14
 
-- **`sriq` is built and selectable** (`--profile sriq`, `auto`, the C API, the Rust crate). It runs
-  single-threaded under a budget of 500,000 clauses, and a run that passes the budget is
-  inconclusive unless it has found something definitive.
-  - It classifies BFO-core and CCO with nothing omitted, and each exits 0.
-  - **`auto` chooses among three rungs.** It takes the first of `el`, `el++` and `sriq` that omits
-    nothing, else the one that omits fewest, so an ontology with inverses or unions now runs
-    under `sriq`.
-  - **`auto` steps down.** When it chose `sriq` and the run passes the clause budget with nothing
-    definitive, it reruns the input under `el` or `el++` and says so on stderr. OBI is such an
-    input.
-  - **The budget also caps one rule instance's choices** at 500,000, so a run whose store stays
-    small cannot spend unbounded time enumerating discarded choices.
-  - The report grammar, the C ABI and the Rust API are unchanged. Only `Fault::ProfileUnavailable`'s
-    text for an unbuilt rung lists `sriq` among the implemented ones.
-- **Fixed, every profile: an omission that quotes a literal stays on one line.** The literal is
-  escaped as N-Triples does it. A literal with a newline, such as an XML literal, used to split the
-  omission across lines and break the report's grammar.
-- **Fixed, every profile: `owl:intersectionOf` (or `unionOf`, `complementOf`, …) on a named class
-  is reported, not dropped.** It is OWL 1's way of stating an equivalence, and the OWL 2 mapping does
-  not define it. HOWL used to skip such a triple silently, so a run could report coherent while
-  ignoring it. It is now an omission, so the run is inconclusive. One W3C test, `WebOnt-Thing-004`
-  (`owl:Thing owl:oneOf …`), moves from passing to outside the el and el++ profiles for this reason.
-- **`sriq`'s gate is built** and tested, with the census's independent column beside it. It admits
-  inverses, `∀`, unions, full negation, number restrictions up to 16, Self, every property
-  characteristic, disjoint properties, `DisjointUnion`, equality and inequality, and negative
-  assertions. Its RBox condition is simple roles over every property expression, the collapse of
-  role-equivalence classes, and Simančík's ≺-regularity; a failure omits the whole RBox.
-  - On BFO-core and CCO it omits nothing. On RO and OBI it omits no RBox axiom; what it omits there
-    is SWRL, class nominals and used data.
+`sriq` ships: the SRIQ object fragment with an ABox, so inverses, unions, `∀`, full negation and
+qualified cardinalities are reasoned over instead of omitted. It runs single-threaded under a clause
+budget, and `auto` now chooses among three profiles and steps down when `sriq` passes its budget.
+The report grammar, the C ABI and the Rust API are unchanged.
+
+### Added
+
+- **`--profile sriq`** (SPEC §5.5): [Sim12]'s chain elimination, then [TGH21]'s consequence-based
+  calculus. It is available from the CLI, `auto`, the C API and the Rust crate.
+  - It admits inverses, `∀`, unions, full negation, number restrictions up to 16, Self, every
+    property characteristic, disjoint properties, `DisjointUnion`, equality and inequality, and
+    negative assertions.
+  - Its RBox condition is simple roles over every property expression, the collapse of
+    role-equivalence classes, and Simančík's ≺-regularity. A failure omits the whole RBox.
+  - Class nominals, datatypes, keys, anonymous individuals and the universal role stay omissions.
+  - It classifies BFO-core and CCO with nothing omitted, and each exits 0. Both equal HermiT on
+    every pair of named classes.
+- **A deterministic clause budget of 500,000** bounds every `sriq` run. A run that passes it is
+  inconclusive (`resource-limit`, exit 2), unless it has already found something definitive. The same
+  number caps the choices one rule instance may try, so a run whose store stays small cannot spend
+  unbounded time on choices it discards. It is not a user option.
 - **BFO-core and CCO are in the pinned corpus** (`corpus/MANIFEST.toml`).
   - Both are pinned to an upstream *commit*: BFO-2020 `5ed46876`, and CommonCoreOntologies
     `510dad76` (tag v2.0-2024-11-06). No versioned PURL serves these bytes.
-  - Each has `el` and `el++` projections, re-certified against HermiT.
-  - Every entry also has a `sriq` projection (census only, until the engine runs `sriq`). BFO-core's,
-    CCO's, GO's and EL-GALEN's are empty.
+  - Each has `el` and `el++` projections, re-certified against HermiT. Every entry also has a `sriq`
+    projection.
+- **`sriq`'s evidence:**
+  - per-construct probes;
+  - the fixture and corpus differentials against HermiT;
+  - the W3C and ELK conformance suites (0 FAIL);
+  - 400 generated ontologies against HermiT (0 failed);
+  - determinism at every cap and worker count.
+
+  A run that stops at the budget is checked as partial but sound: everything it states must hold.
+
+### Changed
+
+- **`auto` chooses among three profiles.** It takes the first of `el`, `el++` and `sriq` that omits
+  nothing, else the one that omits fewest. So an ontology with inverses or unions, which 0.3.0 ran
+  under `el` or `el++` with omissions, now runs under `sriq`. The report's `profile` line names the
+  profile that answered, and the exit codes mean what they did.
+- **`auto` steps down.** When it chose `sriq` and the run passes the clause budget with nothing
+  definitive, it reruns the input under `el` or `el++`, reports that run, and prints one note on
+  stderr. OBI is such an input.
+- **`Fault::ProfileUnavailable`'s text** for an unbuilt profile lists `sriq` among the
+  implemented profiles.
+- **`--workers W` is accepted under `sriq`**, which runs at one worker. The report is the same at
+  every W.
+
+### Fixed
+
+- **Every profile: `owl:intersectionOf` (or `unionOf`, `complementOf`, …) on a named class is
+  reported, not dropped.** It is OWL 1's way of stating an equivalence, and the OWL 2 mapping does
+  not define it. HOWL used to skip such a triple silently, so a run could report coherent while
+  ignoring it. It is now an omission, so **a report that was coherent can become inconclusive**. One
+  W3C test, `WebOnt-Thing-004` (`owl:Thing owl:oneOf …`), moves from passing to outside the el and
+  el++ profiles for this reason.
+- **Every profile: an omission that quotes a literal stays on one line.** The literal is escaped as
+  N-Triples does it. A literal with a newline, such as an XML literal, used to split the omission
+  across lines and break the report's grammar.
+
+### Known limits
+
+- **RO is inconclusive under `sriq`.** One of its runs passes the clause budget. `auto` steps down to
+  `el++`, whose run omits RO's inverses and so is inconclusive too. The parallel engine (slice 10) is
+  meant to lift this.
+- **OBI is out of `sriq`'s reach** (SPEC §12, M5 (c)). `--profile sriq` reports it inconclusive, and
+  `auto` steps down to `el++`.
+- **`sriq`'s performance against HermiT and Sequoia is not yet recorded** (M5 (h)).
 
 ## 0.3.0 — 2026-10-12
 

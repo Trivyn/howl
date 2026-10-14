@@ -150,7 +150,7 @@ howl --version
   property axioms of a data property nothing uses, which provably change no answer and are set
   aside (CCO's 16 data axioms are of that kind);
 - anything outside OWL 2 EL, such as unions, universal restrictions, cardinalities and inverse
-  properties. These belong to the planned `sriq` profile.
+  properties, under `el` and `el++`. `--profile sriq` reasons over these four.
 
 The construct-by-construct table, and the evidence behind each profile, is in
 [`docs/coverage.md`](docs/coverage.md).

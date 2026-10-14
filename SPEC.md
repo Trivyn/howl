@@ -6211,7 +6211,11 @@ flowchart TB
     subsumptions, but one of its runs passes the clause budget, so it ends at `resource-limit` (24 s, 3.4 GB at
     1,000,000).
     Unbudgeted, it completes and equals HermiT (54 s, 10 GB). (c) for RO therefore waits on a larger budget or a
-    leaner engine (slice 10), and the owner decides which.
+    leaner engine (slice 10).
+
+    *Decided 2026-10-14 (owner): the leaner engine.* The budget stays at 500,000 (AD 0345ae3e), and RO waits for
+    slice 10. 0.4.0 ships with RO inconclusive under `sriq`. `auto` steps down to `el++`, whose run omits RO's
+    inverses and so is inconclusive too (measured 2026-10-14: 4 s, 3.35 GB).
   - **(d) Conformance.** The approved Direct-Semantics W3C tests whose constructs are all in `sriq`
     run with 0 FAIL.
   - **(e) Fuzzing.** `abox-fuzz --profile sriq` matches HermiT on generated ontologies that use
@@ -6222,6 +6226,10 @@ flowchart TB
   - **(g) BFO and CCO pass.** `howl validate --profile sriq` exits 0 on both.
   - **(h) Performance is recorded** against HermiT and Sequoia. The target is set at the
     feasibility checkpoint, which may also stop and re-plan the program.
+
+  **Status at 0.4.0 (2026-10-14): (a), (b) and (d)–(g) are met; (c) is met for BFO-core and CCO; (h)
+  is open.** The owner chose to release `sriq` with RO's (c) and (h) still open, and the CHANGELOG
+  says so. M5 is complete when RO meets (c), which is slice 10's aim, and (h) is recorded.
 
   It is built in slices on the `sriq` branch, as `el++` was (owner's plan, 2026-10-10; AD
   00b7c42d):
