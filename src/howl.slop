@@ -23,15 +23,20 @@
                  EdgePair
                  SubPair Findings Outcome Fault Names Verdict verdict
                  Profile ProfileSelection ReasonerConfig
-                 KName KscAxiom Evidence KscResult
-                 default-config emit-edge make-context copy-fault copy-omissions empty-names
+                 KName KscAxiom Evidence KscResult SriqEvidence
+                 default-config emit-edge make-context copy-fault copy-omissions empty-names copy-iri copy-string
                  outcome-is-complete findings-are-incoherent))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document))
   (import select (select-profile choose-auto profile-implemented unavailable-message))
   (import saturate (RoundResult saturate reuse-arena))
   (import classify (extract-findings entails-sub extract-ksc-findings))
-  (import gate (gate-axioms))
+  (import gate (gate-axioms axiom-input-ref))
+  (import canon (sort-omissions omission-cmp))
+  (import owl2 (RawAxiom))
+  (import sriqclauses (SriqIds))
+  (import sriqref (RefIn copy-clauses))
+  (import sriqabox (Inputs SplitRun split-inputs split-run-of split-findings sriq-config SRIQ_CLAUSE_BUDGET))
   (import kscnormal (normalize-ksc copy-ksc-axioms copy-kname))
   (import kscsat (ksc-classify input-classes))
   (import premise (RuleIndex build-rule-index))
@@ -81,7 +86,7 @@
     decode-from
     own-decoded
     Prepared Work ElWork KscWork
-    decode-owned prepare-in-profile
+    decode-owned prepare-in-profile sriq-omissions
     prepare-decoded
     prepare
     reason
@@ -162,9 +167,18 @@
     (axioms  (List KscAxiom))
     (classes (List KName))))
 
+  ;; sriq's (§5.5, the ABox split): both runs' clauses as the calculus
+  ;; reads them, and the query classes' IRIs by id, for the findings.
+  (type SriqWork (record
+    (h       RefIn)
+    (c       RefIn)
+    (has-c   Bool)
+    (classes (List IRI))))
+
   (type Work (union
-    (el-work  ElWork)
-    (ksc-work KscWork)))
+    (el-work   ElWork)
+    (ksc-work  KscWork)
+    (sriq-work SriqWork)))
 
   (type Prepared (record
     (profile    Profile)      ; resolved from the selection before the gate ran
@@ -279,14 +293,14 @@
     (@intent "prepare-decoded once the profile is resolved and implemented")
     (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
     (@alloc arena)
-    ;; el++ has its own gate verdicts and normal form (§5.4); el's are
-    ;; §5.2's. horn-sriq (dropped) and sriq (not built yet) never get
-    ;; here: profile-implemented refuses them first.
+    ;; el++ has its own gate verdicts and normal form (§5.4), sriq its
+    ;; own and the ABox split (§5.5); el's are §5.2's. horn-sriq (dropped)
+    ;; never gets here: profile-implemented refuses it first.
     (match profile
       ('profile-el-plus-plus (prepare-ksc arena d config profile))
       ('profile-el           (prepare-el arena d config profile))
       ('profile-horn-sriq    (prepare-el arena d config profile))
-      ('profile-sriq         (prepare-el arena d config profile))))
+      ('profile-sriq         (prepare-sriq arena d config profile))))
 
   (fn strict-refuses ((config ReasonerConfig) (cov Coverage))
     (@intent "--strict refuses a run with any omission")
@@ -350,6 +364,79 @@
         (arena-free scratch)
         res)))
 
+  (fn prepare-sriq ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
+    (@intent "sriq's front-end second half: gate under sriq, the ABox split, normalize both runs (§5.5)")
+    (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; As prepare-ksc: the gate, the split and the normaliser run in a
+    ;; scratch arena, and what the Prepared keeps (both runs' clauses, the
+    ;; query classes, the omissions) is copied into `arena`. A normaliser
+    ;; refusal (an input it cannot read) is an input-error.
+    (let ((scratch (arena-new 16777216))
+          (gr      (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-sriq))
+          (res     (match (split-inputs scratch gr)
+                     ((ok in)    (sriq-prepared arena config profile (. gr omissions) in))
+                     ((error m)  (error (union-new Fault input-error (copy-string arena m)))))))
+      (do
+        (arena-free scratch)
+        res)))
+
+  (fn sriq-prepared ((arena Arena) (config ReasonerConfig) (profile Profile) (gate-oms (List Omission)) (in Inputs))
+    (@intent "The Prepared for a split: coverage is the gate's omissions and every chain S1's guard set aside, sorted,
+              each once; --strict refuses any")
+    (@spec ((Arena ReasonerConfig Profile (List Omission) Inputs) -> (Result Prepared Fault)))
+    (@alloc arena)
+    (let ((cov (record-new Coverage (omitted (sriq-omissions arena gate-oms (. in omitted))))))
+      (if (strict-refuses config cov)
+        (error (union-new Fault refused (. cov omitted)))
+        (ok (record-new Prepared
+              (profile  profile)
+              (work     (union-new Work sriq-work
+                          (record-new SriqWork (h (copy-refin arena (. in h))) (c (copy-refin arena (. in c)))
+                                               (has-c (. in has-c)) (classes (query-iris arena (. in ids))))))
+              (coverage cov)
+              (names    (empty-names arena)))))))
+
+  (fn sriq-omissions ((arena Arena) (gate-oms (List Omission)) (s1 (List RawAxiom)))
+    (@intent "The gate's omissions and S1's guard's (each an out-of-profile axiom), copied into arena, sorted, each once")
+    (@spec ((Arena (List Omission) (List RawAxiom)) -> (List Omission)))
+    (@alloc arena)
+    (let ((mut all (list-new arena Omission)))
+      (do (for-each (o gate-oms) (list-push all o))
+          (for-each (a s1) (list-push all (union-new Omission out-of-profile (axiom-input-ref arena a))))
+          (distinct-omissions arena (sort-omissions arena (copy-omissions arena all))))))
+
+  (fn distinct-omissions ((arena Arena) (os (List Omission)))
+    (@intent "os (sorted) with each omission once: the two runs' guards can set the same chain aside")
+    (@spec ((Arena (List Omission)) -> (List Omission)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Omission)))
+      (do (for-each (o os)
+            (match (list-get out (- (cast Int (list-len out)) 1))
+              ((some last) (when (!= (omission-cmp last o) 0) (list-push out o)))
+              ((none) (list-push out o))))
+          out)))
+
+  (fn copy-refin ((arena Arena) (in RefIn))
+    (@intent "in, its clauses and hidden ids copied into arena")
+    (@spec ((Arena RefIn) -> RefIn))
+    (@alloc arena)
+    (let ((mut hid (list-new arena U32)))
+      (do (for-each (h (. in hidden)) (list-push hid h))
+          (record-new RefIn (onto (copy-clauses arena (. in onto))) (nclass (. in nclass)) (nquery (. in nquery))
+                            (nrole (. in nrole)) (nfn (. in nfn)) (nconst (. in nconst)) (hidden hid)))))
+
+  (fn query-iris ((arena Arena) (ids SriqIds))
+    (@intent "The query classes' IRIs by id (0 to nclass - 1, the input's class names), owning their strings")
+    (@spec ((Arena SriqIds) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)) (mut b 0))
+      (do (for-each (n (. ids class-of))
+            (do (when (< b (. ids nclass))
+                  (match n ((dn-class i) (list-push out (copy-iri arena i))) ((dn-fresh _) (do))))
+                (set! b (+ b 1))))
+          out)))
+
   (fn copy-knames ((arena Arena) (ns (List KName)))
     (@intent "Class names that own their strings")
     (@spec ((Arena (List KName)) -> (List KName)))
@@ -412,7 +499,42 @@
                   (evidence    (union-new Evidence ksc-evidence r))
                   (rounds      (. r rounds))
                   (names       (. p names))
-                  (owned       (list-new arena Arena)))))))))
+                  (owned       (list-new arena Arena)))))))
+      ((sriq-work w) (sriq-reason arena p w config))))
+
+  (fn sriq-reason ((arena Arena) (p Prepared) (w SriqWork) (config ReasonerConfig))
+    (@intent "sriq's run (§5.5): Run H, then Run C on what H left of the round budget, under the clause budget; the
+              split's verdict; Fault::cancelled when the host cancels")
+    (@spec ((Arena Prepared SriqWork ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; The termination is fixpoint only when every run that ran finished
+    ;; (its fixpoint, or ⊤ → ⊥); a round cap or the clause budget is
+    ;; resource-limit. An inconsistency is definitive whatever stopped the
+    ;; other run, and §6.2's verdict reads it from the findings.
+    (let ((sp (split-run-of arena (. w h) (. w c) (. w has-c) false
+                            (sriq-config (cast Int (. config max-iterations)) SRIQ_CLAUSE_BUDGET (. config cancel-ptr)))))
+      (if (. sp cancelled)
+        (error (union-new Fault cancelled))
+        (ok (sriq-outcome arena p w sp)))))
+
+  (fn sriq-outcome ((arena Arena) (p Prepared) (w SriqWork) (sp SplitRun))
+    (@intent "The Outcome of a split run that was not cancelled")
+    (@spec ((Arena Prepared SriqWork SplitRun) -> Outcome))
+    (@alloc arena)
+    (record-new Outcome
+      (profile     (. p profile))
+      (coverage    (. p coverage))
+      (termination (if (. sp finished)
+                     (union-new Termination fixpoint)
+                     (union-new Termination resource-limit (cast (Int 0 ..) (. sp rounds)))))
+      (findings    (split-findings arena (. (. (. sp h) res) st) (. w classes) (. sp inconsistent)))
+      (evidence    (union-new Evidence sriq-evidence
+                     (record-new SriqEvidence (h-rounds (. (. (. sp h) res) rounds))
+                                              (c-rounds (if (. sp ran-c) (. (. (. sp c) res) rounds) 0))
+                                              (ran-c (. sp ran-c)))))
+      (rounds      (. sp rounds))
+      (names       (. p names))
+      (owned       (list-new arena Arena))))
 
   (fn classify ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Classify a TBox: coherence, unsatisfiable classes, and the subsumption hierarchy")

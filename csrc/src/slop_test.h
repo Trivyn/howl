@@ -194,6 +194,12 @@ SLOP_LIST_DEFINE(sriqctx_Strategy, slop_list_sriqctx_Strategy)
 SLOP_LIST_DEFINE(sriqctx_Edge, slop_list_sriqctx_Edge)
 #endif
 
+#ifndef SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
+#endif
+
 #ifndef SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_DEFINED
 #define SLOP_LIST_TYPES_KSCAXIOM_IMPL_DEFINED
@@ -336,6 +342,11 @@ SLOP_OPTION_DEFINE(sriqctx_Strategy, slop_option_sriqctx_Strategy)
 #ifndef SLOP_OPTION_SRIQCTX_EDGE_DEFINED
 #define SLOP_OPTION_SRIQCTX_EDGE_DEFINED
 SLOP_OPTION_DEFINE(sriqctx_Edge, slop_option_sriqctx_Edge)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
@@ -1179,6 +1190,11 @@ typedef struct { bool is_ok; union { sriqnormal_S0 ok; slop_string err; } data; 
 typedef struct { bool is_ok; union { sriqnames_SriqNormal ok; slop_string err; } data; } slop_result_sriqnames_SriqNormal_string;
 #endif
 
+#ifndef SLOP_RESULT_TYPES_OUTCOME_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_TYPES_OUTCOME_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { types_Outcome ok; types_Fault err; } data; } slop_result_types_Outcome_types_Fault;
+#endif
+
 #ifndef SLOP_RESULT_SRIQCLAUSES_SRIQCLAUSES_STRING_DEFINED
 #define SLOP_RESULT_SRIQCLAUSES_SRIQCLAUSES_STRING_DEFINED
 typedef struct { bool is_ok; union { sriqclauses_SriqClauses ok; slop_string err; } data; } slop_result_sriqclauses_SriqClauses_string;
@@ -1192,6 +1208,7 @@ typedef struct { bool is_ok; union { sriqabox_Inputs ok; slop_string err; } data
 types_Saturation test_empty_saturation(slop_arena* arena);
 types_Saturation test_outcome_saturation(slop_arena* arena, types_Outcome o);
 howl_ElWork test_prepared_el_work(slop_arena* arena, howl_Prepared p);
+howl_ElWork test_empty_el_work(slop_arena* arena);
 types_Findings test_make_findings(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count);
 types_Outcome test_make_outcome(slop_arena* arena, uint8_t inconsistent, int64_t unsat_count, int64_t omitted_count, uint8_t reached_fixpoint);
 uint8_t test_verdict_eq(types_Verdict a, types_Verdict b);
@@ -1621,6 +1638,29 @@ uint8_t test_structure_agrees(slop_arena* arena, sriqctx_Structure st);
 uint8_t test_commit_edge_row(slop_arena* arena);
 uint8_t test_scan_same(slop_arena* arena, slop_string label, sriqref_RefIn in, int64_t n, sriqctx_Strategy s);
 uint8_t test_same_edges(slop_list_sriqctx_Edge a, slop_list_sriqctx_Edge b);
+uint8_t test_test_sriq_wired(slop_arena* arena);
+uint8_t test_wired_says(slop_arena* arena, slop_string label, uint8_t ok);
+uint8_t test_wired_fixture(slop_arena* arena, slop_string name);
+uint8_t test_wired_agrees(slop_arena* arena, slop_string name, types_Outcome o, sriqabox_Inputs in);
+uint8_t test_is_fixpoint(types_Termination t);
+slop_list_rdf_IRI test_query_classes(slop_arena* arena, sriqclauses_SriqIds ids);
+slop_list_rdf_IRI test_raw_unsat(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes);
+slop_list_types_SubPair test_raw_pairs(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes);
+slop_list_types_SubPair test_raw_class_rows(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes, int64_t b);
+slop_list_types_SubPair test_distinct_sub_pairs(slop_arena* arena, slop_list_types_SubPair ps);
+uint8_t test_same_iri_lists(slop_list_rdf_IRI a, slop_list_rdf_IRI b);
+uint8_t test_same_pair_lists(slop_list_types_SubPair a, slop_list_types_SubPair b);
+slop_result_types_Outcome_types_Fault test_sriq_run_cfg(slop_arena* arena, slop_string name, types_ReasonerConfig cfg);
+types_ReasonerConfig test_with_rounds(int64_t k);
+slop_option_types_Outcome test_outcome_of(slop_result_types_Outcome_types_Fault r);
+int64_t test_h_rounds_of(types_Outcome o);
+uint8_t test_wired_cap_rows(slop_arena* arena);
+uint8_t test_wired_shared_budget(slop_arena* arena, types_Outcome o);
+uint8_t test_wired_budget_row(slop_arena* arena);
+uint8_t test_wired_cancel_row(slop_arena* arena);
+uint8_t test_is_cancelled(slop_result_types_Outcome_types_Fault r);
+uint8_t test_wired_omission_rows(slop_arena* arena);
+slop_list_owl2_RawAxiom test_twice(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 uint8_t test_test_sriq_views(slop_arena* arena);
 uint8_t test_fixture_views(slop_arena* arena, slop_string name);
 uint8_t test_views_says(slop_arena* arena, slop_string label, sriqctx_Strategy s, uint8_t ok);
@@ -1632,6 +1672,7 @@ uint8_t test_split_run_agrees(slop_arena* arena, slop_string name, sriqclauses_S
 uint8_t test_split_expects(slop_arena* arena, slop_string name, sriqclauses_SriqIds ids, sriqctx_Strategy s, sriqabox_SplitRun sp);
 uint8_t test_test_sriq_split_rows(slop_arena* arena);
 uint8_t test_split_omitted_row(slop_arena* arena, slop_string name, uint8_t incons);
+uint8_t test_split_omitted_in(slop_arena* arena, slop_string name, uint8_t incons, sriqabox_Inputs in);
 rdf_IRI test_t_iri(slop_string local);
 uint8_t test_split_odd_list_row(slop_arena* arena);
 owl2_RawConcept* test_boxed(slop_arena* arena, owl2_RawConcept c);
@@ -2014,6 +2055,11 @@ SLOP_OPTION_DEFINE(test_ProtoCase, slop_option_test_ProtoCase)
 SLOP_OPTION_DEFINE(sriqctx_Edge, slop_option_sriqctx_Edge)
 #endif
 
+#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
@@ -2054,11 +2100,6 @@ SLOP_OPTION_DEFINE(test_RunAs, slop_option_test_RunAs)
 SLOP_OPTION_DEFINE(owl2_Signature, slop_option_owl2_Signature)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
-#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
-SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
-#endif
-
 #ifndef SLOP_OPTION_ARENA_PTR_DEFINED
 #define SLOP_OPTION_ARENA_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
@@ -2097,12 +2138,6 @@ SLOP_OPTION_DEFINE(sriq_PCands, slop_option_sriq_PCands)
 #ifndef SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 #define SLOP_OPTION_TYPES_CLASSANSWER_DEFINED
 SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
-#endif
-
-#ifndef SLOP_LIST_TYPES_SUBPAIR_DEFINED
-#define SLOP_LIST_TYPES_SUBPAIR_DEFINED
-#define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
 #endif
 
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED

@@ -2853,6 +2853,47 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
   - the logical answers are compared when both sides complete without omissions;
   - otherwise neither side's definitive finding may contradict the other's.
 
+**The production run (slice 11a).** `prepare-sriq` and `reason`'s `sriq` arm (`src/howl.slop`) run the ABox split
+through the library, the same way el and el++ run.
+- **Prepare.** It gates under `sriq` in a scratch arena, splits, and normalises both runs. It then copies into the
+  Prepared:
+  - both runs' clauses;
+  - the query classes' IRIs by id;
+  - the coverage: the gate's omissions plus every chain S1's guard set aside in either run, sorted and each listed once.
+
+  A normaliser refusal is a `Fault::input-error`, and `--strict` refuses any omission.
+- **One round budget.** `max-iterations` covers both runs: Run H takes what it needs, and Run C gets the rest. The
+  `rounds` line is their sum, as el++'s phases share theirs (§5.4).
+- **The clause budget** (owner, 2026-10-14) is 1,000,000 stored clauses in a run's store at a round boundary
+  (`SRIQ_CLAUSE_BUDGET`).
+  - It is a count, not a clock, so the report stays a function of the input and the budget (§6.8).
+  - It binds every `sriq` run. A run that passes it stops at `resource-limit`.
+  - The contexts, choices and Nom caps stay off outside the tests.
+- **Termination.**
+  - It is `fixpoint` when every run that ran finished, at its fixpoint or at ⊤ → ⊥.
+  - Otherwise it is `resource-limit(rounds)`.
+  - An inconsistency is definitive whatever stopped the other run, and §6.2's verdict reads it from the findings.
+- **Cancellation** is read at every round boundary, ahead of the round cap, as `run-ksc` reads it. A cancelled Run H
+  skips Run C. The result is `Fault::cancelled`.
+- **The worker count** is accepted, and the run is single-threaded until slice 10. R6 makes the report the same at
+  every W.
+- **The findings** (`split-findings`) are read off Run H's final structure in one pass per query context.
+  - `holds(B, A)` is `B(x) → A(x) ∈̂ S_{v_B}`. That is never a tautology, so it holds exactly when some stored clause has
+    its body within `{B(x)}` and its head within `{A(x)}`; an empty head is `unsat(B)`.
+  - `holds(⊤, A)` is the same in `v_⊤`, with an empty body.
+  - The rows are built as el's and el++'s are: `owl:Thing ⊑ owl:Thing`, each `holds(⊤, A)`, and per query class
+    either `(B, ⊥)` or `B ⊑ owl:Thing` with its subsumers. They are sorted, each once, and empty under inconsistency.
+  - The probes read these findings.
+- **Tests.**
+  - Every fixture runs through `prepare-in-profile` and `reason`. Its verdict, termination, rounds and findings must
+    equal the split run's with the same configuration, and S4's raw queries on that run's Run H.
+  - Rows check cap 0, the shared budget, a clause budget of 5, cancellation (at the default cap and at cap 0), and
+    S1's omitted chain listed once.
+  - **Mutants seen red:** the hidden unsat ignored in the findings, the budget not shared, the cancel unchecked, the
+    cancel read after the cap, and S1's omissions dropped.
+
+  `sriq` is still not selectable; slice 11b wires it.
+
 **S5 — representation.** [TGH21] leaves each of these choices open, so none needs a new proof. Each
 is fixed here so that reports are input-determined.
 - **One expansion strategy, fixed: cautious** ([Bate+18] §4.2). It picks `v_B` when `f` occurs in

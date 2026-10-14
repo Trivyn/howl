@@ -20,17 +20,21 @@
          input (SPEC 5.5, slice 9j)")
 
   (import rdf (IRI))
-  (import types (Node DName DlClause))
+  (import types (Node DName DlClause Findings SubPair Lit Clause node-top node-bottom))
   (import owl2 (RawAxiom RawConcept RawClassAssertion RawEdge Signature concept-cmp))
   (import canon (iri-cmp sort-range))
   (import gate (GateResult))
-  (import sriqnames (SriqNormal sriq-normalize))
+  (import sriqnames (SriqNormal sriq-normalize sriq-normalize-bounded))
+  (import sriqelim (S1_BOUND))
   (import sriqclauses (SriqIds SriqClauses sriq-clauses class-id))
-  (import sriqref (RefIn RefStatus ref-input))
+  (import sriqref (RefIn RefStatus RefConfig ref-input))
+  (import sriqctx (Structure CtxSet))
   (import sriqctx (q-inconsistent q-hidden-unsat))
+  (import canon (sort-iris sort-sub-pairs sub-pair-cmp))
   (import sriqsat (SatConfig SatResult sat-run))
 
-  (export Split Folded Inputs SplitRun abox-split fold-clauses consistency-input h-input split-inputs split-run)
+  (export Split Folded Inputs SplitRun abox-split fold-clauses consistency-input h-input split-inputs split-run
+          split-run-of split-findings sriq-config SRIQ_CLAUSE_BUDGET split-inputs-bounded)
 
   ;; The two runs' inputs.
   (type Split (record
@@ -407,41 +411,54 @@
     (h       RefIn)
     (c       RefIn)
     (has-c   Bool)
-    (omitted Bool)))   ; did S1's guard omit an axiom in either run? Then only a definitive finding is an answer
+    (omitted (List RawAxiom))))   ; the chains S1's guard set aside in either run: the report lists each
 
   (fn split-inputs ((arena Arena) (gr GateResult))
     (@intent "The split, normalised: Run H's folded input and its ids, and Run C's input when A_rest is not empty")
     (@spec ((Arena GateResult) -> (Result Inputs String)))
     (@alloc arena)
+    (split-inputs-bounded arena gr S1_BOUND))
+
+  (fn split-inputs-bounded ((arena Arena) (gr GateResult) (bound Int))
+    (@intent "split-inputs with S1's size guard at bound (a test lowers it to trip the guard)")
+    (@spec ((Arena GateResult Int) -> (Result Inputs String)))
+    (@alloc arena)
     (let ((sp (abox-split arena gr)))
-      (match (sriq-normalize arena (. (. sp h) accepted) (. (. sp h) signature))
+      (match (sriq-normalize-bounded arena (. (. sp h) accepted) (. (. sp h) signature) bound)
         ((error m) (error m))
         ((ok nh)
           (match (fold-clauses arena nh)
             ((error m) (error m))
-            ((ok f) (inputs-from arena sp f (> (list-len (. nh omitted)) 0))))))))
+            ((ok f) (inputs-from arena sp f (. nh omitted) bound)))))))
 
-  (fn inputs-from ((arena Arena) (sp Split) (f Folded) (omitted Bool))
-    (@intent "Inputs from Run H's folded clauses, with Run C's normalised when A_rest is not empty; omitted says whether
-              Run H's normalisation omitted an axiom")
-    (@spec ((Arena Split Folded Bool) -> (Result Inputs String)))
+  (fn inputs-from ((arena Arena) (sp Split) (f Folded) (omitted (List RawAxiom)) (bound Int))
+    (@intent "Inputs from Run H's folded clauses, with Run C's normalised (S1 bounded by bound) when A_rest is not
+              empty; omitted is what Run H's normalisation set aside")
+    (@spec ((Arena Split Folded (List RawAxiom) Int) -> (Result Inputs String)))
     (@alloc arena)
     (let ((h (h-input arena f)))
       (if (. sp has-c)
-        (c-inputs arena sp (. (. f sc) ids) h omitted)
+        (c-inputs arena sp (. (. f sc) ids) h omitted bound)
         (ok (record-new Inputs (ids (. (. f sc) ids)) (h h) (c h) (has-c false) (omitted omitted))))))
 
-  (fn c-inputs ((arena Arena) (sp Split) (ids SriqIds) (h RefIn) (omitted Bool))
-    (@intent "Inputs with Run C's input normalised beside Run H's; an omission in either is recorded")
-    (@spec ((Arena Split SriqIds RefIn Bool) -> (Result Inputs String)))
+  (fn c-inputs ((arena Arena) (sp Split) (ids SriqIds) (h RefIn) (omitted (List RawAxiom)) (bound Int))
+    (@intent "Inputs with Run C's input normalised beside Run H's; both runs' omissions kept")
+    (@spec ((Arena Split SriqIds RefIn (List RawAxiom) Int) -> (Result Inputs String)))
     (@alloc arena)
-    (match (sriq-normalize arena (. (. sp c) accepted) (. (. sp c) signature))
+    (match (sriq-normalize-bounded arena (. (. sp c) accepted) (. (. sp c) signature) bound)
       ((error m) (error m))
       ((ok nc)
         (match (sriq-clauses arena nc)
           ((error m) (error m))
           ((ok sc) (ok (record-new Inputs (ids ids) (h h) (c (consistency-input (ref-input arena sc))) (has-c true)
-                                   (omitted (or omitted (> (list-len (. nc omitted)) 0))))))))))
+                                   (omitted (both-omitted arena omitted (. nc omitted))))))))))
+
+  (fn both-omitted ((arena Arena) (a (List RawAxiom)) (b (List RawAxiom)))
+    (@intent "a, then b (the report sorts and dedups them with the gate's omissions)")
+    (@spec ((Arena (List RawAxiom) (List RawAxiom)) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RawAxiom)))
+      (do (for-each (x a) (list-push out x)) (for-each (x b) (list-push out x)) out)))
 
   ;; What the two runs found.
   (type SplitRun (record
@@ -449,7 +466,10 @@
     (c            SatResult)     ; Run H's again when Run C did not run
     (ran-c        Bool)
     (inconsistent Bool)          ; a definitive finding: v_⊤'s, a hidden class's, or Run C's ⊤ → ⊥
-    (complete     Bool)))        ; an answer: inconsistent, or both runs at their fixpoint with nothing omitted
+    (complete     Bool)          ; an answer: inconsistent, or both runs at their fixpoint with nothing omitted
+    (finished     Bool)          ; both runs that ran ended at their fixpoint or at ⊤ → ⊥ (the report's termination)
+    (rounds       Int)           ; Run H's rounds plus Run C's: one budget across both
+    (cancelled    Bool)))        ; the host cancelled: no answer (Fault::cancelled)
 
   (fn finished ((s RefStatus))
     (@intent "Did a run end at its fixpoint or at ⊤ → ⊥, never at a cap or out of fuel?")
@@ -458,21 +478,189 @@
     (or (== s 'rs-fixpoint) (== s 'rs-inconsistent)))
 
   (fn split-run ((arena Arena) (in Inputs) (cfg SatConfig))
-    (@intent "Run H, then Run C unless Run H found the input inconsistent or A_rest is empty, and the verdict (SPEC
-              5.5): inconsistent on any run's ⊤ → ⊥ or a hidden class's unsat; else an answer only when both finished
-              and S1's guard omitted nothing")
+    (@intent "split-run-of on in's parts")
     (@spec ((Arena Inputs SatConfig) -> SplitRun))
     (@alloc arena)
-    (let ((h (sat-run arena (. in h) cfg))
+    (split-run-of arena (. in h) (. in c) (. in has-c) (> (list-len (. in omitted)) 0) cfg))
+
+  (fn split-run-of ((arena Arena) (h-in RefIn) (c-in RefIn) (has-c Bool) (omitted Bool) (cfg SatConfig))
+    (@intent "Run H, then Run C unless Run H found the input inconsistent, was cancelled, or A_rest is empty, with the
+              round budget shared (Run C gets what Run H left), and the verdict (SPEC 5.5): inconsistent on any run's
+              ⊤ → ⊥ or a hidden class's unsat; else an answer only when both finished and S1's guard omitted nothing")
+    (@spec ((Arena RefIn RefIn Bool Bool SatConfig) -> SplitRun))
+    (@alloc arena)
+    (let ((h (sat-run arena h-in cfg))
           (hst (. (. h res) st))
-          (hbad (or (q-inconsistent arena hst) (q-hidden-unsat arena hst (. (. in h) nquery) (. (. in h) hidden)))))
-      (if (or hbad (not (. in has-c)))
+          (hdone (finished (. (. h res) status)))
+          (hbad (or (q-inconsistent arena hst) (q-hidden-unsat arena hst (. h-in nquery) (. h-in hidden)))))
+      (if (or hbad (. h cancelled) (not has-c))
         (record-new SplitRun (h h) (c h) (ran-c false) (inconsistent hbad)
-                             (complete (or hbad (and (finished (. (. h res) status)) (not (. in omitted))))))
-        (let ((c (sat-run arena (. in c) cfg))
-              (cbad (q-inconsistent arena (. (. c res) st))))
-          (record-new SplitRun (h h) (c c) (ran-c true) (inconsistent cbad)
-                               (complete (or cbad (and (finished (. (. h res) status)) (finished (. (. c res) status))
-                                                       (not (. in omitted))))))))))
+                             (complete (or hbad (and hdone (not omitted)))) (finished hdone)
+                             (rounds (. (. h res) rounds)) (cancelled (. h cancelled)))
+        (c-run arena h hdone c-in omitted cfg))))
+
+  (fn c-run ((arena Arena) (h SatResult) (hdone Bool) (c-in RefIn) (omitted Bool) (cfg SatConfig))
+    (@intent "Run C on what Run H left of the round budget, and the split's verdict")
+    (@spec ((Arena SatResult Bool RefIn Bool SatConfig) -> SplitRun))
+    (@alloc arena)
+    (let ((c (sat-run arena c-in (with-fuel cfg (- (. (. cfg base) fuel) (. (. h res) rounds)))))
+          (cbad (q-inconsistent arena (. (. c res) st)))
+          (both (and hdone (finished (. (. c res) status)))))
+      (record-new SplitRun (h h) (c c) (ran-c true) (inconsistent cbad)
+                           (complete (or cbad (and both (not omitted)))) (finished both)
+                           (rounds (+ (. (. h res) rounds) (. (. c res) rounds))) (cancelled (. c cancelled)))))
+
+  (fn with-fuel ((cfg SatConfig) (fuel Int))
+    (@intent "cfg with its round cap set to fuel (never below 0)")
+    (@spec ((SatConfig Int) -> SatConfig))
+    (@pure)
+    (let ((b (. cfg base)))
+      (record-new SatConfig
+        (base (record-new RefConfig (strat (. b strat)) (fuel (if (< fuel 0) 0 fuel)) (lam (. b lam)) (ctxs (. b ctxs))
+                                    (cls (. b cls)) (prod (. b prod)) (cnst (. b cnst))))
+        (perm (. cfg perm)) (scan (. cfg scan)) (defer (. cfg defer)) (views (. cfg views)) (check (. cfg check))
+        (cancel (. cfg cancel)))))
+
+  ;; ============================================================
+  ;; The production run (slice 11): its configuration and its findings
+  ;; ============================================================
+
+  ;; The clause budget (owner, 2026-10-14): a run whose store passes it at a
+  ;; round boundary stops at resource-limit. It is a count, never a clock,
+  ;; so reports stay a function of the input and the budget (§6.8); it binds
+  ;; an explicit sriq run as well as auto's, and auto steps down from it.
+  (const SRIQ_CLAUSE_BUDGET Int 1000000)
+
+  (fn sriq-config ((max-rounds Int) (budget Int) (cancel I64))
+    (@intent "The production run: cautious, deferral and kept premise views on, max-rounds rounds over both runs, the
+              clause budget, the host's cancel flag; the contexts, choices and Nom caps off (SPEC 5.5: outside the
+              tests only the round cap and the clause budget apply)")
+    (@spec ((Int Int I64) -> SatConfig))
+    (@pure)
+    (record-new SatConfig
+      (base (record-new RefConfig (strat 'st-cautious) (fuel max-rounds) (lam -1) (ctxs 2147483647) (cls budget)
+                                  (prod 2147483647) (cnst 2147483647)))
+      (perm 0) (scan false) (defer true) (views true) (check false) (cancel cancel)))
+
+  ;; The findings, read off Run H's final structure in one pass per query
+  ;; context. holds(B, A) is B(x) → A(x) ∈̂ S_{v_B}: never a tautology, so
+  ;; some stored clause has its body within {B(x)} and its head within
+  ;; {A(x)}; an empty head is unsat(B). holds(⊤, A) is the same in v_⊤ with
+  ;; an empty body. That is S4's raw queries, read without building a query
+  ;; clause per pair; a test diffs it against them on every fixture.
+  (fn split-findings ((arena Arena) (st Structure) (classes (List IRI)) (inconsistent Bool))
+    (@intent "sriq's findings from Run H's final structure: inconsistency (the split's verdict), the unsatisfiable query
+              classes, and the bottom-compressed taxonomy with owl:Thing, as el and el++ build theirs")
+    (@spec ((Arena Structure (List IRI) Bool) -> Findings))
+    (@alloc arena)
+    (@post {(. $result inconsistent) == inconsistent})
+    (@post (implies {inconsistent == true} {(list-len (. $result unsatisfiable)) == 0}))
+    (@post (implies {inconsistent == true} {(list-len (. $result subsumptions)) == 0}))
+    (record-new Findings
+      (inconsistent  inconsistent)
+      (unsatisfiable (if inconsistent (list-new arena IRI) (unsat-classes arena st classes)))
+      (subsumptions  (if inconsistent (list-new arena SubPair) (taxonomy arena st classes)))
+      (imports-seen  (list-new arena IRI))))
+
+  (fn set-at-ctx ((arena Arena) (st Structure) (v Int))
+    (@intent "S_v, or none")
+    (@spec ((Arena Structure Int) -> (List Clause)))
+    (@alloc arena)
+    (match (list-get (. st sets) v) ((some s) (. s cs)) ((none) (list-new arena Clause))))
+
+  (fn body-within ((c Clause) (b Int))
+    (@intent "Is c's body within {B(x)}, b being B (b < 0: the empty body)?")
+    (@spec ((Clause Int) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (l (. c body)) (when (not (is-x-atom l b)) (set! ok false))) ok)))
+
+  (fn is-x-atom ((l Lit) (b Int))
+    (@intent "Is l the atom B(x), b being B?")
+    (@spec ((Lit Int) -> Bool))
+    (@pure)
+    (and (>= b 0) (== (. l form) 'lf-unary) (== (. (. l t1) kind) 'ak-x) (== (cast Int (. l pred)) b)))
+
+  (fn head-class ((c Clause) (n Int))
+    (@intent "A, if c's head is exactly A(x) for a query class A (id below n); else -1")
+    (@spec ((Clause Int) -> Int))
+    (@pure)
+    (match (list-get (. c head) 0)
+      ((some l) (if (and (== (list-len (. c head)) 1) (== (. l form) 'lf-unary) (== (. (. l t1) kind) 'ak-x)
+                         (< (cast Int (. l pred)) n))
+                  (cast Int (. l pred))
+                  -1))
+      ((none) -1)))
+
+  (fn unsat-at ((arena Arena) (st Structure) (b Int))
+    (@intent "unsat(B): a clause of S_{v_B} with its body within {B(x)} and an empty head")
+    (@spec ((Arena Structure Int) -> Bool))
+    (@alloc arena)
+    (let ((mut found false))
+      (do (for-each (c (set-at-ctx arena st (+ 2 b)))
+            (when (and (== (list-len (. c head)) 0) (body-within c b)) (set! found true)))
+          found)))
+
+  (fn unsat-classes ((arena Arena) (st Structure) (classes (List IRI)))
+    (@intent "The query classes unsat(B) holds of, sorted")
+    (@spec ((Arena Structure (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)) (mut b 0))
+      (do (for-each (i classes) (do (when (unsat-at arena st b) (list-push out i)) (set! b (+ b 1))))
+          (sort-iris arena out))))
+
+  (fn taxonomy ((arena Arena) (st Structure) (classes (List IRI)))
+    (@intent "owl:Thing ⊑ owl:Thing and each holds(⊤, A); for each query class B, (B, ⊥) when unsat, else B ⊑ owl:Thing and
+              each holds(B, A); sorted, each once")
+    (@spec ((Arena Structure (List IRI)) -> (List SubPair)))
+    (@alloc arena)
+    (let ((n (cast Int (list-len classes))) (top (node-top)) (mut raw (list-new arena SubPair)) (mut b 0))
+      (do (list-push raw (record-new SubPair (sub top) (super top)))
+          (for-each (a (holds-in arena st 1 -1 n)) (list-push raw (record-new SubPair (sub top) (super (class-at classes a)))))
+          (for-each (i classes)
+            (do (for-each (p (class-rows arena st classes b n)) (list-push raw p))
+                (set! b (+ b 1))))
+          (distinct-pairs arena (sort-sub-pairs arena raw)))))
+
+  (fn class-rows ((arena Arena) (st Structure) (classes (List IRI)) (b Int) (n Int))
+    (@intent "Query class B's rows: (B, ⊥) when unsat; else (B, owl:Thing) and (B, A) for each holds(B, A)")
+    (@spec ((Arena Structure (List IRI) Int Int) -> (List SubPair)))
+    (@alloc arena)
+    (let ((me (class-at classes b)) (mut out (list-new arena SubPair)))
+      (do (if (unsat-at arena st b)
+            (list-push out (record-new SubPair (sub me) (super (node-bottom))))
+            (do (list-push out (record-new SubPair (sub me) (super (node-top))))
+                (for-each (a (holds-in arena st (+ 2 b) b n))
+                  (list-push out (record-new SubPair (sub me) (super (class-at classes a)))))))
+          out)))
+
+  (fn holds-in ((arena Arena) (st Structure) (v Int) (b Int) (n Int))
+    (@intent "The query classes A with a clause of S_v whose body is within {B(x)} (b < 0: empty) and whose head is A(x)")
+    (@spec ((Arena Structure Int Int Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)))
+      (do (for-each (c (set-at-ctx arena st v))
+            (when (body-within c b)
+              (let ((a (head-class c n))) (when (>= a 0) (list-push out a)))))
+          out)))
+
+  (fn class-at ((classes (List IRI)) (a Int))
+    (@intent "Query class a's node")
+    (@spec (((List IRI) Int) -> Node))
+    (@pure)
+    (match (list-get classes a)
+      ((some i) (union-new Node class-node i))
+      ((none) (node-top))))
+
+  (fn distinct-pairs ((arena Arena) (ps (List SubPair)))
+    (@intent "ps (sorted) with each pair once")
+    (@spec ((Arena (List SubPair)) -> (List SubPair)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SubPair)))
+      (do (for-each (p ps)
+            (match (list-get out (- (cast Int (list-len out)) 1))
+              ((some last) (when (!= (sub-pair-cmp last p) 0) (list-push out p)))
+              ((none) (list-push out p))))
+          out)))
 
 )
