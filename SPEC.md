@@ -2355,7 +2355,8 @@ above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own trans
   - It holds the contexts (each a core and whether it is `v_r`), each context's clause set, the
     edges `⟨v, w, f⟩` and `⟨v, w, u⟩`, and the constants (the order's table).
   - Every context shares S5's one order, so θ is not stored.
-  - Ids: `v_r` is 0, `v_⊤` is 1, and `v_B` is 2 + B for each class B of the input signature (S4).
+  - Ids: `v_r` is 0, `v_⊤` is 1, and `v_B` is 2 + B for each class B of the input signature (S4). In the ABox split's
+    Run H, the hidden query classes' contexts follow, in the order of their ids.
     Contexts a strategy adds follow.
   - A context other than `v_r` is identified by its core, so a lookup by the empty core finds
     `v_⊤`, never `v_r` (Definition 5: `v ≠ v_r`).
@@ -2432,7 +2433,8 @@ omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ 
     ever uses `v_⊤`), and `2^(m+m′+1)` under eager, for m and m′ the numbers of unary and binary
     predicates of O. Eager's is held at 2⁶².
   - ω_D is the number of contexts initialisation creates (A4): `v_r`, `v_⊤`, and one `v_B` per class
-    name of the input signature (S4), so that number plus 2.
+    name of the input signature (S4), so that number plus 2. In the ABox split, the hidden contexts count too: Run H's
+    ω_D is the query classes plus the hidden ones plus 2, and Run C's is 2.
   - `depth-limit` (`src/rules/sriq.slop`) computes it exactly when it is below 2⁶², and gives 2⁶²
     otherwise, by a shift held at the cap before it can overflow. That changes no run:
   - Nom on `o_ρ` needs a clause that mentions `o_ρ`. Such a clause exists only from the round in
@@ -2665,7 +2667,8 @@ omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ 
   - `holds(B, owl:Nothing)` is `unsat(B)`;
   - `owl:Nothing` is below everything.
 
-  Fresh names are never queried: S1's `I` and `F`, S2's `A_E`, `P̄` and `S_{B₂}`.
+  Fresh names are never queried: S1's `I` and `F`, S2's `A_E`, `P̄` and `S_{B₂}`. The one exception is the ABox
+  split's hidden query classes: each is an `A_E`, and only its `unsat` is read, as an inconsistency (below).
 - **The report** is extracted from these raw queries exactly as [§5.4](#54-the-el-calculus)'s K5
   extracts `el++`'s:
   - `owl:Nothing` is never an unsatisfiable finding;
@@ -2679,6 +2682,111 @@ omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ 
 - **A run that derives `⊤ → ⊥` in `v_⊤` stops after that round's commit.** It is complete for its
   answers, as K3's flagged run is: an inconsistent ontology entails everything, and the report says
   so.
+
+**The ABox split (slice 9j, under review).** *Status: drafted 2026-10-14, for Codex's and the owner's review before
+any engine code.*
+
+`sriq` decides consistency, unsatisfiability and subsumption, and nothing about individuals (Requirement c0f9bfb3).
+Class nominals are out of profile, so an individual occurs only in assertions. So an input is answered by two runs, and
+neither needs the ABox whole:
+- **Run H,** for the hierarchy: every individual is gone, and each distinct type set becomes a hidden query class. It
+  has no constant, so R8's deferral applies.
+- **Run C,** for consistency only: whatever the ABox says beyond class assertions, with no query context.
+
+On CCO, all 350 individuals carry class assertions only, in 35 distinct type sets, so Run C does not run.
+- **Definitions.** `K = (T, A)` is what the gate accepts: `A` the assertions, `T` everything else. The data lemma's
+  axioms never reach S0, so `T` is what S0 reads besides `A`.
+  - An individual `o` is **foldable** when it occurs in `A` only in class assertions, and in `DifferentIndividuals`
+    lists, at most once in each.
+    - Its **type** is the set of classes asserted of it, compared as S0's canonical concepts. An individual with only a
+      declaration is foldable, with the empty type.
+    - Every other individual occurs in a property or negative property assertion, in `SameIndividual`, or twice in one
+      list.
+  - `A_rest` is every assertion except the foldable individuals' class assertions. In it, each `DifferentIndividuals`
+    list is kept only with its members that are not foldable, and only when two of them remain.
+  - **Representatives:** for each distinct non-empty type, the least individual by IRI with that type.
+  - `K_H = (T, {C(o) | o a representative, C in its type})`, and `K_C = (T, A_rest)`.
+- **L1 — disjoint unions.** Let `I_j`, for `j ∈ J`, be interpretations with pairwise disjoint domains. Their disjoint
+  union `U` has domain `⊎ Δ^{I_j}`, `A^U = ⊎ A^{I_j}` and `R^U = ⊎ R^{I_j}`. Then:
+  - **(i) Concepts.** `C^U = ⊎ C^{I_j}` for every concept of the language (§5.5, without nominals). By induction:
+    - names, `⊤` and `⊥` are immediate;
+    - `¬`, `⊓` and `⊔` act part by part;
+    - an element's `R`-successors in `U` (for `R` or `R⁻`) are exactly its successors in its own part. So `∃`, `∀`,
+      `≥n`, `≤n` and `∃R.Self` agree with that part.
+  - **(ii) Axioms.** If every `I_j` satisfies `T`, so does `U`:
+    - a GCI, by (i), and so `DisjointUnion`;
+    - a role inclusion with a chain, since a chain of pairs never leaves a part;
+    - every characteristic: transitive, symmetric, asymmetric, reflexive, irreflexive, functional,
+      inverse-functional, and disjoint roles, each read part by part;
+    - `R ⊑ owl:topObjectProperty`, the universal role's only accepted use, which holds in every interpretation.
+  - **(iii) Assertions.** An individual interpreted inside part `j` satisfies the class assertions that `I_j` gives it.
+    Two individuals in different parts are different, and are related by no role.
+- **L1′ — clauses.** A set of [TGH21] Table 1 clauses of the forms DL1–DL9 (no constant) is closed under disjoint
+  union, with each function symbol read part by part.
+  - In every one of these forms, each variable `zᵢ` occurs in a body atom `S(x, zᵢ)` or `S(zᵢ, x)`.
+  - So an assignment that puts some `zᵢ` in another part than `x` falsifies the body.
+  - Any other assignment stays inside one part, which is a model.
+- **L2 — the hierarchy needs no ABox.** If `K` is consistent, then `K ⊨ B ⊑ A` iff `T ⊨ B ⊑ A`, for any concepts `B` and
+  `A`, and so for unsatisfiability.
+  - **⇐:** monotonicity.
+  - **⇒:** take a model `I` of `T` with `e ∈ B^I \ A^I`, and a model `J` of `K`. Interpret every individual in `J`'s
+    part of `I ⊎ J`. That is a model of `K` (L1 (ii), (iii)), and `e` is a counterexample there (L1 (i)).
+- **L3 — consistency splits.** `K` is consistent iff `K_C` is consistent and `K_H` is consistent.
+  - **⇒:** both are contained in `K`, up to the restricted lists, which are weaker.
+  - **⇐:** take a model `J` of `K_C`, and a model `I` of `K_H`.
+    - For each foldable `o` with a non-empty type, let `I_o` be a copy of `I` in which `o` is interpreted as that type's
+      representative is in `I`. For each foldable `o` with the empty type, let `I_o` be any model of `T`; `J` is one.
+    - Interpret each foldable `o` in its own part of `J ⊎ ⊎_o I_o`, and the others in `J`.
+    - By L1 that is a model of `T`, of `A_rest` (in `J`'s part), and of every foldable `o`'s class assertions (its type
+      holds in its part).
+    - Every `DifferentIndividuals` list holds. Two of its members in different parts are different. Two members in `J`
+      are both not foldable, so they are in the restricted list, which `J` satisfies.
+  - When `A_rest` is empty, `K_C` is `T`, and `K_H` entails `T`. Then `K` is consistent iff `K_H` is.
+- **Run H.** `K_H` goes through S0–S5 as any input does, and the clause boundary changes one thing.
+  - **What S2 makes of `K_H`.**
+    - S0 reads `C(o)` as `{o} ⊑ C`, and `C` mentions no nominal.
+    - S2 reads that as `⊤ ⊑ ¬{o} ⊔ C` and names `¬{o}` through `neg-name`. That emits DL10 `⊤ → A_o(o)` once for the key
+      `{o}`, and `A_o(x)` appears in the bodies of the rest.
+    - A DL11 clause comes only from a positive nominal (`define-pos`): a property assertion or `SameIndividual`, and
+      `K_H` has neither. Nor does S1 make or move a nominal.
+    - So `NF(K_H) = O′ ∪ {⊤ → A_o(o) | o a representative}`. `O′` holds only DL1–DL9 clauses, `A_o` is a fresh name, a
+      different one for each `o`, and `o` occurs in no clause of `O′`.
+  - **The fold.** The boundary drops each `⊤ → A_o(o)` and the constant `o`. The run reads `O′`, and each `A_o` is a
+    **hidden query class**:
+    - it gets a context `v_{A_o}` with core `{A_o(x)}`, after the query contexts;
+    - its one raw query is `unsat(A_o)`: `A_o(x) → ⊥ ∈̂ S_{v_{A_o}}`;
+    - it is never reported.
+    - `A_o` stays a fresh name in S5's ids and ranked order.
+    - C1 holds by Core. C2 holds vacuously, as the query has an empty head.
+  - **Claim F.**
+    - (a) `K_H` is consistent iff `O′` is consistent and no `A_o` is unsatisfiable w.r.t. `O′`.
+    - (b) If `K_H` is consistent, then for query classes `B` and `A`, `K_H ⊨ B ⊑ A` iff `O′ ⊨ B(x) → A(x)`, and so for
+      unsatisfiability and `owl:Thing`.
+    - **Proof.** By S0–S2's correctness, `K_H`'s answers are `NF(K_H)`'s.
+      - **(a) ⇒:** a model of `NF(K_H)` is a model of `O′` in which each `A_o` holds `o`.
+      - **(a) ⇐:** take a model `M_o` of `O′` with an element `d_o ∈ A_o` for each `o`. Their disjoint union is a model of
+        `O′` (L1′), and interpreting each `o` as `d_o` makes it a model of `NF(K_H)`. With no representative, a model of
+        `O′` is one of `NF(K_H)`.
+      - **(b) ⇐:** monotonicity.
+      - **(b) ⇒:** take a model `M` of `O′` with a counterexample, and `M*` of `NF(K_H)`. `M ⊎ M*`, with the constants in
+        `M*`, is a model of `NF(K_H)` (L1′) holding the counterexample.
+  - Run H mentions no constant, so R8's deferral applies under cautious or trivial. A hidden query has its body in its
+    core, so R8's conclusion covers it as it covers `unsat(B)`.
+- **Run C,** when `A_rest` is not empty, reads `NF(K_C)` with **no query class**: `nquery = 0`.
+  - Initialisation makes only `v_r` and `v_⊤`. S5's ranked order then ranks every class as a fresh name, by id.
+  - That order is one of 9g's family (the query classes are none), so it is admissible. The one query, `inconsistent`,
+    has an empty head, so C2 holds vacuously in `v_⊤`.
+  - Run C reads only `inconsistent` (S4, with the root's early stop). It has constants, so R8's deferral stays off.
+- **The verdict.** By L3 and Claim F (a):
+  - `K` is **inconsistent** iff Run H derives `⊤ → ⊥` in `v_⊤`, or `unsat(A_o)` for some `o`, or Run C derives
+    `⊤ → ⊥`.
+  - **Otherwise,** `K`'s raw answers are Run H's (L2 for `K` and for `K_H`, then Claim F (b)).
+  - **A cap:** if either run stops at a cap or out of fuel, the input is n/a.
+
+  Both runs are deterministic, and the split is a function of the accepted axioms' content, so every report stays the
+  same at every worker count (R6).
+- **The reference evaluator** keeps reading `K` whole and unsplit. The tests compare the split engine's report against
+  it, so the split is checked by a run that never made it.
 
 **S5 — representation.** [TGH21] leaves each of these choices open, so none needs a new proof. Each
 is fixed here so that reports are input-determined.
