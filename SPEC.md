@@ -3381,6 +3381,9 @@ schedule is its own.
     - Derive builds the same `Premise` records from them, finding a clause's flags by content.
     - Succ's K-sets read the premises' flags (`k-index-premises`) instead of re-running the order over
       every clause.
+    - **One place still recomputes:** the shared ground view selects its members afresh each round, in
+      `ground-of`, twice. Only a run with constants has a ground view, so the ABox split's Run H never
+      meets it.
   - **Nothing a run does changes.** On every fixture and hand-built case under every strategy, the
     tests require the same status, rounds, counts and answers as recomputing the flags every round
     (`SatConfig`'s `views` off). They also require the kept flags to equal a recomputation after every
