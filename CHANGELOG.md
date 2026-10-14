@@ -3,7 +3,7 @@
 ## Unreleased
 
 - **`sriq` is built and selectable** (`--profile sriq`, `auto`, the C API, the Rust crate). It runs
-  single-threaded under a budget of 1,000,000 stored clauses, and a run that passes the budget is
+  single-threaded under a budget of 500,000 clauses, and a run that passes the budget is
   inconclusive unless it has found something definitive.
   - It classifies BFO-core and CCO with nothing omitted, and each exits 0.
   - **`auto` chooses among three rungs.** It takes the first of `el`, `el++` and `sriq` that omits

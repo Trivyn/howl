@@ -580,6 +580,7 @@ struct sriqsat_Here {
     sriqsat_RSrcs rs;
     uint8_t dfr;
     uint8_t views;
+    int64_t room;
 };
 typedef struct sriqsat_Here sriqsat_Here;
 
@@ -595,6 +596,8 @@ sriqsat_CIdx sriqsat_ctx_ix(slop_arena* arena, sriqref_Env env, sriqctx_Structur
 slop_list_sriqsat_CIdx sriqsat_all_ixs(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, int64_t perm, slop_list_sriqsat_View vw);
 sriqsat_CIdx sriqsat_cix_at(slop_arena* arena, slop_list_sriqsat_CIdx ixs, int64_t v);
 sriqsat_Here sriqsat_here_of(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, sriqsat_RSrcs rs, int64_t v, int64_t perm, uint8_t dfr, uint8_t views);
+sriqsat_Here sriqsat_here_room(sriqsat_Here h, int64_t room);
+uint8_t sriqsat_roomy(slop_list_sriqref_Cand out, sriqsat_Here h);
 uint8_t sriqsat_edge_new(sriqsat_Delta dl, sriqctx_Edge e);
 uint8_t sriqsat_consts_new(sriqctx_Structure st, sriqsat_Delta dl);
 slop_list_sriqref_Cand sriqsat_hyper_new_consts(slop_arena* arena, sriqctx_Structure st, sriqsat_Delta dl, uint32_t v, types_Clause oc);
@@ -604,6 +607,7 @@ sriqhyper_HCtx sriqsat_hctx_of(sriqsat_Here h);
 sriqhyper_HOut sriqsat_sat_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, int64_t room);
 slop_list_sriqref_Cand sriqsat_eq_pairs(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, slop_list_sriq_Premise p1s, slop_list_sriq_Premise p2s);
 slop_list_sriqref_Cand sriqsat_eq_side(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, sriq_Premise p1, uint32_t k1, sriq_Premise p2);
+slop_list_sriqref_Cand sriqsat_copy_cands(slop_arena* arena, slop_list_sriqref_Cand cs);
 uint8_t sriqsat_holds_term(types_Lit l, types_ATerm s);
 uint8_t sriqsat_term_at(types_Lit l, uint32_t a, uint8_t inner, types_ATerm s);
 sriqhyper_HOut sriqsat_sat_table2(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, int64_t room);
@@ -628,7 +632,7 @@ sriqsat_JoinSite sriqsat_site_at(slop_list_sriqsat_JoinSite ss, int64_t k, sriqs
 types_Lit sriqsat_site_key(sriqsat_JoinSite s);
 int64_t sriqsat_site_lower(slop_list_sriqsat_JoinSite ss, types_Lit l, sriqsat_JoinSite fallback);
 slop_option_types_Lit sriqsat_site_lit(sriqsat_JoinSite s);
-slop_list_sriqref_Cand sriqsat_sat_join(slop_arena* arena, uint32_t v, slop_list_sriq_Premise p1s, slop_list_sriqsat_JoinSite sites);
+slop_list_sriqref_Cand sriqsat_sat_join(slop_arena* arena, uint32_t v, slop_list_sriq_Premise p1s, slop_list_sriqsat_JoinSite sites, int64_t room);
 slop_list_sriqref_Cand sriqsat_join_one(slop_arena* arena, uint32_t v, sriq_Premise p1, slop_list_sriqsat_JoinSite sites);
 slop_list_sriqref_Cand sriqsat_join_from(slop_arena* arena, uint32_t v, sriq_Premise p1, slop_list_sriqsat_JoinSite sites, int64_t k0, sriqsat_JoinSite s0);
 uint8_t sriqsat_site_holds(sriqsat_JoinSite s, types_Lit l);

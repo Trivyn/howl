@@ -19,6 +19,7 @@ slop_list_sriq_Premise sriqref_slot_cands(slop_arena* arena, uint8_t root, types
 sriq_HState sriqref_hyper_choice(slop_arena* arena, sriq_HState start, slop_list_types_Lit atoms, slop_list_list_sriq_Premise cs, int64_t t, sriq_Premise fallback);
 sriqref_Out sriqref_hyper_with(slop_arena* arena, sriqref_Env env, uint32_t v, uint8_t root, sriq_HState start, types_Clause oc, slop_list_sriq_Premise ps);
 slop_list_sriqref_Cand sriqref_hyper_choices(slop_arena* arena, uint32_t v, sriq_HState start, types_Clause oc, slop_list_list_sriq_Premise cs, int64_t n, sriq_Premise p0);
+sriqref_Cand sriqref_copy_cand(slop_arena* arena, sriqref_Cand c);
 slop_list_sriqref_Cand sriqref_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc);
 slop_list_sriqref_Cand sriqref_hyper_consts(slop_arena* arena, sriqctx_Structure st, uint32_t v, types_Clause oc);
 sriqref_Out sriqref_ref_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_sriq_Premise ps);
@@ -358,16 +359,24 @@ slop_list_sriqref_Cand sriqref_hyper_choices(slop_arena* arena, uint32_t v, sriq
         int64_t t = 0;
         while (t < n) {
             {
-                __auto_type _coll = sriqref_conclusion(arena, v, sriq_hyper_finish(arena, sriqref_hyper_choice(arena, start, oc.body, cs, t, p0), oc.head));
-                for (size_t _i = 0; _i < _coll.len; _i++) {
-                    __auto_type c = _coll.data[_i];
-                    ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                __auto_type tmp = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(65536); _new_arena; });
+                {
+                    __auto_type _coll = sriqref_conclusion(tmp, v, sriq_hyper_finish(tmp, sriqref_hyper_choice(tmp, start, oc.body, cs, t, p0), oc.head));
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type c = _coll.data[_i];
+                        ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqref_copy_cand(arena, c)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                    }
                 }
+                ({ slop_arena_free(tmp); free(tmp); });
+                t = (t + 1);
             }
-            t = (t + 1);
         }
         return out;
     }
+}
+
+sriqref_Cand sriqref_copy_cand(slop_arena* arena, sriqref_Cand c) {
+    return ((sriqref_Cand){.ctx = c.ctx, .c = ((types_Clause){.body = sriqref_copy_lits(arena, c.c.body), .head = sriqref_copy_lits(arena, c.c.head)})});
 }
 
 slop_list_sriqref_Cand sriqref_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc) {

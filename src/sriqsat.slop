@@ -60,7 +60,7 @@
                              g-premise-at g-member-of
                       g-sel-range g-body-members g-member g-root-units view-total materialise))
   (import types (lit-eq cancel-requested))
-  (import sriqref (RefStatus RefConfig RefResult RefIn Cand Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing with-room
+  (import sriqref (RefStatus RefConfig RefResult RefIn Cand Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing with-room copy-cand
                    set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
                    ref-core x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
                    nom-first nom-second nom-pair ref-rsucc
@@ -167,7 +167,8 @@
     (gd    Ground)
     (rs    RSrcs)            ; the root clauses r-Pred can fire from, with their views (slice 9f)
     (dfr   Bool)             ; deferral (R8): Succ evaluates, and its covered test is not read
-    (views Bool)))           ; premise views from the store (9k): Succ's K-sets read the premises' flags
+    (views Bool)             ; premise views from the store (9k): Succ's K-sets read the premises' flags
+    (room  Int)))            ; conclusions this context may add before its pairing loops stop (11b)
 
   ;; The edges into and out of one context.
   (type Adj (record
@@ -266,7 +267,22 @@
           (x (cix-at arena ixs v)))
       (record-new Here (v (cast U32 v)) (root (is-root st v)) (fresh fresh) (all all) (news news) (olds olds)
                        (aps (. x aps)) (dps (. x dps)) (ops (. x ops)) (dix (. x dix)) (aix (. x aix)) (oix (. x oix))
-                       (hx hx) (ixs ixs) (gd gd) (rs rs) (dfr dfr) (views views))))
+                       (hx hx) (ixs ixs) (gd gd) (rs rs) (dfr dfr) (views views) (room ROOM_OFF))))
+
+  (fn here-room ((h Here) (room Int))
+    (@intent "h with its room set")
+    (@spec ((Here Int) -> Here))
+    (@pure)
+    (record-new Here (v (. h v)) (root (. h root)) (fresh (. h fresh)) (all (. h all)) (news (. h news)) (olds (. h olds))
+                     (aps (. h aps)) (dps (. h dps)) (ops (. h ops)) (dix (. h dix)) (aix (. h aix)) (oix (. h oix))
+                     (hx (. h hx)) (ixs (. h ixs)) (gd (. h gd)) (rs (. h rs)) (dfr (. h dfr)) (views (. h views))
+                     (room room)))
+
+  (fn roomy ((out (List Cand)) (h Here))
+    (@intent "Is out still within h's room?")
+    (@spec (((List Cand) Here) -> Bool))
+    (@pure)
+    (<= (cast Int (list-len out)) (. h room)))
 
   (fn edge-new ((dl Delta) (e Edge))
     (@intent "Was e created this round?")
@@ -343,7 +359,7 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (p1 p1s)
-            (when (and (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq))
+            (when (and (roomy out h) (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq))
               (for-each (p2 p2s)
                 (when (. p2 maxed)
                   (do (for-each (c (eq-side arena st h p1 (cast U32 1) p2)) (list-push out c))
@@ -359,9 +375,21 @@
     (@intent "Eq from side k1 of p1's equality into p2, if p2's selected literal holds that side at some position")
     (@spec ((Arena Structure Here Premise U32 Premise) -> (List Cand)))
     (@alloc arena)
+    ;; A firing builds its conclusions in a scratch arena of its own, and
+    ;; only they are copied out: kept for the round, the rewriting's
+    ;; intermediate lists cost some 20 KB a conclusion, and a W3C pigeonhole
+    ;; test's Eq passed 9 GB on them (slice 11b).
     (if (holds-term (. p2 sel) (if (== k1 (cast U32 1)) (. (. p1 sel) t1) (. (. p1 sel) t2)))
-      (eq-positions arena (. st ord) (. h v) (. h root) p1 k1 p2)
+      (let ((tmp (arena-new 65536))
+            (out (copy-cands arena (eq-positions tmp (. st ord) (. h v) (. h root) p1 k1 p2))))
+        (do (arena-free tmp) out))
       (list-new arena Cand)))
+
+  (fn copy-cands ((arena Arena) (cs (List Cand)))
+    (@intent "cs, each conclusion copied into arena")
+    (@spec ((Arena (List Cand)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand))) (do (for-each (c cs) (list-push out (copy-cand arena c))) out)))
 
   (fn holds-term ((l Lit) (s ATerm))
     (@intent "Is s the subterm of l at one of Eq's four positions (either argument, outer or inner)?")
@@ -413,9 +441,9 @@
         (when (<= (cast Int (list-len out)) room)
           (for-each (c (ref-factor arena (. st ord) (. h v) (. h dps))) (list-push out c)))
         (when (<= (cast Int (list-len out)) room)
-          (for-each (c (sat-join arena (. h v) (. h dps) (join-sites arena (. h all)))) (list-push out c)))
+          (for-each (c (sat-join arena (. h v) (. h dps) (join-sites arena (. h all)) room)) (list-push out c)))
         (when (<= (cast Int (list-len out)) room)
-          (for-each (c (sat-join arena (. h v) (. h ops) (join-sites arena (. h news)))) (list-push out c)))
+          (for-each (c (sat-join arena (. h v) (. h ops) (join-sites arena (. h news)) room)) (list-push out c)))
         out)))
 
   ;; ============================================================
@@ -461,9 +489,9 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (p1 p1s)
-            (when (and (. p1 maxed) (joinable (. p1 sel)))
+            (when (and (roomy out h) (. p1 maxed) (joinable (. p1 sel)))
               (for-each (i (g-body-members arena (. h gd) (. p1 sel)))
-                (when (g-counts h i which)
+                (when (and (roomy out h) (g-counts h i which))
                   (for-each (c (join-into-member arena h p1 (g-member (. h gd) i (empty-clause arena))))
                     (list-push out c))))))
           out)))
@@ -500,12 +528,13 @@
     (let ((gn (g-prems arena h 1 true)) (go (g-prems arena h 2 true)) (mut out (list-new arena Cand)))
       (do (when (has-eq (. h dps)) (for-each (c (eq-pairs arena st h (. h dps) (g-prems arena h 0 false)))
                                      (list-push out c)))
-          (when (has-eq (. h ops))
+          (when (and (roomy out h) (has-eq (. h ops)))
             (for-each (c (eq-pairs arena st h (. h ops) (g-prems arena h 1 false))) (list-push out c)))
-          (for-each (c (eq-pairs arena st h gn (. h aps))) (list-push out c))
-          (for-each (c (eq-pairs arena st h go (. h dps))) (list-push out c))
-          (when (> (list-len gn) 0) (for-each (c (eq-pairs arena st h gn (g-prems arena h 0 false))) (list-push out c)))
-          (when (> (list-len go) 0)
+          (when (roomy out h) (for-each (c (eq-pairs arena st h gn (. h aps))) (list-push out c)))
+          (when (roomy out h) (for-each (c (eq-pairs arena st h go (. h dps))) (list-push out c)))
+          (when (and (roomy out h) (> (list-len gn) 0))
+            (for-each (c (eq-pairs arena st h gn (g-prems arena h 0 false))) (list-push out c)))
+          (when (and (roomy out h) (> (list-len go) 0))
             (for-each (c (eq-pairs arena st h go (g-prems arena h (if (. h fresh) 0 1) false))) (list-push out c)))
           out)))
 
@@ -515,9 +544,9 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (c (join-into-g arena h (. h dps) 0)) (list-push out c))
-          (for-each (c (join-into-g arena h (. h ops) 1)) (list-push out c))
-          (for-each (c (join-from-g arena h (join-sites arena (. h all)) 1)) (list-push out c))
-          (for-each (c (join-from-g arena h (join-sites arena (. h news)) 2)) (list-push out c))
+          (when (roomy out h) (for-each (c (join-into-g arena h (. h ops) 1)) (list-push out c)))
+          (when (roomy out h) (for-each (c (join-from-g arena h (join-sites arena (. h all)) 1)) (list-push out c)))
+          (when (roomy out h) (for-each (c (join-from-g arena h (join-sites arena (. h news)) 2)) (list-push out c)))
           out)))
 
   (fn join-from-g ((arena Arena) (h Here) (sites (List JoinSite)) (which Int))
@@ -529,7 +558,7 @@
       (do (for-each (s sites)
             (match (site-lit s)
               ((none) (set! out out))
-              ((some l) (for-each (c (join-site-g arena h s l which)) (list-push out c)))))
+              ((some l) (when (roomy out h) (for-each (c (join-site-g arena h s l which)) (list-push out c))))))
           out)))
 
   (fn join-site-g ((arena Arena) (h Here) (s JoinSite) (l Lit) (which Int))
@@ -538,7 +567,7 @@
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (k (g-sel-range arena (. h gd) l))
-            (when (g-picks h k which)
+            (when (and (roomy out h) (g-picks h k which))
               (for-each (c (join-g-one arena h s (g-premise-at (. h gd) k (fallback-premise arena))))
                 (list-push out c))))
           out)))
@@ -619,14 +648,14 @@
     (@pure)
     (list-get (. (. s c) body) (. s j)))
 
-  (fn sat-join ((arena Arena) (v U32) (p1s (List Premise)) (sites (List JoinSite)))
+  (fn sat-join ((arena Arena) (v U32) (p1s (List Premise)) (sites (List JoinSite)) (room Int))
     (@intent "Join of each maximal premise of p1s with a joinable selected literal against each site holding that
               literal")
-    (@spec ((Arena U32 (List Premise) (List JoinSite)) -> (List Cand)))
+    (@spec ((Arena U32 (List Premise) (List JoinSite) Int) -> (List Cand)))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)))
       (do (for-each (p1 p1s)
-            (when (and (. p1 maxed) (joinable (. p1 sel)))
+            (when (and (<= (cast Int (list-len out)) room) (. p1 maxed) (joinable (. p1 sel)))
               (for-each (c (join-one arena v p1 sites)) (list-push out c))))
           out)))
 
@@ -1163,7 +1192,8 @@
       (if (and (>= v (. dl nctx)) (is-root st v))
         (let ((r (ctx-round arena (with-room env room) lst (cast U32 v))))
           (record-new CRound (r r) (tried 0) (big (> (cast Int (list-len (. r cands))) room))))
-        (sat-old arena env lst dl (. a ins) (here-of arena env lst dl gd hx ixs rs v perm dfr views) room))))
+        (sat-old arena env lst dl (. a ins) (here-room (here-of arena env lst dl gd hx ixs rs v perm dfr views) room)
+                 room))))
 
   (fn sat-old ((arena Arena) (env Env) (st Structure) (dl Delta) (ins (List Edge)) (h Here) (room Int))
     (@intent "Derive in one context, anchored on Δ, or every instance when it is new; past room, big, with the rest

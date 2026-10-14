@@ -1211,7 +1211,7 @@ uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
 types_Verdict types_verdict(types_Outcome o);
 
-#define types_SRIQ_CLAUSE_BUDGET (1000000)
+#define types_SRIQ_CLAUSE_BUDGET (500000)
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED

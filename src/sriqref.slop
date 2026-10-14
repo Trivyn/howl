@@ -50,7 +50,7 @@
           ;; so both order ids, choices and conclusions the same way.
           Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
           set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
-          with-room ref-core slot-cands x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
+          with-room copy-cand ref-core slot-cands x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
           dl4-of nom-first nom-second nom-pair ref-nom ref-succ ref-rsucc
           pslot-cands pred-one pred-run pred-edge away-job root-job slots-of rpred-job rslots ref-rpred ctx-round
           edge-is add-consts add-contexts add-edges action-cands unit-clause cand-at cand-cmp
@@ -297,13 +297,27 @@
     (@intent "Hyper's conclusions into v for one ontology clause, over choices 0 to n - 1 of its slots' premises")
     (@spec ((Arena U32 HState Clause (List (List Premise)) Int Premise) -> (List Cand)))
     (@alloc arena)
+    ;; Each choice's state is built in a scratch arena of its own and only
+    ;; the conclusion is copied out: a choice folds hyper-step over every
+    ;; body atom, and kept for the round its intermediate lists cost far
+    ;; more than its conclusion (a W3C pigeonhole test's 59,049 choices
+    ;; passed 8 GB). Lit holds only scalars, so the copy is complete.
     (let ((mut out (list-new arena Cand)) (mut t 0))
       (do (while (< t n)
-            (do (for-each (c (conclusion arena v (hyper-finish arena (hyper-choice arena start (. oc body) cs t p0)
+            (let ((tmp (arena-new 65536)))
+              (do (for-each (c (conclusion tmp v (hyper-finish tmp (hyper-choice tmp start (. oc body) cs t p0)
                                                                (. oc head))))
-                  (list-push out c))
-                (set! t (+ t 1))))
+                    (list-push out (copy-cand arena c)))
+                  (arena-free tmp)
+                  (set! t (+ t 1)))))
           out)))
+
+  (fn copy-cand ((arena Arena) (c Cand))
+    (@intent "c, its clause's body and head copied into arena")
+    (@spec ((Arena Cand) -> Cand))
+    (@alloc arena)
+    (record-new Cand (ctx (. c ctx)) (c (record-new Clause (body (copy-lits arena (. (. c c) body)))
+                                                         (head (copy-lits arena (. (. c c) head)))))))
 
   (fn hyper-bodiless ((arena Arena) (st Structure) (v U32) (root Bool) (oc Clause))
     (@intent "Hyper on a bodiless ontology clause: x itself away from the root; at the root each constant of U_H (E4)")

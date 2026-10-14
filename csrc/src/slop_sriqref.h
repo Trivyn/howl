@@ -367,6 +367,7 @@ slop_list_sriq_Premise sriqref_slot_cands(slop_arena* arena, uint8_t root, types
 sriq_HState sriqref_hyper_choice(slop_arena* arena, sriq_HState start, slop_list_types_Lit atoms, slop_list_list_sriq_Premise cs, int64_t t, sriq_Premise fallback);
 sriqref_Out sriqref_hyper_with(slop_arena* arena, sriqref_Env env, uint32_t v, uint8_t root, sriq_HState start, types_Clause oc, slop_list_sriq_Premise ps);
 slop_list_sriqref_Cand sriqref_hyper_choices(slop_arena* arena, uint32_t v, sriq_HState start, types_Clause oc, slop_list_list_sriq_Premise cs, int64_t n, sriq_Premise p0);
+sriqref_Cand sriqref_copy_cand(slop_arena* arena, sriqref_Cand c);
 slop_list_sriqref_Cand sriqref_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, uint32_t v, uint8_t root, types_Clause oc);
 slop_list_sriqref_Cand sriqref_hyper_consts(slop_arena* arena, sriqctx_Structure st, uint32_t v, types_Clause oc);
 sriqref_Out sriqref_ref_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint8_t root, slop_list_sriq_Premise ps);

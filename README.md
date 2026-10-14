@@ -108,7 +108,7 @@ howl --version
   |---|---|---|
   | `el` (default) | ELH⊥R+: EL with role hierarchies, ⊥, transitive roles and property chains, domains and ranges, ABox assertions, and `¬` in a superclass, domain or range | built |
   | `el++` | the OWL 2 EL object fragment: `el` plus nominals, `hasValue`, `hasSelf`, reflexive roles, individual equality and inequality, and negative assertions | built |
-  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | built; single-threaded, and bounded by a budget of 1,000,000 clauses (a run that passes it is inconclusive) |
+  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | built; single-threaded, and bounded by a budget of 500,000 clauses (a run that passes it is inconclusive) |
   | `auto` | the cheapest built profile that covers the whole ontology (else the one omitting the fewest axioms). If that is `sriq` and it passes its clause budget with nothing definitive, `auto` steps down to `el` or `el++` and says so on stderr | built |
 
   The report names the profile that ran. `el` and `el++` run in polynomial time, and `sriq` in

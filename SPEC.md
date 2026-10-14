@@ -2888,7 +2888,10 @@ through the library, the same way el and el++ run.
   A normaliser refusal is a `Fault::input-error`, and `--strict` refuses any omission.
 - **One round budget.** `max-iterations` covers both runs: Run H takes what it needs, and Run C gets the rest. The
   `rounds` line is their sum, as el++'s phases share theirs (§5.4).
-- **The clause budget** (owner, 2026-10-13) is 1,000,000 clauses per run (`SRIQ_CLAUSE_BUDGET`). A run stops when
+- **The clause budget** is 500,000 clauses per run (`SRIQ_CLAUSE_BUDGET`). The owner chose 1,000,000 on 2026-10-13.
+  It was halved before release, pending the owner's review (proposed AD; slice 11b): a W3C pigeonhole test
+  (`WebOnt-description-logic-022`, 4 KB) passed 6 GB at 1,000,000, because its clauses are large, about 21
+  literals each. At 500,000 it stops at 1.1 GB, and CCO still completes (1.0 GB). A run stops when
   its store passes the budget at a round boundary, or when a round's conclusions would take it past: the store's
   count plus the round's conclusions so far exceeds the budget.
   - **Why inside a round (slice 11b).** One round can outgrow memory long before the store passes the budget. OBI's
@@ -2896,6 +2899,11 @@ through the library, the same way el and el++ run.
     Run C's root derives 3.98M Hyper conclusions in one step. So the count is read after each context, and within
     a context after Hyper's every (clause, atom) pair and after each later Table 2 step. The rest of the round is
     skipped once the count passes.
+  - **The pairing loops read it too.** Eq, ground Eq and Join, and the Joins with G read the room (`Here.room`)
+    between premises, so a context whose premises pair quadratically stops early.
+  - **A firing's working memory is its own.** Each of Hyper's choices and each Eq firing is built in a scratch
+    arena, and only its conclusion is copied out. The rewriting's intermediate lists cost about 20 KB per
+    conclusion, and in the round's arena they were what the pigeonhole test's Eq filled past 9 GB with.
   - **An abandoned round is not committed.** The run reports the store as the previous round left it, with that
     round count, as the choices cap's stop does.
   - **It is deterministic.** A round's conclusions depend only on the store it starts from, and the count only
@@ -6141,7 +6149,8 @@ flowchart TB
     inconclusive.
 
     *Measured 2026-10-13: the budget leaves RO short too.* RO's `sriq` projection reaches HermiT's 275
-    subsumptions, but one of its runs passes 1,000,000 clauses, so it ends at `resource-limit` (24 s, 3.4 GB).
+    subsumptions, but one of its runs passes the clause budget, so it ends at `resource-limit` (24 s, 3.4 GB at
+    1,000,000).
     Unbudgeted, it completes and equals HermiT (54 s, 10 GB). (c) for RO therefore waits on a larger budget or a
     leaner engine (slice 10), and the owner decides which.
   - **(d) Conformance.** The approved Direct-Semantics W3C tests whose constructs are all in `sriq`
