@@ -297,19 +297,22 @@ fn a_cancelled_answer_run_answers_nothing() {
     assert_eq!(Reasoner::new().answer_cancellable(&input, &fresh).unwrap(), Reasoner::new().answer(&input).unwrap());
 }
 
-/// Under `Auto`, the answer run names the profile that answered: the
-/// probe documents can move the choice. Here a union in the probe document
-/// takes the probe run to sriq while the main run stays in el.
+/// Under `Auto`, the answer run names the profile that answered, chosen for
+/// its module (SPEC §8.4): a query the probe document's union touches runs
+/// under sriq, one it does not runs under el, while the two-run mode's probe
+/// run takes sriq for both and the main run stays in el.
 #[test]
 fn answer_under_auto_names_the_profile_that_answered() {
-    let mut input = turtle(&fixture("v0/litmus.ttl"));
-    input.add_probe_turtle(&fixture("out-of-profile/union.ttl")).unwrap();
-    input.ask_subsumed(&format!("{EX}Mother"), &format!("{EX}Parent"));
     let config = Config { selection: ProfileSelection::Auto, ..Config::default() };
-    let r = Reasoner::with_config(config).classify(&input).unwrap();
-    let a = Reasoner::with_config(config).answer(&input).unwrap();
-    assert_eq!((r.profile, a.profile), (Profile::El, Some(Profile::Sriq)));
-    assert_eq!((&a.probes, a.inconsistent, &a.omissions), (&r.probes, r.probe_inconsistent, &r.probe_omissions));
+    for (sub, sup, want) in [("C", "A", Profile::Sriq), ("Mother", "Parent", Profile::El)] {
+        let mut input = turtle(&fixture("v0/litmus.ttl"));
+        input.add_probe_turtle(&fixture("out-of-profile/union.ttl")).unwrap();
+        input.ask_subsumed(&format!("{EX}{sub}"), &format!("{EX}{sup}"));
+        let r = Reasoner::with_config(config).classify(&input).unwrap();
+        let a = Reasoner::with_config(config).answer(&input).unwrap();
+        assert_eq!((r.profile, a.profile), (Profile::El, Some(want)), "{sub} ⊑ {sup}");
+        assert_eq!((&a.probes, a.inconsistent), (&r.probes, r.probe_inconsistent), "{sub} ⊑ {sup}");
+    }
 }
 
 #[test]

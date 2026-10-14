@@ -1,0 +1,469 @@
+;; ============================================================
+;; Syntactic ⊥-locality modules (SPEC §8.4, "The answer run classifies a
+;; module"; [CGHKS08])
+;;
+;; The answer run classifies M, the ⊥-locality module of its input O for
+;; the classes the queries name, instead of O. Every model of M extends to
+;; a model of O by emptying the symbols outside M (L2), so M and O agree on
+;; every entailment over those symbols and on consistency, and a complete
+;; run on M answers `no` for O even where O has omissions outside M.
+;;
+;; CONSERVATIVE BY CONSTRUCTION. A concept is put in Con⊥ or Con⊤ only by
+;; a rule below; anything else (a data range, an undecodable blank node)
+;; is in neither. An axiom is local only by a row of the table; an axiom
+;; that carries only an InputRef is never local. So "local" is never
+;; claimed wrongly, and doubt sends an axiom INTO the module, where at worst
+;; it is an omission that makes M's run incomplete (L3): an `unknown`, never
+;; a wrong `no`.
+;;
+;; A FRESH role or name never counts as outside, for the same reason, and
+;; nor does OWL's own vocabulary: owl:Thing is the whole domain and
+;; owl:topObjectProperty relates every pair, in every interpretation, so no
+;; interpretation can empty them (owl:Nothing and the bottom property are
+;; empty anyway). Treating the namespace as inside is the safe side.
+;; Classes, properties and individuals share one set of IRIs, so a punned
+;; IRI is in it once: more symbols inside means fewer axioms local.
+;; ============================================================
+
+(module locality
+  (import rdf (IRI))
+  (import types (Node RoleId))
+  (import owl2 (RawConcept RawAxiom CardKind PropCharacteristic RawChain RawEdge RawClassAssertion
+                RawDeclaration RawDisjointUnion Signature))
+  (import normalize (Decoded))
+  (import strlib (starts-with))
+
+  (export con-bot con-top axiom-local axiom-symbols module-axioms ModuleOut module-decoded)
+
+  ;; What extraction returns: M in O's order, and S = the seed ∪ sig(M).
+  (type ModuleOut (record
+    (axioms  (List RawAxiom))
+    (symbols (Set IRI))))
+
+  ;; ============================================================
+  ;; Outside S
+  ;; ============================================================
+
+  (fn iri-out ((s (Set IRI)) (i IRI))
+    (@intent "Is the IRI outside S? OWL's own vocabulary never is: its meaning is fixed")
+    (@spec (((Set IRI) IRI) -> Bool))
+    (and (not (set-has s i)) (not (owl-own i))))
+
+  (fn owl-own ((i IRI))
+    (@intent "Is the IRI in OWL's namespace (owl:Thing, owl:topObjectProperty, ...)?")
+    (@spec ((IRI) -> Bool))
+    (starts-with (. i value) "http://www.w3.org/2002/07/owl#"))
+
+  (fn role-out ((s (Set IRI)) (r RoleId))
+    (@intent "Is the role's property outside S? A fresh role, or OWL's own, never is")
+    (@spec (((Set IRI) RoleId) -> Bool))
+    (match r
+      ((named-role i)   (iri-out s i))
+      ((inverse-role i) (iri-out s i))
+      ((fresh-role _)   false)))
+
+  (fn name-out ((s (Set IRI)) (n Node))
+    (@intent "Is a named concept's class outside S? Only a class name can be, and never OWL's own")
+    (@spec (((Set IRI) Node) -> Bool))
+    (match n
+      ((class-node i)      (iri-out s i))
+      ((individual-node _) false)
+      ((fresh-node _)      false)))
+
+  ;; ============================================================
+  ;; Con⊥(S) and Con⊤(S), by simultaneous induction (SPEC §8.4)
+  ;; ============================================================
+
+  (fn con-bot ((c RawConcept) (s (Set IRI)))
+    (@intent "Is c empty in every interpretation that empties the symbols outside S? (Con⊥, SPEC §8.4)")
+    (@spec ((RawConcept (Set IRI)) -> Bool))
+    ;; No catch-all: a new RawConcept arm must be given an answer here,
+    ;; and -Werror=switch makes forgetting it a build error.
+    (match c
+      ((rc-name n)          (name-out s n))
+      ((rc-thing)           false)
+      ((rc-nothing)         true)
+      ((rc-and cs)          (some-bot cs s))
+      ((rc-some r f)        (or (role-out s r) (con-bot (deref f) s)))
+      ((rc-or cs)           (all-bot cs s))
+      ((rc-not f)           (con-top (deref f) s))
+      ((rc-all _ _)         false)
+      ((rc-oneof ns)        (== (list-len ns) 0))
+      ((rc-has-value r _)   (role-out s r))
+      ((rc-has-self r)      (role-out s r))
+      ;; ≥n R and =n R, n ≥ 1, need a successor: none when R is empty.
+      ((rc-card k r n)      (and (at-least-one k n) (role-out s r)))
+      ((rc-qcard k r n f)   (and (at-least-one k n) (or (role-out s r) (con-bot (deref f) s))))
+      ((rc-data _)          false)
+      ((rc-anon _)          false)))
+
+  (fn con-top ((c RawConcept) (s (Set IRI)))
+    (@intent "Is c everything in every interpretation that empties the symbols outside S? (Con⊤, SPEC §8.4)")
+    (@spec ((RawConcept (Set IRI)) -> Bool))
+    (match c
+      ((rc-name _)          false)
+      ((rc-thing)           true)
+      ((rc-nothing)         false)
+      ((rc-and cs)          (all-top cs s))
+      ((rc-some _ _)        false)
+      ((rc-or cs)           (some-top cs s))
+      ((rc-not f)           (con-bot (deref f) s))
+      ((rc-all r f)         (or (role-out s r) (con-top (deref f) s)))
+      ((rc-oneof _)         false)
+      ((rc-has-value _ _)   false)
+      ((rc-has-self _)      false)
+      ;; ≥0 is everything; ≤n and =0 hold of every element when R is empty.
+      ((rc-card k r n)      (or (min-zero k n) (and (at-most k n) (role-out s r))))
+      ((rc-qcard k r n f)   (or (min-zero k n) (and (at-most k n) (or (role-out s r) (con-bot (deref f) s)))))
+      ((rc-data _)          false)
+      ((rc-anon _)          false)))
+
+  (fn at-least-one ((k CardKind) (n Int))
+    (@intent "≥n or =n with n ≥ 1: a restriction that needs a successor")
+    (@spec ((CardKind Int) -> Bool))
+    (@pure)
+    (and (>= n 1) (not (== k 'card-max))))
+
+  (fn min-zero ((k CardKind) (n Int))
+    (@intent "≥0: everything, whatever the role")
+    (@spec ((CardKind Int) -> Bool))
+    (@pure)
+    (and (== k 'card-min) (== n 0)))
+
+  (fn at-most ((k CardKind) (n Int))
+    (@intent "≤n, or =0: a restriction no element breaks when it has no successor")
+    (@spec ((CardKind Int) -> Bool))
+    (@pure)
+    (or (== k 'card-max) (and (== k 'card-exact) (== n 0))))
+
+  (fn some-bot ((cs (List RawConcept)) (s (Set IRI)))
+    (@intent "Is some member in Con⊥? (A conjunction with one is.)")
+    (@spec (((List RawConcept) (Set IRI)) -> Bool))
+    (let ((mut found false))
+      (do (for-each (c cs) (when (con-bot c s) (set! found true)))
+          found)))
+
+  (fn all-bot ((cs (List RawConcept)) (s (Set IRI)))
+    (@intent "Is every member in Con⊥? (A disjunction of them is; so is an empty one.)")
+    (@spec (((List RawConcept) (Set IRI)) -> Bool))
+    (== (not-bot cs s) 0))
+
+  (fn not-bot ((cs (List RawConcept)) (s (Set IRI)))
+    (@intent "How many members are not in Con⊥")
+    (@spec (((List RawConcept) (Set IRI)) -> Int))
+    (let ((mut n 0))
+      (do (for-each (c cs) (when (not (con-bot c s)) (set! n (+ n 1))))
+          n)))
+
+  (fn some-top ((cs (List RawConcept)) (s (Set IRI)))
+    (@intent "Is some member in Con⊤? (A disjunction with one is.)")
+    (@spec (((List RawConcept) (Set IRI)) -> Bool))
+    (let ((mut found false))
+      (do (for-each (c cs) (when (con-top c s) (set! found true)))
+          found)))
+
+  (fn all-top ((cs (List RawConcept)) (s (Set IRI)))
+    (@intent "Is every member in Con⊤? (A conjunction of them is; so is an empty one.)")
+    (@spec (((List RawConcept) (Set IRI)) -> Bool))
+    (let ((mut all true))
+      (do (for-each (c cs) (when (not (con-top c s)) (set! all false)))
+          all)))
+
+  (fn roles-not-out ((rs (List RoleId)) (s (Set IRI)))
+    (@intent "How many roles are not outside S")
+    (@spec (((List RoleId) (Set IRI)) -> Int))
+    (let ((mut n 0))
+      (do (for-each (r rs) (when (not (role-out s r)) (set! n (+ n 1))))
+          n)))
+
+  ;; ============================================================
+  ;; Locality (SPEC §8.4's table)
+  ;; ============================================================
+
+  (fn axiom-local ((ax RawAxiom) (s (Set IRI)))
+    (@intent "Does every interpretation that empties the symbols outside S satisfy ax? (SPEC §8.4's table)")
+    (@spec ((RawAxiom (Set IRI)) -> Bool))
+    ;; No catch-all, as in con-bot. The InputRef arms are never local: what
+    ;; they say is not read, so they always go into the module.
+    (match ax
+      ((ra-sub-class-of c d)            (or (con-bot (deref c) s) (con-top (deref d) s)))
+      ((ra-equivalent-classes cs)       (or (all-bot cs s) (all-top cs s)))
+      ((ra-disjoint-classes cs)         (<= (not-bot cs s) 1))
+      ((ra-sub-object-property r _)     (role-out s r))
+      ((ra-property-chain ch)           (< (roles-not-out (. ch steps) s) (cast Int (list-len (. ch steps)))))
+      ((ra-equivalent-properties rs)    (== (roles-not-out rs s) 0))
+      ((ra-transitive-property r)       (role-out s r))
+      ((ra-object-property-domain r c)  (or (role-out s r) (con-top (deref c) s)))
+      ((ra-object-property-range r c)   (or (role-out s r) (con-top (deref c) s)))
+      ((ra-class-assertion ca)          (con-top (deref (. ca concept)) s))
+      ((ra-object-property-assertion _) false)
+      ((ra-declaration _)               true)
+      ((ra-annotation)                  true)
+      ((ra-inert-data)                  true)
+      ((ra-inverse-properties r q)      (and (role-out s r) (role-out s q)))
+      ((ra-property-characteristic k r) (and (not (== k 'prop-reflexive)) (role-out s r)))
+      ((ra-disjoint-properties rs)      (<= (roles-not-out rs s) 1))
+      ((ra-same-individual ns)          (<= (list-len ns) 1))
+      ((ra-different-individuals ns)    (<= (list-len ns) 1))
+      ((ra-negative-assertion e)        (role-out s (. e role)))
+      ((ra-disjoint-union du)           (and (iri-out s (. du class)) (all-bot (. du members) s)))
+      ((ra-has-key _)                   false)
+      ((ra-data-axiom _)                false)
+      ((ra-builtin-role _)              false)
+      ((ra-anonymous-individual _)      false)
+      ((ra-reserved-vocabulary _)       false)
+      ((ra-swrl-rule _)                 false)
+      ((ra-unrecognized _)              false)))
+
+  ;; ============================================================
+  ;; Signatures: every IRI an axiom names structurally
+  ;; ============================================================
+
+  (fn axiom-symbols ((arena Arena) (ax RawAxiom))
+    (@intent "Every IRI the axiom names structurally, once each in no particular order (an InputRef's text is not read)")
+    (@spec ((Arena RawAxiom) -> (List IRI)))
+    (@alloc arena)
+    (let ((out (set-new arena IRI)))
+      (do (add-axiom-symbols ax out)
+          (set-elements out :arena arena))))
+
+  (fn add-axiom-symbols ((ax RawAxiom) (out (Set IRI)))
+    (@intent "Push the axiom's IRIs")
+    (@spec ((RawAxiom (Set IRI)) -> Unit))
+    (match ax
+      ((ra-sub-class-of c d)            (do (add-concept-symbols (deref c) out) (add-concept-symbols (deref d) out)))
+      ((ra-equivalent-classes cs)       (add-concepts-symbols cs out))
+      ((ra-disjoint-classes cs)         (add-concepts-symbols cs out))
+      ((ra-sub-object-property r q)     (do (add-role r out) (add-role q out)))
+      ((ra-property-chain ch)           (do (add-roles (. ch steps) out) (add-role (. ch super) out)))
+      ((ra-equivalent-properties rs)    (add-roles rs out))
+      ((ra-transitive-property r)       (add-role r out))
+      ((ra-object-property-domain r c)  (do (add-role r out) (add-concept-symbols (deref c) out)))
+      ((ra-object-property-range r c)   (do (add-role r out) (add-concept-symbols (deref c) out)))
+      ((ra-class-assertion ca)          (do (add-concept-symbols (deref (. ca concept)) out)
+                                            (add-node (. ca subject) out)))
+      ((ra-object-property-assertion e) (add-edge e out))
+      ((ra-declaration d)               (set-put out (. d entity)))
+      ((ra-annotation)                  (do))
+      ((ra-inert-data)                  (do))
+      ((ra-inverse-properties r q)      (do (add-role r out) (add-role q out)))
+      ((ra-property-characteristic _ r) (add-role r out))
+      ((ra-disjoint-properties rs)      (add-roles rs out))
+      ((ra-same-individual ns)          (add-nodes ns out))
+      ((ra-different-individuals ns)    (add-nodes ns out))
+      ((ra-negative-assertion e)        (add-edge e out))
+      ((ra-disjoint-union du)           (do (set-put out (. du class)) (add-concepts-symbols (. du members) out)))
+      ((ra-has-key _)                   (do))
+      ((ra-data-axiom _)                (do))
+      ((ra-builtin-role _)              (do))
+      ((ra-anonymous-individual _)      (do))
+      ((ra-reserved-vocabulary _)       (do))
+      ((ra-swrl-rule _)                 (do))
+      ((ra-unrecognized _)              (do))))
+
+  (fn add-concept-symbols ((c RawConcept) (out (Set IRI)))
+    (@intent "Push the concept's IRIs")
+    (@spec ((RawConcept (Set IRI)) -> Unit))
+    (match c
+      ((rc-name n)          (add-node n out))
+      ((rc-thing)           (do))
+      ((rc-nothing)         (do))
+      ((rc-and cs)          (add-concepts-symbols cs out))
+      ((rc-some r f)        (do (add-role r out) (add-concept-symbols (deref f) out)))
+      ((rc-or cs)           (add-concepts-symbols cs out))
+      ((rc-not f)           (add-concept-symbols (deref f) out))
+      ((rc-all r f)         (do (add-role r out) (add-concept-symbols (deref f) out)))
+      ((rc-oneof ns)        (add-nodes ns out))
+      ((rc-has-value r n)   (do (add-role r out) (add-node n out)))
+      ((rc-has-self r)      (add-role r out))
+      ((rc-card _ r _)      (add-role r out))
+      ((rc-qcard _ r _ f)   (do (add-role r out) (add-concept-symbols (deref f) out)))
+      ((rc-data _)          (do))
+      ((rc-anon _)          (do))))
+
+  (fn add-concepts-symbols ((cs (List RawConcept)) (out (Set IRI)))
+    (@intent "Push every concept's IRIs")
+    (@spec (((List RawConcept) (Set IRI)) -> Unit))
+    (for-each (c cs) (add-concept-symbols c out)))
+
+  (fn add-role ((r RoleId) (out (Set IRI)))
+    (@intent "Push a role's property IRI; a fresh role has none")
+    (@spec ((RoleId (Set IRI)) -> Unit))
+    (match r
+      ((named-role i)   (set-put out i))
+      ((inverse-role i) (set-put out i))
+      ((fresh-role _)   (do))))
+
+  (fn add-roles ((rs (List RoleId)) (out (Set IRI)))
+    (@intent "Push every role's property IRI")
+    (@spec (((List RoleId) (Set IRI)) -> Unit))
+    (for-each (r rs) (add-role r out)))
+
+  (fn add-node ((n Node) (out (Set IRI)))
+    (@intent "Push a node's IRI; a fresh node has none")
+    (@spec ((Node (Set IRI)) -> Unit))
+    (match n
+      ((class-node i)      (set-put out i))
+      ((individual-node i) (set-put out i))
+      ((fresh-node _)      (do))))
+
+  (fn add-nodes ((ns (List Node)) (out (Set IRI)))
+    (@intent "Push every node's IRI")
+    (@spec (((List Node) (Set IRI)) -> Unit))
+    (for-each (n ns) (add-node n out)))
+
+  (fn add-edge ((e RawEdge) (out (Set IRI)))
+    (@intent "Push an assertion's role and both individuals")
+    (@spec ((RawEdge (Set IRI)) -> Unit))
+    (do (add-role (. e role) out) (add-node (. e from) out) (add-node (. e to) out)))
+
+  ;; ============================================================
+  ;; Extraction (SPEC §8.4, "The module")
+  ;; ============================================================
+
+  (fn module-axioms ((arena Arena) (axs (List RawAxiom)) (seed (List IRI)))
+    (@intent "M, the ⊥-locality module of axs for seed, in axs's order, with S = seed ∪ sig(M)")
+    (@spec ((Arena (List RawAxiom) (List IRI)) -> ModuleOut))
+    (@alloc arena)
+    ;; M ⊆ axs, in axs's order, is held by `kept`'s construction and by
+    ;; test-module-order-free; the loop is beyond the verifier, so it is not
+    ;; stated as an @post it would only @assume.
+    ;;
+    ;; An axiom is tested once at the start, then again only when a symbol
+    ;; it names joins S: locality can only be lost as S grows, and only
+    ;; through a symbol the axiom names. The module is the least fixpoint,
+    ;; so the order the queue visits axioms in cannot change it.
+    (let ((s     (set-new arena IRI))
+          (sigs  (symbols-of arena axs))
+          (index (symbol-index arena sigs))
+          (mut in-m  (list-new arena Bool))
+          (mut queue (list-new arena Int))
+          (mut head  0)
+          (mut i     0))
+      (do
+        (for-each (x seed) (set-put s x))
+        (while (< i (cast Int (list-len axs)))
+          (do (list-push in-m false) (list-push queue i) (set! i (+ i 1))))
+        (while (< head (cast Int (list-len queue)))
+          (let ((k (int-of queue head)))
+            (do
+              (set! head (+ head 1))
+              (when (and (not (bool-of in-m k)) (not (axiom-local (axiom-of axs k) s)))
+                (do
+                  (list-set in-m k true)
+                  (for-each (j (admit-symbols arena (sym-of arena sigs k) s index in-m)) (list-push queue j)))))))
+        (record-new ModuleOut (axioms (kept arena axs in-m)) (symbols s)))))
+
+  (fn admit-symbols ((arena Arena) (syms (List IRI)) (s (Set IRI)) (index (Map IRI (List Int))) (in-m (List Bool)))
+    (@intent "Put each new symbol in S; the axioms outside M that name one, to test again")
+    (@spec ((Arena (List IRI) (Set IRI) (Map IRI (List Int)) (List Bool)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut again (list-new arena Int)))
+      (do
+        (for-each (x syms)
+          (when (not (set-has s x))
+            (do
+              (set-put s x)
+              (match (map-get index x)
+                ((some ks) (for-each (j ks) (when (not (bool-of in-m j)) (list-push again j))))
+                ((none)    (do))))))
+        again)))
+
+  (fn symbols-of ((arena Arena) (axs (List RawAxiom)))
+    (@intent "Each axiom's IRIs, by axiom index")
+    (@spec ((Arena (List RawAxiom)) -> (List (List IRI))))
+    (@alloc arena)
+    (let ((mut out (list-new arena (List IRI))))
+      (do (for-each (ax axs) (list-push out (axiom-symbols arena ax)))
+          out)))
+
+  (fn symbol-index ((arena Arena) (sigs (List (List IRI))))
+    (@intent "For each IRI, the indexes of the axioms that name it")
+    (@spec ((Arena (List (List IRI))) -> (Map IRI (List Int))))
+    (@alloc arena)
+    (let ((mut index (map-new arena IRI (List Int)))
+          (mut k 0))
+      (do
+        (for-each (syms sigs)
+          (do
+            (for-each (x syms)
+              (let ((mut ks (match (map-get index x)
+                              ((some l) l)
+                              ((none)   (list-new arena Int)))))
+                (do (list-push ks k) (map-put index x ks))))
+            (set! k (+ k 1))))
+        index)))
+
+  (fn kept ((arena Arena) (axs (List RawAxiom)) (in-m (List Bool)))
+    (@intent "The axioms marked in M, in their order")
+    (@spec ((Arena (List RawAxiom) (List Bool)) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RawAxiom))
+          (mut k 0))
+      (do (for-each (ax axs)
+            (do (when (bool-of in-m k) (list-push out ax))
+                (set! k (+ k 1))))
+          out)))
+
+  (fn int-of ((xs (List Int)) (k Int))
+    (@intent "xs[k], 0 when out of range")
+    (@spec (((List Int) Int) -> Int))
+    (match (list-get xs k) ((some v) v) ((none) 0)))
+
+  (fn bool-of ((xs (List Bool)) (k Int))
+    (@intent "xs[k], false when out of range")
+    (@spec (((List Bool) Int) -> Bool))
+    (match (list-get xs k) ((some v) v) ((none) false)))
+
+  (fn axiom-of ((axs (List RawAxiom)) (k Int))
+    (@intent "axs[k]; k is always in range here (an annotation, which is local, otherwise)")
+    (@spec (((List RawAxiom) Int) -> RawAxiom))
+    (match (list-get axs k) ((some a) a) ((none) (union-new RawAxiom ra-annotation))))
+
+  (fn sym-of ((arena Arena) (sigs (List (List IRI))) (k Int))
+    (@intent "sigs[k]; k is always in range here (empty otherwise)")
+    (@spec ((Arena (List (List IRI)) Int) -> (List IRI)))
+    (@alloc arena)
+    (match (list-get sigs k) ((some l) l) ((none) (list-new arena IRI))))
+
+  ;; ============================================================
+  ;; The module's decoded input
+  ;; ============================================================
+
+  (fn module-decoded ((arena Arena) (d Decoded) (seed (List IRI)))
+    (@intent "d restricted to its module for seed: M's axioms, the signature restricted to S and the built-ins, d's decode-level omissions kept whole")
+    (@spec ((Arena Decoded (List IRI)) -> Decoded))
+    (@alloc arena)
+    ;; Decode-level omissions (unresolved imports, undeclared properties)
+    ;; name no axiom, so they cannot be placed inside or outside M: they
+    ;; stay, and keep M's run incomplete.
+    (let ((m (module-axioms arena (. d axioms) seed)))
+      (record-new Decoded
+        (axioms    (. m axioms))
+        (signature (restricted arena (. d signature) (. m symbols)))
+        (omissions (. d omissions)))))
+
+  (fn restricted ((arena Arena) (sig Signature) (s (Set IRI)))
+    (@intent "The signature's classes, object properties and individuals in S or OWL's own; the rest as they are")
+    (@spec ((Arena Signature (Set IRI)) -> Signature))
+    (@alloc arena)
+    ;; Contexts and query classes are made per class, and sriq's split per
+    ;; individual, so these three are what keeps M's run small. The data
+    ;; side was read by decode and the data lemma, and makes no context.
+    (record-new Signature
+      (classes     (within arena (. sig classes) s))
+      (obj-props   (within arena (. sig obj-props) s))
+      (data-props  (. sig data-props))
+      (annot-props (. sig annot-props))
+      (individuals (within arena (. sig individuals) s))
+      (datatypes   (. sig datatypes))))
+
+  (fn within ((arena Arena) (xs (Set IRI)) (s (Set IRI)))
+    (@intent "The members of xs in S, or in OWL's namespace (the built-ins)")
+    (@spec ((Arena (Set IRI) (Set IRI)) -> (Set IRI)))
+    (@alloc arena)
+    (let ((out (set-new arena IRI)))
+      (do (for-each (x (set-elements xs :arena arena))
+            (when (or (set-has s x) (owl-own x))
+              (set-put out x)))
+          out))))

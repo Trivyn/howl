@@ -551,14 +551,17 @@ impl Report {
 /// The input's probe queries, answered by a probe run alone
 /// ([`Reasoner::answer`]): no main classification, so no report.
 ///
-/// The answers are the ones [`Reasoner::classify`] gives in
-/// [`Report::probes`] for the same input and configuration: the same
-/// probe run, without the main run before it.
+/// The probe run is over the queries' ⊥-locality module (SPEC §8.4), so it
+/// gives every `Yes` and `No` that [`Reasoner::classify`] gives in
+/// [`Report::probes`] for the same input and configuration. Where an
+/// omission outside the module held that run back, it may answer `Yes` or
+/// `No` instead of `Unknown`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answers {
-    /// The rung the probe run ran: under `Auto`, the one chosen for the
-    /// input plus its probe documents. `None` when nothing was asked, so
-    /// nothing ran.
+    /// The rung the run that answered ran: under `Auto`, the one chosen for
+    /// the queries' module (or, when the module's run fell short and the
+    /// whole input was classified instead, for the input plus its probe
+    /// documents). `None` when nothing was asked, so nothing ran.
     pub profile: Option<Profile>,
     /// Each query once, in canonical order (unsatisfiable before
     /// subsumed, then by class).

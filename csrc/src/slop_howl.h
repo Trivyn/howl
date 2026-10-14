@@ -8,6 +8,7 @@
 #include "slop_ttl.h"
 #include "slop_report.h"
 #include "slop_probe.h"
+#include "slop_locality.h"
 #include "slop_owl2.h"
 #include "slop_types.h"
 #include "slop_normalize.h"
@@ -390,8 +391,13 @@ types_Outcome howl_sriq_outcome(slop_arena* arena, howl_Prepared p, howl_SriqWor
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 void howl_release_outcome(types_Outcome o);
 slop_result_howl_Prepared_types_Fault howl_prepare_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
+slop_result_howl_Prepared_types_Fault howl_prepare_encoded_within(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config, uint8_t modular, slop_list_rdf_IRI seed);
+normalize_Decoded howl_within_seed(slop_arena* held, normalize_Decoded d, uint8_t modular, slop_list_rdf_IRI seed);
 slop_result_types_Outcome_types_Fault howl_classify_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
-slop_result_probe_Probing_types_Fault howl_probe_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, slop_list_probe_Query queries, types_ReasonerConfig config);
+slop_result_probe_Probing_types_Fault howl_probe_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, slop_list_probe_Query queries, types_ReasonerConfig config, uint8_t modular);
+slop_result_types_Outcome_types_Fault howl_probe_classified(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config, uint8_t modular, slop_list_probe_Query queries);
+slop_result_types_Outcome_types_Fault howl_classify_within(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config, uint8_t modular, slop_list_rdf_IRI seed);
+slop_list_rdf_IRI howl_query_seed(slop_arena* arena, slop_list_probe_Query queries);
 slop_result_probe_Probing_types_Fault howl_probe_outcome(slop_arena* arena, slop_result_types_Outcome_types_Fault r, slop_list_probe_Query queries);
 probe_Probing howl_probing_of(slop_arena* arena, types_Outcome o, slop_list_probe_Query queries);
 probe_Probing howl_no_probing(slop_arena* arena);
@@ -422,7 +428,7 @@ howl_Run howl_new_run(slop_arena* a, howl_RunState st);
 howl_Run howl_faulted(slop_arena* a, howl_FaultKind kind, slop_string message, types_Profile profile);
 howl_Run howl_run_classify(howl_Input in, howl_Options o);
 howl_Run howl_run_faulted(slop_arena* a, types_Fault f, slop_string prefix, types_Profile profile);
-slop_result_probe_Probing_types_Fault howl_probe_run(slop_arena* a, howl_InputState st, howl_Options o);
+slop_result_probe_Probing_types_Fault howl_probe_run(slop_arena* a, howl_InputState st, howl_Options o, uint8_t modular);
 howl_Run howl_with_probes(slop_arena* a, howl_InputState st, types_Outcome out, howl_Options o);
 howl_Run howl_run_answer(howl_Input in, howl_Options o);
 howl_Run howl_answer_of_input(slop_arena* a, howl_InputState st, howl_Options o);
