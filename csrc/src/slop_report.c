@@ -12,21 +12,21 @@ slop_string report_answer_name(probe_ProbeAnswer a);
 slop_list_string report_report_lines(slop_arena* arena, types_Outcome o);
 
 slop_string report_node_text(slop_arena* arena, types_Node n) {
-    __auto_type _mv_1570 = n;
-    switch (_mv_1570.tag) {
+    __auto_type _mv_1599 = n;
+    switch (_mv_1599.tag) {
         case types_Node_class_node:
         {
-            __auto_type i = _mv_1570.data.class_node;
+            __auto_type i = _mv_1599.data.class_node;
             return i.value;
         }
         case types_Node_individual_node:
         {
-            __auto_type i = _mv_1570.data.individual_node;
+            __auto_type i = _mv_1599.data.individual_node;
             return string_concat(arena, SLOP_STR("{"), string_concat(arena, i.value, SLOP_STR("}")));
         }
         case types_Node_fresh_node:
         {
-            __auto_type k = _mv_1570.data.fresh_node;
+            __auto_type k = _mv_1599.data.fresh_node;
             return string_concat(arena, SLOP_STR("_:fresh"), int_to_string(arena, k));
         }
     }
@@ -38,27 +38,27 @@ slop_string report_keyed(slop_arena* arena, slop_string key, slop_string text) {
 }
 
 slop_string report_verdict_line(types_Outcome o) {
-    __auto_type _mv_1571 = types_verdict(o);
-    if (_mv_1571 == types_Verdict_verdict_coherent) {
+    __auto_type _mv_1600 = types_verdict(o);
+    if (_mv_1600 == types_Verdict_verdict_coherent) {
         return SLOP_STR("verdict coherent");
-    } else if (_mv_1571 == types_Verdict_verdict_incoherent) {
+    } else if (_mv_1600 == types_Verdict_verdict_incoherent) {
         return SLOP_STR("verdict incoherent");
-    } else if (_mv_1571 == types_Verdict_verdict_inconclusive) {
+    } else if (_mv_1600 == types_Verdict_verdict_inconclusive) {
         return SLOP_STR("verdict inconclusive");
     }
     SLOP_UNREACHABLE();
 }
 
 slop_string report_termination_line(types_Termination t) {
-    __auto_type _mv_1572 = t;
-    switch (_mv_1572.tag) {
+    __auto_type _mv_1601 = t;
+    switch (_mv_1601.tag) {
         case types_Termination_fixpoint:
         {
             return SLOP_STR("termination fixpoint");
         }
         case types_Termination_resource_limit:
         {
-            __auto_type _ = _mv_1572.data.resource_limit;
+            __auto_type _ = _mv_1601.data.resource_limit;
             return SLOP_STR("termination resource-limit");
         }
     }
@@ -109,10 +109,10 @@ slop_list_string report_answer_lines(slop_arena* arena, probe_Probing p, uint8_t
 slop_string report_answer_text(slop_arena* arena, probe_Answered a) {
     {
         __auto_type q = a.query;
-        __auto_type _mv_1573 = q.kind;
-        if (_mv_1573 == probe_QueryKind_query_unsatisfiable) {
+        __auto_type _mv_1602 = q.kind;
+        if (_mv_1602 == probe_QueryKind_query_unsatisfiable) {
             return strlib_string_build(arena, ({ slop_list_string _ll = (slop_list_string){ .data = (slop_string*)slop_arena_alloc(arena, 4 * sizeof(slop_string)), .len = 4, .cap = 4, .arena = arena }; _ll.data[0] = SLOP_STR("unsatisfiable "); _ll.data[1] = q.sub.value; _ll.data[2] = SLOP_STR(" "); _ll.data[3] = report_answer_name(a.answer); _ll; }));
-        } else if (_mv_1573 == probe_QueryKind_query_subsumed) {
+        } else if (_mv_1602 == probe_QueryKind_query_subsumed) {
             return strlib_string_build(arena, ({ slop_list_string _ll = (slop_list_string){ .data = (slop_string*)slop_arena_alloc(arena, 6 * sizeof(slop_string)), .len = 6, .cap = 6, .arena = arena }; _ll.data[0] = SLOP_STR("subsumed "); _ll.data[1] = q.sub.value; _ll.data[2] = SLOP_STR(" "); _ll.data[3] = q.sup.value; _ll.data[4] = SLOP_STR(" "); _ll.data[5] = report_answer_name(a.answer); _ll; }));
         }
         SLOP_UNREACHABLE();
@@ -120,12 +120,12 @@ slop_string report_answer_text(slop_arena* arena, probe_Answered a) {
 }
 
 slop_string report_answer_name(probe_ProbeAnswer a) {
-    __auto_type _mv_1574 = a;
-    if (_mv_1574 == probe_ProbeAnswer_answer_yes) {
+    __auto_type _mv_1603 = a;
+    if (_mv_1603 == probe_ProbeAnswer_answer_yes) {
         return SLOP_STR("yes");
-    } else if (_mv_1574 == probe_ProbeAnswer_answer_no) {
+    } else if (_mv_1603 == probe_ProbeAnswer_answer_no) {
         return SLOP_STR("no");
-    } else if (_mv_1574 == probe_ProbeAnswer_answer_unknown) {
+    } else if (_mv_1603 == probe_ProbeAnswer_answer_unknown) {
         return SLOP_STR("unknown");
     }
     SLOP_UNREACHABLE();

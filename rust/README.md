@@ -120,8 +120,11 @@ the verdict.
 ### Answers alone (`howl ask`)
 
 When you need only the answers, `Reasoner::answer` runs the probe run alone, with no main
-classification before it. That is one classification instead of two, and the answers are the ones
-`classify` puts in `report.probes`:
+classification before it, over only the queries' ⊥-locality module: one small classification
+instead of two of the whole input. (When the module's run falls short, the whole input is
+classified too.) It gives every `Yes` and `No` that `classify` puts in
+`report.probes`. Because an omission outside the module no longer counts, it may answer `Yes` or
+`No` where `classify` says `Unknown`:
 
 ```rust
 let answers = Reasoner::new().answer(&input)?;

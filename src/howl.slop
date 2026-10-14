@@ -16,6 +16,7 @@
   (import ttl (parse-ttl-string-for-each-triple))
   (import report (report-lines probe-lines answer-lines node-text))
   (import probe (QueryKind ProbeAnswer Query Answered Probing sort-queries probe-document answer-queries))
+  (import locality (module-decoded))
   (import owl2 (render-omission))
   (import types (Node RoleId Concept NormAxiom
                  Derived Addressed Context Saturation
@@ -654,10 +655,18 @@
     (@intent "The front end over an encoded document, owning everything it returns")
     (@spec ((Arena Encoded (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
+    (prepare-encoded-within arena doc imports-resolved config false (list-new arena IRI)))
+
+  (fn prepare-encoded-within ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
+                              (modular Bool) (seed (List IRI)))
+    (@intent "The front end over an encoded document, or, when modular, over its ⊥-locality module for seed (SPEC §8.4)")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig Bool (List IRI)) -> (Result Prepared Fault)))
+    (@alloc arena)
     ;; The CLI's `decode-held` and `prepare-from` as one call. `doc` is only
     ;; read: decode's working memory is a scratch arena of its own, freed
     ;; once the owned copy is taken, and the owned Decoded is freed once
-    ;; prepared - so `doc` can be prepared again.
+    ;; prepared - so `doc` can be prepared again. With a seed, the module
+    ;; is taken between decode and the gate, so `auto` gates the module.
     (let ((held  (arena-new 16777216))
           (front (arena-new 16777216))
           (d     (own-decoded held (decode-from front doc imports-resolved))))
@@ -665,11 +674,19 @@
         (arena-free front)
         ;; The `ok` arm first: slop types a match's result from its first arm.
         (let ((res (match d
-                     ((ok dd)   (prepare-decoded arena dd config))
+                     ((ok dd)   (prepare-decoded arena (within-seed held dd modular seed) config))
                      ((error f) (error (copy-fault arena f))))))
           (do
             (arena-free held)
             res)))))
+
+  (fn within-seed ((held Arena) (d Decoded) (modular Bool) (seed (List IRI)))
+    (@intent "d itself, or, when modular, its module for the seed")
+    (@spec ((Arena Decoded Bool (List IRI)) -> Decoded))
+    (@alloc held)
+    ;; A flag and a list, not an (Option (List IRI)): slop names that
+    ;; type two ways in the C it generates, and they do not match.
+    (if modular (module-decoded held d seed) d))
 
   (fn classify-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig))
     (@intent "Classify an encoded document: the CLI's path, as one call")
@@ -684,9 +701,9 @@
       ((ok p)    (reason arena p config))))
 
   (fn probe-encoded ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (queries (List Query))
-                     (config ReasonerConfig))
-    (@intent "Answer probe queries from a classification of their own input (probe-document's)")
-    (@spec ((Arena Encoded (List IRI) (List Query) ReasonerConfig) -> (Result Probing Fault)))
+                     (config ReasonerConfig) (modular Bool))
+    (@intent "Answer probe queries from a classification of their own input (probe-document's), or of its module for the queries when modular (the answer run, SPEC §8.4)")
+    (@spec ((Arena Encoded (List IRI) (List Query) ReasonerConfig Bool) -> (Result Probing Fault)))
     (@alloc arena)
     ;; The classification runs in a scratch arena and only the answers and
     ;; the coverage are copied out. Never strict: a probe run's omissions
@@ -695,10 +712,54 @@
           (mut cfg config))
       (do
         (set! cfg strict-profile false)
-        (let ((res (probe-outcome arena (classify-encoded scratch doc imports-resolved cfg) queries)))
+        (let ((res (probe-outcome arena (probe-classified scratch doc imports-resolved cfg modular queries)
+                                  queries)))
           (do
             (arena-free scratch)
             res)))))
+
+  (fn probe-classified ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
+                        (modular Bool) (queries (List Query)))
+    (@intent "The probe input classified: over its module for the queries when modular, and that run is used only when it is complete or inconsistent; otherwise over the whole input (SPEC §8.4)")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig Bool (List Query)) -> (Result Outcome Fault)))
+    (@alloc arena)
+    ;; A complete run on the module answers exactly as a complete run on
+    ;; the whole input would (L2, L4), and an inconsistency it finds is
+    ;; O's. Short of that (an omission inside the module, a cap, the
+    ;; budget), its answers could fall short of the two-run mode's, so the
+    ;; whole input is classified instead: the two-run mode's own probe run.
+    ;; That keeps every yes and no the two-run mode gives (Constraint
+    ;; 499c3842), and costs a second run only when the module's falls short.
+    (if (not modular)
+      (classify-within arena doc imports-resolved config false (list-new arena IRI))
+      (let ((m (classify-within arena doc imports-resolved config true (query-seed arena queries))))
+        (match m
+          ((ok o)
+            (if (or (outcome-is-complete o) (. (. o findings) inconsistent))
+              m
+              (do
+                (release-outcome o)
+                (classify-within arena doc imports-resolved config false (list-new arena IRI)))))
+          ((error _) m)))))
+
+  (fn classify-within ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
+                       (modular Bool) (seed (List IRI)))
+    (@intent "classify-encoded, over the document's module for seed when modular")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig Bool (List IRI)) -> (Result Outcome Fault)))
+    (@alloc arena)
+    (match (prepare-encoded-within arena doc imports-resolved config modular seed)
+      ((error f) (error f))
+      ((ok p)    (reason arena p config))))
+
+  (fn query-seed ((arena Arena) (queries (List Query)))
+    (@intent "Σ₀: every class a query names (SPEC §8.4)")
+    (@spec ((Arena (List Query)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut out (list-new arena IRI)))
+      (do (for-each (q queries)
+            (do (list-push out (. q sub))
+                (when (> (string-len (. (. q sup) value)) 0) (list-push out (. q sup)))))
+          out)))
 
   (fn probe-outcome ((arena Arena) (r (Result Outcome Fault)) (queries (List Query)))
     (@intent "The probe run's result, owned in arena: its answers, or its fault")
@@ -1120,15 +1181,15 @@
       ;; it happen it is an input error, never a verdict.
       ((refused _)       (faulted a 'fault-input-error "refused under a strict profile" profile))))
 
-  (fn probe-run ((a Arena) (st InputState) (o Options))
-    (@intent "The input's queries answered by a probe run of their own (probe-document's input)")
-    (@spec ((Arena InputState Options) -> (Result Probing Fault)))
+  (fn probe-run ((a Arena) (st InputState) (o Options) (modular Bool))
+    (@intent "The input's queries answered by a probe run of their own (probe-document's input), over its module when modular")
+    (@spec ((Arena InputState Options Bool) -> (Result Probing Fault)))
     (@alloc a)
     ;; The probe run's input is built in an arena freed once it has run.
     (let ((qs  (sort-queries a (. st queries)))
           (pa  (arena-new 16777216))
           (doc (probe-document pa (deref (. st enc)) (deref (. st probes)) qs))
-          (res (probe-encoded a (deref doc) (. st imports) qs (options-config o))))
+          (res (probe-encoded a (deref doc) (. st imports) qs (options-config o) modular)))
       (do
         (arena-free pa)
         res)))
@@ -1141,7 +1202,7 @@
     ;; is the caller's, named as the probe run's.
     (if (== (list-len (. st queries)) 0)
       (finished a out (no-probing a) false)
-      (match (probe-run a st o)
+      (match (probe-run a st o false)
         ((ok p)    (finished a out p true))
         ((error f)
           (do
@@ -1152,9 +1213,11 @@
     (@intent "Answer the input's probe queries alone: one probe run, no main classification (SPEC §8.4)")
     (@spec ((Input Options) -> Run))
     :c-name "howl_run_answer"
-    ;; The answers are the ones howl_run_classify gives for the same input
-    ;; and options (Constraint 499c3842): the same probe run, without the
-    ;; main run before it. So the run has no outcome and no report: its
+    ;; The same probe input as howl_run_classify's, over its ⊥-locality
+    ;; module for the queries (SPEC §8.4), with no main run before it: every
+    ;; yes and no howl_run_classify gives is kept (Constraint 499c3842), and
+    ;; an omission outside the module no longer turns a no into unknown. So
+    ;; the run has no outcome and no report: its
     ;; verdict is inconclusive and its findings empty, and its lines are
     ;; the answers (`answer-lines`).
     (let ((a  (arena-new 16777216))
@@ -1173,7 +1236,7 @@
     ;; named as it is (no "probe run: " prefix).
     (if (== (list-len (. st queries)) 0)
       (answered a (no-probing a) false)
-      (match (probe-run a st o)
+      (match (probe-run a st o true)
         ((ok p)    (answered a p true))
         ((error f) (run-faulted a f "" (. o profile))))))
 

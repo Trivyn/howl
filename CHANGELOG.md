@@ -5,8 +5,16 @@
 ### Added
 
 - **Answering probe queries without classifying first** (SPEC §8.4). The answer run is the probe
-  run alone, with no main run, so it costs one classification instead of two and gives the same
-  answers. It is additive: nothing existing changes.
+  run alone, with no main run: usually one classification, of the queries' module, instead of two
+  of the whole input. It is additive: nothing existing changes.
+  - **It classifies the queries' module first.** This is the syntactic ⊥-locality module (Cuenca
+    Grau, Horrocks, Kazakov and Sattler, JAIR 2008), which entails exactly what the ontology entails
+    about the queried classes whenever HOWL can read every axiom in it. It is usually far smaller,
+    and `auto` picks a profile for the module alone.
+  - **It falls back to the whole input** when the module's run is incomplete: an omission inside
+    the module, a round cap, or the clause budget. That makes two classifications in that case.
+  - **It gives every `yes` and `no` the two-run mode gives.** It also answers where an omission
+    outside the module made that mode say `unknown`.
   - **C API:** `howl_run_answer(input, options)`, read with the existing `howl_run_probe_*`
     accessors. The run has no report, its verdict is `inconclusive`, and `howl_run_profile` names
     the profile that answered.
