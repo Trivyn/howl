@@ -2690,7 +2690,13 @@ tautological assertion names no nominal, so not every representative has a DL10 
 - clearing every individual at the boundary;
 - the verdict's handling of caps and omissions.
 
-All four are made here.*
+The second review confirmed those fixes, found no further semantic counterexample, and asked for four more, all made:
+- a definitive finding's precedence over an omission;
+- that S1's guard may omit differently in each run;
+- the comparison with the reference;
+- the original signature as Run H's query classes.
+
+**The model-theoretic argument closes, pending the owner's review.***
 
 `sriq` decides consistency, unsatisfiability and subsumption, and nothing about individuals (Requirement c0f9bfb3).
 Class nominals are out of profile, so an individual occurs only in assertions. So an input is answered by two runs, and
@@ -2761,15 +2767,17 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
       `{o}`, and `A_o(x)` appears in the bodies of the rest.
     - A DL11 clause comes only from a positive nominal (`define-pos`): a property assertion or `SameIndividual`, and
       `K_H` has neither. Nor does S1 make or move a nominal.
-    - **A tautological assertion names nothing.** `ClassAssertion(owl:Thing a)`, or any `C` whose NNF holds `⊤` as a
-      disjunct, gives `¬{a} ⊔ ⊤`, which `gci-nnf` canonicalises to `⊤` before the nominal is named. So no `A_a` and no
-      DL10 exist for `a`. Let `E` be the representatives for which S2 does emit `dl10(o, A_o)`.
+    - **An assertion simplified to `⊤` names nothing.** `ClassAssertion(owl:Thing a)`, or any `C` whose canonical NNF
+      holds `⊤` as a disjunct, gives `¬{a} ⊔ ⊤`, which `gci-nnf` canonicalises to `⊤` before the nominal is named. So
+      no `A_a` and no DL10 exist for `a`. A tautology S2 does not simplify, such as `P ⊔ ¬P`, still names `{a}`. Let `E`
+      be the representatives for which S2 does emit `dl10(o, A_o)`.
     - So `NF(K_H) = O′ ∪ {⊤ → A_o(o) | o ∈ E}`. `O′` holds only DL1–DL9 clauses, `A_o` is a fresh name, a different one
       for each `o`, and no individual occurs in any clause of `O′`.
   - **The fold.** The boundary drops each `⊤ → A_o(o)`, and clears **every** individual from the constants. The
     signature's individuals become constants on their own (`individuals-of`), so dropping the units alone would leave
-    some. The run reads `O′`, with the input's class names still its query classes, and each `A_o` for `o ∈ E` is a
-    **hidden query class**:
+    some. The run reads `O′`. Its query classes are the class names of the **original input's** signature, carried
+    through S5, not rebuilt from `K_H`. That keeps a class whose only occurrence is an assertion on an individual that is
+    not foldable. Each `A_o` for `o ∈ E` is a **hidden query class**:
     - it gets a context `v_{A_o}` with core `{A_o(x)}`, after the query contexts;
     - its one raw query is `unsat(A_o)`: `A_o(x) → ⊥ ∈̂ S_{v_{A_o}}`;
     - it is never reported.
@@ -2779,7 +2787,8 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
     - (a) `K_H` is consistent iff `O′` is consistent and no `A_o` is unsatisfiable w.r.t. `O′`.
     - (b) If `K_H` is consistent, then for query classes `B` and `A`, `K_H ⊨ B ⊑ A` iff `O′ ⊨ B(x) → A(x)`, and so for
       unsatisfiability and `owl:Thing`.
-    - **Proof.** By S0–S2's correctness, `K_H`'s answers are `NF(K_H)`'s.
+    - **Proof,** for a normalisation without omissions: by S0–S2's correctness, `K_H`'s answers are `NF(K_H)`'s. With an
+      omission, S1 and S2 stay sound but no longer equivalent, and only the run's definitive findings stand (below).
       - **(a) ⇒:** a model of `NF(K_H)` is a model of `O′` in which each `A_o` holds `o`.
       - **(a) ⇐:** take a model `M_o` of `O′` with an element `d_o ∈ A_o` for each `o ∈ E`. Their disjoint union is a model
         of `O′` (L1′), and interpreting each `o` as `d_o` makes it a model of `NF(K_H)`. When `E` is empty, a model of
@@ -2795,20 +2804,27 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
     has an empty head, so C2 holds vacuously in `v_⊤`.
   - Run C reads only `inconsistent` (S4, with the root's early stop). It has constants, so R8's deferral stays off.
 - **The verdict.** By L3 and Claim F (a):
-  - `K` is **inconsistent** iff Run H derives `⊤ → ⊥` in `v_⊤`, or `unsat(A_o)` for some `o ∈ E`, or Run C derives
-    `⊤ → ⊥`. Run C's early stop at the root counts, read through the shared ground view as S4 reads it.
+  - **For complete runs without omissions:** `K` is **inconsistent** iff Run H derives `⊤ → ⊥` in `v_⊤`, or
+    `unsat(A_o)` for some `o ∈ E`, or Run C derives `⊤ → ⊥`. Run C's early stop at the root counts, read through the
+    shared ground view as S4 reads it.
   - **Otherwise,** `K`'s raw answers are Run H's (L2 for `K` and for `K_H`, then Claim F (b)).
   - **Order:** Run H runs first. If it finds `K` inconsistent, Run C does not run.
   - **An inconsistency is an answer** from whichever run derives it, since every derivation is sound. It stands even when
     the other run stopped at a cap.
   - **A cap:** with no inconsistency found, a run that stops at a cap or out of fuel makes the input n/a.
   - **Omissions:** the input's report carries every axiom either run omitted, as S1's size guard and the gate do today
-    (S7). A run with an omission is complete only for the smaller theory it read, so the report stays inconclusive.
+    (S7). A run with an omission is complete only for the smaller theory it read. So, in the absence of a definitive
+    finding, the report stays inconclusive. A derived inconsistency is definitive and stands (§6.2).
+  - **The guard can omit differently.** S1's size guard counts every S0 GCI, assertions included, up to its fixed
+    threshold. Run H, Run C and the unsplit input can therefore omit different axioms. That changes coverage, never
+    soundness.
 
   Both runs are deterministic, and the split is a function of the accepted axioms' content, so every report stays the
   same at every worker count (R6).
-- **The reference evaluator** keeps reading `K` whole and unsplit. The tests compare the split engine's report against
-  it, so the split is checked by a run that never made it.
+- **The reference evaluator** keeps reading `K` whole and unsplit. The tests compare the split engine against it, so the
+  split is checked by a run that never made it:
+  - the logical answers are compared when both sides complete without omissions;
+  - otherwise neither side's definitive finding may contradict the other's.
 
 **S5 — representation.** [TGH21] leaves each of these choices open, so none needs a new proof. Each
 is fixed here so that reports are input-determined.
