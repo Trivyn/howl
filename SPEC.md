@@ -2683,8 +2683,8 @@ omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ 
   answers, as K3's flagged run is: an inconsistent ontology entails everything, and the report says
   so.
 
-**The ABox split (slice 9j, under review).** *Status: drafted 2026-10-14, for Codex's and the owner's review before
-any engine code. Codex's first review confirmed L1–L3, L1′, the hidden queries and Run C's order. It found that a
+**The ABox split (slice 9j).** *Status: drafted 2026-10-14, and reviewed by Codex and then the owner before any engine
+code. Codex's first review confirmed L1–L3, L1′, the hidden queries and Run C's order. It found that a
 tautological assertion names no nominal, so not every representative has a DL10 (now the set `E`). It also asked for:
 - the universal role's reading in a union;
 - clearing every individual at the boundary;
@@ -2696,7 +2696,7 @@ The second review confirmed those fixes, found no further semantic counterexampl
 - the comparison with the reference;
 - the original signature as Run H's query classes.
 
-**The model-theoretic argument closes, pending the owner's review.***
+**The model-theoretic argument closes. The owner reviewed it on 2026-10-14, and slice 9j implements it.***
 
 `sriq` decides consistency, unsatisfiability and subsumption, and nothing about individuals (Requirement c0f9bfb3).
 Class nominals are out of profile, so an individual occurs only in assertions. So an input is answered by two runs, and
@@ -2821,6 +2821,31 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
 
   Both runs are deterministic, and the split is a function of the accepted axioms' content, so every report stays the
   same at every worker count (R6).
+- **The prototype** (`src/sriqabox.slop`):
+  - **`abox-split`** makes the two inputs from the gate's result. The foldable individuals and one representative per
+    type come from the accepted axioms. Run H's signature has no individual, and Run C's has the unfoldable ones.
+  - **`fold-clauses`** drops Run H's DL10 units at S5's output, and records each `A_o` as a hidden id.
+  - **`with-hidden`** (`src/sriqctx.slop`) appends their contexts after the query contexts, and **`q-hidden-unsat`** reads
+    them.
+  - **`consistency-input`** gives Run C `nquery = 0`.
+  - **`split-run`** runs Run H, then Run C, and returns the verdict.
+  - The test binary's `sriq-run` splits by default; `--no-split` runs the input whole.
+  - **Tests.** Every sriq fixture runs through the split under trivial, eager and cautious, and the following are
+    checked:
+    - the unsplit reference's verdict, and its answers when consistent;
+    - the fixture's expectations;
+    - the reference on Run H's own input, hidden classes included, giving the prototype's Run H its answers and hidden
+      verdict.
+
+    Eight new clash/control pairs (`abox-fold-*`, `abox-mixed-*`, `abox-different-*`, `abox-max-successor-*`,
+    `abox-declared-*`) each equal HermiT.
+  - **Mutants seen red:**
+    - folding an individual with a property assertion;
+    - ignoring a hidden class's unsat;
+    - skipping Run C;
+    - comparing types by their first class only;
+    - no hidden context;
+    - Run H without the representatives' assertions.
 - **The reference evaluator** keeps reading `K` whole and unsplit. The tests compare the split engine against it, so the
   split is checked by a run that never made it:
   - the logical answers are compared when both sides complete without omissions;

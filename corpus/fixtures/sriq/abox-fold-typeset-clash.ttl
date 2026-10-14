@@ -1,0 +1,15 @@
+# sriq ABox split (slice 9j): two types that share their first class. p : X, and q : X ⊓ Y, where
+# Y ⊑ ∃s.P and X ⊑ ∀s.¬P make X ⊓ Y unsatisfiable. p is the least individual, so a split that compared
+# types by their first class would let p's type stand for q's and miss the clash.
+# Expect: inconsistent.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:X a owl:Class . :Y a owl:Class . :P a owl:Class . :s a owl:ObjectProperty .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :P ] .
+:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:allValuesFrom [ owl:complementOf :P ] ] .
+:p a owl:NamedIndividual , :X .
+:q a owl:NamedIndividual , :X , :Y .

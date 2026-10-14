@@ -213,6 +213,7 @@ sriqctx_CoreChoice sriqctx_cautious_choice(sriqctx_Triggers tr, uint32_t f, slop
 sriqctx_CoreChoice sriqctx_strat_choice(sriqctx_Strategy s, sriqctx_Triggers tr, uint32_t f, slop_list_types_Lit k1);
 slop_list_types_Lit sriqctx_core_of(slop_arena* arena, sriqctx_CoreChoice cc, slop_list_types_Lit k1);
 sriqctx_Structure sriqctx_init_structure(slop_arena* arena, int64_t nquery, int64_t nconst);
+sriqctx_Structure sriqctx_with_hidden(slop_arena* arena, sriqctx_Structure st, slop_list_u32 hidden);
 int64_t sriqctx_ctx_count(sriqctx_Structure st);
 slop_option_sriqctx_Ctx sriqctx_ctx_at(sriqctx_Structure st, int64_t v);
 slop_option_sriqctx_CtxSet sriqctx_set_at(sriqctx_Structure st, int64_t v);
@@ -231,6 +232,7 @@ uint8_t sriqctx_q_of(slop_arena* arena, sriqctx_Structure st, int64_t v, slop_li
 slop_list_types_Lit sriqctx_atom_x(slop_arena* arena, uint32_t b);
 uint8_t sriqctx_q_inconsistent(slop_arena* arena, sriqctx_Structure st);
 uint8_t sriqctx_q_unsat(slop_arena* arena, sriqctx_Structure st, uint32_t b);
+uint8_t sriqctx_q_hidden_unsat(slop_arena* arena, sriqctx_Structure st, int64_t nquery, slop_list_u32 hidden);
 uint8_t sriqctx_q_holds(slop_arena* arena, sriqctx_Structure st, uint32_t b, uint32_t a);
 uint8_t sriqctx_q_thing(slop_arena* arena, sriqctx_Structure st, uint32_t a);
 

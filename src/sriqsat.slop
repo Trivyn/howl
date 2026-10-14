@@ -66,7 +66,7 @@
                    nom-first nom-second nom-pair ref-rsucc
                    pred-one away-job root-job slots-of rslots ctx-round
                    edge-is add-consts add-contexts add-edges action-cands unit-clause cand-at cand-cmp
-                   copy-clauses copy-structure env-of ref-lambda ref-round ref-apply))
+                   copy-clauses copy-structure env-of ref-lambda ref-round ref-apply initial-queries init-of))
 
   (export SatConfig SatResult Counts Supply sat-run sat-materialise hyper-ix-agrees defer-on defer-stable)
 
@@ -1975,7 +1975,7 @@
     (@alloc arena)
     (let ((base (. cfg base))
           (tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn)))
-          (env (env-of arena in base tr (if (>= (. base lam) 0) (. base lam) (ref-lambda tr (. base strat) (. in nquery)))))
+          (env (env-of arena in base tr (if (>= (. base lam) 0) (. base lam) (ref-lambda tr (. base strat) (initial-queries in)))))
           (st (. (. p res) st))
           (r (ref-round arena env (. (projected arena st (first-delta arena st) (. p trig)) st))))
       (and (not (. r over)) (not (. (ref-apply arena st r) changed)) (units-pushed arena st (. p trig)))))
@@ -2003,7 +2003,7 @@
     (@alloc arena)
     (let ((base (. cfg base))
           (tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn)))
-          (env (env-of arena in base tr (ref-lambda tr (. base strat) (. in nquery))))
+          (env (env-of arena in base tr (ref-lambda tr (. base strat) (initial-queries in))))
           (hx (h-index arena (. in onto)))
           (gd (ground-of arena tr st (. env nobody)))
           (dl (first-delta arena st))
@@ -2087,10 +2087,10 @@
     (@alloc arena)
     (let ((base (. cfg base))
           (tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn)))
-          (lam (if (>= (. base lam) 0) (. base lam) (ref-lambda tr (. base strat) (. in nquery))))
+          (lam (if (>= (. base lam) 0) (. base lam) (ref-lambda tr (. base strat) (initial-queries in))))
           (env (env-of arena in base tr lam))
           (hx (h-index arena (. in onto)))
-          (st0 (ranked-structure (init-structure arena (. in nquery) (. in nconst)) (. in nquery)))
+          (st0 (ranked-structure (init-of arena in) (. in nquery)))
           (dfr (defer-on cfg in))
           (mut held (arena-new 1048576))
           (mut run (record-new Run (st st0) (dl (first-delta arena st0)) (status 'rs-fuel) (rounds 0) (going true)

@@ -1,0 +1,463 @@
+;; ============================================================
+;; sriq's ABox split  —  SPEC.md §5.5 "The ABox split" (slice 9j)
+;;
+;; sriq decides consistency, unsatisfiability and subsumption, and nothing
+;; about individuals, and an individual occurs only in assertions. So an
+;; input is answered by two runs:
+;;   RUN H, the hierarchy: T and one representative's class assertions per
+;;     distinct type. Its DL10 units are dropped at S5's output and every
+;;     individual cleared; each representative's A_o becomes a hidden
+;;     query class, whose unsat makes the input inconsistent. It has no
+;;     constant, so R8's deferral applies.
+;;   RUN C, consistency only: T and A_rest, when A_rest is not empty, with
+;;     no query class.
+;; An individual is foldable when it occurs only in class assertions and
+;; in DifferentIndividuals lists, at most once in each (L1–L3).
+;; ============================================================
+
+(module sriqabox
+  (@doc "sriq's ABox split: Run H's and Run C's inputs from the gate's, the fold at S5's output, and Run C's query-free
+         input (SPEC 5.5, slice 9j)")
+
+  (import rdf (IRI))
+  (import types (Node DName DlClause))
+  (import owl2 (RawAxiom RawConcept RawClassAssertion RawEdge Signature concept-cmp))
+  (import canon (iri-cmp sort-range))
+  (import gate (GateResult))
+  (import sriqnames (SriqNormal sriq-normalize))
+  (import sriqclauses (SriqIds SriqClauses sriq-clauses class-id))
+  (import sriqref (RefIn RefStatus ref-input))
+  (import sriqctx (q-inconsistent q-hidden-unsat))
+  (import sriqsat (SatConfig SatResult sat-run))
+
+  (export Split Folded Inputs SplitRun abox-split fold-clauses consistency-input h-input split-inputs split-run)
+
+  ;; The two runs' inputs.
+  (type Split (record
+    (h     GateResult)     ; T and the representatives' class assertions
+    (c     GateResult)     ; T and A_rest
+    (has-c Bool)))         ; is A_rest non-empty, so that Run C runs?
+
+  ;; Run H's clauses after the fold, and its hidden query classes by id.
+  (type Folded (record
+    (sc     SriqClauses)
+    (hidden (List U32))))
+
+  ;; One class assertion on an individual.
+  (type Typed (record
+    (ind IRI)
+    (c   RawConcept)))
+
+  ;; A foldable individual with its type: its asserted classes, sorted by
+  ;; concept-cmp, each once.
+  (type Typing (record
+    (ind   IRI)
+    (types (List RawConcept))))
+
+  ;; ============================================================
+  ;; Foldable individuals
+  ;; ============================================================
+
+  (fn individual-of ((n Node))
+    (@intent "The individual a node names, if it names one")
+    (@spec ((Node) -> (Option IRI)))
+    (@pure)
+    (match n
+      ((individual-node i) (some i))
+      ((class-node _)      (none))
+      ((fresh-node _)      (none))))
+
+  (fn put-node ((s (Set IRI)) (n Node))
+    (@intent "s with n's individual, if n names one")
+    (@spec (((Set IRI) Node) -> Unit))
+    (match (individual-of n) ((some i) (set-put s i)) ((none) (do))))
+
+  (fn unfoldable ((arena Arena) (axs (List RawAxiom)))
+    (@intent "The individuals that are not foldable: in a property or negative property assertion, in SameIndividual, or
+              twice in one DifferentIndividuals list")
+    (@spec ((Arena (List RawAxiom)) -> (Set IRI)))
+    (@alloc arena)
+    (let ((mut bad (set-new arena IRI)))
+      (do (for-each (ax axs)
+            (match ax
+              ((ra-object-property-assertion e) (do (put-node bad (. e from)) (put-node bad (. e to))))
+              ((ra-negative-assertion e)        (do (put-node bad (. e from)) (put-node bad (. e to))))
+              ((ra-same-individual ns)          (for-each (n ns) (put-node bad n)))
+              ((ra-different-individuals ns)    (for-each (i (repeated arena ns)) (set-put bad i)))
+              (_ (do))))
+          bad)))
+
+  (fn repeated ((arena Arena) (ns (List Node)))
+    (@intent "The individuals that occur more than once in ns")
+    (@spec ((Arena (List Node)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut seen (set-new arena IRI)) (mut out (list-new arena IRI)))
+      (do (for-each (n ns)
+            (match (individual-of n)
+              ((some i) (if (set-has seen i) (list-push out i) (set-put seen i)))
+              ((none) (do))))
+          out)))
+
+  (fn foldable-subject ((ca RawClassAssertion) (bad (Set IRI)))
+    (@intent "The individual of a class assertion, if it is foldable")
+    (@spec ((RawClassAssertion (Set IRI)) -> (Option IRI)))
+    (@pure)
+    (match (individual-of (. ca subject))
+      ((some i) (if (set-has bad i) (none) (some i)))
+      ((none)   (none))))
+
+  ;; ============================================================
+  ;; Types and representatives
+  ;; ============================================================
+
+  (fn typed-pairs ((arena Arena) (axs (List RawAxiom)) (bad (Set IRI)))
+    (@intent "Each class assertion on a foldable individual, as (individual, class)")
+    (@spec ((Arena (List RawAxiom) (Set IRI)) -> (List Typed)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Typed)))
+      (do (for-each (ax axs) (match (typed-of ax bad) ((some t) (list-push out t)) ((none) (do))))
+          out)))
+
+  (fn typed-of ((ax RawAxiom) (bad (Set IRI)))
+    (@intent "ax as (individual, class), if it is a class assertion on a foldable individual")
+    (@spec ((RawAxiom (Set IRI)) -> (Option Typed)))
+    (@pure)
+    (match ax
+      ((ra-class-assertion ca)
+        (match (foldable-subject ca bad) ((some i) (some (record-new Typed (ind i) (c (deref (. ca concept)))))) ((none) (none))))
+      (_ (none))))
+
+  (fn typed-at ((xs (List Typed)) (k Int) (fallback Typed))
+    (@intent "Element k")
+    (@spec (((List Typed) Int Typed) -> Typed))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) fallback)))
+
+  (fn typed-cmp ((a Typed) (b Typed))
+    (@intent "By individual, then class")
+    (@spec ((Typed Typed) -> Int))
+    (@pure)
+    (let ((r (iri-cmp (. a ind) (. b ind)))) (if (!= r 0) r (concept-cmp (. a c) (. b c)))))
+
+  (fn typings ((arena Arena) (pairs (List Typed)))
+    (@intent "Each foldable individual with a class assertion, with its type, in IRI order")
+    (@spec ((Arena (List Typed)) -> (List Typing)))
+    (@alloc arena)
+    (match (list-get pairs 0)
+      ((none) (list-new arena Typing))
+      ((some p0) (typings-sorted arena (sorted-typed arena pairs p0) p0))))
+
+  (fn sorted-typed ((arena Arena) (pairs (List Typed)) (p0 Typed))
+    (@intent "pairs by individual, then class")
+    (@spec ((Arena (List Typed) Typed) -> (List Typed)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len pairs))
+                 (fn ((i Int) (j Int)) (typed-cmp (typed-at pairs i p0) (typed-at pairs j p0)))))
+          (mut out (list-new arena Typed)))
+      (do (for-each (k idx) (list-push out (typed-at pairs k p0))) out)))
+
+  (fn typings-sorted ((arena Arena) (ps (List Typed)) (p0 Typed))
+    (@intent "One typing per run of ps (sorted) with one individual, its classes each once")
+    (@spec ((Arena (List Typed) Typed) -> (List Typing)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Typing)) (mut k 0) (n (cast Int (list-len ps))))
+      (do (while (< k n)
+            (let ((ind (. (typed-at ps k p0) ind)) (end (run-end ps k p0)))
+              (do (list-push out (record-new Typing (ind ind) (types (run-types arena ps k end p0))))
+                  (set! k end))))
+          out)))
+
+  (fn run-end ((ps (List Typed)) (k Int) (p0 Typed))
+    (@intent "The position after the run of ps from k with k's individual")
+    (@spec (((List Typed) Int Typed) -> Int))
+    (@pure)
+    (let ((ind (. (typed-at ps k p0) ind)) (mut e k))
+      (do (while (and (< e (cast Int (list-len ps))) (== (iri-cmp (. (typed-at ps e p0) ind) ind) 0)) (set! e (+ e 1)))
+          e)))
+
+  (fn run-types ((arena Arena) (ps (List Typed)) (k Int) (end Int) (p0 Typed))
+    (@intent "The classes of ps from k to end (sorted), each once")
+    (@spec ((Arena (List Typed) Int Int Typed) -> (List RawConcept)))
+    (@alloc arena)
+    (let ((mut cur (list-new arena RawConcept)) (mut i k))
+      (do (while (< i end)
+            (do (when (not (ends-with cur (. (typed-at ps i p0) c))) (list-push cur (. (typed-at ps i p0) c)))
+                (set! i (+ i 1))))
+          cur)))
+
+  (fn ends-with ((cs (List RawConcept)) (c RawConcept))
+    (@intent "Is c the last of cs?")
+    (@spec (((List RawConcept) RawConcept) -> Bool))
+    (@pure)
+    (match (list-get cs (- (cast Int (list-len cs)) 1)) ((some x) (== (concept-cmp x c) 0)) ((none) false)))
+
+  (fn types-cmp ((a (List RawConcept)) (b (List RawConcept)))
+    (@intent "Types lexicographically by concept-cmp, a proper prefix first")
+    (@spec (((List RawConcept) (List RawConcept)) -> Int))
+    (@pure)
+    (let ((mut r 0) (mut i 0))
+      (do (for-each (x a)
+            (do (when (== r 0) (match (list-get b i) ((some y) (set! r (concept-cmp x y))) ((none) (set! r 1))))
+                (set! i (+ i 1))))
+          (if (and (== r 0) (< (list-len a) (list-len b))) -1 r))))
+
+  (fn typing-at ((xs (List Typing)) (k Int) (fallback Typing))
+    (@intent "Element k")
+    (@spec (((List Typing) Int Typing) -> Typing))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) fallback)))
+
+  (fn representatives ((arena Arena) (ts (List Typing)))
+    (@intent "For each distinct type, the least individual by IRI with it")
+    (@spec ((Arena (List Typing)) -> (Set IRI)))
+    (@alloc arena)
+    (match (list-get ts 0)
+      ((none) (set-new arena IRI))
+      ((some t0) (first-of-each arena (sorted-typings arena ts t0)))))
+
+  (fn typing-cmp ((a Typing) (b Typing))
+    (@intent "By type, then individual")
+    (@spec ((Typing Typing) -> Int))
+    (@pure)
+    (let ((r (types-cmp (. a types) (. b types)))) (if (!= r 0) r (iri-cmp (. a ind) (. b ind)))))
+
+  (fn sorted-typings ((arena Arena) (ts (List Typing)) (t0 Typing))
+    (@intent "ts by type, then individual")
+    (@spec ((Arena (List Typing) Typing) -> (List Typing)))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len ts))
+                 (fn ((i Int) (j Int)) (typing-cmp (typing-at ts i t0) (typing-at ts j t0)))))
+          (mut out (list-new arena Typing)))
+      (do (for-each (k idx) (list-push out (typing-at ts k t0))) out)))
+
+  (fn first-of-each ((arena Arena) (ts (List Typing)))
+    (@intent "The individual first in each run of ts (sorted by type) with one type")
+    (@spec ((Arena (List Typing)) -> (Set IRI)))
+    (@alloc arena)
+    (let ((mut reps (set-new arena IRI)) (mut prev (list-new arena RawConcept)) (mut started false))
+      (do (for-each (t ts)
+            (when (or (not started) (!= (types-cmp prev (. t types)) 0))
+              (let ((i (. t ind))) (do (set-put reps i) (set! prev (. t types)) (set! started true)))))
+          reps)))
+
+  ;; ============================================================
+  ;; The two inputs
+  ;; ============================================================
+
+  (fn h-keeps ((ax RawAxiom) (reps (Set IRI)))
+    (@intent "Does Run H read ax: an axiom of T, or a representative's class assertion?")
+    (@spec ((RawAxiom (Set IRI)) -> Bool))
+    (@pure)
+    (match ax
+      ((ra-class-assertion ca)
+        (match (individual-of (. ca subject)) ((some i) (set-has reps i)) ((none) false)))
+      ((ra-object-property-assertion _) false)
+      ((ra-negative-assertion _)        false)
+      ((ra-same-individual _)           false)
+      ((ra-different-individuals _)     false)
+      (_ true)))
+
+  (fn c-axiom ((arena Arena) (ax RawAxiom) (bad (Set IRI)))
+    (@intent "ax as Run C reads it, if it does: T as it is; of A, everything but the foldable individuals' class
+              assertions, a DifferentIndividuals list cut to its members that are not foldable (kept when two remain)")
+    (@spec ((Arena RawAxiom (Set IRI)) -> (Option RawAxiom)))
+    (@alloc arena)
+    (match ax
+      ((ra-class-assertion ca) (match (foldable-subject ca bad) ((some _) (none)) ((none) (some ax))))
+      ((ra-different-individuals ns)
+        (let ((kept (unfoldable-nodes arena ns bad)))
+          (if (>= (list-len kept) 2) (some (union-new RawAxiom ra-different-individuals kept)) (none))))
+      (_ (some ax))))
+
+  (fn unfoldable-nodes ((arena Arena) (ns (List Node)) (bad (Set IRI)))
+    (@intent "The nodes of ns that are not foldable individuals")
+    (@spec ((Arena (List Node) (Set IRI)) -> (List Node)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Node)))
+      (do (for-each (n ns)
+            (match (individual-of n)
+              ((some i) (when (set-has bad i) (list-push out n)))
+              ((none)   (list-push out n))))
+          out)))
+
+  (fn is-assertion ((ax RawAxiom))
+    (@intent "Is ax an assertion, so in A rather than T?")
+    (@spec ((RawAxiom) -> Bool))
+    (@pure)
+    (match ax
+      ((ra-class-assertion _)           true)
+      ((ra-object-property-assertion _) true)
+      ((ra-negative-assertion _)        true)
+      ((ra-same-individual _)           true)
+      ((ra-different-individuals _)     true)
+      (_ false)))
+
+  (fn with-individuals ((sig Signature) (inds (Set IRI)))
+    (@intent "sig with its individuals replaced by inds; its classes are kept, so Run H's query classes are the input's")
+    (@spec ((Signature (Set IRI)) -> Signature))
+    (@pure)
+    (record-new Signature (classes (. sig classes)) (obj-props (. sig obj-props)) (data-props (. sig data-props))
+                          (annot-props (. sig annot-props)) (individuals inds) (datatypes (. sig datatypes))))
+
+  (fn abox-split ((arena Arena) (gr GateResult))
+    (@intent "Run H's input (T and the representatives' class assertions, no individual in its signature) and Run C's (T
+              and A_rest, A_rest's individuals), and whether A_rest is non-empty")
+    (@spec ((Arena GateResult) -> Split))
+    (@alloc arena)
+    (let ((bad (unfoldable arena (. gr accepted)))
+          (reps (representatives arena (typings arena (typed-pairs arena (. gr accepted) bad))))
+          (mut hs (list-new arena RawAxiom)) (mut cs (list-new arena RawAxiom)) (mut rest false))
+      (do (for-each (ax (. gr accepted))
+            (do (when (h-keeps ax reps) (list-push hs ax))
+                (match (c-axiom arena ax bad)
+                  ((some x) (do (list-push cs x) (when (is-assertion x) (set! rest true))))
+                  ((none) (do)))))
+          (record-new Split
+            (h (record-new GateResult (accepted hs) (omissions (. gr omissions))
+                                      (signature (with-individuals (. gr signature) (set-new arena IRI)))))
+            (c (record-new GateResult (accepted cs) (omissions (. gr omissions))
+                                      (signature (with-individuals (. gr signature) bad))))
+            (has-c rest)))))
+
+  ;; ============================================================
+  ;; The fold, at S5's output (Claim F)
+  ;; ============================================================
+
+  (fn fold-clauses ((arena Arena) (n SriqNormal))
+    (@intent "Run H's normal form as the calculus reads it: each DL10 ⊤ → A_o(o) dropped, every individual cleared, and
+              each such A_o a hidden query class (sorted ids); an error if a DL11 or any other constant remains")
+    (@spec ((Arena SriqNormal) -> (Result Folded String)))
+    (@alloc arena)
+    (let ((mut kept (list-new arena DlClause)) (mut names (list-new arena DName)) (mut dl11 false))
+      (do (for-each (c (. n clauses))
+            (match c
+              ((dl10 _ a) (list-push names a))
+              ((dl11 _ _) (set! dl11 true))
+              (_ (list-push kept c))))
+          (if dl11
+            (error "Run H holds a DL11 clause, so a positive nominal")
+            (match (sriq-clauses arena (record-new SriqNormal (clauses kept) (concepts (. n concepts))
+                                                              (sroles (. n sroles)) (sfills (. n sfills)) (bars (. n bars))
+                                                              (fns (. n fns)) (classes (. n classes))
+                                                              (individuals (list-new arena IRI)) (omitted (. n omitted))))
+              ((error m) (error m))
+              ((ok sc) (ok (record-new Folded (sc sc) (hidden (hidden-ids arena sc names))))))))))
+
+  (fn hidden-ids ((arena Arena) (sc SriqClauses) (names (List DName)))
+    (@intent "The ids of names, ascending, each once")
+    (@spec ((Arena SriqClauses (List DName)) -> (List U32)))
+    (@alloc arena)
+    (let ((mut raw (list-new arena U32)) (mut out (list-new arena U32)))
+      (do (for-each (a names) (list-push raw (class-id (. sc ids) a)))
+          (for-each (k (sort-range arena (cast Int (list-len raw))
+                         (fn ((i Int) (j Int)) (u32-cmp (u32-at raw i) (u32-at raw j)))))
+            (let ((v (u32-at raw k)))
+              (match (list-get out (- (cast Int (list-len out)) 1))
+                ((some last) (when (!= last v) (list-push out v)))
+                ((none) (list-push out v)))))
+          out)))
+
+  (fn u32-at ((xs (List U32)) (k Int))
+    (@intent "Element k, or 0")
+    (@spec (((List U32) Int) -> U32))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) (cast U32 0))))
+
+  (fn u32-cmp ((a U32) (b U32))
+    (@intent "-1, 0 or 1")
+    (@spec ((U32 U32) -> Int))
+    (@pure)
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn h-input ((arena Arena) (f Folded))
+    (@intent "Run H's input: the folded clauses as the calculus reads them, with the hidden query classes")
+    (@spec ((Arena Folded) -> RefIn))
+    (@alloc arena)
+    (let ((in (ref-input arena (. f sc))))
+      (record-new RefIn (onto (. in onto)) (nclass (. in nclass)) (nquery (. in nquery)) (nrole (. in nrole))
+                        (nfn (. in nfn)) (nconst (. in nconst)) (hidden (. f hidden)))))
+
+  ;; ============================================================
+  ;; Run C
+  ;; ============================================================
+
+  (fn consistency-input ((in RefIn))
+    (@intent "in with no query class: Run C reads only inconsistent, and its ranked order ranks every class as fresh")
+    (@spec ((RefIn) -> RefIn))
+    (@pure)
+    (record-new RefIn (onto (. in onto)) (nclass (. in nclass)) (nquery 0) (nrole (. in nrole)) (nfn (. in nfn))
+                      (nconst (. in nconst)) (hidden (. in hidden))))
+
+  ;; ============================================================
+  ;; The two runs, from the gate's result to the verdict
+  ;; ============================================================
+
+  ;; Both runs' inputs, and Run H's ids, which the report reads.
+  (type Inputs (record
+    (ids   SriqIds)
+    (h     RefIn)
+    (c     RefIn)
+    (has-c Bool)))
+
+  (fn split-inputs ((arena Arena) (gr GateResult))
+    (@intent "The split, normalised: Run H's folded input and its ids, and Run C's input when A_rest is not empty")
+    (@spec ((Arena GateResult) -> (Result Inputs String)))
+    (@alloc arena)
+    (let ((sp (abox-split arena gr)))
+      (match (sriq-normalize arena (. (. sp h) accepted) (. (. sp h) signature))
+        ((error m) (error m))
+        ((ok nh)
+          (match (fold-clauses arena nh)
+            ((error m) (error m))
+            ((ok f) (inputs-from arena sp f)))))))
+
+  (fn inputs-from ((arena Arena) (sp Split) (f Folded))
+    (@intent "Inputs from Run H's folded clauses, with Run C's normalised when A_rest is not empty")
+    (@spec ((Arena Split Folded) -> (Result Inputs String)))
+    (@alloc arena)
+    (let ((h (h-input arena f)))
+      (if (. sp has-c)
+        (c-inputs arena sp (. (. f sc) ids) h)
+        (ok (record-new Inputs (ids (. (. f sc) ids)) (h h) (c h) (has-c false))))))
+
+  (fn c-inputs ((arena Arena) (sp Split) (ids SriqIds) (h RefIn))
+    (@intent "Inputs with Run C's input normalised beside Run H's")
+    (@spec ((Arena Split SriqIds RefIn) -> (Result Inputs String)))
+    (@alloc arena)
+    (match (sriq-normalize arena (. (. sp c) accepted) (. (. sp c) signature))
+      ((error m) (error m))
+      ((ok nc)
+        (match (sriq-clauses arena nc)
+          ((error m) (error m))
+          ((ok sc) (ok (record-new Inputs (ids ids) (h h) (c (consistency-input (ref-input arena sc))) (has-c true))))))))
+
+  ;; What the two runs found.
+  (type SplitRun (record
+    (h            SatResult)
+    (c            SatResult)     ; Run H's again when Run C did not run
+    (ran-c        Bool)
+    (inconsistent Bool)          ; a definitive finding: v_⊤'s, a hidden class's, or Run C's ⊤ → ⊥
+    (complete     Bool)))        ; an answer: inconsistent, or both runs at their fixpoint
+
+  (fn finished ((s RefStatus))
+    (@intent "Did a run end at its fixpoint or at ⊤ → ⊥, never at a cap or out of fuel?")
+    (@spec ((RefStatus) -> Bool))
+    (@pure)
+    (or (== s 'rs-fixpoint) (== s 'rs-inconsistent)))
+
+  (fn split-run ((arena Arena) (in Inputs) (cfg SatConfig))
+    (@intent "Run H, then Run C unless Run H found the input inconsistent or A_rest is empty, and the verdict (SPEC
+              5.5): inconsistent on any run's ⊤ → ⊥ or a hidden class's unsat; else an answer only when both finished")
+    (@spec ((Arena Inputs SatConfig) -> SplitRun))
+    (@alloc arena)
+    (let ((h (sat-run arena (. in h) cfg))
+          (hst (. (. h res) st))
+          (hbad (or (q-inconsistent arena hst) (q-hidden-unsat arena hst (. (. in h) nquery) (. (. in h) hidden)))))
+      (if (or hbad (not (. in has-c)))
+        (record-new SplitRun (h h) (c h) (ran-c false) (inconsistent hbad) (complete (or hbad (finished (. (. h res) status)))))
+        (let ((c (sat-run arena (. in c) cfg))
+              (cbad (q-inconsistent arena (. (. c res) st))))
+          (record-new SplitRun (h h) (c c) (ran-c true) (inconsistent cbad)
+                               (complete (or cbad (and (finished (. (. h res) status)) (finished (. (. c res) status))))))))))
+
+)
