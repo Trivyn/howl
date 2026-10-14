@@ -150,6 +150,7 @@ struct sriqabox_Inputs {
     sriqref_RefIn h;
     sriqref_RefIn c;
     uint8_t has_c;
+    uint8_t omitted;
 };
 typedef struct sriqabox_Inputs sriqabox_Inputs;
 
@@ -204,6 +205,7 @@ typedef struct { bool is_ok; union { sriqabox_Inputs ok; slop_string err; } data
 slop_option_rdf_IRI sriqabox_individual_of(types_Node n);
 void sriqabox_put_node(slop_map* s, types_Node n);
 slop_map* sriqabox_unfoldable(slop_arena* arena, slop_list_owl2_RawAxiom axs);
+slop_list_rdf_IRI sriqabox_different_bad(slop_arena* arena, slop_list_types_Node ns);
 slop_list_rdf_IRI sriqabox_repeated(slop_arena* arena, slop_list_types_Node ns);
 slop_option_rdf_IRI sriqabox_foldable_subject(owl2_RawClassAssertion ca, slop_map* bad);
 slop_list_sriqabox_Typed sriqabox_typed_pairs(slop_arena* arena, slop_list_owl2_RawAxiom axs, slop_map* bad);
@@ -235,8 +237,8 @@ int64_t sriqabox_u32_cmp(uint32_t a, uint32_t b);
 sriqref_RefIn sriqabox_h_input(slop_arena* arena, sriqabox_Folded f);
 sriqref_RefIn sriqabox_consistency_input(sriqref_RefIn in);
 slop_result_sriqabox_Inputs_string sriqabox_split_inputs(slop_arena* arena, gate_GateResult gr);
-slop_result_sriqabox_Inputs_string sriqabox_inputs_from(slop_arena* arena, sriqabox_Split sp, sriqabox_Folded f);
-slop_result_sriqabox_Inputs_string sriqabox_c_inputs(slop_arena* arena, sriqabox_Split sp, sriqclauses_SriqIds ids, sriqref_RefIn h);
+slop_result_sriqabox_Inputs_string sriqabox_inputs_from(slop_arena* arena, sriqabox_Split sp, sriqabox_Folded f, uint8_t omitted);
+slop_result_sriqabox_Inputs_string sriqabox_c_inputs(slop_arena* arena, sriqabox_Split sp, sriqclauses_SriqIds ids, sriqref_RefIn h, uint8_t omitted);
 uint8_t sriqabox_finished(sriqref_RefStatus s);
 sriqabox_SplitRun sriqabox_split_run(slop_arena* arena, sriqabox_Inputs in, sriqsat_SatConfig cfg);
 

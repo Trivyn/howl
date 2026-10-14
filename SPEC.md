@@ -2710,10 +2710,12 @@ On CCO, all 350 individuals carry class assertions only, in 35 distinct type set
   axioms never reach S0, so `T` is what S0 reads besides `A`.
   - An individual `o` is **foldable** when it occurs in `A` only in class assertions, and in `DifferentIndividuals`
     lists, at most once in each.
-    - Its **type** is the set of classes asserted of it, compared as S0's canonical concepts. An individual with only a
-      declaration is foldable, with the empty type.
+    - Its **type** is the set of classes asserted of it, compared as the accepted axioms write them (`concept-cmp`). Two
+      equivalent types written differently, such as `A ⊓ B` and `B ⊓ A`, each get a representative. That is one hidden
+      class more, and still sound and complete. An individual with only a declaration is foldable, with the empty type.
     - Every other individual occurs in a property or negative property assertion, in `SameIndividual`, or twice in one
-      list.
+      list. A list with a member that is not an individual makes every member unfoldable, so the list reaches S0 whole
+      and is refused as the unsplit input's is.
   - `A_rest` is every assertion except the foldable individuals' class assertions. In it, each `DifferentIndividuals`
     list is kept only with its members that are not foldable, and only when two of them remain.
   - **Representatives:** for each distinct non-empty type, the least individual by IRI with that type.

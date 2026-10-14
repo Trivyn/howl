@@ -34,7 +34,7 @@
   (import owl2 (RawConcept Signature signature-has-class render-omission
                 signature-has-object-property signature-has-annotation-property
                 RawAxiom Disposition disposition axiom-in-profile render-axiom
-                concept-cmp CardKind))
+                concept-cmp CardKind make-signature RawClassAssertion))
   (import ttl (parse-ttl-file parse-ttl-string))
   (import sroiq (SConcept SAxiom render-saxiom box-sc))
   (import sriqnormal (S0 sriq-s0 S2 sriq-s2 render-dl))
@@ -55,7 +55,7 @@
                    q-thing))
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
   (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees defer-on defer-stable))
-  (import sriqabox (Inputs SplitRun split-inputs split-run))
+  (import sriqabox (Split Inputs SplitRun abox-split split-inputs split-run))
   (import sriqindex (commit-indexed KIdx k-index k-query))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts ranked aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt
                      max-flags))
@@ -6964,6 +6964,63 @@
                   (set! ok false)))))
           ok)))
 
+  (fn test-sriq-split-rows ((arena Arena))
+    (@intent "Two cases the fixtures cannot reach: an omission makes a consistent split run inconclusive and leaves an inconsistency standing; a DifferentIndividuals list with a member that is not an individual keeps all its members unfoldable")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (split-omitted-row arena "abox-fold-type-ok" false)
+         (split-omitted-row arena "abox-fold-type-clash" true)
+         (split-odd-list-row arena)))
+
+  (fn split-omitted-row ((arena Arena) (name String) (incons Bool))
+    (@intent "The fixture's split inputs marked as omitting an axiom: an answer only when inconsistent")
+    (@spec ((Arena String Bool) -> Bool))
+    (@alloc arena)
+    (match (split-load arena (fixture-path arena name))
+      ((error m) (split-says arena (string-concat arena name ": no split") 'st-cautious false))
+      ((ok in)
+        (let ((marked (record-new Inputs (ids (. in ids)) (h (. in h)) (c (. in c)) (has-c (. in has-c)) (omitted true)))
+              (sp (split-run arena marked (sat-cfg 'st-cautious 0))))
+          (split-says arena (string-concat arena name ": with an omission, an answer only when inconsistent") 'st-cautious
+                      (and (== (. sp inconsistent) incons) (== (. sp complete) incons)))))))
+
+  (fn t-iri ((local String))
+    (@intent "http://example.org/t#local, as an IRI")
+    (@spec ((String) -> IRI))
+    (record-new IRI (value local)))
+
+  (fn split-odd-list-row ((arena Arena))
+    (@intent "C(a) and DifferentIndividuals(a, class B): a stays unfoldable, Run H reads no assertion, and Run C keeps the list whole (S0 refuses it, as it refuses the unsplit input)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((a (union-new Node individual-node (t-iri "http://example.org/t#a")))
+          (b (union-new Node class-node (t-iri "http://example.org/t#B")))
+          (c (union-new RawConcept rc-name (union-new Node class-node (t-iri "http://example.org/t#C"))))
+          (mut ns (list-new arena Node)) (mut axs (list-new arena RawAxiom)))
+      (do (list-push ns a) (list-push ns b)
+          (list-push axs (union-new RawAxiom ra-class-assertion (record-new RawClassAssertion (concept (boxed arena c)) (subject a))))
+          (list-push axs (union-new RawAxiom ra-different-individuals ns))
+          (let ((sp (abox-split arena (record-new GateResult (accepted axs) (omissions (list-new arena Omission))
+                                                             (signature (make-signature arena))))))
+            (split-says arena "a DifferentIndividuals list with a class member: kept whole for Run C, nothing folded" 'st-cautious
+                        (and (. sp has-c) (== (list-len (. (. sp h) accepted)) 0) (== (list-len (. (. sp c) accepted)) 2)
+                             (list-has-different (. (. sp c) accepted) 2)))))))
+
+  (fn boxed ((arena Arena) (c RawConcept))
+    (@intent "c, boxed in arena")
+    (@spec ((Arena RawConcept) -> (Ptr RawConcept)))
+    (@alloc arena)
+    (let ((q (cast (Ptr RawConcept) (arena-alloc arena (sizeof RawConcept)))))
+      (do (set! (deref q) c) q)))
+
+  (fn list-has-different ((axs (List RawAxiom)) (n Int))
+    (@intent "Does axs hold a DifferentIndividuals list of n members?")
+    (@spec (((List RawAxiom) Int) -> Bool))
+    (let ((mut found false))
+      (do (for-each (ax axs)
+            (match ax ((ra-different-individuals ns) (when (== (cast Int (list-len ns)) n) (set! found true))) (_ (do))))
+          found)))
+
   (fn split-h-as-ref ((arena Arena) (name String) (in Inputs) (s Strategy) (sp SplitRun))
     (@intent "The reference on Run H's input, hidden classes included, gives the prototype's Run H its answers and its hidden verdict, where both complete")
     (@spec ((Arena String Inputs Strategy SplitRun) -> Bool))
@@ -7182,7 +7239,15 @@
                     (when (. sp ran-c) (print-counts arena (. sp c)))))
               (if (. sp complete)
                 (print-report-as arena (. in ids) (. h st) (. sp inconsistent) "proto" s (. h rounds))
-                (do (print "n/a: ") (println (status-name (if (finished-run h) (. (. (. sp c) res) status) (. h status)))) 4)))))))
+                (do (print "n/a: ") (println (split-na arena sp)) 4)))))))
+
+  (fn split-na ((arena Arena) (sp SplitRun))
+    (@intent "Why a split run gives no answer: the status of the run that stopped short, else an omission")
+    (@spec ((Arena SplitRun) -> String))
+    (@alloc arena)
+    (cond ((not (finished-run (. (. sp h) res))) (status-name (. (. (. sp h) res) status)))
+          ((and (. sp ran-c) (not (finished-run (. (. sp c) res)))) (status-name (. (. (. sp c) res) status)))
+          (else "omissions")))
 
   (fn finished-run ((r RefResult))
     (@intent "Did r end at its fixpoint or at ⊤ → ⊥?")
@@ -11958,6 +12023,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-split-fixtures arena)))
             (print-test-result "9j: the ABox split as the unsplit reference on every sriq fixture, and Run H as the reference runs it" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-split-rows arena)))
+            (print-test-result "9j: an omission leaves only an inconsistency standing; an odd DifferentIndividuals list stays whole" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-defer-rows arena)))

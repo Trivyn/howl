@@ -83,9 +83,18 @@
               ((ra-object-property-assertion e) (do (put-node bad (. e from)) (put-node bad (. e to))))
               ((ra-negative-assertion e)        (do (put-node bad (. e from)) (put-node bad (. e to))))
               ((ra-same-individual ns)          (for-each (n ns) (put-node bad n)))
-              ((ra-different-individuals ns)    (for-each (i (repeated arena ns)) (set-put bad i)))
+              ((ra-different-individuals ns)    (for-each (i (different-bad arena ns)) (set-put bad i)))
               (_ (do))))
           bad)))
+
+  (fn different-bad ((arena Arena) (ns (List Node)))
+    (@intent "The members of a DifferentIndividuals list that are not foldable: those twice in it; or, when a member is
+              not an individual, every one, so the list reaches S0 whole and is refused as the unsplit input's is")
+    (@spec ((Arena (List Node)) -> (List IRI)))
+    (@alloc arena)
+    (let ((mut odd false) (mut all (list-new arena IRI)))
+      (do (for-each (n ns) (match (individual-of n) ((some i) (list-push all i)) ((none) (set! odd true))))
+          (if odd all (repeated arena ns)))))
 
   (fn repeated ((arena Arena) (ns (List Node)))
     (@intent "The individuals that occur more than once in ns")
@@ -394,10 +403,11 @@
 
   ;; Both runs' inputs, and Run H's ids, which the report reads.
   (type Inputs (record
-    (ids   SriqIds)
-    (h     RefIn)
-    (c     RefIn)
-    (has-c Bool)))
+    (ids     SriqIds)
+    (h       RefIn)
+    (c       RefIn)
+    (has-c   Bool)
+    (omitted Bool)))   ; did S1's guard omit an axiom in either run? Then only a definitive finding is an answer
 
   (fn split-inputs ((arena Arena) (gr GateResult))
     (@intent "The split, normalised: Run H's folded input and its ids, and Run C's input when A_rest is not empty")
@@ -409,27 +419,29 @@
         ((ok nh)
           (match (fold-clauses arena nh)
             ((error m) (error m))
-            ((ok f) (inputs-from arena sp f)))))))
+            ((ok f) (inputs-from arena sp f (> (list-len (. nh omitted)) 0))))))))
 
-  (fn inputs-from ((arena Arena) (sp Split) (f Folded))
-    (@intent "Inputs from Run H's folded clauses, with Run C's normalised when A_rest is not empty")
-    (@spec ((Arena Split Folded) -> (Result Inputs String)))
+  (fn inputs-from ((arena Arena) (sp Split) (f Folded) (omitted Bool))
+    (@intent "Inputs from Run H's folded clauses, with Run C's normalised when A_rest is not empty; omitted says whether
+              Run H's normalisation omitted an axiom")
+    (@spec ((Arena Split Folded Bool) -> (Result Inputs String)))
     (@alloc arena)
     (let ((h (h-input arena f)))
       (if (. sp has-c)
-        (c-inputs arena sp (. (. f sc) ids) h)
-        (ok (record-new Inputs (ids (. (. f sc) ids)) (h h) (c h) (has-c false))))))
+        (c-inputs arena sp (. (. f sc) ids) h omitted)
+        (ok (record-new Inputs (ids (. (. f sc) ids)) (h h) (c h) (has-c false) (omitted omitted))))))
 
-  (fn c-inputs ((arena Arena) (sp Split) (ids SriqIds) (h RefIn))
-    (@intent "Inputs with Run C's input normalised beside Run H's")
-    (@spec ((Arena Split SriqIds RefIn) -> (Result Inputs String)))
+  (fn c-inputs ((arena Arena) (sp Split) (ids SriqIds) (h RefIn) (omitted Bool))
+    (@intent "Inputs with Run C's input normalised beside Run H's; an omission in either is recorded")
+    (@spec ((Arena Split SriqIds RefIn Bool) -> (Result Inputs String)))
     (@alloc arena)
     (match (sriq-normalize arena (. (. sp c) accepted) (. (. sp c) signature))
       ((error m) (error m))
       ((ok nc)
         (match (sriq-clauses arena nc)
           ((error m) (error m))
-          ((ok sc) (ok (record-new Inputs (ids ids) (h h) (c (consistency-input (ref-input arena sc))) (has-c true))))))))
+          ((ok sc) (ok (record-new Inputs (ids ids) (h h) (c (consistency-input (ref-input arena sc))) (has-c true)
+                                   (omitted (or omitted (> (list-len (. nc omitted)) 0))))))))))
 
   ;; What the two runs found.
   (type SplitRun (record
@@ -437,7 +449,7 @@
     (c            SatResult)     ; Run H's again when Run C did not run
     (ran-c        Bool)
     (inconsistent Bool)          ; a definitive finding: v_⊤'s, a hidden class's, or Run C's ⊤ → ⊥
-    (complete     Bool)))        ; an answer: inconsistent, or both runs at their fixpoint
+    (complete     Bool)))        ; an answer: inconsistent, or both runs at their fixpoint with nothing omitted
 
   (fn finished ((s RefStatus))
     (@intent "Did a run end at its fixpoint or at ⊤ → ⊥, never at a cap or out of fuel?")
@@ -447,17 +459,20 @@
 
   (fn split-run ((arena Arena) (in Inputs) (cfg SatConfig))
     (@intent "Run H, then Run C unless Run H found the input inconsistent or A_rest is empty, and the verdict (SPEC
-              5.5): inconsistent on any run's ⊤ → ⊥ or a hidden class's unsat; else an answer only when both finished")
+              5.5): inconsistent on any run's ⊤ → ⊥ or a hidden class's unsat; else an answer only when both finished
+              and S1's guard omitted nothing")
     (@spec ((Arena Inputs SatConfig) -> SplitRun))
     (@alloc arena)
     (let ((h (sat-run arena (. in h) cfg))
           (hst (. (. h res) st))
           (hbad (or (q-inconsistent arena hst) (q-hidden-unsat arena hst (. (. in h) nquery) (. (. in h) hidden)))))
       (if (or hbad (not (. in has-c)))
-        (record-new SplitRun (h h) (c h) (ran-c false) (inconsistent hbad) (complete (or hbad (finished (. (. h res) status)))))
+        (record-new SplitRun (h h) (c h) (ran-c false) (inconsistent hbad)
+                             (complete (or hbad (and (finished (. (. h res) status)) (not (. in omitted))))))
         (let ((c (sat-run arena (. in c) cfg))
               (cbad (q-inconsistent arena (. (. c res) st))))
           (record-new SplitRun (h h) (c c) (ran-c true) (inconsistent cbad)
-                               (complete (or cbad (and (finished (. (. h res) status)) (finished (. (. c res) status))))))))))
+                               (complete (or cbad (and (finished (. (. h res) status)) (finished (. (. c res) status))
+                                                       (not (. in omitted))))))))))
 
 )
