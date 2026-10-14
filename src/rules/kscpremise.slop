@@ -201,13 +201,13 @@
             ((k-some-lhs v a _)
               (do
                 (file-term arena on-term (name-term a) ax)
-                (r-partnered arena ex-by-role v (name-term a) ax)))
+                (r-partnered arena ex-by-role v (name-term a) ax) (do)))
             ((k-some-rhs a _ _ _)
-              (file-term arena on-term (name-term a) ax))
+              (do (file-term arena on-term (name-term a) ax) (do)))
             ((k-self-lhs v _)
-              (file-role arena on-role v ax))
+              (do (file-role arena on-role v ax) (do)))
             ((k-self-rhs a _)
-              (file-term arena on-term (name-term a) ax))
+              (do (file-term arena on-term (name-term a) ax) (do)))
             ((k-role v w)
               (do
                 (file-role arena on-role v ax)
@@ -220,7 +220,7 @@
                 (when (not (role-eq u v))
                   (file-role arena on-role v ax))))
             ((k-range v _)
-              (file-role arena on-role v ax))
+              (do (file-role arena on-role v ax) (do)))
             ((k-role-assert a _ b)
               (do
                 (file-term arena on-term (nominal-term a) ax)

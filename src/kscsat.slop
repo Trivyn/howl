@@ -315,7 +315,7 @@
                 (set-put (. sh noms-at) x :arena arena)
                 (il-push arena (. sh noms) (. c a) (. c b))))))
         ((f-triple _ _ _)
-          (ri-push arena (. sh outs) (. c a) (. c b) (. c c)))
+          (do (ri-push arena (. sh outs) (. c a) (. c b) (. c c)) (do)))
         ((f-self _ _) (do)))
       true))
 
@@ -783,13 +783,13 @@
         ((some bucket)
           (for-each (ax (. bucket items))
             (match ax
-              ((k-sub sy sz)          (emit-concl d (ksc-5 sy sz x y)))
+              ((k-sub sy sz)          (do (emit-concl d (ksc-5 sy sz x y)) (do)))
               ((k-and _ _ _)          (do))   ; filed in and-pairs, below
-              ((k-some-lhs v a z)     (inst-some-lhs arena d f x y v a z))
-              ((k-some-rhs a v b w)   (do (emit-concl d (ksc-9 a v b w x y)) (emit-concl d (ksc-10 a v b w x y))))
+              ((k-some-lhs v a z)     (do (inst-some-lhs arena d f x y v a z) (do)))
+              ((k-some-rhs a v b w)   (do (emit-concl d (ksc-9 a v b w x y)) (emit-concl d (ksc-10 a v b w x y)) (do)))
               ((k-role-assert a v b)
-               (do (emit-concl d (ksc-9-assert a v b x y)) (emit-concl d (ksc-10-assert a v b x y))))
-              ((k-self-rhs a v)       (emit-concl d (ksc-12 a v x y)))
+               (do (emit-concl d (ksc-9-assert a v b x y)) (emit-concl d (ksc-10-assert a v b x y)) (do)))
+              ((k-self-rhs a v)       (do (emit-concl d (ksc-12 a v x y)) (do)))
               ((k-self-lhs _ _)       (do))
               ((k-role _ _)           (do))
               ((k-chain _ _ _)        (do))
@@ -847,7 +847,7 @@
                   (do
                     (when (role-eq u v)  (chain-first arena d fv x v x1 u v2 w))
                     (when (role-eq v2 v) (chain-second arena d fv x v x1 u v2 w))))
-                ((k-range v2 d2)        (do (emit-concl d (ksc-23 v2 d2 x v x1)) (emit-concl d (ksc-25 v2 d2 x v x1))))
+                ((k-range v2 d2)        (do (emit-concl d (ksc-23 v2 d2 x v x1)) (emit-concl d (ksc-25 v2 d2 x v x1)) (do)))
                 ((k-sub _ _)            (do))
                 ((k-and _ _ _)          (do))
                 ((k-some-rhs _ _ _ _)   (do))
@@ -862,7 +862,7 @@
             (for-each (m (matches-at arena d x1 p))
               (for-each (ax (. (. m axioms) items))
                 (match ax
-                  ((k-some-lhs v2 a z)    (emit-concl d (ksc-7 v2 a z x v x1 x1 (. m other))))
+                  ((k-some-lhs v2 a z)    (do (emit-concl d (ksc-7 v2 a z x v x1 x1 (. m other))) (do)))
                   ((k-sub _ _)            (do))
                   ((k-and _ _ _)          (do))
                   ((k-some-rhs _ _ _ _)   (do))
@@ -928,14 +928,14 @@
           (for-each (ax (. bucket items))
             (match ax
               ((k-some-lhs _ _ _)     (do))   ; filed in ex-by-role, below
-              ((k-self-lhs v2 z)      (emit-concl d (ksc-11 v2 z x v)))
-              ((k-role v2 w)          (emit-concl d (ksc-14 v2 w x v)))
+              ((k-self-lhs v2 z)      (do (emit-concl d (ksc-11 v2 z x v)) (do)))
+              ((k-role v2 w)          (do (emit-concl d (ksc-14 v2 w x v)) (do)))
               ((k-chain u v2 w)
                 ;; f as self(x, u); f as self(x′, v).
                 (do
                   (when (role-eq u v)  (self-chain-first arena d f x v u v2 w))
                   (when (role-eq v2 v) (self-chain-second arena d f x v u v2 w))))
-              ((k-range v2 d2)        (do (emit-concl d (ksc-24 v2 d2 x v)) (emit-concl d (ksc-26 v2 d2 x v))))
+              ((k-range v2 d2)        (do (emit-concl d (ksc-24 v2 d2 x v)) (emit-concl d (ksc-26 v2 d2 x v)) (do)))
               ((k-sub _ _)            (do))
               ((k-and _ _ _)          (do))
               ((k-some-rhs _ _ _ _)   (do))
@@ -949,7 +949,7 @@
           (for-each (m (matches-at arena d x p))
             (for-each (ax (. (. m axioms) items))
               (match ax
-                ((k-some-lhs v2 a z)    (emit-concl d (ksc-8 v2 a z x v x (. m other))))
+                ((k-some-lhs v2 a z)    (do (emit-concl d (ksc-8 v2 a z x v x (. m other))) (do)))
                 ((k-sub _ _)            (do))
                 ((k-and _ _ _)          (do))
                 ((k-some-rhs _ _ _ _)   (do))
@@ -1451,7 +1451,7 @@
           ((some f)
             (do
               (take-fact m f c)
-              (list-set (. (deref m) cur) k (+ (cursor-at (. (deref m) cur) k) 1))))
+              (list-set (. (deref m) cur) k (+ (cursor-at (. (deref m) cur) k) 1)) (do)))
           ((none) (do)))
         (set! (. (deref m) p) (+ (. (deref m) p) 1))
         true)))

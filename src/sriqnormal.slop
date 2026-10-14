@@ -1239,17 +1239,17 @@
             (_ (do))))
         (for-each (a axs)
           (match a
-            ((sa-gci l r) (s2-gci arena p (deref l) (deref r)))
+            ((sa-gci l r) (do (s2-gci arena p (deref l) (deref r)) (do)))
             ((sa-ria x)
               (match (s2-ria arena p x)
                 ((ok _)    (do))
                 ((error m) (set! fault (some m)))))
             ;; Ref(R) is ⊤ ⊑ ∃R.Self; Irr(R) is ∃R.Self ⊑ ⊥ (§5.5 S2).
             ((sa-ref r)
-              (s2-gci arena p (union-new SConcept sc-top) (union-new SConcept sc-self r)))
+              (do (s2-gci arena p (union-new SConcept sc-top) (union-new SConcept sc-self r)) (do)))
             ((sa-irr r)
-              (s2-gci arena p (union-new SConcept sc-self r) (union-new SConcept sc-bottom)))
-            ((sa-dis r s) (s2-dis arena p r s))))
+              (do (s2-gci arena p (union-new SConcept sc-self r) (union-new SConcept sc-bottom)) (do)))
+            ((sa-dis r s) (do (s2-dis arena p r s) (do)))))
         ;; Each P̄ used: P ⊑ P̄⁻ and P̄ ⊑ P⁻ (DL8).
         (for-each (i (. (deref p) bars))
           (do
