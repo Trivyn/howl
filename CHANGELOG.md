@@ -18,6 +18,9 @@
 
 ### Changed
 
+- **The Rust crate compiles the engine with the release CLI's flags**: `-O3` and 65,536 intern
+  buckets, where it used `-O2` and 4,096. The crate pins these whatever the host's Cargo profile.
+  It is 0–3% faster on the corpus, and every report is identical.
 - **`howl_run_ok` means the run has a result**, now including an answer run's answers. It is
   unchanged for every `howl_run_classify` run: it is false exactly when the run faulted.
 
