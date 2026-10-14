@@ -185,7 +185,8 @@ slop_list_sriq_Premise sriqhyper_with_const(slop_arena* arena, slop_list_sriqhyp
 sriqhyper_HOut sriqhyper_hyper_root_groups(slop_arena* arena, sriqref_Env env, sriqhyper_HCtx hc, sriq_HState start, types_Clause oc, slop_list_list_sriq_Premise cs);
 sriqhyper_HOut sriqhyper_root_by_const(slop_arena* arena, sriqref_Env env, sriqhyper_HCtx hc, sriq_HState start, types_Clause oc, slop_list_sriqhyper_Group groups, slop_list_sriqhyper_CPrem g0);
 slop_list_list_sriq_Premise sriqhyper_slots_for(slop_arena* arena, slop_list_sriqhyper_Group groups, uint32_t u);
-sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc);
+sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc, int64_t room);
+sriqhyper_HOut sriqhyper_hyper_code(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc, sriq_HState start, int64_t code);
 
 #ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
 #define SLOP_OPTION_SRIQ_PREMISE_DEFINED

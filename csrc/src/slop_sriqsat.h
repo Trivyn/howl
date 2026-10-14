@@ -463,6 +463,7 @@ SLOP_OPTION_DEFINE(sriqsat_Cut, slop_option_sriqsat_Cut)
 struct sriqsat_CRound {
     sriqref_Round r;
     int64_t tried;
+    uint8_t big;
 };
 typedef struct sriqsat_CRound sriqsat_CRound;
 
@@ -600,12 +601,14 @@ slop_list_sriqref_Cand sriqsat_hyper_new_consts(slop_arena* arena, sriqctx_Struc
 slop_list_sriqref_Cand sriqsat_hyper_bodiless(slop_arena* arena, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, types_Clause oc);
 uint8_t sriqsat_dl10(types_Clause oc);
 sriqhyper_HCtx sriqsat_hctx_of(sriqsat_Here h);
-sriqhyper_HOut sriqsat_sat_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h);
+sriqhyper_HOut sriqsat_sat_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, int64_t room);
 slop_list_sriqref_Cand sriqsat_eq_pairs(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, slop_list_sriq_Premise p1s, slop_list_sriq_Premise p2s);
 slop_list_sriqref_Cand sriqsat_eq_side(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, sriq_Premise p1, uint32_t k1, sriq_Premise p2);
 uint8_t sriqsat_holds_term(types_Lit l, types_ATerm s);
 uint8_t sriqsat_term_at(types_Lit l, uint32_t a, uint8_t inner, types_ATerm s);
-sriqhyper_HOut sriqsat_sat_table2(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h);
+sriqhyper_HOut sriqsat_sat_table2(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, int64_t room);
+uint8_t sriqsat_within(slop_list_sriqref_Cand a, slop_list_sriqref_Cand b, int64_t room);
+slop_list_sriqref_Cand sriqsat_t2_rest(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, slop_list_sriqref_Cand sofar, int64_t room);
 uint8_t sriqsat_g_counts(sriqsat_Here h, int64_t i, int64_t which);
 uint8_t sriqsat_g_picks(sriqsat_Here h, int64_t k, int64_t which);
 slop_list_sriq_Premise sriqsat_g_prems(slop_arena* arena, sriqsat_Here h, int64_t which, uint8_t eqs);
@@ -670,8 +673,9 @@ slop_list_sriqsat_RSrc sriqsat_rsrcs_in(slop_arena* arena, sriqctx_Triggers tr, 
 sriqsat_RSrcs sriqsat_rsrcs_of(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl);
 sriqref_PJob sriqsat_rsrc_job(slop_arena* arena, sriqctx_Structure st, uint32_t v, sriqsat_RSrc r);
 sriqctx_Structure sriqsat_local(sriqctx_Structure st, sriqsat_Adj a, slop_arena* arena);
-sriqsat_CRound sriqsat_sat_ctx(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, sriqsat_RSrcs rs, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqsat_Adj a, int64_t v, int64_t perm, uint8_t dfr, uint8_t views);
-sriqsat_CRound sriqsat_sat_old(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, slop_list_sriqctx_Edge ins, sriqsat_Here h);
+sriqsat_CRound sriqsat_sat_ctx(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, slop_list_sriqsat_CIdx ixs, sriqsat_RSrcs rs, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, sriqsat_Adj a, int64_t v, int64_t perm, uint8_t dfr, uint8_t views, int64_t room);
+sriqsat_CRound sriqsat_sat_old(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, slop_list_sriqctx_Edge ins, sriqsat_Here h, int64_t room);
+sriqsat_CRound sriqsat_sat_old_rest(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, slop_list_sriqctx_Edge ins, sriqsat_Here h, int64_t room, sriqhyper_HOut t2);
 sriqctx_Edge sriqsat_edge_at(slop_list_sriqctx_Edge es, int64_t k, sriqctx_Edge fallback);
 slop_list_sriqsat_Adj sriqsat_adjacency(slop_arena* arena, sriqctx_Structure st);
 slop_list_sriqctx_Edge sriqsat_edges_at(slop_arena* arena, slop_list_sriqsat_Bucket bs, int64_t v);
@@ -679,7 +683,8 @@ int64_t sriqsat_u32_cmp(uint32_t a, uint32_t b);
 sriqsat_Cut sriqsat_cut_at(slop_arena* arena, slop_list_sriqctx_Edge es, slop_list_int idx, int64_t k, int64_t v, uint8_t by_to, sriqctx_Edge e0);
 slop_list_sriqsat_Bucket sriqsat_buckets(slop_arena* arena, slop_list_sriqctx_Edge es, slop_list_int idx, int64_t n, uint8_t by_to, sriqctx_Edge e0);
 int64_t sriqsat_idx_at(slop_list_int idx, int64_t k);
-sriqsat_CRound sriqsat_sat_round(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, int64_t perm, uint8_t dfr, slop_list_sriqsat_View vw);
+uint8_t sriqsat_passes(sriqsat_CRound cr, slop_list_sriqref_Cand cands, int64_t room);
+sriqsat_CRound sriqsat_sat_round(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqctx_Structure st, sriqsat_Delta dl, sriqground_Ground gd, int64_t perm, uint8_t dfr, slop_list_sriqsat_View vw, int64_t room);
 slop_list_sriqref_Cand sriqsat_new_cores(slop_arena* arena, sriqctx_Structure st, int64_t from);
 sriqsat_Step sriqsat_sat_apply(slop_arena* arena, sriqctx_Structure st, sriqground_Ground gd, sriqref_Round r, uint8_t scan, uint8_t dfr, slop_list_sriqsat_Supply trig, slop_list_sriqsat_Flags fl);
 slop_list_sriqref_Cand sriqsat_succ_cands(slop_arena* arena, sriqctx_Structure st, sriqref_Round r, sriqsat_Supplied sup, uint8_t dfr);

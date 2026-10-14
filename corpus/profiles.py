@@ -9,10 +9,10 @@ One list, so wiring a rung in is one edit here rather than one per harness.
 RUNGS = ("el", "el++", "sriq")
 
 # The rungs the engine runs today, and so the only ones a harness accepts.
-# `sriq` joins when it is wired in (§12 M5).
-BUILT = ("el", "el++")
+# `sriq` joined when it was wired in (slice 11b, §12 M5).
+BUILT = ("el", "el++", "sriq")
 
 
 def expected():
-    """The accepted --profile values, for an error message: "el or el++"."""
-    return " or ".join(BUILT)
+    """The accepted --profile values, for an error message: "el, el++ or sriq"."""
+    return ", ".join(BUILT[:-1]) + " or " + BUILT[-1]

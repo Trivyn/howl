@@ -48,14 +48,14 @@
                 CSub SuccSig KSets SuccConcl RSuccConcl PredView PSlot PState PCands
                 csub-lit succ-csub succ-pre k-sets unit-held covers succ-step rsucc-rule
                 pred-view rpred-view pred-start pred-finish rpred-finish pred-join has-fterm succ-sig))
-  (import sriqground (ground-clause))
+  (import sriqground (ground-clause view-total))
   (import sriqctx (Strategy Triggers CoreKind CoreChoice Edge Ctx CtxSet Structure build-triggers triggers-of sole-at
                    in-su in-pr in-sur in-prr lit-ground mentions-x tau-su tau-pr omega omega-d pow2-sat has-lit strat-choice core-of
                    init-structure ctx-count ctx-at ctx-by-core ctx-clause-ok q-inconsistent q-unsat q-hidden-unsat q-holds
                    q-thing))
   (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree premises-of))
   (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees defer-on defer-stable))
-  (import sriqabox (Split Inputs SplitRun abox-split split-inputs split-run split-run-of sriq-config SRIQ_CLAUSE_BUDGET
+  (import sriqabox (Split Inputs SplitRun abox-split split-inputs split-run split-run-of sriq-config
                     split-inputs-bounded))
   (import sriqindex (commit-indexed KIdx k-index k-index-premises k-query))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts ranked aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt
@@ -90,7 +90,8 @@
   (import strlib (starts-with parse-int is-digit char-at substring))
   (import select (profile-name parse-profile profile-dropped unavailable-message))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
-  (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq ind-elem name-term))
+  (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq ind-elem name-term
+                 SRIQ_CLAUSE_BUDGET))
   (import types (DName DRole Dl1 Dl2 Dl4 DlClause AKind ATerm LitForm Lit Clause at-x at-y at-z at-fx at-u at-fu aterm-cmp aterm-eq atom1 atom2 eq-lit neq-lit lit-eq))
   (import kscsat (ksc-classify answer-holds input-classes run-ksc is-bottom-fact store-facts store-holds RunResult))
   (import ksc (reference-closure reference-answer ksc-1 ksc-q))
@@ -179,7 +180,8 @@
           (evidence    (union-new Evidence el-evidence (empty-saturation arena)))
           (rounds      0)
           (names       (empty-names arena))
-          (owned       (list-new arena Arena))))))
+          (owned       (list-new arena Arena))
+          (stepped-down false)))))
 
   (fn verdict-eq ((a Verdict) (b Verdict))
     (@intent "Compare two verdicts")
@@ -6246,6 +6248,7 @@
           (list-push out (record-new Expect (file "at-least-at-most") (kind 0) (a "A") (b "E")))
           (list-push out (record-new Expect (file "disjoint-union") (kind 0) (a "D") (b "C")))
           (list-push out (record-new Expect (file "functional-clash") (kind 1) (a "A") (b "")))
+          (list-push out (record-new Expect (file "step-down-early-unsat") (kind 1) (a "A") (b "")))
           (list-push out (record-new Expect (file "inverse-all") (kind 0) (a "A") (b "C")))
           (list-push out (record-new Expect (file "qualified-max") (kind 1) (a "A") (b "")))
           (list-push out (record-new Expect (file "qualified-max") (kind 2) (a "F") (b "")))
@@ -6920,7 +6923,9 @@
             (when (not (string-eq (. e file) last))
               (do (when (not (wired-fixture arena (. e file))) (set! ok false))
                   (set! last (. e file)))))
-          (and ok (wired-cap-rows arena) (wired-budget-row arena) (wired-cancel-row arena) (wired-omission-rows arena)))))
+          (and ok (wired-cap-rows arena) (wired-budget-row arena) (wired-cancel-row arena) (wired-omission-rows arena)
+               (wired-abandon-scan arena "step-down-early-unsat" false) (wired-abandon-scan arena "tgh21-o1" false)
+               (wired-abandon-scan arena "abox-mixed-component-ok" true)))))
 
   (fn wired-says ((arena Arena) (label String) (ok Bool))
     (@intent "One check of the wired path, printed when it fails")
@@ -7098,6 +7103,72 @@
         (let ((sp (split-run-of arena (. in h) (. in c) (. in has-c) false (sriq-config 1000 5 0))))
           (wired-says arena "a clause budget of 5: rs-clauses, not finished"
                       (and (not (. sp finished)) (== (. (. (. sp h) res) status) 'rs-clauses)))))))
+
+  (fn wired-abandon-scan ((arena Arena) (name String) (run-c Bool))
+    (@intent "Over budgets 1..300, Run H (or Run C, whose root holds the ABox's constants) stops where the clause
+              budget's rule says: at the first round whose store plus that round's conclusions passes the budget,
+              uncommitted (or at a boundary its store passes), and then reports exactly the run capped at its rounds;
+              some budget stops it inside a round")
+    (@spec ((Arena String Bool) -> Bool))
+    (@alloc arena)
+    (match (split-load arena (fixture-path arena name))
+      ((error m) (wired-says arena (string-concat arena name ": no split") false))
+      ((ok in)
+        (let ((run (if run-c (. in c) (. in h)))
+              (ps (round-profile arena run))
+              (classes (query-classes arena (. in ids))) (mut ok true) (mut inside 0) (mut b 1))
+          (do (while (<= b 300)
+                (let ((k (abandon-at arena run classes ps b)))
+                  (do (when (< k 0) (set! ok false)) (when (== k 2) (set! inside (+ inside 1))) (set! b (+ b 1)))))
+              (wired-says arena (string-concat arena name ": Run H stops where the clause budget's rule says, as the run capped there; some stop inside a round")
+                          (and ok (> inside 0))))))))
+
+  ;; One finished run's profile, round by round: the store's view-total
+  ;; after k rounds, and the conclusions round k + 1 derives.
+  (type RoundAt (record (total Int) (next Int)))
+
+  (fn round-profile ((arena Arena) (h RefIn))
+    (@intent "For k = 0, 1, ... until the unbounded run ends: the view-total after k rounds and round k + 1's conclusions")
+    (@spec ((Arena RefIn) -> (List RoundAt)))
+    (@alloc arena)
+    (let ((full (sat-run arena h (sriq-config 1000 SRIQ_CLAUSE_BUDGET 0)))
+          (n (. (. full res) rounds))
+          (mut out (list-new arena RoundAt)) (mut k 0))
+      (do (while (< k n)
+            (let ((a (sat-run arena h (sriq-config k SRIQ_CLAUSE_BUDGET 0)))
+                  (b (sat-run arena h (sriq-config (+ k 1) SRIQ_CLAUSE_BUDGET 0))))
+              (do (list-push out (record-new RoundAt (total (view-total (. (. a res) st)))
+                                                     (next (- (. (. b counts) cands) (. (. a counts) cands)))))
+                  (set! k (+ k 1)))))
+          out)))
+
+  (fn expected-stop ((ps (List RoundAt)) (b Int))
+    (@intent "Where budget b stops the run: the first k past a boundary whose store passes b, or whose round k + 1
+              passes it with its conclusions (k itself, uncommitted); -1 if none does")
+    (@spec (((List RoundAt) Int) -> Int))
+    (@pure)
+    (let ((mut k 0) (mut at -1))
+      (do (for-each (p ps)
+            (do (when (and (< at 0) (or (and (> k 0) (> (. p total) b)) (> (+ (. p total) (. p next)) b)))
+                  (set! at k))
+                (set! k (+ k 1))))
+          at)))
+
+  (fn abandon-at ((arena Arena) (run RefIn) (classes (List IRI)) (ps (List RoundAt)) (b Int))
+    (@intent "At budget b: -1 if Run H stops elsewhere than expected-stop says, or differs from the run capped at its
+              rounds; else 2 if it stopped inside a round (its store within b), 1 if at a boundary, 0 if not at all")
+    (@spec ((Arena RefIn (List IRI) (List RoundAt) Int) -> Int))
+    (@alloc arena)
+    (let ((h (. (sat-run arena run (sriq-config 1000 b 0)) res))
+          (want (expected-stop ps b)))
+      (cond ((!= (. h status) 'rs-clauses) (if (< want 0) 0 -1))
+            ((!= (. h rounds) want) -1)
+            (else
+              (let ((hc (. (sat-run arena run (sriq-config (. h rounds) SRIQ_CLAUSE_BUDGET 0)) res)))
+                (if (and (same-pair-lists (raw-pairs arena (. h st) classes) (raw-pairs arena (. hc st) classes))
+                         (same-iri-lists (raw-unsat arena (. h st) classes) (raw-unsat arena (. hc st) classes)))
+                  (if (<= (view-total (. h st)) b) 2 1)
+                  -1))))))
 
   (fn wired-cancel-row ((arena Arena))
     (@intent "A set cancel flag gives Fault::cancelled, at the default cap and at cap 0 (read ahead of the cap)")
@@ -8317,10 +8388,12 @@
         ok)))
 
   ;; ============================================================
-  ;; el against el++ (SPEC §5.4 K5): on input inside el, complete runs of
-  ;; the two rungs print the same report except for `profile` and
-  ;; `rounds`. Both calculi are complete for the same theory there, so a
-  ;; difference is a defect in one of them, or in K6.
+  ;; el against el++ (SPEC §5.4 K5) and sriq (§5.5 S4): on input inside
+  ;; el, complete runs of the three rungs print the same report except for
+  ;; `profile` and `rounds`. Every calculus is complete for the same theory
+  ;; there, so a difference is a defect in one of them, or in K6. el++ and
+  ;; sriq are incomparable; where both run complete and omit nothing, the
+  ;; same holds of them.
   ;; ============================================================
 
   (fn classify-fixture-in ((arena Arena) (path String) (profile Profile))
@@ -8353,25 +8426,67 @@
         out)))
 
   (fn rungs-agree-on ((arena Arena) (path String))
-    (@intent "Do el and el++ print the same report for this fixture, profile and rounds aside?")
+    (@intent "Do el, el++ and sriq print the same report for this fixture, profile and rounds aside?")
     (@spec ((Arena String) -> Bool))
     (@alloc arena)
-    (match (classify-fixture-in arena path 'profile-el)
-      ((none) (do (println (string-concat arena "  [el vs el++] el did not run: " path)) false))
+    (and (rung-pair-agrees arena path 'profile-el 'profile-el-plus-plus)
+         (rung-pair-agrees arena path 'profile-el 'profile-sriq)))
+
+  (fn rung-pair-agrees ((arena Arena) (path String) (x Profile) (y Profile))
+    (@intent "Do rungs x and y print the same report for this fixture, profile and rounds aside?")
+    (@spec ((Arena String Profile Profile) -> Bool))
+    (@alloc arena)
+    (let ((tag (string-concat arena "  [" (string-concat arena (profile-name x)
+                 (string-concat arena " vs " (string-concat arena (profile-name y) "] "))))))
+      (match (classify-fixture-in arena path x)
+        ((none) (do (println (string-concat arena tag (string-concat arena "the first did not run: " path))) false))
+        ((some a)
+          (match (classify-fixture-in arena path y)
+            ((none) (do (println (string-concat arena tag (string-concat arena "the second did not run: " path))) false))
+            ((some b)
+              (if (same-lines (rung-neutral-lines arena a) (rung-neutral-lines arena b))
+                true
+                (do
+                  (println (string-concat arena tag (string-concat arena "reports differ: " path)))
+                  (for-each (l (rung-neutral-lines arena a)) (println (string-concat arena "    < " l)))
+                  (for-each (l (rung-neutral-lines arena b)) (println (string-concat arena "    > " l)))
+                  false))))))))
+
+  (fn test-el-plus-plus-and-sriq-agree ((arena Arena))
+    (@intent "On every el++ fixture both el++ and sriq run complete and omit nothing on, they print the same report, profile and rounds aside")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; At least ten such fixtures, so the check cannot pass by vacuity.
+    (let ((mut ok true) (mut compared 0) (mut i 0))
+      (do (while (< i (ksc-fixture-count))
+            (let ((c (pp-sriq-compare arena (ksc-fixture-at i))))
+              (do (when (< c 0) (set! ok false))
+                  (when (> c 0) (set! compared (+ compared 1)))
+                  (set! i (+ i 1)))))
+          (when (< compared 10) (println (string-concat arena "  [el++ vs sriq] compared only " (int-to-string arena compared))))
+          (and ok (>= compared 10)))))
+
+  (fn pp-sriq-compare ((arena Arena) (path String))
+    (@intent "1 if el++ and sriq both ran complete on path and agree, 0 if either was incomplete, -1 on a failure")
+    (@spec ((Arena String) -> Int))
+    (@alloc arena)
+    (match (classify-fixture-in arena path 'profile-el-plus-plus)
+      ((none) -1)
       ((some a)
-        (match (classify-fixture-in arena path 'profile-el-plus-plus)
-          ((none) (do (println (string-concat arena "  [el vs el++] el++ did not run: " path)) false))
+        (match (classify-fixture-in arena path 'profile-sriq)
+          ((none) -1)
           ((some b)
-            (if (same-lines (rung-neutral-lines arena a) (rung-neutral-lines arena b))
-              true
-              (do
-                (println (string-concat arena "  [el vs el++] reports differ: " path))
-                (for-each (l (rung-neutral-lines arena a)) (println (string-concat arena "    el   " l)))
-                (for-each (l (rung-neutral-lines arena b)) (println (string-concat arena "    el++ " l)))
-                false)))))))
+            (cond ((not (and (complete-outcome a) (complete-outcome b))) 0)
+                  ((rung-pair-agrees arena path 'profile-el-plus-plus 'profile-sriq) 1)
+                  (else -1)))))))
+
+  (fn complete-outcome ((o Outcome))
+    (@intent "A run at its fixpoint that omitted nothing")
+    (@spec ((Outcome) -> Bool))
+    (and (is-fixpoint (. o termination)) (== (list-len (. (. o coverage) omitted)) 0)))
 
   (fn test-el-and-el-plus-plus-agree ((arena Arena))
-    (@intent "On every el fixture, el and el++ report the same findings (K5)")
+    (@intent "On every el fixture, el, el++ and sriq report the same findings (K5, §5.5 S4)")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     (let ((mut ok true)
@@ -10437,15 +10552,15 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
     (match r ((ran _) false) ((refused p) (== p want)) ((failed) false)))
 
   (fn test-profile-selection ((arena Arena))
-    (@intent "§5.1: the default runs el; el and el++ run as asked; unbuilt rungs are refused by name; auto picks by membership, then fewest omissions, ties to el")
+    (@intent "§5.1: the default runs el; el, el++ and sriq run as asked; the dropped rung is refused by name; auto picks by membership, then fewest omissions, ties to the earlier rung")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; The refusal is the point: a library that ran `el` for an explicit
-    ;; `sriq` would classify a smaller theory than asked for and report it
-    ;; as complete under the wrong name. auto's cases, with each rung's
-    ;; out-of-profile count: litmus 0/0 → el (el first); has-self 1/0 →
-    ;; el++ (the one containing it); union 1/1 → el (tie); nominals 2/1 →
-    ;; el++ (fewer omitted).
+    ;; `horn-sriq` would classify another theory than asked for and report
+    ;; it under the wrong name. auto's cases, with each rung's
+    ;; out-of-profile count (el/el++/sriq): litmus 0/·/· → el (el first);
+    ;; has-self 1/0/· → el++ (the one containing it); union 1/1/0 and
+    ;; inverse 1/1/0 → sriq; nominals 2/1/1 → el++ (a tie, to the earlier).
     (let ((litmus "corpus/fixtures/v0/litmus.ttl")
           (auto (union-new ProfileSelection auto)))
       (and (ran-as (profile-run arena litmus (. (default-config) selection)) 'profile-el)
@@ -10454,12 +10569,118 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
                    'profile-el-plus-plus)
            (refused-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-horn-sriq))
                        'profile-horn-sriq)
-           (refused-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-sriq))
-                       'profile-sriq)
+           (ran-as (profile-run arena litmus (union-new ProfileSelection explicit 'profile-sriq)) 'profile-sriq)
            (ran-as (profile-run arena litmus auto) 'profile-el)
            (ran-as (profile-run arena "corpus/fixtures/el++/has-self.ttl" auto) 'profile-el-plus-plus)
-           (ran-as (profile-run arena "corpus/fixtures/out-of-profile/union.ttl" auto) 'profile-el)
+           (ran-as (profile-run arena "corpus/fixtures/out-of-profile/union.ttl" auto) 'profile-sriq)
+           (ran-as (profile-run arena "corpus/fixtures/out-of-profile/inverse.ttl" auto) 'profile-sriq)
            (ran-as (profile-run arena "corpus/fixtures/out-of-profile/nominals.ttl" auto) 'profile-el-plus-plus))))
+
+  ;; ------------------------------------------------------------
+  ;; Slice 11b: auto's step-down (§5.1). auto keeps its rule, and when the
+  ;; rung it chose is sriq and sriq's run passes the clause budget without
+  ;; a definitive finding, the run that answers is the rung el and el++
+  ;; alone would choose. The budget is lowered here to make it bind.
+  ;; ------------------------------------------------------------
+
+  (fn test-auto-step-down ((arena Arena))
+    (@intent "auto steps down from sriq exactly when sriq's run passes the clause budget without a definitive finding; never under an explicit sriq, a round cap, or a cancel")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((union "corpus/fixtures/out-of-profile/union.ttl")
+          (auto (union-new ProfileSelection auto))
+          (sriq (union-new ProfileSelection explicit 'profile-sriq)))
+      (and (step-says arena "default-config's clause budget is SRIQ_CLAUSE_BUDGET"
+                      (== (cast Int (. (default-config) clause-budget)) SRIQ_CLAUSE_BUDGET))
+           (step-says arena "union, auto: sriq answers, no step-down"
+                      (answered-by (classify-cfg arena union (with-budget auto 1000 SRIQ_CLAUSE_BUDGET)) 'profile-sriq false))
+           (step-says arena "union, auto, budget 1: el answers (el and el++ tie), stepped down"
+                      (answered-by (classify-cfg arena union (with-budget auto 1000 1)) 'profile-el true))
+           (step-says arena "union, explicit sriq, budget 1: sriq, resource-limit, no step-down"
+                      (capped-sriq (classify-cfg arena union (with-budget sriq 1000 1))))
+           (step-says arena "union, auto, cap 0: the cap is the caller's, no step-down"
+                      (capped-sriq (classify-cfg arena union (with-budget auto 0 SRIQ_CLAUSE_BUDGET))))
+           (step-says arena "union, auto, budget 1, cancelled: Fault::cancelled"
+                      (is-cancelled (classify-cfg arena union (cancelled-cfg (with-budget auto 1000 1)))))
+           (step-scan arena "corpus/fixtures/sriq/step-down-early-unsat.ttl"))))
+
+  (fn step-says ((arena Arena) (label String) (ok Bool))
+    (@intent "One check of the step-down, printed when it fails")
+    (@spec ((Arena String Bool) -> Bool))
+    (@alloc arena)
+    (if ok true (do (print "  [sriq 11b] ") (println label) false)))
+
+  (fn with-budget ((sel ProfileSelection) (rounds Int) (budget Int))
+    (@intent "The default configuration under sel, with max-iterations rounds and clause budget budget")
+    (@spec ((ProfileSelection Int Int) -> ReasonerConfig))
+    (let ((mut cfg (default-config)))
+      (do (set! cfg selection sel)
+          (set! cfg max-iterations (cast (Int 0 .. 10000) rounds))
+          (set! cfg clause-budget (cast (Int 1 ..) budget))
+          cfg)))
+
+  (fn cancelled-cfg ((cfg ReasonerConfig))
+    (@intent "cfg with a set cancel flag")
+    (@spec ((ReasonerConfig) -> ReasonerConfig))
+    (let ((mut c cfg)) (do (set! c cancel-ptr (cancel-flag-set)) c)))
+
+  (fn classify-cfg ((arena Arena) (path String) (cfg ReasonerConfig))
+    (@intent "A file through classify under cfg; an unreadable file is an input-error")
+    (@spec ((Arena String ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc arena)
+    (match (parse-ttl-file arena path)
+      ((ok g)    (classify arena (. g triples) (list-new arena IRI) cfg))
+      ((error _) (error (union-new Fault input-error "unreadable fixture")))))
+
+  (fn answered-by ((r (Result Outcome Fault)) (p Profile) (stepped Bool))
+    (@intent "Did rung p answer, stepped down or not as given?")
+    (@spec (((Result Outcome Fault) Profile Bool) -> Bool))
+    (match r ((ok o) (and (== (. o profile) p) (== (. o stepped-down) stepped))) ((error _) false)))
+
+  (fn capped-sriq ((r (Result Outcome Fault)))
+    (@intent "Did sriq answer at resource-limit, not stepped down?")
+    (@spec (((Result Outcome Fault)) -> Bool))
+    (match r
+      ((ok o) (and (== (. o profile) 'profile-sriq) (not (. o stepped-down)) (not (is-fixpoint (. o termination)))))
+      ((error _) false)))
+
+  (fn step-scan ((arena Arena) (path String))
+    (@intent "Over budgets 1..400 on a sriq-only incoherent fixture: auto steps down exactly when the explicit run stops at the budget with nothing definitive; both cases occur, and so does a budget-stopped run that found its unsat")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true) (mut stepped 0) (mut kept 0) (mut b 1))
+      (do (while (<= b 400)
+            (let ((k (step-at arena path b)))
+              (do (when (< k 0) (set! ok false))
+                  (when (== k 1) (set! stepped (+ stepped 1)))
+                  (when (== k 2) (set! kept (+ kept 1)))
+                  (set! b (+ b 1)))))
+          (step-says arena (string-concat arena path ": step-down exactly at the budget with nothing definitive; both cases seen")
+                     (and ok (> stepped 0) (> kept 0))))))
+
+  (fn step-at ((arena Arena) (path String) (b Int))
+    (@intent "At budget b: -1 if auto disagrees with the explicit run; else 1 if it stepped down, 2 if a budget-stopped run kept its definitive finding, 0 otherwise")
+    (@spec ((Arena String Int) -> Int))
+    (@alloc arena)
+    (match (classify-cfg arena path (with-budget (union-new ProfileSelection explicit 'profile-sriq) 1000 b))
+      ((error _) -1)
+      ((ok eo)
+        (let ((stopped (not (is-fixpoint (. eo termination))))
+              (found   (findings-are-incoherent (. eo findings)))
+              (want    (and stopped (not found))))
+          (cond ((not (step-agrees (classify-cfg arena path (with-budget (union-new ProfileSelection auto) 1000 b)) want)) -1)
+                (want 1)
+                ((and stopped found) 2)
+                (else 0))))))
+
+  (fn step-agrees ((a (Result Outcome Fault)) (want Bool))
+    (@intent "auto's run stepped down to a rung below sriq if want, else sriq answered unstepped")
+    (@spec (((Result Outcome Fault) Bool) -> Bool))
+    (match a
+      ((ok o) (if want
+                (and (. o stepped-down) (!= (. o profile) 'profile-sriq))
+                (and (not (. o stepped-down)) (== (. o profile) 'profile-sriq))))
+      ((error _) false)))
 
   (fn test-profile-names-round-trip ((arena Arena))
     (@intent "Every rung's name parses back to the rung, and nothing else parses")
@@ -10481,10 +10702,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
          (not (profile-dropped 'profile-el))
          (not (profile-dropped 'profile-el-plus-plus))
          (not (profile-dropped 'profile-sriq))
+         ;; Every live rung is built (slice 11b), so only the dropped
+         ;; rung's text is reachable.
          (string-eq (unavailable-message arena 'profile-horn-sriq)
-                    "profile horn-sriq was dropped; sriq covers its language")
-         (string-eq (unavailable-message arena 'profile-sriq)
-                    "profile sriq is not implemented yet (implemented: el, el++)")))
+                    "profile horn-sriq was dropped; sriq covers its language")))
 
   (fn name-round-trips ((p Profile))
     (@intent "Whether p's name parses back to p")
@@ -12334,6 +12555,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (print-test-result "9a: the prototype's work on O1, pinned" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
+          (let ((r (test-el-plus-plus-and-sriq-agree arena)))
+            (print-test-result "S4: el++ and sriq report the same where both run complete and omit nothing" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-auto-step-down arena)))
+            (print-test-result "11b: auto steps down from sriq at the clause budget, and only then" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
           (let ((r (test-sriq-wired arena)))
             (print-test-result "11a: sriq through prepare and reason: the split run's verdict, rounds and findings; budgets, cancel, omissions" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
@@ -12403,7 +12632,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-el-and-el-plus-plus-agree arena)))
-            (print-test-result "K5: el and el++ report the same on every el fixture" r)
+            (print-test-result "K5 and S4: el, el++ and sriq report the same on every el fixture" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-ksc-workers-agree arena)))
@@ -12555,7 +12784,7 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-profile-selection arena)))
-            (print-test-result "§5.1: el and el++ run as asked, unbuilt rungs refused by name, auto by membership then fewest omissions" r)
+            (print-test-result "§5.1: el, el++ and sriq run as asked, the dropped rung refused by name, auto by membership then fewest omissions" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-profile-names-round-trip arena)))

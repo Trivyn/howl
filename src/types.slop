@@ -15,6 +15,7 @@
   (import vocab (OWL_THING OWL_NOTHING))
 
   (export
+    SRIQ_CLAUSE_BUDGET
     ;; identity
     Node
     RoleId
@@ -636,7 +637,8 @@
     (evidence    Evidence)     ; always present; PARTIAL unless the run was complete
     (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4), sriq's runs' sum (§5.5)
     (names       Names)        ; el's saturation nodes are RENAMED: map back through this
-    (owned       (List Arena)))) ; arenas `evidence` lives in beyond the caller's: release-outcome
+    (owned       (List Arena))   ; arenas `evidence` lives in beyond the caller's: release-outcome
+    (stepped-down Bool)))       ; auto chose sriq, its run passed the clause budget, and this is el's or el++'s (§5.1)
 
   ;; The error path. Distinct from an Outcome: these produce no result
   ;; to report on.
@@ -682,7 +684,16 @@
     ;; out-of-profile is a report, not a refusal (§8.4).
     (strict-profile  Bool)
     (cancel-ptr      I64)
-    (verbose         Bool)))
+    (verbose         Bool)
+    ;; sriq's clause budget (§5.5): not a host option; a test lowers it.
+    (clause-budget   (Int 1 ..))))
+
+  ;; The clause budget (owner, 2026-10-13): a sriq run whose store passes it
+  ;; at a round boundary stops at resource-limit. It is a count, never a
+  ;; clock, so reports stay a function of the input and the budget (§6.8);
+  ;; it binds an explicit sriq run as well as auto's, and auto steps down
+  ;; from it (§5.1).
+  (const SRIQ_CLAUSE_BUDGET Int 1000000)
 
   (fn default-config ()
     (@intent "Create the default reasoner configuration")
@@ -693,6 +704,7 @@
     (@post {(. $result max-iterations) == 1000})
     (@post {(. $result cancel-ptr) == 0})
     (@post {(. $result verbose) == false})
+    (@post {(. $result clause-budget) == 1000000})   ; SRIQ_CLAUSE_BUDGET: a const is opaque to the prover
     ;; The library path always runs NON-STRICT: out-of-profile is a
     ;; report, not a refusal, and the port always consumes it that way.
     ;; --strict is a CLI affordance layered on top, never the default.
@@ -709,7 +721,10 @@
       (selection (union-new ProfileSelection explicit 'profile-el))
       (strict-profile false)
       (cancel-ptr 0)
-      (verbose false)))
+      (verbose false)
+      ;; SRIQ_CLAUSE_BUDGET, as a literal: a const is opaque to the prover,
+      ;; and test-auto-step-down pins the two equal.
+      (clause-budget 1000000)))
 
   (fn cancel-requested ((cancel I64))
     (@intent "Has the host set the cancel flag `cancel` points at? (0 means no flag)")

@@ -337,21 +337,31 @@
     (let ((mut out (list-new arena (List Premise))))
       (do (for-each (g groups) (list-push out (with-const arena (. g cps) u))) out)))
 
-  (fn hyper-indexed ((arena Arena) (env Env) (hx HIdx) (hc HCtx))
-    (@intent "Hyper on the ontology clauses with a body, once per (clause, atom) pair a premise of Δ_v can anchor")
-    (@spec ((Arena Env HIdx HCtx) -> HOut))
+  (fn hyper-indexed ((arena Arena) (env Env) (hx HIdx) (hc HCtx) (room Int))
+    (@intent "Hyper on the ontology clauses with a body, once per (clause, atom) pair a premise of Δ_v can anchor; once
+              the conclusions pass room, the remaining pairs are skipped (the caller sees the count)")
+    (@spec ((Arena Env HIdx HCtx Int) -> HOut))
     (@alloc arena)
+    ;; room is what sriq's clause budget leaves this round (SPEC §5.5,
+    ;; slice 11b): a round that passes it is abandoned, so the pairs after
+    ;; the one that passes it are never needed.
     (let ((start (hyper-start arena (at-x) (not (. hc root))))
           (mut out (list-new arena Cand)) (mut over false) (mut tried 0))
       (do (for-each (code (hyper-pairs arena hx (. hc dps)))
-            (match (list-get (. hx bodied) (/ code (. hx width)))
-              ((none) (set! tried tried))
-              ((some oc)
-                (let ((o (hyper-anchor arena env hc start oc (% code (. hx width)))))
-                  (do (for-each (c (. (. o out) cands)) (list-push out c))
-                      (when (. (. o out) over) (set! over true))
-                      (set! tried (+ tried (. o tried))))))))
+            (when (<= (cast Int (list-len out)) room)
+              (let ((o (hyper-code arena env hx hc start code)))
+                (do (for-each (c (. (. o out) cands)) (list-push out c))
+                    (when (. (. o out) over) (set! over true))
+                    (set! tried (+ tried (. o tried)))))))
           (record-new HOut (out (out-of out over)) (tried tried)))))
+
+  (fn hyper-code ((arena Arena) (env Env) (hx HIdx) (hc HCtx) (start HState) (code Int))
+    (@intent "Hyper for one (clause, atom) pair, by its code; nothing for a code past the clauses")
+    (@spec ((Arena Env HIdx HCtx HState Int) -> HOut))
+    (@alloc arena)
+    (match (list-get (. hx bodied) (/ code (. hx width)))
+      ((some oc) (hyper-anchor arena env hc start oc (% code (. hx width))))
+      ((none)    (record-new HOut (out (out-of (list-new arena Cand) false)) (tried 0)))))
 
 
 )

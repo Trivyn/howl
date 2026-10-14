@@ -92,8 +92,9 @@ Each is a `make` target that runs both rungs:
 - **Bench** (`make bench-el++`, informational, W = 4): OBI 0.03× and RO 0.10× HermiT; GO 0.95× and
   EL-GALEN 5.25× ELK (`el`: 0.84× and 2.9×).
 `sriq` ([SPEC §5.5](../SPEC.md#55-the-sriq-calculus), M5 in
-[§12](../SPEC.md#12-milestones--acceptance-criteria)) follows; it contains v0 but not EL++'s
-nominals.
+[§12](../SPEC.md#12-milestones--acceptance-criteria)) is built, under `--profile sriq` or `auto`.
+It contains v0 but not EL++'s nominals, and takes every row below marked `sriq`. A run that passes
+its clause budget is inconclusive, and `auto` then steps down to `el` or `el++`.
 
 ## Off the path entirely
 

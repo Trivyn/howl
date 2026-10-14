@@ -2,7 +2,8 @@
 #include "slop_select.h"
 
 slop_option_types_Profile select_select_profile(types_ProfileSelection selection);
-types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus);
+types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus, int64_t out_of_sriq);
+types_Profile select_choose_auto_low(int64_t out_of_el, int64_t out_of_el_plus_plus);
 uint8_t select_profile_implemented(types_Profile p);
 uint8_t select_profile_dropped(types_Profile p);
 slop_string select_unavailable_message(slop_arena* arena, types_Profile p);
@@ -31,7 +32,23 @@ slop_option_types_Profile select_select_profile(types_ProfileSelection selection
     return _retval;
 }
 
-types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus) {
+types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus, int64_t out_of_sriq) {
+    types_Profile _retval = {0};
+    if ((out_of_el <= out_of_el_plus_plus) && (out_of_el <= out_of_sriq)) {
+        _retval = types_Profile_profile_el;
+        goto _slop_post;
+    } else if (out_of_el_plus_plus <= out_of_sriq) {
+        _retval = types_Profile_profile_el_plus_plus;
+        goto _slop_post;
+    } else {
+        _retval = types_Profile_profile_sriq;
+        goto _slop_post;
+    }
+    _slop_post: ;
+    return _retval;
+}
+
+types_Profile select_choose_auto_low(int64_t out_of_el, int64_t out_of_el_plus_plus) {
     types_Profile _retval = {0};
     if (out_of_el_plus_plus < out_of_el) {
         _retval = types_Profile_profile_el_plus_plus;
@@ -57,12 +74,12 @@ uint8_t select_profile_implemented(types_Profile p) {
         _retval = 0;
         goto _slop_post;
     } else if (_mv_1390 == types_Profile_profile_sriq) {
-        _retval = 0;
+        _retval = 1;
         goto _slop_post;
     }
     SLOP_UNREACHABLE();
     _slop_post: ;
-    SLOP_POST(((_retval == (p(==, types_Profile_profile_el) || p(==, types_Profile_profile_el_plus_plus)))), "(== $result (or (p == (quote profile-el)) (p == (quote profile-el-plus-plus))))");
+    SLOP_POST(((_retval == ((p(==, types_Profile_profile_el)) || (p(==, types_Profile_profile_el_plus_plus)) || (p(==, types_Profile_profile_sriq))))), "(== $result (or (p == (quote profile-el)) (p == (quote profile-el-plus-plus)) (p == (quote profile-sriq))))");
     return _retval;
 }
 
@@ -94,7 +111,7 @@ slop_string select_unavailable_message(slop_arena* arena, types_Profile p) {
         if (select_profile_dropped(p)) {
             return string_concat(arena, named, SLOP_STR(" was dropped; sriq covers its language"));
         } else {
-            return string_concat(arena, named, SLOP_STR(" is not implemented yet (implemented: el, el++)"));
+            return string_concat(arena, named, SLOP_STR(" is not implemented yet (implemented: el, el++, sriq)"));
         }
     }
 }

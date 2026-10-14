@@ -34,7 +34,7 @@
   (import sriqsat (SatConfig SatResult sat-run))
 
   (export Split Folded Inputs SplitRun abox-split fold-clauses consistency-input h-input split-inputs split-run
-          split-run-of split-findings sriq-config SRIQ_CLAUSE_BUDGET split-inputs-bounded)
+          split-run-of split-findings sriq-config split-inputs-bounded)
 
   ;; The two runs' inputs.
   (type Split (record
@@ -524,12 +524,6 @@
   ;; ============================================================
   ;; The production run (slice 11): its configuration and its findings
   ;; ============================================================
-
-  ;; The clause budget (owner, 2026-10-14): a run whose store passes it at a
-  ;; round boundary stops at resource-limit. It is a count, never a clock,
-  ;; so reports stay a function of the input and the budget (§6.8); it binds
-  ;; an explicit sriq run as well as auto's, and auto steps down from it.
-  (const SRIQ_CLAUSE_BUDGET Int 1000000)
 
   (fn sriq-config ((max-rounds Int) (budget Int) (cancel I64))
     (@intent "The production run: cautious, deferral and kept premise views on, max-rounds rounds over both runs, the

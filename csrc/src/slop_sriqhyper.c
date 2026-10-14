@@ -27,7 +27,8 @@ slop_list_sriq_Premise sriqhyper_with_const(slop_arena* arena, slop_list_sriqhyp
 sriqhyper_HOut sriqhyper_hyper_root_groups(slop_arena* arena, sriqref_Env env, sriqhyper_HCtx hc, sriq_HState start, types_Clause oc, slop_list_list_sriq_Premise cs);
 sriqhyper_HOut sriqhyper_root_by_const(slop_arena* arena, sriqref_Env env, sriqhyper_HCtx hc, sriq_HState start, types_Clause oc, slop_list_sriqhyper_Group groups, slop_list_sriqhyper_CPrem g0);
 slop_list_list_sriq_Premise sriqhyper_slots_for(slop_arena* arena, slop_list_sriqhyper_Group groups, uint32_t u);
-sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc);
+sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc, int64_t room);
+sriqhyper_HOut sriqhyper_hyper_code(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc, sriq_HState start, int64_t code);
 
 typedef struct { slop_list_sriqhyper_OKey raw; sriqhyper_OKey k0; } sriqhyper__lambda_662_env_t;
 
@@ -509,7 +510,7 @@ slop_list_list_sriq_Premise sriqhyper_slots_for(slop_arena* arena, slop_list_sri
     }
 }
 
-sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc) {
+sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc, int64_t room) {
     {
         __auto_type start = sriq_hyper_start(arena, types_at_x(), !(hc.root));
         __auto_type out = ((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -519,12 +520,9 @@ sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqh
             __auto_type _coll = sriqhyper_hyper_pairs(arena, hx, hc.dps);
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type code = _coll.data[_i];
-                __auto_type _mv_675 = ({ __auto_type _lst = hx.bodied; size_t _idx = (size_t)(code / hx.width); slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (!_mv_675.has_value) {
-                } else if (_mv_675.has_value) {
-                    __auto_type oc = _mv_675.value;
+                if (((int64_t)(((int64_t)((out).len)))) <= room) {
                     {
-                        __auto_type o = sriqhyper_hyper_anchor(arena, env, hc, start, oc, (code % hx.width));
+                        __auto_type o = sriqhyper_hyper_code(arena, env, hx, hc, start, code);
                         {
                             __auto_type _coll = o.out.cands;
                             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -542,5 +540,16 @@ sriqhyper_HOut sriqhyper_hyper_indexed(slop_arena* arena, sriqref_Env env, sriqh
         }
         return ((sriqhyper_HOut){.out = sriqref_out_of(out, over), .tried = tried});
     }
+}
+
+sriqhyper_HOut sriqhyper_hyper_code(slop_arena* arena, sriqref_Env env, sriqhyper_HIdx hx, sriqhyper_HCtx hc, sriq_HState start, int64_t code) {
+    __auto_type _mv_675 = ({ __auto_type _lst = hx.bodied; size_t _idx = (size_t)(code / hx.width); slop_option_types_Clause _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_675.has_value) {
+        __auto_type oc = _mv_675.value;
+        return sriqhyper_hyper_anchor(arena, env, hc, start, oc, (code % hx.width));
+    } else if (!_mv_675.has_value) {
+        return ((sriqhyper_HOut){.out = sriqref_out_of(((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), 0), .tried = 0});
+    }
+    SLOP_UNREACHABLE();
 }
 

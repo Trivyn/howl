@@ -201,7 +201,7 @@ contexts. It is still deterministic saturation: no backtracking and no model sea
 |---|---|---|---|---|---|
 | **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)); `¬` in a superclass, domain or range is taken by rewriting, so the logic is unchanged | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
 | **`el++`** | the **OWL 2 EL object fragment**: SROEL(⊓,×) without products on the left ([§5.4](#54-the-el-calculus)) | PTIME | [Krö10] Theorem 2 (Ksc); [§5.4](#54-the-el-calculus) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions, `owl:bottomObjectProperty`. Datatypes, keys, anonymous individuals and `owl:topObjectProperty` outside a super-role stay omissions | **implemented** ([§5.4](#54-the-el-calculus)) |
-| **`sriq`** | **SRIQ object fragment with an ABox** ([§5.5](#55-the-sriq-calculus)) | 2ExpTime without an ABox (SRIQ's own); with one, [TGH21] Theorem 5 bounds it only triple-exponentially in the chain-eliminated ontology | [Sim12] Theorem 3, then [TGH21] Theorems 1 and 2; [§5.5](#55-the-sriq-calculus) | inverses, `∀`, unions, full negation, qualified number restrictions, `ObjectHasSelf`, every OWL 2 DL property characteristic, `SameIndividual`/`DifferentIndividuals`, negative assertions. Class nominals, datatypes, keys, anonymous individuals and the universal role stay omissions | **specified** (M5, [§12](#12-milestones--acceptance-criteria)) |
+| **`sriq`** | **SRIQ object fragment with an ABox** ([§5.5](#55-the-sriq-calculus)) | 2ExpTime without an ABox (SRIQ's own); with one, [TGH21] Theorem 5 bounds it only triple-exponentially in the chain-eliminated ontology | [Sim12] Theorem 3, then [TGH21] Theorems 1 and 2; [§5.5](#55-the-sriq-calculus) | inverses, `∀`, unions, full negation, qualified number restrictions, `ObjectHasSelf`, every OWL 2 DL property characteristic, `SameIndividual`/`DifferentIndividuals`, negative assertions. Class nominals, datatypes, keys, anonymous individuals and the universal role stay omissions | **implemented**, single-threaded, under a clause budget (M5, [§12](#12-milestones--acceptance-criteria)) |
 
 **The ladder is almost a chain.**
 - `el ⊂ el++`.
@@ -333,8 +333,32 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   that leaves the fewest logical axioms out, a tie going to the earlier rung (`choose-auto`,
   `src/select.slop`, whose postconditions pin the cases). Unresolved imports, missing
   declarations and undeclared properties are the same under every rung, so they never decide.
-  With `el` and `el++` built, that is today's rule: `el` when nothing is out of `el`'s profile,
-  else the one of the two that omits fewer, ties going to `el`.
+  The counts are the gate's. S1's size guard ([§5.5](#55-the-sriq-calculus)) is a limit on a
+  run, not a language, so it never decides.
+
+  **The step-down (owner, 2026-10-13; slice 11b).** A rung can contain an ontology and still be
+  too expensive for it: OBI is inside `sriq`'s language, and `sriq`'s run on it outgrows any
+  reasonable memory (M5 (c)). So when `auto`'s rung is `sriq` and `sriq`'s run stops at its
+  clause budget ([§5.5](#55-the-sriq-calculus), "The production run") with nothing definitive (no
+  inconsistency and no unsatisfiable class), `auto` reruns the input under the same rule
+  restricted to `el` and `el++`, and reports that run.
+  - **The definitive finding wins.** A run stopped at the budget that found an inconsistency or an
+    unsatisfiable class is reported as it stands, because that finding is sound
+    ([§6.2](#62-data-model)) and the rerun might lose it.
+  - **The round cap does not step down.** It is the caller's limit, and it binds whichever rung
+    runs. Only the clause budget says the calculus is too expensive for this input.
+  - **What the report shows.** Its `profile` line names the rung that answered, and its coverage
+    is that rung's, so the axioms that rung omits make the step-down inconclusive. The report
+    grammar is unchanged. The CLI prints one line on stderr when `auto` steps down, which is never
+    part of a report.
+  - **It is reproducible.** The budget counts clauses, not time, so the step-down is a function of
+    the input, and reports stay identical across runs and worker counts
+    ([§6.8](#68-determinism-binding)).
+  - **What it costs.** An `auto` run that chose `sriq` keeps an owned copy of the decoded input
+    until the run ends, to prepare the rerun from (`StepDown`, `src/howl.slop`).
+  - **`--strict`** refuses the rerun when its rung omits anything, as it would any run.
+  - **Explicit `--profile sriq` never steps down.** It obeys the same budget and reports
+    `resource-limit`, which is inconclusive unless the run found something definitive.
 - **The report states the resolved profile** (`profile el`, [§6.7](#67-output--classification)).
   A report is a function of (input, budget, profile). Its findings are complete for that rung's
   logic and no other.
@@ -345,10 +369,10 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   remain partial runs under the rule below.
   - Saying the top rung makes selection "total", as an earlier draft did, would license treating
     its presence as a guaranteed complete fallback.
-  - **With `el` and `el++` built there is no such rung:** an ontology outside both has nothing to
-    escalate to, and the run is inconclusive ([§6.2](#62-data-model)), never "coherent".
-  - Once `sriq` is built, `auto` must run there an ontology that uses inverses or functionality and
-    is otherwise inside `sriq`, not report it inconclusive.
+  - **Before `sriq` was built there was no such rung:** an ontology outside `el` and `el++` had
+    nothing to escalate to, and the run was inconclusive ([§6.2](#62-data-model)), never "coherent".
+  - Since slice 11b, `auto` runs under `sriq` an ontology that uses inverses or functionality and is
+    otherwise inside `sriq`, rather than reporting it inconclusive (unless the step-down applies).
   - The default stays `el`.
 
   **Selection is whole-ontology membership in a single implemented profile — never a union.** Pick
@@ -377,8 +401,8 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
 
 The selection seam was built with only `profile-el` behind it, because a dispatch point left in
 place is far cheaper than one retrofitted later. `prepare-decoded` (`src/howl.slop`) resolves the
-profile before the gate and refuses an unbuilt one. `prepare-in-profile` dispatches `el` and `el++`
-today; `sriq` is its third arm.
+profile before the gate and refuses an unbuilt one. `prepare-in-profile` dispatches all three
+built rungs.
 
 ### 5.2 The exact v0 language
 
@@ -1959,7 +1983,7 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
 >   - E3 was left owed, and is now settled with a proof;
 >   - `docs/coverage.md` misstated "idle".
 > - **Project owner: accepted, 2026-10-08** (PR #34; spec approval recorded as AD e81ee7a2).
->   `--profile sriq` exits 3 until the wiring slice.
+>   `--profile sriq` exited 3 until the wiring slice (11b), which made it selectable.
 > - **Built so far:** the language's representation (`RoleId`'s inverse arm, [§6.2](#62-data-model))
 >   and the gate below, with the census's independent column (slice 4). The gate runs only under
 >   test until the wiring slice.
@@ -2864,10 +2888,31 @@ through the library, the same way el and el++ run.
   A normaliser refusal is a `Fault::input-error`, and `--strict` refuses any omission.
 - **One round budget.** `max-iterations` covers both runs: Run H takes what it needs, and Run C gets the rest. The
   `rounds` line is their sum, as el++'s phases share theirs (§5.4).
-- **The clause budget** (owner, 2026-10-14) is 1,000,000 stored clauses in a run's store at a round boundary
-  (`SRIQ_CLAUSE_BUDGET`).
+- **The clause budget** (owner, 2026-10-13) is 1,000,000 clauses per run (`SRIQ_CLAUSE_BUDGET`). A run stops when
+  its store passes the budget at a round boundary, or when a round's conclusions would take it past: the store's
+  count plus the round's conclusions so far exceeds the budget.
+  - **Why inside a round (slice 11b).** One round can outgrow memory long before the store passes the budget. OBI's
+    Run H holds 716k clauses after round 6, and its seventh round takes the process from 5 GB past 16 GB. Its
+    Run C's root derives 3.98M Hyper conclusions in one step. So the count is read after each context, and within
+    a context after Hyper's every (clause, atom) pair and after each later Table 2 step. The rest of the round is
+    skipped once the count passes.
+  - **An abandoned round is not committed.** The run reports the store as the previous round left it, with that
+    round count, as the choices cap's stop does.
+  - **It is deterministic.** A round's conclusions depend only on the store it starts from, and the count only
+    grows. So whether the round passes the budget depends on neither the context order nor the worker count, only
+    on how soon that is seen.
+  - **Tests.** Over budgets 1 to 300 on two fixtures, Run H stops exactly where this rule says, computed from each
+    round's store and conclusion counts, and reports the run capped at the same round. Some budget stops it inside
+    a round.
+  - **Mutants seen red:** the in-round check dropped, the abandoned round committed, and the room measured without
+    the store. The checks inside a context only skip work: the round is abandoned either way, so no answer can show
+    them. Their evidence is OBI: under `--profile sriq` it stops in 11 s at 4.9 GB, and under `auto` it steps down in
+    13 s at 5.2 GB. Without them, both runs pass 16 GB.
   - It is a count, not a clock, so the report stays a function of the input and the budget (§6.8).
-  - It binds every `sriq` run. A run that passes it stops at `resource-limit`.
+  - It binds every `sriq` run. A run that passes it stops at `resource-limit`, and `auto` steps
+    down from it ([§5.1](#51-profiles-are-selectable)).
+  - It is `ReasonerConfig.clause-budget`, which `default-config` sets and no host option reaches:
+    the C and Rust surfaces do not change, and a test lowers it.
   - The contexts, choices and Nom caps stay off outside the tests.
 - **Termination.**
   - It is `fixpoint` when every run that ran finished, at its fixpoint or at ⊤ → ⊥.
@@ -2892,7 +2937,24 @@ through the library, the same way el and el++ run.
   - **Mutants seen red:** the hidden unsat ignored in the findings, the budget not shared, the cancel unchecked, the
     cancel read after the cap, and S1's omissions dropped.
 
-  `sriq` is still not selectable; slice 11b wires it.
+**Wiring (slice 11b).** `sriq` is selectable: `--profile sriq`, `auto` (with the step-down,
+[§5.1](#51-profiles-are-selectable)), the C API and the Rust crate.
+- **Tests.**
+  - `test-profile-selection`: an explicit `sriq` runs, and `auto` picks `sriq` for a union or an
+    inverse.
+  - `test-auto-step-down`: a lowered budget steps `auto` down to the rung `el` and `el++` alone
+    choose. An explicit `sriq`, a round cap and a cancel never step down. Over budgets 1 to 400 on
+    `step-down-early-unsat`, `auto` steps down exactly when the explicit run stops at the budget
+    with nothing definitive, and both cases occur.
+  - **The three-rung report equality:** every `el` fixture gives the same report under `el`,
+    `el++` and `sriq`, `profile` and `rounds` aside (K5, S4). The same holds of `el++` and `sriq` on
+    every `el++` fixture both run complete without omissions (at least ten).
+- **Surfaces.**
+  - **Goldens:** `corpus/goldens/sriq/` covers every `sriq`, `v0` and `data` fixture, and pins
+    BFO-core and CCO by hash.
+  - **Acceptance:** `make acceptance` checks `sriq`'s exit codes, `corpus-acceptance` checks M5 (g),
+    and `determinism --profile sriq` runs every cap from 0 to R on the fixtures.
+  - **APIs:** the C API test and the Rust crate's tests run `sriq` at every worker count.
 
 **S5 — representation.** [TGH21] leaves each of these choices open, so none needs a new proof. Each
 is fixed here so that reports are input-determined.
@@ -3651,8 +3713,12 @@ schedule is its own.
 - **Derive does not filter by ∈̂.** S6's derive keeps only conclusions not `∈̂ Sₙ`; the prototype
   leaves that to the commit, whose `commit-min` skips exactly those. `Δₙ₊₁` is the same, and its
   candidate counts include the conclusions the commit skips.
-- **Its stops** are the reference's. Outside the tests only the round cap (10,000) applies, so there
-  it can answer where the reference ends n/a.
+- **Its stops** are the reference's, but for the clause cap. The reference commits a round and then
+  stops when its store passes the cap. The prototype abandons a round whose store plus conclusions would
+  pass it, so at a binding clause cap the prototype stops one round earlier, uncommitted (slice 11b,
+  "The production run"). The agreement tests run with the clause cap not binding, and the budget's own
+  rule is tested against an oracle of each round's counts. Outside the tests, the round cap and the clause
+  budget apply, so it can answer where the reference ends n/a.
 - **The tests:**
   - on every fixture, and on [TGH21]'s O1, O3 and O4 and 8c's root rows, under all three
     strategies and the reference's caps, it completes exactly where the reference does;
@@ -5359,10 +5425,10 @@ howl explain     <ontology.ttl> --sub A B                          # justificati
 
 Global flags: `--profile el|el++|sriq|auto` selects the calculus (default **`el`**; `auto` picks
 the cheapest built rung containing the ontology, else the one omitting the fewest logical axioms;
-[§5.1](#51-profiles-are-selectable)). `el` and `el++` are built. A rung that is not built yet exits
-`3` with `howl: profile P is not implemented yet (implemented: el, el++)` (`Fault::unavailable`).
-`horn-sriq` was dropped ([§5](#5-fragment-roadmap)) and is refused the same way, permanently, with
-a message naming `sriq`. The top rung is `sriq`, not `dl`, because it is the SRIQ *object
+[§5.1](#51-profiles-are-selectable); when that is `sriq` and its run passes the clause budget with
+nothing definitive, `auto` steps down to `el` or `el++` and says so on stderr). Every rung is
+built. `horn-sriq` was dropped ([§5](#5-fragment-roadmap)) and is refused permanently, exit `3`
+(`Fault::unavailable`), with a message naming `sriq`. The top rung is `sriq`, not `dl`, because it is the SRIQ *object
 fragment* and a flag named `dl` would promise OWL 2 DL ([§3.2](#32-terminology-discipline));
 `--strict` makes an out-of-profile construct refuse the run
 outright — yielding `Fault::refused` and exit `2` ([§6.2](#62-data-model)) — instead of returning an
@@ -6063,9 +6129,21 @@ flowchart TB
     eager and cautious runs agree wherever each completes (§5.5: trivial can end n/a when Nom
     recurses).
   - **(c) Differential.** HermiT agrees on consistency and on every ordered pair of named classes,
-    for BFO-core, CCO, RO and OBI's `sriq` projection, ABoxes included. Sequoia, run as a pinned
-    external process, agrees on their TBoxes. Every oracle is capability-probed per construct
-    (Constraint b293cf6e).
+    for BFO-core, CCO and RO, ABoxes included. Sequoia, run as a pinned external process, agrees on
+    their TBoxes. Every oracle is capability-probed per construct (Constraint b293cf6e).
+
+    *Amended 2026-10-13 (owner): OBI is recorded as out of reach for this calculus.* Its `sriq`
+    projection's Run H passes the clause budget: at round 7 the store grows from 716k to 1.35M
+    clauses, with 5,284 contexts of about 31 bodiless clauses each. HermiT classifies it in about
+    4 s, and is its reference. Sequoia 0.6.1, the calculus's own implementation, did not finish in
+    30 minutes (graph Consequence bbb60fcb). `auto` steps down from it
+    ([§5.1](#51-profiles-are-selectable)), and an explicit `--profile sriq` reports it
+    inconclusive.
+
+    *Measured 2026-10-13: the budget leaves RO short too.* RO's `sriq` projection reaches HermiT's 275
+    subsumptions, but one of its runs passes 1,000,000 clauses, so it ends at `resource-limit` (24 s, 3.4 GB).
+    Unbudgeted, it completes and equals HermiT (54 s, 10 GB). (c) for RO therefore waits on a larger budget or a
+    leaner engine (slice 10), and the owner decides which.
   - **(d) Conformance.** The approved Direct-Semantics W3C tests whose constructs are all in `sriq`
     run with 0 FAIL.
   - **(e) Fuzzing.** `abox-fuzz --profile sriq` matches HermiT on generated ontologies that use
@@ -6091,7 +6169,9 @@ flowchart TB
      literal reference evaluator with a HermiT leg;
   9. a single-threaded prototype of S6's rounds, and the feasibility checkpoint ((h));
   10. the parallel engine;
-  11. wiring.
+  11. wiring. The owner put this before 10, since CCO already passes (g) single-threaded:
+     11a, the production run; 11b, selectable everywhere with `auto`'s step-down; 11c, the
+     harnesses' evidence.
 
   Each slice's SPEC amendments ship in the PR that implements them.
 - *Earlier rungs and plans:*
