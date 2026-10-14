@@ -362,8 +362,8 @@
       (for-each (a axs)
         (match a
           ((sa-ria x)   (when (not (ria-complex (. (deref p) rb) x)) (emit arena p a)))
-          ((sa-gci l r) (emit-gci arena p (rewrite arena p (deref l) false) (rewrite arena p (deref r) true)))
-          (_            (emit arena p a))))
+          ((sa-gci l r) (do (emit-gci arena p (rewrite arena p (deref l) false) (rewrite arena p (deref r) true)) (do)))
+          (_            (do (emit arena p a) (do)))))
       true))
 
   (fn is-chain ((a SAxiom))

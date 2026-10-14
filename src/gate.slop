@@ -1078,7 +1078,7 @@
           (do
             (for-each (ax axs)
               (match ax
-                ((ra-property-chain ch) (add-case-constraints ch roles n cmat))
+                ((ra-property-chain ch) (do (add-case-constraints ch roles n cmat) (do)))
                 (_ (do))))
             ;; ≺ IS TRANSITIVE, so compatibility must hold for every
             ;; pair the order IMPLIES, not only for generated edges.
