@@ -128,12 +128,12 @@
                 signature-has-object-property
                 signature-has-data-property))
   (import types (Omission UndeclaredProperty Fault Node RoleId InputRef EntityKind))
-  (import strlib (parse-int starts-with))
+  (import strlib (parse-int starts-with replace-all))
   (import canon (string-cmp iri-cmp sort-iris sort-omissions sort-range str-at iri-at))
 
   (export
     ListFault LookupFault Stage0
-    graph-to-indexed
+    graph-to-indexed nt-escape
     term-at triple-at
     one-object
     rdf-list-checked
@@ -1342,8 +1342,20 @@
       ((term-blank b)
         (string-concat arena "_:b" (int-to-string arena (. b id))))
       ((term-literal l)
-        (string-concat arena "\"" (string-concat arena (. l value) "\"")))
+        (string-concat arena "\"" (string-concat arena (nt-escape arena (. l value)) "\"")))
       ((term-triple _) "<<embedded triple>>")))
+
+  (fn nt-escape ((arena Arena) (s String))
+    (@intent "A literal's lexical form as N-Triples writes it: backslash, quote, newline and return escaped")
+    (@spec ((Arena String) -> String))
+    (@alloc arena)
+    ;; A report is one item per line (§6.7): a literal holding a newline,
+    ;; such as an XML literal in a W3C test, once split an omission across
+    ;; lines. The backslash goes first, so the escapes added after it are
+    ;; not escaped again.
+    (replace-all arena (replace-all arena (replace-all arena (replace-all arena s "\\" "\\\\") "\"" "\\\"")
+                                    "\n" "\\n")
+                 "\r" "\\r"))
 
   (fn render-triple ((arena Arena) (t Triple))
     (@intent "One triple as N-Triples, for an InputRef payload")
@@ -1411,9 +1423,15 @@
     (@intent "Does this triple belong to a class expression's internals?")
     (@spec ((Triple) -> Bool))
     (@pure)
-    (if (match (term-iri-value (. t predicate))
-          ((some i) (structural-predicate (. i value)))
-          ((none)   false))
+    ;; Only on a blank subject: a class expression's internals hang off
+    ;; blank nodes. `:c owl:intersectionOf (…)`, OWL 1's way of naming an
+    ;; equivalence, has an IRI subject, and skipped here it was dropped
+    ;; without an omission, so a run that ignored it could report
+    ;; coherent (W3C WebOnt-equivalentClass-004). It is reported instead.
+    (if (and (match (term-iri-value (. t predicate))
+               ((some i) (structural-predicate (. i value)))
+               ((none)   false))
+             (match (. t subject) ((term-blank _) true) (_ false)))
       true
       ;; `[ a owl:Class ; owl:intersectionOf (...) ]` and
       ;; `[ a owl:Restriction ; ... ]` — the type triple of an

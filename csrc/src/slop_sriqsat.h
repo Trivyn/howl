@@ -10,6 +10,7 @@
 #include "slop_sriqindex.h"
 #include "slop_sriqctx.h"
 #include "slop_canon.h"
+#include "slop_saturate.h"
 #include "slop_sriqorder.h"
 #include "slop_sriq.h"
 #include "slop_sriqhyper.h"
@@ -607,6 +608,7 @@ sriqhyper_HCtx sriqsat_hctx_of(sriqsat_Here h);
 sriqhyper_HOut sriqsat_sat_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, int64_t room);
 slop_list_sriqref_Cand sriqsat_eq_pairs(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, slop_list_sriq_Premise p1s, slop_list_sriq_Premise p2s);
 slop_list_sriqref_Cand sriqsat_eq_side(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, sriq_Premise p1, uint32_t k1, sriq_Premise p2);
+slop_list_sriqref_Cand sriqsat_join_kept(slop_arena* arena, uint32_t v, sriq_Premise p1, types_Clause c, int64_t j);
 slop_list_sriqref_Cand sriqsat_copy_cands(slop_arena* arena, slop_list_sriqref_Cand cs);
 uint8_t sriqsat_holds_term(types_Lit l, types_ATerm s);
 uint8_t sriqsat_term_at(types_Lit l, uint32_t a, uint8_t inner, types_ATerm s);
@@ -646,6 +648,7 @@ sriqref_Round sriqsat_nom_g_one(slop_arena* arena, sriqref_Env env, sriqctx_Stru
 slop_list_sriqref_Round sriqsat_two_rounds(slop_arena* arena, sriqref_Round a, sriqref_Round b);
 uint8_t sriqsat_k2_touched(slop_arena* arena, sriqref_Env env, sriqsat_Here h, sriqindex_KIdx kn, sriq_Premise p);
 slop_list_sriq_Premise sriqsat_succ_premises(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h);
+uint8_t sriqsat_k2_touched_apart(sriqref_Env env, sriqsat_Here h, sriqindex_KIdx kn, sriq_Premise p);
 slop_list_sriqref_SuccAct sriqsat_sat_succ(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, slop_list_sriq_Premise ps);
 slop_list_sriqref_SuccAct sriqsat_succ_trigs(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, sriqindex_KIdx bare, slop_list_types_Lit base, slop_list_sriqsat_Trig ts, sriqsat_Trig t0);
 sriqref_SuccAct sriqsat_succ_eval(slop_arena* arena, sriqref_Env env, sriqsat_Here h, sriqsat_SuccView sv, sriq_SuccSig sg);
@@ -658,15 +661,16 @@ slop_list_sriqref_SuccAct sriqsat_succ_on(slop_arena* arena, sriqref_Env env, sr
 slop_list_types_Lit sriqsat_merged_lits(slop_arena* arena, slop_list_types_Lit a, slop_list_types_Lit b);
 slop_list_types_Lit sriqsat_unheld(slop_arena* arena, sriqground_Ground gd, slop_list_types_Lit k2);
 uint8_t sriqsat_covered_view(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint32_t f, slop_list_types_Lit k2);
-sriqref_Out sriqsat_pred_anchored(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix);
+sriqref_Out sriqsat_pred_anchored(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t room);
 slop_list_sriq_Premise sriqsat_slot_ix(slop_arena* arena, sriq_CSub s, sriq_PSlot slot, sriqground_PIdx ix);
-sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t i);
-sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx aix);
-sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJob job, slop_list_list_sriq_Premise cs, slop_list_sriq_Premise ps);
+sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t i, int64_t room);
+sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx aix, int64_t room);
+sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJob job, slop_list_list_sriq_Premise cs, slop_list_sriq_Premise ps, int64_t room);
 sriqground_PIdx sriqsat_w_ix(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, int64_t w, slop_list_types_Clause cs, int64_t which);
 sriqref_Out sriqsat_pred_side(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, sriqctx_Edge e);
 sriqref_Out sriqsat_pred_edge_ix(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, sriqctx_Edge e, slop_list_types_Clause cs);
 slop_list_sriqref_PJob sriqsat_side_jobs(slop_arena* arena, sriqctx_Structure st, sriq_PredView view, slop_list_sriq_PSlot slots, sriqctx_Edge e, uint8_t toroot);
+sriqref_Out sriqsat_no_out(slop_arena* arena);
 sriqref_Out sriqsat_sat_pred(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, slop_list_sriqctx_Edge ins);
 slop_list_sriqref_Out sriqsat_pred_over(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, sriqctx_Edge e);
 uint8_t sriqsat_rpred_edge_new(sriqsat_Delta dl, uint32_t v);

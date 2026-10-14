@@ -50,6 +50,7 @@
   (import sriqctx (Strategy Triggers EdgeLabel Edge Ctx CtxSet Structure build-triggers init-structure core-of
                     ctx-by-core strat-choice))
   (import canon (sort-range))
+  (import saturate (reuse-arena))
   (import sriqorder (SriqOrder ranked max-flags))
   (import sriq (Premise RConcl HState PredView PSlot CSub SuccSig KSets
                 hyper-start hyper-finish succ-sig k-sets covers succ-step pred-view rpred-view rpred-heads-ok body-at
@@ -385,6 +386,14 @@
         (do (arena-free tmp) out))
       (list-new arena Cand)))
 
+  (fn join-kept ((arena Arena) (v U32) (p1 Premise) (c Clause) (j Int))
+    (@intent "Join of p1 into body literal j of c, into v, built in a scratch arena and copied out")
+    (@spec ((Arena U32 Premise Clause Int) -> (List Cand)))
+    (@alloc arena)
+    (let ((tmp (arena-new 16384))
+          (out (copy-cands arena (conclusion tmp v (join-rule tmp p1 (body-at tmp c j))))))
+      (do (arena-free tmp) out)))
+
   (fn copy-cands ((arena Arena) (cs (List Cand)))
     (@intent "cs, each conclusion copied into arena")
     (@spec ((Arena (List Cand)) -> (List Cand)))
@@ -503,7 +512,7 @@
     (let ((mut out (list-new arena Cand)) (mut j 0))
       (do (for-each (l (. g body))
             (do (when (lit-eq l (. p1 sel))
-                  (for-each (c (conclusion arena (. h v) (join-rule arena p1 (body-at arena g j)))) (list-push out c)))
+                  (for-each (c (join-kept arena (. h v) p1 g j)) (list-push out c)))
                 (set! j (+ j 1))))
           out)))
 
@@ -577,7 +586,7 @@
     (@spec ((Arena Here JoinSite Premise) -> (List Cand)))
     (@alloc arena)
     (if (. p1 maxed)
-      (conclusion arena (. h v) (join-rule arena p1 (body-at arena (. s c) (. s j))))
+      (join-kept arena (. h v) p1 (. s c) (. s j))
       (list-new arena Cand)))
 
   (fn fallback-premise ((arena Arena))
@@ -674,7 +683,7 @@
     (let ((mut out (list-new arena Cand)) (mut k k0))
       (do (while (and (< k (cast Int (list-len sites))) (site-holds (site-at sites k s0) (. p1 sel)))
             (let ((s (site-at sites k s0)))
-              (do (for-each (c (conclusion arena v (join-rule arena p1 (body-at arena (. s c) (. s j)))))
+              (do (for-each (c (join-kept arena v p1 (. s c) (. s j)))
                     (list-push out c))
                   (set! k (+ k 1)))))
           out)))
@@ -803,8 +812,17 @@
       (do (for-each (p (. h dps)) (list-push out p))
           (when (or gnew (> (list-len (. kn fparts)) 0))
             (for-each (p (. h ops))
-              (when (and (. p maxed) (or gnew (k2-touched arena env h kn p))) (list-push out p))))
+              (when (and (. p maxed) (or gnew (k2-touched-apart env h kn p))) (list-push out p))))
           out)))
+
+  (fn k2-touched-apart ((env Env) (h Here) (kn KIdx) (p Premise))
+    (@intent "k2-touched in a scratch arena of its own: only the answer outlives its K-set query")
+    (@spec ((Env Here KIdx Premise) -> Bool))
+    ;; One query per old premise, each sorting literal sets: kept in the
+    ;; round's arena they filled memory (slice 11c's fuzzer, seed 367: 0.7 GB
+    ;; to past 12 GB in one round).
+    (let ((tmp (arena-new 65536)) (touched (k2-touched tmp env h kn p)))
+      (do (arena-free tmp) touched)))
 
   ;; Succ through the view. G adds no atom to K₂: an atom it could add is a
   ;; maximal ground Su(O) atom of a visible member, so in Suʳ(O), and the
@@ -956,13 +974,13 @@
               (set! found true)))
           found)))
 
-  (fn pred-anchored ((arena Arena) (env Env) (job PJob) (dix PIdx) (oix PIdx) (aix PIdx))
-    (@intent "One Pred or r-Pred job, once per side slot anchored in Δ_w")
-    (@spec ((Arena Env PJob PIdx PIdx PIdx) -> Out))
+  (fn pred-anchored ((arena Arena) (env Env) (job PJob) (dix PIdx) (oix PIdx) (aix PIdx) (room Int))
+    (@intent "One Pred or r-Pred job, once per side slot anchored in Δ_w; past room, the rest skipped")
+    (@spec ((Arena Env PJob PIdx PIdx PIdx Int) -> Out))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut over false) (mut i 0))
-      (do (while (< i (cast Int (list-len (. job slots))))
-            (let ((o (pred-anchor arena env job dix oix aix i)))
+      (do (while (and (< i (cast Int (list-len (. job slots)))) (<= (cast Int (list-len out)) room))
+            (let ((o (pred-anchor arena env job dix oix aix i room)))
               (do (for-each (c (. o cands)) (list-push out c))
                   (when (. o over) (set! over true))
                   (set! i (+ i 1)))))
@@ -975,35 +993,45 @@
     (@alloc arena)
     (pidx-find arena ix (csub-lit s (. slot lit))))
 
-  (fn pred-anchor ((arena Arena) (env Env) (job PJob) (dix PIdx) (oix PIdx) (aix PIdx) (i Int))
-    (@intent "One job with side slot i anchored in Δ_w: every choice, finished as pred-run finishes")
-    (@spec ((Arena Env PJob PIdx PIdx PIdx Int) -> Out))
+  (fn pred-anchor ((arena Arena) (env Env) (job PJob) (dix PIdx) (oix PIdx) (aix PIdx) (i Int) (room Int))
+    (@intent "One job with side slot i anchored in Δ_w: every choice, finished as pred-run finishes, while within
+              room")
+    (@spec ((Arena Env PJob PIdx PIdx PIdx Int Int) -> Out))
     (@alloc arena)
     (let ((mut cs (list-new arena (List Premise))) (mut j 0))
       (do (for-each (slot (. job slots))
             (do (list-push cs (slot-ix arena (. job s) slot (pick-ix j i dix oix aix))) (set! j (+ j 1))))
-          (pred-choices arena env job cs (. aix ps)))))
+          (pred-choices arena env job cs (. aix ps) room))))
 
-  (fn pred-run-ix ((arena Arena) (env Env) (job PJob) (aix PIdx))
+  (fn pred-run-ix ((arena Arena) (env Env) (job PJob) (aix PIdx) (room Int))
     (@intent "Every choice of side premises for one job, finished by pred-finish or rpred-finish (pred-run, with each
-              slot's premises found by lookup)")
-    (@spec ((Arena Env PJob PIdx) -> Out))
+              slot's premises found by lookup), while within room")
+    (@spec ((Arena Env PJob PIdx Int) -> Out))
     (@alloc arena)
     (let ((mut cs (list-new arena (List Premise))))
       (do (for-each (slot (. job slots)) (list-push cs (slot-ix arena (. job s) slot aix)))
-          (pred-choices arena env job cs (. aix ps)))))
+          (pred-choices arena env job cs (. aix ps) room))))
 
-  (fn pred-choices ((arena Arena) (env Env) (job PJob) (cs (List (List Premise))) (ps (List Premise)))
-    (@intent "Every choice of one premise per slot from cs, finished; over the choices cap, none, and over")
-    (@spec ((Arena Env PJob (List (List Premise)) (List Premise)) -> Out))
+  (fn pred-choices ((arena Arena) (env Env) (job PJob) (cs (List (List Premise))) (ps (List Premise)) (room Int))
+    (@intent "Every choice of one premise per slot from cs, finished, until the conclusions pass room; over the choices
+              cap, none, and over")
+    (@spec ((Arena Env PJob (List (List Premise)) (List Premise) Int) -> Out))
     (@alloc arena)
     (let ((n (product cs (. env prod))) (mut out (list-new arena Cand)) (mut t 0))
       (if (> n (. env prod))
         (out-of out true)
-        (do (while (< t n)
-              (do (for-each (c (pred-one arena env job cs t ps)) (list-push out c))
-                  (set! t (+ t 1))))
-            (out-of out false)))))
+        ;; Each choice in a scratch arena, its conclusion copied out, as
+        ;; Hyper's and Eq's are (slice 11b): in the round's arena a generated
+        ;; ontology's Pred kept some 18 KB a conclusion. One arena, emptied
+        ;; after each choice: one per choice spent 40% of Pred's time in
+        ;; malloc and free.
+        (let ((tmp (arena-new 65536)))
+          (do (while (and (< t n) (<= (cast Int (list-len out)) room))
+                (do (for-each (c (pred-one tmp env job cs t ps)) (list-push out (copy-cand arena c)))
+                    (reuse-arena tmp)
+                    (set! t (+ t 1))))
+              (arena-free tmp)
+              (out-of out false))))))
 
   (fn w-ix ((arena Arena) (env Env) (st Structure) (h Here) (w Int) (cs (List Clause)) (which Int))
     (@intent "S_w's premises (which 0), Δ_w's (1) or the rest's (2), as filed for this round")
@@ -1027,7 +1055,7 @@
       (do (for-each (c (. h olds))
             (let ((view (pred-view arena c core toroot)) (slots (slots-of arena (. view slots))))
               (for-each (job (side-jobs arena st view slots e toroot))
-                (let ((o (pred-anchored arena env job dix oix aix)))
+                (let ((o (if (roomy out h) (pred-anchored arena env job dix oix aix (. h room)) (no-out arena))))
                   (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true)))))))
           (out-of out over))))
 
@@ -1044,7 +1072,7 @@
       (do (for-each (c cs)
             (let ((view (pred-view arena c core toroot)) (slots (slots-of arena (. view slots))))
               (for-each (job (side-jobs arena st view slots e toroot))
-                (let ((o (pred-run-ix arena env job aix)))
+                (let ((o (if (roomy out h) (pred-run-ix arena env job aix (. h room)) (no-out arena))))
                   (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true)))))))
           (out-of out over))))
 
@@ -1059,14 +1087,21 @@
               (do (list-push out (root-job view slots (. e from) (. e label) (cast U32 u))) (set! u (+ u 1)))))
           out)))
 
+  (fn no-out ((arena Arena))
+    (@intent "No conclusions, not over: a step skipped past room")
+    (@spec ((Arena) -> Out))
+    (@alloc arena)
+    (out-of (list-new arena Cand) false))
+
   (fn sat-pred ((arena Arena) (env Env) (st Structure) (dl Delta) (h Here) (ins (List Edge)))
     (@intent "Pred over every f-edge ⟨w, v, f⟩: all of it when the edge is new (or w is v_r and constants are new); else
-              the new clauses of S_v, and the old ones with a new side premise in S_w")
+              the new clauses of S_v, and the old ones with a new side premise in S_w. Past h's room the rest is skipped
+              (the round is abandoned either way)")
     (@spec ((Arena Env Structure Delta Here (List Edge)) -> Out))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut over false))
       (do (for-each (e ins)
-            (when (== (. e lk) 'el-fn)
+            (when (and (== (. e lk) 'el-fn) (roomy out h))
               (for-each (o (pred-over arena env st dl h e))
                 (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true))))))
           (out-of out over))))
@@ -1108,14 +1143,15 @@
   (fn rpred-from ((arena Arena) (env Env) (st Structure) (h Here) (rs (List RSrc)) (aps (List Premise))
                   (anchored Bool))
     (@intent "r-Pred into v from each source root clause: over every choice, or (anchored) with a side premise new in
-              S_v")
+              S_v; past h's room, the rest skipped")
     (@spec ((Arena Env Structure Here (List RSrc) (List Premise) Bool) -> Out))
     (@alloc arena)
     (let ((mut out (list-new arena Cand)) (mut over false))
       (do (for-each (r rs)
             (let ((job (rsrc-job arena st (. h v) r))
-                  (o (if anchored (pred-anchored arena env job (. h dix) (. h oix) (. h aix))
-                       (pred-run-ix arena env job (. h aix)))))
+                  (o (cond ((not (roomy out h)) (no-out arena))
+                           (anchored (pred-anchored arena env job (. h dix) (. h oix) (. h aix) (. h room)))
+                           (else (pred-run-ix arena env job (. h aix) (. h room))))))
               (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true)))))
           (out-of out over))))
 

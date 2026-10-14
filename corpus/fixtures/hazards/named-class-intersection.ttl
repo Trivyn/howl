@@ -1,0 +1,15 @@
+# HAZARD: owl:intersectionOf on a NAMED class, OWL 1's way of stating
+# C ≡ X ⊓ Y. The OWL 2 mapping reads intersectionOf only on an anonymous
+# class expression, and HOWL once skipped this triple as a class
+# expression's internals: dropped without an omission, so C ⊑ X was missed
+# and the run reported coherent (W3C WebOnt-equivalentClass-004 found it).
+# Expect: the triple reported as an omission, so the run is inconclusive
+# (exit 2), never coherent.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:C a owl:Class . :X a owl:Class . :Y a owl:Class .
+:C owl:intersectionOf ( :X :Y ) .

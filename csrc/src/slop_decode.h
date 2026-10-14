@@ -511,6 +511,7 @@ uint8_t decode_declare_entity(slop_arena* arena, owl2_Signature sig, rdf_IRI ent
 uint8_t decode_add_builtins(slop_arena* arena, owl2_Signature sig);
 owl2_Signature decode_build_signature(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_string decode_render_term(slop_arena* arena, rdf_Term t);
+slop_string decode_nt_escape(slop_arena* arena, slop_string s);
 slop_string decode_render_triple(slop_arena* arena, rdf_Triple t);
 types_InputRef decode_frag(slop_arena* arena, rdf_Triple t);
 uint8_t decode_is_pred(rdf_Triple t, slop_string iri);

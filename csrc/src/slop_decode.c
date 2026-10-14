@@ -58,6 +58,7 @@ uint8_t decode_declare_entity(slop_arena* arena, owl2_Signature sig, rdf_IRI ent
 uint8_t decode_add_builtins(slop_arena* arena, owl2_Signature sig);
 owl2_Signature decode_build_signature(slop_arena* arena, termstore_TermStore dict, slop_list_termstore_IdTriple triples);
 slop_string decode_render_term(slop_arena* arena, rdf_Term t);
+slop_string decode_nt_escape(slop_arena* arena, slop_string s);
 slop_string decode_render_triple(slop_arena* arena, rdf_Triple t);
 types_InputRef decode_frag(slop_arena* arena, rdf_Triple t);
 uint8_t decode_is_pred(rdf_Triple t, slop_string iri);
@@ -1444,7 +1445,7 @@ slop_string decode_render_term(slop_arena* arena, rdf_Term t) {
         case rdf_Term_term_literal:
         {
             __auto_type l = _mv_1239.data.term_literal;
-            return string_concat(arena, SLOP_STR("\""), string_concat(arena, l.value, SLOP_STR("\"")));
+            return string_concat(arena, SLOP_STR("\""), string_concat(arena, decode_nt_escape(arena, l.value), SLOP_STR("\"")));
         }
         case rdf_Term_term_triple:
         {
@@ -1453,6 +1454,10 @@ slop_string decode_render_term(slop_arena* arena, rdf_Term t) {
         }
     }
     SLOP_UNREACHABLE();
+}
+
+slop_string decode_nt_escape(slop_arena* arena, slop_string s) {
+    return strlib_replace_all(arena, strlib_replace_all(arena, strlib_replace_all(arena, strlib_replace_all(arena, s, SLOP_STR("\\"), SLOP_STR("\\\\")), SLOP_STR("\""), SLOP_STR("\\\"")), SLOP_STR("\n"), SLOP_STR("\\n")), SLOP_STR("\r"), SLOP_STR("\\r"));
 }
 
 slop_string decode_render_triple(slop_arena* arena, rdf_Triple t) {
@@ -1527,7 +1532,7 @@ uint8_t decode_structural_predicate(slop_string p) {
 }
 
 uint8_t decode_structural_triple(rdf_Triple t) {
-    if (({ __auto_type _mv = decode_term_iri_value(t.predicate); _mv.has_value ? ({ __auto_type i = _mv.value; decode_structural_predicate(i.value); }) : (0); })) {
+    if (({ __auto_type _mv = decode_term_iri_value(t.predicate); _mv.has_value ? ({ __auto_type i = _mv.value; decode_structural_predicate(i.value); }) : (0); }) && ({ __auto_type _mv = t.subject; uint8_t _mr = {0}; switch (_mv.tag) { case rdf_Term_term_blank: { _mr = 1; break; } default: { _mr = 0; break; }  } _mr; })) {
         return 1;
     } else {
         if (!(decode_is_pred(t, vocab_RDF_TYPE))) {

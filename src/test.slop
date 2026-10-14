@@ -25,7 +25,7 @@
                      store-over store-insert-ids))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
                  OWL_THING OWL_NOTHING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
-  (import decode (graph-to-indexed rdf-list-checked term-at stage0-header Stage0
+  (import decode (graph-to-indexed nt-escape rdf-list-checked term-at stage0-header Stage0
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms decode-axioms-with decode-store Stage1))
   (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity
@@ -6914,6 +6914,16 @@
   ;; configuration, is the yardstick, and S4's raw queries read its Run H.
   ;; ------------------------------------------------------------
 
+  (fn test-nt-escape ((arena Arena))
+    (@intent "A literal renders as N-Triples writes it: one line, its quotes, backslashes, newlines and returns escaped")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (and (string-eq (nt-escape arena "plain") "plain")
+         (string-eq (nt-escape arena "a\"b") "a\\\"b")
+         (string-eq (nt-escape arena "a\\b") "a\\\\b")
+         (string-eq (nt-escape arena "a\nb\rc") "a\\nb\\rc")
+         (string-eq (nt-escape arena "\\\"") "\\\\\\\"")))
+
   (fn test-sriq-wired ((arena Arena))
     (@intent "sriq through prepare-in-profile and reason: every fixture's verdict, termination, rounds and findings as the split run and S4's raw queries give them; the round budget shared; the clause budget; cancellation ahead of the cap; S1's guard omissions in the coverage")
     (@spec ((Arena) -> Bool))
@@ -10604,6 +10614,35 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
                       (is-cancelled (classify-cfg arena union (cancelled-cfg (with-budget auto 1000 1)))))
            (step-scan arena "corpus/fixtures/sriq/step-down-early-unsat.ttl"))))
 
+  (fn test-choices-budget ((arena Arena))
+    (@intent "The clause budget also caps one rule instance's choices: sriq-config sets the choices cap to the budget, and
+              an ontology whose Pred products outgrow it stops there, explicit sriq at resource-limit, auto stepped down (at
+              50,000, where a Pred job of round 14 passes it; the production 500,000 binds in round 15)")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((path "corpus/fixtures/sriq-budget/pred-choices.ttl")
+          (auto (union-new ProfileSelection auto))
+          (sriq (union-new ProfileSelection explicit 'profile-sriq)))
+      (and (step-says arena "sriq-config's choices cap is its clause budget"
+                      (== (. (. (sriq-config 1000 7 0) base) prod) 7))
+           (step-says arena "pred-choices: Run H stops at the choices cap, its store within the budget"
+                      (choices-stopped arena path))
+           (step-says arena "pred-choices, explicit sriq: resource-limit, no step-down"
+                      (capped-sriq (classify-cfg arena path (with-budget sriq 1000 50000))))
+           (step-says arena "pred-choices, auto: el answers, stepped down"
+                      (answered-by (classify-cfg arena path (with-budget auto 1000 50000)) 'profile-el true)))))
+
+  (fn choices-stopped ((arena Arena) (path String))
+    (@intent "Does path's Run H stop at the choices cap (rs-product) under a budget of 50,000, its store within it?")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (split-load arena path)
+      ((error m) false)
+      ((ok in)
+        (let ((h (. (. (split-run-of arena (. in h) (. in c) (. in has-c) false (sriq-config 1000 50000 0)) h)
+                    res)))
+          (and (== (. h status) 'rs-product) (<= (view-total (. h st)) 50000))))))
+
   (fn step-says ((arena Arena) (label String) (ok Bool))
     (@intent "One check of the step-down, printed when it fails")
     (@spec ((Arena String Bool) -> Bool))
@@ -12561,6 +12600,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-auto-step-down arena)))
             (print-test-result "11b: auto steps down from sriq at the clause budget, and only then" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-choices-budget arena)))
+            (print-test-result "the clause budget caps one rule instance's choices too; auto steps down there" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-nt-escape arena)))
+            (print-test-result "a literal in an omission renders on one line, escaped as N-Triples" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-wired arena)))

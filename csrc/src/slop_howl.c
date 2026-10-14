@@ -25,6 +25,7 @@ slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_sriq_reason(slop_arena* arena, howl_Prepared p, howl_SriqWork w, types_ReasonerConfig config);
 uint8_t howl_steps_down(sriqabox_SplitRun sp, types_Outcome o);
+uint8_t howl_over_budget(sriqref_RefStatus s);
 slop_result_types_Outcome_types_Fault howl_step_down(slop_arena* arena, howl_StepDown s, types_ReasonerConfig config);
 types_Outcome howl_stepped(slop_arena* arena, types_Outcome o);
 types_Outcome howl_sriq_outcome(slop_arena* arena, howl_Prepared p, howl_SriqWork w, sriqabox_SplitRun sp);
@@ -459,7 +460,11 @@ slop_result_types_Outcome_types_Fault howl_sriq_reason(slop_arena* arena, howl_P
 }
 
 uint8_t howl_steps_down(sriqabox_SplitRun sp, types_Outcome o) {
-    return (((sp.h.res.status == sriqref_RefStatus_rs_clauses) || (sp.ran_c && (sp.c.res.status == sriqref_RefStatus_rs_clauses))) && !(types_findings_are_incoherent(o.findings)));
+    return ((howl_over_budget(sp.h.res.status) || (sp.ran_c && howl_over_budget(sp.c.res.status))) && !(types_findings_are_incoherent(o.findings)));
+}
+
+uint8_t howl_over_budget(sriqref_RefStatus s) {
+    return ((s == sriqref_RefStatus_rs_clauses) || (s == sriqref_RefStatus_rs_product));
 }
 
 slop_result_types_Outcome_types_Fault howl_step_down(slop_arena* arena, howl_StepDown s, types_ReasonerConfig config) {
@@ -487,7 +492,7 @@ types_Outcome howl_stepped(slop_arena* arena, types_Outcome o) {
 }
 
 types_Outcome howl_sriq_outcome(slop_arena* arena, howl_Prepared p, howl_SriqWork w, sriqabox_SplitRun sp) {
-    return ((types_Outcome){.profile = p.profile, .coverage = p.coverage, .termination = ((sp.finished) ? ((types_Termination){ .tag = types_Termination_fixpoint }) : ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = ((int64_t)(SLOP_RANGE(int64_t, sp.rounds, 1, 0, 0, 0, "(Int 0 ..) at howl.slop:614:77"))) })), .findings = sriqabox_split_findings(arena, sp.h.res.st, w.classes, sp.inconsistent), .evidence = ((types_Evidence){ .tag = types_Evidence_sriq_evidence, .data.sriq_evidence = ((types_SriqEvidence){.h_rounds = sp.h.res.rounds, .c_rounds = ((sp.ran_c) ? sp.c.res.rounds : 0), .ran_c = sp.ran_c}) }), .rounds = sp.rounds, .names = p.names, .owned = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .stepped_down = 0});
+    return ((types_Outcome){.profile = p.profile, .coverage = p.coverage, .termination = ((sp.finished) ? ((types_Termination){ .tag = types_Termination_fixpoint }) : ((types_Termination){ .tag = types_Termination_resource_limit, .data.resource_limit = ((int64_t)(SLOP_RANGE(int64_t, sp.rounds, 1, 0, 0, 0, "(Int 0 ..) at howl.slop:620:77"))) })), .findings = sriqabox_split_findings(arena, sp.h.res.st, w.classes, sp.inconsistent), .evidence = ((types_Evidence){ .tag = types_Evidence_sriq_evidence, .data.sriq_evidence = ((types_SriqEvidence){.h_rounds = sp.h.res.rounds, .c_rounds = ((sp.ran_c) ? sp.c.res.rounds : 0), .ran_c = sp.ran_c}) }), .rounds = sp.rounds, .names = p.names, .owned = ((slop_list_arena_ptr){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .stepped_down = 0});
 }
 
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config) {
@@ -647,7 +652,7 @@ slop_option_rdf_Term howl_make_term(slop_arena* arena, howl_TermIn t) {
         return (slop_option_rdf_Term){.has_value = 1, .value = rdf_make_iri(arena, t.value)};
     } else if (_mv_1608 == rdf_TermKind_blank) {
         if ((t.blank >= 0) && (t.blank <= 1099511627775)) {
-            return (slop_option_rdf_Term){.has_value = 1, .value = rdf_make_blank(arena, ((int64_t)(SLOP_RANGE(int64_t, t.blank, 1, 0, 0, 0, "(Int 0 ..) at howl.slop:891:60"))))};
+            return (slop_option_rdf_Term){.has_value = 1, .value = rdf_make_blank(arena, ((int64_t)(SLOP_RANGE(int64_t, t.blank, 1, 0, 0, 0, "(Int 0 ..) at howl.slop:897:60"))))};
         } else {
             return (slop_option_rdf_Term){.has_value = false};
         }
@@ -787,8 +792,8 @@ types_ReasonerConfig howl_options_config(howl_Options o) {
     SLOP_PRE(((o.max_iterations <= 10000)), "(<= (. o max-iterations) 10000)");
     {
         __auto_type c = types_default_config();
-        c.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, o.workers, 1, 1, 1, 64, "(Int 1 .. 64) at howl.slop:1060:50")));
-        c.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, o.max_iterations, 1, 1, 0, 10000, "(Int 0 .. 10000) at howl.slop:1061:55")));
+        c.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, o.workers, 1, 1, 1, 64, "(Int 1 .. 64) at howl.slop:1066:50")));
+        c.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, o.max_iterations, 1, 1, 0, 10000, "(Int 0 .. 10000) at howl.slop:1067:55")));
         c.selection = ((o.auto_select) ? ((types_ProfileSelection){ .tag = types_ProfileSelection_slop_auto }) : ((types_ProfileSelection){ .tag = types_ProfileSelection_explicit, .data.explicit = o.profile }));
         c.strict_profile = 0;
         c.cancel_ptr = o.cancel;

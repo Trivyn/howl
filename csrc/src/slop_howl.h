@@ -383,6 +383,7 @@ slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_sriq_reason(slop_arena* arena, howl_Prepared p, howl_SriqWork w, types_ReasonerConfig config);
 uint8_t howl_steps_down(sriqabox_SplitRun sp, types_Outcome o);
+uint8_t howl_over_budget(sriqref_RefStatus s);
 slop_result_types_Outcome_types_Fault howl_step_down(slop_arena* arena, howl_StepDown s, types_ReasonerConfig config);
 types_Outcome howl_stepped(slop_arena* arena, types_Outcome o);
 types_Outcome howl_sriq_outcome(slop_arena* arena, howl_Prepared p, howl_SriqWork w, sriqabox_SplitRun sp);

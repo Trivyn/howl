@@ -527,13 +527,13 @@
 
   (fn sriq-config ((max-rounds Int) (budget Int) (cancel I64))
     (@intent "The production run: cautious, deferral and kept premise views on, max-rounds rounds over both runs, the
-              clause budget, the host's cancel flag; the contexts, choices and Nom caps off (SPEC 5.5: outside the
-              tests only the round cap and the clause budget apply)")
+              clause budget, which also caps one rule instance's choices, the host's cancel flag; the contexts and Nom
+              caps off (SPEC 5.5: outside the tests only the round cap and the clause budget apply)")
     (@spec ((Int Int I64) -> SatConfig))
     (@pure)
     (record-new SatConfig
       (base (record-new RefConfig (strat 'st-cautious) (fuel max-rounds) (lam -1) (ctxs 2147483647) (cls budget)
-                                  (prod 2147483647) (cnst 2147483647)))
+                                  (prod budget) (cnst 2147483647)))
       (perm 0) (scan false) (defer true) (views true) (check false) (cancel cancel)))
 
   ;; The findings, read off Run H's final structure in one pass per query

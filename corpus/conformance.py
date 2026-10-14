@@ -4,8 +4,11 @@
     python3 corpus/conformance.py fetch            # download and sha256-verify the pinned sources
     python3 corpus/conformance.py run [--update] [--profile P]   # run HOWL against them
 
---profile el (the default) or el++ is passed to HOWL and to the census; each
-profile has its own record (conformance-status.txt, conformance-status-el++.txt).
+--profile el (the default), el++ or sriq is passed to HOWL and to the census;
+each profile has its own record (conformance-status.txt, conformance-status-el++.txt,
+conformance-status-sriq.txt). Under sriq the W3C selection is every approved
+Direct-Semantics test, not only the EL profile's: sriq is outside EL, and the
+construct filter below decides which tests it can judge (SPEC.md §12 M5 (d)).
 
 The capability probes (corpus/fixtures/probes/) carry expectations written for
 HOWL, and the differential compares HOWL with oracles run live. These are the
@@ -123,6 +126,35 @@ def verified(suite):
 
 # -- running ---------------------------------------------------------------
 
+BUDGET = "budget"
+
+
+def budgeted(report, expect=None, notentailed=(), expected=None):
+    """(status, detail) for a run stopped at sriq's clause budget. Its findings are
+    sound but partial, so each is checked for what it claims, never for what it
+    lacks: an inconsistency the test says is wrong, a non-entailment it entails,
+    or (expected, the test's complete answer) a subsumption or unsatisfiable
+    class the answer lacks FAILS. Else an expected inconsistency passes, and
+    anything else is `budget`."""
+    rep = entdiff.parse(report, partial=True)
+    wrong = []
+    if rep.inconsistent and expect is False:
+        wrong.append("inconsistent, expected consistent")
+    if rep.inconsistent and any(not head.startswith("Declaration:") for head, _ in notentailed):
+        # An inconsistency entails every conclusion, expressible or not.
+        wrong.append("inconsistent, but the test has a non-entailment")
+    for head, iris in notentailed:
+        if not rep.inconsistent and head in EXPRESSIBLE and iris is not None and entails_named(rep, head, iris):
+            wrong.append(f"not expected: {head}({' '.join(iris)})")
+    if expected is not None:
+        wrong += entdiff.unsound(rep, expected)
+    if wrong:
+        return "FAIL", "at the clause budget: " + "; ".join(wrong)
+    if rep.inconsistent and expect is True:
+        return "ok", ""
+    return "budget", "stopped at sriq's clause budget"
+
+
 def howl_report(ttl, out_dir):
     """(report path, None) when comparable, else (report path, why it is outside v0).
 
@@ -145,8 +177,14 @@ def howl_report(ttl, out_dir):
         return path, None
     except entdiff.Incomplete as e:
         if e.reason != "omitted":
-            # Nothing here is capped, so a non-fixpoint run is a HOWL fault, not a skip.
-            raise HarnessError(str(e))
+            # Nothing here is capped by the harness. Under sriq a run that
+            # omitted nothing can still stop at the clause budget (SPEC.md
+            # §5.5): recorded as `budget`, never compared. Elsewhere, and
+            # with omissions (which put a test outside first), it is a fault.
+            if PROFILE == "sriq" and "\nomitted 0\n" in p.stdout:
+                return path, BUDGET
+            if PROFILE != "sriq":
+                raise HarnessError(str(e))
     except entdiff.Refused as e:
         raise HarnessError(f"malformed HOWL report: {e}")
     kinds = sorted({line.split(" ", 1)[1].split("(", 1)[0]
@@ -169,7 +207,8 @@ def convert(files, out_dir):
 
 
 def w3c_tests():
-    """The Approved EL-profile, Direct-Semantics W3C tests: (graph, [(node, name, premise ttl)])."""
+    """The Approved Direct-Semantics W3C tests, EL-profile ones only but under sriq:
+    (graph, [(node, name, premise ttl)])."""
     from rdflib import Graph, Namespace
     T = Namespace(TEST)
     (all_rdf,) = verified("w3c")
@@ -179,7 +218,7 @@ def w3c_tests():
     os.makedirs(out_dir, exist_ok=True)
     fs_inputs, cases = [], []
     for t in g.subjects(T.identifier, None):
-        if (t, T.profile, T.EL) not in g or (t, T.semantics, T.DIRECT) not in g:
+        if (PROFILE != "sriq" and (t, T.profile, T.EL) not in g) or (t, T.semantics, T.DIRECT) not in g:
             continue
         if (t, T.status, T.Approved) not in g:
             continue
@@ -189,7 +228,9 @@ def w3c_tests():
             premise = Graph()
             premise.parse(data=str(rdfxml), format="xml")
             ttl = os.path.join(out_dir, name + ".ttl")
-            premise.serialize(ttl, format="turtle")
+            # N-Triples, a subset of Turtle, so no prefix rdflib generates
+            # (`j.0:`, legal Turtle) can trip HOWL's parser.
+            premise.serialize(ttl, format="nt")
         else:
             fs = g.value(t, T.fsPremiseOntology)
             if fs is None:
@@ -237,6 +278,9 @@ def run_w3c():
             results.append((name, "oracle-lossy", "repeated operands in " + " ".join(lossy)))
             continue
         report, outside = howl_report(ttl, out_dir)
+        if outside == BUDGET:
+            results.append((name, *budgeted(report, expect)))
+            continue
         if outside is not None:
             results.append((name, f"outside-{PROFILE}", outside))
             continue
@@ -295,6 +339,9 @@ def run_w3c_entailment():
             c = g.value(t, T.rdfXmlNonConclusionOntology)
             notentailed = conclusion_axioms(str(c)) if c is not None else [("no-rdfxml-conclusion", None)]
         report, outside = howl_report(ttl, out_dir)
+        if outside == BUDGET:
+            results.append((name, *budgeted(report, notentailed=notentailed)))
+            continue
         if outside is not None:
             results.append((name, f"outside-{PROFILE}", outside))
             continue
@@ -518,12 +565,15 @@ def run_elk():
             results.append((name, "oracle-lossy", "repeated operands in " + " ".join(lossy)))
             continue
         report, outside = howl_report(converted[name], out_dir)
-        if outside is not None:
-            results.append((name, f"outside-{PROFILE}", outside))
-            continue
         expected = os.path.join(out_dir, "expected", name + ".report")
         with open(expected, "w", encoding="utf-8") as fh:
             fh.write("\n".join(closed_taxonomy(os.path.splitext(f)[0] + ".taxonomy")) + "\n")
+        if outside == BUDGET:
+            results.append((name, *budgeted(report, expected=entdiff.parse(expected))))
+            continue
+        if outside is not None:
+            results.append((name, f"outside-{PROFILE}", outside))
+            continue
         diff = entdiff.compare(entdiff.parse(report), entdiff.parse(expected))
         if diff:
             detail = "; ".join(f"{k}: {', '.join(v[:3])}{' …' if len(v) > 3 else ''}"
@@ -587,12 +637,15 @@ def run_elk_entailment():
             results.append((name, "oracle-lossy", "repeated operands in " + " ".join(lossy)))
             continue
         report, outside = howl_report(converted[name], out_dir)
-        if outside is not None:
-            results.append((name, f"outside-{PROFILE}", outside))
-            continue
         base = os.path.splitext(f)[0]
         entailed = read_fss(base + ".entailed") if os.path.exists(base + ".entailed") else []
         notentailed = read_fss(base + ".notentailed") if os.path.exists(base + ".notentailed") else []
+        if outside == BUDGET:
+            results.append((name, *budgeted(report, notentailed=notentailed)))
+            continue
+        if outside is not None:
+            results.append((name, f"outside-{PROFILE}", outside))
+            continue
         results.append((name, *check_axioms(entdiff.parse(report), entailed, notentailed)))
     return results
 
@@ -616,7 +669,10 @@ def cmd_run(update):
               "# not-expressible: the expected answer is an axiom HOWL's report does not\n"
               "# state (an individual's type, a property axiom, a complex expression).\n"
               "# oracle-lossy: the input repeats an operand OWL 2 reads pairwise, which the\n"
-              "# OWL API collapses on conversion, so the test cannot be posed to HOWL intact.\n")
+              "# OWL API collapses on conversion, so the test cannot be posed to HOWL intact.\n"
+              + ("# budget: HOWL stopped at sriq's clause budget (SPEC.md §5.5), so its answer\n"
+                 "# is partial and not compared; a definitive inconsistency is still checked.\n"
+                 if PROFILE == "sriq" else ""))
     if update:
         if failed:
             print("  not updating the record while tests fail")
@@ -641,7 +697,7 @@ def cmd_run(update):
                 counts[status] += 1
         print(f"  {PROFILE} {suite}: ok {counts['ok']}, outside-{PROFILE} {counts[f'outside-{PROFILE}']}, "
               f"not-expressible {counts['not-expressible']}, oracle-lossy {counts['oracle-lossy']}, "
-              f"FAIL {counts['FAIL']}")
+              + (f"budget {counts['budget']}, " if PROFILE == "sriq" else "") + f"FAIL {counts['FAIL']}")
     return 1 if failed else 0
 
 

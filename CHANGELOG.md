@@ -12,8 +12,18 @@
   - **`auto` steps down.** When it chose `sriq` and the run passes the clause budget with nothing
     definitive, it reruns the input under `el` or `el++` and says so on stderr. OBI is such an
     input.
+  - **The budget also caps one rule instance's choices** at 500,000, so a run whose store stays
+    small cannot spend unbounded time enumerating discarded choices.
   - The report grammar, the C ABI and the Rust API are unchanged. Only `Fault::ProfileUnavailable`'s
     text for an unbuilt rung lists `sriq` among the implemented ones.
+- **Fixed, every profile: an omission that quotes a literal stays on one line.** The literal is
+  escaped as N-Triples does it. A literal with a newline, such as an XML literal, used to split the
+  omission across lines and break the report's grammar.
+- **Fixed, every profile: `owl:intersectionOf` (or `unionOf`, `complementOf`, …) on a named class
+  is reported, not dropped.** It is OWL 1's way of stating an equivalence, and the OWL 2 mapping does
+  not define it. HOWL used to skip such a triple silently, so a run could report coherent while
+  ignoring it. It is now an omission, so the run is inconclusive. One W3C test, `WebOnt-Thing-004`
+  (`owl:Thing owl:oneOf …`), moves from passing to outside the el and el++ profiles for this reason.
 - **`sriq`'s gate is built** and tested, with the census's independent column beside it. It admits
   inverses, `∀`, unions, full negation, number restrictions up to 16, Self, every property
   characteristic, disjoint properties, `DisjointUnion`, equality and inequality, and negative
