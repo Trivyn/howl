@@ -1,0 +1,13 @@
+# ⊤ ⊑ X: a bodiless clause the root takes for every individual (E4).
+# Expect: consistent; A ⊑ X.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:X a owl:Class . :Y a owl:Class . :A a owl:Class .
+owl:Thing rdfs:subClassOf :X .
+:X owl:disjointWith :Y .
+:a a owl:NamedIndividual , :A .
+

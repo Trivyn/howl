@@ -2,7 +2,7 @@
  * HOWL's C API, every entry point, as a C caller drives it. Built by
  * `make c-example` under AddressSanitizer and UndefinedBehaviorSanitizer.
  *
- * For each fixture named on the command line, on both built profiles at
+ * For each fixture named on the command line, on every built profile at
  * W in {1, 2, 4}: the Turtle is added and its buffer freed BEFORE
  * classifying (the input must not borrow it), a second document of
  * triples follows, and the input is classified twice. Every accessor is
@@ -12,9 +12,9 @@
  *
  * Then probe queries (SPEC §8.4, issue #68): a probe document as Turtle
  * and another as triples, three queries, and their answers through every
- * probe accessor, on both profiles.
+ * probe accessor, on every built profile.
  *
- * Then the refusals: out-of-range options, an unbuilt profile, a term
+ * Then the refusals: out-of-range options, the dropped profile, a term
  * HOWL does not take, and Turtle that does not parse.
  */
 #include "howl.h"
@@ -97,8 +97,8 @@ static howl_Input input_for(const char* path) {
 }
 
 static void fixture(const char* path) {
-    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus };
-    for (int p = 0; p < 2; p++) {
+    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus, types_Profile_profile_sriq };
+    for (int p = 0; p < 3; p++) {
         char* first = NULL;
         for (int w = 1; w <= 4; w *= 2) {
             howl_Input in = input_for(path);
@@ -142,8 +142,8 @@ static int answer_is(howl_Run r, int64_t i, probe_QueryKind k, const char* sub, 
 }
 
 static void probes(void) {
-    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus };
-    for (int p = 0; p < 2; p++) {
+    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus, types_Profile_profile_sriq };
+    for (int p = 0; p < 3; p++) {
         howl_Input in = howl_input_new();
         CHECK(howl_input_add_turtle(in, str(PROBE_MAIN)).ok, "the probe scenario does not parse");
         CHECK(howl_input_add_probe_turtle(in, str(PROBE_DOC)).ok, "the probe document does not parse");
@@ -222,7 +222,7 @@ static void refusals(const char* path) {
     howl_run_free(r);
 
     /* horn-sriq was dropped (SPEC §5): its slot stays in the enum and is
-     * refused for good, saying what replaces it. sriq is not built yet. */
+     * refused for good, saying what replaces it. Every other rung is built. */
     o = howl_default_options();
     o.profile = types_Profile_profile_horn_sriq;
     r = howl_run_classify(in, o);
@@ -230,14 +230,6 @@ static void refusals(const char* path) {
     CHECK(howl_run_fault_profile(r) == types_Profile_profile_horn_sriq, "unavailable names another profile");
     CHECK(msg_is(howl_run_fault_message(r), "profile horn-sriq was dropped; sriq covers its language"),
           "horn-sriq's refusal does not say it was dropped");
-    howl_run_free(r);
-
-    o = howl_default_options();
-    o.profile = types_Profile_profile_sriq;
-    r = howl_run_classify(in, o);
-    CHECK(howl_run_fault(r) == howl_FaultKind_fault_unavailable, "sriq not refused");
-    CHECK(msg_is(howl_run_fault_message(r), "profile sriq is not implemented yet (implemented: el, el++)"),
-          "sriq's refusal does not say it is not built yet");
     howl_run_free(r);
 
     uint32_t flag = 1;
@@ -289,6 +281,6 @@ int main(int argc, char** argv) {
         fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;
     }
-    printf("C API: %d fixtures x {el, el++} x W in {1,2,4}, twice each; probes; refusals: ok\n", argc - 1);
+    printf("C API: %d fixtures x {el, el++, sriq} x W in {1,2,4}, twice each; probes; refusals: ok\n", argc - 1);
     return 0;
 }

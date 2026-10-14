@@ -99,6 +99,8 @@ slop_list_probe_Answered probe_answer_queries(slop_arena* arena, types_Outcome o
 probe_ProbeAnswer probe_answer_of(types_Outcome o, probe_Query q);
 rdf_IRI probe_query_target(probe_Query q);
 slop_option_u8 probe_query_holds(types_Outcome o, probe_Query q);
+slop_option_u8 probe_findings_hold(types_Findings f, rdf_IRI a, rdf_IRI b);
+uint8_t probe_node_is(types_Node n, rdf_IRI i);
 slop_option_u8 probe_el_holds(types_Saturation sat, types_Outcome o, rdf_IRI a, rdf_IRI b);
 uint8_t probe_has_context(types_Saturation sat, types_Outcome o, types_Node n);
 slop_option_u8 probe_ksc_holds(types_KscResult r, rdf_IRI a, rdf_IRI b);

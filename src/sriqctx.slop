@@ -1,0 +1,702 @@
+;; ============================================================
+;; sriq's context structure, triggers and strategies  —  [TGH21]
+;; Definitions 3, 4 and 5, Λ's inputs (Theorem 2, Algorithm 1 step A4),
+;; and the initial structure (A1–A2; SPEC.md §5.5 S3–S5)
+;;
+;; THE STRUCTURE (Definition 3) is the contexts, each with its core and
+;; whether it is the root v_r; each context's clause set S_v; the edges
+;; ⟨v, w, f⟩ and ⟨v, w, u⟩, labelled by a function symbol or a constant;
+;; and the constants (the order's table: O's individuals, then those Nom
+;; creates). Every context shares one context order (S5), so θ is not
+;; stored. A context's identity is its core (S5), apart from v_r, whose
+;; core is empty like v_⊤'s.
+;;
+;; Ids: v_r is 0, v_⊤ is 1, and v_B is 2 + B for each class B of the
+;; input signature (ids 0 .. nclass − 1, S4's query classes). Contexts
+;; a strategy creates follow, numbered by the caller in content order.
+;;
+;; THE TRIGGERS (Definition 4) are read off O's clause bodies once, as
+;; per-id flags, so each membership test is loop-free:
+;;   Su(O):  B(x), B(u)     for each B(x) in a body           (item 1)
+;;           S(x, y)        for each S(x, zᵢ) in a body        (item 2)
+;;           S(y, x)        for each S(zᵢ, x) in a body        (item 3)
+;;           S(u₁, u₂)      for each S in a body               (item 4)
+;;           u₁ ≈ u₂                                           (item 5)
+;;   Pr(O):  B(y), B(u)     for each class B of O              (item 1)
+;;           S(x, y)        for each S(zᵢ, x) in a body        (item 2)
+;;           S(y, x)        for each S(x, zᵢ) in a body        (item 3)
+;;           S(u₁, u₂)      for each S in a body               (item 4)
+;;           x ≈ y, x ≈ u, y ≈ u, u₁ ≈ u₂                      (item 5)
+;;   Suʳ(O): B(u), S(y, u), S(u, y), S(u₁, u₂), u₁ ≈ u₂, over O's B and S
+;;   Prʳ(O): Suʳ(O), and B(y) and y ≈ u
+;; Every constant here is in Σ_u^O: its label's letters are O's roles.
+;;
+;; THE STRATEGIES (Definition 5) choose a successor's core from K₁:
+;; trivial always ∅ (v_⊤), eager K₁ itself, and cautious ([Bate+18] §4.2)
+;; {B(x)} when f occurs in O in exactly one atom B(f(x)) and B(x) ∈ K₁,
+;; else ∅. The choice is returned as a CoreChoice, so `core ⊆ K₁` is a
+;; proved property of every choice.
+;; ============================================================
+
+(module sriqctx
+  (@doc "sriq's context structure, triggers and strategies (TGH21 Definitions 3-5), Λ's inputs, and the initial
+         structure")
+
+  (import types (AKind ATerm LitForm Lit Clause at-x atom1 lit-eq))
+  (import sriqclauses (SriqClauses make-clause))
+  (import sriqsubsume (in-hat))
+  (import sriqorder (SriqOrder named-consts))
+
+  (export Strategy Triggers CoreKind CoreChoice EdgeLabel Edge Ctx CtxSet Structure
+          build-triggers triggers-of sole-at in-su in-pr in-sur in-prr lit-ground mentions-x
+          tau-su tau-pr omega omega-d pow2-sat
+          has-lit strat-choice core-of
+          init-structure with-hidden ctx-count ctx-at set-at ctx-by-core
+          lit-ok ctx-clause-ok
+          q-inconsistent q-unsat q-hidden-unsat q-holds q-thing)
+
+  (type Strategy (enum st-trivial st-eager st-cautious))
+
+  ;; Definition 4's trigger sets, as flags by id.
+  (type Triggers (record
+    (unary (List Bool))    ; by class: B(x) occurs in a body
+    (out   (List Bool))    ; by role:  S(x, zᵢ) occurs in a body
+    (in    (List Bool))    ; by role:  S(zᵢ, x) occurs in a body
+    (body  (List Bool))    ; by role:  S occurs in a body
+    (cls   (List Bool))    ; by class: B occurs in O (Σ_A^O)
+    (role  (List Bool))    ; by role:  S occurs in O (Σ_S^O)
+    (sole  (List U32))))   ; by function symbol: B when f occurs in exactly one atom B(f(x)) of O; else no-id
+
+  ;; A strategy's choice of core: ∅, K₁ itself, or {B(x)}.
+  (type CoreKind (enum cc-empty cc-k1 cc-unary))
+  (type CoreChoice (record
+    (kind CoreKind)
+    (cls  U32)))           ; B, for cc-unary
+
+  (type EdgeLabel (enum el-fn el-const))
+  (type Edge (record
+    (from  U32)
+    (to    U32)
+    (lk    EdgeLabel)
+    (label U32)))          ; f, or u
+
+  (type Ctx (record
+    (core (List Lit))      ; sorted by lit-cmp, without repetition
+    (root Bool)))
+
+  ;; A record, not a bare list: the C generator orders a (List (List T))
+  ;; before (List T) in the header.
+  (type CtxSet (record
+    (cs (List Clause))))
+
+  (type Structure (record
+    (ctxs  (List Ctx))     ; by context id
+    (sets  (List CtxSet))  ; S_v, by context id
+    (edges (List Edge))
+    (ord   SriqOrder)))    ; the constants: O's individuals, then Nom's
+
+  ;; ============================================================
+  ;; Small helpers
+  ;; ============================================================
+
+  (fn no-id ()
+    (@intent "An id no table holds")
+    (@spec (() -> U32))
+    (@pure)
+    (cast U32 4294967295))
+
+  (fn flag-at ((xs (List Bool)) (i U32))
+    (@intent "Flag i, false past the end")
+    (@spec (((List Bool) U32) -> Bool))
+    (@pure)
+    (match (list-get xs (cast Int i)) ((some v) v) ((none) false)))
+
+  (fn u32-at ((xs (List U32)) (i U32))
+    (@intent "Entry i, no-id past the end")
+    (@spec (((List U32) U32) -> U32))
+    (@pure)
+    (match (list-get xs (cast Int i)) ((some v) v) ((none) (no-id))))
+
+  (fn falses ((arena Arena) (n Int))
+    (@intent "n false flags")
+    (@spec ((Arena Int) -> (List Bool)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Bool))
+          (mut k 0))
+      (do (while (< k n) (do (list-push out false) (set! k (+ k 1)))) out)))
+
+  (fn no-ids ((arena Arena) (n Int))
+    (@intent "n entries of no-id")
+    (@spec ((Arena Int) -> (List U32)))
+    (@alloc arena)
+    (let ((mut out (list-new arena U32))
+          (mut k 0))
+      (do (while (< k n) (do (list-push out (no-id)) (set! k (+ k 1)))) out)))
+
+  (fn raise ((xs (List Bool)) (i U32))
+    (@intent "Set flag i. list-set writes through the shared buffer and never reallocates")
+    (@spec (((List Bool) U32) -> Bool))
+    (list-set xs (cast Int i) true))
+
+  (fn count-true ((xs (List Bool)))
+    (@intent "How many flags are set")
+    (@spec (((List Bool)) -> Int))
+    (@pure)
+    (@post (>= $result 0))
+    (let ((mut n 0))
+      (do (for-each (b xs)
+            (@loop-invariant (>= n 0))
+            (when b (set! n (+ n 1))))
+          n)))
+
+  (fn is-kind ((t ATerm) (k AKind))
+    (@intent "Is t of kind k?")
+    (@spec ((ATerm AKind) -> Bool))
+    (@pure)
+    (== (. t kind) k))
+
+  (fn has-lit ((ls (List Lit)) (l Lit))
+    (@intent "Is l among ls?")
+    (@spec (((List Lit) Lit) -> Bool))
+    (@pure)
+    (@post (== $result (exists (x ls) (lit-eq x l))))
+    (let ((mut found false))
+      (do (for-each (x ls)
+            (@loop-invariant (== found (exists (x2 (list-visited ls)) (lit-eq x2 l))))
+            (when (lit-eq x l) (set! found true)))
+          found)))
+
+  ;; ============================================================
+  ;; Definition 4: the triggers, read off O once
+  ;; ============================================================
+
+  (fn note-body-lit ((tr Triggers) (l Lit))
+    (@intent "Raise the body flags a body atom sets: B(x) → unary; S(x, zᵢ) → out; S(zᵢ, x) → in; any S → body")
+    (@spec ((Triggers Lit) -> Bool))
+    (match (. l form)
+      ('lf-unary  (if (is-kind (. l t1) 'ak-x) (raise (. tr unary) (. l pred)) false))
+      ('lf-binary (do (raise (. tr body) (. l pred)) (note-role-sides tr l)))
+      ('lf-eq     false)
+      ('lf-neq    false)))
+
+  (fn note-role-sides ((tr Triggers) (l Lit))
+    (@intent "S(x, zᵢ) raises out; S(zᵢ, x) raises in")
+    (@spec ((Triggers Lit) -> Bool))
+    (cond ((and (is-kind (. l t1) 'ak-x) (is-kind (. l t2) 'ak-z)) (raise (. tr out) (. l pred)))
+          ((and (is-kind (. l t1) 'ak-z) (is-kind (. l t2) 'ak-x)) (raise (. tr in) (. l pred)))
+          (else false)))
+
+  (fn note-any-lit ((tr Triggers) (many (List Bool)) (l Lit))
+    (@intent "Raise the flag of the class or role l names, and note an atom B(f(x)) against f")
+    (@spec ((Triggers (List Bool) Lit) -> Bool))
+    (match (. l form)
+      ('lf-unary  (do (raise (. tr cls) (. l pred)) (note-sole tr many l)))
+      ('lf-binary (raise (. tr role) (. l pred)))
+      ('lf-eq     false)
+      ('lf-neq    false)))
+
+  (fn note-sole ((tr Triggers) (many (List Bool)) (l Lit))
+    (@intent "An atom B(f(x)): f's first such atom names B, and a second, different one marks f as having many")
+    (@spec ((Triggers (List Bool) Lit) -> Bool))
+    (if (not (is-kind (. l t1) 'ak-fx))
+      false
+      (let ((f (. (. l t1) fsym))
+            (b (u32-at (. tr sole) f)))
+        (cond ((== b (no-id)) (list-set (. tr sole) (cast Int f) (. l pred)))
+              ((!= b (. l pred)) (raise many f))
+              (else false)))))
+
+  (fn note-clause ((tr Triggers) (many (List Bool)) (c Clause))
+    (@intent "Note every literal of one ontology clause")
+    (@spec ((Triggers (List Bool) Clause) -> Bool))
+    (do (for-each (l (. c body)) (do (note-body-lit tr l) (note-any-lit tr many l)))
+        (for-each (l (. c head)) (note-any-lit tr many l))
+        true))
+
+  (fn drop-many ((tr Triggers) (many (List Bool)))
+    (@intent "A function symbol in two different atoms B(f(x)) has no sole B")
+    (@spec ((Triggers (List Bool)) -> Bool))
+    (let ((mut f 0))
+      (do (for-each (m many)
+            (do (when m (list-set (. tr sole) f (no-id))) (set! f (+ f 1))))
+          true)))
+
+  (fn build-triggers ((arena Arena) (clauses (List Clause)) (nc Int) (nr Int) (nf Int))
+    (@intent "Definition 4's trigger sets for O's clauses, as flags by id, over nc classes, nr roles and nf function
+              symbols")
+    (@spec ((Arena (List Clause) Int Int Int) -> Triggers))
+    (@alloc arena)
+    (let ((tr   (record-new Triggers
+                  (unary (falses arena nc)) (out (falses arena nr)) (in (falses arena nr))
+                  (body (falses arena nr)) (cls (falses arena nc)) (role (falses arena nr))
+                  (sole (no-ids arena nf))))
+          (many (falses arena nf)))
+      (do (for-each (c clauses) (note-clause tr many c))
+          (drop-many tr many)
+          tr)))
+
+  (fn triggers-of ((arena Arena) (sc SriqClauses))
+    (@intent "The triggers of O as the clause boundary numbers it")
+    (@spec ((Arena SriqClauses) -> Triggers))
+    (@alloc arena)
+    (let ((ids (. sc ids)))
+      (build-triggers arena (. sc clauses) (cast Int (list-len (. ids class-of)))
+                      (cast Int (list-len (. ids role-of))) (. ids nfns))))
+
+  (fn sole-at ((tr Triggers) (f U32))
+    (@intent "B when f occurs in O in exactly one atom B(f(x)); no-id otherwise")
+    (@spec ((Triggers U32) -> U32))
+    (@pure)
+    (u32-at (. tr sole) f))
+
+  ;; ============================================================
+  ;; Membership. A unary atom keeps x in its unused t2 (types.slop),
+  ;; so every test reads the form first.
+  ;; ============================================================
+
+  (fn both-kinds ((l Lit) (a AKind) (b AKind))
+    (@intent "Are l's two terms of kinds a and b, in that order?")
+    (@spec ((Lit AKind AKind) -> Bool))
+    (@pure)
+    (and (is-kind (. l t1) a) (is-kind (. l t2) b)))
+
+  (fn pair-kinds ((l Lit) (a AKind) (b AKind))
+    (@intent "Are l's two terms of kinds a and b, in either order? For (in)equalities, whose sides are oriented
+              structurally")
+    (@spec ((Lit AKind AKind) -> Bool))
+    (@pure)
+    (or (both-kinds l a b) (both-kinds l b a)))
+
+  (fn su-unary ((tr Triggers) (l Lit))
+    (@intent "B(x) or B(u), for B(x) in a body (Su item 1)")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (and (or (is-kind (. l t1) 'ak-x) (is-kind (. l t1) 'ak-u)) (flag-at (. tr unary) (. l pred))))
+
+  (fn su-binary ((tr Triggers) (l Lit))
+    (@intent "S(x, y) for S(x, zᵢ) in a body; S(y, x) for S(zᵢ, x); S(u₁, u₂) for S in a body (Su items 2–4)")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (cond ((both-kinds l 'ak-x 'ak-y) (flag-at (. tr out) (. l pred)))
+          ((both-kinds l 'ak-y 'ak-x) (flag-at (. tr in) (. l pred)))
+          ((both-kinds l 'ak-u 'ak-u) (flag-at (. tr body) (. l pred)))
+          (else false)))
+
+  (fn in-su ((tr Triggers) (l Lit))
+    (@intent "Is l in Su(O), Definition 4's successor triggers?")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (@post (implies $result (or (== (. l form) 'lf-unary) (== (. l form) 'lf-binary) (== (. l form) 'lf-eq))))
+    (@post (implies (and $result (== (. l form) 'lf-eq)) (both-kinds l 'ak-u 'ak-u)))
+    (match (. l form)
+      ('lf-unary  (su-unary tr l))
+      ('lf-binary (su-binary tr l))
+      ('lf-eq     (both-kinds l 'ak-u 'ak-u))
+      ('lf-neq    false)))
+
+  (fn pr-unary ((tr Triggers) (l Lit))
+    (@intent "B(y) or B(u), for each class B of O (Pr item 1)")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (and (or (is-kind (. l t1) 'ak-y) (is-kind (. l t1) 'ak-u)) (flag-at (. tr cls) (. l pred))))
+
+  (fn pr-binary ((tr Triggers) (l Lit))
+    (@intent "S(x, y) for S(zᵢ, x) in a body; S(y, x) for S(x, zᵢ); S(u₁, u₂) for S in a body (Pr items 2–4)")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (cond ((both-kinds l 'ak-x 'ak-y) (flag-at (. tr in) (. l pred)))
+          ((both-kinds l 'ak-y 'ak-x) (flag-at (. tr out) (. l pred)))
+          ((both-kinds l 'ak-u 'ak-u) (flag-at (. tr body) (. l pred)))
+          (else false)))
+
+  (fn pr-eq ((l Lit))
+    (@intent "x ≈ y, x ≈ u, y ≈ u or u₁ ≈ u₂ (Pr item 5)")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (or (pair-kinds l 'ak-x 'ak-y) (pair-kinds l 'ak-x 'ak-u) (pair-kinds l 'ak-y 'ak-u) (both-kinds l 'ak-u 'ak-u)))
+
+  (fn in-pr ((tr Triggers) (l Lit))
+    (@intent "Is l in Pr(O), Definition 4's predecessor triggers?")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (@post (implies $result (not (== (. l form) 'lf-neq))))
+    (match (. l form)
+      ('lf-unary  (pr-unary tr l))
+      ('lf-binary (pr-binary tr l))
+      ('lf-eq     (pr-eq l))
+      ('lf-neq    false)))
+
+  (fn sur-binary ((tr Triggers) (l Lit))
+    (@intent "S(y, u), S(u, y) or S(u₁, u₂), for S of O")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (and (or (pair-kinds l 'ak-y 'ak-u) (both-kinds l 'ak-u 'ak-u)) (flag-at (. tr role) (. l pred))))
+
+  (fn in-sur ((tr Triggers) (l Lit))
+    (@intent "Is l in Suʳ(O): B(u), S(y, u), S(u, y), S(u₁, u₂) or u₁ ≈ u₂, over O's predicates?")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (@post (implies $result (not (== (. l form) 'lf-neq))))
+    (match (. l form)
+      ('lf-unary  (and (is-kind (. l t1) 'ak-u) (flag-at (. tr cls) (. l pred))))
+      ('lf-binary (sur-binary tr l))
+      ('lf-eq     (both-kinds l 'ak-u 'ak-u))
+      ('lf-neq    false)))
+
+  (fn in-prr ((tr Triggers) (l Lit))
+    (@intent "Is l in Prʳ(O): Suʳ(O), B(y) for B of O, or y ≈ u?")
+    (@spec ((Triggers Lit) -> Bool))
+    (@pure)
+    (@post (implies (in-sur tr l) $result))
+    (or (in-sur tr l)
+        (and (== (. l form) 'lf-unary) (is-kind (. l t1) 'ak-y) (flag-at (. tr cls) (. l pred)))
+        (and (== (. l form) 'lf-eq) (pair-kinds l 'ak-y 'ak-u))))
+
+  (fn aterm-ground ((t ATerm))
+    (@intent "A constant u or f(u)")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (or (is-kind t 'ak-u) (is-kind t 'ak-fu)))
+
+  (fn lit-ground ((l Lit))
+    (@intent "Does l mention no variable? A unary atom's unused t2 is not read")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (if (== (. l form) 'lf-unary)
+      (aterm-ground (. l t1))
+      (and (aterm-ground (. l t1)) (aterm-ground (. l t2)))))
+
+  (fn aterm-has-x ((t ATerm))
+    (@intent "x or f(x)")
+    (@spec ((ATerm) -> Bool))
+    (@pure)
+    (or (is-kind t 'ak-x) (is-kind t 'ak-fx)))
+
+  (fn mentions-x ((l Lit))
+    (@intent "Does l mention x, in x or f(x)? A unary atom's unused t2 is not read")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (if (== (. l form) 'lf-unary)
+      (aterm-has-x (. l t1))
+      (or (aterm-has-x (. l t1)) (aterm-has-x (. l t2)))))
+
+  ;; ============================================================
+  ;; Λ's inputs: Theorem 2's τSu and τPr, Definition 9's ω, and A4's ω_D
+  ;; ============================================================
+
+  (fn tau-su ((tr Triggers))
+    (@intent "τSu: Su(O)'s atoms of the form B(x), S(y, x) or S(x, y)")
+    (@spec ((Triggers) -> Int))
+    (@pure)
+    (@post (>= $result 0))
+    (+ (count-true (. tr unary)) (count-true (. tr out)) (count-true (. tr in))))
+
+  (fn tau-pr ((tr Triggers))
+    (@intent "τPr: Pr(O)'s atoms of the form B(y), S(y, x) or S(x, y)")
+    (@spec ((Triggers) -> Int))
+    (@pure)
+    (@post (>= $result 0))
+    (+ (count-true (. tr cls)) (count-true (. tr out)) (count-true (. tr in))))
+
+  (fn pow2-sat ((k Int))
+    (@intent "2^k, held at 2⁶² for k ≥ 62")
+    (@spec ((Int) -> Int))
+    (@pure)
+    (@example (3) -> 8)
+    (@example (62) -> 4611686018427387904)
+    (@example (100) -> 4611686018427387904)
+    (@pre (>= k 0))
+    (@post (implies (>= k 62) (== $result 4611686018427387904)))
+    (if (>= k 62) 4611686018427387904 (<< 1 k)))
+
+  (fn omega ((s Strategy) (tr Triggers))
+    (@intent "Definition 9's ω, the contexts the strategy can add: 1 under trivial, m under cautious, 2^(m+m′+1) under
+              eager, for m and m′ O's unary and binary predicates")
+    (@spec ((Strategy Triggers) -> Int))
+    (@pure)
+    (@post (implies (== s 'st-trivial) (== $result 1)))
+    (@post (implies (== s 'st-cautious) (== $result (count-true (. tr cls)))))
+    (match s
+      ('st-trivial  1)
+      ('st-cautious (count-true (. tr cls)))
+      ('st-eager    (pow2-sat (+ (count-true (. tr cls)) (count-true (. tr role)) 1)))))
+
+  (fn omega-d ((nquery Int))
+    (@intent "ω_D: the contexts initialisation creates, v_r, v_⊤ and one v_B per query class")
+    (@spec ((Int) -> Int))
+    (@pure)
+    (@example (3) -> 5)
+    (@post (== $result (+ nquery 2)))
+    (+ nquery 2))
+
+  ;; ============================================================
+  ;; Definition 5: the strategies
+  ;; ============================================================
+
+  (fn choice-of ((k CoreKind) (b U32))
+    (@intent "A CoreChoice")
+    (@spec ((CoreKind U32) -> CoreChoice))
+    (@pure)
+    (@post (== (. $result kind) k))
+    (@post (== (. $result cls) b))
+    (record-new CoreChoice (kind k) (cls b)))
+
+  (fn cautious-choice ((tr Triggers) (f U32) (k1 (List Lit)))
+    (@intent "[Bate+18] §4.2: {B(x)} when f occurs in O in exactly one atom B(f(x)) and B(x) ∈ K₁; else ∅")
+    (@spec ((Triggers U32 (List Lit)) -> CoreChoice))
+    (@pure)
+    (@post (or (== (. $result kind) 'cc-empty) (== (. $result kind) 'cc-unary)))
+    (@post (implies (== (. $result kind) 'cc-unary)
+                    (and (== (. $result cls) (sole-at tr f)) (has-lit k1 (atom1 (. $result cls) (at-x))))))
+    (let ((b (sole-at tr f)))
+      (if (and (!= b (no-id)) (has-lit k1 (atom1 b (at-x))))
+        (choice-of 'cc-unary b)
+        (choice-of 'cc-empty (no-id)))))
+
+  (fn strat-choice ((s Strategy) (tr Triggers) (f U32) (k1 (List Lit)))
+    (@intent "Definition 5: the core a strategy gives the successor for f and K₁")
+    (@spec ((Strategy Triggers U32 (List Lit)) -> CoreChoice))
+    (@pure)
+    (@post (implies (== s 'st-trivial) (== (. $result kind) 'cc-empty)))
+    (@post (implies (== s 'st-eager) (== (. $result kind) 'cc-k1)))
+    (@post (implies (== (. $result kind) 'cc-unary)
+                    (and (== s 'st-cautious) (has-lit k1 (atom1 (. $result cls) (at-x))))))
+    (match s
+      ('st-trivial  (choice-of 'cc-empty (no-id)))
+      ('st-eager    (choice-of 'cc-k1 (no-id)))
+      ('st-cautious (cautious-choice tr f k1))))
+
+  (fn core-of ((arena Arena) (cc CoreChoice) (k1 (List Lit)))
+    (@intent "The chosen core: ∅, K₁ itself (already a set), or {B(x)}, which strat-choice proves is in K₁")
+    (@spec ((Arena CoreChoice (List Lit)) -> (List Lit)))
+    (@alloc arena)
+    ;; That ∅ and {B(x)} have no and one member is held by test-sriq-strategy-rows:
+    ;; the checker does not read list-new as empty here.
+    (@property chosen (implies (== (. cc kind) 'cc-k1) (== $result k1)))
+    (if (== (. cc kind) 'cc-k1)
+      k1
+      (if (== (. cc kind) 'cc-unary)
+        (let ((mut one (list-new arena Lit)))
+          (do (list-push one (atom1 (. cc cls) (at-x))) one))
+        (let ((none-such (list-new arena Lit)))
+          none-such))))
+
+  ;; ============================================================
+  ;; Definition 3: the structure, and A1–A2's initial one (S4)
+  ;; ============================================================
+
+  (fn init-structure ((arena Arena) (nquery Int) (nconst Int))
+    (@intent "A1–A2: v_r, v_⊤ and v_B with core {B(x)} for each query class B < nquery; every S_v empty, no edge; O's
+              nconst constants")
+    (@spec ((Arena Int Int) -> Structure))
+    (@alloc arena)
+    (@pre (and (>= nquery 0) (>= nconst 0)))
+    (let ((mut ctxs (list-new arena Ctx))
+          (mut sets (list-new arena CtxSet))
+          (mut b 0))
+      (do
+        (list-push ctxs (record-new Ctx (core (list-new arena Lit)) (root true)))
+        (list-push ctxs (record-new Ctx (core (list-new arena Lit)) (root false)))
+        (while (< b nquery)
+          (let ((mut core (list-new arena Lit)))
+            (do (list-push core (atom1 (cast U32 b) (at-x)))
+                (list-push ctxs (record-new Ctx (core core) (root false)))
+                (set! b (+ b 1)))))
+        (set! b 0)
+        (while (< b (+ nquery 2))
+          (do (list-push sets (record-new CtxSet (cs (list-new arena Clause))))
+              (set! b (+ b 1))))
+        (record-new Structure (ctxs ctxs) (sets sets) (edges (list-new arena Edge))
+                              (ord (named-consts arena nconst))))))
+
+  ;; The ABox split's Run H (SPEC §5.5): a hidden query class A, S2's name
+  ;; for an individual's type, gets a context v_A with core {A(x)} after the
+  ;; query contexts, and only unsat(A) is read of it.
+  (fn with-hidden ((arena Arena) (st Structure) (hidden (List U32)))
+    (@intent "st with a context of core {A(x)} and an empty set appended for each hidden query class A, in hidden's
+              order")
+    (@spec ((Arena Structure (List U32)) -> Structure))
+    (@alloc arena)
+    (if (== (list-len hidden) 0)
+      st
+      (let ((mut ctxs (list-new arena Ctx)) (mut sets (list-new arena CtxSet)))
+        (do (for-each (c (. st ctxs)) (list-push ctxs c))
+            (for-each (s (. st sets)) (list-push sets s))
+            (for-each (a hidden)
+              (let ((mut core (list-new arena Lit)))
+                (do (list-push core (atom1 a (at-x)))
+                    (list-push ctxs (record-new Ctx (core core) (root false)))
+                    (list-push sets (record-new CtxSet (cs (list-new arena Clause)))))))
+            (record-new Structure (ctxs ctxs) (sets sets) (edges (. st edges)) (ord (. st ord)))))))
+
+  (fn ctx-count ((st Structure))
+    (@intent "How many contexts")
+    (@spec ((Structure) -> Int))
+    (@pure)
+    (cast Int (list-len (. st ctxs))))
+
+  (fn ctx-at ((st Structure) (v Int))
+    (@intent "Context v, if there is one")
+    (@spec ((Structure Int) -> (Option Ctx)))
+    (@pure)
+    (list-get (. st ctxs) v))
+
+  (fn set-at ((st Structure) (v Int))
+    (@intent "S_v, if v is a context")
+    (@spec ((Structure Int) -> (Option CtxSet)))
+    (@pure)
+    (list-get (. st sets) v))
+
+  (fn lits-same ((a (List Lit)) (b (List Lit)))
+    (@intent "The same literals in the same order: equal sets, both sorted")
+    (@spec (((List Lit) (List Lit)) -> Bool))
+    (@pure)
+    (let ((mut ok (== (list-len a) (list-len b)))
+          (mut i 0))
+      (do (for-each (l a)
+            (do (match (list-get b i) ((some m) (when (not (lit-eq l m)) (set! ok false))) ((none) (set! ok false)))
+                (set! i (+ i 1))))
+          ok)))
+
+  (fn core-matches ((c Ctx) (core (List Lit)))
+    (@intent "A non-root context with this core")
+    (@spec ((Ctx (List Lit)) -> Bool))
+    (@pure)
+    (and (not (. c root)) (lits-same (. c core) core)))
+
+  (fn ctx-by-core ((st Structure) (core (List Lit)))
+    (@intent "The non-root context whose core is core (a set), or no-id. Never v_r, whose core is also empty (Definition
+              5: v ≠ v_r)")
+    (@spec ((Structure (List Lit)) -> U32))
+    (@pure)
+    (@post (!= $result (cast U32 0)))
+    (let ((mut v (cast U32 0))
+          (mut found (no-id)))
+      (do (for-each (c (. st ctxs))
+            (@loop-invariant (!= found (cast U32 0)))
+            (do (when (and (> v (cast U32 0)) (== found (no-id)) (core-matches c core)) (set! found v))
+                (set! v (+ v (cast U32 1)))))
+          found)))
+
+  ;; ============================================================
+  ;; Definitions 2 and 3: what a context clause may hold
+  ;; ============================================================
+
+  (fn var-ok ((t ATerm) (root Bool))
+    (@intent "A context a-term (x, y, f(x), u or f(u), never zᵢ), with no x at the root and no f(u) elsewhere
+              (Definition 3)")
+    (@spec ((ATerm Bool) -> Bool))
+    (@pure)
+    (match (. t kind)
+      ('ak-x  (not root))
+      ('ak-fx (not root))
+      ('ak-fu root)
+      ('ak-y  true)
+      ('ak-u  true)
+      ('ak-z  false)))
+
+  (fn side-x ((s ATerm) (t ATerm))
+    (@intent "S(x, t) with t one of x, y, f(x), u (Definition 2's first p-term form). t = f(u) needs no test: var-ok
+              refuses x at the root and f(u) elsewhere, so the two never meet")
+    (@spec ((ATerm ATerm) -> Bool))
+    (@pure)
+    (and (is-kind s 'ak-x) (not (is-kind t 'ak-z))))
+
+  (fn side-u ((s ATerm) (t ATerm))
+    (@intent "S(u, t) with t one of y, u, f(u) (Definition 2's second p-term form)")
+    (@spec ((ATerm ATerm) -> Bool))
+    (@pure)
+    (and (is-kind s 'ak-u) (or (is-kind t 'ak-y) (is-kind t 'ak-u) (is-kind t 'ak-fu))))
+
+  (fn binary-ok ((l Lit))
+    (@intent "S(s, t) is a context p-term: x on one side with x, y, f(x) or u, or u on one side with y, u or f(u)")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (let ((s (. l t1)) (t (. l t2)))
+      (or (side-x s t) (side-x t s) (side-u s t) (side-u t s))))
+
+  (fn lit-ok ((l Lit) (root Bool))
+    (@intent "Is l a context literal that may stand in a clause of the root (root) or of another context?")
+    (@spec ((Lit Bool) -> Bool))
+    (@pure)
+    (if (== (. l form) 'lf-unary)
+      (var-ok (. l t1) root)
+      (and (var-ok (. l t1) root) (var-ok (. l t2) root)
+           (or (not (== (. l form) 'lf-binary)) (binary-ok l)))))
+
+  (fn body-lit-ok ((l Lit) (root Bool))
+    (@intent "A body literal: a context atom, or u₁ ≈ u₂ (Definition 2)")
+    (@spec ((Lit Bool) -> Bool))
+    (@pure)
+    (and (lit-ok l root)
+         (or (== (. l form) 'lf-unary) (== (. l form) 'lf-binary)
+             (and (== (. l form) 'lf-eq) (both-kinds l 'ak-u 'ak-u)))))
+
+  (fn ctx-clause-ok ((root Bool) (c Clause))
+    (@intent "Definitions 2 and 3: is c a context clause the root (root) or another context may hold?")
+    (@spec ((Bool Clause) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (l (. c body)) (when (not (body-lit-ok l root)) (set! ok false)))
+          (for-each (l (. c head)) (when (not (lit-ok l root)) (set! ok false)))
+          ok)))
+
+  ;; ============================================================
+  ;; S4's raw queries (Algorithm 1 step A6, Corollary 1), read through ∈̂
+  ;; from v_⊤ (id 1) and v_B (id 2 + B)
+  ;; ============================================================
+
+  (fn set-or-none ((arena Arena) (st Structure) (v Int))
+    (@intent "S_v, or nothing for a missing context")
+    (@spec ((Arena Structure Int) -> (List Clause)))
+    (@alloc arena)
+    (match (list-get (. st sets) v) ((some s) (. s cs)) ((none) (list-new arena Clause))))
+
+  (fn q-of ((arena Arena) (st Structure) (v Int) (body (List Lit)) (head (List Lit)))
+    (@intent "body → head ∈̂ S_v")
+    (@spec ((Arena Structure Int (List Lit) (List Lit)) -> Bool))
+    (@alloc arena)
+    (in-hat (make-clause arena body head) (set-or-none arena st v)))
+
+  (fn atom-x ((arena Arena) (b U32))
+    (@intent "[B(x)]")
+    (@spec ((Arena U32) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (list-push out (atom1 b (at-x))) out)))
+
+  (fn q-inconsistent ((arena Arena) (st Structure))
+    (@intent "inconsistent iff ⊤ → ⊥ ∈̂ S_{v_⊤}")
+    (@spec ((Arena Structure) -> Bool))
+    (@alloc arena)
+    (q-of arena st 1 (list-new arena Lit) (list-new arena Lit)))
+
+  (fn q-unsat ((arena Arena) (st Structure) (b U32))
+    (@intent "unsat(B) iff B(x) → ⊥ ∈̂ S_{v_B}")
+    (@spec ((Arena Structure U32) -> Bool))
+    (@alloc arena)
+    (q-of arena st (+ 2 (cast Int b)) (atom-x arena b) (list-new arena Lit)))
+
+  (fn q-hidden-unsat ((arena Arena) (st Structure) (nquery Int) (hidden (List U32)))
+    (@intent "Is some hidden query class A unsatisfiable: A(x) → ⊥ ∈̂ S_{v_A}, v_A the k-th context after the nquery
+              query contexts for A the k-th hidden class?")
+    (@spec ((Arena Structure Int (List U32)) -> Bool))
+    (@alloc arena)
+    (let ((mut found false) (mut k 0))
+      (do (for-each (a hidden)
+            (do (when (q-of arena st (+ (+ 2 nquery) k) (atom-x arena a) (list-new arena Lit)) (set! found true))
+                (set! k (+ k 1))))
+          found)))
+
+  (fn q-holds ((arena Arena) (st Structure) (b U32) (a U32))
+    (@intent "holds(B, A) iff B(x) → A(x) ∈̂ S_{v_B}")
+    (@spec ((Arena Structure U32 U32) -> Bool))
+    (@alloc arena)
+    (q-of arena st (+ 2 (cast Int b)) (atom-x arena b) (atom-x arena a)))
+
+  (fn q-thing ((arena Arena) (st Structure) (a U32))
+    (@intent "holds(owl:Thing, A) iff ⊤ → A(x) ∈̂ S_{v_⊤}")
+    (@spec ((Arena Structure U32) -> Bool))
+    (@alloc arena)
+    (q-of arena st 1 (list-new arena Lit) (atom-x arena a)))
+
+)

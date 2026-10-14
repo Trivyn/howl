@@ -24,7 +24,7 @@
 
   (import rdf (IRI Triple make-iri make-triple))
   (import vocab (RDF_TYPE OWL_CLASS OWL_THING OWL_NOTHING))
-  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission kname-eq
+  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission Findings kname-eq
                  outcome-is-complete renamed-node copy-iri))
   (import canon (string-cmp iri-cmp sort-range))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
@@ -192,7 +192,28 @@
         (else
           (match (. o evidence)
             ((el-evidence sat)  (el-holds sat o (. q sub) b))
-            ((ksc-evidence r)   (ksc-holds r (. q sub) b)))))))
+            ((ksc-evidence r)   (ksc-holds r (. q sub) b))
+            ((sriq-evidence _)  (findings-hold (. o findings) (. q sub) b)))))))
+
+  ;; sriq's findings are its answers (§5.5): the report's own rows, read
+  ;; back. A class with no row has no answer.
+  (fn findings-hold ((f Findings) (a IRI) (b IRI))
+    (@intent "sriq's entails-sub(A, B) from its findings: inconsistent, A unsat, or (A, B) a row; none when A has no row")
+    (@spec ((Findings IRI IRI) -> (Option Bool)))
+    (let ((mut has-row false) (mut holds false))
+      (do (for-each (u (. f unsatisfiable)) (when (== (iri-cmp u a) 0) (set! holds true)))
+          (for-each (p (. f subsumptions))
+            (when (node-is (. p sub) a)
+              (do (set! has-row true) (when (node-is (. p super) b) (set! holds true)))))
+          (cond ((. f inconsistent) (some true))
+                (holds (some true))
+                (has-row (some false))
+                (else (none))))))
+
+  (fn node-is ((n Node) (i IRI))
+    (@intent "Is n the class node of i?")
+    (@spec ((Node IRI) -> Bool))
+    (match n ((class-node s) (== (iri-cmp s i) 0)) (_ false)))
 
   (fn el-holds ((sat Saturation) (o Outcome) (a IRI) (b IRI))
     (@intent "el's entails-sub(A, B), or none when A has no context")

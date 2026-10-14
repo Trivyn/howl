@@ -47,7 +47,7 @@ w3c ok WebOnt-Ontology-001
 w3c ok WebOnt-Restriction-001
 w3c ok WebOnt-Restriction-002
 w3c ok WebOnt-Thing-003
-w3c ok WebOnt-Thing-004
+w3c outside-el++ WebOnt-Thing-004 ReservedVocabulary census-clean
 w3c ok WebOnt-backwardCompatibleWith-002
 w3c ok WebOnt-differentFrom-001
 w3c ok WebOnt-disjointWith-001

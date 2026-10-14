@@ -336,6 +336,9 @@ uint8_t owl2_signature_has_data_property(owl2_Signature sig, rdf_IRI i);
 int64_t owl2_signature_size(slop_arena* arena, owl2_Signature sig);
 uint8_t owl2_is_el_plus_plus(types_Profile p);
 owl2_Disposition owl2_when_el_plus_plus(types_Profile p);
+uint8_t owl2_is_sriq(types_Profile p);
+owl2_Disposition owl2_when_sriq(types_Profile p);
+owl2_Disposition owl2_when_el_plus_plus_or_sriq(types_Profile p);
 uint8_t owl2_role_in_profile(types_Profile p, types_RoleId r);
 uint8_t owl2_roles_in_profile(types_Profile p, slop_list_types_RoleId rs);
 uint8_t owl2_concepts_in_profile(types_Profile p, slop_list_owl2_RawConcept cs);
@@ -372,6 +375,8 @@ owl2_RawAxiom owl2_raw_axiom_at(slop_list_owl2_RawAxiom xs, int64_t i);
 slop_list_owl2_RawAxiom owl2_copy_axioms(slop_arena* arena, slop_list_owl2_RawAxiom xs);
 owl2_Signature owl2_copy_signature(slop_arena* arena, owl2_Signature sig);
 slop_list_owl2_RawConcept owl2_sort_concepts(slop_arena* arena, slop_list_owl2_RawConcept xs);
+
+#define owl2_SRIQ_MAX_COUNT (16)
 
 #ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
 #define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED

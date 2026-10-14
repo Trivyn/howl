@@ -52,7 +52,7 @@ ALL_SRCS    := $(wildcard $(CSRC)/*.c)
 SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
-.PHONY: all cli lib test clean release dist csrc slop-build verify corpus census project project-verify example \
+.PHONY: all cli lib test test-bin diff-elim diff-elim-corpus diff-elim-long clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan golden-asan c-example crate-vendor crate-build crate-test crate-package crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-el++ bench-check abox-fuzz
@@ -109,10 +109,33 @@ cli: $(BIN)
 test: $(BIN)
 	@if grep -rnE 'now-ms|slop_now_ms|clock_gettime|gettimeofday|timespec_get|mach_absolute_time|\btime\(|\bclock\(' src/; then \
 	  echo "FAIL: a clock read under src/ -- the engine never consults a clock (SPEC.md §6.8)"; exit 1; fi
-	@echo "Building tests..."
-	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test
+	@$(MAKE) --no-print-directory test-bin
 	@echo "Running tests..."
 	$(BIN)/howl-test
+
+# The test binary alone. With `sriq-dump STAGE FILE` it prints one of sriq's
+# normaliser stages as OWL 2 functional syntax, for diff-elim below.
+test-bin: $(BIN)
+	@echo "Building tests..."
+	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_test.c $(LDFLAGS) -o $(BIN)/howl-test
+
+# The normaliser differential (SPEC.md §10): each of sriq's normaliser stages,
+# printed as OWL and classified by HermiT, must agree with the input over its
+# class names. diff-elim runs the tracked fixtures (CI); diff-elim-corpus runs
+# BFO-core and CCO (local; `--record` writes corpus/elim-differential.txt).
+diff-elim: test-bin oracle
+	python3 -m unittest -q corpus/test_elimcheck.py
+	python3 corpus/elimcheck.py fixtures
+	python3 corpus/elimcheck.py guarded
+
+diff-elim-corpus: test-bin oracle
+	python3 corpus/elimcheck.py corpus --record
+
+# RO and OBI, whose S1 documents need HermiT for hours: one JVM per document,
+# two at a time (ELIM_LONG_TIMEOUT, default 6 h each). Local, overnight; it
+# writes corpus/elim-differential-long.txt.
+diff-elim-long: test-bin oracle
+	python3 corpus/elimcheck.py long --record
 
 # The test harness under AddressSanitizer. Saturation frees a scratch arena at
 # every barrier, so anything a round allocates there and the store keeps is a
@@ -163,10 +186,12 @@ test-tsan: $(BIN)
 determinism: cli
 	python3 corpus/determinism.py
 	python3 corpus/determinism.py --profile el++
+	python3 corpus/determinism.py --profile sriq
 
 determinism-corpus: cli
 	python3 corpus/determinism.py --corpus
 	python3 corpus/determinism.py --corpus --profile el++
+	python3 corpus/determinism.py --corpus --profile sriq
 
 clean:
 	rm -rf $(BIN) dist
@@ -233,6 +258,8 @@ verify:
 example:
 	slop test src/rules/el.slop
 	slop test src/rules/ksc.slop
+	slop test src/rules/sriq.slop
+	slop test src/sriqctx.slop
 	slop test src/canon.slop
 	slop test src/normalize.slop
 	slop test src/decode.slop
@@ -284,6 +311,7 @@ acceptance: cli
 	check corpus/fixtures/hazards/abox-nary-chain.ttl 1; \
 	check corpus/fixtures/hazards/abox-nothing.ttl 1; \
 	check corpus/fixtures/hazards/abox-complex-assertion.ttl 1; \
+	check corpus/fixtures/hazards/named-class-intersection.ttl 2; \
 	check corpus/fixtures/out-of-profile/inverse-expressions.ttl 2; \
 	check corpus/fixtures/out-of-profile/disjoint-arity.ttl 2; \
 	check corpus/fixtures/v0/litmus.ttl 0 --profile el; \
@@ -306,7 +334,16 @@ acceptance: cli
 	check corpus/fixtures/data/shared-filler.ttl 1; \
 	check corpus/fixtures/data/shared-filler.ttl 1 --profile el++; \
 	checkmsg corpus/fixtures/v0/litmus.ttl 3 "horn-sriq was dropped; sriq covers its language" --profile horn-sriq; \
-	checkmsg corpus/fixtures/v0/litmus.ttl 3 "sriq is not implemented yet" --profile sriq; \
+	check corpus/fixtures/v0/litmus.ttl 0 --profile sriq; \
+	check corpus/fixtures/sriq/functional-clash.ttl 1 --profile sriq; \
+	check corpus/fixtures/sriq/abox-fold-type-clash.ttl 1 --profile sriq; \
+	check corpus/fixtures/sriq/abox-fold-type-ok.ttl 0 --profile sriq; \
+	check corpus/fixtures/out-of-profile/union.ttl 0 --profile auto; \
+	check corpus/fixtures/out-of-profile/inverse.ttl 0 --profile auto; \
+	check corpus/fixtures/sriq/functional-clash.ttl 1 --profile auto; \
+	check corpus/fixtures/out-of-profile/union.ttl 0 --profile sriq --strict; \
+	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile sriq; \
+	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile sriq --strict; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile sroiq; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi
@@ -331,7 +368,7 @@ corpus-acceptance: cli
 	check ro-2025-12-17 ro 2; \
 	check obi-2026-07-27 obi 2; \
 	check go-2026-07-26 go 2; \
-	check el-galen-2011-04-12 el-galen 0; \
+	check el-galen-2011-04-12 el-galen 0; 	check bfo-core-2024-02-07 bfo-core 2; 	check cco-2024-11-06 cco 2; \
 	projected() { f=corpus/vendor/$$1.v0.ttl; \
 	          if [ ! -f "$$f" ]; then echo "  MISSING $$f (run make materialize)"; fail=1; return; fi; \
 	          rep=$$(./$(BIN)/howl validate $$f --report 2>/dev/null); rc=$$?; \
@@ -341,7 +378,15 @@ corpus-acceptance: cli
 	projected ro-2025-12-17 0; \
 	projected obi-2026-07-27 0; \
 	projected go-2026-07-26 0; \
-	projected el-galen-2011-04-12 0; \
+	projected el-galen-2011-04-12 0; 	projected bfo-core-2024-02-07 0; 	projected cco-2024-11-06 0; \
+	sriq() { f=corpus/vendor/$$1.ttl; \
+	          if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh $$2)"; fail=1; return; fi; \
+	          rep=$$(./$(BIN)/howl validate $$f --profile sriq --report 2>/dev/null); rc=$$?; \
+	          om=$$(printf '%s\n' "$$rep" | sed -n 's/^omitted //p'); \
+	          if [ "$$rc" -eq 0 ] && [ "$$om" = "0" ]; then echo "  ok   $$1 (sriq) -> 0, omitted 0"; \
+	          else echo "  FAIL $$1 (sriq) -> $$rc, omitted $${om:-?} (expected 0, 0)"; fail=1; fi; }; \
+	sriq bfo-core-2024-02-07 bfo-core; \
+	sriq cco-2024-11-06 cco; \
 	if [ "$$fail" -eq 0 ]; then echo "  real-corpus acceptance met"; \
 	else echo "  CORPUS ACCEPTANCE FAILED"; exit 1; fi
 
@@ -365,7 +410,14 @@ GOLDEN_FIXTURES := $(wildcard corpus/fixtures/v0/*.ttl corpus/fixtures/hazards/*
 # correctness is the engine-vs-reference differential (make test) and the
 # oracle differential; these pin that nothing changes unnoticed.
 GOLDEN_ELPP_FIXTURES := $(wildcard corpus/fixtures/el++/*.ttl corpus/fixtures/v0/*.ttl corpus/fixtures/data/*.ttl)
-GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
+GOLDEN_ELPP_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12 bfo-core-2024-02-07 cco-2024-11-06
+
+# corpus/goldens/sriq/: every sriq fixture and every v0 and data fixture
+# (which sriq contains, but for the data fixtures' datatypes), under
+# --profile sriq; and BFO-core and CCO by hash. RO (54 s, 10 GB) and OBI (past
+# the clause budget) are left out for time and memory.
+GOLDEN_SRIQ_FIXTURES := $(wildcard corpus/fixtures/sriq/*.ttl corpus/fixtures/v0/*.ttl corpus/fixtures/data/*.ttl)
+GOLDEN_SRIQ_CORPUS   := bfo-core-2024-02-07 cco-2024-11-06
 # IMPORT RUNS, `howl validate DOC.ttl -I IMPORT.ttl --report`, one per
 # DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
 # an attested import - its blank nodes standardized apart from the root's -
@@ -381,7 +433,7 @@ PROBE_ARGS := corpus/fixtures/probe-queries/main.ttl --probe corpus/fixtures/pro
 # GO's golden was captured AFTER the premise index -- the unindexed engine never
 # finished it -- so it pins stability, not correctness, until the S4 differential
 # against ELK checks it.
-GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12
+GOLDEN_CORPUS   := ro-2025-12-17 obi-2026-07-27 go-2026-07-26 el-galen-2011-04-12 bfo-core-2024-02-07 cco-2024-11-06
 # Override to capture from a different build, e.g. the pre-change binary.
 HOWL ?= ./$(BIN)/howl
 
@@ -404,6 +456,28 @@ golden: cli
 	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
 	  done; \
 	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
+	done; \
+	for g in corpus/goldens/sriq/*.report; do \
+	  n=$$(basename $$g .report); src=""; \
+	  for d in sriq v0 data; do \
+	    case "$$n" in "$$d"-*) src=corpus/fixtures/$$d/$${n#$$d-}.ttl; break;; esac; \
+	  done; \
+	  if [ -z "$$src" ] || [ ! -f "$$src" ]; then echo "  ORPHAN $$g (no source fixture $${src:-?})"; fail=1; fi; \
+	done; \
+	for f in $(GOLDEN_SRIQ_FIXTURES); do \
+	  g=corpus/goldens/sriq/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
+	  if [ ! -f "$$g" ]; then echo "  MISSING $$g"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --profile sriq --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) ;; *) echo "  NOT A REPORT $$f (sriq)"; fail=1; continue;; esac; \
+	  if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL $$f (sriq) differs from $$g"; fail=1; fi; \
+	done; \
+	for c in $(GOLDEN_SRIQ_CORPUS); do \
+	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/sriq/$$c.sha256; \
+	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --profile sriq --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) ;; *) echo "  NOT A REPORT $$f (sriq)"; fail=1; continue;; esac; \
+	  h=$$(printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1); \
+	  if [ "$$h" = "$$(cat $$g)" ]; then echo "  ok   $$c (sriq)"; else echo "  FAIL $$c (sriq) report hash $$h"; fail=1; fi; \
 	done; \
 	for f in $(GOLDEN_ELPP_FIXTURES); do \
 	  g=corpus/goldens/el++/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
@@ -491,6 +565,22 @@ golden-update: cli
 	    echo "  -> corpus/goldens/el++/$$c.sha256";; \
 	    *) echo "  NOT A REPORT $$f (el++) -- golden not written"; fail=1;; esac; \
 	done; \
+	mkdir -p corpus/goldens/sriq; \
+	for f in $(GOLDEN_SRIQ_FIXTURES); do \
+	  g=corpus/goldens/sriq/$$(basename $$(dirname $$f))-$$(basename $$f .ttl).report; \
+	  out=$$({ $(HOWL) validate $$f --profile sriq --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > $$g;; \
+	    *) echo "  NOT A REPORT $$f (sriq) -- golden not written"; fail=1;; esac; \
+	done; \
+	for c in $(GOLDEN_SRIQ_CORPUS); do \
+	  f=corpus/vendor/$$c.ttl; \
+	  if [ ! -f "$$f" ]; then echo "  skip $$c (no $$f)"; continue; fi; \
+	  out=$$({ $(HOWL) validate $$f --profile sriq --report 2>/dev/null; echo "exit $$?"; }); \
+	  case "$$out" in "howl-report 2"*) \
+	    printf '%s\n' "$$out" | shasum -a 256 | cut -d' ' -f1 > corpus/goldens/sriq/$$c.sha256; \
+	    echo "  -> corpus/goldens/sriq/$$c.sha256";; \
+	    *) echo "  NOT A REPORT $$f (sriq) -- golden not written"; fail=1;; esac; \
+	done; \
 	[ "$$fail" -eq 0 ]
 
 # THE DIFFERENTIAL (SPEC.md §10 item 1, M1 acceptance (b)). `oracle` builds the
@@ -504,15 +594,18 @@ golden-update: cli
 oracle:
 	cd oracle && ./gradlew --quiet assemble
 
-# Both rungs' probes: corpus/fixtures/probes/ under el, probes-el++/ under el++
-# (SPEC §5.4's constructs), each with its own capability record.
+# Every rung's probes: corpus/fixtures/probes/ under el, probes-el++/ under el++
+# (SPEC §5.4's constructs) and probes-sriq/ under sriq (§5.5's), each with its
+# own capability record.
 probes: cli oracle
 	python3 corpus/differential.py probes
 	python3 corpus/differential.py --profile el++ probes
+	python3 corpus/differential.py --profile sriq probes
 
 probes-update: cli oracle
 	python3 corpus/differential.py probes --update
 	python3 corpus/differential.py --profile el++ probes --update
+	python3 corpus/differential.py --profile sriq probes --update
 
 # The comparator's self-tests run first: a clean diff is evidence only from a
 # comparator known to speak up when the two sides differ.
@@ -520,6 +613,7 @@ diff-fixtures: cli oracle
 	python3 -m unittest -q corpus/test_entdiff.py
 	python3 corpus/differential.py fixtures
 	python3 corpus/differential.py --profile el++ fixtures
+	python3 corpus/differential.py --profile sriq fixtures
 
 # THE ABOX REDUCTION, CHECKED AGAINST HERMIT OVER GENERATED INPUT (SPEC.md
 # §5.3). The proof is about the calculus; this checks the code against it,
@@ -531,6 +625,7 @@ abox-fuzz: cli oracle
 	python3 corpus/abox_fuzz.py
 	python3 corpus/abox_fuzz.py --negation
 	python3 corpus/abox_fuzz.py --elpp
+	python3 corpus/abox_fuzz.py --sriq
 
 # EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
 # W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's
@@ -546,10 +641,12 @@ conformance: cli oracle
 	python3 -m unittest -q corpus/test_conformance.py
 	python3 corpus/conformance.py run
 	python3 corpus/conformance.py --profile el++ run
+	python3 corpus/conformance.py --profile sriq run
 
 conformance-update: cli oracle
 	python3 corpus/conformance.py run --update
 	python3 corpus/conformance.py --profile el++ run --update
+	python3 corpus/conformance.py --profile sriq run --update
 
 # THE CORPUS DIFFERENTIAL (M1 acceptance (b)): each materialized projection,
 # HOWL against its ROUTED oracle — ELK for GO and EL-GALEN, HermiT for the
@@ -559,10 +656,12 @@ diff-corpus: cli oracle
 	python3 corpus/differential.py corpus
 	python3 corpus/differential.py rungs
 	python3 corpus/differential.py --profile el++ corpus
+	python3 corpus/differential.py --profile sriq corpus
 
 diff-corpus-update: cli oracle
 	python3 corpus/differential.py corpus --update
 	python3 corpus/differential.py --profile el++ corpus --update
+	python3 corpus/differential.py --profile sriq corpus --update
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.
@@ -582,11 +681,13 @@ census:
 project: corpus
 	python3 corpus/project.py
 	python3 corpus/project.py --profile el++
+	python3 corpus/project.py --profile sriq
 
 project-verify:
 	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --verify
 	python3 corpus/project.py --profile el++ --verify
+	python3 corpus/project.py --profile sriq --verify
 
 # THE PROJECTED ONTOLOGIES ITSELF, as Turtle under corpus/vendor/ (not
 # committed): the one input HOWL and the oracles share in the corpus
@@ -596,6 +697,7 @@ materialize: corpus
 	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --materialize
 	python3 corpus/project.py --profile el++ --materialize
+	python3 corpus/project.py --profile sriq --materialize
 
 dist:
 	rm -rf dist

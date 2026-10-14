@@ -143,6 +143,42 @@ class EntdiffTest(unittest.TestCase):
                     entdiff.parse(path)
                 self.assertEqual(isinstance(ctx.exception, entdiff.Incomplete), name != "garbled", name)
 
+    def parse_text(self, text, partial=False):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "r")
+            with open(path, "w") as f:
+                f.write(text)
+            return entdiff.parse(path, partial=partial)
+
+    def test_partial_returns_a_capped_run_checked(self):
+        # partial skips only the completeness refusal: a capped run comes back,
+        # a garbled one, or one whose verdict the facts contradict, is still refused.
+        r = self.parse_text(howl(BASE, termination="resource-limit"), partial=True)
+        self.assertEqual(r.subs["A"], {"A", "B", T})
+        for bad in (howl([*BASE, "sub A"], termination="resource-limit"),
+                    howl(BASE, termination="resource-limit").replace("verdict inconclusive", "verdict coherent")):
+            with self.assertRaises(entdiff.Refused) as ctx:
+                self.parse_text(bad, partial=True)
+            self.assertNotIsInstance(ctx.exception, entdiff.Incomplete)
+
+    def test_a_capped_run_is_incomplete_only_once_every_check_passes(self):
+        # unsat without its bottom-compressed sub breaks an invariant checked
+        # after the counts: a capped run must still be Refused, not Incomplete.
+        bad = howl(["inconsistent false", "unsat A"], termination="resource-limit")
+        with self.assertRaises(entdiff.Refused) as ctx:
+            self.parse_text(bad)
+        self.assertNotIsInstance(ctx.exception, entdiff.Incomplete)
+
+    def test_unsound_names_what_the_answer_lacks(self):
+        want = self.parse_text(oracle(BASE))
+        self.assertEqual(entdiff.unsound(self.parse_text(howl(BASE[:3], termination="resource-limit"),
+                                                         partial=True), want), [])
+        extra = self.parse_text(howl([*BASE, "sub B A"], termination="resource-limit"), partial=True)
+        self.assertEqual(entdiff.unsound(extra, want), ["sub B A"])
+        incons = self.parse_text(howl(["inconsistent true"], termination="resource-limit"), partial=True)
+        self.assertEqual(entdiff.unsound(incons, want), ["inconsistent, expected consistent"])
+        self.assertEqual(entdiff.unsound(incons, self.parse_text(oracle(["inconsistent true"]))), [])
+
     def test_refuses_a_howl_report_without_termination(self):
         h = howl(BASE).replace("termination fixpoint\n", "")
         self.assertRefused(self.run_diff(h, oracle(BASE)), "termination None")

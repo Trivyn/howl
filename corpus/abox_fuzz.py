@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A randomized ABox differential: HOWL against HermiT (SPEC.md §5.3, M1 (f)).
 
-    python3 corpus/abox_fuzz.py [--seeds FIRST:LAST] [--update] [--negation | --elpp]
+    python3 corpus/abox_fuzz.py [--seeds FIRST:LAST] [--update] [--negation | --elpp | --sriq]
 
 §5.3 proves the direct-edge ABox encoding sound and complete for the calculus.
 This checks the CODE against that argument, over ontologies nobody wrote by
@@ -35,6 +35,15 @@ global restriction, which the gate enforces), roles may be reflexive, and the
 ABox gains sameAs, differentFrom, AllDifferent and negative property
 assertions. It is recorded on its own line too.
 
+With --sriq the ontologies are sriq's (SPEC.md §5.5, M5 (e)) and HOWL runs
+under `--profile sriq`: besides v0's constructs, class expressions may be
+unions, complements, ∀r.C, ∃r⁻.C (an inverse role), qualified ≤n / ≥n (n ≤ 3)
+and Self, the last two on SIMPLE roles only; simple roles may be functional,
+inverse-functional, symmetric, asymmetric, irreflexive or pairwise disjoint;
+and the ABox gains el++'s sameAs, differentFrom, AllDifferent and negative
+assertions (no nominals: sriq omits them). A run that stops at sriq's clause
+budget is counted as `budget`, neither clean nor failed.
+
 The outcome is written to corpus/abox-fuzz.txt with --update (a deliberate
 act, as `make probes-update`); without it the run must reproduce the recorded
 counts. Reports land in build/abox-fuzz/ for inspection. Exit 0 when every
@@ -66,10 +75,11 @@ PREFIXES = """@prefix :     <http://example.org/fuzz#> .
 class Gen:
     """One ontology's worth of Turtle, from one seed."""
 
-    def __init__(self, seed, negation=False, elpp=False):
+    def __init__(self, seed, negation=False, elpp=False, sriq=False):
         self.rng = random.Random(seed)
         self.negation = negation
         self.elpp = elpp
+        self.sriq = sriq
         self.simple = []                                  # roles Self may use (rbox fills it)
         self.lines = []
         self.nc = self.rng.randint(4, 7)
@@ -99,11 +109,36 @@ class Gen:
             return f"[ a owl:Class ; owl:oneOf ( {self.ind()} ) ]"
         return f"[ a owl:Restriction ; owl:onProperty {self.rng.choice(self.simple)} ; owl:hasSelf true ]"
 
+    def sriq_concept(self, depth):
+        """One of sriq's additions: C ⊔ D, ¬C, ∀r.C, ∃r⁻.C, or, on a simple role,
+        ≤n / ≥n r.C or ∃r.Self."""
+        k, sub = self.rng.random(), self.concept(max(depth - 1, 0))
+        r = self.rng.choice(self.roles)
+        if k < 0.2:
+            return f"[ a owl:Class ; owl:unionOf ( {sub} {self.concept(max(depth - 1, 0))} ) ]"
+        if k < 0.35:
+            return f"[ a owl:Class ; owl:complementOf {sub} ]"
+        if k < 0.55:
+            return f"[ a owl:Restriction ; owl:onProperty {r} ; owl:allValuesFrom {sub} ]"
+        if k < 0.7:
+            return f"[ a owl:Restriction ; owl:onProperty [ owl:inverseOf {r} ] ; owl:someValuesFrom {sub} ]"
+        if not self.simple:
+            return f"[ a owl:Restriction ; owl:onProperty {r} ; owl:allValuesFrom {sub} ]"
+        s = self.rng.choice(self.simple)
+        if k < 0.92:
+            card = "owl:maxQualifiedCardinality" if self.rng.random() < 0.6 else "owl:minQualifiedCardinality"
+            n = self.rng.randint(1, 3)
+            return (f"[ a owl:Restriction ; owl:onProperty {s} ; {card} "
+                    f"\"{n}\"^^<http://www.w3.org/2001/XMLSchema#nonNegativeInteger> ; owl:onClass {sub} ]")
+        return f"[ a owl:Restriction ; owl:onProperty {s} ; owl:hasSelf true ]"
+
     def concept(self, depth=1):
         """A class expression: a name, or at depth ∃r.C / C ⊓ D, and under --elpp
-        sometimes one of el++'s additions."""
+        or --sriq sometimes one of that rung's additions."""
         if self.elpp and self.rng.random() < 0.12:
             return self.elpp_concept()
+        if self.sriq and depth > 0 and self.rng.random() < 0.3:
+            return self.sriq_concept(depth)
         if depth <= 0 or self.rng.random() < 0.5:
             return self.cls()
         if self.rng.random() < 0.6:
@@ -170,6 +205,17 @@ class Gen:
             for r in self.roles:
                 if self.rng.random() < 0.15:
                     self.lines.append(f"{r} a owl:ReflexiveProperty .")
+        if self.sriq:
+            # Characteristics that need a simple role (OWL 2's global
+            # restrictions, which the gate enforces), and disjoint roles.
+            kinds = ("FunctionalProperty", "InverseFunctionalProperty", "SymmetricProperty",
+                     "AsymmetricProperty", "IrreflexiveProperty")
+            for r in self.simple:
+                if self.rng.random() < 0.25:
+                    self.lines.append(f"{r} a owl:{self.rng.choice(kinds)} .")
+            if len(self.simple) >= 2 and self.rng.random() < 0.2:
+                a, b = self.rng.sample(self.simple, 2)
+                self.lines.append(f"{a} owl:propertyDisjointWith {b} .")
         ranges = {r: set() for r in self.roles}
         for r in self.roles:
             if self.rng.random() < 0.4:
@@ -217,7 +263,7 @@ class Gen:
             a = self.rng.choice(self.inds)
             b = hub if self.rng.random() < 0.5 else self.rng.choice(self.inds)
             self.lines.append(f"{a} {self.rng.choice(self.roles)} {b} .")
-        if self.elpp:
+        if self.elpp or self.sriq:
             # Equality and its negations: sameAs and differentFrom pairs, an
             # AllDifferent, and negative property assertions.
             # Rates kept low: each is an easy contradiction, and an
@@ -247,7 +293,7 @@ class Gen:
         return PREFIXES + "\n" + "\n".join(decl + self.lines) + "\n"
 
 
-def generate(seeds, negation, elpp=False):
+def generate(seeds, negation, elpp=False, sriq=False):
     os.makedirs(os.path.join(OUT, "input"), exist_ok=True)
     for stale in os.listdir(os.path.join(OUT, "input")):
         os.remove(os.path.join(OUT, "input", stale))
@@ -255,7 +301,7 @@ def generate(seeds, negation, elpp=False):
     for seed in range(seeds[0], seeds[1] + 1):
         path = os.path.join(OUT, "input", f"seed{seed:04d}.ttl")
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write(Gen(seed, negation, elpp).turtle(seed))
+            fh.write(Gen(seed, negation, elpp, sriq).turtle(seed))
         files.append(path)
     return files
 
@@ -271,6 +317,18 @@ def run_howl(files, profile="el"):
             fh.write(p.stdout)
         reports[os.path.basename(f)[:-4]] = path
     return reports
+
+
+def budget_stopped(report):
+    """Did a sriq run stop at its clause budget (SPEC.md §5.5) with nothing omitted?
+    entdiff.parse checks the report first: a malformed one is Refused, a FAIL,
+    never a budget stop."""
+    try:
+        entdiff.parse(report)
+        return False
+    except entdiff.Incomplete as e:
+        with open(report, encoding="utf-8") as fh:
+            return e.reason == "termination" and "omitted 0" in fh.read().splitlines()
 
 
 def run_hermit(files):
@@ -297,22 +355,33 @@ def main(argv):
     mode_arg = ap.add_mutually_exclusive_group()
     mode_arg.add_argument("--negation", action="store_true")
     mode_arg.add_argument("--elpp", action="store_true")
+    mode_arg.add_argument("--sriq", action="store_true")
     args = ap.parse_args(argv[1:])
     first, last = (int(x) for x in args.seeds.split(":"))
     for tool in (HOWL, ORACLE):
         if not os.path.exists(tool):
             print(f"  cannot run: {tool} is missing (make cli oracle)")
             return 3
-    files = generate((first, last), args.negation, args.elpp)
-    howl = run_howl(files, "el++" if args.elpp else "el")
+    files = generate((first, last), args.negation, args.elpp, args.sriq)
+    howl = run_howl(files, "el++" if args.elpp else "sriq" if args.sriq else "el")
     try:
         hermit = run_hermit(files)
     except RuntimeError as e:
         print(f"  cannot run: {e}")
         return 3
-    counts = {"clean": 0, "inconsistent": 0, "failed": 0}
+    counts = {"clean": 0, "inconsistent": 0, "failed": 0, "budget": 0}
     for stem in sorted(howl):
         try:
+            if args.sriq and budget_stopped(howl[stem]):
+                # Partial, so never diffed; but what it found is sound, so
+                # every finding must hold in HermiT's answer.
+                if stem not in hermit:
+                    raise entdiff.Refused("HermiT gave no report")
+                wrong = entdiff.unsound(entdiff.parse(howl[stem], partial=True), entdiff.parse(hermit[stem]))
+                if wrong:
+                    raise entdiff.Refused("at the clause budget, not in HermiT's answer: " + "; ".join(wrong[:5]))
+                counts["budget"] += 1
+                continue
             h = entdiff.parse(howl[stem])
             if h.kind != "howl":
                 raise entdiff.Refused(f"{howl[stem]}: not a HOWL report")
@@ -332,12 +401,13 @@ def main(argv):
         counts["clean"] += 1
         if h.inconsistent:
             counts["inconsistent"] += 1
-    mode = "negation " if args.negation else "el++ " if args.elpp else ""
+    mode = "negation " if args.negation else "el++ " if args.elpp else "sriq " if args.sriq else ""
     line = (f"{mode}seeds {first}:{last} ontologies {last - first + 1} clean {counts['clean']} "
-            f"of-which-inconsistent {counts['inconsistent']} failed {counts['failed']}")
+            f"of-which-inconsistent {counts['inconsistent']} failed {counts['failed']}"
+            + (f" budget {counts['budget']}" if args.sriq else ""))
     print(f"  {line}")
     # One line per mode; each run checks, or rewrites, only its own.
-    modes = ("", "negation ", "el++ ")
+    modes = ("", "negation ", "el++ ", "sriq ")
 
     def mode_of(l):
         return next((m for m in modes[1:] if l.startswith(m)), "")

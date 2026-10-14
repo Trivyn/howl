@@ -6,14 +6,18 @@
     python3 corpus/differential.py [--profile P] corpus [--update] [--also] [--timeout SECONDS]
     python3 corpus/differential.py rungs
 
---profile el (the default) or el++ selects HOWL's rung, the census used for
-routing, and the records. Under el++:
+--profile el (the default), el++ or sriq selects HOWL's rung, the census used
+for routing, and the records. Under el++:
   - `probes` runs corpus/fixtures/probes-el++/ (one probe per construct SPEC
     §5.4 adds) and records corpus/oracle-capabilities-el++.txt;
   - `fixtures` adds corpus/fixtures/el++/ and probes-el++/, and ELK gates only
     for constructs BOTH capability records show it passing;
   - `corpus` diffs the el++ projections (corpus/vendor/NAME.el++.ttl, from
-    `make materialize-el++`) and records corpus/corpus-differential-el++.txt.
+    `make materialize`) and records corpus/corpus-differential-el++.txt.
+Under sriq the same, with corpus/fixtures/sriq/ and probes-sriq/, and two
+differences (SPEC.md §5.5, M5 (c)): HermiT routes every input, since ELK cannot
+judge sriq's constructs; and OBI is skipped, recorded out of reach for this
+calculus.
 
 `rungs` runs every materialized v0 projection under el AND el++ and requires
 the two reports to be identical but for their `profile` and `rounds` lines:
@@ -321,7 +325,27 @@ CONSTRUCT_LINES = {
     "DifferentIndividuals": r"owl:differentFrom|owl:AllDifferent",
     "NegativeObjectPropertyAssertion": r"owl:NegativePropertyAssertion",
     "built-in role (bottomObjectProperty)": r"owl:bottomObjectProperty",
+    # SPEC §5.5's additions, for corpus/fixtures/probes-sriq/.
+    "ObjectInverseOf": r"owl:inverseOf",
+    "InverseObjectProperties": r"owl:inverseOf",
+    "ObjectUnionOf": r"owl:unionOf",
+    "ObjectComplementOf": r"owl:complementOf",
+    "ObjectAllValuesFrom": r"owl:allValuesFrom",
+    "cardinality": r"owl:(min|max)?(Qualified)?Cardinality|owl:cardinality|owl:qualifiedCardinality",
+    "ObjectHasSelf": r"owl:hasSelf",
+    "FunctionalObjectProperty": r"owl:FunctionalProperty",
+    "InverseFunctionalObjectProperty": r"owl:InverseFunctionalProperty",
+    "SymmetricObjectProperty": r"owl:SymmetricProperty",
+    "AsymmetricObjectProperty": r"owl:AsymmetricProperty",
+    "IrreflexiveObjectProperty": r"owl:IrreflexiveProperty",
+    "ReflexiveObjectProperty": r"owl:ReflexiveProperty",
+    "DisjointObjectProperties": r"owl:propertyDisjointWith|owl:AllDisjointProperties",
+    "DisjointUnion": r"owl:disjointUnionOf",
 }
+
+# Corpus entries out of reach for a rung's calculus, by MANIFEST name: skipped
+# and said so, never diffed (SPEC.md §12 M5 (c), amended 2026-10-13).
+OUT_OF_REACH = {"sriq": {"obi"}}
 
 
 def without_construct(f, construct):
@@ -478,6 +502,8 @@ def routed_constructs(in_v0, inert):
 
 def elk_gates(constructs, capable):
     """(does ELK gate?, why not) for an input with these census constructs."""
+    if PROFILE == "sriq":
+        return False, "sriq: HermiT routes every input"
     uncovered = sorted(set(constructs) - capable)
     if RANGE in constructs:
         return False, RANGE
@@ -501,6 +527,22 @@ def set_profile(p):
         OUT = os.path.join(ROOT, "build", f"differential-{p}")
         FIXTURE_DIRS = ("v0", "hazards", "probes", "data", p, f"probes-{p}")
         PROBE_DIR = f"probes-{p}"
+
+
+def budget_stopped(howl):
+    """The inputs whose sriq run stopped at its clause budget (SPEC.md §5.5): its
+    report is a partial result, recorded as such and never diffed. entdiff.parse
+    checks each first, so a malformed report is never taken for one."""
+    out = set()
+    for n, path in howl.items():
+        try:
+            entdiff.parse(path)
+        except entdiff.Incomplete as e:
+            if e.reason == "termination":
+                out.add(n)
+        except entdiff.Refused:
+            pass
+    return out
 
 
 def oracle_entailments_sha(path):
@@ -527,9 +569,12 @@ def cmd_corpus(update, also, timeout):
     plan, failed = [], False
     for e in entries:
         stem = f"{e['name']}-{e['version']}"
+        if e["name"] in OUT_OF_REACH.get(PROFILE, ()):
+            print(f"  skip {stem:<24} out of reach for {PROFILE}'s calculus (SPEC.md §12 M5 (c))")
+            continue
         path = project.materialized_path(e, PROFILE)
         if not os.path.exists(path):
-            raise HarnessError(f"{rel(path)} is missing: run `make materialize{'' if PROFILE == 'el' else '-' + PROFILE}`")
+            raise HarnessError(f"{rel(path)} is missing: run `make materialize`")
         # ONE PARSE per entry, shared by the projection check, census's
         # construct routing and the OWL API blind-spot scan.
         g = Graph()
@@ -553,14 +598,23 @@ def cmd_corpus(update, also, timeout):
         plan.append((e, stem, path, routed, why, spots, (ground, bnode_sha)))
 
     howl = run_howl([p for _, _, p, *_ in plan])
+    stopped = budget_stopped(howl) if PROFILE == "sriq" else set()
     runs = {}
     for r in REASONERS:
-        batch = [p for _, _, p, routed, _, spots, _ in plan if not spots and (routed == r or also)]
+        batch = [p for _, _, p, routed, _, spots, _ in plan
+                 if not spots and name_of(p) not in stopped and (routed == r or also)]
         runs[r] = run_oracle(r, batch, timeout) if batch else ({}, {})
 
     lines = []
     for e, stem, path, routed, why, spots, ground in plan:
         n = name_of(path)
+        if n in stopped:
+            with open(howl[n], "rb") as fh:
+                howl_sha = hashlib.sha256(fh.read()).hexdigest()
+            print(f"  skip {stem:<24} not comparable: HOWL stopped at sriq's clause budget (resource-limit)")
+            lines.append(f"{stem} source={e['sha256'][:16]} ground={ground[0][:16]} bnodes={ground[1][:16]} "
+                         f"howl-report={howl_sha[:16]} result=budget")
+            continue
         try:
             h = entdiff.parse(howl[n])
         except entdiff.Refused as err:

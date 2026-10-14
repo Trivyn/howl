@@ -1,0 +1,14 @@
+# sriq: a FUNCTIONAL role (≤1 r.⊤, DL4). A has an r-successor in B and one in C,
+# B and C are disjoint, and r allows one successor: A is unsatisfiable.
+# Expect: A unsatisfiable.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class .
+:r a owl:ObjectProperty , owl:FunctionalProperty .
+:B owl:disjointWith :C .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :B ] ,
+                   [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] .

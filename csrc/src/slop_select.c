@@ -2,7 +2,8 @@
 #include "slop_select.h"
 
 slop_option_types_Profile select_select_profile(types_ProfileSelection selection);
-types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus);
+types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus, int64_t out_of_sriq);
+types_Profile select_choose_auto_low(int64_t out_of_el, int64_t out_of_el_plus_plus);
 uint8_t select_profile_implemented(types_Profile p);
 uint8_t select_profile_dropped(types_Profile p);
 slop_string select_unavailable_message(slop_arena* arena, types_Profile p);
@@ -11,8 +12,8 @@ slop_option_types_Profile select_parse_profile(slop_string s);
 
 slop_option_types_Profile select_select_profile(types_ProfileSelection selection) {
     slop_option_types_Profile _retval = {0};
-    __auto_type _mv_917 = selection;
-    switch (_mv_917.tag) {
+    __auto_type _mv_1389 = selection;
+    switch (_mv_1389.tag) {
         case types_ProfileSelection_slop_auto:
         {
             _retval = (slop_option_types_Profile){.has_value = false};
@@ -20,7 +21,7 @@ slop_option_types_Profile select_select_profile(types_ProfileSelection selection
         }
         case types_ProfileSelection_explicit:
         {
-            __auto_type p = _mv_917.data.explicit;
+            __auto_type p = _mv_1389.data.explicit;
             _retval = (slop_option_types_Profile){.has_value = 1, .value = p};
             goto _slop_post;
         }
@@ -31,7 +32,23 @@ slop_option_types_Profile select_select_profile(types_ProfileSelection selection
     return _retval;
 }
 
-types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus) {
+types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus, int64_t out_of_sriq) {
+    types_Profile _retval = {0};
+    if ((out_of_el <= out_of_el_plus_plus) && (out_of_el <= out_of_sriq)) {
+        _retval = types_Profile_profile_el;
+        goto _slop_post;
+    } else if (out_of_el_plus_plus <= out_of_sriq) {
+        _retval = types_Profile_profile_el_plus_plus;
+        goto _slop_post;
+    } else {
+        _retval = types_Profile_profile_sriq;
+        goto _slop_post;
+    }
+    _slop_post: ;
+    return _retval;
+}
+
+types_Profile select_choose_auto_low(int64_t out_of_el, int64_t out_of_el_plus_plus) {
     types_Profile _retval = {0};
     if (out_of_el_plus_plus < out_of_el) {
         _retval = types_Profile_profile_el_plus_plus;
@@ -46,39 +63,39 @@ types_Profile select_choose_auto(int64_t out_of_el, int64_t out_of_el_plus_plus)
 
 uint8_t select_profile_implemented(types_Profile p) {
     uint8_t _retval = {0};
-    __auto_type _mv_918 = p;
-    if (_mv_918 == types_Profile_profile_el) {
+    __auto_type _mv_1390 = p;
+    if (_mv_1390 == types_Profile_profile_el) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_918 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_1390 == types_Profile_profile_el_plus_plus) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_918 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_1390 == types_Profile_profile_horn_sriq) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_918 == types_Profile_profile_sriq) {
-        _retval = 0;
+    } else if (_mv_1390 == types_Profile_profile_sriq) {
+        _retval = 1;
         goto _slop_post;
     }
     SLOP_UNREACHABLE();
     _slop_post: ;
-    SLOP_POST(((_retval == (p(==, types_Profile_profile_el) || p(==, types_Profile_profile_el_plus_plus)))), "(== $result (or (p == (quote profile-el)) (p == (quote profile-el-plus-plus))))");
+    SLOP_POST(((_retval == ((p(==, types_Profile_profile_el)) || (p(==, types_Profile_profile_el_plus_plus)) || (p(==, types_Profile_profile_sriq))))), "(== $result (or (p == (quote profile-el)) (p == (quote profile-el-plus-plus)) (p == (quote profile-sriq))))");
     return _retval;
 }
 
 uint8_t select_profile_dropped(types_Profile p) {
     uint8_t _retval = {0};
-    __auto_type _mv_919 = p;
-    if (_mv_919 == types_Profile_profile_el) {
+    __auto_type _mv_1391 = p;
+    if (_mv_1391 == types_Profile_profile_el) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_919 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_1391 == types_Profile_profile_el_plus_plus) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_919 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_1391 == types_Profile_profile_horn_sriq) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_919 == types_Profile_profile_sriq) {
+    } else if (_mv_1391 == types_Profile_profile_sriq) {
         _retval = 0;
         goto _slop_post;
     }
@@ -94,20 +111,20 @@ slop_string select_unavailable_message(slop_arena* arena, types_Profile p) {
         if (select_profile_dropped(p)) {
             return string_concat(arena, named, SLOP_STR(" was dropped; sriq covers its language"));
         } else {
-            return string_concat(arena, named, SLOP_STR(" is not implemented yet (implemented: el, el++)"));
+            return string_concat(arena, named, SLOP_STR(" is not implemented yet (implemented: el, el++, sriq)"));
         }
     }
 }
 
 slop_string select_profile_name(types_Profile p) {
-    __auto_type _mv_920 = p;
-    if (_mv_920 == types_Profile_profile_el) {
+    __auto_type _mv_1392 = p;
+    if (_mv_1392 == types_Profile_profile_el) {
         return SLOP_STR("el");
-    } else if (_mv_920 == types_Profile_profile_el_plus_plus) {
+    } else if (_mv_1392 == types_Profile_profile_el_plus_plus) {
         return SLOP_STR("el++");
-    } else if (_mv_920 == types_Profile_profile_horn_sriq) {
+    } else if (_mv_1392 == types_Profile_profile_horn_sriq) {
         return SLOP_STR("horn-sriq");
-    } else if (_mv_920 == types_Profile_profile_sriq) {
+    } else if (_mv_1392 == types_Profile_profile_sriq) {
         return SLOP_STR("sriq");
     }
     SLOP_UNREACHABLE();

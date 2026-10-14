@@ -16,12 +16,19 @@
 #include "slop_saturate.h"
 #include "slop_classify.h"
 #include "slop_gate.h"
+#include "slop_canon.h"
+#include "slop_sriqclauses.h"
+#include "slop_sriqref.h"
+#include "slop_sriqabox.h"
 #include "slop_kscnormal.h"
 #include "slop_kscsat.h"
 #include "slop_premise.h"
 
 typedef struct howl_ElWork howl_ElWork;
 typedef struct howl_KscWork howl_KscWork;
+typedef struct howl_SriqWork howl_SriqWork;
+typedef struct howl_StepDown howl_StepDown;
+typedef struct howl_AutoChoice howl_AutoChoice;
 typedef struct howl_Work howl_Work;
 typedef struct howl_Prepared howl_Prepared;
 typedef struct howl_Input howl_Input;
@@ -58,22 +65,28 @@ SLOP_LIST_DEFINE(types_KscAxiom, slop_list_types_KscAxiom)
 SLOP_LIST_DEFINE(types_KName, slop_list_types_KName)
 #endif
 
-#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
-#define SLOP_LIST_RDF_TRIPLE_DEFINED
-#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
-SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
-#endif
-
 #ifndef SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_DEFINED
 #define SLOP_LIST_RDF_IRI_IMPL_DEFINED
 SLOP_LIST_DEFINE(rdf_IRI, slop_list_rdf_IRI)
 #endif
 
+#ifndef SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_DEFINED
+#define SLOP_LIST_RDF_TRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(rdf_Triple, slop_list_rdf_Triple)
+#endif
+
 #ifndef SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(types_Omission, slop_list_types_Omission)
+#endif
+
+#ifndef SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_DEFINED
+#define SLOP_LIST_OWL2_RAWAXIOM_IMPL_DEFINED
+SLOP_LIST_DEFINE(owl2_RawAxiom, slop_list_owl2_RawAxiom)
 #endif
 
 #ifndef SLOP_LIST_PROBE_QUERY_DEFINED
@@ -97,19 +110,24 @@ SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
 SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
 #endif
 
-#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
-#define SLOP_OPTION_RDF_TRIPLE_DEFINED
-SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
-#endif
-
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED
 #define SLOP_OPTION_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
 #endif
 
+#ifndef SLOP_OPTION_RDF_TRIPLE_DEFINED
+#define SLOP_OPTION_RDF_TRIPLE_DEFINED
+SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #endif
 
 #ifndef SLOP_OPTION_PROBE_QUERY_DEFINED
@@ -155,36 +173,26 @@ typedef struct howl_KscWork howl_KscWork;
 SLOP_OPTION_DEFINE(howl_KscWork, slop_option_howl_KscWork)
 #endif
 
-typedef enum {
-    howl_Work_el_work,
-    howl_Work_ksc_work
-} howl_Work_tag;
-
-struct howl_Work {
-    howl_Work_tag tag;
-    union {
-        howl_ElWork el_work;
-        howl_KscWork ksc_work;
-    } data;
+struct howl_StepDown {
+    types_Profile profile;
+    normalize_Decoded decoded;
 };
-typedef struct howl_Work howl_Work;
+typedef struct howl_StepDown howl_StepDown;
 
-#ifndef SLOP_OPTION_HOWL_WORK_DEFINED
-#define SLOP_OPTION_HOWL_WORK_DEFINED
-SLOP_OPTION_DEFINE(howl_Work, slop_option_howl_Work)
+#ifndef SLOP_OPTION_HOWL_STEPDOWN_DEFINED
+#define SLOP_OPTION_HOWL_STEPDOWN_DEFINED
+SLOP_OPTION_DEFINE(howl_StepDown, slop_option_howl_StepDown)
 #endif
 
-struct howl_Prepared {
+struct howl_AutoChoice {
     types_Profile profile;
-    howl_Work work;
-    types_Coverage coverage;
-    types_Names names;
+    types_Profile low;
 };
-typedef struct howl_Prepared howl_Prepared;
+typedef struct howl_AutoChoice howl_AutoChoice;
 
-#ifndef SLOP_OPTION_HOWL_PREPARED_DEFINED
-#define SLOP_OPTION_HOWL_PREPARED_DEFINED
-SLOP_OPTION_DEFINE(howl_Prepared, slop_option_howl_Prepared)
+#ifndef SLOP_OPTION_HOWL_AUTOCHOICE_DEFINED
+#define SLOP_OPTION_HOWL_AUTOCHOICE_DEFINED
+SLOP_OPTION_DEFINE(howl_AutoChoice, slop_option_howl_AutoChoice)
 #endif
 
 struct howl_Input {
@@ -283,6 +291,54 @@ typedef struct howl_RunState howl_RunState;
 SLOP_OPTION_DEFINE(howl_RunState, slop_option_howl_RunState)
 #endif
 
+struct howl_SriqWork {
+    sriqref_RefIn h;
+    sriqref_RefIn c;
+    uint8_t has_c;
+    slop_list_rdf_IRI classes;
+    slop_option_howl_StepDown step;
+};
+typedef struct howl_SriqWork howl_SriqWork;
+
+#ifndef SLOP_OPTION_HOWL_SRIQWORK_DEFINED
+#define SLOP_OPTION_HOWL_SRIQWORK_DEFINED
+SLOP_OPTION_DEFINE(howl_SriqWork, slop_option_howl_SriqWork)
+#endif
+
+typedef enum {
+    howl_Work_el_work,
+    howl_Work_ksc_work,
+    howl_Work_sriq_work
+} howl_Work_tag;
+
+struct howl_Work {
+    howl_Work_tag tag;
+    union {
+        howl_ElWork el_work;
+        howl_KscWork ksc_work;
+        howl_SriqWork sriq_work;
+    } data;
+};
+typedef struct howl_Work howl_Work;
+
+#ifndef SLOP_OPTION_HOWL_WORK_DEFINED
+#define SLOP_OPTION_HOWL_WORK_DEFINED
+SLOP_OPTION_DEFINE(howl_Work, slop_option_howl_Work)
+#endif
+
+struct howl_Prepared {
+    types_Profile profile;
+    howl_Work work;
+    types_Coverage coverage;
+    types_Names names;
+};
+typedef struct howl_Prepared howl_Prepared;
+
+#ifndef SLOP_OPTION_HOWL_PREPARED_DEFINED
+#define SLOP_OPTION_HOWL_PREPARED_DEFINED
+SLOP_OPTION_DEFINE(howl_Prepared, slop_option_howl_Prepared)
+#endif
+
 #ifndef SLOP_RESULT_NORMALIZE_DECODED_TYPES_FAULT_DEFINED
 #define SLOP_RESULT_NORMALIZE_DECODED_TYPES_FAULT_DEFINED
 typedef struct { bool is_ok; union { normalize_Decoded ok; types_Fault err; } data; } slop_result_normalize_Decoded_types_Fault;
@@ -308,15 +364,29 @@ slop_result_normalize_Decoded_types_Fault howl_decode_from(slop_arena* arena, te
 slop_result_normalize_Decoded_types_Fault howl_own_decoded(slop_arena* arena, slop_result_normalize_Decoded_types_Fault r);
 slop_result_normalize_Decoded_types_Fault howl_decode_owned(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved);
 slop_result_howl_Prepared_types_Fault howl_prepare_decoded(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config);
+howl_Prepared howl_with_step_down(slop_arena* arena, howl_Prepared p, normalize_Decoded d, types_Profile low);
 int64_t howl_out_of_profile_count(slop_list_types_Omission oms);
-types_Profile howl_auto_profile(normalize_Decoded d);
+howl_AutoChoice howl_auto_profile(normalize_Decoded d);
+int64_t howl_rung_count(slop_arena* scratch, normalize_Decoded d, types_Profile p);
 slop_result_howl_Prepared_types_Fault howl_prepare_in_profile(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
 uint8_t howl_strict_refuses(types_ReasonerConfig config, types_Coverage cov);
 slop_result_howl_Prepared_types_Fault howl_prepare_el(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
 slop_result_howl_Prepared_types_Fault howl_prepare_ksc(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
+slop_result_howl_Prepared_types_Fault howl_prepare_sriq(slop_arena* arena, normalize_Decoded d, types_ReasonerConfig config, types_Profile profile);
+slop_result_howl_Prepared_types_Fault howl_sriq_prepared(slop_arena* arena, types_ReasonerConfig config, types_Profile profile, slop_list_types_Omission gate_oms, sriqabox_Inputs in);
+slop_list_types_Omission howl_sriq_omissions(slop_arena* arena, slop_list_types_Omission gate_oms, slop_list_owl2_RawAxiom s1);
+slop_list_types_Omission howl_distinct_omissions(slop_arena* arena, slop_list_types_Omission os);
+sriqref_RefIn howl_copy_refin(slop_arena* arena, sriqref_RefIn in);
+slop_list_rdf_IRI howl_query_iris(slop_arena* arena, sriqclauses_SriqIds ids);
 slop_list_types_KName howl_copy_knames(slop_arena* arena, slop_list_types_KName ns);
 slop_result_howl_Prepared_types_Fault howl_prepare(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 slop_result_types_Outcome_types_Fault howl_reason(slop_arena* arena, howl_Prepared p, types_ReasonerConfig config);
+slop_result_types_Outcome_types_Fault howl_sriq_reason(slop_arena* arena, howl_Prepared p, howl_SriqWork w, types_ReasonerConfig config);
+uint8_t howl_steps_down(sriqabox_SplitRun sp, types_Outcome o);
+uint8_t howl_over_budget(sriqref_RefStatus s);
+slop_result_types_Outcome_types_Fault howl_step_down(slop_arena* arena, howl_StepDown s, types_ReasonerConfig config);
+types_Outcome howl_stepped(slop_arena* arena, types_Outcome o);
+types_Outcome howl_sriq_outcome(slop_arena* arena, howl_Prepared p, howl_SriqWork w, sriqabox_SplitRun sp);
 slop_result_types_Outcome_types_Fault howl_classify(slop_arena* arena, slop_list_rdf_Triple triples, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 void howl_release_outcome(types_Outcome o);
 slop_result_howl_Prepared_types_Fault howl_prepare_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
@@ -408,6 +478,26 @@ SLOP_OPTION_DEFINE(types_KName, slop_option_types_KName)
 SLOP_OPTION_DEFINE(howl_KscWork, slop_option_howl_KscWork)
 #endif
 
+#ifndef SLOP_OPTION_RDF_IRI_DEFINED
+#define SLOP_OPTION_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_STEPDOWN_DEFINED
+#define SLOP_OPTION_HOWL_STEPDOWN_DEFINED
+SLOP_OPTION_DEFINE(howl_StepDown, slop_option_howl_StepDown)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_SRIQWORK_DEFINED
+#define SLOP_OPTION_HOWL_SRIQWORK_DEFINED
+SLOP_OPTION_DEFINE(howl_SriqWork, slop_option_howl_SriqWork)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_AUTOCHOICE_DEFINED
+#define SLOP_OPTION_HOWL_AUTOCHOICE_DEFINED
+SLOP_OPTION_DEFINE(howl_AutoChoice, slop_option_howl_AutoChoice)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_WORK_DEFINED
 #define SLOP_OPTION_HOWL_WORK_DEFINED
 SLOP_OPTION_DEFINE(howl_Work, slop_option_howl_Work)
@@ -423,14 +513,14 @@ SLOP_OPTION_DEFINE(howl_Prepared, slop_option_howl_Prepared)
 SLOP_OPTION_DEFINE(rdf_Triple, slop_option_rdf_Triple)
 #endif
 
-#ifndef SLOP_OPTION_RDF_IRI_DEFINED
-#define SLOP_OPTION_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(rdf_IRI, slop_option_rdf_IRI)
-#endif
-
 #ifndef SLOP_OPTION_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(types_Omission, slop_option_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+#define SLOP_OPTION_OWL2_RAWAXIOM_DEFINED
+SLOP_OPTION_DEFINE(owl2_RawAxiom, slop_option_owl2_RawAxiom)
 #endif
 
 #ifndef SLOP_OPTION_PROBE_QUERY_DEFINED
@@ -488,9 +578,20 @@ SLOP_OPTION_DEFINE(rdf_Term, slop_option_rdf_Term)
 SLOP_OPTION_DEFINE(probe_Answered, slop_option_probe_Answered)
 #endif
 
+#ifndef SLOP_OPTION_U32_DEFINED
+#define SLOP_OPTION_U32_DEFINED
+SLOP_OPTION_DEFINE(uint32_t, slop_option_u32)
+#endif
+
 #ifndef SLOP_OPTION_ARENA_PTR_DEFINED
 #define SLOP_OPTION_ARENA_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
+#endif
+
+#ifndef SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_DEFINED
+#define SLOP_LIST_U32_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint32_t, slop_list_u32)
 #endif
 
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED

@@ -1,0 +1,75 @@
+# HOWL sriq projection — REMOVAL LIST
+#
+# projected theory == pinned source MINUS the axioms below.
+#
+# source                  ro-2025-12-17.owl
+# source_sha256           a9f644d4a865747e0b4aba7ca3f19aac1e0b072cab89e24a2e476df3abb10aaf
+# source_triples          11,640
+# axioms_removed          50
+# triples_removed         733
+# in_v0_swept_in          1   <- collateral from blank-node closures
+# projected_triples       10,907
+# projected_ground_sha256 f769f5cd5827e27f66bada763d287ea15dcba969772252f688fe094f1ee931a7
+# projected_bnode_triples 3,209
+# projected_bnode_sha256  d2234de757774f1b10648936d7aec5f6580e491dfe27068f0b81e120d5393fe2
+#
+# The ground hash covers every triple with no blank node on either
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
+#
+# Anchors are named subjects; blank nodes print as _:_ because parser
+# -assigned labels differ run to run and would churn the file.
+#
+
+<http://purl.obolibrary.org/obo/IAO_0000078> <http://www.w3.org/2002/07/owl#equivalentClass> _:_ .    # ObjectOneOf (nominals) [e53121d2]  (+20 in blank-node closure)
+<http://purl.obolibrary.org/obo/ro.owl#x> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [d0acc89c]
+<http://purl.obolibrary.org/obo/ro.owl#y> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [fdb75532]
+<http://purl.obolibrary.org/obo/ro.owl#z> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [161739b1]
+<urn:swrl:var#A> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [ecdb6cfe]
+<urn:swrl:var#B> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [7b1ac648]
+<urn:swrl:var#C> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [1817d678]
+<urn:swrl:var#D> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [9d0b73da]
+<urn:swrl:var#a1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [53fc940f]
+<urn:swrl:var#a2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [038649cd]
+<urn:swrl:var#d> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [ce2a25ac]
+<urn:swrl:var#e> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [fc84f686]
+<urn:swrl:var#eff> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [771756f4]
+<urn:swrl:var#g1> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [043ab523]
+<urn:swrl:var#g2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [bd2d6cbd]
+<urn:swrl:var#in> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [adb0569d]
+<urn:swrl:var#mf2> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [4cecd3a1]
+<urn:swrl:var#mf> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [e13defcf]
+<urn:swrl:var#p> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [38490804]
+<urn:swrl:var#q> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [09df9d91]
+<urn:swrl:var#u> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [1f3500a0]
+<urn:swrl:var#w> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [3ed4fba7]
+<urn:swrl:var#x> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [0149d7f9]
+<urn:swrl:var#y> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [26c02eec]
+<urn:swrl:var#z> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2003/11/swrl#Variable> .    # SWRL rule [a24cf0e2]
+_:_ <http://swrl.stanford.edu/ontologies/3.3/swrla.owl#isRuleEnabled> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .    # SWRL rule [9148a561]  (+32 in blank-node closure)
+_:_ <http://swrl.stanford.edu/ontologies/3.3/swrla.owl#isRuleEnabled> "true"^^<http://www.w3.org/2001/XMLSchema#boolean> .    # SWRL rule [d7c8225f]  (+38 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [05bce9a6]  (+29 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [0642caaa]  (+31 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [07261edc]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [24d41d92]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [2c732eb2]  (+31 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [3232ac5c]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [49c31870]  (+28 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [65c34d3e]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [925bebbb]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [adb01e24]  (+31 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [b217b6c0]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [b643499a]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [c8caf109]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [d6fa4b9e]  (+24 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [d9b887bd]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [ece8089c]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [ed445c0a]  (+22 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f296bd87]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f296bd87]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f3ed057a]  (+23 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f50224f3]  (+36 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [f820f903]  (+32 in blank-node closure)
+_:_ <http://www.w3.org/1999/02/22-rdf-syntax-ns#first> _:_ .    # SWRL rule [fde41528]  (+29 in blank-node closure)

@@ -212,7 +212,8 @@
       (object    (term-of st (. it o)))))
 
   (fn intern-owned ((arena Arena) (st TermStore) (t Term))
-    (@intent "t's id, minted the first time t is seen, keeping an owned copy - by content, quoted triples by their parts")
+    (@intent "t's id, minted the first time t is seen, keeping an owned copy - by content, quoted triples by their
+              parts")
     (@spec ((Arena TermStore Term) -> Int))
     (@alloc arena)
     (match t

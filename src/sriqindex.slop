@@ -1,0 +1,404 @@
+;; ============================================================
+;; sriq's indexed commit  —  SPEC.md §5.5 S6 step 3, slice 9b (D5)
+;;
+;; commit-min (sriqsubsume) takes each candidate in turn: skip it if it is
+;; ∈̂ W, else delete what it subsumes and insert it. It scans W for both,
+;; and copies W at every insert, so a round's arena grows with inserts
+;; times |W|. Its result is min(W ∪ C) whatever the order (R1), so it can
+;; be computed in one pass instead. With W a min set:
+;;   C₁ = the distinct candidates that are not tautologies and not ∈̂ W;
+;;   C₂ = the members of C₁ that no other member of C₁ subsumes;
+;;   W′ = the members of W that no member of C₂ subsumes.
+;; min(W ∪ C) = W′ ∪ C₂, and C₂ is what W lacked: Δ. A candidate C₁ drops
+;; is subsumed by one C₂ keeps (subsumption is a preorder, and C₁ is
+;; finite), so checking C₂ against W suffices.
+;;
+;; "Does some x of X subsume c?" goes through an index: each x is filed
+;; under one literal, its least body literal, or its least head literal
+;; when its body is empty. If x ⊆ c, that literal is in c on the same
+;; side, so probing c's literals finds every such x; subsumes confirms
+;; each. The empty clause subsumes everything; it is kept aside, by
+;; position, so that a query can skip it like any other.
+;;
+;; Succ's K-sets, per context (slice 9d). k-sets reads every clause of
+;; S_v for each Succ instance. Its K₂ has two parts: the maximal ground
+;; literals with no f(u) that are Su(O) atoms, which no successor term
+;; changes, and the maximal literals that mention the instance's own term
+;; f(x) (f(u) at the root), with K₁ among the latter. So the first part is
+;; collected once per context, and the second through literals filed by
+;; the f-terms they mention. Each literal goes through k-sets' own steps
+;; (succ-pre, in-su, mentions-x), so the result is k-sets'; a test diffs
+;; them on every context of every finished run.
+;; ============================================================
+
+(module sriqindex
+  (@doc "sriq's indexed commit: min(W ∪ C) in one pass, with subsumption queries through a literal index (SPEC 5.5 S6,
+         D5); and Succ's K-sets per context, through literals filed by the f-terms they mention")
+
+  (import types (Lit Clause ATerm lit-cmp aterm-cmp at-fx at-fu))
+  (import sriqclauses (lit-set))
+  (import sriqctx (Triggers in-su mentions-x))
+  (import sriqorder (SriqOrder maximal-at))
+  (import sriq (Premise SuccSig KSets succ-pre))
+  (import sriqclauses (clause-cmp clause-eq))
+  (import sriqsubsume (Committed subsumes tautology))
+  (import canon (sort-range))
+
+  (export SubIndex sub-index some-subsumes commit-indexed KIdx k-index k-index-premises k-query)
+
+  ;; One clause filed under one literal: side 0 is the body, 1 the head.
+  (type Entry (record
+    (side Int)
+    (lit  Lit)
+    (i    Int)))
+
+  (type SubIndex (record
+    (xs      (List Clause))
+    (sigs    (List Int))       ; sigs[i] is xs[i]'s signature (slice 9f)
+    (entries (List Entry))     ; sorted by side, then literal
+    (empty   Int)))            ; xs's empty clause, by position, or -1
+
+  (fn entry-cmp ((a Entry) (b Entry))
+    (@intent "By side, then literal")
+    (@spec ((Entry Entry) -> Int))
+    (@pure)
+    (cond ((< (. a side) (. b side)) -1) ((> (. a side) (. b side)) 1) (else (lit-cmp (. a lit) (. b lit)))))
+
+  (fn key-cmp ((e Entry) (side Int) (l Lit))
+    (@intent "e against the key (side, l)")
+    (@spec ((Entry Int Lit) -> Int))
+    (@pure)
+    (cond ((< (. e side) side) -1) ((> (. e side) side) 1) (else (lit-cmp (. e lit) l))))
+
+  (fn entry-at ((es (List Entry)) (k Int) (fallback Entry))
+    (@intent "Element k")
+    (@spec (((List Entry) Int Entry) -> Entry))
+    (@pure)
+    (match (list-get es k) ((some e) e) ((none) fallback)))
+
+  (fn key-of ((c Clause) (i Int))
+    (@intent "The entry c is filed under: its least body literal, else its least head literal; none for the empty
+              clause")
+    (@spec ((Clause Int) -> (Option Entry)))
+    (@pure)
+    (match (list-get (. c body) 0)
+      ((some l) (some (record-new Entry (side 0) (lit l) (i i))))
+      ((none) (match (list-get (. c head) 0)
+                ((some l) (some (record-new Entry (side 1) (lit l) (i i))))
+                ((none) (none))))))
+
+  (fn sub-index ((arena Arena) (xs (List Clause)))
+    (@intent "xs filed by key literal, sorted. xs holds at most one empty clause (a min set, or a list without repeats),
+              which is kept aside by position")
+    (@spec ((Arena (List Clause)) -> SubIndex))
+    (@alloc arena)
+    (let ((mut raw (list-new arena Entry)) (mut sigs (list-new arena Int)) (mut empty -1) (mut i 0))
+      (do (for-each (c xs)
+            (do (match (key-of c i) ((some e) (list-push raw e)) ((none) (set! empty i)))
+                (list-push sigs (clause-sig c))
+                (set! i (+ i 1))))
+          (record-new SubIndex (xs xs) (sigs sigs) (entries (sorted-entries arena raw)) (empty empty)))))
+
+  ;; A clause's signature (slice 9f): bit h(side, l) for each of its
+  ;; literals, h into 0..63. If x ⊆ c side by side, then sig(x) ⊆ sig(c),
+  ;; so a clause with a bit c lacks cannot subsume c, and subsumes is not
+  ;; asked. On CCO's round 9 the probes asked it 133M times, and 392k held.
+  (fn clause-sig ((c Clause))
+    (@intent "The bits of c's literals, body and head apart")
+    (@spec ((Clause) -> Int))
+    (@pure)
+    (let ((mut sg 0))
+      (do (for-each (l (. c body)) (set! sg (| sg (lit-bit 0 l))))
+          (for-each (l (. c head)) (set! sg (| sg (lit-bit 1 l))))
+          sg)))
+
+  (fn lit-bit ((side Int) (l Lit))
+    (@intent "One bit for literal l on side (0 body, 1 head), of bits 0 to 62")
+    (@spec ((Int Lit) -> Int))
+    (@pure)
+    ;; A 64-bit 1, and never bit 63: in C, shifting an int 1 by 31 or more,
+    ;; or a signed 1 into the sign bit, is undefined. The mix is a sum of
+    ;; non-negative products, so % gives 0 to 62.
+    (let ((h (+ (+ (* side 37) (* (cast Int (. l pred)) 131)) (+ (* (term-mix (. l t1)) 7) (term-mix (. l t2))))))
+      (<< (cast Int 1) (% h 63))))
+
+  (fn term-mix ((t ATerm))
+    (@intent "An a-term's fields, mixed into one number for lit-bit")
+    (@spec ((ATerm) -> Int))
+    (@pure)
+    (+ (* (cast Int (. t fsym)) 17) (+ (* (cast Int (. t cst)) 29) (cast Int (. t zi)))))
+
+  (fn sig-at ((ix SubIndex) (i Int))
+    (@intent "Clause i's signature")
+    (@spec ((SubIndex Int) -> Int))
+    (@pure)
+    (match (list-get (. ix sigs) i) ((some x) x) ((none) 0)))
+
+  (fn sorted-entries ((arena Arena) (raw (List Entry)))
+    (@intent "raw sorted by side, then literal")
+    (@spec ((Arena (List Entry)) -> (List Entry)))
+    (@alloc arena)
+    (match (list-get raw 0)
+      ((none) raw)
+      ((some e0)
+        (let ((idx (sort-range arena (cast Int (list-len raw))
+                     (fn ((a Int) (b Int)) (entry-cmp (entry-at raw a e0) (entry-at raw b e0)))))
+              (mut out (list-new arena Entry)))
+          (do (for-each (k idx) (list-push out (entry-at raw k e0))) out)))))
+
+  (fn lower-bound ((es (List Entry)) (side Int) (l Lit) (fallback Entry))
+    (@intent "The first position whose entry is not below (side, l)")
+    (@spec (((List Entry) Int Lit Entry) -> Int))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len es))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (key-cmp (entry-at es mid fallback) side l) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  (fn probe ((ix SubIndex) (side Int) (l Lit) (c Clause) (csig Int) (skip Int))
+    (@intent "Does a clause filed under (side, l), other than number skip, subsume c, whose signature is csig?")
+    (@spec ((SubIndex Int Lit Clause Int Int) -> Bool))
+    (@pure)
+    (match (list-get (. ix entries) 0)
+      ((none) false)
+      ((some e0)
+        (let ((es (. ix entries)) (mut k (lower-bound (. ix entries) side l e0)) (mut found false) (mut going true))
+          (do (while (and going (not found) (< k (cast Int (list-len es))))
+                (let ((e (entry-at es k e0)))
+                  (do (set! going (== (key-cmp e side l) 0))
+                      (set! found (and going (hit ix e c csig skip)))
+                      (set! k (+ k 1)))))
+              found)))))
+
+  (fn hit ((ix SubIndex) (e Entry) (c Clause) (csig Int) (skip Int))
+    (@intent "Does entry e's clause, unless it is number skip, subsume c? Not if it has a signature bit c lacks")
+    (@spec ((SubIndex Entry Clause Int Int) -> Bool))
+    (@pure)
+    (and (!= (. e i) skip) (== (& (sig-at ix (. e i)) (^ csig -1)) 0) (x-subsumes ix (. e i) c)))
+
+  (fn x-subsumes ((ix SubIndex) (i Int) (c Clause))
+    (@intent "Does clause i of the index subsume c?")
+    (@spec ((SubIndex Int Clause) -> Bool))
+    (@pure)
+    (match (list-get (. ix xs) i) ((some x) (subsumes x c)) ((none) false)))
+
+  (fn some-subsumes ((ix SubIndex) (c Clause) (skip Int))
+    (@intent "Does some clause of the index, other than number skip, subsume c? (skip below 0 skips none)")
+    (@spec ((SubIndex Clause Int) -> Bool))
+    (@pure)
+    (let ((csig (clause-sig c)) (mut found (and (>= (. ix empty) 0) (!= (. ix empty) skip))))
+      (do (for-each (l (. c body)) (when (and (not found) (probe ix 0 l c csig skip)) (set! found true)))
+          (for-each (l (. c head)) (when (and (not found) (probe ix 1 l c csig skip)) (set! found true)))
+          found)))
+
+  (fn distinct ((arena Arena) (cs (List Clause)))
+    (@intent "cs in content order, each clause once")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (match (list-get cs 0)
+      ((none) cs)
+      ((some c0)
+        (let ((idx (sort-range arena (cast Int (list-len cs))
+                     (fn ((a Int) (b Int)) (clause-cmp (clause-of cs a c0) (clause-of cs b c0)))))
+              (mut out (list-new arena Clause)) (mut have false) (mut last c0))
+          (do (for-each (k idx)
+                (let ((c (clause-of cs k c0)))
+                  (when (not (and have (clause-eq c last)))
+                    (do (list-push out c) (set! last c) (set! have true)))))
+              out)))))
+
+  (fn clause-of ((cs (List Clause)) (k Int) (fallback Clause))
+    (@intent "Element k")
+    (@spec (((List Clause) Int Clause) -> Clause))
+    (@pure)
+    (match (list-get cs k) ((some c) c) ((none) fallback)))
+
+  (fn merged ((arena Arena) (a (List Clause)) (b (List Clause)))
+    (@intent "a and b, both in content order, merged in content order")
+    (@spec ((Arena (List Clause) (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)) (mut j 0))
+      (do (for-each (x a)
+            (do (while (match (list-get b j) ((some y) (< (clause-cmp y x) 0)) ((none) false))
+                  (do (match (list-get b j) ((some y) (list-push out y)) ((none) (set! j j)))
+                      (set! j (+ j 1))))
+                (list-push out x)))
+          (while (< j (cast Int (list-len b)))
+            (do (match (list-get b j) ((some y) (list-push out y)) ((none) (set! j j)))
+                (set! j (+ j 1))))
+          out)))
+
+  (fn commit-indexed ((arena Arena) (ws (List Clause)) (cs (List Clause)))
+    (@intent "min(W ∪ C) for a min set W (content order) and candidates C, as commit-min gives it, in one pass: its set
+              in content order, and what W lacked")
+    (@spec ((Arena (List Clause) (List Clause)) -> Committed))
+    (@alloc arena)
+    (let ((wix (sub-index arena ws))
+          (mut c1 (list-new arena Clause)))
+      (do (for-each (c (distinct arena cs))
+            (when (not (or (tautology c) (some-subsumes wix c -1))) (list-push c1 c)))
+          (let ((c1ix (sub-index arena c1)) (mut c2 (list-new arena Clause)) (mut i 0))
+            (do (for-each (c c1)
+                  (do (when (not (some-subsumes c1ix c i)) (list-push c2 c))
+                      (set! i (+ i 1))))
+                (let ((c2ix (sub-index arena c2)) (mut kept (list-new arena Clause)))
+                  (do (for-each (w ws) (when (not (some-subsumes c2ix w -1)) (list-push kept w)))
+                      (record-new Committed (set (merged arena kept c2)) (added c2)))))))))
+
+
+  ;; ============================================================
+  ;; Succ's K-sets, per context
+  ;; ============================================================
+
+  ;; A maximal head literal that mentions an f-term, filed under that term,
+  ;; with whether its clause is a unit (single) (⊤ → A′σ, for K₁).
+  (type FPart (record
+    (t    ATerm)
+    (lit  Lit)
+    (single Bool)))
+
+  (type KIdx (record
+    (ground (List Lit))      ; K₂'s part no successor term changes, as a set
+    (fparts (List FPart))))  ; sorted by term
+
+  (fn fterm-key ((t ATerm))
+    (@intent "t as a successor term would be built: f(x), or f(u); none for any other term")
+    (@spec ((ATerm) -> (Option ATerm)))
+    (@pure)
+    (cond ((== (. t kind) 'ak-fx) (some (at-fx (. t fsym))))
+          ((== (. t kind) 'ak-fu) (some (at-fu (. t fsym) (. t cst))))
+          (else (none))))
+
+  (fn fpart-at ((ps (List FPart)) (k Int) (fallback FPart))
+    (@intent "Element k")
+    (@spec (((List FPart) Int FPart) -> FPart))
+    (@pure)
+    (match (list-get ps k) ((some p) p) ((none) fallback)))
+
+  (fn k-index ((arena Arena) (ord SriqOrder) (tr Triggers) (cs (List Clause)))
+    (@intent "Succ's K-sets over cs, prepared for every successor term: the maximal ground literals with no f(u) that
+              are Su(O) atoms, and the maximal literals filed by the f-terms they mention")
+    (@spec ((Arena SriqOrder Triggers (List Clause)) -> KIdx))
+    (@alloc arena)
+    (let ((any (record-new SuccSig (f (cast U32 0)) (root false) (u (cast U32 0))))
+          (mut ground (list-new arena Lit)) (mut raw (list-new arena FPart)))
+      (do (for-each (c cs)
+            (let ((single (and (== (list-len (. c body)) 0) (== (list-len (. c head)) 1))) (mut i 0))
+              (for-each (l (. c head))
+                (do (when (maximal-at arena ord (. c head) i)
+                      (do (for-each (p (fparts-of arena l single)) (list-push raw p))
+                          (for-each (a (ground-k2 arena tr any l)) (list-push ground a))))
+                    (set! i (+ i 1))))))
+          (record-new KIdx (ground (lit-set arena ground)) (fparts (fparts-sorted arena raw))))))
+
+  ;; The same index from premises (slice 9k): a premise's maxed is maximal-at
+  ;; of its clause's head at sel, and its clause is a unit exactly when the
+  ;; premise has an empty body and an empty rest. Premises list each clause's
+  ;; head literals in order, as k-index walks them, so the result is the same.
+  (fn k-index-premises ((arena Arena) (tr Triggers) (ps (List Premise)))
+    (@intent "k-index over the clauses whose premises ps are, read from the premises' maxed flags: no order work")
+    (@spec ((Arena Triggers (List Premise)) -> KIdx))
+    (@alloc arena)
+    (let ((any (record-new SuccSig (f (cast U32 0)) (root false) (u (cast U32 0))))
+          (mut ground (list-new arena Lit)) (mut raw (list-new arena FPart)))
+      (do (for-each (p ps)
+            (when (. p maxed)
+              (do (for-each (x (fparts-of arena (. p sel) (unit-premise p))) (list-push raw x))
+                  (for-each (a (ground-k2 arena tr any (. p sel))) (list-push ground a)))))
+          (record-new KIdx (ground (lit-set arena ground)) (fparts (fparts-sorted arena raw))))))
+
+  (fn unit-premise ((p Premise))
+    (@intent "Is p's clause ⊤ → L: no body, and nothing beside L in the head?")
+    (@spec ((Premise) -> Bool))
+    (@pure)
+    (and (== (list-len (. p body)) 0) (== (list-len (. p rest)) 0)))
+
+  (fn ground-k2 ((arena Arena) (tr Triggers) (any SuccSig) (l Lit))
+    (@intent "[l] if l mentions no f-term and succ-pre takes it as itself (a ground literal, not an inequality), and it
+              is in Su(O); else []. No successor term changes this")
+    (@spec ((Arena Triggers SuccSig Lit) -> (List Lit)))
+    (@alloc arena)
+    (let ((a (succ-pre any l)) (mut out (list-new arena Lit)))
+      (do (when (and (no-fterm l) (. a ok) (in-su tr (. a lit))) (list-push out (. a lit))) out)))
+
+  (fn no-fterm ((l Lit))
+    (@intent "Does l mention no f(x) and no f(u)? A unary atom's unused t2 is not read")
+    (@spec ((Lit) -> Bool))
+    (@pure)
+    (and (is-none (fterm-key (. l t1))) (or (== (. l form) 'lf-unary) (is-none (fterm-key (. l t2))))))
+
+  (fn fparts-of ((arena Arena) (l Lit) (single Bool))
+    (@intent "l filed under each f-term it mentions, once each")
+    (@spec ((Arena Lit Bool) -> (List FPart)))
+    (@alloc arena)
+    (let ((mut out (list-new arena FPart)))
+      (do (match (fterm-key (. l t1))
+            ((some t) (list-push out (record-new FPart (t t) (lit l) (single single))))
+            ((none) (do)))
+          (when (not (== (. l form) 'lf-unary))
+            (match (fterm-key (. l t2))
+              ((some t) (when (not (first-is out t)) (list-push out (record-new FPart (t t) (lit l) (single single)))))
+              ((none) (do))))
+          out)))
+
+  (fn first-is ((ps (List FPart)) (t ATerm))
+    (@intent "Is t the term of ps's first part?")
+    (@spec (((List FPart) ATerm) -> Bool))
+    (@pure)
+    (match (list-get ps 0) ((some p) (== (aterm-cmp (. p t) t) 0)) ((none) false)))
+
+  (fn fparts-sorted ((arena Arena) (raw (List FPart)))
+    (@intent "raw sorted by term")
+    (@spec ((Arena (List FPart)) -> (List FPart)))
+    (@alloc arena)
+    (match (list-get raw 0)
+      ((none) raw)
+      ((some p0)
+        (let ((idx (sort-range arena (cast Int (list-len raw))
+                     (fn ((a Int) (b Int)) (aterm-cmp (. (fpart-at raw a p0) t) (. (fpart-at raw b p0) t)))))
+              (mut out (list-new arena FPart)))
+          (do (for-each (k idx) (list-push out (fpart-at raw k p0))) out)))))
+
+  (fn fpart-lower ((ps (List FPart)) (t ATerm) (fallback FPart))
+    (@intent "The first position whose part's term is not below t")
+    (@spec (((List FPart) ATerm FPart) -> Int))
+    (@pure)
+    (let ((mut lo 0) (mut hi (cast Int (list-len ps))))
+      (do (while (< lo hi)
+            (let ((mid (/ (+ lo hi) 2)))
+              (if (< (aterm-cmp (. (fpart-at ps mid fallback) t) t) 0) (set! lo (+ mid 1)) (set! hi mid))))
+          lo)))
+
+  (type KPair (record
+    (k1 (List Lit))
+    (k2 (List Lit))))
+
+  (fn k-query ((arena Arena) (tr Triggers) (kx KIdx) (sg SuccSig))
+    (@intent "k-sets' K₁ and K₂ for successor term sg: the ground part, and the literals filed under sg's term")
+    (@spec ((Arena Triggers KIdx SuccSig) -> KSets))
+    (@alloc arena)
+    (let ((t (if (. sg root) (at-fu (. sg f) (. sg u)) (at-fx (. sg f))))
+          (fp (match (list-get (. kx fparts) 0)
+                ((none) (record-new KPair (k1 (list-new arena Lit)) (k2 (list-new arena Lit))))
+                ((some p0) (k-walk arena tr kx sg t p0))))
+          (mut k2 (list-new arena Lit)))
+      (do (for-each (a (. kx ground)) (list-push k2 a))
+          (for-each (a (. fp k2)) (list-push k2 a))
+          (record-new KSets (k1 (lit-set arena (. fp k1))) (k2 (lit-set arena k2))))))
+
+  (fn k-walk ((arena Arena) (tr Triggers) (kx KIdx) (sg SuccSig) (t ATerm) (p0 FPart))
+    (@intent "The literals filed under term t, each through succ-pre and in-su as k-of-lit does; into K₁ as well when
+              its clause is a unit and its atom mentions x")
+    (@spec ((Arena Triggers KIdx SuccSig ATerm FPart) -> KPair))
+    (@alloc arena)
+    (let ((ps (. kx fparts)) (mut k (fpart-lower (. kx fparts) t p0))
+          (mut k1 (list-new arena Lit)) (mut k2 (list-new arena Lit)))
+      (do (while (and (< k (cast Int (list-len ps))) (== (aterm-cmp (. (fpart-at ps k p0) t) t) 0))
+            (let ((p (fpart-at ps k p0)) (a (succ-pre sg (. (fpart-at ps k p0) lit))))
+              (do (when (and (. a ok) (in-su tr (. a lit)))
+                    (do (list-push k2 (. a lit))
+                        (when (and (. p single) (mentions-x (. a lit))) (list-push k1 (. a lit)))))
+                  (set! k (+ k 1)))))
+          (record-new KPair (k1 k1) (k2 k2)))))
+)

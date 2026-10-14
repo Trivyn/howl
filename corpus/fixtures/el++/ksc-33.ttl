@@ -1,0 +1,18 @@
+# el++ engine fixture 33 (src/test.slop: test-ksc-engine-matches-reference).
+# K6: a class's run reads W only where W's facts are safe. A ⊑ {a} ⊓ C puts
+# C on a in W, where every class is seeded at once, but A may be empty, so
+# a ∈ C is not entailed. B ⊑ ∃r.{a} with ∃r.C ⊑ D must therefore NOT give
+# B ⊑ D; a run that read W's facts about a (an individual, so unsafe) would.
+# Expect: A ⊑ C, and nothing for B.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:r a owl:ObjectProperty .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class .
+:a a owl:NamedIndividual .
+:A rdfs:subClassOf [ owl:oneOf ( :a ) ] , :C .
+:B rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ owl:oneOf ( :a ) ] ] .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] rdfs:subClassOf :D .

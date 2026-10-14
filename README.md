@@ -108,12 +108,13 @@ howl --version
   |---|---|---|
   | `el` (default) | ELH⊥R+: EL with role hierarchies, ⊥, transitive roles and property chains, domains and ranges, ABox assertions, and `¬` in a superclass, domain or range | built |
   | `el++` | the OWL 2 EL object fragment: `el` plus nominals, `hasValue`, `hasSelf`, reflexive roles, individual equality and inequality, and negative assertions | built |
-  | `auto` | the cheapest built profile that covers the whole ontology (else the one omitting the fewest axioms) | built |
-  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | specified, not yet built; asking for it exits 3, and HOWL never runs another profile in its place |
+  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | built; single-threaded, and bounded by a budget of 500,000 clauses (a run that passes it is inconclusive) |
+  | `auto` | the cheapest built profile that covers the whole ontology (else the one omitting the fewest axioms). If that is `sriq` and it passes its clause budget with nothing definitive, `auto` steps down to `el` or `el++` and says so on stderr | built |
 
-  The report names the profile that ran. Both built profiles run in polynomial time. `horn-sriq`
-  was dropped from the plan, since `sriq` covers its language at the same cost; asking for it exits
-  3 with a message saying so.
+  The report names the profile that ran. `el` and `el++` run in polynomial time, and `sriq` in
+  exponential time at worst; that is why `el` stays the default. `horn-sriq` was dropped from the
+  plan, since `sriq` covers its language at the same cost; asking for it exits 3 with a message
+  saying so.
 - **`--no-imports`** records that leaving the imports out is deliberate. It changes nothing in the
   result: an unattested import is still an omission, and the run still inconclusive.
 - **`--strict`** refuses to run at all if anything would be omitted (exit 2, no report).
@@ -249,8 +250,13 @@ ELK or HermiT over every pair of named classes. The protocol, history and memory
   HermiT) over every pair of named classes;
 - **generated ontologies:** compared with HermiT.
 
-Results are byte-identical across worker counts. `sriq` is next
-([SPEC §5.5](SPEC.md#55-the-sriq-calculus)), with BFO and CCO as its target. `howl classify` (Turtle output
+Results are byte-identical across worker counts. `sriq`
+([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) runs single-threaded. It classifies BFO-core and CCO
+whole: CCO takes 32 rounds, about 9 s and 1.6 GB, and agrees with HermiT. Each of its rules is a
+function whose contracts Z3 proves where it can, and whose tests pin the paper's own derivations
+([SPEC §7](SPEC.md#7-verification--contracts) records what is proved and what is owed). OBI is out
+of its reach: `--profile sriq` stops there at the clause budget, and `auto` steps down to `el++`.
+`howl classify` (Turtle output
 of the inferred hierarchy with `--emit`, and `--reduce`) is planned; until then both flags are
 refused with exit 3.
 

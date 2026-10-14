@@ -83,7 +83,7 @@ impl fmt::Display for Fault {
                 write!(f, "profile horn-sriq was dropped; sriq covers its language")
             }
             Fault::ProfileUnavailable(p) => {
-                write!(f, "profile {} is not implemented yet (implemented: el, el++)", p.name())
+                write!(f, "profile {} is not implemented yet (implemented: el, el++, sriq)", p.name())
             }
             Fault::InvalidConfig(m) => write!(f, "invalid config: {m}"),
         }
@@ -132,7 +132,7 @@ impl Verdict {
 /// |---|---|---|---|
 /// | [`El`](Profile::El) | ELH⊥R+ + domain/range + ABox | PTIME | yes |
 /// | [`ElPlusPlus`](Profile::ElPlusPlus) | the OWL 2 EL object fragment | PTIME | yes |
-/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment with ABox (SPEC §5.5) | 2ExpTime without an ABox; with one, a triple-exponential bound | not yet |
+/// | [`Sriq`](Profile::Sriq) | SRIQ object fragment with ABox (SPEC §5.5) | 2ExpTime without an ABox; with one, a triple-exponential bound | yes, single-threaded, under a clause budget |
 ///
 /// Asking for an unbuilt rung is [`Fault::ProfileUnavailable`].
 /// [`HornSriq`](Profile::HornSriq) was dropped from the ladder (SPEC §5);
@@ -189,8 +189,11 @@ impl Profile {
 ///
 /// The default is `Explicit(Profile::El)`, not `Auto`: a default run
 /// keeps one cost class and one theory across upgrades. `Auto` picks
-/// the cheapest built profile containing the whole ontology; the
-/// [`Report`] names the one that ran.
+/// the cheapest built profile containing the whole ontology (else the
+/// one omitting fewest axioms). When that is `Sriq` and its run passes
+/// the engine's clause budget with nothing definitive, `Auto` steps
+/// down to `El` or `ElPlusPlus` (SPEC §5.1). The [`Report`] names the
+/// one that ran.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProfileSelection {
     Auto,
@@ -698,7 +701,7 @@ mod tests {
     #[test]
     fn unavailable_names_the_profile() {
         let f = Fault::ProfileUnavailable(Profile::Sriq);
-        assert_eq!(f.to_string(), "profile sriq is not implemented yet (implemented: el, el++)");
+        assert_eq!(f.to_string(), "profile sriq is not implemented yet (implemented: el, el++, sriq)");
     }
 
     #[test]

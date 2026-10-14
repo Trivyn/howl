@@ -63,6 +63,7 @@
   (export
     select-profile
     choose-auto
+    choose-auto-low
     profile-implemented
     profile-dropped
     unavailable-message
@@ -84,13 +85,34 @@
       ((auto)       (none))
       ((explicit p) (some p))))
 
-  (fn choose-auto ((out-of-el (Int 0 ..)) (out-of-el-plus-plus (Int 0 ..)))
-    (@intent "§5.1's auto rule over el and el++, from how many logical axioms each leaves out of profile")
-    (@spec (((Int 0 ..) (Int 0 ..)) -> Profile))
+  (fn choose-auto ((out-of-el (Int 0 ..)) (out-of-el-plus-plus (Int 0 ..)) (out-of-sriq (Int 0 ..)))
+    (@intent "§5.1's auto rule over el, el++ and sriq, from how many logical axioms each leaves out of profile")
+    (@spec (((Int 0 ..) (Int 0 ..) (Int 0 ..)) -> Profile))
     (@pure)
     ;; The cheapest rung containing the whole ontology, else the one
-    ;; omitting the fewest logical axioms, ties by declaration order. `el`
-    ;; is first, so it wins whenever it omits nothing and on every tie.
+    ;; omitting the fewest logical axioms, ties by the order el < el++ <
+    ;; sriq, which is by cost. A rung omitting nothing omits the fewest, so
+    ;; the first such rung wins. (When sriq's run is too expensive, auto
+    ;; steps down with choose-auto-low: §5.1.)
+    (@post (implies {out-of-el == 0} {$result == 'profile-el}))
+    (@post (implies (and {out-of-el <= out-of-el-plus-plus} {out-of-el <= out-of-sriq}) {$result == 'profile-el}))
+    (@post (implies (and {out-of-el-plus-plus < out-of-el} {out-of-el-plus-plus <= out-of-sriq})
+                    {$result == 'profile-el-plus-plus}))
+    (@post (implies (and {out-of-sriq < out-of-el} {out-of-sriq < out-of-el-plus-plus}) {$result == 'profile-sriq}))
+    (@example (0 0 0) -> 'profile-el)
+    (@example (2 0 0) -> 'profile-el-plus-plus)
+    (@example (2 1 0) -> 'profile-sriq)
+    (@example (2 1 1) -> 'profile-el-plus-plus)
+    (@example (1 1 1) -> 'profile-el)
+    (@example (3 2 5) -> 'profile-el-plus-plus)
+    (cond ((and (<= out-of-el out-of-el-plus-plus) (<= out-of-el out-of-sriq)) 'profile-el)
+          ((<= out-of-el-plus-plus out-of-sriq) 'profile-el-plus-plus)
+          (else 'profile-sriq)))
+
+  (fn choose-auto-low ((out-of-el (Int 0 ..)) (out-of-el-plus-plus (Int 0 ..)))
+    (@intent "auto's step-down from sriq (§5.1): the same rule over el and el++ alone")
+    (@spec (((Int 0 ..) (Int 0 ..)) -> Profile))
+    (@pure)
     (@post (implies {out-of-el == 0} {$result == 'profile-el}))
     (@post (implies {out-of-el-plus-plus < out-of-el} {$result == 'profile-el-plus-plus}))
     (@post (implies {out-of-el <= out-of-el-plus-plus} {$result == 'profile-el}))
@@ -106,12 +128,12 @@
     (@pure)
     ;; Pinned so that wiring a rung in is a deliberate, visible edit:
     ;; the postcondition and the match change together.
-    (@post {$result == (or (p == 'profile-el) (p == 'profile-el-plus-plus))})
+    (@post {$result == (or (p == 'profile-el) (p == 'profile-el-plus-plus) (p == 'profile-sriq))})
     (match p
       ('profile-el           true)
       ('profile-el-plus-plus true)
       ('profile-horn-sriq    false)
-      ('profile-sriq         false)))
+      ('profile-sriq         true)))
 
   (fn profile-dropped ((p Profile))
     (@intent "Whether a rung was dropped from the ladder, so a request for it is refused for good")
@@ -136,7 +158,7 @@
     (let ((named (string-concat arena "profile " (profile-name p))))
       (if (profile-dropped p)
         (string-concat arena named " was dropped; sriq covers its language")
-        (string-concat arena named " is not implemented yet (implemented: el, el++)"))))
+        (string-concat arena named " is not implemented yet (implemented: el, el++, sriq)"))))
 
   (fn profile-name ((p Profile))
     (@intent "A rung's name, as the CLI flag and the report spell it")

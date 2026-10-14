@@ -1,0 +1,227 @@
+# HOWL el++ projection — REMOVAL LIST
+#
+# projected theory == pinned source MINUS the axioms below.
+#
+# source                  cco-2024-11-06.ttl
+# source_sha256           e609db27478a2c8b52b9bb5eb5ac979ac323510e851c368e4d9ec7d1c153fe5b
+# source_triples          13,649
+# axioms_removed          202
+# triples_removed         539
+# in_v0_swept_in          59   <- collateral from blank-node closures
+# projected_triples       13,110
+# projected_ground_sha256 e79929345845b642b7c94664c4367b7acd243b7262ef9e75b21a46f7e425ccc6
+# projected_bnode_triples 1,019
+# projected_bnode_sha256  1278ebdb611d2664306cc8d0553bae189fe61a949cecf8096e4b4c7ff03f0fcc
+#
+# The ground hash covers every triple with no blank node on either
+# end, which is canonical as it stands. The blank-node hash covers the
+# rest, with each blank node named by a hash of its own content
+# instead of the parser's label -- label-free without URDNA2015,
+# which is impractical at this size.
+#
+# Anchors are named subjects; blank nodes print as _:_ because parser
+# -assigned labels differ run to run and would churn the file.
+#
+
+<http://purl.obolibrary.org/obo/BFO_0000002> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [7da1b9fb]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000004> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [123f25fd]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000006> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [f5143e2e]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000008> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [685b5cc1]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000008> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [eed684cd]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000009> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [7de4312c]  (+11 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000011> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [1840577d]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000011> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [498c7606]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [143bf1b4]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [8d08c25a]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000015> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [cdc6986d]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000018> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [772d545f]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000026> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [4be47f4e]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000028> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [4e57e303]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000029> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [b784233c]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000029> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [f4ad1874]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000029> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [e2adee7b]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [28e2ebab]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [f35678ff]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [392287d5]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000035> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [84900766]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000038> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [1d488427]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000038> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [c8545703]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000040> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [92fd4191]  (+11 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000040> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [c089a962]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000054> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000055> .    # InverseObjectProperties [2635afde]
+<http://purl.obolibrary.org/obo/BFO_0000056> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf + ObjectUnionOf [b2ff8380]  (+16 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000056> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000057> .    # InverseObjectProperties [39d06bc0]
+<http://purl.obolibrary.org/obo/BFO_0000057> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf + ObjectUnionOf [080e1e8c]  (+16 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000058> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [65dafeed]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000058> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000059> .    # InverseObjectProperties [678c0d55]
+<http://purl.obolibrary.org/obo/BFO_0000059> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [1b127d8d]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000062> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000063> .    # InverseObjectProperties [4f79ed38]
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [cf94b471]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [10aa0416]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000066> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000183> .    # InverseObjectProperties [2e582c7a]
+<http://purl.obolibrary.org/obo/BFO_0000084> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000101> .    # InverseObjectProperties [14d9134e]
+<http://purl.obolibrary.org/obo/BFO_0000115> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000129> .    # InverseObjectProperties [8cfc03c6]
+<http://purl.obolibrary.org/obo/BFO_0000117> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000132> .    # InverseObjectProperties [8284eb09]
+<http://purl.obolibrary.org/obo/BFO_0000121> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000139> .    # InverseObjectProperties [4ca2fb3f]
+<http://purl.obolibrary.org/obo/BFO_0000124> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000171> .    # InverseObjectProperties [47b4d844]
+<http://purl.obolibrary.org/obo/BFO_0000127> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000218> .    # InverseObjectProperties [7db88e1a]
+<http://purl.obolibrary.org/obo/BFO_0000140> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [361bc959]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000140> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [5e1ab2fa]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000142> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom + ObjectUnionOf [91a5a328]  (+9 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000146> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [883c7c09]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000147> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [570cc990]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000148> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [8bcd0a94]  (+3 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000153> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [986bb802]
+<http://purl.obolibrary.org/obo/BFO_0000176> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000178> .    # InverseObjectProperties [daa5ff1b]
+<http://purl.obolibrary.org/obo/BFO_0000183> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [8d175764]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000183> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [1bb2958c]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000184> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [5f41a8f8]
+<http://purl.obolibrary.org/obo/BFO_0000184> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#InverseFunctionalProperty> .    # InverseFunctionalObjectProperty [d3ab7c57]
+<http://purl.obolibrary.org/obo/BFO_0000184> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000185> .    # InverseObjectProperties [49c2deef]
+<http://purl.obolibrary.org/obo/BFO_0000194> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectComplementOf + ObjectUnionOf [0814b7ee]  (+14 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000194> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000195> .    # InverseObjectProperties [d2fd5cd1]
+<http://purl.obolibrary.org/obo/BFO_0000195> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectComplementOf + ObjectUnionOf [66f9df9c]  (+14 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000196> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000197> .    # InverseObjectProperties [854c7f3d]
+<http://purl.obolibrary.org/obo/BFO_0000199> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [13d29316]
+<http://purl.obolibrary.org/obo/BFO_0000199> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [d13e7744]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000199> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001874> .    # InverseObjectProperties [79f1257b]
+<http://purl.obolibrary.org/obo/BFO_0000200> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [ac87db93]
+<http://purl.obolibrary.org/obo/BFO_0000200> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [2d367001]  (+6 in blank-node closure)
+<http://purl.obolibrary.org/obo/BFO_0000221> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000222> .    # InverseObjectProperties [953b35ad]
+<http://purl.obolibrary.org/obo/BFO_0000222> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [6d269570]
+<http://purl.obolibrary.org/obo/BFO_0000223> <http://www.w3.org/2002/07/owl#inverseOf> <http://purl.obolibrary.org/obo/BFO_0000224> .    # InverseObjectProperties [edbb09f8]
+<http://purl.obolibrary.org/obo/BFO_0000224> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#FunctionalProperty> .    # FunctionalObjectProperty [aaeea414]
+<https://www.commoncoreontologies.org/ont00000300> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [61406fb6]  (+12 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00000914> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [25994acb]  (+3 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001239> <http://www.w3.org/2000/01/rdf-schema#subClassOf> _:_ .    # ObjectAllValuesFrom [238b5c35]  (+3 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001774> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001883> .    # InverseObjectProperties [6703bd41]
+<https://www.commoncoreontologies.org/ont00001775> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001928> .    # InverseObjectProperties [6f6f6eef]
+<https://www.commoncoreontologies.org/ont00001776> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001876> .    # InverseObjectProperties [b2185fff]
+<https://www.commoncoreontologies.org/ont00001777> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001857> .    # InverseObjectProperties [976c0256]
+<https://www.commoncoreontologies.org/ont00001778> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001936> .    # InverseObjectProperties [0b8ffc00]
+<https://www.commoncoreontologies.org/ont00001779> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001848> .    # InverseObjectProperties [5ffb56a7]
+<https://www.commoncoreontologies.org/ont00001780> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001786> .    # InverseObjectProperties [5f124af6]
+<https://www.commoncoreontologies.org/ont00001781> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001979> .    # InverseObjectProperties [c45e1635]
+<https://www.commoncoreontologies.org/ont00001783> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001820> .    # InverseObjectProperties [95084196]
+<https://www.commoncoreontologies.org/ont00001784> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001881> .    # InverseObjectProperties [af3494c2]
+<https://www.commoncoreontologies.org/ont00001785> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001988> .    # InverseObjectProperties [3e2009dd]
+<https://www.commoncoreontologies.org/ont00001787> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001833> .    # InverseObjectProperties [9ebfb696]
+<https://www.commoncoreontologies.org/ont00001788> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001994> .    # InverseObjectProperties [2ebb5a12]
+<https://www.commoncoreontologies.org/ont00001789> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001955> .    # InverseObjectProperties [9b198da2]
+<https://www.commoncoreontologies.org/ont00001790> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001929> .    # InverseObjectProperties [8c89d4ac]
+<https://www.commoncoreontologies.org/ont00001792> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001851> .    # InverseObjectProperties [e6d269c1]
+<https://www.commoncoreontologies.org/ont00001793> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001948> .    # InverseObjectProperties [65b9264e]
+<https://www.commoncoreontologies.org/ont00001794> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001815> .    # InverseObjectProperties [01165331]
+<https://www.commoncoreontologies.org/ont00001795> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001869> .    # InverseObjectProperties [302f5aa1]
+<https://www.commoncoreontologies.org/ont00001796> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001909> .    # InverseObjectProperties [06327c37]
+<https://www.commoncoreontologies.org/ont00001798> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001943> .    # InverseObjectProperties [570764e1]
+<https://www.commoncoreontologies.org/ont00001800> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001817> .    # InverseObjectProperties [26fb2cdf]
+<https://www.commoncoreontologies.org/ont00001801> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001808> .    # InverseObjectProperties [827f7b83]
+<https://www.commoncoreontologies.org/ont00001802> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001957> .    # InverseObjectProperties [f18e66ab]
+<https://www.commoncoreontologies.org/ont00001803> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001819> .    # InverseObjectProperties [1c98197c]
+<https://www.commoncoreontologies.org/ont00001804> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001804> .    # InverseObjectProperties [a73f5ee6]
+<https://www.commoncoreontologies.org/ont00001805> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001888> .    # InverseObjectProperties [9faecc2b]
+<https://www.commoncoreontologies.org/ont00001806> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [1b563f99]
+<https://www.commoncoreontologies.org/ont00001806> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001806> .    # InverseObjectProperties [e4bbfff9]
+<https://www.commoncoreontologies.org/ont00001807> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001974> .    # InverseObjectProperties [77968fe4]
+<https://www.commoncoreontologies.org/ont00001809> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [983a082d]  (+6 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001809> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001836> .    # InverseObjectProperties [61a361fd]
+<https://www.commoncoreontologies.org/ont00001811> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001963> .    # InverseObjectProperties [11dd78cc]
+<https://www.commoncoreontologies.org/ont00001812> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001981> .    # InverseObjectProperties [b2e0ed26]
+<https://www.commoncoreontologies.org/ont00001813> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001925> .    # InverseObjectProperties [d39d51e6]
+<https://www.commoncoreontologies.org/ont00001814> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001821> .    # InverseObjectProperties [eb0563d4]
+<https://www.commoncoreontologies.org/ont00001816> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001986> .    # InverseObjectProperties [a29cc25e]
+<https://www.commoncoreontologies.org/ont00001818> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001818> .    # InverseObjectProperties [4276e64b]
+<https://www.commoncoreontologies.org/ont00001822> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [57c072c0]
+<https://www.commoncoreontologies.org/ont00001822> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <https://www.commoncoreontologies.org/ont00001862> .    # DisjointObjectProperties [a6104c0c]
+<https://www.commoncoreontologies.org/ont00001823> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001926> .    # InverseObjectProperties [8a341c21]
+<https://www.commoncoreontologies.org/ont00001825> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001870> .    # InverseObjectProperties [10c5b8df]
+<https://www.commoncoreontologies.org/ont00001825> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <https://www.commoncoreontologies.org/ont00001862> .    # DisjointObjectProperties [82e55a70]
+<https://www.commoncoreontologies.org/ont00001826> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001828> .    # InverseObjectProperties [eb39ce57]
+<https://www.commoncoreontologies.org/ont00001827> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001989> .    # InverseObjectProperties [7db5d6d5]
+<https://www.commoncoreontologies.org/ont00001829> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001956> .    # InverseObjectProperties [3d50b7ec]
+<https://www.commoncoreontologies.org/ont00001830> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001895> .    # InverseObjectProperties [17e0a6d6]
+<https://www.commoncoreontologies.org/ont00001831> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001951> .    # InverseObjectProperties [d287faec]
+<https://www.commoncoreontologies.org/ont00001834> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001886> .    # InverseObjectProperties [d827830b]
+<https://www.commoncoreontologies.org/ont00001835> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001839> .    # InverseObjectProperties [42b2a009]
+<https://www.commoncoreontologies.org/ont00001836> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [b8f2cdfd]  (+6 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001837> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001908> .    # InverseObjectProperties [d18fcac8]
+<https://www.commoncoreontologies.org/ont00001840> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001882> .    # InverseObjectProperties [cdbe3124]
+<https://www.commoncoreontologies.org/ont00001841> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001921> .    # InverseObjectProperties [ccac96d7]
+<https://www.commoncoreontologies.org/ont00001842> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001995> .    # InverseObjectProperties [90204dfa]
+<https://www.commoncoreontologies.org/ont00001843> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001894> .    # InverseObjectProperties [296d8406]
+<https://www.commoncoreontologies.org/ont00001844> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001993> .    # InverseObjectProperties [ed0a0a8d]
+<https://www.commoncoreontologies.org/ont00001845> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001918> .    # InverseObjectProperties [147015a8]
+<https://www.commoncoreontologies.org/ont00001846> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001992> .    # InverseObjectProperties [225aee98]
+<https://www.commoncoreontologies.org/ont00001847> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001940> .    # InverseObjectProperties [d9c76f28]
+<https://www.commoncoreontologies.org/ont00001849> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001935> .    # InverseObjectProperties [302dc353]
+<https://www.commoncoreontologies.org/ont00001850> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001945> .    # InverseObjectProperties [b0d4a4ee]
+<https://www.commoncoreontologies.org/ont00001852> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001949> .    # InverseObjectProperties [4fce0697]
+<https://www.commoncoreontologies.org/ont00001853> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001885> .    # InverseObjectProperties [33043919]
+<https://www.commoncoreontologies.org/ont00001854> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001867> .    # InverseObjectProperties [9d3a2539]
+<https://www.commoncoreontologies.org/ont00001855> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001944> .    # InverseObjectProperties [108beb6c]
+<https://www.commoncoreontologies.org/ont00001856> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001932> .    # InverseObjectProperties [dff38e17]
+<https://www.commoncoreontologies.org/ont00001858> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001987> .    # InverseObjectProperties [d67b4aad]
+<https://www.commoncoreontologies.org/ont00001859> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001864> .    # InverseObjectProperties [dfe7ebce]
+<https://www.commoncoreontologies.org/ont00001860> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001968> .    # InverseObjectProperties [f3aeeca8]
+<https://www.commoncoreontologies.org/ont00001861> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001991> .    # InverseObjectProperties [d8d21bdf]
+<https://www.commoncoreontologies.org/ont00001862> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <https://www.commoncoreontologies.org/ont00001870> .    # DisjointObjectProperties [8018a1c2]
+<https://www.commoncoreontologies.org/ont00001862> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <https://www.commoncoreontologies.org/ont00001924> .    # DisjointObjectProperties [541fe4d9]
+<https://www.commoncoreontologies.org/ont00001862> <http://www.w3.org/2002/07/owl#propertyDisjointWith> <https://www.commoncoreontologies.org/ont00001971> .    # DisjointObjectProperties [f7cb1581]
+<https://www.commoncoreontologies.org/ont00001863> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001961> .    # InverseObjectProperties [63dcb8f6]
+<https://www.commoncoreontologies.org/ont00001865> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [9ab82fd6]
+<https://www.commoncoreontologies.org/ont00001866> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001984> .    # InverseObjectProperties [2c04f4a2]
+<https://www.commoncoreontologies.org/ont00001868> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001914> .    # InverseObjectProperties [bc4a459c]
+<https://www.commoncoreontologies.org/ont00001871> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001887> .    # InverseObjectProperties [a87ba2ca]
+<https://www.commoncoreontologies.org/ont00001872> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001890> .    # InverseObjectProperties [59417981]
+<https://www.commoncoreontologies.org/ont00001873> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001938> .    # InverseObjectProperties [66a2d052]
+<https://www.commoncoreontologies.org/ont00001874> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [55ae3f02]  (+6 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001875> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001923> .    # InverseObjectProperties [b718d108]
+<https://www.commoncoreontologies.org/ont00001877> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001964> .    # InverseObjectProperties [c7fcc06f]
+<https://www.commoncoreontologies.org/ont00001878> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001919> .    # InverseObjectProperties [f5e19f8e]
+<https://www.commoncoreontologies.org/ont00001879> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001916> .    # InverseObjectProperties [2705631a]
+<https://www.commoncoreontologies.org/ont00001880> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001898> .    # InverseObjectProperties [c6b7193e]
+<https://www.commoncoreontologies.org/ont00001884> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001980> .    # InverseObjectProperties [e108e140]
+<https://www.commoncoreontologies.org/ont00001884> <http://www.w3.org/2002/07/owl#propertyChainAxiom> _:_ .    # ObjectPropertyChain (range/composition condition) [7454eead]  (+4 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001889> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001954> .    # InverseObjectProperties [eee579ad]
+<https://www.commoncoreontologies.org/ont00001891> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001952> .    # InverseObjectProperties [313120fc]
+<https://www.commoncoreontologies.org/ont00001892> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001972> .    # InverseObjectProperties [a5a3f045]
+<https://www.commoncoreontologies.org/ont00001893> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001990> .    # InverseObjectProperties [5656312f]
+<https://www.commoncoreontologies.org/ont00001896> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [ca03c27f]
+<https://www.commoncoreontologies.org/ont00001896> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001915> .    # InverseObjectProperties [13dd8c1a]
+<https://www.commoncoreontologies.org/ont00001897> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001960> .    # InverseObjectProperties [2901e35a]
+<https://www.commoncoreontologies.org/ont00001899> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001976> .    # InverseObjectProperties [cbf46364]
+<https://www.commoncoreontologies.org/ont00001900> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001913> .    # InverseObjectProperties [c5b142c6]
+<https://www.commoncoreontologies.org/ont00001902> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [7ce330a0]
+<https://www.commoncoreontologies.org/ont00001902> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001902> .    # InverseObjectProperties [8cfdf7d2]
+<https://www.commoncoreontologies.org/ont00001903> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001973> .    # InverseObjectProperties [91ef5b8d]
+<https://www.commoncoreontologies.org/ont00001904> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001966> .    # InverseObjectProperties [98d67248]
+<https://www.commoncoreontologies.org/ont00001905> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001927> .    # InverseObjectProperties [07fd0368]
+<https://www.commoncoreontologies.org/ont00001906> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001934> .    # InverseObjectProperties [d626bab8]
+<https://www.commoncoreontologies.org/ont00001910> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001998> .    # InverseObjectProperties [f6ad6b27]
+<https://www.commoncoreontologies.org/ont00001911> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001937> .    # InverseObjectProperties [5334bf46]
+<https://www.commoncoreontologies.org/ont00001912> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001997> .    # InverseObjectProperties [a10a4d40]
+<https://www.commoncoreontologies.org/ont00001915> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#IrreflexiveProperty> .    # IrreflexiveObjectProperty [8999509a]
+<https://www.commoncoreontologies.org/ont00001917> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001982> .    # InverseObjectProperties [39b8603a]
+<https://www.commoncoreontologies.org/ont00001920> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001942> .    # InverseObjectProperties [a341a011]
+<https://www.commoncoreontologies.org/ont00001922> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001978> .    # InverseObjectProperties [20b6392c]
+<https://www.commoncoreontologies.org/ont00001924> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001971> .    # InverseObjectProperties [b03a94a9]
+<https://www.commoncoreontologies.org/ont00001930> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [d37d41df]
+<https://www.commoncoreontologies.org/ont00001930> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001930> .    # InverseObjectProperties [80f27224]
+<https://www.commoncoreontologies.org/ont00001933> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001962> .    # InverseObjectProperties [c4bec479]
+<https://www.commoncoreontologies.org/ont00001939> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [d2f1127f]  (+8 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001939> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [15e627df]  (+8 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001939> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001977> .    # InverseObjectProperties [2cbea4e7]
+<https://www.commoncoreontologies.org/ont00001941> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001958> .    # InverseObjectProperties [836d2599]
+<https://www.commoncoreontologies.org/ont00001946> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001985> .    # InverseObjectProperties [09f4246a]
+<https://www.commoncoreontologies.org/ont00001950> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [f4746403]
+<https://www.commoncoreontologies.org/ont00001950> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001950> .    # InverseObjectProperties [0290a299]
+<https://www.commoncoreontologies.org/ont00001953> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001995> .    # InverseObjectProperties [22b1bac0]
+<https://www.commoncoreontologies.org/ont00001959> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001970> .    # InverseObjectProperties [16e97dfc]
+<https://www.commoncoreontologies.org/ont00001965> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001983> .    # InverseObjectProperties [6e953db4]
+<https://www.commoncoreontologies.org/ont00001967> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001969> .    # InverseObjectProperties [96b87657]
+<https://www.commoncoreontologies.org/ont00001975> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://www.w3.org/2002/07/owl#SymmetricProperty> .    # SymmetricObjectProperty [44d40dcd]
+<https://www.commoncoreontologies.org/ont00001975> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001975> .    # InverseObjectProperties [c33ca372]
+<https://www.commoncoreontologies.org/ont00001977> <http://www.w3.org/2000/01/rdf-schema#domain> _:_ .    # ObjectUnionOf [ea71107f]  (+8 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001977> <http://www.w3.org/2000/01/rdf-schema#range> _:_ .    # ObjectUnionOf [d0b16563]  (+8 in blank-node closure)
+<https://www.commoncoreontologies.org/ont00001996> <http://www.w3.org/2002/07/owl#inverseOf> <https://www.commoncoreontologies.org/ont00001996> .    # InverseObjectProperties [f787b8e8]

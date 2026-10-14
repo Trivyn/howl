@@ -1,0 +1,1369 @@
+;; ============================================================
+;; sriq's literal reference evaluator  —  SPEC.md §5.5 (D5(a), D7),
+;; [TGH21] Algorithm 1 run as naively as it is written
+;;
+;; EACH ROUND reads a frozen structure and applies every rule to every
+;; choice of premises in every context: Table 2's Core, Hyper, Eq, Ineq,
+;; Factor, Join and Nom, and Table 3's Succ, r-Succ, Pred and r-Pred
+;; over every edge. Its products are its own: it folds the proved
+;; per-instance steps (hyper-step, pred-step) over every choice, and never
+;; calls hyper-join or pred-join, which slice 9's engine will use. A
+;; premise is offered to a slot only if it meets conditions the step's
+;; `sound` property already requires (maximal, and the slot's literal or
+;; its form and predicate), which changes no conclusion.
+;;
+;; AT THE ROUND'S END, in content order: Nom's new constants, the new
+;; contexts by core, the new edges, and then each context's candidates,
+;; each kept only if it is not ∈̂ the set so far. Nothing is deleted
+;; until the fixpoint (D5(a)); then Elim runs once, leaving each set's
+;; min.
+;;
+;; THE RUN STOPS at the fixpoint, at ⊤ → ⊥ ∈̂ S_{v_⊤} (S4), when the fuel
+;; runs out, or at a cap (contexts, clauses, constants, or the choices of
+;; one instance), which is n/a: never an answer. The constants cap ends
+;; Nom recursion that only Λ would: under the trivial strategy every
+;; successor shares v_⊤, and on [TGH21]'s O4 Nom then mints a constant
+;; every few rounds, which only Λ (at least 10,001) would stop.
+;; ============================================================
+
+(module sriqref
+  (@doc "sriq's literal reference evaluator: naive rounds of every TGH21 Table 2 and Table 3 rule instance (SPEC 5.5,
+         D7)")
+
+  (import types (AKind ATerm LitForm Lit Clause at-x at-u atom1 eq-lit lit-eq lit-cmp aterm-eq))
+  (import sriqclauses (SriqClauses make-clause clause-cmp clause-eq))
+  (import sriqorder (ConstEntry SriqOrder aux-const const-entry))
+  (import sriqsubsume (Committed in-hat commit-min))
+  (import sriqctx (Strategy Triggers CoreKind CoreChoice EdgeLabel Edge Ctx CtxSet Structure
+                   build-triggers tau-su tau-pr omega omega-d init-structure with-hidden ctx-by-core core-of lit-ground))
+  (import canon (sort-range))
+  (import sriq (Premise RConcl HState Cands Pos BodyView select assemble core-rule ineq-rule factor-rule
+                hyper-start hyper-step hyper-finish hyper-join eq-rule body-at join-rule nom-rule stored-lambda
+                CSub SuccSig KSets SuccConcl RSuccConcl PredView PSlot PState
+                csub-lit succ-csub succ-sig k-sets covers unit-held succ-step rsucc-lit rsucc-rule
+                pred-view rpred-view pred-start pred-step pred-finish rpred-finish PCands pred-join))
+
+  (export RefStatus RefConfig RefResult RefIn Cand ref-run ref-input ref-set ref-lambda ref-stable ref-round ref-apply
+          initial-queries init-of
+          combinators-agree
+          ;; The per-instance plumbing slice 9's prototype (sriqsat) shares,
+          ;; so both order ids, choices and conclusions the same way.
+          Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
+          set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
+          with-room copy-cand ref-core slot-cands x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
+          dl4-of nom-first nom-second nom-pair ref-nom ref-succ ref-rsucc
+          pslot-cands pred-one pred-run pred-edge away-job root-job slots-of rpred-job rslots ref-rpred ctx-round
+          edge-is add-consts add-contexts add-edges action-cands unit-clause cand-at cand-cmp
+          copy-clauses copy-structure env-of stop-status)
+
+  (type RefStatus (enum rs-fixpoint rs-inconsistent rs-fuel rs-contexts rs-clauses rs-product rs-constants))
+
+  (type RefConfig (record
+    (strat Strategy)
+    (fuel  Int)        ; rounds at most
+    (lam   Int)        ; Λ; below 0 means stored-lambda's
+    (ctxs  Int)        ; contexts at most
+    (cls   Int)        ; clauses at most, over all contexts
+    (prod  Int)        ; choices of one rule instance at most
+    (cnst  Int)))      ; constants Nom may add, at most
+
+  ;; What a run reads besides the structure.
+  (type Env (record
+    (onto   (List Clause))
+    (tr     Triggers)
+    (strat  Strategy)
+    (lam    Int)
+    (prod   Int)
+    (nconst Int)               ; O's individuals: the constants Nom did not make
+    (nobody (List Clause))     ; an empty list: the set of a missing context
+    (room   Int)))             ; conclusions a context may derive before the rest is skipped: the
+                               ; prototype's clause budget (sriqsat); unlimited in the reference
+
+  (type Cand (record
+    (ctx U32)
+    (c   Clause)))
+
+  (type SuccAct (record
+    (from U32)
+    (sg   SuccSig)
+    (core (List Lit))
+    (adds (List Lit))))
+
+  (type RSuccAct (record
+    (from U32)
+    (u    U32)
+    (lit  Lit)))
+
+  (type NomAct (record
+    (o   U32)
+    (sb2 U32)
+    (i   U32)))
+
+  ;; One rule family's output: candidates, and whether an instance was
+  ;; over the choices cap.
+  (type Out (record
+    (cands (List Cand))
+    (over  Bool)))
+
+  (type Round (record
+    (cands  (List Cand))
+    (succs  (List SuccAct))
+    (rsuccs (List RSuccAct))
+    (noms   (List NomAct))
+    (over   Bool)))
+
+  (type Dl4 (record
+    (ok  Bool)
+    (b1  U32)
+    (sb2 U32)
+    (n   U32)))
+
+  ;; One Pred or r-Pred instance family: a view, σ, its slots, and the
+  ;; target context.
+  (type PJob (record
+    (view   PredView)
+    (s      CSub)
+    (slots  (List PSlot))
+    (to     U32)
+    (rpred  Bool)
+    (toroot Bool)))
+
+  (type Committing (record
+    (st      Structure)
+    (changed Bool)))
+
+  (type Grown (record
+    (cs   (List Clause))
+    (grew Bool)))
+
+  (type RefIn (record
+    (onto   (List Clause))
+    (nclass Int)
+    (nquery Int)
+    (nrole  Int)
+    (nfn    Int)
+    (nconst Int)
+    (hidden (List U32))))   ; the ABox split's hidden query classes (Run H), by id; else none
+
+  (type RefResult (record
+    (status RefStatus)
+    (rounds Int)
+    (st     Structure)))
+
+  ;; ============================================================
+  ;; Small helpers
+  ;; ============================================================
+
+  (fn set-of ((env Env) (st Structure) (v Int))
+    (@intent "S_v, or nothing for a missing context")
+    (@spec ((Env Structure Int) -> (List Clause)))
+    (@pure)
+    (match (list-get (. st sets) v) ((some s) (. s cs)) ((none) (. env nobody))))
+
+  (fn ctx-of ((st Structure) (v Int))
+    (@intent "Context v's core and root flag; a root with no core for a missing one")
+    (@spec ((Structure Int) -> (Option Ctx)))
+    (@pure)
+    (list-get (. st ctxs) v))
+
+  (fn is-root ((st Structure) (v Int))
+    (@intent "Is v the root context?")
+    (@spec ((Structure Int) -> Bool))
+    (@pure)
+    (match (ctx-of st v) ((some c) (. c root)) ((none) false)))
+
+  (fn core-at ((env Env) (st Structure) (arena Arena) (v Int))
+    (@intent "core_v")
+    (@spec ((Env Structure Arena Int) -> (List Lit)))
+    (@alloc arena)
+    (match (ctx-of st v) ((some c) (. c core)) ((none) (list-new arena Lit))))
+
+  (fn one-cand ((arena Arena) (v U32) (c Clause))
+    (@intent "[c into v]")
+    (@spec ((Arena U32 Clause) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand))) (do (list-push out (record-new Cand (ctx v) (c c))) out)))
+
+  (fn out-of ((cands (List Cand)) (over Bool))
+    (@intent "An Out")
+    (@spec (((List Cand) Bool) -> Out))
+    (@pure)
+    (record-new Out (cands cands) (over over)))
+
+  (fn premises-of ((arena Arena) (ord SriqOrder) (cs (List Clause)))
+    (@intent "Every clause of cs with each head literal selected in turn")
+    (@spec ((Arena SriqOrder (List Clause)) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)))
+      (do (for-each (c cs)
+            (let ((mut i 0))
+              (while (< i (cast Int (list-len (. c head))))
+                (do (list-push out (select arena ord c i)) (set! i (+ i 1))))))
+          out)))
+
+  (fn consts-of ((st Structure))
+    (@intent "How many constants the structure holds: U_H (E4)")
+    (@spec ((Structure) -> Int))
+    (@pure)
+    (cast Int (list-len (. (. st ord) consts))))
+
+  (fn conclusion ((arena Arena) (v U32) (r RConcl))
+    (@intent "r's set clause into v, if it fires")
+    (@spec ((Arena U32 RConcl) -> (List Cand)))
+    (@alloc arena)
+    (if (. r fires) (one-cand arena v (assemble arena r)) (list-new arena Cand)))
+
+  (fn append-cands ((arena Arena) (a (List Cand)) (b (List Cand)))
+    (@intent "a, then b")
+    (@spec ((Arena (List Cand) (List Cand)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (x a) (list-push out x)) (for-each (x b) (list-push out x)) out)))
+
+  (fn prem-at ((ps (List Premise)) (k Int) (fallback Premise))
+    (@intent "Premise k")
+    (@spec (((List Premise) Int Premise) -> Premise))
+    (@pure)
+    (match (list-get ps k) ((some p) p) ((none) fallback)))
+
+  (fn product ((cs (List (List Premise))) (cap Int))
+    (@intent "The number of choices, one premise per slot; cap + 1 once it passes cap")
+    (@spec (((List (List Premise)) Int) -> Int))
+    (@pure)
+    (let ((mut n 1))
+      (do (for-each (c cs)
+            (set! n (if (> (* n (cast Int (list-len c))) cap) (+ cap 1) (* n (cast Int (list-len c))))))
+          n)))
+
+  ;; ============================================================
+  ;; Table 2, in one context
+  ;; ============================================================
+
+  (fn ref-core ((arena Arena) (v U32) (core (List Lit)))
+    (@intent "Core: ⊤ → A for each A of core_v")
+    (@spec ((Arena U32 (List Lit)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (a core) (for-each (c (conclusion arena v (core-rule arena a))) (list-push out c))) out)))
+
+  (fn x-fits ((root Bool) (a ATerm) (t ATerm))
+    (@intent "Away from the root σ(x) is x, so an atom's x meets only x; anything else is decided by the step")
+    (@spec ((Bool ATerm ATerm) -> Bool))
+    (@pure)
+    (or root (not (== (. a kind) 'ak-x)) (== (. t kind) 'ak-x)))
+
+  (fn slot-cands ((arena Arena) (root Bool) (a Lit) (ps (List Premise)))
+    (@intent "The premises Hyper's step can match against body atom a: maximal, of a's form and predicate (atom-matches'
+              post), and x against x away from the root (term-matches with σ(x) = x)")
+    (@spec ((Arena Bool Lit (List Premise)) -> (List Premise)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Premise)))
+      (do (for-each (p ps)
+            (when (and (. p maxed) (== (. (. p sel) form) (. a form)) (== (. (. p sel) pred) (. a pred))
+                       (x-fits root (. a t1) (. (. p sel) t1))
+                       (or (== (. a form) 'lf-unary) (x-fits root (. a t2) (. (. p sel) t2))))
+              (list-push out p)))
+          out)))
+
+  (fn hyper-choice ((arena Arena) (start HState) (atoms (List Lit)) (cs (List (List Premise))) (t Int)
+                    (fallback Premise))
+    (@intent "Hyper's state after choice t, decoded slot by slot, folded through hyper-step")
+    (@spec ((Arena HState (List Lit) (List (List Premise)) Int Premise) -> HState))
+    (@alloc arena)
+    (let ((mut st start) (mut r t) (mut j 0))
+      (do (for-each (a atoms)
+            (match (list-get cs j)
+              ((some c) (let ((n (cast Int (list-len c))))
+                          (do (set! st (hyper-step arena st a (prem-at c (% r n) fallback)))
+                              (set! r (/ r n)))))
+              ((none) (set! st st)))
+            (set! j (+ j 1)))
+          st)))
+
+  (fn hyper-with ((arena Arena) (env Env) (v U32) (root Bool) (start HState) (oc Clause) (ps (List Premise)))
+    (@intent "Hyper on one ontology clause with a body, over every choice of premises")
+    (@spec ((Arena Env U32 Bool HState Clause (List Premise)) -> Out))
+    (@alloc arena)
+    (let ((mut cs (list-new arena (List Premise))))
+      (do (for-each (a (. oc body)) (list-push cs (slot-cands arena root a ps)))
+          (let ((n (product cs (. env prod))))
+            (if (> n (. env prod))
+              (out-of (list-new arena Cand) true)
+              (match (list-get ps 0)
+                ((none) (out-of (list-new arena Cand) false))
+                ((some p0) (out-of (hyper-choices arena v start oc cs n p0) false))))))))
+
+  (fn hyper-choices ((arena Arena) (v U32) (start HState) (oc Clause) (cs (List (List Premise))) (n Int) (p0 Premise))
+    (@intent "Hyper's conclusions into v for one ontology clause, over choices 0 to n - 1 of its slots' premises")
+    (@spec ((Arena U32 HState Clause (List (List Premise)) Int Premise) -> (List Cand)))
+    (@alloc arena)
+    ;; Each choice's state is built in a scratch arena of its own and only
+    ;; the conclusion is copied out: a choice folds hyper-step over every
+    ;; body atom, and kept for the round its intermediate lists cost far
+    ;; more than its conclusion (a W3C pigeonhole test's 59,049 choices
+    ;; passed 8 GB). Lit holds only scalars, so the copy is complete.
+    (let ((mut out (list-new arena Cand)) (mut t 0))
+      (do (while (< t n)
+            (let ((tmp (arena-new 65536)))
+              (do (for-each (c (conclusion tmp v (hyper-finish tmp (hyper-choice tmp start (. oc body) cs t p0)
+                                                               (. oc head))))
+                    (list-push out (copy-cand arena c)))
+                  (arena-free tmp)
+                  (set! t (+ t 1)))))
+          out)))
+
+  (fn copy-cand ((arena Arena) (c Cand))
+    (@intent "c, its clause's body and head copied into arena")
+    (@spec ((Arena Cand) -> Cand))
+    (@alloc arena)
+    (record-new Cand (ctx (. c ctx)) (c (record-new Clause (body (copy-lits arena (. (. c c) body)))
+                                                         (head (copy-lits arena (. (. c c) head)))))))
+
+  (fn hyper-bodiless ((arena Arena) (st Structure) (v U32) (root Bool) (oc Clause))
+    (@intent "Hyper on a bodiless ontology clause: x itself away from the root; at the root each constant of U_H (E4)")
+    (@spec ((Arena Structure U32 Bool Clause) -> (List Cand)))
+    (@alloc arena)
+    (if (not root)
+      (conclusion arena v (hyper-finish arena (hyper-start arena (at-x) true) (. oc head)))
+      (hyper-consts arena st v oc)))
+
+  (fn hyper-consts ((arena Arena) (st Structure) (v U32) (oc Clause))
+    (@intent "Hyper on a bodiless ontology clause at the root: once for each constant of U_H (E4)")
+    (@spec ((Arena Structure U32 Clause) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut u 0))
+      (do (while (< u (consts-of st))
+            (do (for-each (c (conclusion arena v (hyper-finish arena (hyper-start arena (at-u (cast U32 u)) true)
+                                                               (. oc head))))
+                  (list-push out c))
+                (set! u (+ u 1))))
+          out)))
+
+  (fn ref-hyper ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (ps (List Premise)))
+    (@intent "Hyper on every ontology clause: x unbound at the root until the first atom binds it to a constant")
+    (@spec ((Arena Env Structure U32 Bool (List Premise)) -> Out))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut over false))
+      (do (for-each (oc (. env onto))
+            (when (<= (cast Int (list-len out)) (. env room))
+              (let ((o (hyper-one arena env st v root oc ps)))
+                (do (for-each (c (. o cands)) (list-push out c))
+                    (when (. o over) (set! over true))))))
+          (out-of out over))))
+
+  (fn hyper-one ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (oc Clause) (ps (List Premise)))
+    (@intent "Hyper on one ontology clause, bodiless or not")
+    (@spec ((Arena Env Structure U32 Bool Clause (List Premise)) -> Out))
+    (@alloc arena)
+    (if (== (list-len (. oc body)) 0)
+      (out-of (hyper-bodiless arena st v root oc) false)
+      (hyper-with arena env v root (hyper-start arena (at-x) (not root)) oc ps)))
+
+  (fn eq-positions ((arena Arena) (ord SriqOrder) (v U32) (root Bool) (p1 Premise) (k1 U32) (p2 Premise))
+    (@intent "Eq for one equality side k1 of p1 into p2, at each of the four positions")
+    (@spec ((Arena SriqOrder U32 Bool Premise U32 Premise) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut a 1))
+      (do (while (<= a 2)
+            (do (for-each (c (eq-at arena ord v root p1 k1 p2 (cast U32 a))) (list-push out c))
+                (set! a (+ a 1))))
+          out)))
+
+  (fn eq-at ((arena Arena) (ord SriqOrder) (v U32) (root Bool) (p1 Premise) (k1 U32) (p2 Premise) (a U32))
+    (@intent "Eq for one equality side k1 of p1 into p2 at argument a, outer then inner")
+    (@spec ((Arena SriqOrder U32 Bool Premise U32 Premise U32) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (inner (bools arena))
+            (for-each (c (conclusion arena v (eq-rule arena ord root p1 k1 p2 (record-new Pos (arg a) (inner inner)))))
+              (list-push out c)))
+          out)))
+
+  (fn bools ((arena Arena))
+    (@intent "[false, true]")
+    (@spec ((Arena) -> (List Bool)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Bool))) (do (list-push out false) (list-push out true) out)))
+
+  (fn ref-eq ((arena Arena) (ord SriqOrder) (v U32) (root Bool) (ps (List Premise)))
+    (@intent "Eq: every maximal selected equality, either side, into every maximal premise")
+    (@spec ((Arena SriqOrder U32 Bool (List Premise)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (p1 ps)
+            (when (and (. p1 maxed) (== (. (. p1 sel) form) 'lf-eq))
+              (for-each (p2 ps)
+                (when (. p2 maxed)
+                  (do (for-each (c (eq-positions arena ord v root p1 (cast U32 1) p2)) (list-push out c))
+                      (for-each (c (eq-positions arena ord v root p1 (cast U32 2) p2)) (list-push out c)))))))
+          out)))
+
+  (fn ref-ineq ((arena Arena) (v U32) (ps (List Premise)))
+    (@intent "Ineq on every premise")
+    (@spec ((Arena U32 (List Premise)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (p ps) (for-each (c (conclusion arena v (ineq-rule p))) (list-push out c))) out)))
+
+  (fn factor-of ((arena Arena) (ord SriqOrder) (v U32) (p Premise))
+    (@intent "Factor on one premise: each other equality of its head, against either side of the selected one")
+    (@spec ((Arena SriqOrder U32 Premise) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (l1 (. p rest))
+            (when (== (. l1 form) 'lf-eq)
+              (do (for-each (c (conclusion arena v (factor-rule arena ord p l1 (. (. p sel) t1)))) (list-push out c))
+                  (for-each (c (conclusion arena v (factor-rule arena ord p l1 (. (. p sel) t2)))) (list-push out c)))))
+          out)))
+
+  (fn ref-factor ((arena Arena) (ord SriqOrder) (v U32) (ps (List Premise)))
+    (@intent "Factor on every premise whose selected literal is an equality")
+    (@spec ((Arena SriqOrder U32 (List Premise)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (p ps)
+            (when (and (. p maxed) (== (. (. p sel) form) 'lf-eq))
+              (for-each (c (factor-of arena ord v p)) (list-push out c))))
+          out)))
+
+  (fn join-into ((arena Arena) (v U32) (p1 Premise) (c2 Clause))
+    (@intent "Join of p1 against each body literal of c2")
+    (@spec ((Arena U32 Premise Clause) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut j 0))
+      (do (while (< j (cast Int (list-len (. c2 body))))
+            (do (for-each (c (conclusion arena v (join-rule arena p1 (body-at arena c2 j)))) (list-push out c))
+                (set! j (+ j 1))))
+          out)))
+
+  (fn ref-join ((arena Arena) (v U32) (ps (List Premise)) (cs (List Clause)))
+    (@intent "Join: every maximal premise against every body literal of every clause of S_v")
+    (@spec ((Arena U32 (List Premise) (List Clause)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (p1 ps)
+            (when (. p1 maxed)
+              (for-each (c2 cs) (for-each (c (join-into arena v p1 c2)) (list-push out c)))))
+          out)))
+
+  ;; ------------------------------------------------------------
+  ;; Nom: DL4's at-most clause, B₁(x) ∧ ⋀ S_{B₂}(x, zᵢ) → ⋁ zᵢ ≈ zⱼ, the
+  ;; only Table 1 clause with a body atom S(x, zᵢ).
+  ;; ------------------------------------------------------------
+
+
+  (fn dl4-of ((oc Clause))
+    (@intent "B₁, S_{B₂} and n, if oc is DL4's at-most clause: one B₁(x), n + 1 atoms S_{B₂}(x, zᵢ) of one role, and a
+              head of exactly the C(n + 1, 2) equalities zᵢ ≈ zⱼ")
+    (@spec ((Clause) -> Dl4))
+    (@pure)
+    (let ((mut b1 (cast U32 0)) (mut nb 0) (mut sb2 (cast U32 0)) (mut nr 0) (mut roles-ok true))
+      (do (for-each (l (. oc body))
+            (cond ((== (. l form) 'lf-unary) (do (set! b1 (. l pred)) (set! nb (+ nb 1))))
+                  ((and (== (. l form) 'lf-binary) (== (. (. l t1) kind) 'ak-x) (== (. (. l t2) kind) 'ak-z))
+                    (do (when (and (> nr 0) (!= (. l pred) sb2)) (set! roles-ok false))
+                        (set! sb2 (. l pred)) (set! nr (+ nr 1))))
+                  (else (set! nb (+ nb 2)))))
+          (record-new Dl4 (ok (and (== nb 1) (> nr 0) roles-ok (at-most-head (. oc head) nr)))
+                          (b1 b1) (sb2 sb2) (n (cast U32 (- nr 1)))))))
+
+  (fn at-most-head ((head (List Lit)) (m Int))
+    (@intent "Is head exactly C(m, 2) equalities, each between two neighbours zᵢ and zⱼ?")
+    (@spec (((List Lit) Int) -> Bool))
+    (@pure)
+    (let ((mut ok (== (cast Int (list-len head)) (/ (* m (- m 1)) 2))))
+      (do (for-each (l head)
+            (when (not (and (== (. l form) 'lf-eq) (== (. (. l t1) kind) 'ak-z) (== (. (. l t2) kind) 'ak-z)))
+              (set! ok false)))
+          ok)))
+
+  (fn child-of ((ord SriqOrder) (o U32) (sb2 U32) (i U32))
+    (@intent "The constant o_{ρ·S^i} for o_ρ = o and S = sb2, if it exists")
+    (@spec ((SriqOrder U32 U32 U32) -> (Option U32)))
+    (@pure)
+    (let ((mut k 0) (mut found (Option U32) (none)))
+      (do (for-each (e (. ord consts))
+            (do (when (and (== (. e parent) o) (== (. e srole) sb2) (== (. e i) i) (> (. e len) (cast U32 0)))
+                  (set! found (some (cast U32 k))))
+                (set! k (+ k 1))))
+          found)))
+
+  (fn nom-pair ((arena Arena) (env Env) (ord SriqOrder) (v U32) (d Dl4) (p1 Premise) (p2 Premise))
+    (@intent "Nom on B₁(o) and S_{B₂}(o, x): the conclusion once o's n children exist, else the children to create, if o
+              is below Λ")
+    (@spec ((Arena Env SriqOrder U32 Dl4 Premise Premise) -> Round))
+    (@alloc arena)
+    (let ((o (. (. (. p1 sel) t1) cst))
+          (mut kids (list-new arena U32))
+          (mut missing (list-new arena NomAct))
+          (mut i (cast U32 1)))
+      (do (while (<= i (. d n))
+            (do (match (child-of ord o (. d sb2) i)
+                  ((some k) (list-push kids k))
+                  ((none)   (list-push missing (record-new NomAct (o o) (sb2 (. d sb2)) (i i)))))
+                (set! i (+ i (cast U32 1)))))
+          (cond ((== (list-len missing) 0)
+                  (round-of (conclusion arena v (nom-rule arena ord (. env lam) (. d b1) (. d sb2) (. d n) p1 p2 kids))
+                            (list-new arena SuccAct) (list-new arena RSuccAct) (list-new arena NomAct) false))
+                ((< (cast Int (. (const-entry ord o) len)) (. env lam))
+                  (round-of (list-new arena Cand) (list-new arena SuccAct) (list-new arena RSuccAct) missing false))
+                (else (round-of (list-new arena Cand) (list-new arena SuccAct) (list-new arena RSuccAct)
+                                (list-new arena NomAct) false))))))
+
+  (fn nom-first ((p Premise) (d Dl4))
+    (@intent "A maximal B₁(o)")
+    (@spec ((Premise Dl4) -> Bool))
+    (@pure)
+    (let ((a (. p sel)))
+      (and (. p maxed) (== (. a form) 'lf-unary) (== (. a pred) (. d b1)) (== (. (. a t1) kind) 'ak-u))))
+
+  (fn nom-second ((p Premise) (d Dl4) (o U32))
+    (@intent "A maximal S_{B₂}(o, x)")
+    (@spec ((Premise Dl4 U32) -> Bool))
+    (@pure)
+    (let ((r (. p sel)))
+      (and (. p maxed) (== (. r form) 'lf-binary) (== (. r pred) (. d sb2))
+           (== (. (. r t1) kind) 'ak-u) (== (. (. r t1) cst) o) (== (. (. r t2) kind) 'ak-x))))
+
+  (fn nom-clause ((arena Arena) (env Env) (ord SriqOrder) (v U32) (d Dl4) (ps (List Premise)))
+    (@intent "Nom on one DL4 clause, over every pair of premises")
+    (@spec ((Arena Env SriqOrder U32 Dl4 (List Premise)) -> Round))
+    (@alloc arena)
+    (let ((mut cands (list-new arena Cand)) (mut noms (list-new arena NomAct)))
+      (do (for-each (p1 ps)
+            (when (nom-first p1 d)
+              (for-each (p2 ps)
+                (when (nom-second p2 d (. (. (. p1 sel) t1) cst))
+                  (let ((r (nom-pair arena env ord v d p1 p2)))
+                    (do (for-each (c (. r cands)) (list-push cands c))
+                        (for-each (a (. r noms)) (list-push noms a))))))))
+          (round-of cands (list-new arena SuccAct) (list-new arena RSuccAct) noms false))))
+
+  (fn ref-nom ((arena Arena) (env Env) (ord SriqOrder) (v U32) (ps (List Premise)))
+    (@intent "Nom on every DL4 at-most clause of O")
+    (@spec ((Arena Env SriqOrder U32 (List Premise)) -> Round))
+    (@alloc arena)
+    (let ((mut cands (list-new arena Cand)) (mut noms (list-new arena NomAct)))
+      (do (for-each (oc (. env onto))
+            (let ((d (dl4-of oc)))
+              (when (. d ok)
+                (let ((r (nom-clause arena env ord v d ps)))
+                  (do (for-each (c (. r cands)) (list-push cands c))
+                      (for-each (a (. r noms)) (list-push noms a)))))))
+          (round-of cands (list-new arena SuccAct) (list-new arena RSuccAct) noms false))))
+
+  (fn round-of ((cands (List Cand)) (succs (List SuccAct)) (rsuccs (List RSuccAct)) (noms (List NomAct)) (over Bool))
+    (@intent "A Round")
+    (@spec (((List Cand) (List SuccAct) (List RSuccAct) (List NomAct) Bool) -> Round))
+    (@pure)
+    (record-new Round (cands cands) (succs succs) (rsuccs rsuccs) (noms noms) (over over)))
+
+  ;; ============================================================
+  ;; Table 3: Succ and r-Succ, which return actions
+  ;; ============================================================
+
+  (fn edge-is ((e Edge) (from U32) (to U32) (lk EdgeLabel) (label U32))
+    (@intent "Is e ⟨from, to⟩ with this label?")
+    (@spec ((Edge U32 U32 EdgeLabel U32) -> Bool))
+    (@pure)
+    (and (== (. e from) from) (== (. e to) to) (== (. e lk) lk) (== (. e label) label)))
+
+  (fn has-edge ((st Structure) (from U32) (to U32) (lk EdgeLabel) (label U32))
+    (@intent "Is ⟨from, to, label⟩ an edge?")
+    (@spec ((Structure U32 U32 EdgeLabel U32) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (e (. st edges)) (when (edge-is e from to lk label) (set! found true))) found)))
+
+  (fn covered ((arena Arena) (env Env) (st Structure) (v U32) (f U32) (k2 (List Lit)))
+    (@intent "Is there an f-edge ⟨v, w, f⟩ whose target covers K₂?")
+    (@spec ((Arena Env Structure U32 U32 (List Lit)) -> Bool))
+    (@alloc arena)
+    (let ((mut found false))
+      (do (for-each (e (. st edges))
+            (when (and (== (. e from) v) (== (. e lk) 'el-fn) (== (. e label) f)
+                       (covers k2 (core-at env st arena (cast Int (. e to))) (set-of env st (cast Int (. e to)))))
+              (set! found true)))
+          found)))
+
+  (fn succ-of ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (cs (List Clause)) (p Premise))
+    (@intent "Succ on one premise: its successor term, K₁ and K₂, and the action if it fires")
+    (@spec ((Arena Env Structure U32 Bool (List Clause) Premise) -> (List SuccAct)))
+    (@alloc arena)
+    (match (succ-sig root (. p sel))
+      ((none) (list-new arena SuccAct))
+      ((some sg) (succ-with arena env st v cs p sg))))
+
+  (fn succ-with ((arena Arena) (env Env) (st Structure) (v U32) (cs (List Clause)) (p Premise) (sg SuccSig))
+    (@intent "Succ on one premise with successor term sg: K₁ and K₂, and the action if it fires")
+    (@spec ((Arena Env Structure U32 (List Clause) Premise SuccSig) -> (List SuccAct)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SuccAct))
+          (ks (k-sets arena (. st ord) (. env tr) sg cs))
+          (r (succ-step arena (. env strat) (. env tr) sg p ks (covered arena env st v (. sg f) (. ks k2)))))
+      (do (when (. r fires)
+            (list-push out (record-new SuccAct (from v) (sg sg) (core (core-of arena (. r choice) (. ks k1)))
+                                       (adds (. r adds)))))
+          out)))
+
+  (fn ref-succ ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (cs (List Clause)) (ps (List Premise)))
+    (@intent "Succ on every maximal premise")
+    (@spec ((Arena Env Structure U32 Bool (List Clause) (List Premise)) -> (List SuccAct)))
+    (@alloc arena)
+    (let ((mut out (list-new arena SuccAct)))
+      (do (for-each (p ps) (when (. p maxed) (for-each (a (succ-of arena env st v root cs p)) (list-push out a))))
+          out)))
+
+  (fn lit-consts ((arena Arena) (l Lit))
+    (@intent "The constants l mentions as terms, each once")
+    (@spec ((Arena Lit) -> (List U32)))
+    (@alloc arena)
+    (let ((mut out (list-new arena U32)))
+      (do (when (== (. (. l t1) kind) 'ak-u) (list-push out (. (. l t1) cst)))
+          (when (and (not (== (. l form) 'lf-unary)) (== (. (. l t2) kind) 'ak-u)
+                     (not (and (== (. (. l t1) kind) 'ak-u) (== (. (. l t1) cst) (. (. l t2) cst)))))
+            (list-push out (. (. l t2) cst)))
+          out)))
+
+  (fn ref-rsucc ((arena Arena) (env Env) (st Structure) (v U32) (ps (List Premise)))
+    (@intent "r-Succ on every maximal premise, one instance per constant of its A")
+    (@spec ((Arena Env Structure U32 (List Premise)) -> (List RSuccAct)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RSuccAct)) (root-set (set-of env st 0)))
+      (do (for-each (p ps)
+            (when (. p maxed)
+              (for-each (a (rsucc-of arena env st v root-set p)) (list-push out a))))
+          out)))
+
+  (fn rsucc-of ((arena Arena) (env Env) (st Structure) (v U32) (root-set (List Clause)) (p Premise))
+    (@intent "r-Succ on one maximal premise, one instance per constant of its A; root-set is S_{v_r}")
+    (@spec ((Arena Env Structure U32 (List Clause) Premise) -> (List RSuccAct)))
+    (@alloc arena)
+    (let ((mut out (list-new arena RSuccAct)))
+      (do (for-each (u (lit-consts arena (rsucc-lit (. p sel))))
+            (let ((r (rsucc-rule (. env tr) false p u (and (has-edge st v (cast U32 0) 'el-const u)
+                                                            (unit-held (rsucc-lit (. p sel)) root-set)))))
+              (when (. r fires) (list-push out (record-new RSuccAct (from v) (u u) (lit (. r lit)))))))
+          out)))
+
+  ;; ============================================================
+  ;; Table 3: Pred and r-Pred, through their own product
+  ;; ============================================================
+
+  (fn pslot-cands ((arena Arena) (s CSub) (slot PSlot) (ps (List Premise)))
+    (@intent "The premises pred-step can meet a slot with: maximal, and selecting exactly Cᵢσ")
+    (@spec ((Arena CSub PSlot (List Premise)) -> (List Premise)))
+    (@alloc arena)
+    (let ((want (csub-lit s (. slot lit))) (mut out (list-new arena Premise)))
+      (do (for-each (p ps) (when (and (. p maxed) (lit-eq (. p sel) want)) (list-push out p))) out)))
+
+  (fn pred-choice ((arena Arena) (start PState) (s CSub) (slots (List PSlot)) (cs (List (List Premise))) (t Int)
+                   (fallback Premise))
+    (@intent "Pred's state after choice t, folded through pred-step")
+    (@spec ((Arena PState CSub (List PSlot) (List (List Premise)) Int Premise) -> PState))
+    (@alloc arena)
+    (let ((mut st start) (mut r t) (mut j 0))
+      (do (for-each (slot slots)
+            (match (list-get cs j)
+              ((some c) (let ((n (cast Int (list-len c))))
+                          (do (set! st (pred-step arena st s slot (prem-at c (% r n) fallback)))
+                              (set! r (/ r n)))))
+              ((none) (set! st st)))
+            (set! j (+ j 1)))
+          st)))
+
+
+  (fn pred-run ((arena Arena) (env Env) (job PJob) (ps (List Premise)))
+    (@intent "Every choice of side premises for one job, finished by pred-finish or rpred-finish")
+    (@spec ((Arena Env PJob (List Premise)) -> Out))
+    (@alloc arena)
+    (let ((mut cs (list-new arena (List Premise))) (mut out (list-new arena Cand)))
+      (do (for-each (slot (. job slots)) (list-push cs (pslot-cands arena (. job s) slot ps)))
+          (let ((n (product cs (. env prod))))
+            (if (> n (. env prod))
+              (out-of out true)
+              (let ((mut t 0))
+                (do (while (< t n)
+                      (do (for-each (c (pred-one arena env job cs t ps)) (list-push out c))
+                          (set! t (+ t 1))))
+                    (out-of out false))))))))
+
+  (fn pred-one ((arena Arena) (env Env) (job PJob) (cs (List (List Premise))) (t Int) (ps (List Premise)))
+    (@intent "Choice t of one job, finished")
+    (@spec ((Arena Env PJob (List (List Premise)) Int (List Premise)) -> (List Cand)))
+    (@alloc arena)
+    (let ((fallback (prem-or ps (. job view)))
+          (st (pred-choice arena (pred-start arena true) (. job s) (. job slots) cs t fallback)))
+      (if (. job rpred)
+        (conclusion arena (. job to) (rpred-finish arena st (. env tr) (. job view)))
+        (conclusion arena (. job to) (pred-finish arena st (. job s) (. env tr) (. job toroot) (. job view))))))
+
+  (fn prem-or ((ps (List Premise)) (v PredView))
+    (@intent "Any premise, as prem-at's fallback; one with no maximal literal when ps is empty")
+    (@spec (((List Premise) PredView) -> Premise))
+    (@pure)
+    (match (list-get ps 0)
+      ((some p) p)
+      ((none)
+       (record-new Premise (body (. v ground)) (sel (atom1 (cast U32 0) (at-x))) (rest (. v head)) (maxed false)))))
+
+  (fn slots-of ((arena Arena) (lits (List Lit)))
+    (@intent "Pred's slots, each with its edge, which the caller has found")
+    (@spec ((Arena (List Lit)) -> (List PSlot)))
+    (@alloc arena)
+    (let ((mut out (list-new arena PSlot)))
+      (do (for-each (l lits) (list-push out (record-new PSlot (lit l) (edge true)))) out)))
+
+  (fn pred-edge ((arena Arena) (env Env) (st Structure) (v U32) (e Edge) (cs (List Clause)))
+    (@intent "Pred over one edge ⟨w, v, f⟩: each clause of S_v into w; into v_r, for each u ∈ U_H (E4)")
+    (@spec ((Arena Env Structure U32 Edge (List Clause)) -> Out))
+    (@alloc arena)
+    (let ((w (. e from)) (toroot (is-root st (cast Int (. e from))))
+          (ws (premises-of arena (. st ord) (set-of env st (cast Int (. e from)))))
+          (core (core-at env st arena (cast Int v)))
+          (mut out (list-new arena Cand)) (mut over false))
+      (do (for-each (c cs)
+            (let ((o (pred-clause arena env st e w toroot core ws c)))
+              (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true)))))
+          (out-of out over))))
+
+  (fn pred-clause ((arena Arena) (env Env) (st Structure) (e Edge) (w U32) (toroot Bool) (core (List Lit))
+                   (ws (List Premise)) (c Clause))
+    (@intent "Pred over one edge ⟨w, v, f⟩ for one clause c of S_v: into w; into v_r, for each u ∈ U_H (E4)")
+    (@spec ((Arena Env Structure Edge U32 Bool (List Lit) (List Premise) Clause) -> Out))
+    (@alloc arena)
+    (let ((view (pred-view arena c core toroot)) (slots (slots-of arena (. view slots))))
+      (if (not toroot)
+        (pred-run arena env (away-job view slots (. e label) w) ws)
+        (pred-root arena env st view slots w (. e label) ws))))
+
+  (fn away-job ((view PredView) (slots (List PSlot)) (f U32) (w U32))
+    (@intent "The Pred job over an edge ⟨w, v, f⟩ with w not the root: σ = {y ↦ x, x ↦ f(x)}, into w")
+    (@spec ((PredView (List PSlot) U32 U32) -> PJob))
+    (@pure)
+    (record-new PJob (view view) (s (succ-csub (sig-away f))) (slots slots) (to w) (rpred false) (toroot false)))
+
+  (fn pred-root ((arena Arena) (env Env) (st Structure) (view PredView) (slots (List PSlot)) (w U32) (f U32)
+                 (ws (List Premise)))
+    (@intent "Pred into v_r for each u ∈ U_H: σ = {y ↦ u, x ↦ f(u)}")
+    (@spec ((Arena Env Structure PredView (List PSlot) U32 U32 (List Premise)) -> Out))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut over false) (mut u 0))
+      (do (while (< u (consts-of st))
+            (let ((o (pred-run arena env (root-job view slots w f (cast U32 u)) ws)))
+              (do (for-each (x (. o cands)) (list-push out x))
+                  (when (. o over) (set! over true))
+                  (set! u (+ u 1)))))
+          (out-of out over))))
+
+  (fn root-job ((view PredView) (slots (List PSlot)) (w U32) (f U32) (u U32))
+    (@intent "The Pred job into v_r for one u ∈ U_H: σ = {y ↦ u, x ↦ f(u)}")
+    (@spec ((PredView (List PSlot) U32 U32 U32) -> PJob))
+    (@pure)
+    (record-new PJob (view view) (s (succ-csub (sig-at f u))) (slots slots) (to w) (rpred false) (toroot true)))
+
+  (fn sig-away ((f U32))
+    (@intent "f(x)")
+    (@spec ((U32) -> SuccSig))
+    (@pure)
+    (record-new SuccSig (f f) (root false) (u (cast U32 0))))
+
+  (fn sig-at ((f U32) (u U32))
+    (@intent "f(u)")
+    (@spec ((U32 U32) -> SuccSig))
+    (@pure)
+    (record-new SuccSig (f f) (root true) (u u)))
+
+  (fn ref-pred ((arena Arena) (env Env) (st Structure) (v U32) (cs (List Clause)))
+    (@intent "Pred over every f-edge into v")
+    (@spec ((Arena Env Structure U32 (List Clause)) -> Out))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut over false))
+      (do (for-each (e (. st edges))
+            (when (and (== (. e to) v) (== (. e lk) 'el-fn))
+              (let ((o (pred-edge arena env st v e cs)))
+                (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true))))))
+          (out-of out over))))
+
+  (fn slot-const ((l Lit))
+    (@intent "The constant of an r-Pred slot S(y, u) or S(u, y)")
+    (@spec ((Lit) -> U32))
+    (@pure)
+    (if (== (. (. l t1) kind) 'ak-u) (. (. l t1) cst) (. (. l t2) cst)))
+
+  (fn rslots ((arena Arena) (st Structure) (v U32) (lits (List Lit)))
+    (@intent "r-Pred's slots, each with whether ⟨v, v_r, uᵢ⟩ is an edge")
+    (@spec ((Arena Structure U32 (List Lit)) -> (List PSlot)))
+    (@alloc arena)
+    (let ((mut out (list-new arena PSlot)))
+      (do (for-each (l lits)
+            (list-push out (record-new PSlot (lit l) (edge (has-edge st v (cast U32 0) 'el-const (slot-const l))))))
+          out)))
+
+  (fn ref-rpred ((arena Arena) (env Env) (st Structure) (v U32) (ps (List Premise)))
+    (@intent "r-Pred: every root clause into v, σ = {y ↦ x}")
+    (@spec ((Arena Env Structure U32 (List Premise)) -> Out))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)) (mut over false))
+      (do (for-each (c (set-of env st 0))
+            (let ((o (pred-run arena env (rpred-job arena env st v c) ps)))
+              (do (for-each (x (. o cands)) (list-push out x)) (when (. o over) (set! over true)))))
+          (out-of out over))))
+
+  (fn rpred-job ((arena Arena) (env Env) (st Structure) (v U32) (c Clause))
+    (@intent "The r-Pred job from root clause c into v: σ = {y ↦ x}")
+    (@spec ((Arena Env Structure U32 Clause) -> PJob))
+    (@alloc arena)
+    (let ((view (rpred-view arena (. env tr) c)))
+      (record-new PJob (view view) (s (record-new CSub (x (at-x)) (y (at-x))))
+                       (slots (rslots arena st v (. view slots))) (to v) (rpred true) (toroot false))))
+
+  ;; ============================================================
+  ;; One round
+  ;; ============================================================
+
+  (fn ctx-table2 ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (cs (List Clause)) (ps (List Premise)))
+    (@intent "Table 2 in context v, but Nom")
+    (@spec ((Arena Env Structure U32 Bool (List Clause) (List Premise)) -> Out))
+    (@alloc arena)
+    (let ((ord (. st ord))
+          (h (ref-hyper arena env st v root ps))
+          (mut out (ref-core arena v (core-at env st arena (cast Int v)))))
+      (do (for-each (c (. h cands)) (list-push out c))
+          ;; Past the room (the prototype's budget), the rest is skipped.
+          (when (<= (cast Int (list-len out)) (. env room))
+            (do (for-each (c (ref-eq arena ord v root ps)) (list-push out c))
+                (for-each (c (ref-ineq arena v ps)) (list-push out c))
+                (for-each (c (ref-factor arena ord v ps)) (list-push out c))
+                (for-each (c (ref-join arena v ps cs)) (list-push out c))))
+          (out-of out (. h over)))))
+
+  (fn ctx-round ((arena Arena) (env Env) (st Structure) (v U32))
+    (@intent "Every rule instance with its main premise in context v")
+    (@spec ((Arena Env Structure U32) -> Round))
+    (@alloc arena)
+    (let ((root (is-root st (cast Int v)))
+          (cs (set-of env st (cast Int v)))
+          (ps (premises-of arena (. st ord) (set-of env st (cast Int v))))
+          (t2 (ctx-table2 arena env st v root cs ps)))
+      (if (> (cast Int (list-len (. t2 cands))) (. env room))
+        (round-of (. t2 cands) (list-new arena SuccAct) (list-new arena RSuccAct) (list-new arena NomAct) (. t2 over))
+        (ctx-round-rest arena env st v root cs ps t2))))
+
+  (fn ctx-round-rest ((arena Arena) (env Env) (st Structure) (v U32) (root Bool) (cs (List Clause)) (ps (List Premise))
+                      (t2 Out))
+    (@intent "ctx-round after Table 2: Nom, Pred, r-Pred and the Succ actions")
+    (@spec ((Arena Env Structure U32 Bool (List Clause) (List Premise) Out) -> Round))
+    (@alloc arena)
+    (let ((nom (ref-nom arena env (. st ord) v ps))
+          (pr (if root (out-of (list-new arena Cand) false) (ref-pred arena env st v cs)))
+          (rp (if root (out-of (list-new arena Cand) false) (ref-rpred arena env st v ps)))
+          (mut cands (list-new arena Cand)))
+      (do (for-each (c (. t2 cands)) (list-push cands c))
+          (for-each (c (. nom cands)) (list-push cands c))
+          (for-each (c (. pr cands)) (list-push cands c))
+          (for-each (c (. rp cands)) (list-push cands c))
+          (round-of cands (ref-succ arena env st v root cs ps)
+                    (if root (list-new arena RSuccAct) (ref-rsucc arena env st v ps))
+                    (. nom noms)
+                    (or (. t2 over) (. pr over) (. rp over))))))
+
+  (fn ref-round ((arena Arena) (env Env) (st Structure))
+    (@intent "One round over every context of the frozen structure")
+    (@spec ((Arena Env Structure) -> Round))
+    (@alloc arena)
+    (let ((mut cands (list-new arena Cand)) (mut succs (list-new arena SuccAct))
+          (mut rsuccs (list-new arena RSuccAct)) (mut noms (list-new arena NomAct))
+          (mut over false) (mut v 0))
+      (do (while (< v (cast Int (list-len (. st ctxs))))
+            (let ((r (ctx-round arena env st (cast U32 v))))
+              (do (for-each (x (. r cands)) (list-push cands x))
+                  (for-each (x (. r succs)) (list-push succs x))
+                  (for-each (x (. r rsuccs)) (list-push rsuccs x))
+                  (for-each (x (. r noms)) (list-push noms x))
+                  (when (. r over) (set! over true))
+                  (set! v (+ v 1)))))
+          (round-of cands succs rsuccs noms over))))
+
+  ;; ============================================================
+  ;; The round's end: constants, contexts, edges, then candidates
+  ;; ============================================================
+
+  (fn nom-cmp ((a NomAct) (b NomAct))
+    (@intent "Content order of Nom's children: by parent, role, then index")
+    (@spec ((NomAct NomAct) -> Int))
+    (@pure)
+    (cond ((< (. a o) (. b o)) -1) ((> (. a o) (. b o)) 1)
+          ((< (. a sb2) (. b sb2)) -1) ((> (. a sb2) (. b sb2)) 1)
+          ((< (. a i) (. b i)) -1) ((> (. a i) (. b i)) 1)
+          (else 0)))
+
+  (fn nom-at ((xs (List NomAct)) (k Int) (fallback NomAct))
+    (@intent "Element k")
+    (@spec (((List NomAct) Int NomAct) -> NomAct))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) fallback)))
+
+  (fn add-consts ((arena Arena) (ord SriqOrder) (noms (List NomAct)))
+    (@intent "The order's table with each new child appended, in content order, each once")
+    (@spec ((Arena SriqOrder (List NomAct)) -> SriqOrder))
+    (@alloc arena)
+    (match (list-get noms 0)
+      ((none) ord)
+      ((some n0)
+        (let ((idx (sort-range arena (cast Int (list-len noms))
+                               (fn ((i Int) (j Int)) (nom-cmp (nom-at noms i n0) (nom-at noms j n0)))))
+              (mut cur ord))
+          (do (for-each (k idx) (set! cur (with-child arena cur (nom-at noms k n0))))
+              cur)))))
+
+  (fn with-child ((arena Arena) (ord SriqOrder) (a NomAct))
+    (@intent "The order's table with Nom's child a appended, unless it is there already")
+    (@spec ((Arena SriqOrder NomAct) -> SriqOrder))
+    (@alloc arena)
+    (match (child-of ord (. a o) (. a sb2) (. a i))
+      ((some _) ord)
+      ((none) (push-const arena ord (aux-const (const-entry ord (. a o)) (. a o) (. a sb2) (. a i))))))
+
+  (fn push-const ((arena Arena) (ord SriqOrder) (e ConstEntry))
+    (@intent "The table with e appended")
+    (@spec ((Arena SriqOrder ConstEntry) -> SriqOrder))
+    (@alloc arena)
+    (let ((mut cs (list-new arena ConstEntry)))
+      (do (for-each (x (. ord consts)) (list-push cs x)) (list-push cs e)
+          (record-new SriqOrder (consts cs) (rank (. ord rank))))))
+
+  (fn lits-cmp ((a (List Lit)) (b (List Lit)))
+    (@intent "Content order of cores: by length, then literal by literal")
+    (@spec (((List Lit) (List Lit)) -> Int))
+    (@pure)
+    (let ((na (cast Int (list-len a))) (nb (cast Int (list-len b))) (mut r 0) (mut i 0))
+      (do (cond ((< na nb) (set! r -1)) ((> na nb) (set! r 1)) (else (set! r 0)))
+          (for-each (l a)
+            (do (when (== r 0)
+                  (match (list-get b i) ((some m) (set! r (lit-cmp l m))) ((none) (set! r 1))))
+                (set! i (+ i 1))))
+          r)))
+
+  (fn core-in ((cores (List (List Lit))) (c (List Lit)))
+    (@intent "Is c among cores?")
+    (@spec (((List (List Lit)) (List Lit)) -> Bool))
+    (@pure)
+    (let ((mut found false)) (do (for-each (x cores) (when (== (lits-cmp x c) 0) (set! found true))) found)))
+
+  (fn core-at-k ((xs (List (List Lit))) (k Int) (fallback (List Lit)))
+    (@intent "Element k")
+    (@spec (((List (List Lit)) Int (List Lit)) -> (List Lit)))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) fallback)))
+
+  (fn add-contexts ((arena Arena) (st Structure) (succs (List SuccAct)))
+    (@intent "The structure with each new core's context appended, in content order, with an empty set")
+    (@spec ((Arena Structure (List SuccAct)) -> Structure))
+    (@alloc arena)
+    (let ((mut fresh (list-new arena (List Lit))))
+      (do (for-each (a succs)
+            (when (and (== (ctx-by-core st (. a core)) (cast U32 4294967295)) (not (core-in fresh (. a core))))
+              (list-push fresh (. a core))))
+          (match (list-get fresh 0)
+            ((none) st)
+            ((some f0) (with-contexts arena st fresh f0))))))
+
+  (fn with-contexts ((arena Arena) (st Structure) (fresh (List (List Lit))) (f0 (List Lit)))
+    (@intent "The structure with a context appended for each core of fresh, in content order, with an empty set; f0 is
+              fresh's first")
+    (@spec ((Arena Structure (List (List Lit)) (List Lit)) -> Structure))
+    (@alloc arena)
+    (let ((idx (sort-range arena (cast Int (list-len fresh))
+                           (fn ((i Int) (j Int)) (lits-cmp (core-at-k fresh i f0) (core-at-k fresh j f0)))))
+          (mut ctxs (list-new arena Ctx)) (mut sets (list-new arena CtxSet)))
+      (do (for-each (c (. st ctxs)) (list-push ctxs c))
+          (for-each (s (. st sets)) (list-push sets s))
+          (for-each (k idx)
+            (do (list-push ctxs (record-new Ctx (core (core-at-k fresh k f0)) (root false)))
+                (list-push sets (record-new CtxSet (cs (list-new arena Clause))))))
+          (record-new Structure (ctxs ctxs) (sets sets) (edges (. st edges)) (ord (. st ord))))))
+
+  (fn add-edges ((arena Arena) (st Structure) (succs (List SuccAct)) (rsuccs (List RSuccAct)))
+    (@intent "The structure with Succ's ⟨v, w, f⟩ (and the root's ⟨v_r, w, u⟩) and r-Succ's ⟨v, v_r, u⟩, each once")
+    (@spec ((Arena Structure (List SuccAct) (List RSuccAct)) -> Structure))
+    (@alloc arena)
+    (let ((mut es (list-new arena Edge)))
+      (do (for-each (e (. st edges)) (list-push es e))
+          (for-each (a succs) (set! es (succ-edges arena st es a)))
+          (for-each (a rsuccs)
+            (set! es (with-edge arena es (record-new Edge (from (. a from)) (to (cast U32 0)) (lk 'el-const)
+                                                     (label (. a u))))))
+          (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges es) (ord (. st ord))))))
+
+  (fn succ-edges ((arena Arena) (st Structure) (es (List Edge)) (a SuccAct))
+    (@intent "es with Succ action a's ⟨v, w, f⟩ and, when its term is f(u), its ⟨v, w, u⟩, each once; w is a's core's
+              context in st")
+    (@spec ((Arena Structure (List Edge) SuccAct) -> (List Edge)))
+    (@alloc arena)
+    (let ((w (ctx-by-core st (. a core)))
+          (fe (with-edge arena es (record-new Edge (from (. a from)) (to w) (lk 'el-fn) (label (. (. a sg) f))))))
+      (if (. (. a sg) root)
+        (with-edge arena fe (record-new Edge (from (. a from)) (to w) (lk 'el-const) (label (. (. a sg) u))))
+        fe)))
+
+  (fn with-edge ((arena Arena) (es (List Edge)) (e Edge))
+    (@intent "es with e, if it is not there yet")
+    (@spec ((Arena (List Edge) Edge) -> (List Edge)))
+    (@alloc arena)
+    (let ((mut found false) (mut out (list-new arena Edge)))
+      (do (for-each (x es)
+            (do (when (edge-is x (. e from) (. e to) (. e lk) (. e label)) (set! found true))
+                (list-push out x)))
+          (when (not found) (list-push out e))
+          out)))
+
+  (fn unit-clause ((arena Arena) (a Lit))
+    (@intent "A → A")
+    (@spec ((Arena Lit) -> Clause))
+    (@alloc arena)
+    (let ((mut b (list-new arena Lit)) (mut h (list-new arena Lit)))
+      (do (list-push b a) (list-push h a) (make-clause arena b h))))
+
+  (fn action-cands ((arena Arena) (st Structure) (succs (List SuccAct)) (rsuccs (List RSuccAct)))
+    (@intent "Succ's A′ → A′ into its target, and r-Succ's A → A into v_r")
+    (@spec ((Arena Structure (List SuccAct) (List RSuccAct)) -> (List Cand)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Cand)))
+      (do (for-each (a succs)
+            (let ((w (ctx-by-core st (. a core))))
+              (for-each (l (. a adds)) (list-push out (record-new Cand (ctx w) (c (unit-clause arena l)))))))
+          (for-each (a rsuccs) (list-push out (record-new Cand (ctx (cast U32 0)) (c (unit-clause arena (. a lit))))))
+          out)))
+
+  (fn cand-at ((xs (List Cand)) (k Int) (fallback Cand))
+    (@intent "Element k")
+    (@spec (((List Cand) Int Cand) -> Cand))
+    (@pure)
+    (match (list-get xs k) ((some x) x) ((none) fallback)))
+
+  (fn cand-cmp ((a Cand) (b Cand))
+    (@intent "By context, then clause content")
+    (@spec ((Cand Cand) -> Int))
+    (@pure)
+    (cond ((< (. a ctx) (. b ctx)) -1) ((> (. a ctx) (. b ctx)) 1) (else (clause-cmp (. a c) (. b c)))))
+
+  (fn commit-sets ((arena Arena) (st Structure) (cands (List Cand)))
+    (@intent "Each context's set with its candidates appended, in content order, each only if not ∈̂ the set so far;
+              whether any was")
+    (@spec ((Arena Structure (List Cand)) -> Committing))
+    (@alloc arena)
+    (match (list-get cands 0)
+      ((none) (record-new Committing (st st) (changed false)))
+      ((some c0) (commit-sorted arena st cands c0))))
+
+  (fn commit-sorted ((arena Arena) (st Structure) (cands (List Cand)) (c0 Cand))
+    (@intent "commit-sets on a non-empty cands, c0 its first: the candidates sorted into content order, then each
+              context's set grown")
+    (@spec ((Arena Structure (List Cand) Cand) -> Committing))
+    (@alloc arena)
+    (let ((mut sets (list-new arena CtxSet)) (mut changed false) (mut v 0)
+          (idx (sort-range arena (cast Int (list-len cands))
+                           (fn ((i Int) (j Int)) (cand-cmp (cand-at cands i c0) (cand-at cands j c0))))))
+      (do (for-each (s (. st sets))
+            (let ((r (grow arena (. s cs) cands idx (cast U32 v) c0)))
+              (do (list-push sets (record-new CtxSet (cs (. r cs))))
+                  (when (. r grew) (set! changed true))
+                  (set! v (+ v 1)))))
+          (record-new Committing
+            (st (record-new Structure (ctxs (. st ctxs)) (sets sets) (edges (. st edges)) (ord (. st ord))))
+            (changed changed)))))
+
+
+  (fn grow ((arena Arena) (cs (List Clause)) (cands (List Cand)) (idx (List Int)) (v U32) (c0 Cand))
+    (@intent "One context's set, with each of its candidates in content order appended unless ∈̂ the set so far")
+    (@spec ((Arena (List Clause) (List Cand) (List Int) U32 Cand) -> Grown))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)) (mut grew false))
+      (do (for-each (c cs) (list-push out c))
+          (for-each (k idx)
+            (let ((x (cand-at cands k c0)))
+              (when (and (== (. x ctx) v) (not (in-hat (. x c) out)))
+                (do (list-push out (. x c)) (set! grew true)))))
+          (record-new Grown (cs out) (grew grew)))))
+
+  (fn ref-apply ((arena Arena) (st Structure) (r Round))
+    (@intent "The round's end: new constants, new contexts, new edges, then each context's candidates; whether anything
+              changed")
+    (@spec ((Arena Structure Round) -> Committing))
+    (@alloc arena)
+    (let ((n0 (list-len (. (. st ord) consts)))
+          (s1 (record-new Structure (ctxs (. st ctxs)) (sets (. st sets)) (edges (. st edges))
+                                    (ord (add-consts arena (. st ord) (. r noms)))))
+          (s2 (add-contexts arena s1 (. r succs)))
+          (s3 (add-edges arena s2 (. r succs) (. r rsuccs)))
+          (cm (commit-sets arena s3 (append-cands arena (. r cands) (action-cands arena s3 (. r succs) (. r rsuccs))))))
+      (record-new Committing
+        (st (. cm st))
+        (changed (or (. cm changed)
+                     (!= (list-len (. (. s3 ord) consts)) n0)
+                     (!= (list-len (. s3 ctxs)) (list-len (. st ctxs)))
+                     (!= (list-len (. s3 edges)) (list-len (. st edges))))))))
+
+  ;; ============================================================
+  ;; The run
+  ;; ============================================================
+
+  (fn total-clauses ((st Structure))
+    (@intent "Clauses over every context")
+    (@spec ((Structure) -> Int))
+    (@pure)
+    (let ((mut n 0)) (do (for-each (s (. st sets)) (set! n (+ n (cast Int (list-len (. s cs)))))) n)))
+
+  (fn inconsistent-now ((arena Arena) (env Env) (st Structure))
+    (@intent "⊤ → ⊥ ∈̂ S_{v_⊤} (S4's early stop)")
+    (@spec ((Arena Env Structure) -> Bool))
+    (@alloc arena)
+    (in-hat (make-clause arena (list-new arena Lit) (list-new arena Lit)) (set-of env st 1)))
+
+  (fn ref-elim ((arena Arena) (st Structure))
+    (@intent "Elim once (D5(a)): each set's min, the non-tautologies no other member subsumes")
+    (@spec ((Arena Structure) -> Structure))
+    (@alloc arena)
+    (let ((mut sets (list-new arena CtxSet)))
+      (do (for-each (s (. st sets))
+            (list-push sets (record-new CtxSet (cs (. (commit-min arena (list-new arena Clause) (. s cs)) set)))))
+          (record-new Structure (ctxs (. st ctxs)) (sets sets) (edges (. st edges)) (ord (. st ord))))))
+
+  (fn initial-queries ((in RefIn))
+    (@intent "The query contexts initialisation makes besides v_r and v_⊤: the query classes and the hidden ones (ω_D
+              less 2)")
+    (@spec ((RefIn) -> Int))
+    (@pure)
+    (+ (. in nquery) (cast Int (list-len (. in hidden)))))
+
+  (fn init-of ((arena Arena) (in RefIn))
+    (@intent "A1–A2's structure for in: v_r, v_⊤, a v_B per query class, then a context per hidden query class")
+    (@spec ((Arena RefIn) -> Structure))
+    (@alloc arena)
+    (with-hidden arena (init-structure arena (. in nquery) (. in nconst)) (. in hidden)))
+
+  (fn ref-lambda ((tr Triggers) (s Strategy) (nquery Int))
+    (@intent "The Λ HOWL stores for this ontology and strategy; nquery counts the query contexts, hidden ones too")
+    (@spec ((Triggers Strategy Int) -> Int))
+    (@pure)
+    (stored-lambda (tau-su tr) (tau-pr tr) (omega s tr) (omega-d nquery)))
+
+  (fn ref-input ((arena Arena) (sc SriqClauses))
+    (@intent "O's clauses and their counts, as the reference reads them: classes, query classes, roles, function
+              symbols, constants")
+    (@spec ((Arena SriqClauses) -> RefIn))
+    (@alloc arena)
+    (let ((ids (. sc ids)))
+      (record-new RefIn (onto (. sc clauses)) (nclass (cast Int (list-len (. ids class-of)))) (nquery (. ids nclass))
+                        (nrole (cast Int (list-len (. ids role-of)))) (nfn (. ids nfns))
+                        (nconst (cast Int (list-len (. ids const-of)))) (hidden (list-new arena U32)))))
+
+
+  (fn ref-run ((arena Arena) (in RefIn) (cfg RefConfig))
+    (@intent "Algorithm 1 under the reference: initialise, run naive rounds to a stop, then Elim once. Each round runs
+              in a scratch arena, and the structure it leaves is copied into an arena of its own, so a long run holds
+              one structure and one round")
+    (@spec ((Arena RefIn RefConfig) -> RefResult))
+    (@alloc arena)
+    (let ((tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn)))
+          (lam (if (>= (. cfg lam) 0) (. cfg lam) (ref-lambda tr (. cfg strat) (initial-queries in))))
+          (env (env-of arena in cfg tr lam))
+          (mut held (arena-new 1048576))
+          (mut st (init-of arena in))
+          (mut status RefStatus 'rs-fuel)
+          (mut rounds 0)
+          (mut going true))
+      (do (while (and going (< rounds (. cfg fuel)))
+            (let ((scratch (arena-new 1048576))
+                  (r (ref-round scratch env st)))
+              (do (if (. r over)
+                    (do (set! status 'rs-product) (set! going false))
+                    (let ((cm (ref-apply scratch st r))
+                          (next (arena-new 1048576)))
+                      (do (set! st (copy-structure next (. cm st)))
+                          (arena-free held)
+                          (set! held next)
+                          (set! rounds (+ rounds 1))
+                          (set! status (stop-status scratch env st cm cfg))
+                          (set! going (== status 'rs-fuel)))))
+                  (arena-free scratch))))
+          ;; Copied out before held is freed: Elim's sets share their
+          ;; clauses' bodies and heads with the structure it reads.
+          (let ((done (ref-elim arena (copy-structure arena st))))
+            (do (arena-free held)
+                (record-new RefResult (status status) (rounds rounds) (st done)))))))
+
+  (fn copy-lits ((arena Arena) (ls (List Lit)))
+    (@intent "ls, in arena")
+    (@spec ((Arena (List Lit)) -> (List Lit)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Lit))) (do (for-each (l ls) (list-push out l)) out)))
+
+  (fn copy-clauses ((arena Arena) (cs (List Clause)))
+    (@intent "cs, in arena, each clause's body and head copied")
+    (@spec ((Arena (List Clause)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause)))
+      (do (for-each (c cs) (list-push out (record-new Clause (body (copy-lits arena (. c body)))
+                                                      (head (copy-lits arena (. c head))))))
+          out)))
+
+  (fn copy-structure ((arena Arena) (st Structure))
+    (@intent "st, deep-copied into arena: every list it holds is allocated there")
+    (@spec ((Arena Structure) -> Structure))
+    (@alloc arena)
+    (let ((mut ctxs (list-new arena Ctx)) (mut sets (list-new arena CtxSet))
+          (mut edges (list-new arena Edge)) (mut consts (list-new arena ConstEntry)))
+      (do (for-each (c (. st ctxs)) (list-push ctxs
+                                               (record-new Ctx (core (copy-lits arena (. c core))) (root (. c root)))))
+          (for-each (x (. st sets)) (list-push sets (record-new CtxSet (cs (copy-clauses arena (. x cs))))))
+          (for-each (e (. st edges)) (list-push edges e))
+          (for-each (e (. (. st ord) consts)) (list-push consts e))
+          (record-new Structure (ctxs ctxs) (sets sets) (edges edges)
+                                (ord (record-new SriqOrder (consts consts) (rank (. (. st ord) rank))))))))
+
+  (fn env-of ((arena Arena) (in RefIn) (cfg RefConfig) (tr Triggers) (lam Int))
+    (@intent "What every round reads besides the structure")
+    (@spec ((Arena RefIn RefConfig Triggers Int) -> Env))
+    (@alloc arena)
+    (record-new Env (onto (. in onto)) (tr tr) (strat (. cfg strat)) (lam lam) (prod (. cfg prod))
+                    (nconst (. in nconst)) (nobody (list-new arena Clause)) (room 2147483647)))
+
+  (fn with-room ((env Env) (room Int))
+    (@intent "env with its room set: past room conclusions, a context's remaining work is skipped")
+    (@spec ((Env Int) -> Env))
+    (@pure)
+    (record-new Env (onto (. env onto)) (tr (. env tr)) (strat (. env strat)) (lam (. env lam)) (prod (. env prod))
+                    (nconst (. env nconst)) (nobody (. env nobody)) (room room)))
+
+  (fn env-for ((arena Arena) (in RefIn) (cfg RefConfig))
+    (@intent "The run's Env, rebuilt for a check after the run")
+    (@spec ((Arena RefIn RefConfig) -> Env))
+    (@alloc arena)
+    (let ((tr (build-triggers arena (. in onto) (. in nclass) (. in nrole) (. in nfn))))
+      (env-of arena in cfg tr (if (>= (. cfg lam) 0) (. cfg lam) (ref-lambda tr (. cfg strat) (initial-queries in))))))
+
+  (fn ref-stable ((arena Arena) (in RefIn) (cfg RefConfig) (st Structure))
+    (@intent "Is a finished, Elim-ed structure saturated: does one more round change nothing (D5(a)'s argument)?")
+    (@spec ((Arena RefIn RefConfig Structure) -> Bool))
+    (@alloc arena)
+    (let ((r (ref-round arena (env-for arena in cfg) st)))
+      (and (not (. r over)) (not (. (ref-apply arena st r) changed)))))
+
+  (fn stop-status ((arena Arena) (env Env) (st Structure) (cm Committing) (cfg RefConfig))
+    (@intent "Why the run stops after this round, or rs-fuel to go on")
+    (@spec ((Arena Env Structure Committing RefConfig) -> RefStatus))
+    (@alloc arena)
+    (cond ((not (. cm changed)) 'rs-fixpoint)
+          ((inconsistent-now arena env st) 'rs-inconsistent)
+          ((> (cast Int (list-len (. st ctxs))) (. cfg ctxs)) 'rs-contexts)
+          ((> (total-clauses st) (. cfg cls)) 'rs-clauses)
+          ((> (- (cast Int (list-len (. (. st ord) consts))) (. env nconst)) (. cfg cnst)) 'rs-constants)
+          (else 'rs-fuel)))
+
+  (fn ref-set ((arena Arena) (st Structure) (v Int))
+    (@intent "S_v of a finished run, for the read-off and the tests")
+    (@spec ((Arena Structure Int) -> (List Clause)))
+    (@alloc arena)
+    (match (list-get (. st sets) v) ((some s) (. s cs)) ((none) (list-new arena Clause))))
+
+  ;; ============================================================
+  ;; The combinators against the reference's own products: hyper-join
+  ;; and pred-join, whose folds are owed (§7), must conclude exactly what
+  ;; the reference does, on every context of a finished run.
+  ;; ============================================================
+
+  (fn clause-in ((xs (List Clause)) (c Clause))
+    (@intent "Is c among xs?")
+    (@spec (((List Clause) Clause) -> Bool))
+    (@pure)
+    (let ((mut found false)) (do (for-each (x xs) (when (clause-eq x c) (set! found true))) found)))
+
+  (fn same-clauses ((a (List Clause)) (b (List Clause)))
+    (@intent "The same clauses, as sets")
+    (@spec (((List Clause) (List Clause)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do (for-each (x a) (when (not (clause-in b x)) (set! ok false)))
+          (for-each (x b) (when (not (clause-in a x)) (set! ok false)))
+          ok)))
+
+  (fn cand-clauses ((arena Arena) (cs (List Cand)))
+    (@intent "The candidates' clauses")
+    (@spec ((Arena (List Cand)) -> (List Clause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Clause))) (do (for-each (c cs) (list-push out (. c c))) out)))
+
+  (fn hyper-agrees ((arena Arena) (env Env) (v U32) (root Bool) (oc Clause) (ps (List Premise)))
+    (@intent "hyper-join concludes exactly what the reference's product does, for one ontology clause in one context")
+    (@spec ((Arena Env U32 Bool Clause (List Premise)) -> Bool))
+    (@alloc arena)
+    (let ((start (hyper-start arena (at-x) (not root)))
+          (mut cands (list-new arena Cands))
+          (mut joined (list-new arena Clause)))
+      (do (for-each (a (. oc body)) (list-push cands (record-new Cands (ps (slot-cands arena root a ps)))))
+          (for-each (r (hyper-join arena start (. oc body) cands (. oc head))) (list-push joined (assemble arena r)))
+          (let ((o (hyper-with arena env v root start oc ps)))
+            (or (. o over) (same-clauses joined (cand-clauses arena (. o cands))))))))
+
+  (fn pred-agrees ((arena Arena) (env Env) (job PJob) (ps (List Premise)))
+    (@intent "pred-join concludes exactly what the reference's product does, for one job")
+    (@spec ((Arena Env PJob (List Premise)) -> Bool))
+    (@alloc arena)
+    (let ((mut cands (list-new arena PCands)) (mut joined (list-new arena Clause)))
+      (do (for-each (slot (. job slots)) (list-push cands
+                                                    (record-new PCands (slot slot)
+                                                                (ps (pslot-cands arena (. job s) slot ps)))))
+          (for-each (st (pred-join arena (pred-start arena true) (. job s) cands))
+            (let ((r (if (. job rpred) (rpred-finish arena st (. env tr) (. job view))
+                                       (pred-finish arena st (. job s) (. env tr) (. job toroot) (. job view)))))
+              (when (. r fires) (list-push joined (assemble arena r)))))
+          (let ((o (pred-run arena env job ps)))
+            (or (. o over) (same-clauses joined (cand-clauses arena (. o cands))))))))
+
+  (fn ctx-agrees ((arena Arena) (env Env) (st Structure) (v U32))
+    (@intent "Both combinators agree with the reference in context v: Hyper on every ontology clause with a body, Pred
+              over every f-edge into v (away from the root), r-Pred from every root clause")
+    (@spec ((Arena Env Structure U32) -> Bool))
+    (@alloc arena)
+    (let ((root (is-root st (cast Int v)))
+          (cs (set-of env st (cast Int v)))
+          (ps (premises-of arena (. st ord) (set-of env st (cast Int v))))
+          (mut ok true))
+      (do (for-each (oc (. env onto))
+            (when (and (> (list-len (. oc body)) 0) (not (hyper-agrees arena env v root oc ps))) (set! ok false)))
+          (when (not root)
+            (do (for-each (e (. st edges))
+                  (when (and (== (. e to) v) (== (. e lk) 'el-fn) (not (is-root st (cast Int (. e from)))))
+                    (when (not (edge-agrees arena env st v e cs)) (set! ok false))))
+                (for-each (c (set-of env st 0))
+                  (when (not (pred-agrees arena env (rpred-job arena env st v c) ps)) (set! ok false)))))
+          ok)))
+
+  (fn edge-agrees ((arena Arena) (env Env) (st Structure) (v U32) (e Edge) (cs (List Clause)))
+    (@intent "pred-join agrees with the reference over one edge ⟨w, v, f⟩ with w not the root, for every clause of S_v")
+    (@spec ((Arena Env Structure U32 Edge (List Clause)) -> Bool))
+    (@alloc arena)
+    (let ((ws (premises-of arena (. st ord) (set-of env st (cast Int (. e from)))))
+          (core (core-at env st arena (cast Int v)))
+          (mut ok true))
+      (do (for-each (c cs)
+            (let ((view (pred-view arena c core false)))
+              (when (not (pred-agrees arena env (away-job view (slots-of arena (. view slots)) (. e label) (. e from))
+                                      ws))
+                (set! ok false))))
+          ok)))
+
+  (fn combinators-agree ((arena Arena) (in RefIn) (cfg RefConfig) (st Structure))
+    (@intent "On every context of a finished structure, hyper-join and pred-join conclude exactly what the reference's
+              own products do")
+    (@spec ((Arena RefIn RefConfig Structure) -> Bool))
+    (@alloc arena)
+    (let ((env (env-for arena in cfg)) (mut ok true) (mut v 0))
+      (do (while (< v (cast Int (list-len (. st ctxs))))
+            (do (when (not (ctx-agrees arena env st (cast U32 v))) (set! ok false))
+                (set! v (+ v 1))))
+          ok)))
+
+)

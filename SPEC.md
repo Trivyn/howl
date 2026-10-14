@@ -201,7 +201,7 @@ contexts. It is still deterministic saturation: no backtracking and no model sea
 |---|---|---|---|---|---|
 | **`el`** (v0) | **ELH<sub>⊥</sub><sup>R+</sup> + domain/range + ABox** ([§5.2](#52-the-exact-v0-language)); `¬` in a superclass, domain or range is taken by rewriting, so the logic is unchanged | PTIME | [BBL05], [BBL08]; [§5.3](#53-the-abox-reduction-is-sound-and-complete) | — | **implemented; the default** |
 | **`el++`** | the **OWL 2 EL object fragment**: SROEL(⊓,×) without products on the left ([§5.4](#54-the-el-calculus)) | PTIME | [Krö10] Theorem 2 (Ksc); [§5.4](#54-the-el-calculus) | nominals (`ObjectOneOf` of one, `ObjectHasValue`), `ObjectHasSelf`, reflexive roles, `SameIndividual`/`DifferentIndividuals`, negative assertions, `owl:bottomObjectProperty`. Datatypes, keys, anonymous individuals and `owl:topObjectProperty` outside a super-role stay omissions | **implemented** ([§5.4](#54-the-el-calculus)) |
-| **`sriq`** | **SRIQ object fragment with an ABox** ([§5.5](#55-the-sriq-calculus)) | 2ExpTime without an ABox (SRIQ's own); with one, [TGH21] Theorem 5 bounds it only triple-exponentially in the chain-eliminated ontology | [Sim12] Theorem 3, then [TGH21] Theorems 1 and 2; [§5.5](#55-the-sriq-calculus) | inverses, `∀`, unions, full negation, qualified number restrictions, `ObjectHasSelf`, every OWL 2 DL property characteristic, `SameIndividual`/`DifferentIndividuals`, negative assertions. Class nominals, datatypes, keys, anonymous individuals and the universal role stay omissions | **specified** (M5, [§12](#12-milestones--acceptance-criteria)) |
+| **`sriq`** | **SRIQ object fragment with an ABox** ([§5.5](#55-the-sriq-calculus)) | 2ExpTime without an ABox (SRIQ's own); with one, [TGH21] Theorem 5 bounds it only triple-exponentially in the chain-eliminated ontology | [Sim12] Theorem 3, then [TGH21] Theorems 1 and 2; [§5.5](#55-the-sriq-calculus) | inverses, `∀`, unions, full negation, qualified number restrictions, `ObjectHasSelf`, every OWL 2 DL property characteristic, `SameIndividual`/`DifferentIndividuals`, negative assertions. Class nominals, datatypes, keys, anonymous individuals and the universal role stay omissions | **implemented**, single-threaded, under a clause budget (M5, [§12](#12-milestones--acceptance-criteria)) |
 
 **The ladder is almost a chain.**
 - `el ⊂ el++`.
@@ -333,8 +333,33 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   that leaves the fewest logical axioms out, a tie going to the earlier rung (`choose-auto`,
   `src/select.slop`, whose postconditions pin the cases). Unresolved imports, missing
   declarations and undeclared properties are the same under every rung, so they never decide.
-  With `el` and `el++` built, that is today's rule: `el` when nothing is out of `el`'s profile,
-  else the one of the two that omits fewer, ties going to `el`.
+  The counts are the gate's. S1's size guard ([§5.5](#55-the-sriq-calculus)) is a limit on a
+  run, not a language, so it never decides.
+
+  **The step-down (owner, 2026-10-13; slice 11b).** A rung can contain an ontology and still be
+  too expensive for it: OBI is inside `sriq`'s language, and `sriq`'s run on it outgrows any
+  reasonable memory (M5 (c)). So when `auto`'s rung is `sriq` and `sriq`'s run stops at its
+  clause budget ([§5.5](#55-the-sriq-calculus), "The production run": its stored clauses, or one rule
+  instance's choices) with nothing definitive (no
+  inconsistency and no unsatisfiable class), `auto` reruns the input under the same rule
+  restricted to `el` and `el++`, and reports that run.
+  - **The definitive finding wins.** A run stopped at the budget that found an inconsistency or an
+    unsatisfiable class is reported as it stands, because that finding is sound
+    ([§6.2](#62-data-model)) and the rerun might lose it.
+  - **The round cap does not step down.** It is the caller's limit, and it binds whichever rung
+    runs. Only the clause budget says the calculus is too expensive for this input.
+  - **What the report shows.** Its `profile` line names the rung that answered, and its coverage
+    is that rung's, so the axioms that rung omits make the step-down inconclusive. The report
+    grammar is unchanged. The CLI prints one line on stderr when `auto` steps down, which is never
+    part of a report.
+  - **It is reproducible.** The budget counts clauses, not time, so the step-down is a function of
+    the input, and reports stay identical across runs and worker counts
+    ([§6.8](#68-determinism-binding)).
+  - **What it costs.** An `auto` run that chose `sriq` keeps an owned copy of the decoded input
+    until the run ends, to prepare the rerun from (`StepDown`, `src/howl.slop`).
+  - **`--strict`** refuses the rerun when its rung omits anything, as it would any run.
+  - **Explicit `--profile sriq` never steps down.** It obeys the same budget and reports
+    `resource-limit`, which is inconclusive unless the run found something definitive.
 - **The report states the resolved profile** (`profile el`, [§6.7](#67-output--classification)).
   A report is a function of (input, budget, profile). Its findings are complete for that rung's
   logic and no other.
@@ -345,10 +370,10 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   remain partial runs under the rule below.
   - Saying the top rung makes selection "total", as an earlier draft did, would license treating
     its presence as a guaranteed complete fallback.
-  - **With `el` and `el++` built there is no such rung:** an ontology outside both has nothing to
-    escalate to, and the run is inconclusive ([§6.2](#62-data-model)), never "coherent".
-  - Once `sriq` is built, `auto` must run there an ontology that uses inverses or functionality and
-    is otherwise inside `sriq`, not report it inconclusive.
+  - **Before `sriq` was built there was no such rung:** an ontology outside `el` and `el++` had
+    nothing to escalate to, and the run was inconclusive ([§6.2](#62-data-model)), never "coherent".
+  - Since slice 11b, `auto` runs under `sriq` an ontology that uses inverses or functionality and is
+    otherwise inside `sriq`, rather than reporting it inconclusive (unless the step-down applies).
   - The default stays `el`.
 
   **Selection is whole-ontology membership in a single implemented profile — never a union.** Pick
@@ -377,8 +402,8 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
 
 The selection seam was built with only `profile-el` behind it, because a dispatch point left in
 place is far cheaper than one retrofitted later. `prepare-decoded` (`src/howl.slop`) resolves the
-profile before the gate and refuses an unbuilt one. `prepare-in-profile` dispatches `el` and `el++`
-today; `sriq` is its third arm.
+profile before the gate and refuses an unbuilt one. `prepare-in-profile` dispatches all three
+built rungs.
 
 ### 5.2 The exact v0 language
 
@@ -1959,7 +1984,16 @@ normal form, the chain elimination in front of it, and the bookkeeping around th
 >   - E3 was left owed, and is now settled with a proof;
 >   - `docs/coverage.md` misstated "idle".
 > - **Project owner: accepted, 2026-10-08** (PR #34; spec approval recorded as AD e81ee7a2).
->   `--profile sriq` exits 3 until the wiring slice.
+>   `--profile sriq` exited 3 until the wiring slice (11b), which made it selectable.
+> - **Built so far:** the language's representation (`RoleId`'s inverse arm, [§6.2](#62-data-model))
+>   and the gate below, with the census's independent column (slice 4). The gate runs only under
+>   test until the wiring slice.
+> - **Amended 2026-10-09 (slice 5):** S2 pins [TGH21] Table 1 and the choices it leaves open, and S5
+>   lists `S_{B₂}`. Until S1 is built (slice 6), the normaliser refuses an input with a complex RIA,
+>   transitivity included, with that reason, rather than normalise it wrongly.
+> - **Amended 2026-10-09 (slice 6):** S1 pins what [Sim12] leaves open and corrects two errata in it
+>   (see "What S1 fixes"). The size guard omits only the chains, and a HermiT differential checks
+>   the normaliser's stages ([§10](#10-testing-strategy)).
 
 **Sources.**
 - **[TGH21]** Tena Cucala, Cuenca Grau, Horrocks, *Pay-as-you-go consequence-based reasoning for
@@ -2022,7 +2056,8 @@ The `{a}` in the assertion rows are the only nominals, and only assertions produ
   proof is allowed (Constraint ae25e3d4).
 - **Other data, `HasKey`, `DatatypeDefinition` and SWRL.** "Other data" means anything the data
   lemma does not set aside.
-- **RBoxes:** an RBox the gate below rejects, and the complex RIAs that S1's size guard omits.
+- **RBoxes:** an RBox the gate below rejects, and the property chains (transitivity included)
+  that S1's size guard omits.
 
 **Gate conditions.** They are [Sim12]'s preconditions, checked as written, so the gate is exactly
 as strict as the proof.
@@ -2082,20 +2117,71 @@ as strict as the proof.
 - **Punning** needs no special treatment. Classes, roles and individuals are separate sorts in
   [TGH21]'s signature, which is how OWL 2 DL's punning semantics treats them.
 
-**S1 — chain elimination.** [Sim12] §4, run on S0's output:
+**S1 — chain elimination.** [Sim12] §4, run on S0's output. `R^c` is S0's collapsed RIAs, each
+with its inverse `inv(w) ⊑ inv(R)` added. A role is simple exactly when the gate says so.
 1. **Initialisation** (Definition 3):
    - drop every complex RIA;
    - keep the simple RIAs and the role assertions `Ref`, `Irr` and `Dis`;
    - label every positive `∀R.C` and every negative `∃R.C`.
+
+   Polarity is [Sim12] §2.1's, read on the un-normalised GCI:
+
+   | Position | Polarity |
+   |---|---|
+   | a GCI's right side; inside `⊓`, `⊔`, `∃R.·`, `∀R.·`, `≥n R.·` | kept |
+   | a GCI's left side; inside `¬·` and `≤n R.·` | flipped |
 2. **Expansion** (Definitions 4–6), repeated until nothing is labelled:
-   - a labelled `∀^R R.C` is replaced by a fresh `I`, with `F ⊑ C` and `expand(I ⊑ ∀^R R.F)` added;
-   - a labelled `∃^R R.C` is replaced by a fresh `F`, with `C ⊑ I` and
+   - a labelled `∀^R R.C` is replaced by `I`, with `F ⊑ C` and `expand(I ⊑ ∀^R R.F)` added;
+   - a labelled `∃^R R.C` is replaced by `F`, with `C ⊑ I` and
      `expand(I ⊑ ∀^R inv(R).F)` added.
 
-   `expand`'s items 1–5 encode the two-state automaton of `R`'s RIAs in `R^c`. A symmetric role is
-   expanded in both directions.
+   `expand′(I ⊑ ∀^R S.F)` (Definition 4) reads the RIAs into `S` in `R^c`, by form:
+   - item 1: `I ⊑ ∀S.F`, **unlabelled**, and never labelled again;
+   - item 2: `I ⊑ ∀^R R₁ … ∀^R Rₙ.F` for each (R1)-form `R₁·…·Rₙ ⊑ S`, length 1 included;
+   - item 3: `F ⊑ ∀^R R₁ … ∀^R Rₙ.F` for each (R2) `S·R₁·…·Rₙ ⊑ S`;
+   - item 4: `I ⊑ ∀^R R₁ … ∀^R Rₙ.I` for each (R3) `R₁·…·Rₙ·S ⊑ S`;
+   - item 5: `F ⊑ I` if `S·S ⊑ S`.
+
+   `expand` is `expand′` for `S`, and also for `inv(S)` with the same `I` and `F` when
+   `inv(S) ⊑ S ∈ R^c`, so a symmetric role is expanded in both directions. A word in items 2–4
+   that holds `S` or `inv(S)` fits no form; it is refused as an RBox the gate should have refused,
+   never looped on.
 3. **Simple roles are not expanded.** This is [Sim12]'s closing optimisation: a labelled
    restriction on a simple role is unlabelled in place.
+
+**Two errata in [Sim12].** Both are read as the paper's own definitions and example require:
+- **Definition 4 item 2 ranges over (R1)-form RIAs only.** Read literally ("each `Rᵢ` distinct
+  from `R`"), it also matches (R5) `inv(S) ⊑ S`: its item 2 is `I ⊑ ∀^R inv(S).F`, whose expansion
+  matches `S ⊑ inv(S)` in turn, without end. That reading also contradicts the paper's own claim
+  (pp. 7, 9) that `expand` uses only roles `≺ S`, since `inv(S) ≺ S` holds under no regular order.
+  §3's (E1), "of form (R1)", is the intended reading. Symmetry is `expand`'s second call.
+- **Fig. 1 (p. 10) swaps the word shapes of its I-exp and F-exp rules.** Definition 4, §3's
+  (E2)/(E3) and Example 1 agree with each other, and the paper's sentence pairing I-exp with
+  (E1)/(E3) does too; they are what S1 implements.
+
+**What S1 fixes that [Sim12] leaves open.** The owner approved these on 2026-10-09.
+1. **One pair of names per labelled concept, reused.** `I` and `F` are keyed by what they name:
+   (`∀` or `∃`, the role, and the filler, canonical, after its own labelled concepts are
+   replaced). A labelled concept that recurs reuses its pair.
+
+   Definition 6 asks for names fresh at each expansion, so this needs an argument. Take the run
+   with fresh names: it terminates, by Theorem 3's bound. Map each of its names to its key's pair
+   (σ).
+   - From the output to the input: a model of S1's output, read through σ, is a model of that
+     run's output, and Theorem 3 gives the input's model.
+   - From the input to the output: Theorem 2's construction interprets every name as its labelled
+     concept, `I := ∀^R R.C` and `F := ∃^R inv(R).∀^R R.C` (for `∃`: `I := ∀^R inv(R).∃^R R.C`,
+     `F := ∃^R R.C`). Names that σ identifies therefore agree, so the model is well defined.
+2. **The names are atoms of the working form,** written `I[∀R.C]`, `F[∀R.C]`, `I[∃R.C]` and
+   `F[∃R.C]`. S2 treats them as class names, and S5 gives them ids from their content.
+3. **Order cannot matter.** Labelled concepts are replaced innermost first, which is one of the
+   sequences Theorem 3 allows. The output is canonical, sorted and deduped, so it is a function of
+   S0's output.
+4. **The bottom role is not special-cased.** The gate counts it as non-simple, as under el++,
+   whether or not it is in an inclusion, and so does its component's representative. So
+   `∃N.⊤ ⊑ ⊥` is a negative `∃` on a non-simple role, and is expanded like any other.
+5. **A chain is eliminated, not lost.** It yields no clause of its own; its consequences arrive
+   through the expansions.
 
 **What survives.** [Sim12] Theorem 3: the result is **simple-conservative** over the input. Their
 models coincide on the input's concept names, simple roles and individuals, so consistency, unsatisfiability and
@@ -2107,7 +2193,10 @@ derived through a chain. The report states neither.
 The output has no complex RIA. What remains:
 - the simple RIAs;
 - `Ref`, `Irr` and `Dis`;
-- GCIs, whose new axioms have the form `I ⊑ ∀R.F`, over possibly inverse roles.
+- GCIs. The new ones are `I ⊑ ∀R.F` (item 1, over possibly inverse roles), `F ⊑ C′` and
+  `C′ ⊑ I` (Definition 6), `F ⊑ I` (item 5), and items 2–4's chains `I ⊑ ∀R₁ … ∀Rₙ.F`,
+  `F ⊑ ∀R₁ … ∀Rₙ.F` and `I ⊑ ∀R₁ … ∀Rₙ.I`, in which a `∀` over a simple role stays in place. [Sim12]'s "only `I ⊑ ∀R.F`" is for the algorithm without the
+  closing optimisation.
 
 That is an ALCHOIQ+ TBox whose nominals all come from assertions.
 
@@ -2115,20 +2204,37 @@ The negative assertion `{a} ⊑ ∀R.¬{b}` is a positive `∀`, so a negative a
 role is expanded like any other. It then constrains every chain from `a` to `b`, as it must.
 
 **Size guard.** [Sim12] Theorem 3 bounds the number of expansions by `‖T‖·(2‖R‖)^d`, where `d` is
-the RBox's depth. That is exponential in the depth, and optimal. If S1's output would exceed a fixed
-bound, every complex RIA is omitted instead, witnessed as a set, and the run is inconclusive. The
-bound is set in the chain-elimination slice, where RO (depth 12) is measured. The guard is
-deterministic, and it only ever weakens the theory, so its findings stay sound (S7).
+the RBox's depth. That is exponential in the depth, and optimal.
+- **What it counts:** distinct labelled concepts, that is, keys. They form a set, so whether the
+  guard trips does not depend on the order of expansion.
+- **What it omits:** over a fixed bound, the property chains (transitivity included, which arrives
+  as `R ∘ R ⊑ R`) are omitted instead. S1's output is then S0's axioms minus its chains, unlabelled:
+  literally a subset of S0, so every finding stays sound (S7). The witnesses are the accepted
+  chain axioms (a `TransitiveObjectProperty` is accepted as `R ∘ R ⊑ R`), and the run is
+  inconclusive.
+- **The bound** is 100,000 distinct labelled concepts, set in slice 6e from the corpus. RO, whose
+  RBox is the deepest (12), needs 10,173 and GO 9,033; BFO-core, CCO and OBI need under 100. So
+  it is about ten times the worst, and every corpus entry runs whole.
+- **What it bounds:** the work an input can demand of a correct S1, which Theorem 3's argument
+  ties to the keys (a name nests at most the RBox's depth, plus one: 13 on RO). It is not a
+  defence against an S1 defect that nests names without end; keys alone do not bound that, and
+  S1's invariants and the normaliser differential catch it. The owner chose keys only
+  (2026-10-09), over a second cap on the names' total size.
 
 **S2 — normal form.** The structural transformation takes S1's output into [TGH21] Table 1's
 DL1–DL11:
 - Every GCI `C ⊑ D` becomes `⊤ ⊑ NNF(¬C ⊔ D)`, so every subconcept occurrence is then positive.
+  Three forms are read as DL3 first, without that rewriting (choice 11): `∃R.C ⊑ D`, a domain
+  `∃R.⊤ ⊑ D`, and a range `⊤ ⊑ ∀R.D`. Their fillers are named as below, so a filler's own name can
+  still come from the rewriting.
 - Each subconcept `E` that is not a concept name gets one fresh name `A_E` per distinct `E`, with
   `A_E ⊑ E`, and `E`'s own subconcepts are replaced by their names. The one exception is a literal
   standing directly in a disjunction, which goes to DL1 as it is. So the filler of every `∃`, `∀`,
-  `≥` and `≤` is a name, even when it is a literal. `∀R.¬B`, for example, gets `A_{¬B}` with the
+  `≥` and `≤` is a name, even when it is a literal, except ⊤, which stays ⊤ (choice 6 below). `∀R.¬B`, for example, gets `A_{¬B}` with the
   DL1 clause `A_{¬B} ⊓ B ⊑ ⊥`. Three cases name differently:
   - in `≤n R.F`, `F`'s occurrence is negative, so it is named through `F ⊑ B`;
+  - in choice 11's `∃R.C ⊑ D`, C's occurrence is negative, so it is named through `C ⊑ B₁`, built as
+    any `F ⊑ B` is;
   - a literal `¬{o}` is named through `{o} ⊑ X` (DL10), and becomes `¬X`;
   - a literal `¬∃R.Self` is named through `∃R.Self ⊑ X` (DL6), and becomes `¬X`.
 - The shapes are then read off:
@@ -2149,18 +2255,118 @@ DL1–DL11:
 - Table 1's forms take role *names*. So each name `P` whose inverse is needed as an argument gets a
   fresh name `P̄`, with the two DL8 clauses `P ⊑ P̄⁻` and `P̄ ⊑ P⁻`.
 
+**[TGH21] Table 1, pinned** (AIJ 298, §2.3, p. 5). These are the clauses the reference evaluator and
+the engine read. Every `B` is a class name, every `S` a role name, each `fᵢ` a fresh function
+symbol, and `o` a constant. `n = 0` in DL1 is the empty body (`⊤`), and an empty head is `⊥`.
+
+| Form | Axiom | DL-clauses |
+|---|---|---|
+| DL1 | `B₁ ⊓ … ⊓ Bₙ ⊑ Bₙ₊₁ ⊔ … ⊔ Bₘ` | `B₁(x) ∧ … ∧ Bₙ(x) → Bₙ₊₁(x) ∨ … ∨ Bₘ(x)` |
+| DL2 | `B₁ ⊑ ≥n S.B₂` | `B₁(x) → B₂(fᵢ(x))` and `B₁(x) → S(x, fᵢ(x))` for `1 ≤ i ≤ n`; `B₁(x) → fᵢ(x) ≉ fⱼ(x)` for `1 ≤ i < j ≤ n` |
+| DL3 | `∃S.B₁ ⊑ B₂` | `S(z₁, x) ∧ B₁(x) → B₂(z₁)` |
+| DL4 | `B₁ ⊑ ≤n S.B₂` | `S(z₁, x) ∧ B₂(x) → S_{B₂}(z₁, x)`; `B₁(x) ∧ ⋀_{1≤i≤n+1} S_{B₂}(x, zᵢ) → ⋁_{1≤i<j≤n+1} zᵢ ≈ zⱼ` |
+| DL5 | `B ⊑ ∃S.Self` | `B(x) → S(x, x)` |
+| DL6 | `∃S.Self ⊑ B` | `S(x, x) → B(x)` |
+| DL7 | `S₁ ⊑ S₂` | `S₁(z₁, x) → S₂(z₁, x)` |
+| DL8 | `S₁ ⊑ S₂⁻` | `S₁(z₁, x) → S₂(x, z₁)` |
+| DL9 | `Disj(S₁, S₂)` | `S₁(z₁, x) ∧ S₂(z₁, x) → ⊥` |
+| DL10 | `{o} ⊑ B` | `⊤ → B(o)` |
+| DL11 | `B ⊑ {o}` | `B(x) → x ≈ o` |
+
+DL4's `S_{B₂}` is a fresh role, one for each pair of `S` and `B₂` ([TGH21]: "determined by `S` and
+`B₂`"). It is a third kind of HOWL-minted role name, beside `P̄`.
+
+**What S2 fixes that [TGH21] leaves open.** Each of these changes names, ids, rounds or capped
+reports, so each is fixed here. None changes the proof below, which holds for any naming that puts a
+name below what it names at a positive occurrence and above it at a negative one. (Owner-approved,
+2026-10-09; AD 3f4c88fc.)
+1. **One name per distinct concept, up to ⊓/⊔ commutativity, associativity and idempotence, and
+   ⊤/⊥'s unit and zero laws** (`C ⊔ ⊥ = C ⊓ ⊤ = C`, `C ⊔ ⊤ = ⊤`, `C ⊓ ⊥ = ⊥`). The decoder keeps an
+   RDF list's order, so the normaliser flattens, simplifies, dedupes and sorts every ⊓ and ⊔ before
+   it names. Two occurrences of the same concept, in any order, share one `A_E`. The laws matter at
+   the top level too: `⊤ ⊑ B ⊓ C` is `⊤ ⊑ NNF(⊥ ⊔ (B ⊓ C))`, which is `B ⊓ C`, so it splits (choice
+   3) rather than naming the conjunction. (Owner-approved, 2026-10-09, during slice 5c.)
+2. **No shortcut for a single-name body.** `A ⊑ ∃R.B` is DL1 `A → A_E` and then DL2 for `A_E`, as
+   the transformation reads. Emitting DL2 for `A` directly would save a name and a rule application.
+   It changes rounds, so it is an optimisation that needs its own amendment. Choice 11 is one, for a
+   negative `∃`.
+3. **A top-level ⊓ is split:** `⊤ ⊑ E₁ ⊓ … ⊓ Eₖ` is k axioms. A nested ⊓ is a concept like any
+   other, named once.
+4. **DL1 holds names only.** A positive `{o}` or `∃R.Self` standing in a disjunction gets its `A_E`,
+   with DL11 or DL5. The literal exception above covers names and negated names, not these.
+5. **One name per concept across polarities.** `A_E ⊑ E` and `E ⊑ A_E`, when both are needed, share
+   `A_E`, as el's registry does with its direction bits. The proof sets `A_E^I := E^I` either way.
+6. **⊤ and ⊥ are the empty body and the empty head.** A DL2 whose filler is ⊤ emits only its `S` and
+   `≉` clauses. Its `B₂(fᵢ(x))` would be `⊤(fᵢ(x))`, a tautology, and every remaining clause is of a
+   Table 1 form. The cautious strategy (S5) takes `v_⊤` for an `f` that occurs in no atom `B(f(x))`.
+7. **Canonical forms, all equivalences:**
+   - `≥1 R.C` is `∃R.C`;
+   - `∃P⁻.Self` is `∃P.Self`: both say `(x, x) ∈ P^I`;
+   - `=n R.C` is `≥n R.C ⊓ ≤n R.C`;
+   - an unqualified number restriction is qualified by ⊤.
+8. **"The canonical order of what they name"** (S5) is a structural comparison: `concept-cmp` on
+   concepts, `role-cmp` on roles, `iri-cmp` on IRIs. It is never the byte order of a rendered key.
+9. **NNF runs here,** after S1's polarity labelling, as written. S1 labels by polarity on the
+   un-normalised GCIs.
+10. **SameIndividual's hub** is its canonically least member, not the first written.
+11. **A top-level `∃` on a GCI's left is read as DL3** (amends choice 2; owner-approved 2026-10-11, AD
+    1cfde27c). Three GCI forms are Table 1's DL3 as they stand, and are read so before
+    `⊤ ⊑ NNF(¬C ⊔ D)`:
+
+    | GCI | Read as |
+    |---|---|
+    | `∃R.C ⊑ D`, C not ⊤ | DL3 `∃R.B₁ ⊑ B₂`, B₁ the name above C, B₂ the name below D; over `P̄` when R is an inverse |
+    | `∃R.⊤ ⊑ D`, a domain | DL3 `∃R.T ⊑ B₂`, B₂ the name below D |
+    | `⊤ ⊑ ∀R.D`, a range | DL3 `∃inv(R).T ⊑ B₂`, B₂ the name below D, over `P̄` as for any `∀` |
+
+    - **The match.** It runs on canonical NNF (choices 1 and 7): the left side `C ⊑ D`'s C is in
+      canonical NNF, so `≥1 R.C` and `¬∀R.¬C` are `∃R.C`, and C and D are canonical. A range is
+      matched on each conjunct of `⊤ ⊑ NNF(D)` after choice 3's split, so `⊤ ⊑ ∀R.D ⊓ ∀S.E` reads both.
+      Only an `∃` at the top of a left side is read so: `A ⊓ ∃R.C ⊑ D` is not, and a filler's name
+      (B₁, B₂) is built as S2 builds any name above or below, not by this choice again.
+    - **T** is S2's fresh name for ⊤, `A_⊤`. It is used by this choice only, and made only when one
+      of these forms occurs, with the single DL1 axiom `⊤ ⊑ T`. It is numbered with the other fresh
+      names from content (S5), and like every fresh name it is never a query class. The ⊤ fillers of
+      DL2 and DL4 stay ⊤ (choice 6). Table 1's B₁ must be a class name, and the empty body is DL1's
+      alone.
+    - **Degenerate cases.** If C is ⊥ or D is ⊤, the GCI is a tautology and nothing is emitted. If
+      D is ⊥, B₂ is the name below ⊥, as for any other D.
+    - **Why.** Read through `⊤ ⊑ NNF(¬C ⊔ D)`, a negative `∃` becomes a named `∀` and a ⊤-headed
+      DL1 clause. Hyper fires a bodiless clause in every context, so each domain put a disjunction,
+      and each range a unit, into every context. On CCO these were 141 disjunctions and 151 units in
+      each of its 1,424 contexts, and the checkpoint's first probe died in round 2 (Consequence
+      8c82ff31). Read as DL3, the clause `S(z₁, x) ∧ B₁(x) → B₂(z₁)` fires only where an S-edge
+      exists. Of what these readings emit, only T's one unit reaches every context. Other bodiless
+      clauses still do: S1's `⊤ ⊑ I`, `≤ 1` units, and the names of complex fillers.
+    - **Proof.** Each reading is an equivalence up to fresh names (a conservative extension), given
+      S2's naming:
+      - `∃R.C ⊑ D` is equivalent to `∃R.B₁ ⊑ B₂` with `C ⊑ B₁` and `B₂ ⊑ D`, by the proof below:
+        B₁ stands above C at its negative occurrence, and B₂ below D at its positive one;
+      - `∃R.⊤ ⊑ D` is `∃R.T ⊑ D` once `⊤ ⊑ T` makes T all of Δ;
+      - `⊤ ⊑ ∀R.D` is `∃R⁻.⊤ ⊑ D`, and so `∃inv(R).T ⊑ D`.
+
+      The axioms this choice emits, DL3 and `⊤ ⊑ T`, are Table 1 rows, so it adds nothing outside
+      Table 1 (choice 6's DL2 with a ⊤ filler is unchanged). It changes names, ids and rounds, and so
+      can change a capped report, as every S2 choice can (R7). It never changes a complete run's
+      answer. The normaliser differential checks it against HermiT at S2.
+
 *Proof.*
 - **Input to output:** any model of the input becomes a model of the output by setting
   `A_E^I := E^I` and `P̄^I := (P^I)⁻`.
 - **Output to input:** any model of the output satisfies the input, by induction on `E`. A name
   stands *below* what it names where the occurrence is positive (`A_E ⊑ E`), and *above* it where
-  the occurrence is negative (`F ⊑ B`, `{o} ⊑ X`, `∃R.Self ⊑ X`). So putting the named concepts
-  back in place of the names can only grow each disjunct, and `⊤ ⊑ NNF(¬C ⊔ D)` still holds.
+  the occurrence is negative (`F ⊑ B`, choice 11's `C ⊑ B₁`, `{o} ⊑ X`, `∃R.Self ⊑ X`). So putting
+  the named concepts back in place of the names can only grow each disjunct, and `⊤ ⊑ NNF(¬C ⊔ D)`
+  still holds. For a
+  GCI choice 11 reads as DL3, `∃R.B₁ ⊑ B₂` with `C ⊑ B₁` and `B₂ ⊑ D` gives `∃R.C ⊑ ∃R.B₁ ⊑ B₂ ⊑ D`,
+  and T is ⊤ in every model of `⊤ ⊑ T`.
+- **Input to output, for choice 11:** set `B₁^I := C^I`, `B₂^I := D^I`, `T^I := Δ^I`; then
+  `∃R.B₁ ⊑ B₂` is the input GCI itself.
 
 So the output is a conservative extension of the input, and agrees with it on every entailment over
 the input signature. This is the standard argument for the transformation [TGH21] §2.3 cites. It is
-written out here because two choices are HOWL's own: one name per distinct `E`, and the inverse
-names.
+written out here because the naming is HOWL's own: one name per distinct `E` (with the choices
+above), the inverse names `P̄`, and DL4's `S_{B₂}`, which [TGH21]'s own translation introduces.
 
 **S3 — the calculus, as published.** [TGH21]:
 - **Tables 2 and 3.** In a context: Core, Hyper, Eq, Ineq, Factor, Elim, Join and Nom. Between
@@ -2169,14 +2375,93 @@ names.
 - **Definition 5:** the expansion strategies.
 - **Definition 3:** the context structure, with its root context `v_r`.
 
+**As HOWL stores them** (`src/sriqctx.slop`):
+- **The structure.**
+  - It holds the contexts (each a core and whether it is `v_r`), each context's clause set, the
+    edges `⟨v, w, f⟩` and `⟨v, w, u⟩`, and the constants (the order's table).
+  - Every context shares S5's one order, so θ is not stored.
+  - Ids: `v_r` is 0, `v_⊤` is 1, and `v_B` is 2 + B for each class B of the input signature (S4). In the ABox split's
+    Run H, the hidden query classes' contexts follow, in the order of their ids.
+    Contexts a strategy adds follow.
+  - A context other than `v_r` is identified by its core, so a lookup by the empty core finds
+    `v_⊤`, never `v_r` (Definition 5: `v ≠ v_r`).
+- **The trigger sets** are read off O's clause bodies once, as flags by id, so each membership
+  test is loop-free:
+  - a body's `B(x)` puts `B(x)` and `B(u)` in Su(O);
+  - `S(x, zᵢ)` puts `S(x, y)` in Su(O) and `S(y, x)` in Pr(O);
+  - `S(zᵢ, x)` does the reverse;
+  - any role a body names gives `S(u₁, u₂)` in both;
+  - every class of O gives `B(y)` and `B(u)` in Pr(O).
+
+  Suʳ(O) and Prʳ(O) range over O's predicates.
+- **The tests read shapes, not the signature.** Membership in `Σ_u^O`, and Definition 3's
+  "in the signature of O", hold by construction rather than by a check:
+  - every constant a structure holds is in `Σ_u^O`: O's individuals, and Nom's constants, whose
+    labels' letters are O's roles;
+  - every rule builds its literals from O's predicates and those constants.
+
+  So the trigger tests and the context-clause check (`ctx-clause-ok`) take that as given, and test
+  only the forms Definitions 2 to 4 print.
+- **K₁ reads "A′ mentions x".** The PDF prints "A′ mentions xσ" (p. 15). Read literally that is
+  always empty, since no atom of Su(O) contains `f(x)` or `f(u)`. "A′σ mentions xσ" is the same as
+  "A′ mentions x", which gives Definition 3's core forms `B(x)`, `S(x, y)` and `S(y, x)`.
+  [TGH21]'s own Figure 2 has `K₁ = {B(x), R(y, x)}`.
+- **The strategies.**
+  - All three of Definition 5's strategies are built. Trivial always chooses `∅`. Eager chooses
+    `K₁`. Cautious chooses `{B(x)}` when `f` occurs in O in exactly one atom `B(f(x))` and
+    `B(x) ∈ K₁`, and `∅` otherwise (S5).
+  - Each choice is returned as a kind and a class. Z3 proves that a cautious `{B(x)}` has
+    `B(x) ∈ K₁`, so `core ⊆ K₁` holds of every choice.
+  - Cautious is the engine's (S5). Trivial and eager serve the reference evaluator and the
+    feasibility checkpoint.
+
+**[TGH21] Table 3, pinned** (AIJ 298, §4.1, p. 15, read from the rendered page, since the text
+extraction scrambles it). It is transcribed as printed. HOWL's readings follow it as bullets.
+`v` and `w` are contexts, `σ` is fixed in each row, and `Δ ⊁_v L` is S5's maximality. The caption
+omits "the precondition `Γ → Δ ∉̂ S_v` from Pred, and r-Pred", where `Γ → Δ` is the conclusion.
+
+| Rule | If | Then |
+|---|---|---|
+| Succ | `Γ → Δ ∨ A ∈ S_v` with `Δ ⊁_v A`; A contains `f(x)` if `v ≠ v_r`, else `f(u)` for some `u ∈ Σ_u^O`; and there is no `⟨v, w, f⟩ ∈ E` with `A′ → A′ ∈̂ S_w` for each `A′ ∈ K₂ \ core_w` | Let `⟨w, core′, ≻′⟩ = strat(f, K₁, D)`. If `w ∉ V`, add `w` with `core_w = core′`, `≻_w = ≻′`, `S_w = ∅`. Add `⟨v, w, f⟩` to E if absent, and, if `v = v_r`, `⟨v, w, u⟩` if absent. Add `A′ → A′` to `S_w` for each `A′ ∈ K₂ \ core_w` |
+| | where `σ = {y ↦ x, x ↦ f(x)}` if `v ≠ v_r`, else `{y ↦ u, x ↦ f(u)}`; `K₁ = {A′ ∈ Su(O) \| A′ mentions xσ and ⊤ → A′σ ∈ S_v}`; `K₂ = {A′ ∈ Su(O) \| Γ′ → Δ′ ∨ A′σ ∈ S_v, Δ′ ⊁_v A′σ}` | |
+| Pred | `v ≠ v_r` and `⟨w, v, f⟩ ∈ E`; `⋀ᵢ₌₁ᵐ Aᵢ ∧ ⋀ᵢ₌₁ⁿ Cᵢ → ⋁ᵢ₌₁ᵏ Lᵢ ∈ S_v`, where each non-ground `Lᵢ` is in Pr(O) if `w ≠ v_r`, and in Pr(O) or of the form `S(x, u)` or `S(u, x)` if `w = v_r`; each `Aᵢ` is ground; and `Γᵢ → Δᵢ ∨ Cᵢσ ∈ S_w` with `Δᵢ ⊁_w Cᵢσ` for `1 ≤ i ≤ n′` | Add `⋀ᵢ₌₁ⁿ′ Γᵢ ∧ ⋀ᵢ₌₁ᵐ Aᵢ → ⋁ᵢ₌₁ⁿ′ Δᵢ ∨ ⋁ᵢ₌₁ᵏ Lᵢσ` to `S_w` |
+| | where, if `w ≠ v_r`, `σ = {y ↦ x, x ↦ f(x)}` and `n′ = n`; else `σ = {y ↦ u, x ↦ f(u)}` for some `u ∈ Σ_u^O` (E4: `u ∈ U_H`) and `{C_{n+1}, …, C_{n′}} = core_v` | |
+| r-Succ | `v ≠ v_r`; `Γ → Δ ∨ Aσ ∈ S_v` with `Δ ⊁_v Aσ`, `σ = {y ↦ x}`, and `A ∈ Suʳ(O)` containing `u ∈ Σ_u^O`; and there is no `⟨v, v_r, u⟩ ∈ E` with `A → A ∈̂ S_{v_r}` | Add `⟨v, v_r, u⟩` to E, and `A → A` to `S_{v_r}` |
+| r-Pred | `⋀ᵢ₌₁ⁿ Cᵢ → ⋁ᵢ₌₁ᵏ Lᵢ ∈ S_{v_r}`; `Lᵢ ∈ Prʳ(O)` for each non-ground `Lᵢ`; `Cᵢ ∈ Suʳ(O)`, with `uᵢ` the named individual in `Cᵢ`; and for each `uᵢ` there is `⟨v, v_r, uᵢ⟩ ∈ E` such that `Γᵢ → Δᵢ ∨ Cᵢσ ∈ S_v` with `Δᵢ ⊁_v Cᵢσ` and `σ(y) = x` | Add `⋀ᵢ₌₁ⁿ Γᵢ ∧ ⋀ᵢ₌₁ᵐ Aᵢ → ⋁ᵢ₌₁ⁿ Δᵢ ∨ ⋁ᵢ₌₁ᵏ Lᵢσ` to `S_v` |
+
+- **K₁ is read as "A′ mentions x"** (above): "xσ" is `f(x)` or `f(u)`, which no atom of Su(O)
+  contains.
+- **Pred's precondition is on its own target,** `S_w`. The caption names `S_v`, the set of Table
+  2's rules, whose conclusions go to `v`.
+- **r-Pred's `Aᵢ` are read by E3, and its conclusion is restricted by E5** (below).
+- **r-Pred's `v` is not `v_r`,** though the table does not print it:
+  - with a `Cᵢ`, its edge `⟨v, v_r, u⟩` comes from r-Succ, which requires `v ≠ v_r`;
+  - with a non-ground `Lᵢ`, the conclusion has `x`, which `S_{v_r}` may not hold (Definition 3);
+  - with neither, the conclusion into `v_r` would be the premise itself, which is `∈̂`.
+- **Succ's trigger is any maximal atom with `f(x)`** (`f(u)` at the root), as printed. The rule
+  does not ask that it lie in `Su(O)σ`; `K₁` and `K₂` read only Su(O)'s atoms.
+- **r-Succ makes one instance per constant** of an atom with two, `S(u₁, u₂)` or `u₁ ≈ u₂`, since
+  the table says only "contains `u`".
+
 - **Nom is in.** It introduces auxiliary constants when "an inverse role, an at-most number
   restriction, and a nominal" interact ([TGH21] §4.1). [TGH18] adds that the rule "does not apply if
   the input ontology lacks either inverse roles, or nominals, or number restrictions."
   - An ABox-free `sriq` ontology has no nominal, so it never reaches Nom.
-  - The slice that builds Nom counts its firings on the corpus.
+  - Slice 9, which runs Nom, counts its firings on the corpus. (Slice 7 builds Nom's function and
+    runs nothing.)
 - **The depth limit Λ** is Algorithm 1 step A4's, `2^τSu · 2^τPr · (ω + ω_D)`, which meets
-  Theorem 2's precondition. HOWL computes it exactly when it is below 2⁶², and stores 2⁶²
-  otherwise. That changes no run:
+  Theorem 2's precondition.
+  - τSu and τPr count Theorem 2's atoms (Definition 4): Su(O)'s of the form `B(x)`, `S(y, x)` or
+    `S(x, y)`, and Pr(O)'s of the form `B(y)`, `S(y, x)` or `S(x, y)`.
+  - ω is Definition 9's bound on the contexts the strategy adds ([TGH21] §5.1): `|Σ_A^O|` under
+    cautious ("the cautious strategy can introduce at most m contexts"), 1 under trivial (it only
+    ever uses `v_⊤`), and `2^(m+m′+1)` under eager, for m and m′ the numbers of unary and binary
+    predicates of O. Eager's is held at 2⁶².
+  - ω_D is the number of contexts initialisation creates (A4): `v_r`, `v_⊤`, and one `v_B` per class
+    name of the input signature (S4), so that number plus 2. In the ABox split, the hidden contexts count too: Run H's
+    ω_D is the query classes plus the hidden ones plus 2, and Run C's is 2.
+  - `depth-limit` (`src/rules/sriq.slop`) computes it exactly when it is below 2⁶², and gives 2⁶²
+    otherwise, by a shift held at the cap before it can overflow. That changes no run:
   - Nom on `o_ρ` needs a clause that mentions `o_ρ`. Such a clause exists only from the round in
     which `o_ρ` was created, so Nom adds at most one to the longest label per round, and every label
     is no longer than the number of rounds run.
@@ -2184,6 +2469,10 @@ names.
     enforce ([§9](#9-cli--interface-sketch)).
   - So every label a run can build is shorter than 2⁶², and the test `|ρ| < Λ` has the same outcome
     under the stored value as under the true one.
+  - HOWL stores `max(Λ, 10,001)` (`stored-lambda`, beside `depth-limit`; G1, below). Unlike the 2⁶²
+    cap, that floor can change a run, but only one whose true Λ is at most 10,000; G1 says how. It
+    also means Λ's exact value never decides a run that saturates, so τSu, τPr, ω and ω_D are held
+    by test rows, not by an end-to-end run.
 - **Errata.** Each is read as follows, and each is checked against the completeness proof:
   - **E1.** Table 2's Nom prints its DL4 premise's head as `⋁_{1≤i<j≤n}`. Table 1 has `n+1`
     neighbours, so the head is `⋁_{1≤i<j≤n+1}`.
@@ -2216,6 +2505,167 @@ names.
       `⊤ → C(o)`, gives (112), `D(o) → F(x)`.
   - [Bate+18] Table 1 prints DL9 as `S₁(z₁,x) ∧ S₂(z₂,x) → ⊥`. HOWL uses [TGH21] Table 1's
     `S₂(z₁,x)`.
+  - **E4. Hyper at the root takes σ(x) from O's individuals and the constants Nom has created.** Table 2's Hyper at
+    `v_r` takes `σ(x) ∈ Σ_u^O`, which is infinite whenever O has a constant and a role, since a
+    label may be any length. With a body, the premises fix `σ(x)` to a constant already in
+    `S_{v_r}`. With none (`n = 0`), nothing does. For a bodiless clause whose head mentions `x` (a
+    DL1 such as `⊤ → B(x)`), the rule read literally adds `⊤ → Δσ` for every constant of `Σ_u^O`,
+    so no finite structure is saturated unless every such instance is redundant (as it is once
+    `⊤ → ⊥ ∈ S_{v_r}`). That contradicts [TGH21]'s own finite derivations
+    (§4.1) and Theorems 5 and 6. A ground bodiless clause, DL10's `⊤ → B(o)`, gives one conclusion
+    whatever `σ` is.
+    - **HOWL's reading:** `σ(x)` ranges over `U_H`: every individual of O, whether or not a clause
+      mentions it, and each auxiliary constant from the round Nom creates it (S6: "a new constant
+      takes the root's Hyper conclusions"). Sequoia does the same: its nominal contexts, one per
+      constant, are added "whenever auxiliary constants are generated within the context
+      structure" ([TGH21] §7.2.2).
+    - **Pred into `v_r` has the same defect.** Table 3's Pred with `w = v_r` takes
+      `σ = {y ↦ u, x ↦ f(u)}` "for some `u ∈ Σ_u^O`". With no body atom `Cᵢ` and an empty core
+      (`v_⊤`), nothing fixes `u`: `⊤ → x ≈ o` in `v_⊤` would give `⊤ → f(u) ≈ o` for every `u`.
+      Its `u` ranges over `U_H` too. The labels of the edges `⟨v_r, v, u⟩` are not enough: Succ
+      at the root adds that edge only when it fires, and it does not fire for `f(u₂)` when an
+      `f`-edge it can reuse already exists from `f(u₁)`. (Table 3 is built in slices 8 and 9.)
+    - **The completeness proof, relativised.** Let D be the saturated structure, and
+      `U = Orig(O) ∪ consts(D)`, O's individuals and the constants in D's clauses, so
+      `U ⊆ U_H ⊆ Σ_u^O`, and U is finite. Two facts carry the argument:
+      - **F1. Only Nom introduces an auxiliary constant.** Every other rule takes its constants
+        from its premises or from O. The only premise-free instances, root Hyper with `n = 0`
+        and Pred into `v_r` with no premise, are limited by HOWL's reading to `U_H`.
+      - **F2. Every rewrite rule of every fragment is over U.** `N_t` grounds only `x` and `y`
+        (by `σ_t`), and `S_{v_r}` has no `x` (Definition 3). `R_{R_t}` comes from `R_c`
+        (D.4.1), and the default rule is `t ⇒ c`. So no rule names a constant of
+        `Σ_u^O \ U`.
+
+      Read Appendix D with `Σ_u^O` replaced by U, and its Herbrand universe by the ground terms
+      over `U ∪ {c}`, `Σ_f^O`, the predicates of O and Q, and `true`:
+      - Appendix C's Lemmas 3 to 6 are generic.
+      - D.2's `R_{R_t}`, `Δ_{R_t}`, L1 to L7, Definitions 10 to 12, O1 to O3 and `>_t` range over
+        U. They only bound `Γ_t`, `Δ_t` and the neighbourhood, which F2 keeps inside the universe.
+      - Lemmas 7 to 23 keep their proofs: each `u` they use is taken from a clause or a rule
+        (F2).
+      - Lemma 24 holds for `u ∈ U`, if Lemma 9 is applied to the clause of `S_v` that contains
+        Nom's conclusion up to redundancy, not to the conclusion itself. That clause's constants
+        occur in D. A child constant absent from D is never named. (Definition 6's clauses (82),
+        which do name such children, are not used to build the countermodel, which is a model of
+        O, not of `C_D`; a sound initial structure stays a hypothesis of the theorem. Every
+        inference HOWL makes is a Table 2 or Table 3 inference, so Theorem 1 is untouched.)
+      - Lemma 26 needs root Hyper with `n = 0` only for `σ(x) ∈ U_H`.
+      - Lemmas 27 to 31: the chain's constants `o₁, …, oₙ` occur in D, and `o₀` is in O. The
+        witnesses come from D's clauses, and "greatest" ranges over a finite set.
+      - D.4.1 builds fragments for `c`, for each `R_c`-irreducible `t ∈ U` and for each `f(t′)`.
+        A constant's fragment uses only `R_c`, and `f(t′)`'s only `R_{t′}`, so the induction never
+        uses a hypothesis about an absent constant.
+      - Lemma 32: the precedence is finite, so the path order is well-founded. On `Σ_u^O` the
+        proof's "since ≻m is a-admissible, it is well-founded" does not follow: `o_{S¹} ≻m o_{S²}
+        ≻m …` is a-admissible.
+      - Lemmas 33 to 38 hold with U for `Σ_u^O`.
+      - Lemma 39: for `t ∈ U`, the case `n = 0` needs `⊤ → Δ{x ↦ t} ∈̂ S_{v_r}`, which
+        saturation under HOWL's reading supplies, since `t ∈ U_H`.
+      - Lemma 40 is unchanged: `nf(c)` is `c` itself or a constant of U.
+
+      Then `R*` is a Herbrand model of O over this universe that refutes `Γ_Q → Δ_Q`, and its
+      quotient, expanded arbitrarily to the rest of the signature, shows `O ⊭ Γ_Q → Δ_Q`. The
+      paper restricts its universe the same way elsewhere: `c ∉ Σ_u^O` (D.1), and constants outside
+      `Σ_u^O` and terms over `Σ_f \ Σ_f^O` get no fragment, though Lemma 38's proof assumes every
+      irreducible term has one. The restriction needs `U_H ⊇ Orig(O)` even for an individual no
+      clause mentions, because the proof builds a root fragment for each.
+
+      **What this establishes:** every step of Appendix D that depends on which constants exist
+      goes through over U, so E4's reading opens no gap that the literal reading lacks. It does not
+      establish Theorem 2 outright: the printed proof has three open points of its own (below).
+      Two reviewers found them, and the literal reading has each of them too.
+  - **E5. r-Pred carries no term `f(u)` into a context.**
+    - **The defect.** Table 3 restricts only r-Pred's non-ground head literals (`Lᵢ ∈ Prʳ(O)`), and
+      E3 carries every ground body atom as an `Aᵢ`. Either can mention `f(u)`:
+      - root Hyper on a DL2 clause `B₁(x) → S(x, f(x))`, with `⊤ → B₁(o)` in `v_r`, gives
+        `⊤ → S(o, f(o))`, and r-Pred with no `Cᵢ` adds it to every context where it is `∉̂`;
+      - from a sound structure with `B(f(o)) → B(o)` in `v_r`, which Definitions 2 and 3 allow,
+        r-Pred carries `B(f(o))`.
+
+      Definition 3 forbids every context but `v_r` a clause with a term `f(u)`. So the printed rule
+      can build a structure that is not a context structure, and Theorem 1's claim fails for it.
+      Appendix B's r-Pred case checks only "an arbitrary element in Prʳ(O) … A{y ↦ x} is a context
+      term", and never a ground literal.
+    - **HOWL's r-Pred** also requires that no literal of the conclusion mention a term `f(u)`:
+      neither an `Lᵢ` nor a carried `Aᵢ`. The `Γᵢ` and `Δᵢ` come from `S_v`, which holds none.
+      - Every non-ground `Lᵢ` is still in `Prʳ(O)`. A ground literal is then `B(u)`, `S(u₁, u₂)`,
+        `u₁ ≈ u₂` or `u₁ ≉ u₂`.
+      - In HOWL's runs the body half never refuses an instance. A1 starts `S_{v_r}` empty, and no
+        rule writes `f(u)` into a root body. This goes by a joint induction with "no other context
+        holds `f(u)`": Core's root core is empty; Hyper, Ineq, Factor, Join and Pred into `v_r`
+        copy or drop premise bodies; Eq rewrites heads only; Nom needs `x`; Succ never targets
+        `v_r`; and r-Succ adds `A → A` with `A ∈ Suʳ(O)`, which is function-free. The half is
+        there so that the claim holds of every sound structure, as Theorem 1 states.
+    - **Sound.** E5 only removes instances, so each conclusion is still entailed by Appendix B's
+      argument. Each is now a context clause that `v` may hold: `Lσ` for `L ∈ Prʳ(O)` is a context
+      literal (Appendix B), and a function-free ground literal is one in every context. r-Pred is
+      the only rule that could write `f(u)` into another context. Hyper's and Pred's substitutions
+      (Table B.5), Eq's guard ("if s₂|p = x then s₂ contains no f ∈ Σ_f^O and no y"), Succ and Nom
+      never do.
+    - **Complete.**
+      - Every instance E5 keeps is a printed instance, so HOWL's derivations are derivations of the
+        printed calculus: Theorem 2's "derivable", and D.3's Definitions 13 to 15 and Lemma 25, hold
+        of them as they stand.
+      - Only "no rule can be applied" changes. So every place the proof needs an r-Pred instance to
+        be applied must need one that E5 keeps. These are all of them:
+        - **D.4.1, condition L6, the case `t ∈ Σ_u^O`** (p. 59). The main premise is a root clause
+          `Γ′ → Δ′` with `Γ′ ⊆ Γ_Rt` and `Δ′ ⊆ Δ_Rt`. The paper writes `Γ′ → ⊥`, its image in
+          `N_t`, but `Δ′` is carried into the conclusion. Both sets are function-free (D.2.1).
+          HOWL reaches the conclusion through E3's carry and then Join.
+        - **Lemma 39, the case of a DL3, DL4a, DL7, DL8 or DL9 clause** (p. 64). These are the
+          clauses whose body has an atom `S(z₁, x)`, so DL4a is DL4's first clause,
+          `S(z₁, x) ∧ B₂(x) → S_{B₂}(z₁, x)`. The main premise is `A″₁ ∧ … ∧ A″ₙ → Δ′{x ↦ y}`: the
+          clause with `x` a constant `t` and `z₁` read as `y`.
+          - Its body atoms are of the forms `B(t)` and `S(y, t)`.
+          - Its head is `B₂(y)`, `S_{B₂}(y, t)`, `S₂(y, t)`, `S₂(t, y)` or `⊥` (Table 1).
+
+          Both are function-free. The paper's next sentence says those clauses' heads "consist
+          exclusively of equalities", which fits only DL4's at-most clause. If the case is meant to
+          cover that clause too, its head `zᵢ ≈ zⱼ` becomes `y ≈ t` or `t ≈ t′`, still function-free.
+        - **Lemma 26's r-Pred case, and the replays of Lemmas 27, 29, 30 and 31** (pp. 53–57).
+          These apply r-Pred to a subsumer of an instance's premises, or replay a derivation's own
+          steps on subsumers or on ground-decomposition nodes. A subsumer's body and head are
+          included in the original's, and a node's `Γ^Rt_w`, `Δ^Rt_w` are included in `Rt`, which is
+          function-free (Definitions 10 and 16). So each replayed instance is one E5 keeps.
+          Lemmas 27 to 31 serve only Lemma 24's case `|ρ| = Λ`, which the stored Λ rules out (G1).
+
+        Lemmas 7 to 23, 32 to 38 and 40, and Corollary 19, use no r-Pred. Appendix E is Algorithm
+        2's, which HOWL does not run.
+    - **Rejected: every `Lᵢ ∈ Prʳ(O)`,** as Appendix B's wording suggests. It is too strong:
+      `Prʳ(O)` has no inequalities, and L6's `Δ′ ⊆ Δ_Rt` can hold `u₁ ≉ u₂` (condition L1).
+    - **Other support.** The paper defines a derivation step as one whose result "is a context
+      structure for O" (p. 14), which is the filter E5 makes explicit. Sequoia's nominal contexts
+      "prevent the derivation of literals containing both constants and function symbols"
+      (§7.2.2), so the implementation never meets the case.
+    - **Status.** The owner chose the head reading on 2026-10-11 (AD ec7a6eaf, S8-1). Review
+      extended it to the carried atoms: the head alone leaves the second case above. Proposed AD
+      4bb4d611, for ratification.
+  - **Open points in Theorem 2's printed proof.** None is caused by E4, and none has been shown
+    to make the calculus incomplete. HOWL's completeness rests on Theorem 2, so each is a gap in
+    the argument HOWL cites until it is closed. **Decided** (the owner, 2026-10-10; AD 3f465834):
+    HOWL builds on Theorem 2 with these recorded and claims nothing new, and M5 (a)'s completeness
+    acceptance waits on them.
+    - **G1. Lemma 27's descent chain can break at a premise-free inference.** Lemma 27 traces each
+      literal mentioning `o_j` back through Definition 15's descent to a premise literal
+      mentioning `o_j`, or to the Nom that created `o_j`. Root Hyper with `n = 0` and Pred into
+      `v_r` with no premise produce literals mentioning a constant no premise mentions, and r-Pred
+      with no `Cᵢ` carries such a root clause to a non-root context. So the chain can stop with
+      neither case holding. Lemmas 29 to 31 replay inferences along the chain, and a break leaves
+      fewer than Λ links for Lemma 31's pigeonhole. Only Lemma 24's case `|ρ| = Λ` uses Lemmas 27
+      to 31. **Chosen** (the owner, 2026-10-10; AD d29622cd): HOWL stores Λ as at least 10,001,
+      one more than the round cap. No label then reaches Λ in a run, since labels are no longer than the rounds run, so
+      a run that saturates never meets the case `|ρ| = Λ`. The cost is that a run whose Nom
+      recursion only a smaller true Λ would cut ends capped (sound, reported incomplete) instead of
+      saturating. A true Λ that small needs `τSu + τPr ≤ 12`, since `ω + ω_D ≥ 2`.
+      `depth-limit` computes Theorem 2's value, and `stored-lambda` the value HOWL stores.
+    - **G2. `N_u` can hold rules outside `u`'s neighbourhood.** `N_u` takes every ground instance
+      of `S_{v_r}` whose body is in `Γ_u` (D.2.1), and such a clause can mention `f(u″)` for
+      `u″ ≠ u`. Definition 11's neighbourhood of `u` omits that term, and `>_u` is defined on the
+      neighbourhood. Lemma 33 assumes `f(t)`'s rules arise only in `R_t`.
+    - **G3. A reducible `c`.** When `c` is reducible in `R_c`, D.4.1 drops `R_c` from `R`, while a
+      default fragment can still add `f(t′) ⇒ c`. So `c` can be an irreducible term of `R`
+      without being irreducible in `R_c`, which Lemma 39 assumes ("if c appears, then it is
+      irreducible w.r.t. `R_c`").
 
 **S4 — queries, and what the report reads.**
 - **Initialisation** (Algorithm 1, steps A1–A2) creates:
@@ -2242,7 +2692,8 @@ names.
   - `holds(B, owl:Nothing)` is `unsat(B)`;
   - `owl:Nothing` is below everything.
 
-  Fresh names are never queried: S1's `I` and `F`, S2's `A_E` and `P̄`.
+  Fresh names are never queried: S1's `I` and `F`, S2's `A_E`, `P̄` and `S_{B₂}`. The one exception is the ABox
+  split's hidden query classes: each is an `A_E`, and only its `unsat` is read, as an inconsistency (below).
 - **The report** is extracted from these raw queries exactly as [§5.4](#54-the-el-calculus)'s K5
   extracts `el++`'s:
   - `owl:Nothing` is never an unsatisfiable finding;
@@ -2257,39 +2708,470 @@ names.
   answers, as K3's flagged run is: an inconsistent ontology entails everything, and the report says
   so.
 
+**The ABox split (slice 9j).** *Status: drafted 2026-10-14, and reviewed by Codex and then the owner before any engine
+code. Codex's first review confirmed L1–L3, L1′, the hidden queries and Run C's order. It found that a
+tautological assertion names no nominal, so not every representative has a DL10 (now the set `E`). It also asked for:
+- the universal role's reading in a union;
+- clearing every individual at the boundary;
+- the verdict's handling of caps and omissions.
+
+The second review confirmed those fixes, found no further semantic counterexample, and asked for four more, all made:
+- a definitive finding's precedence over an omission;
+- that S1's guard may omit differently in each run;
+- the comparison with the reference;
+- the original signature as Run H's query classes.
+
+**The model-theoretic argument closes. The owner reviewed it on 2026-10-14, and slice 9j implements it.***
+
+`sriq` decides consistency, unsatisfiability and subsumption, and nothing about individuals (Requirement c0f9bfb3).
+Class nominals are out of profile, so an individual occurs only in assertions. So an input is answered by two runs, and
+neither needs the ABox whole:
+- **Run H,** for the hierarchy: every individual is gone, and each distinct type set becomes a hidden query class. It
+  has no constant, so R8's deferral applies.
+- **Run C,** for consistency only: whatever the ABox says beyond class assertions, with no query context.
+
+On CCO, all 350 individuals carry class assertions only, in 35 distinct type sets, so Run C does not run.
+- **Definitions.** `K = (T, A)` is what the gate accepts: `A` the assertions, `T` everything else. The data lemma's
+  axioms never reach S0, so `T` is what S0 reads besides `A`.
+  - An individual `o` is **foldable** when it occurs in `A` only in class assertions, and in `DifferentIndividuals`
+    lists, at most once in each.
+    - Its **type** is the set of classes asserted of it, compared as the accepted axioms write them (`concept-cmp`). Two
+      equivalent types written differently, such as `A ⊓ B` and `B ⊓ A`, each get a representative. That is one hidden
+      class more, and still sound and complete. An individual with only a declaration is foldable, with the empty type.
+    - Every other individual occurs in a property or negative property assertion, in `SameIndividual`, or twice in one
+      list. A list with a member that is not an individual makes every member unfoldable, so the list reaches S0 whole
+      and is refused as the unsplit input's is.
+  - `A_rest` is every assertion except the foldable individuals' class assertions. In it, each `DifferentIndividuals`
+    list is kept only with its members that are not foldable, and only when two of them remain.
+  - **Representatives:** for each distinct non-empty type, the least individual by IRI with that type.
+  - `K_H = (T, {C(o) | o a representative, C in its type})`, and `K_C = (T, A_rest)`.
+- **L1 — disjoint unions.** Let `I_j`, for `j` in a non-empty set `J`, be interpretations with pairwise disjoint domains.
+  Their disjoint union `U` has:
+  - domain `⊎ Δ^{I_j}`;
+  - `A^U = ⊎ A^{I_j}` for each class, and `R^U = ⊎ R^{I_j}` for each ordinary role;
+  - `owl:topObjectProperty` as `Δ^U × Δ^U` and `owl:bottomObjectProperty` as `∅`, as OWL fixes them.
+
+  Then:
+  - **(i) Concepts.** `C^U = ⊎ C^{I_j}` for every concept of the accepted language (no nominals, and no universal
+    role outside a super-role). By induction:
+    - names, `⊤` and `⊥` are immediate;
+    - `¬`, `⊓` and `⊔` act part by part;
+    - an element's `R`-successors in `U` (for `R` or `R⁻`) are exactly its successors in its own part. So `∃`, `∀`,
+      `≥n`, `≤n` and `∃R.Self` agree with that part.
+  - **(ii) Axioms.** If every `I_j` satisfies `T`, so does `U`:
+    - a GCI, by (i), and so `DisjointUnion`;
+    - a role inclusion with a chain, since a chain of pairs never leaves a part;
+    - every characteristic: transitive, symmetric, asymmetric, reflexive, irreflexive, functional,
+      inverse-functional, and disjoint roles, each read part by part;
+    - `R ⊑ owl:topObjectProperty`, the universal role's only accepted use, which holds in every interpretation.
+  - **(iii) Assertions.** An individual interpreted inside part `j` satisfies the class assertions that `I_j` gives it.
+    Two individuals in different parts are different, and related by no ordinary role.
+- **L1′ — clauses.** A set of [TGH21] Table 1 clauses of the forms DL1–DL9 (no constant) is closed under disjoint
+  union, with each function symbol read part by part.
+  - In every one of these forms, each variable `zᵢ` occurs in a body atom `S(x, zᵢ)` or `S(zᵢ, x)`.
+  - So an assignment that puts some `zᵢ` in another part than `x` falsifies the body.
+  - Any other assignment stays inside one part, which is a model.
+- **L2 — the hierarchy needs no ABox.** If `K` is consistent, then `K ⊨ B ⊑ A` iff `T ⊨ B ⊑ A`, for any concepts `B` and
+  `A` of the accepted language, and so for unsatisfiability.
+  - **⇐:** monotonicity.
+  - **⇒:** take a model `I` of `T` with `e ∈ B^I \ A^I`, and a model `J` of `K`. Interpret every individual in `J`'s
+    part of `I ⊎ J`. That is a model of `K` (L1 (ii), (iii)), and `e` is a counterexample there (L1 (i)).
+- **L3 — consistency splits.** `K` is consistent iff `K_C` is consistent and `K_H` is consistent.
+  - **⇒:** both are contained in `K`, up to the restricted lists, which are weaker.
+  - **⇐:** take a model `J` of `K_C`, and a model `I` of `K_H`.
+    - For each foldable `o` with a non-empty type, let `I_o` be a copy of `I` in which `o` is interpreted as that type's
+      representative is in `I`. For each foldable `o` with the empty type, let `I_o` be any model of `T`; `J` is one.
+    - Interpret each foldable `o` in its own part of `J ⊎ ⊎_o I_o`, and the others in `J`.
+    - By L1 that is a model of `T`, of `A_rest` (in `J`'s part), and of every foldable `o`'s class assertions (its type
+      holds in its part).
+    - Every `DifferentIndividuals` list holds. Two of its members in different parts are different. Two members in `J`
+      are both not foldable, so they are in the restricted list, which `J` satisfies.
+  - When `A_rest` is empty, `K_C` is `T`, and `K_H` entails `T`. Then `K` is consistent iff `K_H` is.
+- **Run H.** `K_H` goes through S0–S5 as any input does, and the clause boundary changes one thing.
+  - **What S2 makes of `K_H`.**
+    - S0 reads `C(o)` as `{o} ⊑ C`, and `C` mentions no nominal.
+    - S2 reads that as `⊤ ⊑ ¬{o} ⊔ C` and names `¬{o}` through `neg-name`. That emits DL10 `⊤ → A_o(o)` once for the key
+      `{o}`, and `A_o(x)` appears in the bodies of the rest.
+    - A DL11 clause comes only from a positive nominal (`define-pos`): a property assertion or `SameIndividual`, and
+      `K_H` has neither. Nor does S1 make or move a nominal.
+    - **An assertion simplified to `⊤` names nothing.** `ClassAssertion(owl:Thing a)`, or any `C` whose canonical NNF
+      holds `⊤` as a disjunct, gives `¬{a} ⊔ ⊤`, which `gci-nnf` canonicalises to `⊤` before the nominal is named. So
+      no `A_a` and no DL10 exist for `a`. A tautology S2 does not simplify, such as `P ⊔ ¬P`, still names `{a}`. Let `E`
+      be the representatives for which S2 does emit `dl10(o, A_o)`.
+    - So `NF(K_H) = O′ ∪ {⊤ → A_o(o) | o ∈ E}`. `O′` holds only DL1–DL9 clauses, `A_o` is a fresh name, a different one
+      for each `o`, and no individual occurs in any clause of `O′`.
+  - **The fold.** The boundary drops each `⊤ → A_o(o)`, and clears **every** individual from the constants. The
+    signature's individuals become constants on their own (`individuals-of`), so dropping the units alone would leave
+    some. The run reads `O′`. Its query classes are the class names of the **original input's** signature, carried
+    through S5, not rebuilt from `K_H`. That keeps a class whose only occurrence is an assertion on an individual that is
+    not foldable. Each `A_o` for `o ∈ E` is a **hidden query class**:
+    - it gets a context `v_{A_o}` with core `{A_o(x)}`, after the query contexts;
+    - its one raw query is `unsat(A_o)`: `A_o(x) → ⊥ ∈̂ S_{v_{A_o}}`;
+    - it is never reported.
+    - `A_o` stays a fresh name in S5's ids and ranked order.
+    - C1 holds by Core. C2 holds vacuously, as the query has an empty head.
+  - **Claim F.**
+    - (a) `K_H` is consistent iff `O′` is consistent and no `A_o` is unsatisfiable w.r.t. `O′`.
+    - (b) If `K_H` is consistent, then for query classes `B` and `A`, `K_H ⊨ B ⊑ A` iff `O′ ⊨ B(x) → A(x)`, and so for
+      unsatisfiability and `owl:Thing`.
+    - **Proof,** for a normalisation without omissions: by S0–S2's correctness, `K_H`'s answers are `NF(K_H)`'s. With an
+      omission, S1 and S2 stay sound but no longer equivalent, and only the run's definitive findings stand (below).
+      - **(a) ⇒:** a model of `NF(K_H)` is a model of `O′` in which each `A_o` holds `o`.
+      - **(a) ⇐:** take a model `M_o` of `O′` with an element `d_o ∈ A_o` for each `o ∈ E`. Their disjoint union is a model
+        of `O′` (L1′), and interpreting each `o` as `d_o` makes it a model of `NF(K_H)`. When `E` is empty, a model of
+        `O′` is one of `NF(K_H)`.
+      - **(b) ⇐:** monotonicity.
+      - **(b) ⇒:** take a model `M` of `O′` with a counterexample, and `M*` of `NF(K_H)`. `M ⊎ M*`, with the constants in
+        `M*`, is a model of `NF(K_H)` (L1′) holding the counterexample.
+  - Run H mentions no constant, so R8's deferral applies under cautious or trivial. A hidden query has its body in its
+    core, so R8's conclusion covers it as it covers `unsat(B)`.
+- **Run C,** when `A_rest` is not empty, reads `NF(K_C)` with **no query class**: `nquery = 0`.
+  - Initialisation makes only `v_r` and `v_⊤`. S5's ranked order then ranks every class as a fresh name, by id.
+  - That order is one of 9g's family (the query classes are none), so it is admissible. The one query, `inconsistent`,
+    has an empty head, so C2 holds vacuously in `v_⊤`.
+  - Run C reads only `inconsistent` (S4, with the root's early stop). It has constants, so R8's deferral stays off.
+- **The verdict.** By L3 and Claim F (a):
+  - **For complete runs without omissions:** `K` is **inconsistent** iff Run H derives `⊤ → ⊥` in `v_⊤`, or
+    `unsat(A_o)` for some `o ∈ E`, or Run C derives `⊤ → ⊥`. Run C's early stop at the root counts, read through the
+    shared ground view as S4 reads it.
+  - **Otherwise,** `K`'s raw answers are Run H's (L2 for `K` and for `K_H`, then Claim F (b)).
+  - **Order:** Run H runs first. If it finds `K` inconsistent, Run C does not run.
+  - **An inconsistency is an answer** from whichever run derives it, since every derivation is sound. It stands even when
+    the other run stopped at a cap.
+  - **A cap:** with no inconsistency found, a run that stops at a cap or out of fuel makes the input n/a.
+  - **Omissions:** the input's report carries every axiom either run omitted, as S1's size guard and the gate do today
+    (S7). A run with an omission is complete only for the smaller theory it read. So, in the absence of a definitive
+    finding, the report stays inconclusive. A derived inconsistency is definitive and stands (§6.2).
+  - **The guard can omit differently.** S1's size guard counts every S0 GCI, assertions included, up to its fixed
+    threshold. Run H, Run C and the unsplit input can therefore omit different axioms. That changes coverage, never
+    soundness.
+
+  Both runs are deterministic, and the split is a function of the accepted axioms' content, so every report stays the
+  same at every worker count (R6).
+- **The prototype** (`src/sriqabox.slop`):
+  - **`abox-split`** makes the two inputs from the gate's result. The foldable individuals and one representative per
+    type come from the accepted axioms. Run H's signature has no individual, and Run C's has the unfoldable ones.
+  - **`fold-clauses`** drops Run H's DL10 units at S5's output, and records each `A_o` as a hidden id.
+  - **`with-hidden`** (`src/sriqctx.slop`) appends their contexts after the query contexts, and **`q-hidden-unsat`** reads
+    them.
+  - **`consistency-input`** gives Run C `nquery = 0`.
+  - **`split-run`** runs Run H, then Run C, and returns the verdict.
+  - The test binary's `sriq-run` splits by default; `--no-split` runs the input whole.
+  - **Tests.** Every sriq fixture runs through the split under trivial, eager and cautious, and the following are
+    checked:
+    - the unsplit reference's verdict, and its answers when consistent;
+    - the fixture's expectations;
+    - the reference on Run H's own input, hidden classes included, giving the prototype's Run H its answers and hidden
+      verdict.
+
+    Eight new clash/control pairs (`abox-fold-*`, `abox-mixed-*`, `abox-different-*`, `abox-max-successor-*`,
+    `abox-declared-*`) each equal HermiT.
+  - **Mutants seen red:**
+    - folding an individual with a property assertion;
+    - ignoring a hidden class's unsat;
+    - skipping Run C;
+    - comparing types by their first class only;
+    - no hidden context;
+    - Run H without the representatives' assertions.
+- **The reference evaluator** keeps reading `K` whole and unsplit. The tests compare the split engine against it, so the
+  split is checked by a run that never made it:
+  - the logical answers are compared when both sides complete without omissions;
+  - otherwise neither side's definitive finding may contradict the other's.
+
+**The production run (slice 11a).** `prepare-sriq` and `reason`'s `sriq` arm (`src/howl.slop`) run the ABox split
+through the library, the same way el and el++ run.
+- **Prepare.** It gates under `sriq` in a scratch arena, splits, and normalises both runs. It then copies into the
+  Prepared:
+  - both runs' clauses;
+  - the query classes' IRIs by id;
+  - the coverage: the gate's omissions plus every chain S1's guard set aside in either run, sorted and each listed once.
+
+  A normaliser refusal is a `Fault::input-error`, and `--strict` refuses any omission.
+- **One round budget.** `max-iterations` covers both runs: Run H takes what it needs, and Run C gets the rest. The
+  `rounds` line is their sum, as el++'s phases share theirs (§5.4).
+- **The clause budget** is 500,000 clauses per run (`SRIQ_CLAUSE_BUDGET`). The owner chose 1,000,000 on 2026-10-13.
+  It was halved before release, pending the owner's review (proposed AD; slice 11b): a W3C pigeonhole test
+  (`WebOnt-description-logic-022`, 4 KB) passed 6 GB at 1,000,000, because its clauses are large, about 21
+  literals each. At 500,000 it stops at 1.1 GB, and CCO still completes (1.0 GB). A run stops when
+  its store passes the budget at a round boundary, or when a round's conclusions would take it past: the store's
+  count plus the round's conclusions so far exceeds the budget.
+  - **Why inside a round (slice 11b).** One round can outgrow memory long before the store passes the budget. OBI's
+    Run H holds 716k clauses after round 6, and its seventh round takes the process from 5 GB past 16 GB. Its
+    Run C's root derives 3.98M Hyper conclusions in one step. So the count is read after each context, and within
+    a context after Hyper's every (clause, atom) pair and after each later Table 2 step. The rest of the round is
+    skipped once the count passes.
+  - **The pairing loops read it too.** Eq, ground Eq and Join, and the Joins with G read the room (`Here.room`)
+    between premises, so a context whose premises pair quadratically stops early. So do Pred and r-Pred (slice
+    11c): between edges, between jobs, and between one job's choices. Before that, one context's Pred kept every
+    conclusion of every job, and the fuzzer's seed 158 reached 7.8 GB in one round; it now peaks at 2.7 GB.
+  - **A firing's working memory is its own.** Each of Hyper's and Pred's (and r-Pred's) choices, each Eq
+    firing and each Join firing is built in a scratch arena, and only its conclusion is copied out. Their
+    intermediate lists cost 12 to 20 KB per conclusion, and kept in the round's arena they were what filled
+    memory: the pigeonhole test's Eq passed 9 GB, and a generated ontology's Pred (slice 11c's fuzzer, seed
+    14) passed 12 GB. Pred's choices share one scratch arena, emptied after each (`reuse-arena`): one arena per
+    choice spent 40% of Pred's time in malloc and free. Succ's test for an old premise whose K₂ a new clause
+    touches (`k2-touched-apart`) runs its K-set query in a scratch arena too, since only the answer is kept; the
+    fuzzer's seed 367 went from 0.7 GB past 12 GB in one round without it, and peaks at 3.0 GB with it.
+  - **An abandoned round is not committed.** The run reports the store as the previous round left it, with that
+    round count, as the choices cap's stop does.
+  - **It is deterministic.** A round's conclusions depend only on the store it starts from, and the count only
+    grows. So whether the round passes the budget depends on neither the context order nor the worker count, only
+    on how soon that is seen.
+  - **Tests.** Over budgets 1 to 300 on two fixtures, Run H stops exactly where this rule says, computed from each
+    round's store and conclusion counts, and reports the run capped at the same round. Some budget stops it inside
+    a round.
+  - **Mutants seen red:** the in-round check dropped, the abandoned round committed, and the room measured without
+    the store. The checks inside a context only skip work: the round is abandoned either way, so no answer can show
+    them. Their evidence is OBI: under `--profile sriq` it stops in 11 s at 4.9 GB, and under `auto` it steps down in
+    13 s at 5.2 GB. Without them, both runs pass 16 GB.
+  - It is a count, not a clock, so the report stays a function of the input and the budget (§6.8).
+  - It binds every `sriq` run. A run that passes it stops at `resource-limit`, and `auto` steps
+    down from it ([§5.1](#51-profiles-are-selectable)).
+  - It is `ReasonerConfig.clause-budget`, which `default-config` sets and no host option reaches:
+    the C and Rust surfaces do not change, and a test lowers it.
+  - **It caps one rule instance's choices too (slice 11c).** The choices cap (`RefConfig.prod`: the choices of
+    one Hyper or Pred instance, one side premise per slot) is the budget in production. The scratch arenas made
+    a discarded choice cost no memory, so a product could outgrow time with the store unchanged: the fuzzer's
+    seed 329 (38 lines) spent 85 s in its fifteenth round at 90 MB, every conclusion redundant. Its largest Pred
+    job grew from 880 choices in round 13 to 119,658 in round 14 and past 500,000 in round 15. Now that job
+    stops the run as the choices cap does (`rs-product`), uncommitted, in 12 s. That stop is the budget's: it is
+    `resource-limit`, and `auto` steps down from it (`over-budget`, `src/howl.slop`). A test runs the fixture
+    `corpus/fixtures/sriq-budget/pred-choices.ttl` at budget 50,000; the step-down ignoring this stop was seen
+    red.
+  - The contexts and Nom caps stay off outside the tests.
+- **Termination.**
+  - It is `fixpoint` when every run that ran finished, at its fixpoint or at ⊤ → ⊥.
+  - Otherwise it is `resource-limit(rounds)`.
+  - An inconsistency is definitive whatever stopped the other run, and §6.2's verdict reads it from the findings.
+- **Cancellation** is read at every round boundary, ahead of the round cap, as `run-ksc` reads it. A cancelled Run H
+  skips Run C. The result is `Fault::cancelled`.
+- **The worker count** is accepted, and the run is single-threaded until slice 10. R6 makes the report the same at
+  every W.
+- **The findings** (`split-findings`) are read off Run H's final structure in one pass per query context.
+  - `holds(B, A)` is `B(x) → A(x) ∈̂ S_{v_B}`. That is never a tautology, so it holds exactly when some stored clause has
+    its body within `{B(x)}` and its head within `{A(x)}`; an empty head is `unsat(B)`.
+  - `holds(⊤, A)` is the same in `v_⊤`, with an empty body.
+  - The rows are built as el's and el++'s are: `owl:Thing ⊑ owl:Thing`, each `holds(⊤, A)`, and per query class
+    either `(B, ⊥)` or `B ⊑ owl:Thing` with its subsumers. They are sorted, each once, and empty under inconsistency.
+  - The probes read these findings.
+- **Tests.**
+  - Every fixture runs through `prepare-in-profile` and `reason`. Its verdict, termination, rounds and findings must
+    equal the split run's with the same configuration, and S4's raw queries on that run's Run H.
+  - Rows check cap 0, the shared budget, a clause budget of 5, cancellation (at the default cap and at cap 0), and
+    S1's omitted chain listed once.
+  - **Mutants seen red:** the hidden unsat ignored in the findings, the budget not shared, the cancel unchecked, the
+    cancel read after the cap, and S1's omissions dropped.
+
+**The harnesses (slice 11c): M5's evidence.**
+- **(c) The differential.** `make probes` includes `corpus/fixtures/probes-sriq/`: one load-bearing probe per
+  construct §5.5 adds, 20 in all. HOWL and HermiT pass every one; ELK passes 1, since it cannot read the rest.
+  The record is `corpus/oracle-capabilities-sriq.txt`.
+  - `make diff-fixtures` compares 140 fixtures with HermiT and finds them clean. Under `sriq`, HermiT routes
+    every input.
+  - `make diff-corpus` finds BFO-core and CCO clean against HermiT (CCO: 11,922 subsumptions). OBI is skipped,
+    being out of reach.
+  - RO, GO and EL-GALEN's `sriq` projections stop at the clause budget. They are recorded as `result=budget`
+    with their report's hash, so a change shows (`corpus/corpus-differential-sriq.txt`).
+- **(d) Conformance.** Under `sriq`, the selection is every approved Direct-Semantics W3C test, not the EL
+  profile's only. The record is `corpus/conformance-status-sriq.txt`:
+  - W3C (in)consistency: 115 ok, 0 FAIL;
+  - W3C entailment: 7 ok, 0 FAIL;
+  - ELK's classification tests: 58 ok, 0 FAIL;
+  - stopped at the clause budget: 6 W3C tests, recorded as `budget`. Their findings are partial but sound, so
+    each is still checked for what it claims (`budgeted`): an inconsistency the test says is wrong, a
+    non-entailment the report entails, or (ELK's tests) a subsumption the expected taxonomy lacks fails the run.
+    A report is validated (`entdiff.parse(partial=True)`) before it is taken for a budget stop, in every
+    harness.
+- **(e) Fuzzing.** `abox_fuzz.py --sriq` generates 400 ontologies with unions, complements, ∀, inverse roles,
+  qualified cardinality and Self, and with role characteristics and disjoint roles on simple roles. Their ABoxes
+  have equality, inequality and negative assertions. The record is `corpus/abox-fuzz.txt`: 333 equal HermiT's
+  answer (207 of them inconsistent), 67 stop at the budget, and none fails. A budget-stopped run is never diffed,
+  but each of its findings (an inconsistency, an unsatisfiable class, a subsumption) must hold in HermiT's
+  answer (`entdiff.unsound`). Each run went through a per-child guard of 8 GB and 300 s, and none tripped it;
+  the heaviest measured, seed 367, peaks at 3.0 GB.
+- **(f) and (g)** are slice 11b's: determinism at every cap, and BFO-core and CCO exit 0.
+- **(h) Performance** against HermiT and Sequoia is not yet recorded. A pinned Sequoia runner is owed.
+- **Found on the way, fixed in every rung.**
+  - **An omitted literal now renders on one line.** Its value is escaped as N-Triples, since an XML literal
+    with newlines broke a report.
+  - **A structural predicate on a named class is reported.** `:c owl:intersectionOf (…)` is OWL 1's way of
+    stating an equivalence. It was dropped without an omission, so the run could report coherent. It is now
+    omitted, and the run inconclusive (`hazards/named-class-intersection`). So is `owl:oneOf` on one, as in
+    W3C `WebOnt-Thing-004` (`owl:Thing owl:oneOf ( :s )`), which moves from `ok` to `outside` in the el and
+    el++ records. The census does not flag that triple (`census-clean` in the el++ record), so the census is the
+    weaker check here.
+- **The harnesses take HOWL's binary from `$HOWL`**, so a caller can wrap each child in its own memory and time
+  guard; the slice's runs did (4 to 8 GB, 300 s). A guard on the harness process alone does not reach its
+  children: one left an orphaned howl growing. No guard is part of the repository.
+
+**Wiring (slice 11b).** `sriq` is selectable: `--profile sriq`, `auto` (with the step-down,
+[§5.1](#51-profiles-are-selectable)), the C API and the Rust crate.
+- **Tests.**
+  - `test-profile-selection`: an explicit `sriq` runs, and `auto` picks `sriq` for a union or an
+    inverse.
+  - `test-auto-step-down`: a lowered budget steps `auto` down to the rung `el` and `el++` alone
+    choose. An explicit `sriq`, a round cap and a cancel never step down. Over budgets 1 to 400 on
+    `step-down-early-unsat`, `auto` steps down exactly when the explicit run stops at the budget
+    with nothing definitive, and both cases occur.
+  - **The three-rung report equality:** every `el` fixture gives the same report under `el`,
+    `el++` and `sriq`, `profile` and `rounds` aside (K5, S4). The same holds of `el++` and `sriq` on
+    every `el++` fixture both run complete without omissions (at least ten).
+- **Surfaces.**
+  - **Goldens:** `corpus/goldens/sriq/` covers every `sriq`, `v0` and `data` fixture, and pins
+    BFO-core and CCO by hash.
+  - **Acceptance:** `make acceptance` checks `sriq`'s exit codes, `corpus-acceptance` checks M5 (g),
+    and `determinism --profile sriq` runs every cap from 0 to R on the fixtures.
+  - **APIs:** the C API test and the Rust crate's tests run `sriq` at every worker count.
+
 **S5 — representation.** [TGH21] leaves each of these choices open, so none needs a new proof. Each
 is fixed here so that reports are input-determined.
 - **One expansion strategy, fixed: cautious** ([Bate+18] §4.2). It picks `v_B` when `f` occurs in
   exactly one atom `B(f(x))` of `O` and `B(x) ∈ K1`, and `v_⊤` otherwise.
   - It is admissible: Definition 9, at most one context per class name.
   - It makes successor contexts and query contexts one family.
-  - With eager Hyper, it gives Proposition 12's linear correspondence on EL.
+  - It gives Proposition 12's linear correspondence on EL under S6's rounds, as the proof below
+    shows, although S6 gives Hyper no priority.
   - It is a pure function of `f` and `K1`.
+
+  **Proposition 12 under S6.** [Bate+18] Proposition 12 assumes that "the Hyper rule is applied
+  eagerly". Its proof uses that twice, in each direction of the correspondence, and for one reason:
+  for a DL2 axiom `B₁ ⊑ ∃S.B₂`, "both clauses are derived before the Succ rule is applied", so the
+  cautious strategy finds `B₂(x) ∈ K1` and picks `v_{B₂}`. S6 gives Hyper no priority, but it
+  supplies exactly that:
+  - The two clauses, `⊤ → B₂(f(x))` and `⊤ → S(x, f(x))` in `v_{B₁}`, are Hyper conclusions of the
+    DL2 axiom's two DL-clauses `B₁(x) → B₂(f(x))` and `B₁(x) → S(x, f(x))` from one premise, the
+    clause in which `B₁(x)` is maximal. So both instances run in the round after that premise
+    arrives, and both conclusions join one `Δₙ₊₁`, or were already in `Sₙ₊₁`.
+  - On EL, `f` occurs only in that axiom's clauses. So every Succ trigger for `f` is one of those
+    conclusions or descends from them, and Succ for `(v_{B₁}, f)` runs no earlier than round
+    `n + 1`, reading `Sₙ₊₁`, which holds both.
+  - What changes is the count of repeated instances, which stays within a constant factor:
+    - an instance with several premises in one `Δₙ` may run once per such premise, and an EL
+      DL-clause (DL1 or DL3) has at most two body atoms;
+    - Succ for `(v, f)` is re-checked whenever a clause contributing to its `K2` arrives (S6), and
+      on EL those are only the two clauses of `f`'s DL2 pair.
+
+    So the correspondence stays linear. The feasibility checkpoint measures inferences per class on
+    GO and EL-GALEN against `el++`.
+  - **One case is outside the argument: a context holding `⊤ → ⊥`.** There `∈̂` holds by
+    subsumption, the commit deletes the clauses `⊤ → ⊥` subsumes, and the DL2 pair may never be in
+    the store, so Succ does not fire where [BBL05]'s CR3 still adds the edge. [Bate+18]'s proof has
+    the same case: its invariant "`B₂ ∈ S(B₁)` implies `⊤ → B₂(x) ∈ S_{v_{B₁}}`" fails once Elim
+    removes that clause. The cost reading survives: `⊤ → ⊥` subsumes every clause, so once it is
+    committed it is the context's only clause and no candidate enters, and its only further
+    inferences are Pred's, which are [BBL05]'s CR5.
 
   Completeness holds for any admissible strategy (Theorem 2). Capped reports and `rounds` depend on
   which strategy runs, though, so the strategy is not a runtime option. The feasibility checkpoint
   measures eager against it, and a change is an amendment to this paragraph.
-- **One context order, for every context:** [TGH21] §4.2's Sequoia order, admissible by Appendix A.
-  It is the least order containing the lexicographic path order on a-terms induced by `⋗`, plus
-  that section's seven comparisons. It compares two p-terms only when one is the other with smaller
-  a-terms, so distinct class names are never ordered against each other.
+- **One context order, for every context:** [TGH21] §4.2's Sequoia order, admissible by Appendix A,
+  as the reference evaluator runs it; the engine runs it ranked (below). It is the least order
+  containing the lexicographic path order on a-terms induced by `⋗`, plus that section's seven
+  comparisons. It compares two p-terms only when one is the other with smaller a-terms, so distinct
+  class names are never ordered against each other.
 
-  `⋗` orders `Σf ∪ Σu`:
+  `⋗` orders `Σf ∪ Σu`. In each comparison below, the greater id, the later IRI and the longer label
+  are the greater:
   - every function symbol is above every constant;
   - function symbols are ordered by id;
   - constants are ordered by label length, then by base individual (by IRI, as `canon.slop`'s
-    `iri-cmp` does), then by label, lexicographically.
+    `iri-cmp` does), then by label, lexicographically from the base. A label's letter `S^i` is
+    compared by `S`'s id, then by `i`.
 
-  That order is a-admissible (Definition 7). It is total over every constant Nom could ever invent,
-  so it is fixed before the run.
+  That order is a-admissible (Definition 7): a longer label is greater, and the rest only needs to
+  be total. It is total over every constant Nom could ever invent, so it is fixed before the run.
+
+  `src/sriqorder.slop` implements the order as a case table over the a-term shapes (`x`, `y`, `f(x)`,
+  `u`, `f(u)`), which Appendix A's proof of transitivity allows. A test builds the least order by
+  closure over a bounded universe of Definition 2's context terms, and requires the table to equal
+  it.
+
+  **Literals and maximality.** Literals compare as [TGH21] §2.1 says: `A` as the multiset
+  `{A, true}`, `s ≈ t` as `{s, t}` and `s ≉ t` as `{s, s, t, t}`, under the multiset extension of
+  `≻`. In Table 2's side conditions, "`Δ ⊁ L`" means that no literal of `Δ` is `≻ L`, so `L` is
+  maximal in `Δ ∨ L`; "`t ⊁ s`" means that `t ≻ s` does not hold. The paper's text extraction
+  loses the symbol; the PDF prints `⊁`.
+- **The ranked order (slice 9g, AD 1ffa7a22).** The engine adds a precedence on class names to
+  Sequoia's order: every fresh name ranks above every query class, and fresh names rank among
+  themselves by id. A query class is one of the input's, an id below `nquery`; the fresh names are
+  S1's and S2's, at or above it. Query classes stay unordered among themselves.
+  - **Why.** Sequoia's order makes every disjunct of a head `F₁(x) ∨ F₂(x) ∨ Q(x)` maximal, so
+    Hyper resolves on each one. On CCO after 9f, context 41's DL3 clauses `A(x) ∧ R(z, x) → B(z)`
+    met 1,000 to 2,600 premises selecting a fresh `A(x)`, times ~300 selecting `R(z, x)`, and every
+    choice fired: more than 10.6M conclusions in round 10. [TGH21] §8 names the cause: most
+    timeouts were on ontologies "where saturation produced many clauses with large numbers of
+    disjuncts in the head".
+  - **The order.** It is the least order containing Sequoia's and `F(x) ≻ G(x)` for every pair of
+    class names where `F` ranks above `G`. Between unary atoms with different predicates, that
+    closure is exactly: `P(t) ≻ P′(t′)` iff `P` ranks above `P′`, `t` is `x` or some `f(x)`, and
+    `t′` is `x` or `y`.
+    - A chain from `P(t)` to `P′(t′)` stays among unary atoms: Sequoia's order puts a p-term only
+      above a-terms and above the same predicate with smaller a-terms, and never an a-term above a
+      p-term.
+    - So it reads `P(t) ⪰ P(x)`, one or more rank steps (rank is transitive), then
+      `P′(x) ⪰ P′(t′)`. `t ⪰ x` holds only for `x` and `f(x)` (item 3; `x` is never compared with a
+      constant). `x ⪰ t′` holds only for `x` and `y` (item 1).
+  - **Strict.** The order is irreflexive, since no name ranks above itself and Sequoia's is strict.
+    It is transitive, case by case:
+    - rank, then the same predicate: `P(t) ≻ P′(t′) ≻ P′(t″)` needs `t′ ≻ t″`, so `t′` is `x` and
+      `t″` is `y`, which is allowed;
+    - the same predicate, then rank: `P(s) ≻ P(t) ≻ P′(t′)` needs `s ≻ t` with `t` in `{x, f(x)}`,
+      so `s` is some `g(x)`, which is allowed;
+    - rank, then rank: the middle term is `x`, and rank is transitive;
+    - rank, then down to an a-term or `true`: `P(t) ≻ P′(t′) ≻ s` with `t′` in `{x, y}`, so `s` is
+      `x`, `y` or `true`, and `P(t)` is already above each of those by items 4 and 5 (for example
+      `F(x) ≻ Q(x) ≻ y`).
+  - **Admissible (Definition 7).**
+    - (1) to (3) concern `true`, p-terms against `x`, and a-terms, and are Sequoia's unchanged.
+    - (4): p-terms do not nest, so monotonicity and the subterm property concern only a-terms
+      inside one p-term, as before.
+    - (5) constrains what a function-free p-term mentioning `y` or a constant may dominate. The new
+      comparisons' greater side is `P(x)` or `P(f(x))`, neither of which is such a p-term, and no
+      atom over `y` or a constant gains a comparison as the greater.
+  - **C2 for every raw query** (Theorem 2):
+    - `unsat` and `inconsistent` have `ΔQ = ∅`, so C2 holds vacuously.
+    - `holds(B, A)` and `holds(⊤, A)` have `ΔQ = {A(x)}` with `A` a query class. `A` ranks above
+      nothing, so `A(x)` dominates only `x`, `y`, `true` and atoms over `y`, all of which C2
+      excludes.
+    - This is why fresh names rank **above** the query classes. [TGH21] §7.1 says Sequoia makes
+      them smaller. Read literally, that breaks C2: with `B ⊑ T ⊔ A` and `T ⊑ ⊥`, `T` fresh and
+      `A ≻ T`, the clause `⊤ → T(x) ∨ A(x)` never resolves `T(x)`, so `B ⊑ A` is missed. A test row
+      runs that ontology. Bate+18 §5.4's "smallest" advice is for a consistency check, where
+      `ΔQ = ∅`.
+  - **One order still serves every context**, so S6's single-order arguments (the shared ground
+    view, D4) are untouched. Theorem 2 then gives completeness for the engine as for the reference.
+    The reference keeps Sequoia's order as printed, and the tests require both to give the same raw
+    answers, which checks this independently.
 - **Ids are created from content.** These get dense ids in the canonical order of what they name,
   never in input order, as the gate's canonical forms already are
   ([§6.8](#68-determinism-binding)):
   - class and role names;
-  - S1's `I` and `F`, and S2's `A_E` and `P̄`;
-  - function symbols and constants.
+  - S1's `I` and `F`, and S2's `A_E`, `P̄` and `S_{B₂}`. `P̄` is keyed by `P`, and `S_{B₂}` by the
+    pair `(S, B₂)`;
+  - function symbols and constants. Each DL2 function symbol `fᵢ` is keyed by its axiom's content
+    and its position `i`.
 
   A context's identity is its core.
+- **The calculus reads flat records of dense ids** (`src/sriqclauses.slop`, data model only). One
+  boundary numbers, once, before any rule runs:
+  - **classes:** the input's class names and any other class a clause names (one used but not
+    declared), in IRI order; then each `A_E` by its content id;
+  - **roles:** each `P` a clause names, in IRI order; then each `P̄`, in `P`'s order; then each
+    `S_{B₂}` by its content id;
+  - **function symbols:** as above;
+  - **constants:** the input's individuals and any other a clause names, in IRI order. The constants
+    Nom invents follow them.
+
+  An a-term is a kind (`x`, `y`, `zᵢ`, `f(x)`, `u`, `f(u)`) with its ids. A literal is a form (an
+  atom `B(t)` or `S(s, t)`, or `≈`, or `≉`) with a predicate and two a-terms. An equality's or
+  inequality's two a-terms are ordered by a fixed structural order (never `≻`), so that "`t1 ⋈ t2` is
+  identical to `t2 ⋈ t1`" ([TGH21] §2.1) is equality of records. A clause is a body and a head, each
+  sorted without repetition, since they are "treated as sets". Table 1 is expanded there, once, so
+  the rules read DL-clauses, as [TGH21] defines Hyper and the trigger sets over them.
+
+  The numbering is a bijection on the names it covers, as `el++`'s store ids are (AD 7910309f), so
+  it needs no lemma. A name it does not cover, or `owl:Thing` or `owl:Nothing` in a name's place
+  (S2 writes them as the empty body and head), is refused with its text, never dropped.
 
 **S6 — rounds, and why every report is the same at every worker count.** [TGH21]'s rules are a set
 of independent inferences, and S6 fixes their schedule. The state at boundary `n` is:
@@ -2310,13 +3192,15 @@ A round has four steps:
      store.
 2. **Create**, serially. New contexts (identified by core), edges and constants get ids in content
    order. Their Core clauses and `A → A` clauses join the candidates.
-3. **Commit**, per context shard, with one committer each. Sort the context's candidates by content,
-   then take each candidate `c` in turn, with `W` the context's current set:
+3. **Commit**, per context shard, with one committer each. Take each of the context's candidates `c`
+   in turn, in any order (R1: the result does not depend on it), with `W` the context's current set:
    - if `c ∈̂ W`, skip it;
    - otherwise delete every `w ∈ W` that `c` subsumes, and insert `c`.
 
-   What is inserted forms `Δₙ₊₁`, in context-id order and then content order, along with the new
-   edges, contexts and constants.
+   What is inserted and survives the commit forms `Δₙ₊₁`, in context-id order and then content
+   order, along with the new edges, contexts and constants. A candidate inserted and then subsumed
+   by a later one is not in it: `Δₙ₊₁` is `S_vⁿ⁺¹ \ S_vⁿ`, so `Δₙ₊₁ ⊆ Sₙ₊₁`. `src/sriqsubsume.slop`
+   implements `∈̂` and this step.
 4. **Boundary.** Check cancellation, then the cap, as `run-ksc` does. An empty `Δₙ₊₁` is the
    fixpoint.
 
@@ -2379,6 +3263,545 @@ The argument, one short step at a time:
     bottom. So a larger cap that finds `A ⊑ ⊥` replaces `A`'s `sub` lines by its unsatisfiability,
     and one that finds inconsistency drops the hierarchy. Each report is still sound (S7).
 
+**R8 — predecessor relevance (slice 9i).** *Status: drafted 2026-10-13. The first draft
+was refereed by Codex the same day and did not close (constants, root units, Nom, the shared ground
+view, Factor's lifting, edge triggers, new edges). The second draft narrowed the scope and replaced the
+lifting argument. Its partial review found that a historical trigger can make a unit relevant in a
+stale target, and that a filtered `K₂` changes Succ's conclusion. The third draft pushed units to
+every target and rested on Theorem 2's hypotheses. Its review confirmed that use of Theorem 2, closed
+the argument for trivial, and found that unrestricted Succ can still switch an `f` to a new cautious
+target. The fourth draft refreshed the target, and
+its review (the fourth) found no remaining counterexample in scope. It asked for these local
+corrections, made here:
+- a source holding `⊤ → ⊥`;
+- the continuation's Λ;
+- the forms of body atoms;
+- edge arrival as a Pred trigger.
+
+**The argument closes in scope. The owner reviewed it on 2026-10-13, and slice 9i implements it.** The idea comes from the owner-reviewed clean-room report on Sequoia
+(`~/code/research_report.md`, items 1 and 7; graph Consequences 7ff9c324 and dbf7ae4b), re-derived here
+in HOWL's terms.*
+
+Derive may ignore a clause whose body no single predecessor supplies. The clause is kept and committed
+as usual, but it is a premise of no rule until it becomes supported.
+
+- **Scope.** Deferral is on only when the input has **no constants**: no individual of O, hence
+  `Σ_u^O = ∅`. The strategy must be cautious or trivial.
+  - Then `v_r` is inert. Hyper at the root binds `x` only to `U_H = ∅` (E4), and the root holds no
+    clause.
+  - Nom never fires (it needs an `o_ρ`), r-Succ and r-Pred have no constant to name, the shared ground
+    view is empty, and no literal is ground.
+  - With any constant present, deferral is off and S6 runs unchanged.
+- **Definitions.**
+  - **The triggers of a predecessor and a function symbol.** For a context `w` and a function symbol
+    `f`, `trig(w, f)` is the union of `K₂` over **every** evaluation of Succ for `(w, f)`, whatever
+    target it names and whether or not it adds a unit. `K₂` is computed, as derive reads it, over
+    `w`'s supported clauses.
+    - S6 already re-evaluates Succ for `(w, f)` whenever a clause contributing to its `K₁` or `K₂`
+      arrives. Here, becoming supported counts as arriving.
+    - `trig(w, f)` only grows. It is history: it belongs to the run's state beside the store.
+  - **Unit pushing.** At every evaluation of Succ for `(w, f)`, after `trig(w, f)` absorbs `K₂`, the
+    engine adds `A′ → A′` to `S_v` for every `A′ ∈ trig(w, f) \ core_v` and every edge
+    `⟨w, v, f⟩ ∈ E`, unless it is already `∈̂ S_v`.
+    - This covers the edge Succ creates or confirms, and any older edge, for instance one into `v_⊤`
+      that cautious made before `K₁` grew.
+    - A unit `A′ → A′` is a tautology, so the structure stays sound (Definition 6).
+  - **Target refresh.** At the same evaluation, the engine makes sure `⟨w, strat(f, K₁), f⟩ ∈ E`,
+    creating that context if needed, even when an older edge covers `K₂`. Pushing then fills it too.
+    - `K₁` reads only clauses with an empty body, which are always supported. So it is the printed
+      `K₁`, and the refreshed edge is sound exactly as Succ's own edge would be (Definition 6, S2):
+      its target core lies in `K₁`, which the source's empty-body clauses entail.
+    - An older edge stays sound when `K₁` grows later.
+  - **Support.** A clause `c ∈ S_v` with body `Γ` is *supported* when `Γ ⊆ core_v ∪ trig(w, f)` for
+    some edge `⟨w, v, f⟩ ∈ E`, or when `Γ ⊆ core_v`.
+    - Every body atom is non-ground (there are no constants).
+    - For a fixed run's final store `F`, *relevant* means supported with `F`'s edges and `F`'s
+      final `trig`, frozen.
+  - **The schedule.**
+    - Derive reads, in each context, only the clauses supported at the round's boundary, as premises
+      and side premises of every rule, with Succ's `K₁` and `K₂` read the same way.
+    - When a stored clause becomes supported because some `trig(w, f)` grew or an edge arrived, it
+      joins the next round's `Δ`. Activation is arrival, even when the round commits no clause.
+    - The fixpoint is a round with no new clause, edge, context, activation or growth of `trig`.
+- **P1 — bodies only grow,** in the conclusion's own context.
+  - **Hyper, Eq, Ineq and Factor** conclude a body that is the union of their premises' bodies.
+  - **Join** does too here: its `A` is ground, and none occurs.
+  - **Core** concludes an empty body.
+  - **Pred** concludes in the predecessor `w` the union of its side premises' bodies in `w`.
+  - **Corollary.** "Unsupported" is upward closed under body inclusion, so an instance with an
+    unsupported premise in the conclusion's context concludes an unsupported clause.
+- **P2 — Pred reads supported clauses.** Pred along `⟨w, v, f⟩` takes `c ∈ S_v` and, for each atom `Cᵢ`
+  of its body, a side premise in `S_w` with `Cᵢσ` maximal.
+  - If those side premises are supported, then each `Cᵢσ` is maximal in a supported clause of `w`, so
+    `Cᵢ ∈ K₂(w, f)` at Succ's evaluation on that clause's arrival. Hence `Cᵢ ∈ trig(w, f)`, and `c` is
+    supported through that edge.
+  - This holds for every edge out of `w` labelled `f`, including one an earlier cautious choice
+    created before `K₁` grew. That is why `trig` is keyed by `(w, f)` and not by the target.
+- **P3 — subsumers of supported clauses are supported:** if `D ⊆ C`, then `D`'s body is in `C`'s.
+- **P4 — `y` needs a `y`-atom in the body.** Every clause of a context that mentions `y` has a body
+  atom mentioning `y`. Cautious and trivial cores have no `y`, and every rule keeps it so:
+  - units carry their atom in the body;
+  - Hyper takes its `y` from a side premise through `σ(zᵢ) = y`, and keeps that premise's body;
+  - Eq, Ineq, Factor and Join keep their premises' bodies;
+  - Pred maps `y` to `x`;
+  - Core and bodiless Hyper introduce none.
+
+  Without constants, every non-ground literal of Pr(O) mentions `y` (`B(y)`, `S(x, y)`, `S(y, x)`,
+  and `x ≈ y` if any). So a clause with an empty body and a Pr(O)-only head has an **empty** head.
+- **P5 — saturation for supported premises.** At the fixpoint, every rule instance whose premises are
+  all supported clauses of `F`, over edges of `F`, has its conclusion `∈̂ F`, and every Succ action it
+  calls for is taken.
+  - This is R4's argument. The latest premise to become supported entered `Δ`, on arrival or on
+    activation. The others were present (R3) and supported, since support only grows.
+  - **Edges are premises of Pred.** An edge's arrival schedules its Pred instances, as in S6.
+  - **Succ, when the source does not hold `⊤ → ⊥`.** The clauses with an empty body that make up
+    `K₁` are subsumed only by `⊤ → ⊥` or by themselves, so they persist once present.
+    - The last arriving or activating contributor triggered an evaluation with `F`'s final `K₁` and
+      supported `K₂`.
+    - So `F` holds the edge to `strat(f, K₁(F))` (target refresh), and its target holds every unit
+      of `trig(w, f)` (pushing).
+  - **A source holding `⊤ → ⊥`.** There `F_w = {⊤ → ⊥}`, which subsumes every clause, so no clause
+    can be added and no Succ trigger exists. Its old edges may name a target that `K₁` no longer
+    picks, and nothing needs the current one.
+  - **Units at the fixpoint.** By pushing, for every edge `⟨w, v, f⟩ ∈ F` and every
+    `A′ ∈ trig(w, f) \ core_v`, `A′ → A′ ∈̂ F_v`. The last evaluation for `(w, f)` pushed all of
+    `trig(w, f)`, and an edge created later was created by an evaluation, which pushed to it.
+- **The theorem.** Let `F` be the final store of a deferred run on a constant-free input, under
+  cautious or trivial. Then either `⊤ → ⊥ ∈̂ F_{v_⊤}`, in which case the run reports the ontology
+  inconsistent (S4), or every raw query `Q` of context `q` with `O ⊨ Q` has `Q ∈̂ F_q`.
+- **Proof.**
+  - **Setup.** Let `S′` be any fair continuation of `F` under [TGH21]'s rules, with no deferral,
+    until it saturates.
+    - **Theorem 2's hypotheses** ([TGH21] p. 16, Definitions 5–7 and 9; checked against the PDF in the
+      third review):
+      - a structure derivable by the printed rules from a sound structure mentioning no auxiliary
+        constant;
+      - orders admissible relative to one a-admissible total order;
+      - saturation under Tables 2 and 3;
+      - `Λ ≥ 2^{τSu}·2^{τPr}·ω`;
+      - C1 and C2 for the query context.
+
+      There is no requirement that every edge's target be the strategy's current choice, nor that the
+      derivation start from Algorithm 1's initial structure.
+    - **Take `F` as the starting structure.**
+      - It is sound for O:
+        - every clause is a sound conclusion or a tautological unit;
+        - every edge satisfies S2, because each was created or refreshed with its target core inside
+          the printed `K₁`.
+      - It mentions no auxiliary constant, since there are no constants at all.
+      - S5's orders apply.
+      - **Λ.** Take, for the continuation, a mathematical Λ meeting Theorem 2's bound. With no
+        constants Nom never fires, so Λ changes no step of `F` or `S′`. HOWL's stored Λ, capped at
+        2⁶², need not meet the bound.
+
+      `S′` is derivable from `F` by the printed rules and is saturated, so Theorem 2 gives
+      `Q ∈̂ S′_q`. Deferral's filtered `K₂` and the pushed units do not affect `S′`: `F` need not be
+      derivable from S4's initial structure by the printed rules.
+    - No Nom constant exists, so the continuation terminates (Theorem 5).
+  - **Invariant.** Induction over the continuation's steps shows:
+    - **(I1)** every clause it adds is irrelevant;
+    - **(I2)** it adds no context;
+    - **(I3)** every edge it adds has the form `⟨w, v_⊤, f⟩`, where `F_w` holds no relevant clause
+      with an `f(x)`-atom maximal;
+    - **(I4)** the relevant clauses of `S′` are exactly those of `F`.
+
+    Each step:
+    - **Elim.** It deletes a relevant clause only for a subsumer that is relevant too (P3), so the
+      subsumer is in `F`, by (I1) and (I4). But `F_v` is a `min` set. So nothing relevant is deleted,
+      which keeps (I4).
+    - **A local rule in context `t`.**
+      - If every premise is relevant, they are clauses of `F` (I4) and supported, so the instance ran
+        in `F` (P5). Its conclusion is `∈̂ F ⊆̂ S′`, and the continuation does not add it.
+      - Otherwise its conclusion is irrelevant (P1). No lifting to subsumers is needed, because
+        relevant premises are literally in `F`.
+    - **Pred along `e = ⟨w, v, f⟩` into `w`.**
+      - *All side premises relevant, and `e ∈ F`.* The successor clause `c` is relevant (P2, with
+        `F`'s `trig`), so it is in `F` (I4). The instance ran in `F` (P5).
+      - *A side premise irrelevant.* The conclusion is irrelevant (P1).
+      - *`e` new.* By (I3), `v = v_⊤` and `F_w` has no relevant clause with an `f(x)`-atom maximal.
+        - **Body atoms in scope** are `B(x)`, `R(x, y)` or `R(y, x)`. Units have these forms, and the
+          rules only combine bodies.
+        - If `c` has a body atom `C₁`, then `C₁σ` mentions `f(x)`, so the side premise for it is a
+          clause of `w` with an `f(x)`-atom maximal, which is irrelevant. So is the conclusion.
+        - If `c` has an empty body, P4 makes `c = ⊤ → ⊥`. It is relevant, so `c ∈ F_{v_⊤}`, which
+          is the theorem's first case.
+    - **Succ for `(w, f)`.** `K₁` is read off clauses with an empty body. Those are relevant, and by
+      (I1) and (I4) never added or deleted, so `K₁(S′_w) = K₁(F_w)`.
+      - *`F` evaluated Succ for `(w, f)`.* `F` holds the edge to `strat(f, K₁(F))`, and that is the
+        continuation's target too, so no new context or edge (target refresh, P5).
+        - If the continuation's Succ applies anyway, its new `K₂` atoms come from irrelevant
+          contributors (I1).
+        - A unit `A′ → A′` it would add to a context `v` is relevant only if
+          `A′ ∈ core_v ∪ trig(w′, f′)` for some edge `⟨w′, v, f′⟩ ∈ F`.
+          - If `A′ ∈ core_v`, Core's `⊤ → A′` subsumes the unit.
+          - Otherwise pushing put it there.
+
+          Either way it is `∈̂ F_v`, so it is not added. Whatever is added is irrelevant (I1).
+        - So every Pred it enables runs along an edge of `F`, and is covered by the Pred case.
+      - *`F` never evaluated Succ for `(w, f)`.* Then `F_w` has no relevant clause with an `f(x)`-atom
+        maximal. `K₁` consists of such clauses, so it is empty, and both strategies choose `v_⊤`,
+        which exists. That gives (I2) and (I3). Its units are irrelevant, as above.
+    - **Core and bodiless Hyper** run only in contexts of `F` (I2), where `F` ran them.
+  - **Conclusion.** `Q ∈̂ S′_q` through some `D ∈ S′_q`. Every raw query has its body inside the core
+    (`B(x) → A(x)` in `v_B`; `⊤ → ⊥` and `⊤ → A(x)` in `v_⊤`), so `D` is relevant (P3). By (I4),
+    `D ∈ F_q`, so `Q ∈̂ F_q`.
+- **Determinism.** `trig` is a deterministic function of the run's rounds, all functions of sets
+  (R1). So the augmented state's transition is deterministic, and every report is the same at every
+  worker count (R6). The caps (R7) count rounds.
+- **The prototype** (`src/sriqsat.slop`, slice 9i). `SatConfig`'s `defer` asks for deferral, and
+  `defer-on` turns it on only in scope: no constant, and cautious or trivial.
+  - **Derive's view.** At each round's start, every context but the root is narrowed to its supported
+    clauses, in `S_v`, `Δ_v` and the rest alike (`projected`). The store itself is committed as S6
+    commits it.
+  - **Succ.** All the triggers of one successor term share its K-sets, so each term in a round is one
+    evaluation: an action naming `strat(f, K₁)` and carrying all of `K₂`. Succ's covered test is not
+    read; refresh and pushing do its work.
+  - **Create.** `trig` grows by the round's evaluations (`supplied`). The evaluations' targets are
+    created and their edges ensured as Succ's are, which is target refresh. Every f-edge out of an
+    evaluated `(w, f)` gets its target's units for all of `trig(w, f)` (`pushed`), in place of Succ's
+    own.
+  - **Activation.** After the commit, a stored clause of `S_v \ Δ_v` that is supported now, and was not
+    under the edges and `trig` before the round, joins `Δ_v` (`activated`). Only a context with a new
+    edge in, or a grown `trig` on one, is read. A round that only grew `trig` has changed.
+  - **Tests.**
+    - **P5 on every deferred fixture run.** One reference round over the supported clauses changes
+      nothing in the whole store (`defer-stable`), and every f-edge's target holds the units of its
+      `trig` (`units-pushed`).
+    - **Fixtures:**
+      - `deferred-reactivation`: under trivial, a merged body that is inert until `trig` grows, so a
+        run that never activates misses `X ⊑ Q`;
+      - `deferred-retarget`: under cautious, the edge to `v_B` that only target refresh adds;
+      - `deferred-stale-unit`: a unit that only pushing puts into a stale target.
+    - **Mutants seen red:** no activation; support over the union of the edges; no unit pushing; no
+      target refresh; deferral with constants.
+    - **A mutant that survives:** deferral at the root. In scope the root holds no clause, so no test
+      can see it. The constants mutant guards that scope.
+- **Out of scope:**
+  - **Inputs with constants.** Deferral there needs root seeds, Nom's new constants, and a composition
+    argument for the shared ground view (the first review's items 1–3, 7 and 8).
+  - **The eager strategy,** whose cores can mention `y` (P4).
+
+**The literal reference evaluator** (`src/sriqref.slop`; D7, D5(a), D10's fuel cap). The engine of
+slices 9 and 10 must answer every fixture as this does. It is S6's semantics without S6's schedule:
+- **Each round is naive.** It reads a frozen structure, and applies every Table 2 and Table 3 rule to
+  every choice of premises in every context, and every Table 3 rule over every edge. Its products
+  are its own: it folds the proved per-instance steps (`hyper-step`, `pred-step`) over every choice,
+  and never calls `hyper-join` or `pred-join`. A test then checks that those two combinators conclude
+  exactly what its products do, on every context of every finished run.
+- **Premises are filtered before they are offered.** A premise is offered to a slot only if it meets
+  conditions the step's `sound` property already requires, so no conclusion changes. It must be
+  maximal. For Hyper it must have the body atom's form and predicate, and, away from the root, `x`
+  where the atom has `x`. For Pred and r-Pred it must select exactly `Cᵢσ`.
+- **Root Hyper with no body, and Pred into `v_r`,** range over every constant the structure holds
+  (E4's `U_H`).
+- **Nom** reads only DL4's at-most clauses: one `B₁(x)`, `n + 1` atoms `S_{B₂}(x, zᵢ)` of one role,
+  and a head of exactly the `C(n + 1, 2)` equalities `zᵢ ≈ zⱼ`. It adds `o_ρ`'s missing children at
+  the round's end, and its conclusion arrives the next round, once they exist.
+- **At the round's end,** in content order:
+  - Nom's new constants, by parent, role and index;
+  - the new contexts, by core;
+  - the new edges, each once (in the order their actions were found, which no rule reads);
+  - each context's candidates, by content, each kept only if it is not `∈̂` the set so far.
+
+  Nothing is deleted until the fixpoint (D5(a)). Then Elim runs once, leaving each set's `min`. A
+  test checks that one more round then changes nothing, which is D5(a)'s argument.
+- **The run stops** at the fixpoint, or at `⊤ → ⊥ ∈̂ S_{v_⊤}` (S4). It also stops when the fuel of
+  10,000 rounds runs out, or at a cap: 512 contexts, 4,000 clauses, 10⁶ choices for one instance, or
+  8 constants from Nom. A stop at the fuel or a cap is n/a, never an answer. Each round runs in a
+  scratch arena, so a long run holds one structure and one round.
+- **The strategy is a parameter:** trivial, eager or cautious. The engine keeps cautious (S5). On
+  every fixture the three agree on every raw query wherever each completes.
+- **Trivial can recurse through Nom.** Under trivial every successor shares `v_⊤`. On [TGH21]'s O4
+  each new constant's successor then holds Nom's premises again, so Nom mints a constant every few
+  rounds, and only Λ (at least 10,001 here) would end the chain. The reference ends it n/a at a cap.
+  Eager and cautious reach O4's fixpoint with the one Nom constant Example 2 describes. This is the
+  trivial strategy's behaviour, not a defect: Theorem 5 bounds it only by Λ.
+- **[TGH21]'s Figure 6 misprints O3's (87).** It prints `C ⊑ F ⊔ D`, but Example 1's own run needs
+  `A ⊑ F ⊔ D`: Hyper on (93) `⊤ → A(x)` gives (94) `⊤ → F(x) ∨ D(x)` in `v_A`, and `v_C` holds no
+  `F ∨ D`. As printed, O3 does not entail `A ⊑ F`. A model with `o ∈ C ∩ F`, `o ∉ D`, `b S o` and
+  `a R b`, and no other F, satisfies it, and HermiT agrees. With `A ⊑ F ⊔ D`, both HermiT and the
+  reference find `A ⊑ F`. The tests run both.
+
+**The prototype (slice 9).** `src/sriqsat.slop` runs S6's four steps at one worker (D8). The
+parallel engine (slice 10) only chunks its derive and shards its commit. It shares the reference's
+per-instance work: the same proved steps, the same slot filters, the same round's-end code. Only the
+schedule is its own.
+- **Derive anchors on Δₙ.** For an instance with slots 1 to k, slot i comes from `Δₙ`, the slots
+  before it from `Sₙ \ Δₙ`, and the slots after it from `Sₙ`, so each instance runs once in the round
+  its newest premise arrives. These are premises too:
+  - an edge, of Pred and r-Pred;
+  - every clause that puts an atom into K₂, of Succ;
+  - a new constant, of Nom (its children) and of the root's E4 instances (Hyper on a bodiless clause,
+    and Pred into `v_r`).
+
+  A new context runs every instance: it reads all of its set as new (with Core and the bodiless
+  ontology clauses, and every root clause for r-Pred). In the first round the root runs the
+  reference's round. Running an instance none of whose premises is new concludes
+  nothing new: it ran when its newest premise arrived, its conclusion is `∈̂ Sₙ` since (R2), and its
+  actions were taken. So the anchoring may run more than `Δₙ` needs, never less.
+- **Premise views are kept with the store** (slice 9k). Every rule reads a clause through its
+  premises, `select`'s views. Their one costly part, whether the selected literal is maximal in the
+  head, is a function of the clause and the run's one order (S5).
+  - **That order is fixed for a stored clause.** Its rank is set once, and its constants only grow.
+    `add-consts` runs before the commit, so every constant a stored clause names is already there.
+  - **So the flags are kept, not recomputed.** A clause's maximal flags are computed once, when it
+    commits, and kept beside `S_v` in its content order.
+    - The commit walks them from the old set to the new one, and so does the root's re-commit at the
+      boundary.
+    - Derive builds the same `Premise` records from them, finding a clause's flags by content.
+    - Succ's K-sets read the premises' flags (`k-index-premises`) instead of re-running the order over
+      every clause.
+    - **One place still recomputes:** the shared ground view selects its members afresh each round, in
+      `ground-of`, twice. Only a run with constants has a ground view, so the ABox split's Run H never
+      meets it.
+  - **Nothing a run does changes.** On every fixture and hand-built case under every strategy, the
+    tests require the same status, rounds, counts and answers as recomputing the flags every round
+    (`SatConfig`'s `views` off). They also require the kept flags to equal a recomputation after every
+    round (`check`).
+  - **Mutants seen red:** a kept clause given its neighbour's flags, a new clause given none, the
+    root's re-commit not walked, `single` read from the body alone, and flags from the wrong context.
+- **Create** follows the reference's round's end, and adds each new context's Core clauses to the
+  candidates (step 2). The reference derives them the round after, so the prototype can finish in
+  fewer rounds.
+- **Commit** computes each context's `min(Sₙ ∪ C)` (slice 9b, `src/sriqindex.slop`). It deletes as it
+  goes, where the reference waits for the fixpoint (D5(a)). The two stores can therefore differ, and
+  under cautious even their contexts: K₂ is read from a set already minimised. They are compared on
+  their raw answers (M5 (b)), never on their stores.
+
+  `commit-min` takes candidates one at a time, scanning W for each and copying it at each insert. The
+  indexed commit computes the same set (R1) in one pass. With W a min set:
+  - C₁ is the distinct candidates that are neither tautologies nor `∈̂ W`;
+  - C₂ is the members of C₁ that no other member of C₁ subsumes;
+  - W′ is the members of W that no member of C₂ subsumes.
+
+  Then `min(W ∪ C) = W′ ∪ C₂`, and C₂ is `Δₙ₊₁`. Checking W against C₂ alone suffices: a member of C₁
+  that C₂ drops is subsumed by one C₂ keeps, since subsumption is a preorder on a finite set, and a
+  member of W that a candidate strictly subsumes is subsumed by a member of C₂. A candidate equal to a
+  member of W is `∈̂ W`, never reaches C₁, and leaves that member in place, as `commit-min` does.
+
+  "Does some x of X subsume c?" goes through an index. Each x is filed under one literal: its least
+  body literal, or its least head literal when its body is empty. If x ⊆ c, that literal is in c on the
+  same side, so probing c's literals finds every such x, and `subsumes` confirms each. The empty clause
+  subsumes everything; it is kept aside by position, so that a query can skip it as it skips any
+  clause. The index is complete by construction, and each index assumes at most one empty clause, as
+  a min set or a list without repeats has. Each x also carries a signature, one bit of 63 per
+  (side, literal) hashed (slice 9f). If x ⊆ c, then x's bits are among c's, so `subsumes` is asked
+  only of an x with no bit c lacks. On CCO's round 9, the probes had asked it 133M times, and 392k
+  held. The tests diff it against `commit-min` on hand rows and on
+  every context's final set of every run, split into a W and candidates. They also require each run
+  through it to give the same status, rounds, answers and work counts as the run through `commit-min`,
+  on every fixture and hand row under every strategy.
+- **Join is tried only where it can fire.** Its `sound` property requires a maximal premise whose
+  selected literal is joinable and equal to the body literal. So the prototype pairs a premise only
+  with the joinable body literals equal to its own, and builds no view of any other pair. These are the
+  rule's own conditions, so no conclusion changes, as with the reference's slot filters.
+- **The shared ground view (slice 9d, AD 59e16962).** r-Pred with no `Cᵢ` copies a root clause into
+  every other context, with no edge needed (E3). After its first round, CCO's root holds about 9,800
+  such clauses, and its 1,424 contexts would each hold a copy. The prototype stores them once.
+  - **Definitions,** at each boundary `n`, so derive reads them frozen:
+    - **G** is the set of root clauses that are ground and mention no term `f(u)`. `Δ_G` is
+      `Δ_{v_r} ∩ G`.
+    - For `v ≠ v_r`, the members of G **visible** in v are `V_v = {g ∈ G : g ∉̂ S_v}`. The others are
+      *hidden* in v: `S_v` already holds a clause that subsumes them.
+    - **The view** of v is `S_v ∪ V_v`. G is stored once and shared. Each context keeps only the list
+      of its hidden members. A member is hidden only by a ground clause of `S_v`. So each boundary
+      finds, for each ground clause of `S_v`, the members it subsumes, through an index of G under
+      every literal of every member. `⊤ → ⊥` hides all of G.
+  - **Three facts:**
+    - *G1. A root clause that subsumes a member of G is in G.* Its body and head are subsets of the
+      member's. So for a ground clause `c` with no `f(u)`, `c ∈̂ S_{v_r}` exactly when `c ∈̂ G`. `∈̂ G`
+      persists from boundary to boundary (R2 at the root). No member of G is subsumed by an earlier
+      member: the root is a min set, and `∈̂` persists there.
+    - *G2. For `g ∈ G`, r-Pred into any `v ≠ v_r` concludes `g` itself.* Its body is all `Aᵢ`, so
+      there is no `Cᵢ` and no edge to meet (E3). `σ = {y ↦ x}` changes no ground literal, E5 refuses
+      nothing (no `f(u)`), and every ground `Lᵢ` is allowed.
+    - *G3. Hidden stays hidden.* `g ∈̂ S_v` persists (R2 in v). So a member newly visible in v is in
+      `Δ_G`, unless v itself is new.
+  - **The printed derivation.** Read the prototype's run as a derivation P of the printed calculus,
+    in which at each boundary every `v ≠ v_r` holds `P_v = S_v ∪ V_v` and `P_{v_r} = S_{v_r}`. Its
+    edges are the prototype's plus `E_G`: the edges `⟨v, v_r, u⟩` that P's own r-Succ steps (below)
+    have added, one for each constant `u` of a maximal literal `A ∈ Suʳ(O)` of a copy. `E_G` only
+    grows, as printed edges do. It is virtual: never stored, and read by no prototype rule.
+    - **From boundary `n` to `n + 1`,** P makes these steps, in this order:
+      1. The prototype's round and commit. Each inference is on premises in `P_vⁿ` (the view).
+      2. r-Pred copies each newly visible member into v. This is printed (G2): it is `∉̂ S_vⁿ⁺¹` by
+         visibility, and `∉̂` the existing copies by G1.
+      3. Elim deletes each copy that `S_vⁿ⁺¹` or another copy subsumes. This removes the copies that
+         are now hidden, and the copies of members the root has deleted: each such member has a
+         subsumer in G (G1), which is copied or hidden.
+      4. r-Succ on each new copy, on each of its maximal `A ∈ Suʳ(O)`. It adds `E_G`'s edges, and
+         `A → A` to `S_{v_r}` (redundantly after the first time). The prototype commits the same
+         `A → A` into `S_{v_r}` at this boundary, right after its commit (`with-units`): one for each
+         maximal `A ∈ Suʳ(O)` of a member visible in some context, when `A → A ∉̂ S_{v_r}`. A context
+         made later can be the first. Each `A → A` is itself a member of G, so steps 2 to 4 run once
+         more for them; their own r-Succ adds edges only, since their `A` is then held.
+
+      So `P_{v_r} = S_{v_r}` at every boundary.
+    - **A prototype r-Succ that P would not run** (its trigger is in `S_v`, `⟨v, v_r, u⟩ ∈ E_G`, and
+      `A → A ∈̂ S_{v_r}`) adds an edge P already has and a candidate the commit skips. It changes
+      nothing in P.
+    - So every inference is printed, P is derivable from the initial structure, and Theorem 1
+      applies. Clauses of `S_v` that a visible member subsumes stay in P with their Elim deferred,
+      which the calculus allows. They are premises the prototype keeps, and their conclusions are
+      sound. Building M performs the deferred Elims.
+  - **The final M** is P at the fixpoint after Elim: `M_v = min(S_v ∪ G)`, which equals
+    `min(S_v ∪ V_v)` since hidden members are `∈̂ S_v`. `M_{v_r} = S_{v_r}`, and the edges are the
+    prototype's plus `E_G`.
+  - **M is saturated.** Take any rule instance over M.
+    - **At the root,** premises come from `S_{v_r}` only, which the view leaves as it is. Root Succ's
+      coverage check reads the target `w` through its view, `S_w ∪ V_w`, which is `∈̂ M_w`. Root
+      instances run as before (R4), root Hyper with all its premises in G among them.
+    - **In `v ≠ v_r`,** premises come from `S_v` or `V_v`. The anchoring treats `Δ_G ∩ V_v` as new
+      beside `Δ_v`, and the rest of `V_v` as old (G3). A new context reads all of `V_v` as old. Every
+      branch that reruns all of an instance family (a new context, a new edge, new constants for
+      Nom) reads the view.
+    - **At least one premise in `S_v`:** the instance ran in the round its newest premise arrived.
+      Its conclusion is `∈̂ S_v ∪ V_v`, so `∈̂ M_v`, and its action was taken.
+    - **Every premise in `V_v`,** rule by rule:
+      - *Join, Factor, Ineq.* None depends on the context but through `≻`, and every context shares
+        one order (`premises-of` and `maximal-at` read `(. st ord)`). So the root ran the same
+        instance on the same premises (`V_v ⊆ G ⊆ S_{v_r}`). Its conclusion is ground, with no
+        `f(u)`, and `∈̂ S_{v_r}`, so `∈̂ G` (G1), and `∈̂ S_v ∪ V_v`.
+      - *Eq.* Away from the root Eq rewrites one position; at the root it rewrites every occurrence
+        of a constant. The two differ when the second premise selects a binary atom with the
+        constant in both arguments, as `S(u₁, u₁)` beside `u₁ ≈ u₂`. So Eq with both premises in
+        `V_v` is run in v. An existing context anchors it on `Δ_G ∩ V_v`. A new context runs it over
+        every pair, since nothing would anchor those pairs later (G3).
+      - *Hyper.* Every body atom of every Table 1 clause mentions `x`, and away from the root `x`
+        meets only `x` (`x-fits`). So no Hyper instance away from the root has a premise in G.
+      - *Nom, Succ, Pred and r-Pred side premises.* Nom's `S_{B₂}(o, x)`, Succ's trigger, and every
+        `Cᵢσ` mention `x` or `f(x)`, so none comes from G.
+      - *Pred, with `g ∈ V_v` as its main premise.* Into `w ≠ v_r` it concludes `g`, which is
+        `∈̂ S_w ∪ V_w`. Into `v_r`, its conclusion adds the core side premises' `Γᵢ` to the body
+        and their `Δᵢ` to the head, so `g ∈ S_{v_r}` subsumes it. Not run.
+      - *r-Pred, with `g ∈ G` as its main premise.* It concludes `g` (G2). Not run. Every other root
+        clause with no `Cᵢ` mentions an `f(u)`, and E5 refuses it:
+        - a root clause's non-ground body atoms are its `S(y, u)` and `S(u, y)` (E3);
+        - a `y` in its head comes with a `y` in its body. `y` enters the root only through r-Succ's
+          `S(y, u) → S(y, u)`, every root rule keeps its premises' bodies, Join drops only a ground
+          body atom, and Pred into `v_r` maps `y` to a constant;
+        - so a root clause with no `Cᵢ` is ground.
+      - *r-Succ on `g ∈ V_v`.* Its precondition fails in M: `E_G` has the edge, and `A → A ∈̂ S_{v_r}`
+        (it was added at the boundary where `g` became visible, or was already `∈̂`).
+    - **Hyper on DL10's `⊤ → B(o)`** away from the root concludes `⊤ → B(o)`. The root derives the
+      same clause by E4 in its first round, since `o` is one of O's individuals and so in `U_H`. It
+      is ground, with no `f(u)`, so `∈̂ G` (G1) from then on. Not run away from the root. DL1's
+      `⊤ → ⊥` (`n = m = 0`) names no constant, and the root need not derive it (`U_H` can be empty),
+      so it is still run in every context.
+    - **Succ.** `K₁` needs a unit mentioning `x`, so G adds nothing to it. Nor does G add to `K₂`:
+      - an atom it could add is a maximal ground Su(O) atom `A` of a visible member;
+      - a ground atom in Su(O) is in Suʳ(O): a class or role in a body is one of O's;
+      - so step 4 has put `A → A` into `S_{v_r}`, and `A → A ∈̂ G`;
+      - every target reads G, so `A` is covered there, and its `A → A` is `∈̂` there already.
+
+      For the same reason, Succ drops from `K₂` every atom `A′` with `A′ → A′ ∈̂ G`. Such an atom can
+      come from `S_v`, from a clause that a visible member subsumes and whose Elim P defers. P's
+      coverage holds for it, and P's Succ adds an `A′ → A′` that is `∈̂` already. The rest of `K₂`
+      needs `A′ → A′ ∈̂ S_w ∪ V_w`, which for an atom G does not hold is `∈̂ S_w`. `K₂` over the view
+      is a superset of `K₂` over `M_v`, so a fixpoint whose edges cover it covers M's too.
+    - **`E_G` enables nothing else.** Edges `⟨v, v_r, u⟩` are read only by r-Succ and r-Pred. An
+      r-Pred instance over one needs a side premise in `S_v` selecting a maximal `S(x, u)` or
+      `S(u, x)` in `Suʳ(O){y ↦ x}`. Its own r-Succ (a premise in `S_v`, so run) made the same edge a
+      prototype edge.
+    - **Elim** is not applicable to M, whose sets are min sets.
+    - So M is saturated in [TGH21]'s sense, and Theorem 2 applies as R4 says.
+  - **The read-off and the stop** read M through the view. Every raw query's clause mentions `x`
+    or is `⊤ → ⊥`, so a member of G can make one hold only by being `⊤ → ⊥`. When the root holds
+    `⊤ → ⊥`, every context's view does.
+  - **The commit** skips a candidate `∈̂ S_v ∪ G`, through an index of G built once per round. It does
+    not delete members of `S_v` that a visible member subsumes; M's `min` does.
+  - **What is unchanged:** every rule's function, E3 to E5, and the reference evaluator, which still
+    copies every member of G into every context. The tests:
+    - compare the two on their raw answers;
+    - check the prototype's fixpoint by building M and running one naive reference round over it, in
+      which nothing may change. The M they build has the edges of `E_G` for the members visible at
+      the end, not those of members since deleted. That is the stronger check: an edge `⟨v, v_r, u⟩`
+      only makes r-Succ's precondition fail, and enables no r-Pred instance (above). So if no rule
+      applies with fewer such edges, none applies with all of them;
+    - count the clause cap over what the view stands for (`view-total`): each context but the root
+      counts all of G, unless it holds `⊤ → ⊥`, which hides all of G. Members hidden by another
+      clause are still counted, so the count can run above M's. The cap is the tests' only, and on
+      every fixture and row the prototype completes where the reference does. The stop at `⊤ → ⊥`
+      reads the root as well, so it can come a round before the reference's.
+- **Filters that change no conclusion (slice 9d).** Each skips work by a condition the rule's own
+  `sound` property requires, as the reference's slot filters do:
+  - **Eq** is tried on a pair only when the second premise's selected literal holds the rewritten
+    term at one of Eq's four positions (`at-is`).
+  - **Join's sites** are sorted by literal, and a premise finds the sites equal to its selected
+    literal by search. Away from the root, G's sites are found through the same index of G that
+    finds hidden members.
+  - **Succ's K-sets** are indexed once per context (`k-index`, `src/sriqindex.slop`). K₂ has a part
+    no successor term changes (the maximal ground literals with no `f(u)` that are Su(O) atoms) and
+    the maximal literals that mention the term. The first is collected once; the second is filed by
+    the f-terms it mentions. Each literal goes through `k-sets`' own steps (`succ-pre`, `in-su`,
+    `mentions-x`), and a test diffs the two on every context and trigger of every finished run. The
+    triggers are taken in successor-term order, and each term's K-sets and coverage are found once.
+    Succ's re-check of an old trigger reads the index of `Δ_v` the same way.
+  - **Pred's and r-Pred's side slots** are met only by a maximal premise selecting exactly `Cᵢσ`
+    (`pred-step`). So their candidates are found through premises filed by selected literal. Every
+    context's premises (all, of `Δ_v`, and the rest) are filed once per round (slice 9e). A context's
+    derive reads its own, and Pred over an edge from `w` reads `w`'s.
+  - **Hyper** (slice 9e). `hyper-step` fires only on a maximal premise whose selected literal is the
+    body atom under σ: of its form and predicate, with `x` met by `x` away from the root (`x-fits`),
+    and at the root with `σ(x)` one constant for every atom (`term-matches` binds `x` only to a
+    constant there). So:
+    - O's clauses with a body are filed by each body atom's form and predicate, once per run. An
+      instance anchored on atom i needs a premise of `Δ_v` of that form and predicate, so a context
+      runs Hyper only on the (clause, atom) pairs filed under the keys its maximal `Δ_v` premises
+      select. A new context's `Δ_v` is all of `S_v`.
+    - Each slot's premises are found by the atom's form and predicate in the context's filed
+      premises (`lit-cmp` keeps each pair contiguous), then filtered by `x-fits`.
+    - At the root, every Table 1 body atom mentions `x`, so each slot's premises are grouped by the
+      constant at the atom's `x`. Only the choices within one constant's groups are tried; every
+      other choice binds `σ(x)` to two constants, which `hyper-step` refuses. The choices cap is
+      counted per constant, so an instance the reference stops n/a at the cap can complete here. No
+      conclusion of a complete run changes. The cap is the tests' only, and on every fixture and row
+      the two complete alike.
+
+    A test diffs the indexed Hyper, with all of `S_v` as `Δ_v`, against the reference's
+    `hyper-with` over every clause with a body, on every context of every finished run. `--counts`
+    reports the choices tried. The code is `src/sriqhyper.slop`.
+  - **Nom's DL4 clauses** are found once per run, not in every context and round. When constants
+    are new, Nom runs on every pair of `S_v`'s premises, as the reference's `ref-nom` does.
+  - **r-Pred's root clauses** are chosen once per round (slice 9f). `rpred-finish` fires exactly
+    when the side premises meet, the view is ok (E3, E5) and every `Lᵢ` is allowed (its proved
+    `sound`). The last two depend on the root clause alone, never on the context or the choice. So
+    each round keeps the root clauses outside G that pass them (`rpred-able`, whose `@post` is
+    those two conditions), with their views. A context builds only their slots' edges. On CCO,
+    r-Pred used to finish 19.5M choices in round 9 without one firing. A root clause set aside is
+    never counted against the choices cap, so a run the reference stops n/a at the cap, on a clause
+    that could not fire, can complete here, as with Hyper's per-constant cap. No conclusion of a
+    complete run changes.
+  - **Create's edges** are added through one stable sort of the new edges and a binary search of the
+    old ones (`edges-added`, slice 9f). The reference's `add-edges` folds `with-edge`, which copies
+    the edge list for every edge. The result is the same list: the old edges, then each new edge at
+    its first occurrence, in action order, when it is not already an edge. The prototype's scan
+    mode, which the tests diff against, keeps the fold, and the tests compare the final edges too.
+- **Derive does not filter by ∈̂.** S6's derive keeps only conclusions not `∈̂ Sₙ`; the prototype
+  leaves that to the commit, whose `commit-min` skips exactly those. `Δₙ₊₁` is the same, and its
+  candidate counts include the conclusions the commit skips.
+- **Its stops** are the reference's, but for the clause cap. The reference commits a round and then
+  stops when its store passes the cap. The prototype abandons a round whose store plus conclusions would
+  pass it, so at a binding clause cap the prototype stops one round earlier, uncommitted (slice 11b,
+  "The production run"). The agreement tests run with the clause cap not binding, and the budget's own
+  rule is tested against an oracle of each round's counts. Outside the tests, the round cap and the clause
+  budget apply, so it can answer where the reference ends n/a.
+- **The tests:**
+  - on every fixture, and on [TGH21]'s O1, O3 and O4 and 8c's root rows, under all three
+    strategies and the reference's caps, it completes exactly where the reference does;
+  - a complete run stops as the reference's does (at the fixpoint, or at `⊤ → ⊥`);
+  - it passes the reference's checks: one more naive round changes nothing, so its fixpoint is the
+    reference's;
+  - it gives the reference's answers;
+  - it gives them again in the same rounds with `Δₙ` reversed and rotated (R6);
+  - its answers are monotone at every cap from 0 to its rounds (R7).
+
+  `make diff-elim` adds a `proto~ref` leg per strategy. A pin on O1's work catches an instance that
+  runs twice, or one skipped and recovered later, which no answer can see.
+- **`howl-test sriq-run FILE [STRATEGY] [--counts] [--rounds N]`** runs it outside the tests.
+  `--rounds` caps the run, for probing a large input round by round; a capped run is n/a, but
+  `--counts` still prints its work.
+
 **Cancellation.** As in `el++`. It is checked at every round boundary, before the cap, and yields
 `Fault::cancelled` with no Outcome.
 
@@ -2400,8 +3823,8 @@ needs a complete run ([§6.2](#62-data-model)).
 - **Pay-as-you-go.**
   - On ELH input, the calculus is polynomial with the cautious strategy ([Bate+18] Proposition 11;
     [TGH21] Theorem 6).
-  - On EL input, with eager Hyper, its inferences correspond linearly to [BBL05]'s
-    (Proposition 12).
+  - On EL input, its inferences correspond linearly to [BBL05]'s ([Bate+18] Proposition 12). The
+    proposition assumes eager Hyper; S5 shows S6's rounds supply what its proof uses.
 - **Measured on the targets.** Sequoia, the published implementation, was run on 2026-10-07
   (Consequence 237dd717). Its saturation took 18 ms on BFO-core, 164 ms on CCO and 259 ms on RO.
   RO's 205 complex RIAs, of depth 12, compile in about 2 s.
@@ -3681,7 +5104,47 @@ row below sits on one side of that line.
 | **ABox reduction correctness** — the direct-edge individual encoding is sound and complete | **Discharged** ([§5.3](#53-the-abox-reduction-is-sound-and-complete)): a reduction to the published EL++ calculus and its range-restriction extension, with the ABox's nominals discharged by a canonical-model argument (the published nominal completeness fails, [KKS12]), plus the steps specific to HOWL's encoding, proved there and reviewed; checked against HermiT by the ABox fixtures and `make abox-fuzz` | **No** — model-theoretic |
 | **`el++` faithfulness** — each of [Krö10] Fig. 3's rules that `el++` uses is implemented exactly | Rule (13) is not a rule function: K7 replaces it with the dispatcher reading `triple` through the told role closure, and that coverage is held by the reference differential (which keeps rule (13)), not by a contract; each part of the read-through was seen to fail under a mutation, caught by that differential or a pinned entailment ([§5.4](#54-the-el-calculus), K7's gate). Every other rule: one loop-free function per rule instance (`src/rules/ksc.slop`), taking exactly the rule's premises and returning its head and whether it fires, with proved `@property`s that read as the Datalog rule: `sound` (fires only if the body matches), `complete` (fires whenever it does) and `head` (the conclusion is the rule's head over these premises' own terms). Rules (1) and (3) and Theorem 2's seed (*) always fire, so they carry `complete` and `head` only. Rules applied over stored partners go through **one** join combinator, `ksc-join`, which proves both directions through checked `@loop-invariant`s: every fact it returns is a firing instance's head for some partner in the snapshot, and every partner's firing head is returned (stated over `(list-visited ps)`, the partners visited so far, slop #247). Every contract was seen to fail under a mutation of its body: 112 mutants, 111 refuted by exactly the contract they target and one unknown, none verified. The literal Psc reference evaluator is the end-to-end check ([§5.4](#54-the-el-calculus)): the engine must answer every class of every fixture as the reference does | **Yes** — structural |
 | **`el++` translation and sharing** — K0–K7: the OWL-to-SROEL(⊓,×) translation, the normal form, sharing by monotonicity, the ⊥ flag, soundness under omissions, extraction, the shared saturation for safe classes, and role inclusions read through the told closure (rule (13) is the dispatcher's `sup*`/`sub*` reads, not a rule function, so its coverage is held by the reference differential, not a per-rule contract) | [Krö10] Theorems 1–3 and Proposition 1 **+** [§5.4](#54-the-el-calculus)'s lemmas, reviewed and owner-accepted **+** the `el`/`el++` and HermiT differentials | **No** — model-theoretic |
-| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`, planned), with `sound`, `complete` and `head` properties against the rule's line; Hyper and Pred split into a loop-free step and one join combinator with loop invariants, as `ksc-join`; a literal reference evaluator under the trivial strategy, which the engine must match on every fixture, and which must itself match its own eager run (the papers' strategy independence) | **Yes** — structural, once built |
+| **`sriq` clause boundary** — [TGH21] Table 1 is expanded exactly into DL-clauses, over dense ids from content | `src/sriqclauses.slop`: one function per Table 1 form, checked row by row against Table 1 (`test-sriq-table1-rows`, with DL2 over three symbols and over a ⊤ filler, and DL4 over three neighbours, over `n = 0` and with a shared `S_{B₂}` clause). On every tracked `sriq` fixture (`make test`), every clause is a DL-clause (§2.3) in its one canonical record, every id is in range and maps back, every table is in content order, and reordered input gives the same clauses. The shape, canonical-record, range, round-trip and order checks (not the reordering) also pass on all 18 vendored documents, run by hand (`howl-test sriq-dump clauses-check`). The checks themselves reject a malformed clause, record and table (`test-sriq-clause-checks-reject`). 56 mutants: 53 seen red; the other 3 each exposed a check that another already made, now removed | **Owed** — the expansions build lists in loops, whose lengths and contents the checker does not track (as `sort-range`); the tests stand in |
+| **`sriq` context order** — Sequoia's order (§5.5 S5) is implemented exactly, and is admissible | `src/sriqorder.slop`'s case table. Z3 proves [TGH21] §4.2's items 1 to 3 on a-terms, item 4 (everything else is above `true`), item 5 (a p-term is above `x` and `y`), that `x` and `y` are never compared with a constant or `f(u)`, that no a-term is above a p-term, that distinct predicates are never compared, and that `⋗` on constants is irreflexive. Every guarded post was checked for vacuity: its negation fails. The engine's ranked order (slice 9g) is proved the same way. Z3 proves that a query class ranks above nothing, that no name ranks above itself, and that a p-term of another predicate is below only a higher-ranked one. `test-sriq-ranked-order-closure` builds the least order with an independent copy of the precedence, over a universe with one query class and two fresh names, and requires the table to equal it. The ranked strictness test adds Definition 7(5), and the ranked C2 and max-flags tests check the query classes and the precedence row by row. Three mutants were all seen red: fresh names below query classes, a fresh atom over a constant ranked, and `f(x)` dropped. The first also makes the prototype disagree with the Sequoia-order reference on five fixtures. (Before slop 0.4.2, the posts of `fx-over` and `fu-over` leaked onto `aterm-gt`'s result, so item 1 and the constant-above-`x` case held only vacuously: slop-lang/slop#340, graph Lesson b9d4a569.) `test-sriq-order-closure` builds the least order containing a literal LPO and items 1 to 7, by closure over a bounded universe of Definition 2's context terms (eight constants, labels up to length 2, every `f(u)`), and requires the table to equal it pair by pair. Over the same universe the table is irreflexive, asymmetric and transitive, and meets Definition 7 (1) to (3) and Theorem 2's C2. Maximality is checked row by row, and the literal order is strict. 25 mutants, all seen red | **Partly** — the items above are proved. Transitivity, asymmetry and irreflexivity beyond constants, the multiset extension and the label walk (loops) are held by the tests |
+| **`sriq` redundancy and commit** — `∈̂` is [TGH21] §2.1's, and S6's commit leaves `min(W ∪ C)` | `src/sriqsubsume.slop`. Z3 proves `in-hat` both ways through a checked `@loop-invariant` over `(list-visited ws)`, as `ksc-join`: it holds exactly when `c` is a tautology or some member subsumes it. The same way, it proves `tautology` (some head literal is `s ≈ s`, or `s ≉ t` beside `s ≈ t`; through `taut-in`), `has-eq-of`, and `holds-clause` (membership), and that Elim's `without-subsumed` keeps nothing `c` subsumes. `subsumes` (merge walks over canonical clauses) is held by rows of each case of `∈̂`, with no substitution. R1: in every one of the 720 orders of six candidates (a tautology, a subsumed and a subsuming candidate, and an insertion undone later in the same commit), the commit leaves `min(W ∪ C)` as its definition computes it, and adds exactly the new members. R2: whatever is `∈̂` before the commit is `∈̂` after it, though its subsumers are deleted. 15 mutants, all seen red. Contract mutants: 4, each refuted by exactly the contract it targets | **Partly** — `in-hat` and `tautology` are proved relative to `subsumes`; that and the commit are held by the tests |
+| **`sriq` single-context rules** — [TGH21] Table 2's Core, Hyper, Ineq and Factor are implemented exactly | `src/rules/sriq.slop`: one loop-free function per rule instance over premise views (`select` gives a clause's body Γ, the selected literal L, the rest of its head Δ, and whether `Δ ⊁ L`), returning the conclusion's parts and whether it fires. Z3 proves `sound` and `complete` for Ineq and Factor, each stating the rule's side conditions, and for Hyper's step (one body atom against one premise) relative to `atom-matches`, which decides whether the premise's literal is the atom under σ; `head` for Ineq; and `complete` for Core, which takes each atom of `core_v` from its caller. Hyper's fold over the body atoms (`hyper-join`) keeps the step's verdict (`hyper-finish`) and only firing steps (`extend-one`), both proved; that it reaches every choice of premises is held by rows: O1's (16) to (21) under HOWL's order, each from its premises and ontology clause, a premise's body carried, a literal that is not maximal, DL4 with a repeated neighbour (it fires, and ∈̂ (i) drops the conclusion), Example 1's root Hypers (117) and (118) (`x` bound to `o`, `z₁` to `y`), a bodiless clause on a given constant (E4), `f(x)` at the root as `f(u)`, and `S(x, x)` on one constant twice. Ineq fires on a `t ≉ t` that is not maximal. Z3 also proves the helpers' contracts:
+- `select`'s `@pre` (the index is in the head) and that its view keeps the body;
+- `hyper-start` fires and binds x exactly when asked;
+- `apply-term` maps x to σ(x) and leaves y, a constant and `f(u)` alone;
+- a match in `atom-matches` agrees on form and predicate, and is of an atom;
+- `holds-lit` is membership, `without-lit` drops every copy, and `other-side` is a side of its literal.
+
+Z3 also proves that `apply-lit`, `with-arg`, `replace-at` and `replace-all` keep the literal's form, through the form each literal constructor posts (`types.slop`'s `atom1`, `atom2`, `eq-lit`, `neq-lit`). The constructors post the form alone: posts on every field left Z3 timing out on the rule contracts' counterexamples. Each rule also carries a firing and a non-firing `@example` from the paper, as the el++ rules do (`make example`). Factor is [TGH21] §3.1's example (whose order needs `f(x) ≻ g(x)`), and each side condition failing alone stops it. 37 mutants: 36 seen red; the other exposed a dead branch, now removed. Every contract was seen to go unverified under a mutation of its body: 16 mutants for the rules, each refuted by exactly the contract it targets, and 19 for the helpers and constructors, each refuted by its target or (`select`'s view) unknown, not verified | **Partly** — the per-instance functions are proved. The fold, the matching (`atom-matches`, `bind-atom`), what `apply-lit` builds beyond its form, and the heads of Hyper, Factor and Core (lists built by pushes) are held by the tests |
+| **`sriq` Eq, Join, Nom and Λ** — the rest of [TGH21] Table 2 is implemented exactly, and Λ is Algorithm 1 step A4's | `src/rules/sriq.slop`, loop-free per rule instance as above. A position is an argument or side and whether it is the x or u under f (`subterm-at`, `replace-at`, `replace-all`). Z3 proves `sound` and `complete` for Eq, Join and Nom, each stating the rule's side conditions: Eq's both maximal, `t₁ ⊁ s₁`, `t₂ ⊁ s₂`, `s₂|p = s₁`, not `x ≈ y` or `y ≈ u`, and the x rule; Join's maximal ground atom or `u₁ ≈ u₂`; Nom's `B₁(o_ρ)` and `S_{B₂}(o_ρ, x)`, `|ρ| < Λ`, and the children (`kids-ok`). Nom's DL4 clause enters as its ids (`B₁`, `S_{B₂}`, n), as Hyper's ontology clause does: that it is one of O's is the caller's. For `depth-limit`, over the inputs a run supplies (atom counts, ω held at 2⁶², ω_D at least 1), that an exponent of 62 or more gives 2⁶². Also proved:
+- `eq-rule`'s `@pre` (`k1` and the position's argument are 1 or 2);
+- `nom-rule`'s (`Λ ≥ 0`);
+- `body-at`'s (the index is in the body), and that its view keeps the head;
+- `other-arg` and `arg-term` pick a side;
+- `replace-const` rewrites the constant itself;
+- a `kids-ok` that passes has exactly n children (that they are the right ones is held by the rows);
+- `nom-head` builds only equalities, through a loop invariant. Rows: Eq as O1's (22), Example 1's (96) and Example 2's (149), the root rewriting a constant everywhere (under f too) where elsewhere it rewrites at p, and each exclusion alone; Join completing Example 1's (112) after r-Pred has carried (118)'s ground atoms (E3), and on `u₁ ≈ u₂`, and its refusals; Nom as Example 2's (150), with (131)'s ⊤ named by S2's fresh class A (the root's `⊤ → A(o)` carried in by r-Pred) and its `S₂` by the fresh sub-role `S_{B₂}` (`S_{B₂}(o, x)` derived from (149) by Hyper), with n = 1 and 2, depth against Λ, and each wrong child, class, role, constant or argument; Λ's exact and held values, just below and at the cap. 42 mutants, all seen red (five after filling the test gaps they exposed). Every contract was seen to go unverified under a mutation of its body: 17 mutants for the rules, each refuted by exactly the contract it targets, and 6 for the helpers, each refuted by its target or (`body-at`'s view) unknown, not verified | **Partly** — the rule functions are proved. Positions and replacement beyond the form, which children `kids-ok` accepts, `nom-head`'s literals beyond their form, and `depth-limit`'s exact branch (a shift, which the checker does not interpret) are held by the tests |
+| **`sriq` context structure, triggers and strategies** — [TGH21] Definitions 3 to 5 are stored exactly, over the structure's own constants and O's predicates (§5.5 S3), and Λ is the value G1 fixes | `src/sriqctx.slop`. Z3 proves:
+- each trigger test accepts only its definition's shapes: `in-su` only atoms and `u₁ ≈ u₂`, with an equality only between constants; `in-pr`, `in-sur` and `in-prr` never an inequality; and `in-prr` holds wherever `in-sur` does;
+- `strat-choice`: trivial chooses ∅ and eager K₁, and a cautious `{B(x)}` has `B(x) ∈ K₁` with `B` the sole atom `B(f(x))` of `f`, so `core ⊆ K₁` holds of every choice. `core-of` returns K₁ itself for eager;
+- `ctx-by-core` never returns `v_r`;
+- τSu and τPr are non-negative; ω is 1 under trivial and `|Σ_A^O|` under cautious; `pow2-sat` holds at 2⁶²; and ω_D is the query classes plus 2;
+- `has-lit` is membership, through a loop invariant;
+- `stored-lambda` (`src/rules/sriq.slop`) is at least 10,001, and equals `depth-limit` from 10,001 up.
+
+Rows: Definition 4 item by item on [TGH21] Figure 1's O1, on DL6's `S(x, x)` and on Table 1's DL4 (`test-sriq-triggers-rows`); on every fixture, each body atom's triggers are in Su and Pr; Definition 5 on O1's Figures 2 and 3 (eager K₁, cautious `{B(x)}`, trivial ∅, and cautious falling back to ∅ without the atom); ω, ω_D and the stored Λ; A1–A2's structure; and Definitions 2 and 3 on one clause of each kind. 24 test mutants: 22 seen red. One exposed redundant code in `side-x`, now removed. The other (`ctx-by-core` considering id 0) changes nothing a test can see, since id 0 is always `v_r`, and `ctx-by-core`'s contract refutes it. 21 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — the flags' read-off, `ctx-clause-ok`'s shape table, and that `core-of`'s ∅ and `{B(x)}` have no and one member are held by the rows |
+| **`sriq` multi-context rules** — [TGH21] Table 3's Succ, Pred, r-Succ and r-Pred are implemented exactly, as pinned in §5.5 S3, with E3 and E5 | `src/rules/sriq.slop`, loop-free per rule instance over premise views, as Table 2's rules are. σ (`csub-term`, `csub-lit`) replaces x and y and keeps every other term. Z3 proves:
+- `succ-step`: `sound` and `complete` (it fires exactly when its premise's atom is maximal, contains the successor term, and no f-edge's target covers K₂), and `head` (its core is the strategy's choice for K₁);
+- `rsucc-rule`: `sound`, `complete` and `head` (in a context other than `v_r`, a maximal `Aσ` with `A ∈ Suʳ(O)` containing `u`, no `y`, and not held);
+- `pred-step` (`sound`, `complete`: the slot's edge exists and the side premise's selected literal is a maximal `Cᵢσ`), `pred-start`, `pred-finish` and `rpred-finish` (they fire exactly when every step did and the heads pass), and `pred-extend-one` keeps only firing states;
+- `pred-heads-ok` and `rpred-heads-ok` are their conditions over every `Lᵢ` (E5 for r-Pred), `covers` is "each `A′ ∈ K₂` is in the core or `A′ → A′ ∈̂ S_w`", and `unit-held` is that `∈̂` (each through a loop invariant);
+- `succ-pre` gives an atom when it gives one, and `rsucc-lit` keeps the form.
+
+Owed, with the rows that stand in:
+- `k-sets`, a fold over the clauses, held by `test-sriq-succ-rows` and, in 8c, by a forward computation over every final context;
+- `pred-join`'s fold, as `hyper-join`'s;
+- the conclusions' assembly: `succ-step`'s added atoms (K₂ outside the core), and the body and head that `pred-step`, `pred-finish` and `rpred-finish` build. The contracts fix when each rule fires and which core it chooses, and the rows fix what it concludes;
+- that `succ-pre` inverts σ exactly, which `test-sriq-succ-pre-inverts` checks over every Su(O) shape at and away from the root (the constructors post only their form, so the checker does not see a rebuilt ground literal come back). Rows: Succ on O1's Figures 2 and 3 (K₁ and K₂, each strategy's core and adds (31), (39)–(40), (43), covered targets, a ground atom, the root's `f(u)`); r-Succ on Example 1's (114)–(116), one instance per constant; Pred on O1's (24) and (27), Example 1's (113), Example 2's (147), and into `v_r` for `u = a` but not `b` (E4, with the core as a side premise); r-Pred on Example 1's (118) carrying its ground atoms (E3), with no `Cᵢ`, and E5's refusal. 29 test mutants, all seen red, eight of them only after filling the test gaps they exposed: a non-maximal image, a non-unit clause in K₁, another constant's `f(u)` at the root, Succ on an equality, a non-maximal side premise, a slot outside Suʳ(O) that v could meet, two candidates for one slot, and a ground `f(u)` given to `succ-pre`. 27 contract mutants, each refuted by exactly the contract it targets. Every guarded post's negated twin fails | **Partly** — `k-sets`, `pred-join`'s fold, the conclusions' assembly and `succ-pre`'s exact inversion are held by the rows |
+| **`sriq` faithfulness** — each of [TGH21] Tables 2 and 3's rules is implemented exactly | One function per rule instance (`src/rules/sriq.slop`: Table 2's and Table 3's rules, in the rows above), with `sound` and `complete` properties against the rule's line, and `head` where the checker follows the conclusion; Hyper and Pred split into a loop-free step and one join combinator. Slice 7's tally, over the five rows above: 175 test mutants, 171 seen red and four that each exposed redundant code, now removed; 62 contract mutants, each refuted by exactly the contract it targets or, in two cases, unknown (not verified). Every guarded post was checked for vacuity: its negation fails to verify, and so does each form post's. The literal reference evaluator (`src/sriqref.slop`, §5.5) is built. On every fixture, and on [TGH21]'s O1, O3 and O4, its trivial, eager and cautious runs agree wherever each completes (trivial can end n/a when Nom recurses), and HermiT agrees with it on every fixture. Its own 14 test mutants: 11 seen red, four of them only after filling the test gaps they exposed (root Hyper on a bodiless clause with `x`, for every constant; the fuel's count; Nom on a body like DL4's with another head). Three change no answer the tests can see: the root's `⟨v_r, w, u⟩` edges, which no rule reads; contexts numbered in discovery order; and r-Succ skipping a unary ground atom, whose answers reach the root another way in every row so far. 8d's HermiT leg runs the root on ABox fixtures. The prototype of S6's rounds (`src/sriqsat.slop`, slice 9) matches it: on every fixture and on O1, O3 and O4 under all three strategies, it gives the same answers, stops as it does, and passes its checks; it does so again with Δ permuted (R6), and its answers are monotone in the cap (R7). `make diff-elim` checks the same on every fixture. Its 18 test mutants: 16 seen red, three of them only through the work pin (an instance run twice; Succ's K₂ clauses as premises; a new context's Core at create), and one (r-Pred's side anchor) only after a row was built for it. Two survive: Pred into `v_r` anchored on a new constant alone, and r-Pred anchored on a new u-edge alone. Each fires only for an instance whose one new premise is that constant or edge: a slotless main clause whose head depends on u (the constant a Nom child, reusing an existing root f-edge), or a u-edge that r-Succ creates the round after the side premise that asked for it, when the root clause is older still. Both are reachable in the calculus, and the prototype runs them. No row reaches either, because in every row a ground fact about u gives each context its u-edge early, and neither has been shown to change an answer. Slice 9d's shared ground view and engine filters are checked the same way, and the prototype's fixpoint is checked through M (its view materialised). The K-set index is diffed against `k-sets` on every context and trigger. Three rows (the view's Eq, Join and units rows) reach the view's paths. 9d's 33 test mutants: 18 seen red, three of them only after a row was built or extended for them. 15 survive, none changing an answer or M's saturation. In five, every row also reaches the dropped instance's conclusion another way: G's equality into a context literal (old or new) and Eq inside an `f(u)` term are matched by r-Succ and r-Pred's round trip through the root, and G's premise into a context's carried ground atom by the root's own Join. Five change only the work done (storing copies: r-Pred from G, the commit's filter, DL10 in a new context; rerunning G as new). Four change only whether a step is printed: reading hidden members, hiding fewer, keeping held atoms in K₂, and an `A → A` for a member hidden everywhere. One is equivalent: a new context's r-Pred over old root clauses, since every root clause with no `Cᵢ` outside G mentions an `f(u)`. Slice 9e's indexed Hyper is diffed against the reference's `hyper-with` on every context of every finished run; a root row (three individuals, ∃S.B ⊑ C) reaches the grouping by `σ(x)`. 9e's 11 test mutants: 7 seen red. Four survive. Dropping `x-fits` before the step is equivalent (`hyper-step` refuses the same premises). Counting the choices cap over the whole product changes only capped runs. Nom over `Δ_v` alone when constants are new is the same gap as 9a's survivors, since no row has an instance whose only new premise is a constant. Keeping only the first DL4 clause shows no row has two DL4 clauses that both fire. The parallel engine (slice 10) must match it too | **Partly** — the prototype matches the reference; the parallel engine is to come |
 | **`sriq` translation, elimination and rounds** — S0–S7: the OWL-to-SROIQ translation and role collapse, chain elimination, the normal form, the calculus with its errata and Nom, query read-off, the fixed strategy and order, the round model R1–R7, soundness under omissions and caps; and the data lemma | [Sim12] Theorem 3, [TGH21] Theorems 1, 2 and 5, Corollary 1 **+** [§5.5](#55-the-sriq-calculus)'s lemmas, reviewed and owner-accepted **+** the HermiT differential and, for TBoxes, a Sequoia one | **No** — model-theoretic |
 | **Termination** — the saturation halts | `el`: EL saturates over a *finite* domain (name×name, role×pair), fixed once normalization has introduced all fresh names; expressible as a monotone-growth-toward-a-finite-cap loop invariant. `sriq`: finitely many contexts (admissible strategy), terms, and constants below Λ ([§5.5](#55-the-sriq-calculus) R5; [TGH21] Theorem 5) | **Yes** for `el`; **No** for `sriq`, whose bound is a counting argument over the clause universe |
 | **Global completeness** — the rule set derives *every* entailed subsumption | Published calculus proof (CEL/ELK for `el`; [Krö10] for `el++`; [Sim12] then [TGH21] for `sriq`) **+ differential testing** against ELK/HermiT | **No** — meta-theoretic, not per-function |
@@ -4029,10 +5492,10 @@ howl explain     <ontology.ttl> --sub A B                          # justificati
 
 Global flags: `--profile el|el++|sriq|auto` selects the calculus (default **`el`**; `auto` picks
 the cheapest built rung containing the ontology, else the one omitting the fewest logical axioms;
-[§5.1](#51-profiles-are-selectable)). `el` and `el++` are built. A rung that is not built yet exits
-`3` with `howl: profile P is not implemented yet (implemented: el, el++)` (`Fault::unavailable`).
-`horn-sriq` was dropped ([§5](#5-fragment-roadmap)) and is refused the same way, permanently, with
-a message naming `sriq`. The top rung is `sriq`, not `dl`, because it is the SRIQ *object
+[§5.1](#51-profiles-are-selectable); when that is `sriq` and its run passes the clause budget with
+nothing definitive, `auto` steps down to `el` or `el++` and says so on stderr). Every rung is
+built. `horn-sriq` was dropped ([§5](#5-fragment-roadmap)) and is refused permanently, exit `3`
+(`Fault::unavailable`), with a message naming `sriq`. The top rung is `sriq`, not `dl`, because it is the SRIQ *object
 fragment* and a flag named `dl` would promise OWL 2 DL ([§3.2](#32-terminology-discipline));
 `--strict` makes an out-of-profile construct refuse the run
 outright — yielding `Fault::refused` and exit `2` ([§6.2](#62-data-model)) — instead of returning an
@@ -4193,7 +5656,8 @@ the weaker, more useful condition.
      - ELK's warning capture is proven live by a tripwire: `out-of-profile/allvalues.ttl` must make
        ELK warn both before the first file and after the last.
    - **The comparison reads HOWL's canonical report** ([§6.7](#67-output--classification))
-     directly. There is no separate dump format. The oracle writes the same bottom-compressed
+     directly. There is no separate dump format for reports. (The normaliser differential below
+     prints a normaliser stage, not a report.) The oracle writes the same bottom-compressed
      grammar, so `corpus/entdiff.py` compares sets and decides `entails-sub` for every ordered
      pair in time linear in the report. It **refuses** a HOWL report that didn't reach a fixpoint
      or omitted anything: such a report is a lower bound over a different theory.
@@ -4206,6 +5670,26 @@ the weaker, more useful condition.
      Only a *well-formed* incomplete report is skipped; a malformed one fails. A test in
      `src/test.slop` holds `entails-sub` equal to the report's answer on every pair, so the
      function the port serves is the one the differential certifies.
+   - **The normaliser differential** (`make diff-elim`, slice 6) checks `sriq`'s normaliser
+     against HermiT rather than HOWL's report.
+     - HOWL's test binary prints a stage as an OWL 2 functional-syntax document, with every
+       entity declared. S0 and S1 print their axioms. S2 prints its normal form with S5's ids,
+       each clause as the [TGH21] Table 1 axiom it encodes (DL4 without its `S_{B₂}`), since
+       Skolem terms are not OWL.
+     - `corpus/elimcheck.py` converts each document with the oracle. HermiT then classifies the
+       input and each stage.
+     - Restricted to the input's class names, the classifications must agree. That is what S0's
+       translation, [Sim12] Theorem 3 and S2's proof promise. A guarded S1 run is weaker by
+       design, so it is checked one way only: everything the guarded S1 entails, S0 must entail.
+       A second pass trips the guard on purpose (a bound of 0) on every chain fixture that labels
+       something.
+     - Locally, `make diff-elim-corpus` runs BFO-core and CCO against HermiT, and S1's invariants
+       on all five vendored ontologies. RO's and OBI's S1 documents are beyond HermiT (each
+       unclassified after six hours in its own 24 GB JVM, 2026-10-10, recorded in
+       `corpus/elim-differential-long.txt` by `make diff-elim-long`; HermiT classifies every
+       class of a stage, fresh names included), so for them S1's invariants are the check; S1's
+       determinism is tested on the fixtures.
+     - The test binary already exists, so this adds no third binary.
    - **Capability probes** are `corpus/fixtures/probes/`: one ontology per v0 construct, with
      `# construct:` (a `corpus/census.py` label) and `# expect:` / `# expect-not:` lines.
      - Each probe's construct is load-bearing, **checked on every run**. The probe is rerun with
@@ -4312,10 +5796,27 @@ the weaker, more useful condition.
        membership.
      - **Corpus:** BFO-core and CCO are vendored and pinned beside RO and OBI. Each gets a `sriq`
        projection, which is empty for BFO and CCO once the data lemma applies.
-     - **Fixtures:** ABox fixtures for equality (a functional role with two asserted successors),
-       negative assertions on transitive roles, and inverse functionality.
-     - **Engine checks:** the literal reference evaluator, and determinism with a shuffled `Δ`
-       (S6, R6).
+     - **Fixtures:** `corpus/fixtures/sriq` holds ABox fixtures as clash and control pairs. A clash is
+       inconsistent; its control drops one assertion and is consistent:
+       - equality: a functional role with two asserted successors;
+       - a negative assertion on a transitive role;
+       - inverse functionality;
+       - a root successor, whose context sends a class back to its individual;
+       - `⊤ ⊑ X`, which the root takes for every individual.
+
+       Beside them sits [TGH21]'s O1 as Turtle (`tgh21-o1.ttl`).
+     - **Engine checks:** the literal reference evaluator (§5.5), and determinism with a shuffled
+       `Δ` (S6, R6). `make diff-elim` runs the reference under trivial, eager and cautious on every
+       fixture whose stages dump (one that does not already fails the harness):
+       - its cautious run must agree with HermiT on the input and on S2;
+       - its trivial and eager runs must agree with its cautious one;
+       - on `corpus/fixtures/sriq` neither the reference nor HermiT may be missing or end n/a;
+       - the prototype (`howl-test sriq-run`, slice 9) must give the reference's answers under each
+         strategy, and may be n/a only where the reference is, and never on `corpus/fixtures/sriq`.
+
+       The reports compare consistency and the class hierarchy, not individual equality, so a
+       control's equality (`b = c` from functionality) is checked through its clash partner's
+       `AllDifferent`.
 3. **Contract obligations.** Every loop-free completion rule carries a `sound`/`complete`
    *faithfulness* pair of `@property`s ([§7](#7-verification--contracts)), each seen to stop
    verifying under a mutation of the rule's body; the four loop rules are owed. The driver
@@ -4691,12 +6192,26 @@ flowchart TB
     review and accepted by the owner, and their Requirements and Constraints are in the graph.
   - **(b) Faithfulness.** Every rule function carries its contracts, each seen to fail under
     mutation, or an explicit owed row in [§7](#7-verification--contracts). The engine answers every
-    class of every fixture as the literal reference evaluator does, and the reference agrees with
-    its own eager-strategy run.
+    class of every fixture as the literal reference evaluator does, and the reference's trivial,
+    eager and cautious runs agree wherever each completes (§5.5: trivial can end n/a when Nom
+    recurses).
   - **(c) Differential.** HermiT agrees on consistency and on every ordered pair of named classes,
-    for BFO-core, CCO, RO and OBI's `sriq` projection, ABoxes included. Sequoia, run as a pinned
-    external process, agrees on their TBoxes. Every oracle is capability-probed per construct
-    (Constraint b293cf6e).
+    for BFO-core, CCO and RO, ABoxes included. Sequoia, run as a pinned external process, agrees on
+    their TBoxes. Every oracle is capability-probed per construct (Constraint b293cf6e).
+
+    *Amended 2026-10-13 (owner): OBI is recorded as out of reach for this calculus.* Its `sriq`
+    projection's Run H passes the clause budget: at round 7 the store grows from 716k to 1.35M
+    clauses, with 5,284 contexts of about 31 bodiless clauses each. HermiT classifies it in about
+    4 s, and is its reference. Sequoia 0.6.1, the calculus's own implementation, did not finish in
+    30 minutes (graph Consequence bbb60fcb). `auto` steps down from it
+    ([§5.1](#51-profiles-are-selectable)), and an explicit `--profile sriq` reports it
+    inconclusive.
+
+    *Measured 2026-10-13: the budget leaves RO short too.* RO's `sriq` projection reaches HermiT's 275
+    subsumptions, but one of its runs passes the clause budget, so it ends at `resource-limit` (24 s, 3.4 GB at
+    1,000,000).
+    Unbudgeted, it completes and equals HermiT (54 s, 10 GB). (c) for RO therefore waits on a larger budget or a
+    leaner engine (slice 10), and the owner decides which.
   - **(d) Conformance.** The approved Direct-Semantics W3C tests whose constructs are all in `sriq`
     run with 0 FAIL.
   - **(e) Fuzzing.** `abox-fuzz --profile sriq` matches HermiT on generated ontologies that use
@@ -4707,6 +6222,26 @@ flowchart TB
   - **(g) BFO and CCO pass.** `howl validate --profile sriq` exits 0 on both.
   - **(h) Performance is recorded** against HermiT and Sequoia. The target is set at the
     feasibility checkpoint, which may also stop and re-plan the program.
+
+  It is built in slices on the `sriq` branch, as `el++` was (owner's plan, 2026-10-10; AD
+  00b7c42d):
+  1. the specification: §5.5 and the data lemma;
+  2. `horn-sriq` dropped from every surface;
+  3. the data lemma, implemented in every rung;
+  4. the `sriq` gate and census;
+  5. S0, S2 and S5: the working form, the normal form and ids from content;
+  6. S1, chain elimination, and the normaliser differential against HermiT;
+  7. the clause language (dense ids, Table 1 expanded into DL-clauses), the context order, `∈̂`
+     and the commit's `min`, and Table 2's rules with their contracts;
+  8. the context structure, triggers and strategies, Table 3's rules, Λ, S4's read-off, and the
+     literal reference evaluator with a HermiT leg;
+  9. a single-threaded prototype of S6's rounds, and the feasibility checkpoint ((h));
+  10. the parallel engine;
+  11. wiring. The owner put this before 10, since CCO already passes (g) single-threaded:
+     11a, the production run; 11b, selectable everywhere with `auto`'s step-down; 11c, the
+     harnesses' evidence.
+
+  Each slice's SPEC amendments ship in the PR that implements them.
 - *Earlier rungs and plans:*
   - **`el++`** was specified in [§5.4](#54-the-el-calculus) and built in slices:
     1. decode fixes;

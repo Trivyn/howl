@@ -14,6 +14,15 @@ typedef struct types_NormAxiom types_NormAxiom;
 typedef struct types_KName types_KName;
 typedef struct types_KTerm types_KTerm;
 typedef struct types_KscAxiom types_KscAxiom;
+typedef struct types_DName types_DName;
+typedef struct types_DRole types_DRole;
+typedef struct types_Dl1 types_Dl1;
+typedef struct types_Dl2 types_Dl2;
+typedef struct types_Dl4 types_Dl4;
+typedef struct types_DlClause types_DlClause;
+typedef struct types_ATerm types_ATerm;
+typedef struct types_Lit types_Lit;
+typedef struct types_Clause types_Clause;
 typedef struct types_KElem types_KElem;
 typedef struct types_KFact types_KFact;
 typedef struct types_Derived types_Derived;
@@ -34,12 +43,29 @@ typedef struct types_SubPair types_SubPair;
 typedef struct types_Findings types_Findings;
 typedef struct types_ClassAnswer types_ClassAnswer;
 typedef struct types_KscResult types_KscResult;
+typedef struct types_SriqEvidence types_SriqEvidence;
 typedef struct types_Evidence types_Evidence;
 typedef struct types_Outcome types_Outcome;
 typedef struct types_Fault types_Fault;
 typedef struct types_ProfileSelection types_ProfileSelection;
 typedef struct types_ReasonerConfig types_ReasonerConfig;
 typedef struct types_Names types_Names;
+
+typedef enum {
+    types_AKind_ak_x,
+    types_AKind_ak_y,
+    types_AKind_ak_z,
+    types_AKind_ak_fx,
+    types_AKind_ak_u,
+    types_AKind_ak_fu
+} types_AKind;
+
+typedef enum {
+    types_LitForm_lf_unary,
+    types_LitForm_lf_binary,
+    types_LitForm_lf_eq,
+    types_LitForm_lf_neq
+} types_LitForm;
 
 typedef enum {
     types_EntityKind_entity_class,
@@ -306,6 +332,196 @@ typedef struct types_KscAxiom types_KscAxiom;
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+typedef enum {
+    types_DName_dn_class,
+    types_DName_dn_fresh
+} types_DName_tag;
+
+struct types_DName {
+    types_DName_tag tag;
+    union {
+        rdf_IRI dn_class;
+        int64_t dn_fresh;
+    } data;
+};
+typedef struct types_DName types_DName;
+
+#ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_LIST_TYPES_DNAME_DEFINED
+#define SLOP_LIST_TYPES_DNAME_DEFINED
+#define SLOP_LIST_TYPES_DNAME_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_DName, slop_list_types_DName)
+#endif
+
+typedef enum {
+    types_DRole_dr_prop,
+    types_DRole_dr_bar,
+    types_DRole_dr_sub
+} types_DRole_tag;
+
+struct types_DRole {
+    types_DRole_tag tag;
+    union {
+        rdf_IRI dr_prop;
+        rdf_IRI dr_bar;
+        int64_t dr_sub;
+    } data;
+};
+typedef struct types_DRole types_DRole;
+
+#ifndef SLOP_OPTION_TYPES_DROLE_DEFINED
+#define SLOP_OPTION_TYPES_DROLE_DEFINED
+SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
+#endif
+
+struct types_Dl1 {
+    slop_list_types_DName body;
+    slop_list_types_DName head;
+};
+typedef struct types_Dl1 types_Dl1;
+
+#ifndef SLOP_OPTION_TYPES_DL1_DEFINED
+#define SLOP_OPTION_TYPES_DL1_DEFINED
+SLOP_OPTION_DEFINE(types_Dl1, slop_option_types_Dl1)
+#endif
+
+struct types_Dl2 {
+    types_DName sub;
+    types_DRole role;
+    int64_t count;
+    slop_option_types_DName filler;
+    slop_list_int fns;
+};
+typedef struct types_Dl2 types_Dl2;
+
+#ifndef SLOP_OPTION_TYPES_DL2_DEFINED
+#define SLOP_OPTION_TYPES_DL2_DEFINED
+SLOP_OPTION_DEFINE(types_Dl2, slop_option_types_Dl2)
+#endif
+
+struct types_Dl4 {
+    types_DName sub;
+    types_DRole role;
+    int64_t count;
+    slop_option_types_DName filler;
+    types_DRole srole;
+};
+typedef struct types_Dl4 types_Dl4;
+
+#ifndef SLOP_OPTION_TYPES_DL4_DEFINED
+#define SLOP_OPTION_TYPES_DL4_DEFINED
+SLOP_OPTION_DEFINE(types_Dl4, slop_option_types_Dl4)
+#endif
+
+typedef enum {
+    types_DlClause_dl1,
+    types_DlClause_dl2,
+    types_DlClause_dl3,
+    types_DlClause_dl4,
+    types_DlClause_dl5,
+    types_DlClause_dl6,
+    types_DlClause_dl7,
+    types_DlClause_dl8,
+    types_DlClause_dl9,
+    types_DlClause_dl10,
+    types_DlClause_dl11
+} types_DlClause_tag;
+
+struct types_DlClause {
+    types_DlClause_tag tag;
+    union {
+        types_Dl1 dl1;
+        types_Dl2 dl2;
+        struct {
+            types_DRole f0;
+            types_DName f1;
+            types_DName f2;
+        } dl3;
+        types_Dl4 dl4;
+        struct {
+            types_DName f0;
+            types_DRole f1;
+        } dl5;
+        struct {
+            types_DRole f0;
+            types_DName f1;
+        } dl6;
+        struct {
+            types_DRole f0;
+            types_DRole f1;
+        } dl7;
+        struct {
+            types_DRole f0;
+            types_DRole f1;
+        } dl8;
+        struct {
+            types_DRole f0;
+            types_DRole f1;
+        } dl9;
+        struct {
+            rdf_IRI f0;
+            types_DName f1;
+        } dl10;
+        struct {
+            types_DName f0;
+            rdf_IRI f1;
+        } dl11;
+    } data;
+};
+typedef struct types_DlClause types_DlClause;
+
+#ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
+#endif
+
+struct types_ATerm {
+    types_AKind kind;
+    uint32_t fsym;
+    uint32_t cst;
+    uint32_t zi;
+};
+typedef struct types_ATerm types_ATerm;
+
+#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+struct types_Lit {
+    types_LitForm form;
+    uint32_t pred;
+    types_ATerm t1;
+    types_ATerm t2;
+};
+typedef struct types_Lit types_Lit;
+
+#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
+#define SLOP_OPTION_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#endif
+
+#ifndef SLOP_LIST_TYPES_LIT_DEFINED
+#define SLOP_LIST_TYPES_LIT_DEFINED
+#define SLOP_LIST_TYPES_LIT_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Lit, slop_list_types_Lit)
+#endif
+
+struct types_Clause {
+    slop_list_types_Lit body;
+    slop_list_types_Lit head;
+};
+typedef struct types_Clause types_Clause;
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
 #endif
 
 typedef enum {
@@ -652,9 +868,22 @@ typedef struct types_KscResult types_KscResult;
 SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
 #endif
 
+struct types_SriqEvidence {
+    int64_t h_rounds;
+    int64_t c_rounds;
+    uint8_t ran_c;
+};
+typedef struct types_SriqEvidence types_SriqEvidence;
+
+#ifndef SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+#define SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+SLOP_OPTION_DEFINE(types_SriqEvidence, slop_option_types_SriqEvidence)
+#endif
+
 typedef enum {
     types_Evidence_el_evidence,
-    types_Evidence_ksc_evidence
+    types_Evidence_ksc_evidence,
+    types_Evidence_sriq_evidence
 } types_Evidence_tag;
 
 struct types_Evidence {
@@ -662,6 +891,7 @@ struct types_Evidence {
     union {
         types_Saturation el_evidence;
         types_KscResult ksc_evidence;
+        types_SriqEvidence sriq_evidence;
     } data;
 };
 typedef struct types_Evidence types_Evidence;
@@ -719,6 +949,7 @@ struct types_ReasonerConfig {
     uint8_t strict_profile;
     int64_t cancel_ptr;
     uint8_t verbose;
+    int64_t clause_budget;
 };
 typedef struct types_ReasonerConfig types_ReasonerConfig;
 
@@ -749,6 +980,7 @@ struct types_Outcome {
     int64_t rounds;
     types_Names names;
     slop_list_arena_ptr owned;
+    uint8_t stepped_down;
 };
 typedef struct types_Outcome types_Outcome;
 
@@ -936,6 +1168,24 @@ types_KElem types_aux_elem(int64_t w);
 types_KElem types_class_elem(types_KName q);
 types_KTerm types_thing_term(void);
 types_KTerm types_nothing_term(void);
+types_ATerm types_at_x(void);
+types_ATerm types_at_y(void);
+types_ATerm types_at_z(uint32_t i);
+types_ATerm types_at_fx(uint32_t f);
+types_ATerm types_at_u(uint32_t u);
+types_ATerm types_at_fu(uint32_t f, uint32_t u);
+int64_t types_ord_int(int64_t a, int64_t b);
+int64_t types_akind_rank(types_AKind k);
+int64_t types_aterm_cmp(types_ATerm a, types_ATerm b);
+uint8_t types_aterm_eq(types_ATerm a, types_ATerm b);
+types_Lit types_atom1(uint32_t b, types_ATerm t);
+types_Lit types_atom2(uint32_t s, types_ATerm l, types_ATerm r);
+types_Lit types_oriented(types_LitForm form, types_ATerm s, types_ATerm t);
+types_Lit types_eq_lit(types_ATerm s, types_ATerm t);
+types_Lit types_neq_lit(types_ATerm s, types_ATerm t);
+int64_t types_lit_form_rank(types_LitForm f);
+int64_t types_lit_cmp(types_Lit a, types_Lit b);
+uint8_t types_lit_eq(types_Lit a, types_Lit b);
 types_Names types_empty_names(slop_arena* arena);
 types_Node types_intern_node(slop_arena* arena, types_Names names, types_Node n);
 types_RoleId types_intern_role(slop_arena* arena, types_Names names, types_RoleId r);
@@ -960,6 +1210,8 @@ types_EdgePair types_emit_edge(slop_arena* arena, types_LogicalEdge e);
 uint8_t types_outcome_is_complete(types_Outcome o);
 uint8_t types_findings_are_incoherent(types_Findings f);
 types_Verdict types_verdict(types_Outcome o);
+
+#define types_SRIQ_CLAUSE_BUDGET (500000)
 
 #ifndef SLOP_OPTION_TYPES_NODE_DEFINED
 #define SLOP_OPTION_TYPES_NODE_DEFINED
@@ -994,6 +1246,51 @@ SLOP_OPTION_DEFINE(types_KTerm, slop_option_types_KTerm)
 #ifndef SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 #define SLOP_OPTION_TYPES_KSCAXIOM_DEFINED
 SLOP_OPTION_DEFINE(types_KscAxiom, slop_option_types_KscAxiom)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
+#define SLOP_OPTION_TYPES_DNAME_DEFINED
+SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DROLE_DEFINED
+#define SLOP_OPTION_TYPES_DROLE_DEFINED
+SLOP_OPTION_DEFINE(types_DRole, slop_option_types_DRole)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DL1_DEFINED
+#define SLOP_OPTION_TYPES_DL1_DEFINED
+SLOP_OPTION_DEFINE(types_Dl1, slop_option_types_Dl1)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DL2_DEFINED
+#define SLOP_OPTION_TYPES_DL2_DEFINED
+SLOP_OPTION_DEFINE(types_Dl2, slop_option_types_Dl2)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DL4_DEFINED
+#define SLOP_OPTION_TYPES_DL4_DEFINED
+SLOP_OPTION_DEFINE(types_Dl4, slop_option_types_Dl4)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_DLCLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_DlClause, slop_option_types_DlClause)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
+#define SLOP_OPTION_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_KELEM_DEFINED
@@ -1104,6 +1401,11 @@ SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
 #ifndef SLOP_OPTION_TYPES_KSCRESULT_DEFINED
 #define SLOP_OPTION_TYPES_KSCRESULT_DEFINED
 SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+#define SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+SLOP_OPTION_DEFINE(types_SriqEvidence, slop_option_types_SriqEvidence)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_EVIDENCE_DEFINED

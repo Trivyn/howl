@@ -15,6 +15,7 @@
   (import vocab (OWL_THING OWL_NOTHING))
 
   (export
+    SRIQ_CLAUSE_BUDGET
     ;; identity
     Node
     RoleId
@@ -22,6 +23,8 @@
     Concept
     NormAxiom
     KName KTerm KscAxiom
+    DName DRole Dl1 Dl2 Dl4 DlClause
+    AKind ATerm LitForm Lit Clause
     KElem KFact
     ;; saturation
     Derived
@@ -43,7 +46,7 @@
     SubPair
     Findings
     Outcome
-    Evidence ClassAnswer KscResult
+    Evidence SriqEvidence ClassAnswer KscResult
     Fault
     Names
     ;; configuration
@@ -60,6 +63,8 @@
     kname-eq kterm-eq kelem-eq kfact-eq
     name-term nominal-term ind-elem aux-elem class-elem
     thing-term nothing-term
+    at-x at-y at-z at-fx at-u at-fu aterm-cmp aterm-eq
+    atom1 atom2 eq-lit neq-lit lit-cmp lit-eq
     derived-eq
     addressed-eq
     emit-edge
@@ -237,6 +242,105 @@
     (k-chain        RoleId RoleId RoleId)          ; subRChain  R ∘ S ⊑ T
     (k-range        RoleId KName)                  ; supProd    R ⊑ ⊤ × D
     (k-role-assert  IRI RoleId IRI)))              ; R(a, b) ↦ supEx(a, R, b, b) — §5.4's Fig. 2 erratum
+
+  ;; ============================================================
+  ;; sriq's normal form — [TGH21] Table 1, as SPEC §5.5 S2 pins it
+  ;;
+  ;; One variant per Table 1 form, at the axiom level; the engine reads
+  ;; each as the DL-clauses Table 1 lists for it. Every role slot is a
+  ;; role NAME (DRole has no inverse arm): an inverse argument is P̄, so
+  ;; "Table 1's forms take role names" holds by construction.
+  ;; ============================================================
+
+  ;; A class name: an input class, or a fresh A_E (its registry id; ids
+  ;; from content are given in S5's pass).
+  (type DName (union
+    (dn-class IRI)
+    (dn-fresh (Int 0 ..))))
+
+  ;; A role name: a property P, the fresh P̄ standing for P⁻, or DL4's
+  ;; fresh S_{B₂} (its registry id).
+  (type DRole (union
+    (dr-prop IRI)
+    (dr-bar  IRI)
+    (dr-sub  (Int 0 ..))))
+
+  ;; DL1  B₁ ⊓ … ⊓ Bₙ ⊑ Bₙ₊₁ ⊔ … ⊔ Bₘ. An empty body is ⊤, an empty head ⊥.
+  (type Dl1 (record
+    (body (List DName))
+    (head (List DName))))
+
+  ;; DL2  B₁ ⊑ ≥n S.B₂, with its n function symbols. A filler of none is
+  ;; ⊤ (S2 choice 6): its B₂(fᵢ(x)) clauses are omitted.
+  (type Dl2 (record
+    (sub    DName)
+    (role   DRole)
+    (count  (Int 1 ..))
+    (filler (Option DName))
+    (fns    (List (Int 0 ..)))))
+
+  ;; DL4  B₁ ⊑ ≤n S.B₂, with its fresh S_{B₂}. A filler of none is ⊤.
+  (type Dl4 (record
+    (sub    DName)
+    (role   DRole)
+    (count  (Int 0 ..))
+    (filler (Option DName))
+    (srole  DRole)))
+
+  (type DlClause (union
+    (dl1  Dl1)
+    (dl2  Dl2)
+    (dl3  DRole DName DName)    ; ∃S.B₁ ⊑ B₂
+    (dl4  Dl4)
+    (dl5  DName DRole)          ; B ⊑ ∃S.Self
+    (dl6  DRole DName)          ; ∃S.Self ⊑ B
+    (dl7  DRole DRole)          ; S₁ ⊑ S₂
+    (dl8  DRole DRole)          ; S₁ ⊑ S₂⁻
+    (dl9  DRole DRole)          ; Disj(S₁, S₂)
+    (dl10 IRI DName)            ; {o} ⊑ B
+    (dl11 DName IRI)))          ; B ⊑ {o}
+
+  ;; ============================================================
+  ;; sriq's clause language — [TGH21] §2.1, §2.3 and Definition 2
+  ;; (SPEC §5.5 S5)
+  ;;
+  ;; What the calculus reads: flat records of dense U32 ids, which
+  ;; sriqclauses.slop builds once from the normal form. Classes, roles,
+  ;; function symbols and constants are each numbered from 0. An a-term
+  ;; never nests ([TGH21]'s are x, y, zᵢ, f(x), u and f(u)), so a kind and
+  ;; three id slots hold any of them, and a literal has finitely many
+  ;; positions. A slot its kind does not use is 0, so equal a-terms are
+  ;; equal field by field.
+  ;; ============================================================
+
+  ;; x is the central variable and y its predecessor; zᵢ is a neighbour
+  ;; (ontology clauses only); u is a constant, named or Nom's.
+  (type AKind (enum ak-x ak-y ak-z ak-fx ak-u ak-fu))
+
+  (type ATerm (record
+    (kind AKind)
+    (fsym U32)      ; f, in f(x) and f(u)
+    (cst  U32)      ; u, in u and f(u)
+    (zi   U32)))    ; i, in zᵢ, from 1 as in Table 1
+
+  (type LitForm (enum lf-unary lf-binary lf-eq lf-neq))
+
+  ;; B(t): pred B, t1 t, t2 x. S(s, t): pred S, t1 s, t2 t. s ≈ t and
+  ;; s ≉ t: pred 0, the larger a-term (aterm-cmp) first, so that "t1 ⋈ t2
+  ;; is identical to t2 ⋈ t1" ([TGH21] §2.1) is field equality. An atom
+  ;; A ≈ true is written A, as the paper does.
+  (type Lit (record
+    (form LitForm)
+    (pred U32)
+    (t1   ATerm)
+    (t2   ATerm)))
+
+  ;; Γ → Δ: a body of atoms (and, in a context clause, u₁ ≈ u₂) and a head
+  ;; of literals, each sorted by lit-cmp without repetition, since they are
+  ;; "treated as sets" (§2.1). An empty body is ⊤, an empty head ⊥.
+  (type Clause (record
+    (body (List Lit))
+    (head (List Lit))))
 
   ;; ============================================================
   ;; el++ facts — Kinst's IDB, [Krö10] Fig. 3 (SPEC §5.4)
@@ -513,9 +617,17 @@
   ;; What a run leaves behind, by calculus: el's saturation, or el++'s
   ;; per-class answers. Findings are extracted from it; the report reads
   ;; nothing else from it but `rounds`, which the Outcome carries itself.
+  ;; sriq's evidence (SPEC §5.5, the ABox split): the run's shape. Its
+  ;; answers are the findings themselves, which the probes read.
+  (type SriqEvidence (record
+    (h-rounds Int)                   ; Run H's rounds
+    (c-rounds Int)                   ; Run C's, 0 when it did not run
+    (ran-c    Bool)))
+
   (type Evidence (union
-    (el-evidence  Saturation)
-    (ksc-evidence KscResult)))
+    (el-evidence   Saturation)
+    (ksc-evidence  KscResult)
+    (sriq-evidence SriqEvidence)))
 
   (type Outcome (record
     (profile     Profile)      ; the calculus that ran (§5.1); the report states it
@@ -523,9 +635,10 @@
     (termination Termination)
     (findings    Findings)     ; what WAS derived — always present, always meaningful
     (evidence    Evidence)     ; always present; PARTIAL unless the run was complete
-    (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4)
+    (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4), sriq's runs' sum (§5.5)
     (names       Names)        ; el's saturation nodes are RENAMED: map back through this
-    (owned       (List Arena)))) ; arenas `evidence` lives in beyond the caller's: release-outcome
+    (owned       (List Arena))   ; arenas `evidence` lives in beyond the caller's: release-outcome
+    (stepped-down Bool)))       ; auto chose sriq, its run passed the clause budget, and this is el's or el++'s (§5.1)
 
   ;; The error path. Distinct from an Outcome: these produce no result
   ;; to report on.
@@ -571,7 +684,16 @@
     ;; out-of-profile is a report, not a refusal (§8.4).
     (strict-profile  Bool)
     (cancel-ptr      I64)
-    (verbose         Bool)))
+    (verbose         Bool)
+    ;; sriq's clause budget (§5.5): not a host option; a test lowers it.
+    (clause-budget   (Int 1 ..))))
+
+  ;; The clause budget (owner, 2026-10-13): a sriq run whose store passes it
+  ;; at a round boundary stops at resource-limit. It is a count, never a
+  ;; clock, so reports stay a function of the input and the budget (§6.8);
+  ;; it binds an explicit sriq run as well as auto's, and auto steps down
+  ;; from it (§5.1).
+  (const SRIQ_CLAUSE_BUDGET Int 500000)
 
   (fn default-config ()
     (@intent "Create the default reasoner configuration")
@@ -582,6 +704,7 @@
     (@post {(. $result max-iterations) == 1000})
     (@post {(. $result cancel-ptr) == 0})
     (@post {(. $result verbose) == false})
+    (@post {(. $result clause-budget) == 500000})   ; SRIQ_CLAUSE_BUDGET: a const is opaque to the prover
     ;; The library path always runs NON-STRICT: out-of-profile is a
     ;; report, not a refusal, and the port always consumes it that way.
     ;; --strict is a CLI affordance layered on top, never the default.
@@ -598,7 +721,10 @@
       (selection (union-new ProfileSelection explicit 'profile-el))
       (strict-profile false)
       (cancel-ptr 0)
-      (verbose false)))
+      (verbose false)
+      ;; SRIQ_CLAUSE_BUDGET, as a literal: a const is opaque to the prover,
+      ;; and test-auto-step-down pins the two equal.
+      (clause-budget 500000)))
 
   (fn cancel-requested ((cancel I64))
     (@intent "Has the host set the cancel flag `cancel` points at? (0 means no flag)")
@@ -802,6 +928,153 @@
     (@spec (() -> KTerm))
     (@pure)
     (union-new KTerm k-name (union-new KName k-class (record-new IRI (value OWL_NOTHING)))))
+
+  ;; ------------------------------------------------------------
+  ;; sriq's a-terms and literals: constructors, and a structural order.
+  ;; The order only sorts and orients; it is never the context order ≻.
+  ;; A literal's constructor posts its form and nothing more: posts on
+  ;; every field (kind, pred, t1, t2) left Z3 timing out on the rule
+  ;; contracts' counterexamples, so mutated rules came back unknown.
+  ;; ------------------------------------------------------------
+
+  (fn at-x ()
+    (@intent "x, the central variable")
+    (@spec (() -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-x) (fsym (cast U32 0)) (cst (cast U32 0)) (zi (cast U32 0))))
+
+  (fn at-y ()
+    (@intent "y, the predecessor variable")
+    (@spec (() -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-y) (fsym (cast U32 0)) (cst (cast U32 0)) (zi (cast U32 0))))
+
+  (fn at-z ((i U32))
+    (@intent "zᵢ, a neighbour variable")
+    (@spec ((U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-z) (fsym (cast U32 0)) (cst (cast U32 0)) (zi i)))
+
+  (fn at-fx ((f U32))
+    (@intent "f(x)")
+    (@spec ((U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-fx) (fsym f) (cst (cast U32 0)) (zi (cast U32 0))))
+
+  (fn at-u ((u U32))
+    (@intent "The constant u")
+    (@spec ((U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-u) (fsym (cast U32 0)) (cst u) (zi (cast U32 0))))
+
+  (fn at-fu ((f U32) (u U32))
+    (@intent "f(u)")
+    (@spec ((U32 U32) -> ATerm))
+    (@pure)
+    (record-new ATerm (kind 'ak-fu) (fsym f) (cst u) (zi (cast U32 0))))
+
+  (fn ord-int ((a Int) (b Int))
+    (@intent "-1, 0 or 1")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (cond ((< a b) -1) ((> a b) 1) (else 0)))
+
+  (fn akind-rank ((k AKind))
+    (@intent "x, y, zᵢ, f(x), u, f(u), in that order")
+    (@spec ((AKind) -> Int))
+    (@pure)
+    (match k ('ak-x 0) ('ak-y 1) ('ak-z 2) ('ak-fx 3) ('ak-u 4) ('ak-fu 5)))
+
+  (fn aterm-cmp ((a ATerm) (b ATerm))
+    (@intent "A structural total order on a-terms: kind, then f, u and i")
+    (@spec ((ATerm ATerm) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (let ((ka (akind-rank (. a kind)))
+          (kb (akind-rank (. b kind))))
+      (cond
+        ((!= ka kb)                 (ord-int ka kb))
+        ((!= (. a fsym) (. b fsym)) (ord-int (cast Int (. a fsym)) (cast Int (. b fsym))))
+        ((!= (. a cst) (. b cst))   (ord-int (cast Int (. a cst)) (cast Int (. b cst))))
+        (else                       (ord-int (cast Int (. a zi)) (cast Int (. b zi)))))))
+
+  (fn aterm-eq ((a ATerm) (b ATerm))
+    (@intent "The same a-term")
+    (@spec ((ATerm ATerm) -> Bool))
+    (@pure)
+    (== (aterm-cmp a b) 0))
+
+  (fn atom1 ((b U32) (t ATerm))
+    (@intent "B(t); the unused second slot is x")
+    (@spec ((U32 ATerm) -> Lit))
+    (@pure)
+    (@post (== (. $result form) 'lf-unary))
+    (record-new Lit (form 'lf-unary) (pred b) (t1 t) (t2 (at-x))))
+
+  (fn atom2 ((s U32) (l ATerm) (r ATerm))
+    (@intent "S(l, r)")
+    (@spec ((U32 ATerm ATerm) -> Lit))
+    (@pure)
+    (@post (== (. $result form) 'lf-binary))
+    (record-new Lit (form 'lf-binary) (pred s) (t1 l) (t2 r)))
+
+  (fn oriented ((form LitForm) (s ATerm) (t ATerm))
+    (@intent "s ⋈ t with the larger a-term first: one record whichever way round it is written")
+    (@spec ((LitForm ATerm ATerm) -> Lit))
+    (@pure)
+    (@post (== (. $result form) form))
+    ;; No orientation @post. In another function's contract the solver
+    ;; reads aterm-cmp as uninterpreted, so the antisymmetry it would need
+    ;; is out of reach (it refutes `t1 ≥ t2` with aterm-cmp ≡ -1).
+    ;; test-sriq-eq-orientation checks both orders on every pair of a-term
+    ;; kinds instead.
+    (if (>= (aterm-cmp s t) 0)
+      (record-new Lit (form form) (pred (cast U32 0)) (t1 s) (t2 t))
+      (record-new Lit (form form) (pred (cast U32 0)) (t1 t) (t2 s))))
+
+  (fn eq-lit ((s ATerm) (t ATerm))
+    (@intent "s ≈ t, oriented")
+    (@spec ((ATerm ATerm) -> Lit))
+    (@pure)
+    (@post (== (. $result form) 'lf-eq))
+    (oriented 'lf-eq s t))
+
+  (fn neq-lit ((s ATerm) (t ATerm))
+    (@intent "s ≉ t, oriented")
+    (@spec ((ATerm ATerm) -> Lit))
+    (@pure)
+    (@post (== (. $result form) 'lf-neq))
+    (oriented 'lf-neq s t))
+
+  (fn lit-form-rank ((f LitForm))
+    (@intent "Atoms B(t), then S(s, t), then ≈, then ≉")
+    (@spec ((LitForm) -> Int))
+    (@pure)
+    (match f ('lf-unary 0) ('lf-binary 1) ('lf-eq 2) ('lf-neq 3)))
+
+  (fn lit-cmp ((a Lit) (b Lit))
+    (@intent "A structural total order on literals: form, predicate, then the a-terms in order")
+    (@spec ((Lit Lit) -> Int))
+    (@pure)
+    (@post {$result >= -1})
+    (@post {$result <= 1})
+    (let ((fa (lit-form-rank (. a form)))
+          (fb (lit-form-rank (. b form)))
+          (c1 (aterm-cmp (. a t1) (. b t1))))
+      (cond
+        ((!= fa fb)                 (ord-int fa fb))
+        ((!= (. a pred) (. b pred)) (ord-int (cast Int (. a pred)) (cast Int (. b pred))))
+        ((!= c1 0)                  c1)
+        (else                       (aterm-cmp (. a t2) (. b t2))))))
+
+  (fn lit-eq ((a Lit) (b Lit))
+    (@intent "The same literal")
+    (@spec ((Lit Lit) -> Bool))
+    (@pure)
+    (== (lit-cmp a b) 0))
 
 ;; ============================================================
   ;; Saturation-local names  —  M1 slice 6b C2

@@ -72,5 +72,35 @@ class FssTest(unittest.TestCase):
         self.assertEqual(conformance.fss_repeated_operands(path), [])
 
 
+
+class BudgetedTest(unittest.TestCase):
+    """A run stopped at sriq's clause budget is partial but sound: whatever it
+    claims that the test's answer contradicts FAILS; the rest is `budget`."""
+
+    def report(self, d, body, verdict="inconclusive"):
+        subs = [l for l in body if l.startswith("sub ")]
+        path = os.path.join(d, "h.report")
+        with open(path, "w") as f:
+            f.write("\n".join(["howl-report 2", "profile sriq", f"verdict {verdict}", "termination resource-limit",
+                               "rounds 3", body[0], "omitted 0", "unsatisfiable 0", f"subsumptions {len(subs)}",
+                               *subs]) + "\n")
+        return path
+
+    def test_a_definitive_finding_is_checked(self):
+        import entdiff
+        with tempfile.TemporaryDirectory() as d:
+            incons = self.report(d, ["inconsistent true"], "incoherent")
+            self.assertEqual(conformance.budgeted(incons, False)[0], "FAIL")
+            self.assertEqual(conformance.budgeted(incons, True)[0], "ok")
+            self.assertEqual(conformance.budgeted(incons, notentailed=[("SubClassOf", [A, B])])[0], "FAIL")
+            self.assertEqual(conformance.budgeted(incons, notentailed=[("ClassAssertion", None)])[0], "FAIL")
+            sub = self.report(d, ["inconsistent false", f"sub {A} {B}"])
+            want = os.path.join(d, "want.report")
+            with open(want, "w") as f:
+                f.write(f"oracle-report 1\ninconsistent false\nsub {A} {A}\n")
+            self.assertEqual(conformance.budgeted(sub, expected=entdiff.parse(want))[0], "FAIL")
+            self.assertEqual(conformance.budgeted(sub, notentailed=[("SubClassOf", [B, A])])[0], "budget")
+            self.assertEqual(conformance.budgeted(sub)[0], "budget")
+
 if __name__ == "__main__":
     unittest.main()

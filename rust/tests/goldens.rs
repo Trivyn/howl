@@ -94,6 +94,13 @@ fn el_plus_plus_fixture_goldens() {
     check(&gs, ProfileSelection::Explicit(Profile::ElPlusPlus));
 }
 
+#[test]
+fn sriq_fixture_goldens() {
+    let gs = goldens_in("sriq", &["sriq", "v0", "data"]);
+    assert!(gs.len() >= 60, "only {} sriq goldens found", gs.len());
+    check(&gs, ProfileSelection::Explicit(Profile::Sriq));
+}
+
 /// `howl validate root.ttl -I imported.ttl --report`: two documents,
 /// the second's blank nodes standardized apart, and its ontology IRI
 /// attested.

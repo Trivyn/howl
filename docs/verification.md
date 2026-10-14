@@ -15,8 +15,9 @@ is read through `cancel-requested`
 ([#280](https://github.com/slop-lang/slop/issues/280)), el's loop has no `break`, and the calls in
 it take counts, not the Saturation. The profile seam's contracts are among the verified: `select-profile` resolves an
 explicit request to exactly itself and leaves `auto` to the ontology, `profile-implemented` admits
-`el` and `el++` only, `profile-dropped` holds for `horn-sriq` alone, `choose-auto` proves `auto`'s three cases (`el` when it omits nothing, else the
-rung omitting fewer, ties to `el`), and `default-config` selects `el`; each was seen to fail under a
+`el`, `el++` and `sriq`, `profile-dropped` holds for `horn-sriq` alone, `choose-auto` proves `auto`'s rule over three
+rungs (`el` when it omits nothing, else the rung omitting fewest, ties to the earlier), `choose-auto-low` the same over `el` and
+`el++` for the step-down, and `default-config` selects `el` with the clause budget at 500,000; each was seen to fail under a
 mutation. Among the verified, the five loop-free completion
 rules each prove a **faithfulness pair**: `sound` (nothing unlicensed is emitted) and `complete`
 (nothing licensed is omitted), 11 properties in all, each seen to stop verifying under a mutation of

@@ -1,0 +1,14 @@
+# sriq ABox split (slice 9j): SameIndividual and DifferentIndividuals on the same pair, beside an
+# AllDifferent of folded individuals. a and b are not foldable (SameIndividual), and clash.
+# Expect: inconsistent.
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+
+:X a owl:Class .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual .
+:a owl:sameAs :b . :a owl:differentFrom :b .
+:p a owl:NamedIndividual , :X . :q a owl:NamedIndividual , :X . :w a owl:NamedIndividual , :X .
+[ a owl:AllDifferent ; owl:distinctMembers ( :p :q :w ) ] .

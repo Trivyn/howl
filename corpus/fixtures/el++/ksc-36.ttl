@@ -1,0 +1,18 @@
+# el++ engine fixture 36 (src/test.slop: test-ksc-engine-matches-reference).
+# Rule (18) from its second self premise: A ⊑ ∃u.Self gives self(x, u) in
+# round 1, and A ⊑ C ⊑ ∃v.Self gives self(x, v) only in round 2, after
+# self(x, u) was processed. So u ∘ v ⊑ w must join when self(x, v) arrives,
+# from the second leg: self(x, w), and with ∃w.A ⊑ D, A ⊑ D.
+# Expect: A ⊑ C, A ⊑ D.
+# Inside el++ whole: the engine must answer every class as the literal Psc
+# reference does (test-ksc-engine-matches-reference).
+
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:u a owl:ObjectProperty . :v a owl:ObjectProperty . :w a owl:ObjectProperty .
+:A a owl:Class . :C a owl:Class . :D a owl:Class .
+:w owl:propertyChainAxiom ( :u :v ) .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :u ; owl:hasSelf true ] , :C .
+:C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :v ; owl:hasSelf true ] .
+[ a owl:Restriction ; owl:onProperty :w ; owl:someValuesFrom :A ] rdfs:subClassOf :D .

@@ -1,0 +1,19 @@
+howl-report 2
+profile sriq
+verdict incoherent
+termination fixpoint
+rounds 3
+inconsistent false
+omitted 0
+unsatisfiable 1
+unsat http://example.org/t#Y
+subsumptions 8
+sub http://example.org/t#A http://example.org/t#A
+sub http://example.org/t#A http://example.org/t#X
+sub http://example.org/t#A http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#X http://example.org/t#X
+sub http://example.org/t#X http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/t#Y http://www.w3.org/2002/07/owl#Nothing
+sub http://www.w3.org/2002/07/owl#Thing http://example.org/t#X
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 1

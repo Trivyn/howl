@@ -1,0 +1,25 @@
+# sriq: predecessor relevance (SPEC §5.5 S6 R8, slice 9i), reactivation.
+# Under trivial, X's and Y's successors share v_⊤: X's edge supplies A(x)
+# and r(y, x), Y's supplies B(x) and s(y, x). Hyper there joins A → A and
+# B → B into A(x) ∧ B(x) → C(x), which no single edge supplies, so it is
+# stored but deferred. X ⊑ X1 ⊑ X2 ⊑ X3 ⊑ ∀r.B later adds B(f(x)) to X's
+# K₂, so trig(v_X, f) grows to hold B. The stored clause is now supported,
+# and must be activated: only then does Hyper join it with ∃r.C ⊑ Q and
+# Pred bring Q back to X. A run that never reactivated it would miss
+# X ⊑ Q.
+# Expect: X ⊑ Q.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :Q a owl:Class .
+:X a owl:Class . :X1 a owl:Class . :X2 a owl:Class . :X3 a owl:Class . :Y a owl:Class .
+:r a owl:ObjectProperty . :s a owl:ObjectProperty .
+:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :A ] .
+:X rdfs:subClassOf :X1 . :X1 rdfs:subClassOf :X2 . :X2 rdfs:subClassOf :X3 .
+:X3 rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] .
+:Y rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] .
+[ owl:intersectionOf ( :A :B ) ] rdfs:subClassOf :C .
+[ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom :C ] rdfs:subClassOf :Q .

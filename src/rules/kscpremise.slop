@@ -184,8 +184,10 @@
             ((k-sub y z)
               (do
                 (file-term arena on-term y ax)
-                (match (term-individual y) ((some a) (when (first-mention arena seen a) (list-push nis a))) ((none) (do)))
-                (match (term-individual z) ((some a) (when (first-mention arena seen a) (list-push nis a))) ((none) (do)))))
+                (match (term-individual y) ((some a) (when (first-mention arena seen a) (list-push nis a)))
+                  ((none) (do)))
+                (match (term-individual z) ((some a) (when (first-mention arena seen a) (list-push nis a)))
+                  ((none) (do)))))
             ;; subConj and subEx's triple/self side go to the two-level
             ;; partner maps, not the flat buckets: a general class takes
             ;; part in thousands of conjunctions, and a role heads
