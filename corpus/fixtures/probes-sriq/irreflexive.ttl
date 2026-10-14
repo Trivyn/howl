@@ -1,0 +1,15 @@
+# PROBE irreflexive. r is irreflexive, so r(a, a) is inconsistent.
+# construct: IrreflexiveObjectProperty
+# expect: inconsistent
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:r a owl:ObjectProperty .
+:r a owl:IrreflexiveProperty .
+:a a owl:NamedIndividual .
+:a :r :a .

@@ -37,6 +37,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import profiles  # noqa: E402
 
 NOTHING = "http://www.w3.org/2002/07/owl#Nothing"
+THING = "http://www.w3.org/2002/07/owl#Thing"
 SHOWN = 50
 
 
@@ -70,7 +71,24 @@ class Report:
         return set(self.subs)
 
 
-def parse(path):
+def unsound(rep, want):
+    """What a partial report rep claims that the complete answer want does not
+    entail: its findings are sound, so each must hold in want."""
+    def holds(a, b):
+        return (want.inconsistent or a == NOTHING or b == THING or a in want.unsat
+                or b in want.subs.get(a, ()))
+    if rep.inconsistent:
+        return [] if want.inconsistent else ["inconsistent, expected consistent"]
+    out = [f"unsat {a}" for a in sorted(rep.unsat) if not holds(a, NOTHING)]
+    out += [f"sub {a} {b}" for a in sorted(rep.subs) for b in sorted(rep.subs[a]) if not holds(a, b)]
+    return out
+
+
+def parse(path, partial=False):
+    """The report at path, every check run. A HOWL report of a run that did not
+    finish or omitted axioms raises Incomplete, unless partial: then it is
+    returned as it stands, its findings sound but not complete (a caller may
+    check them only for what they claim, never for what they lack)."""
     try:
         with open(path, encoding="utf-8") as f:
             lines = f.read().splitlines()
@@ -154,14 +172,6 @@ def parse(path):
             raise Refused(f"{path}: verdict {single.get('verdict')} but the report's facts make it {expected}")
         if "exit" in single and single["exit"] != {"coherent": "0", "incoherent": "1", "inconclusive": "2"}[expected]:
             raise Refused(f"{path}: exit {single['exit']} does not match verdict {expected}")
-        # THE REFUSAL. Checked here rather than trusted to the caller, so no
-        # driver can diff a partial run by forgetting to look.
-        if termination != "fixpoint":
-            raise Incomplete(f"{path}: termination {termination}: only a run that reached its fixpoint is compared",
-                             "termination")
-        if single["omitted"] != "0":
-            raise Incomplete(f"{path}: omitted {single['omitted']}: HOWL reasoned over a smaller theory than the oracle",
-                             "omitted")
     if inconsistent and (unsat or subs):
         raise Refused(f"{path}: an inconsistent report must carry no hierarchy")
     for a in unsat:
@@ -170,6 +180,16 @@ def parse(path):
     for a, bs in subs.items():
         if NOTHING in bs and a not in unsat:
             raise Refused(f"{path}: `sub {a} owl:Nothing` without `unsat {a}`")
+    if kind == "howl" and not partial:
+        # THE REFUSAL. Checked here rather than trusted to the caller, so no
+        # driver can diff a partial run by forgetting to look; and last, so
+        # Incomplete means every other check passed (a driver may skip it).
+        if single["termination"] != "fixpoint":
+            raise Incomplete(f"{path}: termination {single['termination']}: only a run that reached its fixpoint is "
+                             "compared", "termination")
+        if single["omitted"] != "0":
+            raise Incomplete(f"{path}: omitted {single['omitted']}: HOWL reasoned over a smaller theory than the oracle",
+                             "omitted")
     return Report(kind, inconsistent, unsat, dict(subs), meta)
 
 

@@ -854,7 +854,7 @@ sriqsat_SatConfig sriqabox_with_fuel(sriqsat_SatConfig cfg, int64_t fuel) {
 }
 
 sriqsat_SatConfig sriqabox_sriq_config(int64_t max_rounds, int64_t budget, int64_t cancel) {
-    return ((sriqsat_SatConfig){.base = ((sriqref_RefConfig){.strat = sriqctx_Strategy_st_cautious, .fuel = max_rounds, .lam = -1, .ctxs = 2147483647, .cls = budget, .prod = 2147483647, .cnst = 2147483647}), .perm = 0, .scan = 0, .defer = 1, .views = 1, .check = 0, .cancel = cancel});
+    return ((sriqsat_SatConfig){.base = ((sriqref_RefConfig){.strat = sriqctx_Strategy_st_cautious, .fuel = max_rounds, .lam = -1, .ctxs = 2147483647, .cls = budget, .prod = budget, .cnst = 2147483647}), .perm = 0, .scan = 0, .defer = 1, .views = 1, .check = 0, .cancel = cancel});
 }
 
 types_Findings sriqabox_split_findings(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes, uint8_t inconsistent) {

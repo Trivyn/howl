@@ -21,6 +21,7 @@ sriqhyper_HCtx sriqsat_hctx_of(sriqsat_Here h);
 sriqhyper_HOut sriqsat_sat_hyper(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, int64_t room);
 slop_list_sriqref_Cand sriqsat_eq_pairs(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, slop_list_sriq_Premise p1s, slop_list_sriq_Premise p2s);
 slop_list_sriqref_Cand sriqsat_eq_side(slop_arena* arena, sriqctx_Structure st, sriqsat_Here h, sriq_Premise p1, uint32_t k1, sriq_Premise p2);
+slop_list_sriqref_Cand sriqsat_join_kept(slop_arena* arena, uint32_t v, sriq_Premise p1, types_Clause c, int64_t j);
 slop_list_sriqref_Cand sriqsat_copy_cands(slop_arena* arena, slop_list_sriqref_Cand cs);
 uint8_t sriqsat_holds_term(types_Lit l, types_ATerm s);
 uint8_t sriqsat_term_at(types_Lit l, uint32_t a, uint8_t inner, types_ATerm s);
@@ -60,6 +61,7 @@ sriqref_Round sriqsat_nom_g_one(slop_arena* arena, sriqref_Env env, sriqctx_Stru
 slop_list_sriqref_Round sriqsat_two_rounds(slop_arena* arena, sriqref_Round a, sriqref_Round b);
 uint8_t sriqsat_k2_touched(slop_arena* arena, sriqref_Env env, sriqsat_Here h, sriqindex_KIdx kn, sriq_Premise p);
 slop_list_sriq_Premise sriqsat_succ_premises(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h);
+uint8_t sriqsat_k2_touched_apart(sriqref_Env env, sriqsat_Here h, sriqindex_KIdx kn, sriq_Premise p);
 slop_list_sriqref_SuccAct sriqsat_sat_succ(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, slop_list_sriq_Premise ps);
 slop_list_sriqref_SuccAct sriqsat_succ_trigs(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, sriqindex_KIdx bare, slop_list_types_Lit base, slop_list_sriqsat_Trig ts, sriqsat_Trig t0);
 sriqref_SuccAct sriqsat_succ_eval(slop_arena* arena, sriqref_Env env, sriqsat_Here h, sriqsat_SuccView sv, sriq_SuccSig sg);
@@ -72,15 +74,16 @@ slop_list_sriqref_SuccAct sriqsat_succ_on(slop_arena* arena, sriqref_Env env, sr
 slop_list_types_Lit sriqsat_merged_lits(slop_arena* arena, slop_list_types_Lit a, slop_list_types_Lit b);
 slop_list_types_Lit sriqsat_unheld(slop_arena* arena, sriqground_Ground gd, slop_list_types_Lit k2);
 uint8_t sriqsat_covered_view(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, uint32_t v, uint32_t f, slop_list_types_Lit k2);
-sriqref_Out sriqsat_pred_anchored(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix);
+sriqref_Out sriqsat_pred_anchored(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t room);
 slop_list_sriq_Premise sriqsat_slot_ix(slop_arena* arena, sriq_CSub s, sriq_PSlot slot, sriqground_PIdx ix);
-sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t i);
-sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx aix);
-sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJob job, slop_list_list_sriq_Premise cs, slop_list_sriq_Premise ps);
+sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t i, int64_t room);
+sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx aix, int64_t room);
+sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJob job, slop_list_list_sriq_Premise cs, slop_list_sriq_Premise ps, int64_t room);
 sriqground_PIdx sriqsat_w_ix(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, int64_t w, slop_list_types_Clause cs, int64_t which);
 sriqref_Out sriqsat_pred_side(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, sriqctx_Edge e);
 sriqref_Out sriqsat_pred_edge_ix(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Here h, sriqctx_Edge e, slop_list_types_Clause cs);
 slop_list_sriqref_PJob sriqsat_side_jobs(slop_arena* arena, sriqctx_Structure st, sriq_PredView view, slop_list_sriq_PSlot slots, sriqctx_Edge e, uint8_t toroot);
+sriqref_Out sriqsat_no_out(slop_arena* arena);
 sriqref_Out sriqsat_sat_pred(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, slop_list_sriqctx_Edge ins);
 slop_list_sriqref_Out sriqsat_pred_over(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, sriqctx_Edge e);
 uint8_t sriqsat_rpred_edge_new(sriqsat_Delta dl, uint32_t v);
@@ -472,6 +475,15 @@ slop_list_sriqref_Cand sriqsat_eq_side(slop_arena* arena, sriqctx_Structure st, 
     }
 }
 
+slop_list_sriqref_Cand sriqsat_join_kept(slop_arena* arena, uint32_t v, sriq_Premise p1, types_Clause c, int64_t j) {
+    {
+        __auto_type tmp = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16384); _new_arena; });
+        __auto_type out = sriqsat_copy_cands(arena, sriqref_conclusion(tmp, v, sriq_join_rule(tmp, p1, sriq_body_at(tmp, c, j))));
+        ({ slop_arena_free(tmp); free(tmp); });
+        return out;
+    }
+}
+
 slop_list_sriqref_Cand sriqsat_copy_cands(slop_arena* arena, slop_list_sriqref_Cand cs) {
     {
         __auto_type out = ((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -678,7 +690,7 @@ slop_list_sriqref_Cand sriqsat_join_into_member(slop_arena* arena, sriqsat_Here 
                 __auto_type l = _coll.data[_i];
                 if (types_lit_eq(l, p1.sel)) {
                     {
-                        __auto_type _coll = sriqref_conclusion(arena, h.v, sriq_join_rule(arena, p1, sriq_body_at(arena, g, j)));
+                        __auto_type _coll = sriqsat_join_kept(arena, h.v, p1, g, j);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type c = _coll.data[_i];
                             ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -867,7 +879,7 @@ slop_list_sriqref_Cand sriqsat_join_site_g(slop_arena* arena, sriqsat_Here h, sr
 
 slop_list_sriqref_Cand sriqsat_join_g_one(slop_arena* arena, sriqsat_Here h, sriqsat_JoinSite s, sriq_Premise p1) {
     if (p1.maxed) {
-        return sriqref_conclusion(arena, h.v, sriq_join_rule(arena, p1, sriq_body_at(arena, s.c, s.j)));
+        return sriqsat_join_kept(arena, h.v, p1, s.c, s.j);
     } else {
         return ((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
     }
@@ -1010,7 +1022,7 @@ slop_list_sriqref_Cand sriqsat_join_from(slop_arena* arena, uint32_t v, sriq_Pre
             {
                 __auto_type s = sriqsat_site_at(sites, k, s0);
                 {
-                    __auto_type _coll = sriqref_conclusion(arena, v, sriq_join_rule(arena, p1, sriq_body_at(arena, s.c, s.j)));
+                    __auto_type _coll = sriqsat_join_kept(arena, v, p1, s.c, s.j);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type c = _coll.data[_i];
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -1285,13 +1297,22 @@ slop_list_sriq_Premise sriqsat_succ_premises(slop_arena* arena, sriqref_Env env,
                 __auto_type _coll = h.ops;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type p = _coll.data[_i];
-                    if (p.maxed && (gnew || sriqsat_k2_touched(arena, env, h, kn, p))) {
+                    if (p.maxed && (gnew || sriqsat_k2_touched_apart(env, h, kn, p))) {
                         ({ __auto_type _lst_p = &(out); __auto_type _item = (p); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     }
                 }
             }
         }
         return out;
+    }
+}
+
+uint8_t sriqsat_k2_touched_apart(sriqref_Env env, sriqsat_Here h, sriqindex_KIdx kn, sriq_Premise p) {
+    {
+        __auto_type tmp = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(65536); _new_arena; });
+        __auto_type touched = sriqsat_k2_touched(tmp, env, h, kn, p);
+        ({ slop_arena_free(tmp); free(tmp); });
+        return touched;
     }
 }
 
@@ -1502,14 +1523,14 @@ uint8_t sriqsat_covered_view(slop_arena* arena, sriqref_Env env, sriqctx_Structu
     }
 }
 
-sriqref_Out sriqsat_pred_anchored(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix) {
+sriqref_Out sriqsat_pred_anchored(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t room) {
     {
         __auto_type out = ((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         uint8_t over = 0;
         int64_t i = 0;
-        while (i < ((int64_t)(((int64_t)((job.slots).len))))) {
+        while ((i < ((int64_t)(((int64_t)((job.slots).len))))) && (((int64_t)(((int64_t)((out).len)))) <= room)) {
             {
-                __auto_type o = sriqsat_pred_anchor(arena, env, job, dix, oix, aix, i);
+                __auto_type o = sriqsat_pred_anchor(arena, env, job, dix, oix, aix, i, room);
                 {
                     __auto_type _coll = o.cands;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1531,7 +1552,7 @@ slop_list_sriq_Premise sriqsat_slot_ix(slop_arena* arena, sriq_CSub s, sriq_PSlo
     return sriqground_pidx_find(arena, ix, sriq_csub_lit(s, slot.lit));
 }
 
-sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t i) {
+sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx dix, sriqground_PIdx oix, sriqground_PIdx aix, int64_t i, int64_t room) {
     {
         __auto_type cs = ((slop_list_list_sriq_Premise){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t j = 0;
@@ -1543,11 +1564,11 @@ sriqref_Out sriqsat_pred_anchor(slop_arena* arena, sriqref_Env env, sriqref_PJob
                 j = (j + 1);
             }
         }
-        return sriqsat_pred_choices(arena, env, job, cs, aix.ps);
+        return sriqsat_pred_choices(arena, env, job, cs, aix.ps, room);
     }
 }
 
-sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx aix) {
+sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob job, sriqground_PIdx aix, int64_t room) {
     {
         __auto_type cs = ((slop_list_list_sriq_Premise){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
@@ -1557,11 +1578,11 @@ sriqref_Out sriqsat_pred_run_ix(slop_arena* arena, sriqref_Env env, sriqref_PJob
                 ({ __auto_type _lst_p = &(cs); __auto_type _item = (sriqsat_slot_ix(arena, job.s, slot, aix)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
-        return sriqsat_pred_choices(arena, env, job, cs, aix.ps);
+        return sriqsat_pred_choices(arena, env, job, cs, aix.ps, room);
     }
 }
 
-sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJob job, slop_list_list_sriq_Premise cs, slop_list_sriq_Premise ps) {
+sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJob job, slop_list_list_sriq_Premise cs, slop_list_sriq_Premise ps, int64_t room) {
     {
         __auto_type n = sriqref_product(cs, env.prod);
         __auto_type out = ((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -1569,17 +1590,22 @@ sriqref_Out sriqsat_pred_choices(slop_arena* arena, sriqref_Env env, sriqref_PJo
         if (n > env.prod) {
             return sriqref_out_of(out, 1);
         } else {
-            while (t < n) {
-                {
-                    __auto_type _coll = sriqref_pred_one(arena, env, job, cs, t, ps);
-                    for (size_t _i = 0; _i < _coll.len; _i++) {
-                        __auto_type c = _coll.data[_i];
-                        ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            {
+                __auto_type tmp = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(65536); _new_arena; });
+                while ((t < n) && (((int64_t)(((int64_t)((out).len)))) <= room)) {
+                    {
+                        __auto_type _coll = sriqref_pred_one(tmp, env, job, cs, t, ps);
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type c = _coll.data[_i];
+                            ({ __auto_type _lst_p = &(out); __auto_type _item = (sriqref_copy_cand(arena, c)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        }
                     }
+                    saturate_reuse_arena(tmp);
+                    t = (t + 1);
                 }
-                t = (t + 1);
+                ({ slop_arena_free(tmp); free(tmp); });
+                return sriqref_out_of(out, 0);
             }
-            return sriqref_out_of(out, 0);
         }
     }
 }
@@ -1619,7 +1645,7 @@ sriqref_Out sriqsat_pred_side(slop_arena* arena, sriqref_Env env, sriqctx_Struct
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type job = _coll.data[_i];
                             {
-                                __auto_type o = sriqsat_pred_anchored(arena, env, job, dix, oix, aix);
+                                __auto_type o = ((sriqsat_roomy(out, h)) ? sriqsat_pred_anchored(arena, env, job, dix, oix, aix, h.room) : sriqsat_no_out(arena));
                                 {
                                     __auto_type _coll = o.cands;
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1660,7 +1686,7 @@ sriqref_Out sriqsat_pred_edge_ix(slop_arena* arena, sriqref_Env env, sriqctx_Str
                         for (size_t _i = 0; _i < _coll.len; _i++) {
                             __auto_type job = _coll.data[_i];
                             {
-                                __auto_type o = sriqsat_pred_run_ix(arena, env, job, aix);
+                                __auto_type o = ((sriqsat_roomy(out, h)) ? sriqsat_pred_run_ix(arena, env, job, aix, h.room) : sriqsat_no_out(arena));
                                 {
                                     __auto_type _coll = o.cands;
                                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1697,6 +1723,10 @@ slop_list_sriqref_PJob sriqsat_side_jobs(slop_arena* arena, sriqctx_Structure st
     }
 }
 
+sriqref_Out sriqsat_no_out(slop_arena* arena) {
+    return sriqref_out_of(((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), 0);
+}
+
 sriqref_Out sriqsat_sat_pred(slop_arena* arena, sriqref_Env env, sriqctx_Structure st, sriqsat_Delta dl, sriqsat_Here h, slop_list_sriqctx_Edge ins) {
     {
         __auto_type out = ((slop_list_sriqref_Cand){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -1705,7 +1735,7 @@ sriqref_Out sriqsat_sat_pred(slop_arena* arena, sriqref_Env env, sriqctx_Structu
             __auto_type _coll = ins;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type e = _coll.data[_i];
-                if (e.lk == sriqctx_EdgeLabel_el_fn) {
+                if ((e.lk == sriqctx_EdgeLabel_el_fn) && sriqsat_roomy(out, h)) {
                     {
                         __auto_type _coll = sriqsat_pred_over(arena, env, st, dl, h, e);
                         for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -1783,7 +1813,7 @@ sriqref_Out sriqsat_rpred_from(slop_arena* arena, sriqref_Env env, sriqctx_Struc
                 __auto_type r = _coll.data[_i];
                 {
                     __auto_type job = sriqsat_rsrc_job(arena, st, h.v, r);
-                    __auto_type o = ((anchored) ? sriqsat_pred_anchored(arena, env, job, h.dix, h.oix, h.aix) : sriqsat_pred_run_ix(arena, env, job, h.aix));
+                    __auto_type o = (!(sriqsat_roomy(out, h)) ? sriqsat_no_out(arena) : (anchored ? sriqsat_pred_anchored(arena, env, job, h.dix, h.oix, h.aix, h.room) : sriqsat_pred_run_ix(arena, env, job, h.aix, h.room)));
                     {
                         __auto_type _coll = o.cands;
                         for (size_t _i = 0; _i < _coll.len; _i++) {

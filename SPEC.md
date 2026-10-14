@@ -339,7 +339,8 @@ output stage. A profile is therefore a **pluggable component** behind a stable i
   **The step-down (owner, 2026-10-13; slice 11b).** A rung can contain an ontology and still be
   too expensive for it: OBI is inside `sriq`'s language, and `sriq`'s run on it outgrows any
   reasonable memory (M5 (c)). So when `auto`'s rung is `sriq` and `sriq`'s run stops at its
-  clause budget ([§5.5](#55-the-sriq-calculus), "The production run") with nothing definitive (no
+  clause budget ([§5.5](#55-the-sriq-calculus), "The production run": its stored clauses, or one rule
+  instance's choices) with nothing definitive (no
   inconsistency and no unsatisfiable class), `auto` reruns the input under the same rule
   restricted to `el` and `el++`, and reports that run.
   - **The definitive finding wins.** A run stopped at the budget that found an inconsistency or an
@@ -2900,10 +2901,17 @@ through the library, the same way el and el++ run.
     a context after Hyper's every (clause, atom) pair and after each later Table 2 step. The rest of the round is
     skipped once the count passes.
   - **The pairing loops read it too.** Eq, ground Eq and Join, and the Joins with G read the room (`Here.room`)
-    between premises, so a context whose premises pair quadratically stops early.
-  - **A firing's working memory is its own.** Each of Hyper's choices and each Eq firing is built in a scratch
-    arena, and only its conclusion is copied out. The rewriting's intermediate lists cost about 20 KB per
-    conclusion, and in the round's arena they were what the pigeonhole test's Eq filled past 9 GB with.
+    between premises, so a context whose premises pair quadratically stops early. So do Pred and r-Pred (slice
+    11c): between edges, between jobs, and between one job's choices. Before that, one context's Pred kept every
+    conclusion of every job, and the fuzzer's seed 158 reached 7.8 GB in one round; it now peaks at 2.7 GB.
+  - **A firing's working memory is its own.** Each of Hyper's and Pred's (and r-Pred's) choices, each Eq
+    firing and each Join firing is built in a scratch arena, and only its conclusion is copied out. Their
+    intermediate lists cost 12 to 20 KB per conclusion, and kept in the round's arena they were what filled
+    memory: the pigeonhole test's Eq passed 9 GB, and a generated ontology's Pred (slice 11c's fuzzer, seed
+    14) passed 12 GB. Pred's choices share one scratch arena, emptied after each (`reuse-arena`): one arena per
+    choice spent 40% of Pred's time in malloc and free. Succ's test for an old premise whose K₂ a new clause
+    touches (`k2-touched-apart`) runs its K-set query in a scratch arena too, since only the answer is kept; the
+    fuzzer's seed 367 went from 0.7 GB past 12 GB in one round without it, and peaks at 3.0 GB with it.
   - **An abandoned round is not committed.** The run reports the store as the previous round left it, with that
     round count, as the choices cap's stop does.
   - **It is deterministic.** A round's conclusions depend only on the store it starts from, and the count only
@@ -2921,7 +2929,16 @@ through the library, the same way el and el++ run.
     down from it ([§5.1](#51-profiles-are-selectable)).
   - It is `ReasonerConfig.clause-budget`, which `default-config` sets and no host option reaches:
     the C and Rust surfaces do not change, and a test lowers it.
-  - The contexts, choices and Nom caps stay off outside the tests.
+  - **It caps one rule instance's choices too (slice 11c).** The choices cap (`RefConfig.prod`: the choices of
+    one Hyper or Pred instance, one side premise per slot) is the budget in production. The scratch arenas made
+    a discarded choice cost no memory, so a product could outgrow time with the store unchanged: the fuzzer's
+    seed 329 (38 lines) spent 85 s in its fifteenth round at 90 MB, every conclusion redundant. Its largest Pred
+    job grew from 880 choices in round 13 to 119,658 in round 14 and past 500,000 in round 15. Now that job
+    stops the run as the choices cap does (`rs-product`), uncommitted, in 12 s. That stop is the budget's: it is
+    `resource-limit`, and `auto` steps down from it (`over-budget`, `src/howl.slop`). A test runs the fixture
+    `corpus/fixtures/sriq-budget/pred-choices.ttl` at budget 50,000; the step-down ignoring this stop was seen
+    red.
+  - The contexts and Nom caps stay off outside the tests.
 - **Termination.**
   - It is `fixpoint` when every run that ran finished, at its fixpoint or at ⊤ → ⊥.
   - Otherwise it is `resource-limit(rounds)`.
@@ -2944,6 +2961,48 @@ through the library, the same way el and el++ run.
     S1's omitted chain listed once.
   - **Mutants seen red:** the hidden unsat ignored in the findings, the budget not shared, the cancel unchecked, the
     cancel read after the cap, and S1's omissions dropped.
+
+**The harnesses (slice 11c): M5's evidence.**
+- **(c) The differential.** `make probes` includes `corpus/fixtures/probes-sriq/`: one load-bearing probe per
+  construct §5.5 adds, 20 in all. HOWL and HermiT pass every one; ELK passes 1, since it cannot read the rest.
+  The record is `corpus/oracle-capabilities-sriq.txt`.
+  - `make diff-fixtures` compares 140 fixtures with HermiT and finds them clean. Under `sriq`, HermiT routes
+    every input.
+  - `make diff-corpus` finds BFO-core and CCO clean against HermiT (CCO: 11,922 subsumptions). OBI is skipped,
+    being out of reach.
+  - RO, GO and EL-GALEN's `sriq` projections stop at the clause budget. They are recorded as `result=budget`
+    with their report's hash, so a change shows (`corpus/corpus-differential-sriq.txt`).
+- **(d) Conformance.** Under `sriq`, the selection is every approved Direct-Semantics W3C test, not the EL
+  profile's only. The record is `corpus/conformance-status-sriq.txt`:
+  - W3C (in)consistency: 115 ok, 0 FAIL;
+  - W3C entailment: 7 ok, 0 FAIL;
+  - ELK's classification tests: 58 ok, 0 FAIL;
+  - stopped at the clause budget: 6 W3C tests, recorded as `budget`. Their findings are partial but sound, so
+    each is still checked for what it claims (`budgeted`): an inconsistency the test says is wrong, a
+    non-entailment the report entails, or (ELK's tests) a subsumption the expected taxonomy lacks fails the run.
+    A report is validated (`entdiff.parse(partial=True)`) before it is taken for a budget stop, in every
+    harness.
+- **(e) Fuzzing.** `abox_fuzz.py --sriq` generates 400 ontologies with unions, complements, ∀, inverse roles,
+  qualified cardinality and Self, and with role characteristics and disjoint roles on simple roles. Their ABoxes
+  have equality, inequality and negative assertions. The record is `corpus/abox-fuzz.txt`: 333 equal HermiT's
+  answer (207 of them inconsistent), 67 stop at the budget, and none fails. A budget-stopped run is never diffed,
+  but each of its findings (an inconsistency, an unsatisfiable class, a subsumption) must hold in HermiT's
+  answer (`entdiff.unsound`). Each run went through a per-child guard of 8 GB and 300 s, and none tripped it;
+  the heaviest measured, seed 367, peaks at 3.0 GB.
+- **(f) and (g)** are slice 11b's: determinism at every cap, and BFO-core and CCO exit 0.
+- **(h) Performance** against HermiT and Sequoia is not yet recorded. A pinned Sequoia runner is owed.
+- **Found on the way, fixed in every rung.**
+  - **An omitted literal now renders on one line.** Its value is escaped as N-Triples, since an XML literal
+    with newlines broke a report.
+  - **A structural predicate on a named class is reported.** `:c owl:intersectionOf (…)` is OWL 1's way of
+    stating an equivalence. It was dropped without an omission, so the run could report coherent. It is now
+    omitted, and the run inconclusive (`hazards/named-class-intersection`). So is `owl:oneOf` on one, as in
+    W3C `WebOnt-Thing-004` (`owl:Thing owl:oneOf ( :s )`), which moves from `ok` to `outside` in the el and
+    el++ records. The census does not flag that triple (`census-clean` in the el++ record), so the census is the
+    weaker check here.
+- **The harnesses take HOWL's binary from `$HOWL`**, so a caller can wrap each child in its own memory and time
+  guard; the slice's runs did (4 to 8 GB, 300 s). A guard on the harness process alone does not reach its
+  children: one left an orphaned howl growing. No guard is part of the repository.
 
 **Wiring (slice 11b).** `sriq` is selectable: `--profile sriq`, `auto` (with the step-down,
 [§5.1](#51-profiles-are-selectable)), the C API and the Rust crate.

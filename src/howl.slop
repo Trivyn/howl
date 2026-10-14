@@ -35,7 +35,7 @@
   (import canon (sort-omissions omission-cmp))
   (import owl2 (RawAxiom))
   (import sriqclauses (SriqIds))
-  (import sriqref (RefIn copy-clauses))
+  (import sriqref (RefIn RefStatus copy-clauses))
   (import sriqabox (Inputs SplitRun split-inputs split-run-of split-findings sriq-config))
   (import kscnormal (normalize-ksc copy-ksc-axioms copy-kname))
   (import kscsat (ksc-classify input-classes))
@@ -571,9 +571,15 @@
     ;; budget means the calculus is too expensive for this input. An
     ;; inconsistency or an unsatisfiable class is definitive (§6.2), and
     ;; the run that found it is reported.
-    (and (or (== (. (. (. sp h) res) status) 'rs-clauses)
-             (and (. sp ran-c) (== (. (. (. sp c) res) status) 'rs-clauses)))
+    (and (or (over-budget (. (. (. sp h) res) status))
+             (and (. sp ran-c) (over-budget (. (. (. sp c) res) status))))
          (not (findings-are-incoherent (. o findings)))))
+
+  (fn over-budget ((s RefStatus))
+    (@intent "Did the clause budget stop the run: its stored clauses, or one rule instance's choices (SPEC 5.5)?")
+    (@spec ((RefStatus) -> Bool))
+    (@pure)
+    (or (== s 'rs-clauses) (== s 'rs-product)))
 
   (fn step-down ((arena Arena) (s StepDown) (config ReasonerConfig))
     (@intent "auto's step-down: the input prepared and run under the rung el and el++ alone would choose")

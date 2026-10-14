@@ -1,0 +1,17 @@
+# PROBE different-individuals. r is functional with r(c, a) and r(c, b), so a = b, which a ≠ b contradicts.
+# construct: DifferentIndividuals
+# expect: inconsistent
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+<http://example.org/t> a owl:Ontology .
+:r a owl:ObjectProperty .
+:r a owl:FunctionalProperty .
+:a a owl:NamedIndividual . :b a owl:NamedIndividual . :c a owl:NamedIndividual .
+:c :r :a .
+:c :r :b .
+:a owl:differentFrom :b .

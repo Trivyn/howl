@@ -311,6 +311,7 @@ acceptance: cli
 	check corpus/fixtures/hazards/abox-nary-chain.ttl 1; \
 	check corpus/fixtures/hazards/abox-nothing.ttl 1; \
 	check corpus/fixtures/hazards/abox-complex-assertion.ttl 1; \
+	check corpus/fixtures/hazards/named-class-intersection.ttl 2; \
 	check corpus/fixtures/out-of-profile/inverse-expressions.ttl 2; \
 	check corpus/fixtures/out-of-profile/disjoint-arity.ttl 2; \
 	check corpus/fixtures/v0/litmus.ttl 0 --profile el; \
@@ -593,15 +594,18 @@ golden-update: cli
 oracle:
 	cd oracle && ./gradlew --quiet assemble
 
-# Both rungs' probes: corpus/fixtures/probes/ under el, probes-el++/ under el++
-# (SPEC §5.4's constructs), each with its own capability record.
+# Every rung's probes: corpus/fixtures/probes/ under el, probes-el++/ under el++
+# (SPEC §5.4's constructs) and probes-sriq/ under sriq (§5.5's), each with its
+# own capability record.
 probes: cli oracle
 	python3 corpus/differential.py probes
 	python3 corpus/differential.py --profile el++ probes
+	python3 corpus/differential.py --profile sriq probes
 
 probes-update: cli oracle
 	python3 corpus/differential.py probes --update
 	python3 corpus/differential.py --profile el++ probes --update
+	python3 corpus/differential.py --profile sriq probes --update
 
 # The comparator's self-tests run first: a clean diff is evidence only from a
 # comparator known to speak up when the two sides differ.
@@ -609,6 +613,7 @@ diff-fixtures: cli oracle
 	python3 -m unittest -q corpus/test_entdiff.py
 	python3 corpus/differential.py fixtures
 	python3 corpus/differential.py --profile el++ fixtures
+	python3 corpus/differential.py --profile sriq fixtures
 
 # THE ABOX REDUCTION, CHECKED AGAINST HERMIT OVER GENERATED INPUT (SPEC.md
 # §5.3). The proof is about the calculus; this checks the code against it,
@@ -620,6 +625,7 @@ abox-fuzz: cli oracle
 	python3 corpus/abox_fuzz.py
 	python3 corpus/abox_fuzz.py --negation
 	python3 corpus/abox_fuzz.py --elpp
+	python3 corpus/abox_fuzz.py --sriq
 
 # EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
 # W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's
@@ -635,10 +641,12 @@ conformance: cli oracle
 	python3 -m unittest -q corpus/test_conformance.py
 	python3 corpus/conformance.py run
 	python3 corpus/conformance.py --profile el++ run
+	python3 corpus/conformance.py --profile sriq run
 
 conformance-update: cli oracle
 	python3 corpus/conformance.py run --update
 	python3 corpus/conformance.py --profile el++ run --update
+	python3 corpus/conformance.py --profile sriq run --update
 
 # THE CORPUS DIFFERENTIAL (M1 acceptance (b)): each materialized projection,
 # HOWL against its ROUTED oracle — ELK for GO and EL-GALEN, HermiT for the
@@ -648,10 +656,12 @@ diff-corpus: cli oracle
 	python3 corpus/differential.py corpus
 	python3 corpus/differential.py rungs
 	python3 corpus/differential.py --profile el++ corpus
+	python3 corpus/differential.py --profile sriq corpus
 
 diff-corpus-update: cli oracle
 	python3 corpus/differential.py corpus --update
 	python3 corpus/differential.py --profile el++ corpus --update
+	python3 corpus/differential.py --profile sriq corpus --update
 
 # Fetch and SHA-256-verify the pinned external ontologies (corpus/MANIFEST.toml).
 # Not committed: GO alone is 129 MB, and their licences differ from HOWL's.
@@ -687,6 +697,7 @@ materialize: corpus
 	python3 -m unittest -q corpus/test_project.py
 	python3 corpus/project.py --materialize
 	python3 corpus/project.py --profile el++ --materialize
+	python3 corpus/project.py --profile sriq --materialize
 
 dist:
 	rm -rf dist
