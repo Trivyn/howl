@@ -53,10 +53,10 @@
                    in-su in-pr in-sur in-prr lit-ground mentions-x tau-su tau-pr omega omega-d pow2-sat has-lit strat-choice core-of
                    init-structure ctx-count ctx-at ctx-by-core ctx-clause-ok q-inconsistent q-unsat q-hidden-unsat q-holds
                    q-thing))
-  (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree))
+  (import sriqref (RefStatus RefConfig RefResult RefIn ref-run ref-input ref-set ref-stable combinators-agree premises-of))
   (import sriqsat (SatConfig SatResult Counts sat-run sat-materialise hyper-ix-agrees defer-on defer-stable))
   (import sriqabox (Split Inputs SplitRun abox-split split-inputs split-run))
-  (import sriqindex (commit-indexed KIdx k-index k-query))
+  (import sriqindex (commit-indexed KIdx k-index k-index-premises k-query))
   (import sriqorder (ConstEntry SriqOrder CKind CTerm named-consts ranked aux-const const-entry const-gt aterm-gt cterm-gt ct-true ct-a ct-p lit-gt
                      max-flags))
 
@@ -6419,13 +6419,13 @@
   (fn sat-cfg-at ((s Strategy) (perm Int) (defer Bool))
     (@intent "sat-cfg, with deferral asked for or not")
     (@spec ((Strategy Int Bool) -> SatConfig))
-    (record-new SatConfig (base (ref-cfg s)) (perm perm) (scan false) (defer defer)))
+    (record-new SatConfig (base (ref-cfg s)) (perm perm) (scan false) (defer defer) (views true) (check true)))
 
   (fn sat-fuel ((s Strategy) (fuel Int))
     (@intent "The prototype capped at fuel rounds")
     (@spec ((Strategy Int) -> SatConfig))
     (record-new SatConfig (base (record-new RefConfig (strat s) (fuel fuel) (lam -1) (ctxs 512) (cls 4000) (prod 1000000) (cnst 8)))
-                          (perm 0) (scan false) (defer true)))
+                          (perm 0) (scan false) (defer true) (views true) (check true)))
 
   (fn answers-of ((arena Arena) (st Structure) (n Int))
     (@intent "The raw answers over n query classes: inconsistent, then unsat(B) and holds(B, A) for each pair")
@@ -6495,8 +6495,12 @@
     (@intent "kidx-agrees on one context's set cs")
     (@spec ((Arena Triggers Structure Bool (List Clause)) -> Bool))
     (@alloc arena)
-    (let ((kx (k-index arena (. st ord) tr cs)) (mut ok true))
-      (do (for-each (c cs) (when (not (kidx-clause arena tr st root cs kx c)) (set! ok false))) ok)))
+    (let ((kx (k-index arena (. st ord) tr cs))
+          (kp (k-index-premises arena tr (premises-of arena (. st ord) cs)))
+          (mut ok true))
+      (do (for-each (c cs)
+            (when (not (and (kidx-clause arena tr st root cs kx c) (kidx-clause arena tr st root cs kp c))) (set! ok false)))
+          ok)))
 
   (fn kidx-clause ((arena Arena) (tr Triggers) (st Structure) (root Bool) (cs (List Clause)) (kx KIdx) (c Clause))
     (@intent "kidx-agrees for the successor term of each head literal of c, selected")
@@ -6868,7 +6872,7 @@
     (@spec ((Arena String RefIn Int Strategy) -> Bool))
     (@alloc arena)
     (let ((p (sat-run arena in (sat-cfg s 0)))
-          (q (sat-run arena in (record-new SatConfig (base (ref-cfg s)) (perm 0) (scan true) (defer true)))))
+          (q (sat-run arena in (record-new SatConfig (base (ref-cfg s)) (perm 0) (scan true) (defer true) (views true) (check true)))))
       (proto-says arena (string-concat arena label ": the index commits as commit-min does (9b)") s
                   (and (== (. (. p res) status) (. (. q res) status))
                        (== (. (. p res) rounds) (. (. q res) rounds))
@@ -6891,6 +6895,60 @@
                   ((none) (set! ok false)))
                 (set! i (+ i 1))))
           ok)))
+
+  ;; ------------------------------------------------------------
+  ;; Slice 9k: premise views kept with the store. Engine work only: every
+  ;; run with them is the run without them, count for count, and the kept
+  ;; flags equal a recomputation after every round.
+  ;; ------------------------------------------------------------
+
+  (fn test-sriq-views ((arena Arena))
+    (@intent "Every sriq fixture and hand-built case (the root rows reach the root's re-commit at the boundary) under trivial, eager and cautious: with premise views kept, the same status, rounds, counts and answers as recomputing them every round, and no kept flag stale after any round")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true) (mut last ""))
+      (do (for-each (e (expects arena))
+            (when (not (string-eq (. e file) last))
+              (do (when (not (fixture-views arena (. e file))) (set! ok false))
+                  (set! last (. e file)))))
+          (for-each (c (proto-cases arena))
+            (for-each (s (strategies arena))
+              (when (not (views-same arena (. c label) (. c in) (. c n) s)) (set! ok false))))
+          ok)))
+
+  (fn fixture-views ((arena Arena) (name String))
+    (@intent "fixture's views check under each strategy")
+    (@spec ((Arena String) -> Bool))
+    (@alloc arena)
+    (match (fixture-sc arena (fixture-path arena name))
+      ((none) (do (print "  [sriq 9k] no clauses: ") (println name) false))
+      ((some sc)
+        (let ((in (ref-input arena sc)) (n (. (. sc ids) nclass)) (mut ok true))
+          (do (for-each (s (strategies arena))
+                (when (not (views-same arena name in n s)) (set! ok false)))
+              ok)))))
+
+  (fn views-says ((arena Arena) (label String) (s Strategy) (ok Bool))
+    (@intent "One check of the kept views, printed when it fails")
+    (@spec ((Arena String Strategy Bool) -> Bool))
+    (@alloc arena)
+    (if ok true (do (print "  [sriq 9k] ") (print label) (print " under ") (println (strat-name s)) false)))
+
+  (fn views-same ((arena Arena) (name String) (in RefIn) (n Int) (s Strategy))
+    (@intent "One fixture under s: views kept (and checked) against views recomputed")
+    (@spec ((Arena String RefIn Int Strategy) -> Bool))
+    (@alloc arena)
+    (let ((p (sat-run arena in (sat-cfg s 0)))
+          (q (sat-run arena in (record-new SatConfig (base (ref-cfg s)) (perm 0) (scan false) (defer true) (views false)
+                                                     (check false))))
+          (a (. p counts)) (b (. q counts)))
+      (and (views-says arena (string-concat arena name ": no kept flag stale") s (== (. a stale) 0))
+           (views-says arena (string-concat arena name ": views kept, the same run as recomputed") s
+                       (and (== (. (. p res) status) (. (. q res) status)) (== (. (. p res) rounds) (. (. q res) rounds))
+                            (== (. a cands) (. b cands)) (== (. a rcands) (. b rcands)) (== (. a succs) (. b succs))
+                            (== (. a rsuccs) (. b rsuccs)) (== (. a noms) (. b noms)) (== (. a added) (. b added))
+                            (== (. a acts) (. b acts)) (== (. a hyper) (. b hyper))
+                            (same-bools (answers-of arena (. (. p res) st) n) (answers-of arena (. (. q res) st) n)))))))
 
   ;; ------------------------------------------------------------
   ;; Slice 9j: the ABox split (SPEC §5.5 "The ABox split"). The reference
@@ -6940,6 +6998,8 @@
           (n (. (. in ids) nclass)))
       (and (split-says arena (string-concat arena name ": the split's class table is the unsplit one's") s
                        (== n (. (. sc ids) nclass)))
+           (split-says arena (string-concat arena name ": no kept flag stale in either run") s
+                       (and (== (. (. (. sp h) counts) stale) 0) (== (. (. (. sp c) counts) stale) 0)))
            (split-says arena (string-concat arena name ": complete where the reference is") s
                        (or (not (complete-run r)) (. sp complete)))
            (split-says arena (string-concat arena name ": the reference's verdict") s
@@ -7201,20 +7261,21 @@
       ((some s)
         (match (sriq-load arena path)
           ((error m) (do (print "n/a: ") (println m) 4))
-          ((ok sc) (if proto (proto-report arena sc s counts 10000 true) (ref-report arena sc s)))))))
+          ((ok sc) (if proto (proto-report arena sc s counts 10000 true true) (ref-report arena sc s)))))))
 
-  (fn sriq-proto ((arena Arena) (path String) (strat String) (counts Bool) (rounds Int) (defer Bool) (split Bool))
+  (fn sriq-proto ((arena Arena) (path String) (strat String) (counts Bool) (rounds Int) (defer Bool) (split Bool)
+                  (views Bool))
     (@intent "The prototype on one file, at most rounds rounds, deferral asked for or not, through the ABox split or as one run: gate, normalise, the clause boundary, then the run(s), printed as an oracle report; exit 4 when n/a")
-    (@spec ((Arena String String Bool Int Bool Bool) -> Int))
+    (@spec ((Arena String String Bool Int Bool Bool Bool) -> Int))
     (@alloc arena)
     (match (parse-strategy strat)
       ((none) (do (println "strategy: trivial, eager or cautious") 2))
       ((some s)
         (if split
-          (split-report arena path s counts rounds defer)
+          (split-report arena path s counts rounds defer views)
           (match (sriq-load arena path)
             ((error m) (do (print "n/a: ") (println m) 4))
-            ((ok sc) (proto-report arena sc s counts rounds defer)))))))
+            ((ok sc) (proto-report arena sc s counts rounds defer views)))))))
 
   (fn split-load ((arena Arena) (path String))
     (@intent "One file through the gate, refusing omissions, then the ABox split's two inputs")
@@ -7224,14 +7285,14 @@
       ((none) (error "did not gate"))
       ((some gr) (if (> (list-len (. gr omissions)) 0) (error "omissions") (split-inputs arena gr)))))
 
-  (fn split-report ((arena Arena) (path String) (s Strategy) (counts Bool) (rounds Int) (defer Bool))
+  (fn split-report ((arena Arena) (path String) (s Strategy) (counts Bool) (rounds Int) (defer Bool) (views Bool))
     (@intent "The prototype through the ABox split (SPEC 5.5): Run H, then Run C when it runs, the verdict printed as an oracle report from Run H's answers; with counts, each run's work, Run C's lines after `count run-c 1`")
-    (@spec ((Arena String Strategy Bool Int Bool) -> Int))
+    (@spec ((Arena String Strategy Bool Int Bool Bool) -> Int))
     (@alloc arena)
     (match (split-load arena path)
       ((error m) (do (print "n/a: ") (println m) 4))
       ((ok in)
-        (let ((sp (split-run arena in (proto-cfg s rounds defer))) (h (. (. sp h) res)))
+        (let ((sp (split-run arena in (proto-cfg s rounds defer views))) (h (. (. sp h) res)))
           (do (when counts
                 (do (print-counts arena (. sp h))
                     (count-line arena "hidden" (cast Int (list-len (. (. in h) hidden))))
@@ -7263,18 +7324,18 @@
         (print-ref-report arena (. sc ids) (. r st) "ref" s (. r rounds))
         (do (print "n/a: ") (println (status-name (. r status))) 4))))
 
-  (fn proto-cfg ((s Strategy) (rounds Int) (defer Bool))
-    (@intent "The prototype outside the tests: the round cap only (10,000 unless asked for fewer); no cap on contexts, clauses, choices or constants")
-    (@spec ((Strategy Int Bool) -> SatConfig))
+  (fn proto-cfg ((s Strategy) (rounds Int) (defer Bool) (views Bool))
+    (@intent "The prototype outside the tests: the round cap only (10,000 unless asked for fewer); no cap on contexts, clauses, choices or constants; premise views kept with the store unless views is false")
+    (@spec ((Strategy Int Bool Bool) -> SatConfig))
     (record-new SatConfig (base (record-new RefConfig (strat s) (fuel rounds) (lam -1) (ctxs 2147483647) (cls 2147483647)
                                                       (prod 2147483647) (cnst 2147483647)))
-                          (perm 0) (scan false) (defer defer)))
+                          (perm 0) (scan false) (defer defer) (views views) (check false)))
 
-  (fn proto-report ((arena Arena) (sc SriqClauses) (s Strategy) (counts Bool) (rounds Int) (defer Bool))
+  (fn proto-report ((arena Arena) (sc SriqClauses) (s Strategy) (counts Bool) (rounds Int) (defer Bool) (views Bool))
     (@intent "Run the prototype and print its report, or n/a; with counts, its work as `count` lines after the report")
-    (@spec ((Arena SriqClauses Strategy Bool Int Bool) -> Int))
+    (@spec ((Arena SriqClauses Strategy Bool Int Bool Bool) -> Int))
     (@alloc arena)
-    (let ((p (sat-run arena (ref-input arena sc) (proto-cfg s rounds defer))) (r (. p res)))
+    (let ((p (sat-run arena (ref-input arena sc) (proto-cfg s rounds defer views))) (r (. p res)))
       (do (when counts (print-counts arena p))
           (if (complete-run r)
             (print-ref-report arena (. sc ids) (. r st) "proto" s (. r rounds))
@@ -11455,28 +11516,29 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
       ((and (== argc 4) (string-eq (arg-text argv 1) "sriq-ref"))
         (with-arena 4194304 (sriq-ref arena (arg-text argv 2) (arg-text argv 3) false false)))
       ;; The prototype: howl-test sriq-run FILE [STRATEGY] [--counts].
-      ((and (>= argc 3) (<= argc 9) (string-eq (arg-text argv 1) "sriq-run"))
+      ((and (>= argc 3) (<= argc 10) (string-eq (arg-text argv 1) "sriq-run"))
         (with-arena 4194304 (sriq-run-args arena argc argv)))
-      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE | ksc-dump FILE | sriq-ref FILE [STRATEGY] | sriq-run FILE [STRATEGY] [--counts] [--rounds N] [--no-defer] [--no-split]]") 2))))
+      (else (do (println "usage: howl-test [sriq-dump STAGE FILE [BOUND] | front-dump FILE | ksc-dump FILE | sriq-ref FILE [STRATEGY] | sriq-run FILE [STRATEGY] [--counts] [--rounds N] [--no-defer] [--no-split] [--no-views]]") 2))))
 
   (fn sriq-run-args ((arena Arena) (argc Int) (argv (Ptr (Ptr U8))))
-    (@intent "sriq-run FILE [STRATEGY] [--counts] [--rounds N] [--no-defer] [--no-split]: cautious unless a strategy is named; --rounds caps each run (n/a if it stops there), for probing a large input; --no-defer runs S6 without R8's deferral; --no-split runs the input as one run, without the ABox split")
+    (@intent "sriq-run FILE [STRATEGY] [--counts] [--rounds N] [--no-defer] [--no-split]: cautious unless a strategy is named; --rounds caps each run (n/a if it stops there), for probing a large input; --no-defer runs S6 without R8's deferral; --no-split runs the input as one run, without the ABox split; --no-views recomputes premise views every round (9k's baseline)")
     (@spec ((Arena Int (Ptr (Ptr U8))) -> Int))
     (@alloc arena)
-    (let ((mut strat "cautious") (mut counts false) (mut rounds 10000) (mut defer true) (mut split true) (mut ok true)
-          (mut i 3))
+    (let ((mut strat "cautious") (mut counts false) (mut rounds 10000) (mut defer true) (mut split true) (mut views true)
+          (mut ok true) (mut i 3))
       (do (while (< i argc)
             (let ((a (arg-text argv i)))
               (cond ((string-eq a "--counts") (do (set! counts true) (set! i (+ i 1))))
                     ((string-eq a "--no-defer") (do (set! defer false) (set! i (+ i 1))))
                     ((string-eq a "--no-split") (do (set! split false) (set! i (+ i 1))))
+                    ((string-eq a "--no-views") (do (set! views false) (set! i (+ i 1))))
                     ((string-eq a "--rounds")
                       (do (set! rounds (if (< (+ i 1) argc) (bound-arg (arg-text argv (+ i 1))) -1))
                           (when (< rounds 0) (set! ok false))
                           (set! i (+ i 2))))
                     (else (do (set! strat a) (set! i (+ i 1)))))))
           (if ok
-            (sriq-proto arena (arg-text argv 2) strat counts rounds defer split)
+            (sriq-proto arena (arg-text argv 2) strat counts rounds defer split views)
             (do (println "--rounds takes a whole number") 2)))))
 
   (fn run-suite ()
@@ -12019,6 +12081,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-sriq-proto-work arena)))
             (print-test-result "9a: the prototype's work on O1, pinned" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-views arena)))
+            (print-test-result "9k: premise views kept with the store: the same run as recomputing them, none stale" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-split-fixtures arena)))

@@ -23,6 +23,8 @@ sriqsubsume_Committed sriqindex_commit_indexed(slop_arena* arena, slop_list_type
 slop_option_types_ATerm sriqindex_fterm_key(types_ATerm t);
 sriqindex_FPart sriqindex_fpart_at(slop_list_sriqindex_FPart ps, int64_t k, sriqindex_FPart fallback);
 sriqindex_KIdx sriqindex_k_index(slop_arena* arena, sriqorder_SriqOrder ord, sriqctx_Triggers tr, slop_list_types_Clause cs);
+sriqindex_KIdx sriqindex_k_index_premises(slop_arena* arena, sriqctx_Triggers tr, slop_list_sriq_Premise ps);
+uint8_t sriqindex_unit_premise(sriq_Premise p);
 slop_list_types_Lit sriqindex_ground_k2(slop_arena* arena, sriqctx_Triggers tr, sriq_SuccSig any, types_Lit l);
 uint8_t sriqindex_no_fterm(types_Lit l);
 slop_list_sriqindex_FPart sriqindex_fparts_of(slop_arena* arena, types_Lit l, uint8_t single);
@@ -448,6 +450,41 @@ sriqindex_KIdx sriqindex_k_index(slop_arena* arena, sriqorder_SriqOrder ord, sri
         }
         return ((sriqindex_KIdx){.ground = sriqclauses_lit_set(arena, ground), .fparts = sriqindex_fparts_sorted(arena, raw)});
     }
+}
+
+sriqindex_KIdx sriqindex_k_index_premises(slop_arena* arena, sriqctx_Triggers tr, slop_list_sriq_Premise ps) {
+    {
+        __auto_type any = ((sriq_SuccSig){.f = ((uint32_t)(0)), .root = 0, .u = ((uint32_t)(0))});
+        __auto_type ground = ((slop_list_types_Lit){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type raw = ((slop_list_sriqindex_FPart){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = ps;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type p = _coll.data[_i];
+                if (p.maxed) {
+                    {
+                        __auto_type _coll = sriqindex_fparts_of(arena, p.sel, sriqindex_unit_premise(p));
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type x = _coll.data[_i];
+                            ({ __auto_type _lst_p = &(raw); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        }
+                    }
+                    {
+                        __auto_type _coll = sriqindex_ground_k2(arena, tr, any, p.sel);
+                        for (size_t _i = 0; _i < _coll.len; _i++) {
+                            __auto_type a = _coll.data[_i];
+                            ({ __auto_type _lst_p = &(ground); __auto_type _item = (a); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                        }
+                    }
+                }
+            }
+        }
+        return ((sriqindex_KIdx){.ground = sriqclauses_lit_set(arena, ground), .fparts = sriqindex_fparts_sorted(arena, raw)});
+    }
+}
+
+uint8_t sriqindex_unit_premise(sriq_Premise p) {
+    return ((((int64_t)((p.body).len)) == 0) && (((int64_t)((p.rest).len)) == 0));
 }
 
 slop_list_types_Lit sriqindex_ground_k2(slop_arena* arena, sriqctx_Triggers tr, sriq_SuccSig any, types_Lit l) {

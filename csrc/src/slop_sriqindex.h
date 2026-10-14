@@ -30,6 +30,12 @@ SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
 SLOP_LIST_DEFINE(types_Lit, slop_list_types_Lit)
 #endif
 
+#ifndef SLOP_LIST_SRIQ_PREMISE_DEFINED
+#define SLOP_LIST_SRIQ_PREMISE_DEFINED
+#define SLOP_LIST_SRIQ_PREMISE_IMPL_DEFINED
+SLOP_LIST_DEFINE(sriq_Premise, slop_list_sriq_Premise)
+#endif
+
 #ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
 #define SLOP_OPTION_TYPES_CLAUSE_DEFINED
 SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
@@ -43,6 +49,11 @@ SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
 #ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
 #define SLOP_OPTION_TYPES_ATERM_DEFINED
 SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
+#define SLOP_OPTION_SRIQ_PREMISE_DEFINED
+SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
 #endif
 
 struct sriqindex_Entry {
@@ -138,6 +149,8 @@ sriqsubsume_Committed sriqindex_commit_indexed(slop_arena* arena, slop_list_type
 slop_option_types_ATerm sriqindex_fterm_key(types_ATerm t);
 sriqindex_FPart sriqindex_fpart_at(slop_list_sriqindex_FPart ps, int64_t k, sriqindex_FPart fallback);
 sriqindex_KIdx sriqindex_k_index(slop_arena* arena, sriqorder_SriqOrder ord, sriqctx_Triggers tr, slop_list_types_Clause cs);
+sriqindex_KIdx sriqindex_k_index_premises(slop_arena* arena, sriqctx_Triggers tr, slop_list_sriq_Premise ps);
+uint8_t sriqindex_unit_premise(sriq_Premise p);
 slop_list_types_Lit sriqindex_ground_k2(slop_arena* arena, sriqctx_Triggers tr, sriq_SuccSig any, types_Lit l);
 uint8_t sriqindex_no_fterm(types_Lit l);
 slop_list_sriqindex_FPart sriqindex_fparts_of(slop_arena* arena, types_Lit l, uint8_t single);
@@ -180,6 +193,11 @@ SLOP_OPTION_DEFINE(sriqindex_KIdx, slop_option_sriqindex_KIdx)
 #ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
 #define SLOP_OPTION_TYPES_ATERM_DEFINED
 SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#endif
+
+#ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
+#define SLOP_OPTION_SRIQ_PREMISE_DEFINED
+SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
 #endif
 
 #ifndef SLOP_OPTION_SRIQINDEX_KPAIR_DEFINED

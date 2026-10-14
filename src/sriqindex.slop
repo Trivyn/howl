@@ -39,12 +39,12 @@
   (import sriqclauses (lit-set))
   (import sriqctx (Triggers in-su mentions-x))
   (import sriqorder (SriqOrder maximal-at))
-  (import sriq (SuccSig KSets succ-pre))
+  (import sriq (Premise SuccSig KSets succ-pre))
   (import sriqclauses (clause-cmp clause-eq))
   (import sriqsubsume (Committed subsumes tautology))
   (import canon (sort-range))
 
-  (export SubIndex sub-index some-subsumes commit-indexed KIdx k-index k-query)
+  (export SubIndex sub-index some-subsumes commit-indexed KIdx k-index k-index-premises k-query)
 
   ;; One clause filed under one literal: side 0 is the body, 1 the head.
   (type Entry (record
@@ -291,6 +291,28 @@
                           (for-each (a (ground-k2 arena tr any l)) (list-push ground a))))
                     (set! i (+ i 1))))))
           (record-new KIdx (ground (lit-set arena ground)) (fparts (fparts-sorted arena raw))))))
+
+  ;; The same index from premises (slice 9k): a premise's maxed is maximal-at
+  ;; of its clause's head at sel, and its clause is a unit exactly when the
+  ;; premise has an empty body and an empty rest. Premises list each clause's
+  ;; head literals in order, as k-index walks them, so the result is the same.
+  (fn k-index-premises ((arena Arena) (tr Triggers) (ps (List Premise)))
+    (@intent "k-index over the clauses whose premises ps are, read from the premises' maxed flags: no order work")
+    (@spec ((Arena Triggers (List Premise)) -> KIdx))
+    (@alloc arena)
+    (let ((any (record-new SuccSig (f (cast U32 0)) (root false) (u (cast U32 0))))
+          (mut ground (list-new arena Lit)) (mut raw (list-new arena FPart)))
+      (do (for-each (p ps)
+            (when (. p maxed)
+              (do (for-each (x (fparts-of arena (. p sel) (unit-premise p))) (list-push raw x))
+                  (for-each (a (ground-k2 arena tr any (. p sel))) (list-push ground a)))))
+          (record-new KIdx (ground (lit-set arena ground)) (fparts (fparts-sorted arena raw))))))
+
+  (fn unit-premise ((p Premise))
+    (@intent "Is p's clause ⊤ → L: no body, and nothing beside L in the head?")
+    (@spec ((Premise) -> Bool))
+    (@pure)
+    (and (== (list-len (. p body)) 0) (== (list-len (. p rest)) 0)))
 
   (fn ground-k2 ((arena Arena) (tr Triggers) (any SuccSig) (l Lit))
     (@intent "[l] if l mentions no f-term and succ-pre takes it as itself (a ground literal, not an inequality), and it
