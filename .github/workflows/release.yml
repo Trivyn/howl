@@ -25,9 +25,14 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x86_64
             cc: gcc
+          # Apple clang on macOS, the platform's own compiler: on the corpus the
+          # engine it builds runs 14-21% faster than a Homebrew gcc build (gcc-16,
+          # release flags, 2026-10-14), and it is the compiler every local
+          # measurement is taken with. Linux keeps gcc, so CI still compiles the
+          # generated C with a second compiler family.
           - os: macos-26
             platform: macos-arm64
-            cc: gcc-14
+            cc: clang
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -41,10 +46,6 @@ jobs:
           grep -qx "version = \"$VERSION\"" slop.toml || { echo "slop.toml is not $VERSION"; exit 1; }
           grep -qx "version = \"$VERSION\"" rust/Cargo.toml || { echo "rust/Cargo.toml is not $VERSION"; exit 1; }
           grep -q "^## $VERSION " CHANGELOG.md || { echo "CHANGELOG.md has no $VERSION entry"; exit 1; }
-
-      - name: Install GCC 14 (macOS)
-        if: runner.os == 'macOS'
-        run: brew install gcc@14
 
       - name: Run tests
         run: make test CC=${{ matrix.cc }}
