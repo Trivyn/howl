@@ -730,17 +730,30 @@
     ;; whole input is classified instead: the two-run mode's own probe run.
     ;; That keeps every yes and no the two-run mode gives (Constraint
     ;; 499c3842), and costs a second run only when the module's falls short.
+    ;; When the module's gate already omits something, its run cannot be
+    ;; complete, so it is not run at all: straight to the whole input.
     (if (not modular)
       (classify-within arena doc imports-resolved config false (list-new arena IRI))
-      (let ((m (classify-within arena doc imports-resolved config true (query-seed arena queries))))
-        (match m
-          ((ok o)
-            (if (or (outcome-is-complete o) (. (. o findings) inconsistent))
-              m
-              (do
-                (release-outcome o)
-                (classify-within arena doc imports-resolved config false (list-new arena IRI)))))
-          ((error _) m)))))
+      (match (prepare-encoded-within arena doc imports-resolved config true (query-seed arena queries))
+        ((error f) (error f))
+        ((ok p)
+          (if (> (list-len (. (. p coverage) omitted)) 0)
+            (classify-within arena doc imports-resolved config false (list-new arena IRI))
+            (module-or-whole arena doc imports-resolved config (reason arena p config)))))))
+
+  (fn module-or-whole ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
+                       (m (Result Outcome Fault)))
+    (@intent "The module's run when it is complete or inconsistent; otherwise the whole input classified instead")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig (Result Outcome Fault)) -> (Result Outcome Fault)))
+    (@alloc arena)
+    (match m
+      ((ok o)
+        (if (or (outcome-is-complete o) (. (. o findings) inconsistent))
+          m
+          (do
+            (release-outcome o)
+            (classify-within arena doc imports-resolved config false (list-new arena IRI)))))
+      ((error _) m)))
 
   (fn classify-within ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
                        (modular Bool) (seed (List IRI)))

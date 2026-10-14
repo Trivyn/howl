@@ -396,6 +396,7 @@ normalize_Decoded howl_within_seed(slop_arena* held, normalize_Decoded d, uint8_
 slop_result_types_Outcome_types_Fault howl_classify_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config);
 slop_result_probe_Probing_types_Fault howl_probe_encoded(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, slop_list_probe_Query queries, types_ReasonerConfig config, uint8_t modular);
 slop_result_types_Outcome_types_Fault howl_probe_classified(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config, uint8_t modular, slop_list_probe_Query queries);
+slop_result_types_Outcome_types_Fault howl_module_or_whole(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config, slop_result_types_Outcome_types_Fault m);
 slop_result_types_Outcome_types_Fault howl_classify_within(slop_arena* arena, termstore_Encoded doc, slop_list_rdf_IRI imports_resolved, types_ReasonerConfig config, uint8_t modular, slop_list_rdf_IRI seed);
 slop_list_rdf_IRI howl_query_seed(slop_arena* arena, slop_list_probe_Query queries);
 slop_result_probe_Probing_types_Fault howl_probe_outcome(slop_arena* arena, slop_result_types_Outcome_types_Fault r, slop_list_probe_Query queries);

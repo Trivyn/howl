@@ -1,0 +1,7 @@
+# corpus/modules.py: HOWL's ⊥-locality modules against the OWL API's (BOT), per corpus entry. Regenerate with --update.
+bfo-core-2024-02-07 classes 36 seeds 50 missing 0 fallback 0 larger 0 mean-symbols howl 5.9 owlapi 5.9 mean-axioms howl 5.4 owlapi 5.4 max-symbols howl 10 owlapi 10
+cco-2024-11-06 classes 1422 seeds 50 missing 0 fallback 0 larger 0 mean-symbols howl 419.5 owlapi 419.5 mean-axioms howl 448.5 owlapi 448.5 max-symbols howl 440 owlapi 440
+ro-2025-12-17 classes 58 seeds 50 missing 0 fallback 50 larger 50 mean-symbols howl 91.4 owlapi 171.2 mean-axioms howl 592.5 owlapi 359.8 max-symbols howl 98 owlapi 179
+obi-2026-07-27 classes 5239 seeds 50 missing 0 fallback 0 larger 0 mean-symbols howl 473.1 owlapi 473.1 mean-axioms howl 576.4 owlapi 571.6 max-symbols howl 548 owlapi 548
+go-2026-07-26 classes 51986 seeds 50 missing 0 fallback 0 larger 0 mean-symbols howl 28.0 owlapi 28.0 mean-axioms howl 56.5 owlapi 56.5 max-symbols howl 128 owlapi 128
+el-galen-2011-04-12 classes 23136 seeds 50 missing 0 fallback 0 larger 0 mean-symbols howl 4919.2 owlapi 4919.2 mean-axioms howl 10991.1 owlapi 10991.1 max-symbols howl 6758 owlapi 6758

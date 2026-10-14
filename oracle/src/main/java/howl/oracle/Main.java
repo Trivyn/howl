@@ -9,7 +9,12 @@ import org.semanticweb.owlapi.formats.TurtleDocumentFormat;
 import org.semanticweb.owlapi.io.FileDocumentSource;
 import org.semanticweb.owlapi.io.OWLOntologyLoaderMetaData;
 import org.semanticweb.owlapi.model.IRI;
+import org.semanticweb.owlapi.model.OWLAxiom;
 import org.semanticweb.owlapi.model.OWLClass;
+import org.semanticweb.owlapi.model.OWLEntity;
+import org.semanticweb.owlapi.model.OWLOntologyCreationException;
+import uk.ac.manchester.cs.owlapi.modularity.ModuleType;
+import uk.ac.manchester.cs.owlapi.modularity.SyntacticLocalityModuleExtractor;
 import org.semanticweb.owlapi.model.OWLDataFactory;
 import org.semanticweb.owlapi.model.OWLDocumentFormat;
 import org.semanticweb.owlapi.model.OWLOntology;
@@ -25,6 +30,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -44,7 +50,15 @@ import java.util.TreeSet;
  * oracle convert                                  --out DIR FILE...
  * oracle bench  --reasoner elk --workers N --tripwire FILE --warmup K --runs M FILE
  * oracle bench  --reasoner hermit                          --warmup K --runs M FILE
+ * oracle module --seeds SEEDS                               --out DIR FILE
  * </pre>
+ *
+ * <p>{@code module} writes, for each line of SEEDS (class IRIs separated by
+ * spaces), the OWL API's syntactic ⊥-locality module of FILE for that
+ * signature (ModuleType.BOT): its logical axiom count and its signature's
+ * classes, object properties and named individuals, plus the seed, sorted.
+ * corpus/modules.py holds HOWL's own extractor (src/locality.slop, SPEC §8.4)
+ * to it: HOWL's module must contain every symbol of the OWL API's.
  *
  * <p>{@code convert} re-serializes each file as Turtle through the same pinned
  * OWL API, for inputs HOWL cannot read directly (ELK's conformance tests are in
@@ -117,8 +131,9 @@ public final class Main {
     }
 
     private static int run(String[] args) throws Usage, Abort {
+        if (args.length > 0 && args[0].equals("module")) return moduleCommand(args);
         if (args.length == 0 || !(args[0].equals("report") || args[0].equals("convert") || args[0].equals("bench"))) {
-            throw new Usage("the commands are `report`, `convert` and `bench`");
+            throw new Usage("the commands are `report`, `convert`, `bench` and `module`");
         }
         boolean convert = args[0].equals("convert");
         boolean bench = args[0].equals("bench");
@@ -223,6 +238,71 @@ public final class Main {
         }
         if (tripwire != null) fireTripwire(reasoner, tripwire, "after");
         return failed == 0 ? 0 : 1;
+    }
+
+    /** {@code module --seeds SEEDS --out DIR FILE}: the OWL API's ⊥-module per seed line. */
+    private static int moduleCommand(String[] args) throws Usage, Abort {
+        File seeds = null, file = null;
+        Path out = null;
+        for (int i = 1; i < args.length; i++) {
+            switch (args[i]) {
+                case "--seeds" -> seeds = new File(value(args, ++i, "--seeds"));
+                case "--out" -> out = Path.of(value(args, ++i, "--out"));
+                default -> {
+                    if (args[i].startsWith("--")) throw new Usage("unknown flag " + args[i]);
+                    if (file != null) throw new Usage("module takes exactly one FILE");
+                    file = new File(args[i]);
+                }
+            }
+        }
+        if (seeds == null || out == null || file == null) throw new Usage("module takes --seeds SEEDS, --out DIR and one FILE");
+        Properties pins = pins();
+        String owlapi = checkRelease("OWL API", VersionInfo.getVersionInfo().getVersion(), pins.getProperty("owlapi"));
+        try {
+            Files.createDirectories(out);
+            OWLOntologyManager manager = OWLManager.createOWLOntologyManager();
+            OWLOntology ont = manager.loadOntologyFromOntologyDocument(
+                    new FileDocumentSource(file, new TurtleDocumentFormat()));
+            // The extractor reads the imports closure, so every ontology in it
+            // must have parsed cleanly, not only the root.
+            for (OWLOntology o : (Iterable<OWLOntology>) ont.importsClosure()::iterator) refuseLossyParse(o);
+            OWLDataFactory df = manager.getOWLDataFactory();
+            SyntacticLocalityModuleExtractor x = new SyntacticLocalityModuleExtractor(manager, ont, ModuleType.BOT);
+            List<String> text = new ArrayList<>();
+            text.add("oracle-modules 1");
+            text.add("owlapi " + owlapi);
+            for (String line : Files.readAllLines(seeds.toPath(), StandardCharsets.UTF_8)) {
+                if (line.isBlank()) continue;
+                Set<OWLEntity> sig = new HashSet<>();
+                Set<String> syms = new TreeSet<>(CODE_POINT_ORDER);
+                for (String iri : line.trim().split("\\s+")) {
+                    sig.add(df.getOWLClass(IRI.create(iri)));
+                    syms.add(iri);
+                }
+                Set<OWLAxiom> module = x.extract(sig);
+                long logical = 0;
+                for (OWLAxiom ax : module) {
+                    if (!ax.isLogicalAxiom()) continue;
+                    logical++;
+                    ax.classesInSignature().forEach(c -> syms.add(c.getIRI().toString()));
+                    ax.objectPropertiesInSignature().forEach(p -> syms.add(p.getIRI().toString()));
+                    ax.individualsInSignature().forEach(n -> { if (n.isNamed()) syms.add(n.asOWLNamedIndividual().getIRI().toString()); });
+                }
+                text.add("seed " + line.trim());
+                text.add("axioms " + logical);
+                for (String sym : syms) text.add("sym " + sym);
+                text.add("end");
+            }
+            Files.write(out.resolve(reportName(file).replaceAll("\\.report$", "") + ".modules"), text, StandardCharsets.UTF_8);
+            System.out.println("ok   " + file);
+            return 0;
+        } catch (IOException | OWLOntologyCreationException e) {
+            System.out.println("FAIL " + file + ": " + e.getMessage());
+            return 1;
+        } catch (Exception e) {
+            System.out.println("FAIL " + file + ": " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            return 1;
+        }
     }
 
     /** Each FILE to {@code DIR/<name>.ttl}; the format is detected by the OWL API. */

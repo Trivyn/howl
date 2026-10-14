@@ -3,3 +3,4 @@ seeds 1:400 ontologies 400 clean 400 of-which-inconsistent 169 failed 0
 negation seeds 1:400 ontologies 400 clean 400 of-which-inconsistent 276 failed 0
 el++ seeds 1:400 ontologies 400 clean 400 of-which-inconsistent 211 failed 0
 sriq seeds 1:400 ontologies 400 clean 333 of-which-inconsistent 207 failed 0 budget 67
+ask seeds 1:400 ontologies 400 queries 2321 wrong 0 el yes 744 no 5 unknown 1572 auto yes 1435 no 567 unknown 319

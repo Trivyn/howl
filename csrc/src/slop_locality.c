@@ -26,6 +26,9 @@ void locality_add_roles(slop_list_types_RoleId rs, slop_map* out);
 void locality_add_node(types_Node n, slop_map* out);
 void locality_add_nodes(slop_list_types_Node ns, slop_map* out);
 void locality_add_edge(owl2_RawEdge e, slop_map* out);
+uint8_t locality_axiom_readable(owl2_RawAxiom ax);
+uint8_t locality_concept_readable(owl2_RawConcept c);
+uint8_t locality_concepts_readable(slop_list_owl2_RawConcept cs);
 locality_ModuleOut locality_module_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, slop_list_rdf_IRI seed);
 slop_list_int locality_admit_symbols(slop_arena* arena, slop_list_rdf_IRI syms, slop_map* s, slop_map* index, slop_list_u8 in_m);
 slop_list_list_rdf_IRI locality_symbols_of(slop_arena* arena, slop_list_owl2_RawAxiom axs);
@@ -870,6 +873,243 @@ void locality_add_edge(owl2_RawEdge e, slop_map* out) {
     locality_add_node(e.to, out);
 }
 
+uint8_t locality_axiom_readable(owl2_RawAxiom ax) {
+    __auto_type _mv_1586 = ax;
+    switch (_mv_1586.tag) {
+        case owl2_RawAxiom_ra_sub_class_of:
+        {
+            __auto_type c = _mv_1586.data.ra_sub_class_of.f0;
+            __auto_type d = _mv_1586.data.ra_sub_class_of.f1;
+            return (locality_concept_readable((*c)) && locality_concept_readable((*d)));
+        }
+        case owl2_RawAxiom_ra_equivalent_classes:
+        {
+            __auto_type cs = _mv_1586.data.ra_equivalent_classes;
+            return locality_concepts_readable(cs);
+        }
+        case owl2_RawAxiom_ra_disjoint_classes:
+        {
+            __auto_type cs = _mv_1586.data.ra_disjoint_classes;
+            return locality_concepts_readable(cs);
+        }
+        case owl2_RawAxiom_ra_sub_object_property:
+        {
+            return 1;
+        }
+        case owl2_RawAxiom_ra_property_chain:
+        {
+            __auto_type _ = _mv_1586.data.ra_property_chain;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_equivalent_properties:
+        {
+            __auto_type _ = _mv_1586.data.ra_equivalent_properties;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_transitive_property:
+        {
+            __auto_type _ = _mv_1586.data.ra_transitive_property;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_object_property_domain:
+        {
+            __auto_type c = _mv_1586.data.ra_object_property_domain.f1;
+            return locality_concept_readable((*c));
+        }
+        case owl2_RawAxiom_ra_object_property_range:
+        {
+            __auto_type c = _mv_1586.data.ra_object_property_range.f1;
+            return locality_concept_readable((*c));
+        }
+        case owl2_RawAxiom_ra_class_assertion:
+        {
+            __auto_type ca = _mv_1586.data.ra_class_assertion;
+            return locality_concept_readable((*ca.concept));
+        }
+        case owl2_RawAxiom_ra_object_property_assertion:
+        {
+            __auto_type _ = _mv_1586.data.ra_object_property_assertion;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_declaration:
+        {
+            __auto_type _ = _mv_1586.data.ra_declaration;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_annotation:
+        {
+            return 1;
+        }
+        case owl2_RawAxiom_ra_inert_data:
+        {
+            return 1;
+        }
+        case owl2_RawAxiom_ra_inverse_properties:
+        {
+            return 1;
+        }
+        case owl2_RawAxiom_ra_property_characteristic:
+        {
+            return 1;
+        }
+        case owl2_RawAxiom_ra_disjoint_properties:
+        {
+            __auto_type _ = _mv_1586.data.ra_disjoint_properties;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_same_individual:
+        {
+            __auto_type _ = _mv_1586.data.ra_same_individual;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_different_individuals:
+        {
+            __auto_type _ = _mv_1586.data.ra_different_individuals;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_negative_assertion:
+        {
+            __auto_type _ = _mv_1586.data.ra_negative_assertion;
+            return 1;
+        }
+        case owl2_RawAxiom_ra_disjoint_union:
+        {
+            __auto_type du = _mv_1586.data.ra_disjoint_union;
+            return locality_concepts_readable(du.members);
+        }
+        case owl2_RawAxiom_ra_has_key:
+        {
+            __auto_type _ = _mv_1586.data.ra_has_key;
+            return 0;
+        }
+        case owl2_RawAxiom_ra_data_axiom:
+        {
+            __auto_type _ = _mv_1586.data.ra_data_axiom;
+            return 0;
+        }
+        case owl2_RawAxiom_ra_builtin_role:
+        {
+            __auto_type _ = _mv_1586.data.ra_builtin_role;
+            return 0;
+        }
+        case owl2_RawAxiom_ra_anonymous_individual:
+        {
+            __auto_type _ = _mv_1586.data.ra_anonymous_individual;
+            return 0;
+        }
+        case owl2_RawAxiom_ra_reserved_vocabulary:
+        {
+            __auto_type _ = _mv_1586.data.ra_reserved_vocabulary;
+            return 0;
+        }
+        case owl2_RawAxiom_ra_swrl_rule:
+        {
+            __auto_type _ = _mv_1586.data.ra_swrl_rule;
+            return 0;
+        }
+        case owl2_RawAxiom_ra_unrecognized:
+        {
+            __auto_type _ = _mv_1586.data.ra_unrecognized;
+            return 0;
+        }
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t locality_concept_readable(owl2_RawConcept c) {
+    __auto_type _mv_1587 = c;
+    switch (_mv_1587.tag) {
+        case owl2_RawConcept_rc_name:
+        {
+            __auto_type _ = _mv_1587.data.rc_name;
+            return 1;
+        }
+        case owl2_RawConcept_rc_thing:
+        {
+            return 1;
+        }
+        case owl2_RawConcept_rc_nothing:
+        {
+            return 1;
+        }
+        case owl2_RawConcept_rc_and:
+        {
+            __auto_type cs = _mv_1587.data.rc_and;
+            return locality_concepts_readable(cs);
+        }
+        case owl2_RawConcept_rc_some:
+        {
+            __auto_type f = _mv_1587.data.rc_some.f1;
+            return locality_concept_readable((*f));
+        }
+        case owl2_RawConcept_rc_or:
+        {
+            __auto_type cs = _mv_1587.data.rc_or;
+            return locality_concepts_readable(cs);
+        }
+        case owl2_RawConcept_rc_not:
+        {
+            __auto_type f = _mv_1587.data.rc_not;
+            return locality_concept_readable((*f));
+        }
+        case owl2_RawConcept_rc_all:
+        {
+            __auto_type f = _mv_1587.data.rc_all.f1;
+            return locality_concept_readable((*f));
+        }
+        case owl2_RawConcept_rc_oneof:
+        {
+            __auto_type _ = _mv_1587.data.rc_oneof;
+            return 1;
+        }
+        case owl2_RawConcept_rc_has_value:
+        {
+            return 1;
+        }
+        case owl2_RawConcept_rc_has_self:
+        {
+            __auto_type _ = _mv_1587.data.rc_has_self;
+            return 1;
+        }
+        case owl2_RawConcept_rc_card:
+        {
+            return 1;
+        }
+        case owl2_RawConcept_rc_qcard:
+        {
+            __auto_type f = _mv_1587.data.rc_qcard.f3;
+            return locality_concept_readable((*f));
+        }
+        case owl2_RawConcept_rc_data:
+        {
+            __auto_type _ = _mv_1587.data.rc_data;
+            return 0;
+        }
+        case owl2_RawConcept_rc_anon:
+        {
+            __auto_type _ = _mv_1587.data.rc_anon;
+            return 0;
+        }
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t locality_concepts_readable(slop_list_owl2_RawConcept cs) {
+    {
+        uint8_t ok = 1;
+        {
+            __auto_type _coll = cs;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type c = _coll.data[_i];
+                if (!(locality_concept_readable(c))) {
+                    ok = 0;
+                }
+            }
+        }
+        return ok;
+    }
+}
+
 locality_ModuleOut locality_module_axioms(slop_arena* arena, slop_list_owl2_RawAxiom axs, slop_list_rdf_IRI seed) {
     {
         __auto_type s = ({ static const slop_map_desc _d = SLOP_SET_DESC(rdf_IRI, slop_hash_rdf_IRI, slop_eq_rdf_IRI, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
@@ -920,9 +1160,9 @@ slop_list_int locality_admit_symbols(slop_arena* arena, slop_list_rdf_IRI syms, 
                 __auto_type x = _coll.data[_i];
                 if (!(slop_map_has(s, &(x)))) {
                     ({ slop_map_put(NULL, s, &(x), NULL, 0); });
-                    __auto_type _mv_1590 = ({ void* _ptr = slop_map_get(index, &(x)); _ptr ? (slop_option_list_int){ .has_value = true, .value = *(slop_list_int*)_ptr } : (slop_option_list_int){ .has_value = false }; });
-                    if (_mv_1590.has_value) {
-                        __auto_type ks = _mv_1590.value;
+                    __auto_type _mv_1592 = ({ void* _ptr = slop_map_get(index, &(x)); _ptr ? (slop_option_list_int){ .has_value = true, .value = *(slop_list_int*)_ptr } : (slop_option_list_int){ .has_value = false }; });
+                    if (_mv_1592.has_value) {
+                        __auto_type ks = _mv_1592.value;
                         {
                             __auto_type _coll = ks;
                             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -932,7 +1172,7 @@ slop_list_int locality_admit_symbols(slop_arena* arena, slop_list_rdf_IRI syms, 
                                 }
                             }
                         }
-                    } else if (!_mv_1590.has_value) {
+                    } else if (!_mv_1592.has_value) {
                     }
                 }
             }
@@ -1000,44 +1240,44 @@ slop_list_owl2_RawAxiom locality_kept(slop_arena* arena, slop_list_owl2_RawAxiom
 }
 
 int64_t locality_int_of(slop_list_int xs, int64_t k) {
-    __auto_type _mv_1593 = ({ __auto_type _lst = xs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1593.has_value) {
-        __auto_type v = _mv_1593.value;
+    __auto_type _mv_1595 = ({ __auto_type _lst = xs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_1595.has_value) {
+        __auto_type v = _mv_1595.value;
         return v;
-    } else if (!_mv_1593.has_value) {
+    } else if (!_mv_1595.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 uint8_t locality_bool_of(slop_list_u8 xs, int64_t k) {
-    __auto_type _mv_1594 = ({ __auto_type _lst = xs; size_t _idx = (size_t)k; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1594.has_value) {
-        __auto_type v = _mv_1594.value;
+    __auto_type _mv_1596 = ({ __auto_type _lst = xs; size_t _idx = (size_t)k; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_1596.has_value) {
+        __auto_type v = _mv_1596.value;
         return v;
-    } else if (!_mv_1594.has_value) {
+    } else if (!_mv_1596.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 owl2_RawAxiom locality_axiom_of(slop_list_owl2_RawAxiom axs, int64_t k) {
-    __auto_type _mv_1595 = ({ __auto_type _lst = axs; size_t _idx = (size_t)k; slop_option_owl2_RawAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1595.has_value) {
-        __auto_type a = _mv_1595.value;
+    __auto_type _mv_1597 = ({ __auto_type _lst = axs; size_t _idx = (size_t)k; slop_option_owl2_RawAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_1597.has_value) {
+        __auto_type a = _mv_1597.value;
         return a;
-    } else if (!_mv_1595.has_value) {
+    } else if (!_mv_1597.has_value) {
         return ((owl2_RawAxiom){ .tag = owl2_RawAxiom_ra_annotation });
     }
     SLOP_UNREACHABLE();
 }
 
 slop_list_rdf_IRI locality_sym_of(slop_arena* arena, slop_list_list_rdf_IRI sigs, int64_t k) {
-    __auto_type _mv_1596 = ({ __auto_type _lst = sigs; size_t _idx = (size_t)k; slop_option_list_rdf_IRI _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1596.has_value) {
-        __auto_type l = _mv_1596.value;
+    __auto_type _mv_1598 = ({ __auto_type _lst = sigs; size_t _idx = (size_t)k; slop_option_list_rdf_IRI _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_1598.has_value) {
+        __auto_type l = _mv_1598.value;
         return l;
-    } else if (!_mv_1596.has_value) {
+    } else if (!_mv_1598.has_value) {
         return ((slop_list_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
     }
     SLOP_UNREACHABLE();
