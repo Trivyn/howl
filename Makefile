@@ -345,6 +345,15 @@ acceptance: cli
 	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile sriq; \
 	check corpus/fixtures/out-of-profile/nominals.ttl 2 --profile sriq --strict; \
 	check corpus/fixtures/v0/litmus.ttl 3 --profile sroiq; \
+	askcheck() { want=$$1; msg=$$2; shift 2; out=$$(./$(BIN)/howl ask "$$@" 2>&1); rc=$$?; \
+	  if [ "$$rc" = "$$want" ] && printf '%s' "$$out" | grep -qF -- "$$msg"; then echo "  ok   ask $$* -> $$rc"; \
+	  else echo "  FAIL ask $$* -> $$rc (expected $$want, saying \"$$msg\")"; fail=1; fi; }; \
+	askcheck 0 "probe subsumed http://example.org/t#A urn:probe:re no" $(PROBE_ARGS); \
+	askcheck 0 "probe unsatisfiable http://example.org/t#D yes" corpus/fixtures/hazards/inconsistent-via-individual.ttl \
+	  --ask-unsat http://example.org/t\#D; \
+	askcheck 3 "nothing asked" corpus/fixtures/v0/litmus.ttl; \
+	askcheck 3 "do not apply" corpus/fixtures/v0/litmus.ttl --ask-unsat urn:x --report; \
+	askcheck 3 "horn-sriq was dropped" corpus/fixtures/v0/litmus.ttl --ask-unsat urn:x --profile horn-sriq; \
 	if [ "$$fail" -eq 0 ]; then echo "  all SPEC.md §12 acceptance criteria met"; \
 	else echo "  ACCEPTANCE FAILED"; exit 1; fi
 
@@ -510,6 +519,9 @@ golden: cli
 	g=corpus/goldens/probe-queries/main.report; \
 	out=$$({ $(HOWL) validate $(PROBE_ARGS) --report 2>/dev/null; echo "exit $$?"; }); \
 	if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL probe queries differ from $$g"; fail=1; fi; \
+	g=corpus/goldens/probe-queries/ask.report; \
+	out=$$({ $(HOWL) ask $(PROBE_ARGS) 2>/dev/null; echo "exit $$?"; }); \
+	if [ "$$out" != "$$(cat $$g)" ]; then echo "  FAIL howl ask differs from $$g"; fail=1; fi; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; g=corpus/goldens/$$c.sha256; \
 	  if [ ! -f "$$f" ]; then echo "  MISSING $$f (run ./corpus/fetch.sh)"; fail=1; continue; fi; \
@@ -540,6 +552,9 @@ golden-update: cli
 	out=$$({ $(HOWL) validate $(PROBE_ARGS) --report 2>/dev/null; echo "exit $$?"; }); \
 	case "$$out" in "howl-report 2"*) printf '%s\n' "$$out" > corpus/goldens/probe-queries/main.report;; \
 	  *) echo "  NOT A REPORT probe queries -- golden not written"; fail=1;; esac; \
+	out=$$({ $(HOWL) ask $(PROBE_ARGS) 2>/dev/null; echo "exit $$?"; }); \
+	case "$$out" in "profile "*) printf '%s\n' "$$out" > corpus/goldens/probe-queries/ask.report;; \
+	  *) echo "  NOT AN ANSWER RUN howl ask -- golden not written"; fail=1;; esac; \
 	for c in $(GOLDEN_CORPUS); do \
 	  f=corpus/vendor/$$c.ttl; \
 	  if [ ! -f "$$f" ]; then echo "  skip $$c (no $$f)"; continue; fi; \

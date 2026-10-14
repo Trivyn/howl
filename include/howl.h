@@ -121,6 +121,7 @@ void howl_input_begin_document(howl_Input in);
 void howl_input_begin_probe_document(howl_Input in);
 void howl_input_free(howl_Input in);
 howl_Input howl_input_new(void);
+howl_Run howl_run_answer(howl_Input in, howl_Options o);
 howl_Run howl_run_classify(howl_Input in, howl_Options o);
 howl_FaultKind howl_run_fault(howl_Run r);
 slop_string howl_run_fault_message(howl_Run r);

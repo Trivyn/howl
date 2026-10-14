@@ -24,7 +24,7 @@
 
   (import rdf (IRI Triple make-iri make-triple))
   (import vocab (RDF_TYPE OWL_CLASS OWL_THING OWL_NOTHING))
-  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission Findings kname-eq
+  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission Findings Profile kname-eq
                  outcome-is-complete renamed-node copy-iri))
   (import canon (string-cmp iri-cmp sort-range))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
@@ -52,13 +52,15 @@
     (query  Query)
     (answer ProbeAnswer)))
 
-  ;; What a probe run returns: its answers and the two facts that qualify
-  ;; them. Its own rounds and termination are not here: only whether it
-  ;; was complete matters, and that is already in every `no`.
+  ;; What a probe run returns: its answers, the two facts that qualify
+  ;; them, and the profile that answered (under auto, the probe documents
+  ;; can move the choice). Its own rounds and termination are not here:
+  ;; only whether it was complete matters, and that is already in every `no`.
   (type Probing (record
     (answers      (List Answered))   ; one per query, in canonical order
     (inconsistent Bool)              ; every answer is then a vacuous yes
-    (omissions    (List Omission)))) ; the probe run's coverage gaps; any rules out `no`
+    (omissions    (List Omission))   ; the probe run's coverage gaps; any rules out `no`
+    (profile      Profile)))         ; the profile the probe run ran
 
   ;; ============================================================
   ;; Canonical order: unsatisfiable before subsumed, then sub, then sup

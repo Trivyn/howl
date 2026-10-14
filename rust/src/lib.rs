@@ -548,6 +548,38 @@ impl Report {
     }
 }
 
+/// The input's probe queries, answered by a probe run alone
+/// ([`Reasoner::answer`]): no main classification, so no report.
+///
+/// The answers are the ones [`Reasoner::classify`] gives in
+/// [`Report::probes`] for the same input and configuration: the same
+/// probe run, without the main run before it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Answers {
+    /// The rung the probe run ran: under `Auto`, the one chosen for the
+    /// input plus its probe documents. `None` when nothing was asked, so
+    /// nothing ran.
+    pub profile: Option<Profile>,
+    /// Each query once, in canonical order (unsatisfiable before
+    /// subsumed, then by class).
+    pub probes: Vec<ProbeAnswer>,
+    /// Whether the probe run was inconsistent: every answer is then a
+    /// vacuous `Yes`.
+    pub inconsistent: bool,
+    /// What the probe run did not cover, rendered as
+    /// [`Report::omissions`] are. Any rules out a `No`.
+    pub omissions: Vec<String>,
+    lines: Vec<String>,
+}
+
+impl Answers {
+    /// The lines `howl ask` prints: `profile P` when a probe run ran, then
+    /// the probe lines.
+    pub fn lines(&self) -> &[String] {
+        &self.lines
+    }
+}
+
 /// A HOWL reasoner instance.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Reasoner {
@@ -579,9 +611,28 @@ impl Reasoner {
         self.run(input, cancel.as_cancel_ptr())
     }
 
+    /// Answer the input's probe queries alone (SPEC §8.4): one probe
+    /// run, and no main classification. Cheaper than
+    /// [`classify`](Self::classify) by that classification, with the same
+    /// answers.
+    pub fn answer(&self, input: &Input) -> Result<Answers, Fault> {
+        self.answer_run(input, 0)
+    }
+
+    /// [`answer`](Self::answer), stopping with [`Fault::Cancelled`] at the
+    /// first round boundary after `cancel` is set.
+    pub fn answer_cancellable(&self, input: &Input, cancel: &CancelToken) -> Result<Answers, Fault> {
+        self.answer_run(input, cancel.as_cancel_ptr())
+    }
+
     fn run(&self, input: &Input, cancel: i64) -> Result<Report, Fault> {
         let run = Run(unsafe { ffi::howl_run_classify(input.raw, self.config.to_ffi(cancel)) });
         run.result()
+    }
+
+    fn answer_run(&self, input: &Input, cancel: i64) -> Result<Answers, Fault> {
+        let run = Run(unsafe { ffi::howl_run_answer(input.raw, self.config.to_ffi(cancel)) });
+        run.answers()
     }
 }
 
@@ -595,18 +646,48 @@ impl Drop for Run {
 }
 
 impl Run {
-    fn result(&self) -> Result<Report, Fault> {
+    /// The run's fault, if it has no result.
+    fn fault(&self) -> Option<Fault> {
         let r = self.0;
         unsafe {
-            if ffi::howl_run_ok(r) == 0 {
-                return Err(match ffi::howl_run_fault(r) {
-                    ffi::FAULT_CANCELLED => Fault::Cancelled,
-                    ffi::FAULT_INPUT_ERROR => Fault::InputError(owned(ffi::howl_run_fault_message(r))),
-                    ffi::FAULT_UNAVAILABLE => Fault::ProfileUnavailable(Profile::from_ffi(ffi::howl_run_fault_profile(r))),
-                    ffi::FAULT_INVALID_OPTIONS => Fault::InvalidConfig(owned(ffi::howl_run_fault_message(r))),
-                    f => panic!("the engine returned fault {f} for a run with no result"),
-                });
+            if ffi::howl_run_ok(r) != 0 {
+                return None;
             }
+            Some(match ffi::howl_run_fault(r) {
+                ffi::FAULT_CANCELLED => Fault::Cancelled,
+                ffi::FAULT_INPUT_ERROR => Fault::InputError(owned(ffi::howl_run_fault_message(r))),
+                ffi::FAULT_UNAVAILABLE => Fault::ProfileUnavailable(Profile::from_ffi(ffi::howl_run_fault_profile(r))),
+                ffi::FAULT_INVALID_OPTIONS => Fault::InvalidConfig(owned(ffi::howl_run_fault_message(r))),
+                f => panic!("the engine returned fault {f} for a run with no result"),
+            })
+        }
+    }
+
+    fn answers(&self) -> Result<Answers, Fault> {
+        if let Some(f) = self.fault() {
+            return Err(f);
+        }
+        let r = self.0;
+        unsafe {
+            let n = ffi::howl_run_probe_len(r);
+            Ok(Answers {
+                profile: if n == 0 { None } else { Some(Profile::from_ffi(ffi::howl_run_profile(r))) },
+                probes: (0..n).map(|i| probe_answer(r, i)).collect(),
+                inconsistent: ffi::howl_run_probe_inconsistent(r) != 0,
+                omissions: (0..ffi::howl_run_probe_omission_len(r))
+                    .map(|i| owned(ffi::howl_run_probe_omission(r, i)))
+                    .collect(),
+                lines: (0..ffi::howl_run_report_len(r)).map(|i| owned(ffi::howl_run_report_line(r, i))).collect(),
+            })
+        }
+    }
+
+    fn result(&self) -> Result<Report, Fault> {
+        if let Some(f) = self.fault() {
+            return Err(f);
+        }
+        let r = self.0;
+        unsafe {
             let t = ffi::howl_run_termination(r);
             let termination = match t.tag {
                 ffi::TERMINATION_FIXPOINT => Termination::Fixpoint,

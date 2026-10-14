@@ -29,6 +29,7 @@ static int failures = 0;
 
 static slop_string str(const char* s) { return (slop_string){ strlen(s), s }; }
 static int msg_is(slop_string m, const char* want) { return m.len == strlen(want) && memcmp(m.data, want, m.len) == 0; }
+static int same_str(slop_string a, slop_string b) { return a.len == b.len && memcmp(a.data, b.data, a.len) == 0; }
 
 static char* read_file(const char* path, size_t* len) {
     FILE* f = fopen(path, "rb");
@@ -175,6 +176,22 @@ static void probes(void) {
         CHECK(howl_run_probe_len(r) >= 0 && howl_run_probe_sub(r, 99).len == 0
               && howl_run_probe_answer(r, 99) == probe_ProbeAnswer_answer_unknown,
               "profile %d: an out-of-range probe answer is not empty and unknown", p);
+        /* The answer run (SPEC §8.4): the same answers, with no main run. */
+        howl_Run a = howl_run_answer(in, o);
+        CHECK(howl_run_ok(a) && howl_run_probe_len(a) == howl_run_probe_len(r),
+              "profile %d: the answer run did not answer as classify does", p);
+        for (int64_t i = 0; i < howl_run_probe_len(r); i++)
+            CHECK(howl_run_probe_kind(a, i) == howl_run_probe_kind(r, i)
+                  && howl_run_probe_answer(a, i) == howl_run_probe_answer(r, i)
+                  && same_str(howl_run_probe_sub(a, i), howl_run_probe_sub(r, i))
+                  && same_str(howl_run_probe_sup(a, i), howl_run_probe_sup(r, i)),
+                  "profile %d: answer %lld differs from classify's", p, (long long)i);
+        CHECK(howl_run_profile(a) == profiles[p] && howl_run_unsat_len(a) == 0 && howl_run_sub_len(a) == 0
+              && howl_run_verdict(a) == types_Verdict_verdict_inconclusive
+              && howl_run_report_len(a) == 4 + 4 && msg_is(howl_run_report_line(a, 1), "probes 4"),
+              "profile %d: the answer run has a report, or the wrong lines", p);
+        free(report_of(a));
+        howl_run_free(a);
         free(report_of(r));
         howl_run_free(r);
         howl_input_free(in);
@@ -193,6 +210,12 @@ static void probes(void) {
               && howl_run_report_len(r) == 0 && howl_run_probe_len(r) == 0,
               "a probe run's fault did not fault the run");
         howl_run_free(r);
+        /* The answer run's probe run is the whole run: its fault, unprefixed. */
+        howl_Run a = howl_run_answer(in, howl_default_options());
+        CHECK(!howl_run_ok(a) && howl_run_fault(a) == howl_FaultKind_fault_input_error
+              && howl_run_report_len(a) == 0 && howl_run_probe_len(a) == 0,
+              "an answer run's fault did not fault it");
+        howl_run_free(a);
         howl_input_free(in);
     }
     /* A query naming an empty IRI refuses the input. */

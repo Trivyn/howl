@@ -5388,6 +5388,26 @@ have a value), and *queries*: is `C` unsatisfiable, is `A ⊑ B`, for named clas
 - **A probe run that faults takes the run with it:** cancelled is cancelled, and an input error in
   a probe document is the caller's, named as the probe run's. A query naming an empty IRI, or a
   probe document that does not parse, refuses the input as a bad document does.
+- **The answer run asks without classifying first** (`howl_run_answer`, `Reasoner::answer`,
+  `howl ask`). It is the probe run alone, with no main run before it, so it costs one
+  classification instead of two (Requirement e99fc9a2).
+  - **Its answers are the two-run mode's**, for the same input and options (Constraint 499c3842).
+    It is the same probe run. The tests hold the two modes equal on every class pair of the
+    fixtures under el, el++ and sriq, and on the probe scenarios: an omission, a cap of 0 and an
+    inconsistent run.
+  - **It has no main outcome, so no report.**
+    - Its verdict is `inconclusive`, and its findings, omissions and rounds are empty or 0.
+    - Its probe accessors answer as the two-run mode's do.
+    - Its profile is the one the probe run ran; under `auto`, the probe documents can move that
+      choice.
+    - `howl_run_ok` is true. It reads "the run has a result", and an answer run's result is its
+      answers.
+  - **Its lines are `profile P`, then the probe lines.** With nothing asked, nothing runs: the lines
+    are `probes 0`, `probe-inconsistent false` and `probe-omitted 0`, and the profile is never
+    read. A fault is the run's own, with no `probe run:` prefix.
+  - **`howl ask` exits 0 when it answered, whatever the answers.** A `no` is not a failure and a
+    `yes` is not a pass. It exits 2 when cancelled and 3 when it could not run. It refuses a run
+    that asks nothing, and refuses `--report`, `--strict` and `--timings`, since none applies to it.
 
 **Dual-engine cross-check changes §8.2's story.** The pipeline runs an agreement stage that
 cross-checks the TBox and ABox engines on a deterministic probe set **in the EL ∩ RL entailment

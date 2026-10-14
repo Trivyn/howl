@@ -32,7 +32,7 @@
   (import strlib (string-build))
   (import probe (Probing Answered ProbeAnswer))
 
-  (export report-lines probe-lines node-text)
+  (export report-lines probe-lines answer-lines node-text)
 
   (fn node-text ((arena Arena) (n Node))
     (@intent "A node as report text — injective across the three node kinds")
@@ -88,6 +88,16 @@
           (list-push out (keyed arena "probe-omission" (render-omission arena om))))
         (for-each (a (. p answers))
           (list-push out (keyed arena "probe" (answer-text arena a))))
+        out)))
+
+  (fn answer-lines ((arena Arena) (p Probing) (ran Bool))
+    (@intent "An answer run's lines (SPEC §8.4): `profile P` when a probe run ran, then the probe lines")
+    (@spec ((Arena Probing Bool) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do
+        (when ran (list-push out (keyed arena "profile" (profile-name (. p profile)))))
+        (for-each (l (probe-lines arena p)) (list-push out l))
         out)))
 
   (fn answer-text ((arena Arena) (a Answered))
