@@ -6,6 +6,7 @@ slop_string report_keyed(slop_arena* arena, slop_string key, slop_string text);
 slop_string report_verdict_line(types_Outcome o);
 slop_string report_termination_line(types_Termination t);
 slop_list_string report_probe_lines(slop_arena* arena, probe_Probing p);
+slop_list_string report_answer_lines(slop_arena* arena, probe_Probing p, uint8_t ran);
 slop_string report_answer_text(slop_arena* arena, probe_Answered a);
 slop_string report_answer_name(probe_ProbeAnswer a);
 slop_list_string report_report_lines(slop_arena* arena, types_Outcome o);
@@ -82,6 +83,23 @@ slop_list_string report_probe_lines(slop_arena* arena, probe_Probing p) {
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type a = _coll.data[_i];
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (report_keyed(arena, SLOP_STR("probe"), report_answer_text(arena, a))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_string report_answer_lines(slop_arena* arena, probe_Probing p, uint8_t ran) {
+    {
+        __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        if (ran) {
+            ({ __auto_type _lst_p = &(out); __auto_type _item = (report_keyed(arena, SLOP_STR("profile"), select_profile_name(p.profile))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+        }
+        {
+            __auto_type _coll = report_probe_lines(arena, p);
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type l = _coll.data[_i];
+                ({ __auto_type _lst_p = &(out); __auto_type _item = (l); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
             }
         }
         return out;

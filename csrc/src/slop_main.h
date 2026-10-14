@@ -104,6 +104,10 @@ slop_result_types_Outcome_types_Fault main_with_probe(slop_arena* arena, slop_re
 void main_print_probes(slop_arena* arena, slop_option_result_probe_Probing_types_Fault probed);
 uint8_t main_operand(slop_string s);
 void main_print_omissions(slop_arena* arena, slop_list_types_Omission os);
+int64_t main_validate_run(slop_arena* arena, slop_arena* front, termstore_Encoded* enc, slop_arena* pfront, termstore_Encoded* penc, slop_list_rdf_IRI resolved, slop_list_probe_Query queries, types_ReasonerConfig cfg, uint8_t report_mode, uint8_t timings, int64_t t_start);
+int64_t main_ask_run(slop_arena* arena, slop_arena* front, termstore_Encoded* enc, slop_arena* pfront, termstore_Encoded* penc, slop_list_rdf_IRI resolved, slop_list_probe_Query queries, types_ReasonerConfig cfg);
+void main_print_ask_fault(slop_arena* arena, types_Fault f);
+int64_t main_ask_exit_code(slop_result_probe_Probing_types_Fault r);
 int main(int argc, char** _c_argv);
 
 #ifndef SLOP_OPTION_RDF_IRI_DEFINED

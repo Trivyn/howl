@@ -81,6 +81,7 @@ struct probe_Probing {
     slop_list_probe_Answered answers;
     uint8_t inconsistent;
     slop_list_types_Omission omissions;
+    types_Profile profile;
 };
 typedef struct probe_Probing probe_Probing;
 

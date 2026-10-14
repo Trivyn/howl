@@ -82,6 +82,8 @@
                 run-ok run-fault run-fault-message run-fault-profile run-verdict run-report-len run-report-line
                 input-add-probe-turtle input-ask-unsatisfiable input-ask-subsumed
                 run-probe-len run-probe-kind run-probe-sub run-probe-sup run-probe-answer run-probe-inconsistent
+                run-probe-omission-len run-probe-omission run-answer run-profile run-rounds
+                run-sub-len run-unsat-len run-omission-len
                 Prepared ElWork prepare reason decode-owned prepare-in-profile sriq-omissions))
   (import el (apply-el-rules apply-el-rules-reference))
   (import probe (QueryKind ProbeAnswer))
@@ -10157,6 +10159,153 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (set! i (+ i 1))))
         ok)))
 
+  ;; The answer run (howl_run_answer): the probe run alone. Constraint
+  ;; 499c3842: wherever both modes answer, they agree. Here they always
+  ;; answer the same, since it is the same probe run without the main run.
+
+  (fn test-answer-equals-two-run ((arena Arena))
+    (@intent "§8.4: the answer run's answers are the two-run mode's, on every class pair, under el, el++ and sriq")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((mut ok true)
+          (paths (list String
+                   "corpus/fixtures/v0/litmus.ttl"
+                   "corpus/fixtures/v0/top-bottom.ttl"
+                   "corpus/fixtures/hazards/unsatisfiable-consistent.ttl"
+                   "corpus/fixtures/hazards/inconsistent-via-individual.ttl"
+                   "corpus/fixtures/hazards/abox-disjoint-range.ttl"
+                   "corpus/fixtures/hazards/cyclic-hierarchy.ttl"
+                   "corpus/fixtures/hazards/punning.ttl"
+                   "corpus/fixtures/hazards/owl-nothing-present.ttl"
+                   "corpus/fixtures/hazards/declared-unused-class.ttl"
+                   "corpus/fixtures/hazards/undeclared-property.ttl"
+                   "corpus/fixtures/probes/some-unsat-filler.ttl"
+                   "corpus/fixtures/probes/top-subsumes-everything.ttl"))
+          (mut i 0)
+          (mut last ""))
+      (do
+        (for-each (p paths)
+          (when (not (and (answer-equals-two-run arena p 'profile-el)
+                          (answer-equals-two-run arena p 'profile-el-plus-plus)
+                          (answer-equals-two-run arena p 'profile-sriq)))
+            (set! ok false)))
+        (while (< i (ksc-fixture-count))
+          (do
+            (when (not (answer-equals-two-run arena (ksc-fixture-at i) 'profile-el-plus-plus))
+              (set! ok false))
+            (set! i (+ i 1))))
+        (for-each (e (expects arena))
+          (when (not (string-eq (. e file) last))
+            (do (when (not (answer-equals-two-run arena (fixture-path arena (. e file)) 'profile-sriq))
+                  (set! ok false))
+                (set! last (. e file)))))
+        ok)))
+
+  (fn answer-equals-two-run ((arena Arena) (path String) (profile Profile))
+    (@intent "Ask every class pair of a fixture; does the answer run answer as the two-run mode does?")
+    (@spec ((Arena String Profile) -> Bool))
+    (@alloc arena)
+    (match (file-text arena path)
+      ((none) false)
+      ((some text)
+        (match (classify-in arena path profile)
+          ((none)   true)   ; not classifiable under this profile: nothing to compare
+          ((some o) (answer-equals-on arena text (report-classes arena (. o findings)) path profile))))))
+
+  (fn answer-equals-on ((arena Arena) (text String) (cs (List IRI)) (path String) (profile Profile))
+    (@intent "One input with every pair asked, run both ways: the same answers, and the answer run's shape")
+    (@spec ((Arena String (List IRI) String Profile) -> Bool))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut opts (default-options)))
+      (do
+        (set! opts profile profile)
+        (input-add-turtle in text)
+        (ask-every-pair in (reversed-iris arena cs) cs)
+        (let ((r  (run-classify in opts))
+              (a  (run-answer in opts))
+              (ok (and (run-ok r) (run-ok a)
+                       (same-answers r a)
+                       (answer-run-shape arena a r))))
+          (do
+            (run-free r) (run-free a) (input-free in)
+            (when (not ok)
+              (do (print "  [answer] differs from the two-run mode: ") (print (profile-name profile))
+                  (print " ") (println path)))
+            ok)))))
+
+  (fn same-answers ((r Run) (a Run))
+    (@intent "The same queries, answers, inconsistency and probe omissions, in the same order")
+    (@spec ((Run Run) -> Bool))
+    (let ((mut ok (and (== (run-probe-len r) (run-probe-len a))
+                       (== (run-probe-inconsistent r) (run-probe-inconsistent a))
+                       (== (run-probe-omission-len r) (run-probe-omission-len a))))
+          (mut i 0))
+      (do
+        (while (and ok (< i (run-probe-len r)))
+          (do
+            (when (not (and (== (run-probe-kind r i) (run-probe-kind a i))
+                            (string-eq (run-probe-sub r i) (run-probe-sub a i))
+                            (string-eq (run-probe-sup r i) (run-probe-sup a i))
+                            (== (run-probe-answer r i) (run-probe-answer a i))))
+              (set! ok false))
+            (set! i (+ i 1))))
+        (set! i 0)
+        (while (and ok (< i (run-probe-omission-len r)))
+          (do
+            (when (not (string-eq (run-probe-omission r i) (run-probe-omission a i))) (set! ok false))
+            (set! i (+ i 1))))
+        ok)))
+
+  (fn answer-run-shape ((arena Arena) (a Run) (r Run))
+    (@intent "An answer run has no outcome (no findings, verdict inconclusive) and its lines are `profile P` then the probe lines")
+    (@spec ((Arena Run Run) -> Bool))
+    (@alloc arena)
+    (let ((want (string-concat arena "profile "
+                  (string-concat arena (profile-name (run-profile a)) (string-concat arena "\n" (probe-tail arena r)))))
+          (got  (lines-text arena a)))
+      (and (== (run-sub-len a) 0) (== (run-unsat-len a) 0) (== (run-omission-len a) 0)
+           (== (run-verdict a) 'verdict-inconclusive) (== (run-rounds a) 0)
+           (string-eq got want))))
+
+  (fn lines-text ((arena Arena) (r Run))
+    (@intent "The run's lines, one per line")
+    (@spec ((Arena Run) -> String))
+    (@alloc arena)
+    (let ((mut out ""))
+      (do (for-each (l (api-lines arena r)) (set! out (string-concat arena out (string-concat arena l "\n"))))
+          out)))
+
+  (fn test-answer-run-edges ((arena Arena))
+    (@intent "§8.4: an answer run that asks nothing runs nothing; a refused input or bad options are faults, as howl_run_classify's")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((empty (input-new))
+          (bad   (input-new))
+          (good  (input-new))
+          (mut o (default-options)))
+      (do
+        (input-add-turtle empty (string-concat arena (probe-prefixes) (scenario-main)))
+        (input-add-turtle bad (string-concat arena (probe-prefixes) (scenario-main)))
+        (input-ask-unsatisfiable bad "")
+        (input-add-turtle good (string-concat arena (probe-prefixes) (scenario-main)))
+        (input-ask-unsatisfiable good "http://example.org/t#D")
+        (let ((r0 (run-answer empty o))
+              (rb (run-answer bad o))
+              (ok1 (and (run-ok r0) (== (run-probe-len r0) 0)
+                        (string-eq (lines-text arena r0) "probes 0\nprobe-inconsistent false\nprobe-omitted 0\n")
+                        (not (run-ok rb)) (== (run-fault rb) 'fault-input-error))))
+          (do
+            (set! o max-iterations -1)
+            (let ((ro (run-answer good o))
+                  (ok2 (and (not (run-ok ro)) (== (run-fault ro) 'fault-invalid-options))))
+              (do
+                (run-free r0) (run-free rb) (run-free ro)
+                (input-free empty) (input-free bad) (input-free good)
+                (when (not ok1) (println "  [answer] an empty or refused input is not handled as classify handles it"))
+                (when (not ok2) (println "  [answer] bad options are not refused"))
+                (and ok1 ok2))))))))
+
   ;; The scenarios: a host's own probe documents.
 
   (fn probe-prefixes ()
@@ -10233,12 +10382,15 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
         (input-add-turtle plain (string-concat arena (probe-prefixes) (scenario-main)))
         (let ((r  (run-classify in o))
               (r0 (run-classify plain o))
+              (a  (run-answer in o))
               (ok (and (run-ok r)
                        (tail-is arena label r want)
                        (main-lines-unchanged arena r (api-lines arena r0))
-                       (== (run-verdict r) (run-verdict r0)))))
+                       (== (run-verdict r) (run-verdict r0))
+                       ;; the answer run answers as the two-run mode does
+                       (run-ok a) (same-answers r a) (answer-run-shape arena a r))))
           (do
-            (run-free r) (run-free r0) (input-free in) (input-free plain)
+            (run-free r) (run-free r0) (run-free a) (input-free in) (input-free plain)
             ok)))))
 
   (fn test-probe-scenarios ((arena Arena))
@@ -12804,6 +12956,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-public-api arena)))
             (print-test-result "§8.4: the public C API reports what classify does, and refuses what it must" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-answer-equals-two-run arena)))
+            (print-test-result "§8.4: the answer run answers as the two-run mode, every class pair, el, el++ and sriq" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-answer-run-edges arena)))
+            (print-test-result "§8.4: an answer run asking nothing runs nothing; refusals and bad options as classify's" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-probes-agree-with-report arena)))

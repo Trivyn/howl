@@ -151,6 +151,7 @@ extern "C" {
 
     pub fn howl_default_options() -> Options;
     pub fn howl_run_classify(input: Input, options: Options) -> Run;
+    pub fn howl_run_answer(input: Input, options: Options) -> Run;
     pub fn howl_run_free(run: Run);
 
     pub fn howl_run_ok(run: Run) -> u8;

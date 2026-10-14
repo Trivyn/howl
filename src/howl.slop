@@ -14,7 +14,7 @@
 
   (import rdf (Triple IRI Term TermKind make-iri make-blank make-literal make-triple))
   (import ttl (parse-ttl-string-for-each-triple))
-  (import report (report-lines probe-lines node-text))
+  (import report (report-lines probe-lines answer-lines node-text))
   (import probe (QueryKind ProbeAnswer Query Answered Probing sort-queries probe-document answer-queries))
   (import owl2 (render-omission))
   (import types (Node RoleId Concept NormAxiom
@@ -715,7 +715,8 @@
     (let ((p (record-new Probing
                (answers      (answer-queries arena o queries))
                (inconsistent (. (. o findings) inconsistent))
-               (omissions    (copy-omissions arena (. (. o coverage) omitted))))))
+               (omissions    (copy-omissions arena (. (. o coverage) omitted)))
+               (profile      (. o profile)))))
       (do
         (release-outcome o)
         p)))
@@ -724,8 +725,9 @@
     (@intent "The probe result of a run that asked nothing")
     (@spec ((Arena) -> Probing))
     (@alloc arena)
+    ;; No probe run ran, so its profile is never read: no line names it.
     (record-new Probing (answers (list-new arena Answered)) (inconsistent false)
-      (omissions (list-new arena Omission))))
+      (omissions (list-new arena Omission)) (profile 'profile-el)))
 
   ;; ============================================================
   ;; The public C API
@@ -1118,27 +1120,70 @@
       ;; it happen it is an input error, never a verdict.
       ((refused _)       (faulted a 'fault-input-error "refused under a strict profile" profile))))
 
+  (fn probe-run ((a Arena) (st InputState) (o Options))
+    (@intent "The input's queries answered by a probe run of their own (probe-document's input)")
+    (@spec ((Arena InputState Options) -> (Result Probing Fault)))
+    (@alloc a)
+    ;; The probe run's input is built in an arena freed once it has run.
+    (let ((qs  (sort-queries a (. st queries)))
+          (pa  (arena-new 16777216))
+          (doc (probe-document pa (deref (. st enc)) (deref (. st probes)) qs))
+          (res (probe-encoded a (deref doc) (. st imports) qs (options-config o))))
+      (do
+        (arena-free pa)
+        res)))
+
   (fn with-probes ((a Arena) (st InputState) (out Outcome) (o Options))
     (@intent "The run over a finished outcome, its probe queries answered by a run of their own")
     (@spec ((Arena InputState Outcome Options) -> Run))
-    ;; The probe run's input is built in an arena freed once it has run.
     ;; A probe run that faults takes the whole run with it: cancelled is
     ;; cancelled, and an input error (a probe document HOWL cannot decode)
     ;; is the caller's, named as the probe run's.
     (if (== (list-len (. st queries)) 0)
       (finished a out (no-probing a) false)
-      (let ((qs  (sort-queries a (. st queries)))
-            (pa  (arena-new 16777216))
-            (doc (probe-document pa (deref (. st enc)) (deref (. st probes)) qs))
-            (res (probe-encoded a (deref doc) (. st imports) qs (options-config o))))
-        (do
-          (arena-free pa)
-          (match res
-            ((ok p)    (finished a out p true))
-            ((error f)
-              (do
-                (release-outcome out)
-                (run-faulted a f "probe run: " (. o profile)))))))))
+      (match (probe-run a st o)
+        ((ok p)    (finished a out p true))
+        ((error f)
+          (do
+            (release-outcome out)
+            (run-faulted a f "probe run: " (. o profile)))))))
+
+  (fn run-answer ((in Input) (o Options))
+    (@intent "Answer the input's probe queries alone: one probe run, no main classification (SPEC §8.4)")
+    (@spec ((Input Options) -> Run))
+    :c-name "howl_run_answer"
+    ;; The answers are the ones howl_run_classify gives for the same input
+    ;; and options (Constraint 499c3842): the same probe run, without the
+    ;; main run before it. So the run has no outcome and no report: its
+    ;; verdict is inconclusive and its findings empty, and its lines are
+    ;; the answers (`answer-lines`).
+    (let ((a  (arena-new 16777216))
+          (st (deref (input-state in))))
+      (match (options-problem o)
+        ((some why) (faulted a 'fault-invalid-options why (. o profile)))
+        ((none)
+          (match (. st failed)
+            ((some why) (faulted a 'fault-input-error (string-concat a "" why) (. o profile)))
+            ((none)     (answer-of-input a st o)))))))
+
+  (fn answer-of-input ((a Arena) (st InputState) (o Options))
+    (@intent "The answer run over an input that loaded: nothing asked runs nothing")
+    (@spec ((Arena InputState Options) -> Run))
+    ;; Here the probe run is the whole run, so its fault is the run's,
+    ;; named as it is (no "probe run: " prefix).
+    (if (== (list-len (. st queries)) 0)
+      (answered a (no-probing a) false)
+      (match (probe-run a st o)
+        ((ok p)    (answered a p true))
+        ((error f) (run-faulted a f "" (. o profile))))))
+
+  (fn answered ((a Arena) (p Probing) (ran Bool))
+    (@intent "An answer run: answers and no outcome, its lines the answering profile (when a probe run ran) and the probe lines")
+    (@spec ((Arena Probing Bool) -> Run))
+    (new-run a (record-new RunState
+                 (arena a) (outcome (none)) (fault 'fault-none) (message "")
+                 (fault-profile (. p profile)) (verdict 'verdict-inconclusive)
+                 (probing p) (lines (answer-lines a p ran)))))
 
   (fn finished ((a Arena) (out Outcome) (p Probing) (asked Bool))
     (@intent "A run with a result: the report's lines, then the probe lines when a query was asked")
@@ -1166,10 +1211,14 @@
         (arena-free (. st arena)))))
 
   (fn run-ok ((r Run))
-    (@intent "Whether the run has a result")
+    (@intent "Whether the run has a result: a classification's outcome, or an answer run's answers")
     (@spec ((Run) -> Bool))
     :c-name "howl_run_ok"
-    (match (. (run-state r) outcome) ((some _) true) ((none) false)))
+    ;; Every run without a result carries a fault (`faulted`), and every
+    ;; run with one carries fault-none, so this is the outcome test for a
+    ;; classify run. An answer run (`howl_run_answer`) has answers and no
+    ;; outcome.
+    (== (. (run-state r) fault) 'fault-none))
 
   (fn run-fault ((r Run))
     (@intent "Why the run has no result, or fault-none")
