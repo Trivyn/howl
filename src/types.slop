@@ -45,7 +45,7 @@
     SubPair
     Findings
     Outcome
-    Evidence ClassAnswer KscResult
+    Evidence SriqEvidence ClassAnswer KscResult
     Fault
     Names
     ;; configuration
@@ -616,9 +616,17 @@
   ;; What a run leaves behind, by calculus: el's saturation, or el++'s
   ;; per-class answers. Findings are extracted from it; the report reads
   ;; nothing else from it but `rounds`, which the Outcome carries itself.
+  ;; sriq's evidence (SPEC §5.5, the ABox split): the run's shape. Its
+  ;; answers are the findings themselves, which the probes read.
+  (type SriqEvidence (record
+    (h-rounds Int)                   ; Run H's rounds
+    (c-rounds Int)                   ; Run C's, 0 when it did not run
+    (ran-c    Bool)))
+
   (type Evidence (union
-    (el-evidence  Saturation)
-    (ksc-evidence KscResult)))
+    (el-evidence   Saturation)
+    (ksc-evidence  KscResult)
+    (sriq-evidence SriqEvidence)))
 
   (type Outcome (record
     (profile     Profile)      ; the calculus that ran (§5.1); the report states it
@@ -626,7 +634,7 @@
     (termination Termination)
     (findings    Findings)     ; what WAS derived — always present, always meaningful
     (evidence    Evidence)     ; always present; PARTIAL unless the run was complete
-    (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4)
+    (rounds      Int)          ; the `rounds` line: el's iteration, el++'s phase sum (§5.4), sriq's runs' sum (§5.5)
     (names       Names)        ; el's saturation nodes are RENAMED: map back through this
     (owned       (List Arena)))) ; arenas `evidence` lives in beyond the caller's: release-outcome
 

@@ -10,6 +10,7 @@
 #include "slop_canon.h"
 #include "slop_gate.h"
 #include "slop_sriqnames.h"
+#include "slop_sriqelim.h"
 #include "slop_sriqclauses.h"
 #include "slop_sriqref.h"
 #include "slop_sriqctx.h"
@@ -63,6 +64,18 @@ SLOP_LIST_DEFINE(types_Node, slop_list_types_Node)
 SLOP_LIST_DEFINE(types_DName, slop_list_types_DName)
 #endif
 
+#ifndef SLOP_LIST_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_TYPES_CLAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
+#endif
+
+#ifndef SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_DEFINED
+#define SLOP_LIST_TYPES_SUBPAIR_IMPL_DEFINED
+SLOP_LIST_DEFINE(types_SubPair, slop_list_types_SubPair)
+#endif
+
 #ifndef SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
 #define SLOP_OPTION_OWL2_RAWCONCEPT_DEFINED
 SLOP_OPTION_DEFINE(owl2_RawConcept, slop_option_owl2_RawConcept)
@@ -86,6 +99,16 @@ SLOP_OPTION_DEFINE(types_Node, slop_option_types_Node)
 #ifndef SLOP_OPTION_TYPES_DNAME_DEFINED
 #define SLOP_OPTION_TYPES_DNAME_DEFINED
 SLOP_OPTION_DEFINE(types_DName, slop_option_types_DName)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #endif
 
 struct sriqabox_Split {
@@ -150,7 +173,7 @@ struct sriqabox_Inputs {
     sriqref_RefIn h;
     sriqref_RefIn c;
     uint8_t has_c;
-    uint8_t omitted;
+    slop_list_owl2_RawAxiom omitted;
 };
 typedef struct sriqabox_Inputs sriqabox_Inputs;
 
@@ -165,6 +188,9 @@ struct sriqabox_SplitRun {
     uint8_t ran_c;
     uint8_t inconsistent;
     uint8_t complete;
+    uint8_t finished;
+    int64_t rounds;
+    uint8_t cancelled;
 };
 typedef struct sriqabox_SplitRun sriqabox_SplitRun;
 
@@ -237,10 +263,30 @@ int64_t sriqabox_u32_cmp(uint32_t a, uint32_t b);
 sriqref_RefIn sriqabox_h_input(slop_arena* arena, sriqabox_Folded f);
 sriqref_RefIn sriqabox_consistency_input(sriqref_RefIn in);
 slop_result_sriqabox_Inputs_string sriqabox_split_inputs(slop_arena* arena, gate_GateResult gr);
-slop_result_sriqabox_Inputs_string sriqabox_inputs_from(slop_arena* arena, sriqabox_Split sp, sriqabox_Folded f, uint8_t omitted);
-slop_result_sriqabox_Inputs_string sriqabox_c_inputs(slop_arena* arena, sriqabox_Split sp, sriqclauses_SriqIds ids, sriqref_RefIn h, uint8_t omitted);
+slop_result_sriqabox_Inputs_string sriqabox_split_inputs_bounded(slop_arena* arena, gate_GateResult gr, int64_t bound);
+slop_result_sriqabox_Inputs_string sriqabox_inputs_from(slop_arena* arena, sriqabox_Split sp, sriqabox_Folded f, slop_list_owl2_RawAxiom omitted, int64_t bound);
+slop_result_sriqabox_Inputs_string sriqabox_c_inputs(slop_arena* arena, sriqabox_Split sp, sriqclauses_SriqIds ids, sriqref_RefIn h, slop_list_owl2_RawAxiom omitted, int64_t bound);
+slop_list_owl2_RawAxiom sriqabox_both_omitted(slop_arena* arena, slop_list_owl2_RawAxiom a, slop_list_owl2_RawAxiom b);
 uint8_t sriqabox_finished(sriqref_RefStatus s);
 sriqabox_SplitRun sriqabox_split_run(slop_arena* arena, sriqabox_Inputs in, sriqsat_SatConfig cfg);
+sriqabox_SplitRun sriqabox_split_run_of(slop_arena* arena, sriqref_RefIn h_in, sriqref_RefIn c_in, uint8_t has_c, uint8_t omitted, sriqsat_SatConfig cfg);
+sriqabox_SplitRun sriqabox_c_run(slop_arena* arena, sriqsat_SatResult h, uint8_t hdone, sriqref_RefIn c_in, uint8_t omitted, sriqsat_SatConfig cfg);
+sriqsat_SatConfig sriqabox_with_fuel(sriqsat_SatConfig cfg, int64_t fuel);
+sriqsat_SatConfig sriqabox_sriq_config(int64_t max_rounds, int64_t budget, int64_t cancel);
+types_Findings sriqabox_split_findings(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes, uint8_t inconsistent);
+slop_list_types_Clause sriqabox_set_at_ctx(slop_arena* arena, sriqctx_Structure st, int64_t v);
+uint8_t sriqabox_body_within(types_Clause c, int64_t b);
+uint8_t sriqabox_is_x_atom(types_Lit l, int64_t b);
+int64_t sriqabox_head_class(types_Clause c, int64_t n);
+uint8_t sriqabox_unsat_at(slop_arena* arena, sriqctx_Structure st, int64_t b);
+slop_list_rdf_IRI sriqabox_unsat_classes(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes);
+slop_list_types_SubPair sriqabox_taxonomy(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes);
+slop_list_types_SubPair sriqabox_class_rows(slop_arena* arena, sriqctx_Structure st, slop_list_rdf_IRI classes, int64_t b, int64_t n);
+slop_list_int sriqabox_holds_in(slop_arena* arena, sriqctx_Structure st, int64_t v, int64_t b, int64_t n);
+types_Node sriqabox_class_at(slop_list_rdf_IRI classes, int64_t a);
+slop_list_types_SubPair sriqabox_distinct_pairs(slop_arena* arena, slop_list_types_SubPair ps);
+
+#define sriqabox_SRIQ_CLAUSE_BUDGET (1000000)
 
 #ifndef SLOP_OPTION_SRIQABOX_SPLIT_DEFINED
 #define SLOP_OPTION_SRIQABOX_SPLIT_DEFINED
@@ -300,6 +346,16 @@ SLOP_OPTION_DEFINE(sriqabox_Inputs, slop_option_sriqabox_Inputs)
 #ifndef SLOP_OPTION_SRIQABOX_SPLITRUN_DEFINED
 #define SLOP_OPTION_SRIQABOX_SPLITRUN_DEFINED
 SLOP_OPTION_DEFINE(sriqabox_SplitRun, slop_option_sriqabox_SplitRun)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+#define SLOP_OPTION_TYPES_SUBPAIR_DEFINED
+SLOP_OPTION_DEFINE(types_SubPair, slop_option_types_SubPair)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_DLCLAUSE_DEFINED

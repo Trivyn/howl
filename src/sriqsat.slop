@@ -59,7 +59,7 @@
                              g-in-hat g-held
                              g-premise-at g-member-of
                       g-sel-range g-body-members g-member g-root-units view-total materialise))
-  (import types (lit-eq))
+  (import types (lit-eq cancel-requested))
   (import sriqref (RefStatus RefConfig RefResult RefIn Cand Env SuccAct RSuccAct NomAct Out Round Dl4 PJob Committing
                    set-of is-root core-at premises-of consts-of conclusion out-of round-of append-cands product
                    ref-core x-fits hyper-with hyper-choices eq-positions ref-ineq ref-factor ref-join
@@ -86,8 +86,9 @@
     (perm  Int)
     (scan  Bool)
     (defer Bool)
-    (views Bool)
-    (check Bool)))
+    (views  Bool)
+    (check  Bool)
+    (cancel I64)))   ; the host's cancel flag (ReasonerConfig's cancel-ptr), read at every round boundary; 0 for none
 
   ;; Work counted over the run (no clock is read under src/).
   (type Counts (record
@@ -102,9 +103,10 @@
     (stale  Int)))    ; with check: kept flags that differ from a recomputation
 
   (type SatResult (record
-    (res    RefResult)
-    (counts Counts)
-    (trig   (List Supply))))   ; R8's trig at the end; empty without deferral
+    (res       RefResult)
+    (counts    Counts)
+    (trig      (List Supply))   ; R8's trig at the end; empty without deferral
+    (cancelled Bool)))          ; the host cancelled at a round boundary: no answer (Fault::cancelled)
 
   ;; Δₙ beside Sₙ: each context's new clauses and the rest, the new
   ;; edges, and where the new contexts and constants start.
@@ -2310,24 +2312,31 @@
           (st0 (ranked-structure (init-of arena in) (. in nquery)))
           (dfr (defer-on cfg in))
           (mut held (arena-new 1048576))
+          (mut cancelled false) (mut capped false)
           (mut run (record-new Run (st st0) (dl (first-delta arena st0)) (status 'rs-fuel) (rounds 0) (going true)
                                    (trig (list-new arena Supply)) (flags (empty-flags arena st0))
                                    (counts (record-new Counts (cands 0) (rcands 0) (succs 0) (rsuccs 0) (noms 0)
                                                        (added 0) (acts 0) (hyper 0) (stale 0))))))
-      (do (while (and (. run going) (< (. run rounds) (. base fuel)))
-            (let ((scratch (arena-new 1048576))
-                  (next (arena-new 1048576))
-                  (nr (sat-once next scratch env hx cfg dfr run)))
-              (do (if (== (. nr status) 'rs-product)
-                    (arena-free next)
-                    (do (arena-free held) (set! held next)))
-                  (arena-free scratch)
-                  (set! run nr))))
+      ;; Cancellation is read at every round boundary, before the cap, as
+      ;; run-ksc reads it (SPEC §5.5 S6 step 4): a cancelled run has no answer.
+      (do (while (and (. run going) (not cancelled) (not capped))
+            (cond ((cancel-requested (. cfg cancel)) (set! cancelled true))
+                  ((>= (. run rounds) (. base fuel)) (set! capped true))
+                  (else
+                    (let ((scratch (arena-new 1048576))
+                          (next (arena-new 1048576))
+                          (nr (sat-once next scratch env hx cfg dfr run)))
+                      (do (if (== (. nr status) 'rs-product)
+                            (arena-free next)
+                            (do (arena-free held) (set! held next)))
+                          (arena-free scratch)
+                          (set! run nr))))))
           (let ((done (copy-structure arena (read-view arena (. run st)))) (trig (copy-trig arena (. run trig))))
             (do (arena-free held)
                 (record-new SatResult
                   (res (record-new RefResult (status (. run status)) (rounds (. run rounds)) (st done)))
                   (counts (. run counts))
-                  (trig trig)))))))
+                  (trig trig)
+                  (cancelled cancelled)))))))
 
 )

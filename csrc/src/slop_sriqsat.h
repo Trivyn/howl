@@ -214,6 +214,7 @@ struct sriqsat_SatConfig {
     uint8_t defer;
     uint8_t views;
     uint8_t check;
+    int64_t cancel;
 };
 typedef struct sriqsat_SatConfig sriqsat_SatConfig;
 
@@ -550,6 +551,7 @@ struct sriqsat_SatResult {
     sriqref_RefResult res;
     sriqsat_Counts counts;
     slop_list_sriqsat_Supply trig;
+    uint8_t cancelled;
 };
 typedef struct sriqsat_SatResult sriqsat_SatResult;
 

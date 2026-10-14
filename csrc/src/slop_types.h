@@ -43,6 +43,7 @@ typedef struct types_SubPair types_SubPair;
 typedef struct types_Findings types_Findings;
 typedef struct types_ClassAnswer types_ClassAnswer;
 typedef struct types_KscResult types_KscResult;
+typedef struct types_SriqEvidence types_SriqEvidence;
 typedef struct types_Evidence types_Evidence;
 typedef struct types_Outcome types_Outcome;
 typedef struct types_Fault types_Fault;
@@ -867,9 +868,22 @@ typedef struct types_KscResult types_KscResult;
 SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
 #endif
 
+struct types_SriqEvidence {
+    int64_t h_rounds;
+    int64_t c_rounds;
+    uint8_t ran_c;
+};
+typedef struct types_SriqEvidence types_SriqEvidence;
+
+#ifndef SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+#define SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+SLOP_OPTION_DEFINE(types_SriqEvidence, slop_option_types_SriqEvidence)
+#endif
+
 typedef enum {
     types_Evidence_el_evidence,
-    types_Evidence_ksc_evidence
+    types_Evidence_ksc_evidence,
+    types_Evidence_sriq_evidence
 } types_Evidence_tag;
 
 struct types_Evidence {
@@ -877,6 +891,7 @@ struct types_Evidence {
     union {
         types_Saturation el_evidence;
         types_KscResult ksc_evidence;
+        types_SriqEvidence sriq_evidence;
     } data;
 };
 typedef struct types_Evidence types_Evidence;
@@ -1382,6 +1397,11 @@ SLOP_OPTION_DEFINE(types_ClassAnswer, slop_option_types_ClassAnswer)
 #ifndef SLOP_OPTION_TYPES_KSCRESULT_DEFINED
 #define SLOP_OPTION_TYPES_KSCRESULT_DEFINED
 SLOP_OPTION_DEFINE(types_KscResult, slop_option_types_KscResult)
+#endif
+
+#ifndef SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+#define SLOP_OPTION_TYPES_SRIQEVIDENCE_DEFINED
+SLOP_OPTION_DEFINE(types_SriqEvidence, slop_option_types_SriqEvidence)
 #endif
 
 #ifndef SLOP_OPTION_TYPES_EVIDENCE_DEFINED
