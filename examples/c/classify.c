@@ -48,9 +48,9 @@ int main(int argc, char** argv) {
     int code = 3;
     if (howl_run_ok(run)) {
         switch (howl_run_verdict(run)) {
-        case types_Verdict_verdict_coherent:     puts("verdict: coherent");     code = 0; break;
-        case types_Verdict_verdict_incoherent:   puts("verdict: incoherent");   code = 1; break;
-        case types_Verdict_verdict_inconclusive: puts("verdict: inconclusive"); code = 2; break;
+        case howl_types_Verdict_verdict_coherent:     puts("verdict: coherent");     code = 0; break;
+        case howl_types_Verdict_verdict_incoherent:   puts("verdict: incoherent");   code = 1; break;
+        case howl_types_Verdict_verdict_inconclusive: puts("verdict: inconclusive"); code = 2; break;
         }
         for (int64_t i = 0; i < howl_run_unsat_len(run); i++) {
             slop_string c = howl_run_unsat(run, i);

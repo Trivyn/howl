@@ -5585,7 +5585,7 @@ field each, so no engine struct reaches the header. `libhowl.a` with that header
   reports byte for byte (`rust/tests/goldens.rs`).
 - **Cancellation** is a `CancelToken` that the engine reads at round boundaries.
 - **What Rust mirrors:** only the API's small value types (`howl_Options`, `howl_TermIn`,
-  `howl_TurtleResult`, `types_Termination`, `slop_string`) and its enum values, each asserted against
+  `howl_TurtleResult`, `howl_types_Termination`, `slop_string`) and its enum values, each asserted against
   the generated header. Every engine result is read through the API's accessors. An `Outcome` embeds
   its whole `Saturation` or `KscResult` by value, and that is the GROWL 0.6.0 drift hazard at its
   largest.

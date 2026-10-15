@@ -2,6 +2,11 @@
 #define SLOP_sriqindex_H
 
 #include "../runtime/slop_runtime.h"
+#ifndef SLOP_RUNTIME_ABI
+#error "this module was generated for SLOP runtime ABI 2026-1 (SLOP_RUNTIME_ABI 202601), but slop_runtime.h predates runtime ABI versioning: use the slop_runtime.h of the SLOP release that generated this code"
+#elif SLOP_RUNTIME_ABI != 202601
+#error "this module was generated for SLOP runtime ABI 2026-1 (SLOP_RUNTIME_ABI 202601), which this slop_runtime.h does not provide (SLOP_RUNTIME_ABI differs): regenerate the C with the SLOP release that matches the runtime, or use the slop_runtime.h of the release that generated it"
+#endif
 #include <stdint.h>
 #include <stdbool.h>
 #include "slop_types.h"
@@ -12,197 +17,197 @@
 #include "slop_sriqsubsume.h"
 #include "slop_canon.h"
 
-typedef struct sriqindex_Entry sriqindex_Entry;
-typedef struct sriqindex_SubIndex sriqindex_SubIndex;
-typedef struct sriqindex_FPart sriqindex_FPart;
-typedef struct sriqindex_KIdx sriqindex_KIdx;
-typedef struct sriqindex_KPair sriqindex_KPair;
+typedef struct howl_sriqindex_Entry howl_sriqindex_Entry;
+typedef struct howl_sriqindex_SubIndex howl_sriqindex_SubIndex;
+typedef struct howl_sriqindex_FPart howl_sriqindex_FPart;
+typedef struct howl_sriqindex_KIdx howl_sriqindex_KIdx;
+typedef struct howl_sriqindex_KPair howl_sriqindex_KPair;
 
-#ifndef SLOP_LIST_TYPES_CLAUSE_DEFINED
-#define SLOP_LIST_TYPES_CLAUSE_DEFINED
-#define SLOP_LIST_TYPES_CLAUSE_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Clause, slop_list_types_Clause)
+#ifndef SLOP_LIST_HOWL_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_CLAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_CLAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_Clause, slop_list_howl_types_Clause)
 #endif
 
-#ifndef SLOP_LIST_TYPES_LIT_DEFINED
-#define SLOP_LIST_TYPES_LIT_DEFINED
-#define SLOP_LIST_TYPES_LIT_IMPL_DEFINED
-SLOP_LIST_DEFINE(types_Lit, slop_list_types_Lit)
+#ifndef SLOP_LIST_HOWL_TYPES_LIT_DEFINED
+#define SLOP_LIST_HOWL_TYPES_LIT_DEFINED
+#define SLOP_LIST_HOWL_TYPES_LIT_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_Lit, slop_list_howl_types_Lit)
 #endif
 
-#ifndef SLOP_LIST_SRIQ_PREMISE_DEFINED
-#define SLOP_LIST_SRIQ_PREMISE_DEFINED
-#define SLOP_LIST_SRIQ_PREMISE_IMPL_DEFINED
-SLOP_LIST_DEFINE(sriq_Premise, slop_list_sriq_Premise)
+#ifndef SLOP_LIST_HOWL_SRIQ_PREMISE_DEFINED
+#define SLOP_LIST_HOWL_SRIQ_PREMISE_DEFINED
+#define SLOP_LIST_HOWL_SRIQ_PREMISE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_sriq_Premise, slop_list_howl_sriq_Premise)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
-#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
-SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#ifndef SLOP_OPTION_HOWL_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Clause, slop_option_howl_types_Clause)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
-#define SLOP_OPTION_TYPES_LIT_DEFINED
-SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#ifndef SLOP_OPTION_HOWL_TYPES_LIT_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Lit, slop_option_howl_types_Lit)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
-#define SLOP_OPTION_TYPES_ATERM_DEFINED
-SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#ifndef SLOP_OPTION_HOWL_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(howl_types_ATerm, slop_option_howl_types_ATerm)
 #endif
 
-#ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
-#define SLOP_OPTION_SRIQ_PREMISE_DEFINED
-SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
+#ifndef SLOP_OPTION_HOWL_SRIQ_PREMISE_DEFINED
+#define SLOP_OPTION_HOWL_SRIQ_PREMISE_DEFINED
+SLOP_OPTION_DEFINE(howl_sriq_Premise, slop_option_howl_sriq_Premise)
 #endif
 
-struct sriqindex_Entry {
+struct howl_sriqindex_Entry {
     int64_t side;
-    types_Lit lit;
+    howl_types_Lit lit;
     int64_t i;
 };
-typedef struct sriqindex_Entry sriqindex_Entry;
+typedef struct howl_sriqindex_Entry howl_sriqindex_Entry;
 
-#ifndef SLOP_OPTION_SRIQINDEX_ENTRY_DEFINED
-#define SLOP_OPTION_SRIQINDEX_ENTRY_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_Entry, slop_option_sriqindex_Entry)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_ENTRY_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_ENTRY_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_Entry, slop_option_howl_sriqindex_Entry)
 #endif
 
-#ifndef SLOP_LIST_SRIQINDEX_ENTRY_DEFINED
-#define SLOP_LIST_SRIQINDEX_ENTRY_DEFINED
-#define SLOP_LIST_SRIQINDEX_ENTRY_IMPL_DEFINED
-SLOP_LIST_DEFINE(sriqindex_Entry, slop_list_sriqindex_Entry)
+#ifndef SLOP_LIST_HOWL_SRIQINDEX_ENTRY_DEFINED
+#define SLOP_LIST_HOWL_SRIQINDEX_ENTRY_DEFINED
+#define SLOP_LIST_HOWL_SRIQINDEX_ENTRY_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_sriqindex_Entry, slop_list_howl_sriqindex_Entry)
 #endif
 
-struct sriqindex_SubIndex {
-    slop_list_types_Clause xs;
+struct howl_sriqindex_SubIndex {
+    slop_list_howl_types_Clause xs;
     slop_list_int sigs;
-    slop_list_sriqindex_Entry entries;
+    slop_list_howl_sriqindex_Entry entries;
     int64_t empty;
 };
-typedef struct sriqindex_SubIndex sriqindex_SubIndex;
+typedef struct howl_sriqindex_SubIndex howl_sriqindex_SubIndex;
 
-#ifndef SLOP_OPTION_SRIQINDEX_SUBINDEX_DEFINED
-#define SLOP_OPTION_SRIQINDEX_SUBINDEX_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_SubIndex, slop_option_sriqindex_SubIndex)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_SUBINDEX_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_SUBINDEX_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_SubIndex, slop_option_howl_sriqindex_SubIndex)
 #endif
 
-struct sriqindex_FPart {
-    types_ATerm t;
-    types_Lit lit;
+struct howl_sriqindex_FPart {
+    howl_types_ATerm t;
+    howl_types_Lit lit;
     uint8_t single;
 };
-typedef struct sriqindex_FPart sriqindex_FPart;
+typedef struct howl_sriqindex_FPart howl_sriqindex_FPart;
 
-#ifndef SLOP_OPTION_SRIQINDEX_FPART_DEFINED
-#define SLOP_OPTION_SRIQINDEX_FPART_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_FPart, slop_option_sriqindex_FPart)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_FPART_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_FPART_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_FPart, slop_option_howl_sriqindex_FPart)
 #endif
 
-#ifndef SLOP_LIST_SRIQINDEX_FPART_DEFINED
-#define SLOP_LIST_SRIQINDEX_FPART_DEFINED
-#define SLOP_LIST_SRIQINDEX_FPART_IMPL_DEFINED
-SLOP_LIST_DEFINE(sriqindex_FPart, slop_list_sriqindex_FPart)
+#ifndef SLOP_LIST_HOWL_SRIQINDEX_FPART_DEFINED
+#define SLOP_LIST_HOWL_SRIQINDEX_FPART_DEFINED
+#define SLOP_LIST_HOWL_SRIQINDEX_FPART_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_sriqindex_FPart, slop_list_howl_sriqindex_FPart)
 #endif
 
-struct sriqindex_KIdx {
-    slop_list_types_Lit ground;
-    slop_list_sriqindex_FPart fparts;
+struct howl_sriqindex_KIdx {
+    slop_list_howl_types_Lit ground;
+    slop_list_howl_sriqindex_FPart fparts;
 };
-typedef struct sriqindex_KIdx sriqindex_KIdx;
+typedef struct howl_sriqindex_KIdx howl_sriqindex_KIdx;
 
-#ifndef SLOP_OPTION_SRIQINDEX_KIDX_DEFINED
-#define SLOP_OPTION_SRIQINDEX_KIDX_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_KIdx, slop_option_sriqindex_KIdx)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_KIDX_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_KIDX_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_KIdx, slop_option_howl_sriqindex_KIdx)
 #endif
 
-struct sriqindex_KPair {
-    slop_list_types_Lit k1;
-    slop_list_types_Lit k2;
+struct howl_sriqindex_KPair {
+    slop_list_howl_types_Lit k1;
+    slop_list_howl_types_Lit k2;
 };
-typedef struct sriqindex_KPair sriqindex_KPair;
+typedef struct howl_sriqindex_KPair howl_sriqindex_KPair;
 
-#ifndef SLOP_OPTION_SRIQINDEX_KPAIR_DEFINED
-#define SLOP_OPTION_SRIQINDEX_KPAIR_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_KPair, slop_option_sriqindex_KPair)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_KPAIR_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_KPAIR_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_KPair, slop_option_howl_sriqindex_KPair)
 #endif
 
-int64_t sriqindex_entry_cmp(sriqindex_Entry a, sriqindex_Entry b);
-int64_t sriqindex_key_cmp(sriqindex_Entry e, int64_t side, types_Lit l);
-sriqindex_Entry sriqindex_entry_at(slop_list_sriqindex_Entry es, int64_t k, sriqindex_Entry fallback);
-slop_option_sriqindex_Entry sriqindex_key_of(types_Clause c, int64_t i);
-sriqindex_SubIndex sriqindex_sub_index(slop_arena* arena, slop_list_types_Clause xs);
-int64_t sriqindex_clause_sig(types_Clause c);
-int64_t sriqindex_lit_bit(int64_t side, types_Lit l);
-int64_t sriqindex_term_mix(types_ATerm t);
-int64_t sriqindex_sig_at(sriqindex_SubIndex ix, int64_t i);
-slop_list_sriqindex_Entry sriqindex_sorted_entries(slop_arena* arena, slop_list_sriqindex_Entry raw);
-int64_t sriqindex_lower_bound(slop_list_sriqindex_Entry es, int64_t side, types_Lit l, sriqindex_Entry fallback);
-uint8_t sriqindex_probe(sriqindex_SubIndex ix, int64_t side, types_Lit l, types_Clause c, int64_t csig, int64_t skip);
-uint8_t sriqindex_hit(sriqindex_SubIndex ix, sriqindex_Entry e, types_Clause c, int64_t csig, int64_t skip);
-uint8_t sriqindex_x_subsumes(sriqindex_SubIndex ix, int64_t i, types_Clause c);
-uint8_t sriqindex_some_subsumes(sriqindex_SubIndex ix, types_Clause c, int64_t skip);
-slop_list_types_Clause sriqindex_distinct(slop_arena* arena, slop_list_types_Clause cs);
-types_Clause sriqindex_clause_of(slop_list_types_Clause cs, int64_t k, types_Clause fallback);
-slop_list_types_Clause sriqindex_merged(slop_arena* arena, slop_list_types_Clause a, slop_list_types_Clause b);
-sriqsubsume_Committed sriqindex_commit_indexed(slop_arena* arena, slop_list_types_Clause ws, slop_list_types_Clause cs);
-slop_option_types_ATerm sriqindex_fterm_key(types_ATerm t);
-sriqindex_FPart sriqindex_fpart_at(slop_list_sriqindex_FPart ps, int64_t k, sriqindex_FPart fallback);
-sriqindex_KIdx sriqindex_k_index(slop_arena* arena, sriqorder_SriqOrder ord, sriqctx_Triggers tr, slop_list_types_Clause cs);
-sriqindex_KIdx sriqindex_k_index_premises(slop_arena* arena, sriqctx_Triggers tr, slop_list_sriq_Premise ps);
-uint8_t sriqindex_unit_premise(sriq_Premise p);
-slop_list_types_Lit sriqindex_ground_k2(slop_arena* arena, sriqctx_Triggers tr, sriq_SuccSig any, types_Lit l);
-uint8_t sriqindex_no_fterm(types_Lit l);
-slop_list_sriqindex_FPart sriqindex_fparts_of(slop_arena* arena, types_Lit l, uint8_t single);
-uint8_t sriqindex_first_is(slop_list_sriqindex_FPart ps, types_ATerm t);
-slop_list_sriqindex_FPart sriqindex_fparts_sorted(slop_arena* arena, slop_list_sriqindex_FPart raw);
-int64_t sriqindex_fpart_lower(slop_list_sriqindex_FPart ps, types_ATerm t, sriqindex_FPart fallback);
-sriq_KSets sriqindex_k_query(slop_arena* arena, sriqctx_Triggers tr, sriqindex_KIdx kx, sriq_SuccSig sg);
-sriqindex_KPair sriqindex_k_walk(slop_arena* arena, sriqctx_Triggers tr, sriqindex_KIdx kx, sriq_SuccSig sg, types_ATerm t, sriqindex_FPart p0);
+int64_t howl_sriqindex_entry_cmp(howl_sriqindex_Entry a, howl_sriqindex_Entry b);
+int64_t howl_sriqindex_key_cmp(howl_sriqindex_Entry e, int64_t side, howl_types_Lit l);
+howl_sriqindex_Entry howl_sriqindex_entry_at(slop_list_howl_sriqindex_Entry es, int64_t k, howl_sriqindex_Entry fallback);
+slop_option_howl_sriqindex_Entry howl_sriqindex_key_of(howl_types_Clause c, int64_t i);
+howl_sriqindex_SubIndex howl_sriqindex_sub_index(slop_arena* arena, slop_list_howl_types_Clause xs);
+int64_t howl_sriqindex_clause_sig(howl_types_Clause c);
+int64_t howl_sriqindex_lit_bit(int64_t side, howl_types_Lit l);
+int64_t howl_sriqindex_term_mix(howl_types_ATerm t);
+int64_t howl_sriqindex_sig_at(howl_sriqindex_SubIndex ix, int64_t i);
+slop_list_howl_sriqindex_Entry howl_sriqindex_sorted_entries(slop_arena* arena, slop_list_howl_sriqindex_Entry raw);
+int64_t howl_sriqindex_lower_bound(slop_list_howl_sriqindex_Entry es, int64_t side, howl_types_Lit l, howl_sriqindex_Entry fallback);
+uint8_t howl_sriqindex_probe(howl_sriqindex_SubIndex ix, int64_t side, howl_types_Lit l, howl_types_Clause c, int64_t csig, int64_t skip);
+uint8_t howl_sriqindex_hit(howl_sriqindex_SubIndex ix, howl_sriqindex_Entry e, howl_types_Clause c, int64_t csig, int64_t skip);
+uint8_t howl_sriqindex_x_subsumes(howl_sriqindex_SubIndex ix, int64_t i, howl_types_Clause c);
+uint8_t howl_sriqindex_some_subsumes(howl_sriqindex_SubIndex ix, howl_types_Clause c, int64_t skip);
+slop_list_howl_types_Clause howl_sriqindex_distinct(slop_arena* arena, slop_list_howl_types_Clause cs);
+howl_types_Clause howl_sriqindex_clause_of(slop_list_howl_types_Clause cs, int64_t k, howl_types_Clause fallback);
+slop_list_howl_types_Clause howl_sriqindex_merged(slop_arena* arena, slop_list_howl_types_Clause a, slop_list_howl_types_Clause b);
+howl_sriqsubsume_Committed howl_sriqindex_commit_indexed(slop_arena* arena, slop_list_howl_types_Clause ws, slop_list_howl_types_Clause cs);
+slop_option_howl_types_ATerm howl_sriqindex_fterm_key(howl_types_ATerm t);
+howl_sriqindex_FPart howl_sriqindex_fpart_at(slop_list_howl_sriqindex_FPart ps, int64_t k, howl_sriqindex_FPart fallback);
+howl_sriqindex_KIdx howl_sriqindex_k_index(slop_arena* arena, howl_sriqorder_SriqOrder ord, howl_sriqctx_Triggers tr, slop_list_howl_types_Clause cs);
+howl_sriqindex_KIdx howl_sriqindex_k_index_premises(slop_arena* arena, howl_sriqctx_Triggers tr, slop_list_howl_sriq_Premise ps);
+uint8_t howl_sriqindex_unit_premise(howl_sriq_Premise p);
+slop_list_howl_types_Lit howl_sriqindex_ground_k2(slop_arena* arena, howl_sriqctx_Triggers tr, howl_sriq_SuccSig any, howl_types_Lit l);
+uint8_t howl_sriqindex_no_fterm(howl_types_Lit l);
+slop_list_howl_sriqindex_FPart howl_sriqindex_fparts_of(slop_arena* arena, howl_types_Lit l, uint8_t single);
+uint8_t howl_sriqindex_first_is(slop_list_howl_sriqindex_FPart ps, howl_types_ATerm t);
+slop_list_howl_sriqindex_FPart howl_sriqindex_fparts_sorted(slop_arena* arena, slop_list_howl_sriqindex_FPart raw);
+int64_t howl_sriqindex_fpart_lower(slop_list_howl_sriqindex_FPart ps, howl_types_ATerm t, howl_sriqindex_FPart fallback);
+howl_sriq_KSets howl_sriqindex_k_query(slop_arena* arena, howl_sriqctx_Triggers tr, howl_sriqindex_KIdx kx, howl_sriq_SuccSig sg);
+howl_sriqindex_KPair howl_sriqindex_k_walk(slop_arena* arena, howl_sriqctx_Triggers tr, howl_sriqindex_KIdx kx, howl_sriq_SuccSig sg, howl_types_ATerm t, howl_sriqindex_FPart p0);
 
-#ifndef SLOP_OPTION_SRIQINDEX_ENTRY_DEFINED
-#define SLOP_OPTION_SRIQINDEX_ENTRY_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_Entry, slop_option_sriqindex_Entry)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_ENTRY_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_ENTRY_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_Entry, slop_option_howl_sriqindex_Entry)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_CLAUSE_DEFINED
-#define SLOP_OPTION_TYPES_CLAUSE_DEFINED
-SLOP_OPTION_DEFINE(types_Clause, slop_option_types_Clause)
+#ifndef SLOP_OPTION_HOWL_TYPES_CLAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_CLAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Clause, slop_option_howl_types_Clause)
 #endif
 
-#ifndef SLOP_OPTION_SRIQINDEX_SUBINDEX_DEFINED
-#define SLOP_OPTION_SRIQINDEX_SUBINDEX_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_SubIndex, slop_option_sriqindex_SubIndex)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_SUBINDEX_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_SUBINDEX_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_SubIndex, slop_option_howl_sriqindex_SubIndex)
 #endif
 
-#ifndef SLOP_OPTION_SRIQINDEX_FPART_DEFINED
-#define SLOP_OPTION_SRIQINDEX_FPART_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_FPart, slop_option_sriqindex_FPart)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_FPART_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_FPART_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_FPart, slop_option_howl_sriqindex_FPart)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_LIT_DEFINED
-#define SLOP_OPTION_TYPES_LIT_DEFINED
-SLOP_OPTION_DEFINE(types_Lit, slop_option_types_Lit)
+#ifndef SLOP_OPTION_HOWL_TYPES_LIT_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_LIT_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Lit, slop_option_howl_types_Lit)
 #endif
 
-#ifndef SLOP_OPTION_SRIQINDEX_KIDX_DEFINED
-#define SLOP_OPTION_SRIQINDEX_KIDX_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_KIdx, slop_option_sriqindex_KIdx)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_KIDX_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_KIDX_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_KIdx, slop_option_howl_sriqindex_KIdx)
 #endif
 
-#ifndef SLOP_OPTION_TYPES_ATERM_DEFINED
-#define SLOP_OPTION_TYPES_ATERM_DEFINED
-SLOP_OPTION_DEFINE(types_ATerm, slop_option_types_ATerm)
+#ifndef SLOP_OPTION_HOWL_TYPES_ATERM_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_ATERM_DEFINED
+SLOP_OPTION_DEFINE(howl_types_ATerm, slop_option_howl_types_ATerm)
 #endif
 
-#ifndef SLOP_OPTION_SRIQ_PREMISE_DEFINED
-#define SLOP_OPTION_SRIQ_PREMISE_DEFINED
-SLOP_OPTION_DEFINE(sriq_Premise, slop_option_sriq_Premise)
+#ifndef SLOP_OPTION_HOWL_SRIQ_PREMISE_DEFINED
+#define SLOP_OPTION_HOWL_SRIQ_PREMISE_DEFINED
+SLOP_OPTION_DEFINE(howl_sriq_Premise, slop_option_howl_sriq_Premise)
 #endif
 
-#ifndef SLOP_OPTION_SRIQINDEX_KPAIR_DEFINED
-#define SLOP_OPTION_SRIQINDEX_KPAIR_DEFINED
-SLOP_OPTION_DEFINE(sriqindex_KPair, slop_option_sriqindex_KPair)
+#ifndef SLOP_OPTION_HOWL_SRIQINDEX_KPAIR_DEFINED
+#define SLOP_OPTION_HOWL_SRIQINDEX_KPAIR_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqindex_KPair, slop_option_howl_sriqindex_KPair)
 #endif
 
 

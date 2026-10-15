@@ -74,7 +74,7 @@ static char* report_of(howl_Run run) {
 }
 
 static howl_TermIn iri(const char* v) {
-    return (howl_TermIn){ .kind = rdf_TermKind_iri, .value = str(v), .datatype = str(""), .lang = str("") };
+    return (howl_TermIn){ .kind = slop_rdf_rdf_TermKind_iri, .value = str(v), .datatype = str(""), .lang = str("") };
 }
 
 static howl_Input input_for(const char* path) {
@@ -87,9 +87,9 @@ static howl_Input input_for(const char* path) {
     CHECK(r.ok, "%s does not parse", path);
     /* A second document, with a typed literal and a blank node. */
     howl_input_begin_document(in);
-    howl_TermIn lit = { .kind = rdf_TermKind_literal, .value = str("7"),
+    howl_TermIn lit = { .kind = slop_rdf_rdf_TermKind_literal, .value = str("7"),
                         .datatype = str("http://www.w3.org/2001/XMLSchema#integer"), .lang = str("") };
-    howl_TermIn b = { .kind = rdf_TermKind_blank, .blank = 0, .value = str(""), .datatype = str(""), .lang = str("") };
+    howl_TermIn b = { .kind = slop_rdf_rdf_TermKind_blank, .blank = 0, .value = str(""), .datatype = str(""), .lang = str("") };
     CHECK(howl_input_add_triple(in, iri("http://example.org/api#x"),
                                 iri("http://www.w3.org/2000/01/rdf-schema#comment"), lit), "add a literal");
     CHECK(howl_input_add_triple(in, b, iri("http://www.w3.org/2000/01/rdf-schema#label"), lit), "add a blank");
@@ -98,7 +98,7 @@ static howl_Input input_for(const char* path) {
 }
 
 static void fixture(const char* path) {
-    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus, types_Profile_profile_sriq };
+    howl_types_Profile profiles[] = { howl_types_Profile_profile_el, howl_types_Profile_profile_el_plus_plus, howl_types_Profile_profile_sriq };
     for (int p = 0; p < 3; p++) {
         char* first = NULL;
         for (int w = 1; w <= 4; w *= 2) {
@@ -136,14 +136,14 @@ static const char* PROBE_DOC =
     "<urn:probe:p> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:someValuesFrom owl:Thing ] .\n"
     "<urn:probe:q> rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :q ; owl:someValuesFrom owl:Thing ] .\n";
 
-static int answer_is(howl_Run r, int64_t i, probe_QueryKind k, const char* sub, const char* sup,
-                     probe_ProbeAnswer a) {
+static int answer_is(howl_Run r, int64_t i, howl_probe_QueryKind k, const char* sub, const char* sup,
+                     howl_probe_ProbeAnswer a) {
     return howl_run_probe_kind(r, i) == k && msg_is(howl_run_probe_sub(r, i), sub)
         && msg_is(howl_run_probe_sup(r, i), sup) && howl_run_probe_answer(r, i) == a;
 }
 
 static void probes(void) {
-    types_Profile profiles[] = { types_Profile_profile_el, types_Profile_profile_el_plus_plus, types_Profile_profile_sriq };
+    howl_types_Profile profiles[] = { howl_types_Profile_profile_el, howl_types_Profile_profile_el_plus_plus, howl_types_Profile_profile_sriq };
     for (int p = 0; p < 3; p++) {
         howl_Input in = howl_input_new();
         CHECK(howl_input_add_turtle(in, str(PROBE_MAIN)).ok, "the probe scenario does not parse");
@@ -161,20 +161,20 @@ static void probes(void) {
         howl_Options o = howl_default_options();
         o.profile = profiles[p];
         howl_Run r = howl_run_classify(in, o);
-        CHECK(howl_run_ok(r) && howl_run_verdict(r) == types_Verdict_verdict_coherent,
+        CHECK(howl_run_ok(r) && howl_run_verdict(r) == howl_types_Verdict_verdict_coherent,
               "profile %d: the main run is not coherent", p);
         CHECK(howl_run_unsat_len(r) == 0, "profile %d: a probe class reached unsatisfiable", p);
         CHECK(howl_run_probe_len(r) == 4, "profile %d: %lld answers", p, (long long)howl_run_probe_len(r));
-        CHECK(answer_is(r, 0, probe_QueryKind_query_unsatisfiable, "urn:probe:p", "", probe_ProbeAnswer_answer_yes)
-              && answer_is(r, 1, probe_QueryKind_query_unsatisfiable, "urn:probe:q", "", probe_ProbeAnswer_answer_no)
-              && answer_is(r, 2, probe_QueryKind_query_unsatisfiable, "urn:probe:t", "", probe_ProbeAnswer_answer_yes)
-              && answer_is(r, 3, probe_QueryKind_query_subsumed, "urn:probe:t", "http://example.org/t#D",
-                           probe_ProbeAnswer_answer_yes),
+        CHECK(answer_is(r, 0, howl_probe_QueryKind_query_unsatisfiable, "urn:probe:p", "", howl_probe_ProbeAnswer_answer_yes)
+              && answer_is(r, 1, howl_probe_QueryKind_query_unsatisfiable, "urn:probe:q", "", howl_probe_ProbeAnswer_answer_no)
+              && answer_is(r, 2, howl_probe_QueryKind_query_unsatisfiable, "urn:probe:t", "", howl_probe_ProbeAnswer_answer_yes)
+              && answer_is(r, 3, howl_probe_QueryKind_query_subsumed, "urn:probe:t", "http://example.org/t#D",
+                           howl_probe_ProbeAnswer_answer_yes),
               "profile %d: wrong probe answers", p);
         CHECK(!howl_run_probe_inconsistent(r) && howl_run_probe_omission_len(r) == 0,
               "profile %d: the probe run was not clean", p);
         CHECK(howl_run_probe_len(r) >= 0 && howl_run_probe_sub(r, 99).len == 0
-              && howl_run_probe_answer(r, 99) == probe_ProbeAnswer_answer_unknown,
+              && howl_run_probe_answer(r, 99) == howl_probe_ProbeAnswer_answer_unknown,
               "profile %d: an out-of-range probe answer is not empty and unknown", p);
         /* The answer run (SPEC §8.4): the same answers, with no main run. */
         howl_Run a = howl_run_answer(in, o);
@@ -187,7 +187,7 @@ static void probes(void) {
                   && same_str(howl_run_probe_sup(a, i), howl_run_probe_sup(r, i)),
                   "profile %d: answer %lld differs from classify's", p, (long long)i);
         CHECK(howl_run_profile(a) == profiles[p] && howl_run_unsat_len(a) == 0 && howl_run_sub_len(a) == 0
-              && howl_run_verdict(a) == types_Verdict_verdict_inconclusive
+              && howl_run_verdict(a) == howl_types_Verdict_verdict_inconclusive
               && howl_run_report_len(a) == 4 + 4 && msg_is(howl_run_report_line(a, 1), "probes 4"),
               "profile %d: the answer run has a report, or the wrong lines", p);
         free(report_of(a));
@@ -234,7 +234,7 @@ static void refusals(const char* path) {
     o.workers = 0;
     howl_Run r = howl_run_classify(in, o);
     CHECK(!howl_run_ok(r) && howl_run_fault(r) == howl_FaultKind_fault_invalid_options, "workers 0 accepted");
-    CHECK(howl_run_verdict(r) == types_Verdict_verdict_inconclusive, "a faulted run's verdict is not inconclusive");
+    CHECK(howl_run_verdict(r) == howl_types_Verdict_verdict_inconclusive, "a faulted run's verdict is not inconclusive");
     CHECK(howl_run_report_len(r) == 0 && howl_run_sub_len(r) == 0, "a faulted run has lines");
     howl_run_free(r);
 
@@ -247,10 +247,10 @@ static void refusals(const char* path) {
     /* horn-sriq was dropped (SPEC §5): its slot stays in the enum and is
      * refused for good, saying what replaces it. Every other rung is built. */
     o = howl_default_options();
-    o.profile = types_Profile_profile_horn_sriq;
+    o.profile = howl_types_Profile_profile_horn_sriq;
     r = howl_run_classify(in, o);
     CHECK(howl_run_fault(r) == howl_FaultKind_fault_unavailable, "horn-sriq not refused");
-    CHECK(howl_run_fault_profile(r) == types_Profile_profile_horn_sriq, "unavailable names another profile");
+    CHECK(howl_run_fault_profile(r) == howl_types_Profile_profile_horn_sriq, "unavailable names another profile");
     CHECK(msg_is(howl_run_fault_message(r), "profile horn-sriq was dropped; sriq covers its language"),
           "horn-sriq's refusal does not say it was dropped");
     howl_run_free(r);
@@ -264,7 +264,7 @@ static void refusals(const char* path) {
     howl_input_free(in);
 
     in = howl_input_new();
-    howl_TermIn quoted = { .kind = rdf_TermKind_triple, .value = str(""), .datatype = str(""), .lang = str("") };
+    howl_TermIn quoted = { .kind = slop_rdf_rdf_TermKind_triple, .value = str(""), .datatype = str(""), .lang = str("") };
     CHECK(!howl_input_add_triple(in, quoted, iri("http://example.org/p"), iri("http://example.org/o")),
           "a quoted triple was taken");
     r = howl_run_classify(in, howl_default_options());
@@ -285,7 +285,7 @@ static void refusals(const char* path) {
     howl_run_free(r);
 
     in = howl_input_new();
-    howl_TermIn huge = { .kind = rdf_TermKind_blank, .blank = INT64_MAX, .value = str(""), .datatype = str(""), .lang = str("") };
+    howl_TermIn huge = { .kind = slop_rdf_rdf_TermKind_blank, .blank = INT64_MAX, .value = str(""), .datatype = str(""), .lang = str("") };
     CHECK(!howl_input_add_triple(in, huge, iri("http://example.org/p"), iri("http://example.org/o")),
           "a blank id near INT64_MAX was taken");
     howl_input_begin_document(in);  /* must not overflow */

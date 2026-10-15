@@ -14,16 +14,11 @@ fn main() {
 
     // HOWL's modules are compiled against its own copy of the runtime
     // header and linked against slop-std-sys's runtime objects, so the two
-    // must be the same generation. A mismatch would build cleanly and
-    // disagree about every inline runtime struct.
-    let ours = fs::read(runtime.join("slop_runtime.h")).expect("csrc/runtime/slop_runtime.h (run `make crate-vendor`)");
-    let theirs = fs::read(Path::new(&std_inc).join("../runtime/slop_runtime.h"))
-        .expect("slop-std-sys's csrc/runtime/slop_runtime.h");
-    assert!(
-        ours == theirs,
-        "HOWL's slop_runtime.h differs from slop-std-sys's: csrc/ and the -sys crates come from different slop releases"
-    );
-
+    // must agree on the runtime ABI. Every generated header checks that at
+    // compile time (`SLOP_RUNTIME_ABI`, slop 0.5.0): HOWL's modules include
+    // the -sys crates' headers, which `#error` against a runtime header of
+    // another ABI. A copy differing only in comments, as 0.5.1's does from
+    // 0.5.0's, builds.
     // Every vendored HOWL module (`make crate-vendor` leaves out the
     // shared ones and the CLI and test entry points), in a fixed order.
     let mut sources: Vec<_> = fs::read_dir(csrc)

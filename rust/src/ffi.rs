@@ -48,7 +48,7 @@ pub struct Run {
 pub struct Options {
     pub workers: i64,
     pub max_iterations: i64,
-    /// A `PROFILE_*` value (`types_Profile`).
+    /// A `PROFILE_*` value (`howl_types_Profile`).
     pub profile: c_int,
     pub auto_select: u8,
     /// The address of a `uint32_t` cancel flag, or 0.
@@ -59,7 +59,7 @@ pub struct Options {
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct TermIn {
-    /// A `TERM_*` value (`rdf_TermKind`).
+    /// A `TERM_*` value (`slop_rdf_rdf_TermKind`).
     pub kind: c_int,
     pub blank: i64,
     pub value: SlopString,
@@ -78,7 +78,7 @@ pub struct TurtleResult {
     pub column: i64,
 }
 
-/// `types_Termination`: a tag and, for a resource limit, the round count.
+/// `howl_types_Termination`: a tag and, for a resource limit, the round count.
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub struct Termination {
@@ -221,9 +221,9 @@ mod layout_guard {
         fn howl_layout_offset_howl_TurtleResult_line() -> usize;
         fn howl_layout_offset_howl_TurtleResult_column() -> usize;
         fn howl_layout_width_howl_TurtleResult_ok() -> usize;
-        fn howl_layout_sizeof_types_Termination() -> usize;
-        fn howl_layout_offset_types_Termination_data() -> usize;
-        fn howl_layout_width_types_Termination_tag() -> usize;
+        fn howl_layout_sizeof_howl_types_Termination() -> usize;
+        fn howl_layout_offset_howl_types_Termination_data() -> usize;
+        fn howl_layout_width_howl_types_Termination_tag() -> usize;
         fn howl_layout_constant(which: c_int) -> std::os::raw::c_long;
     }
 
@@ -278,9 +278,9 @@ mod layout_guard {
                 ("howl_TurtleResult.line", offset_of!(TurtleResult, line), c(howl_layout_offset_howl_TurtleResult_line)),
                 ("howl_TurtleResult.column", offset_of!(TurtleResult, column), c(howl_layout_offset_howl_TurtleResult_column)),
                 ("width howl_TurtleResult.ok", width_of!(TurtleResult, ok), c(howl_layout_width_howl_TurtleResult_ok)),
-                ("types_Termination", size_of::<Termination>(), c(howl_layout_sizeof_types_Termination)),
-                ("types_Termination.data", offset_of!(Termination, resource_limit), c(howl_layout_offset_types_Termination_data)),
-                ("width types_Termination.tag", width_of!(Termination, tag), c(howl_layout_width_types_Termination_tag)),
+                ("howl_types_Termination", size_of::<Termination>(), c(howl_layout_sizeof_howl_types_Termination)),
+                ("howl_types_Termination.data", offset_of!(Termination, resource_limit), c(howl_layout_offset_howl_types_Termination_data)),
+                ("width howl_types_Termination.tag", width_of!(Termination, tag), c(howl_layout_width_howl_types_Termination_tag)),
         ];
         for (what, rust, c) in checks {
             assert_eq!(rust, c, "{what} drifted from include/howl.h");

@@ -42,8 +42,9 @@ Tests and examples hold both instead. The boundary is not obvious, it is not doc
 was established by *probing* — writing the minimal pair of functions that differ in one construct and
 seeing which verifies. Recorded here so it is not rediscovered a third time.
 
-**Toolchain: slop 0.4.0 and slop-rdf 0.5.0** (the Rust crate's `slop-std-sys` 0.4.0 and
-`slop-rdf-sys` 0.5.0 vendor the same generation). 0.4.0 carries [#278](https://github.com/slop-lang/slop/pull/278), which makes a collection grow in the arena it was made in, with `:arena` for a put
+**Toolchain: slop 0.5.1 and slop-rdf 0.6.0.** The Rust crate's `slop-std-sys` 0.5 and
+`slop-rdf-sys` 0.6 are generated on slop 0.5.0, the same runtime ABI (`SLOP_RUNTIME_ABI` 202601).
+Since 0.5.0, generated C names carry their package ([#360](https://github.com/slop-lang/slop/pull/360)), so HOWL's are `howl_…`. 0.4.0 carries [#278](https://github.com/slop-lang/slop/pull/278), which makes a collection grow in the arena it was made in, with `:arena` for a put
 that must grow elsewhere (SLOP facts, below). Since #265 the verifier also proves a range return type
 rather than assuming it, which is why the naming registry types its ids `(Int 0 ..)`. el++'s rule contracts need #247 (`list-visited`, which makes the join's completeness
 statable), #248 (no trigger patterns on hypotheses; `list-contains` by structure), #251 (a pure
@@ -200,7 +201,7 @@ HOWL's public C API is written in SLOP (the `:c-name` functions in `src/howl.slo
 generates its header, `include/howl.h`; `examples/c/classify.c` is a complete C caller. `rust/` is
 the `howl` crate ([`rust/README.md`](../rust/README.md)), which binds that API: `Input`, then
 `Reasoner::classify`, then an owned `Report` whose verdict comes from the engine. It links the RDF and
-runtime C from `slop-rdf-sys` 0.5.0 and `slop-std-sys` 0.4.0 on crates.io. Its input is encoded as
+runtime C from `slop-rdf-sys` 0.6 and `slop-std-sys` 0.5 on crates.io. Its input is encoded as
 the CLI encodes, so `make crate-test` reproduces every committed golden byte for byte through the
 crate.
 
@@ -218,5 +219,6 @@ The guards check sizes, offsets, **field widths** and the enum values the access
 widths are not redundant. SLOP range types lower to narrow integers (`(Int 1 .. 64)` → `uint8_t`),
 and widening one on the Rust side can be absorbed entirely by struct padding. Every offset and the
 total size would stay identical while the Rust side reads padding into the high bits of the value.
-That gap was found by deliberately drifting a mirror to check the guards actually bite. `build.rs`
-also refuses to build if `csrc/runtime/slop_runtime.h` differs from the one `slop-std-sys` ships.
+That gap was found by deliberately drifting a mirror to check the guards actually bite. The build
+also fails if HOWL's C and the `-sys` crates' C were generated for different SLOP runtime ABIs:
+every generated header checks `SLOP_RUNTIME_ABI` against the runtime header it is compiled with.

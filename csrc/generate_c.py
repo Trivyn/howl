@@ -33,7 +33,7 @@ if slop_home:
     sys.path.insert(0, str(Path(slop_home) / "src"))
 
 from slop.parser import parse_file
-from slop.resolver import ModuleResolver
+from slop.resolver import ModuleResolver, package_flags
 from slop.providers import load_project_config
 from slop import paths
 
@@ -106,8 +106,11 @@ def main():
             print(f"Error: Native compiler not found at {compiler_bin}")
             sys.exit(1)
 
-        # Call native compiler
-        cmd = [str(compiler_bin), "transpile"] + source_files
+        # Call native compiler, telling it each module's package (slop #360):
+        # the std modules are std, slop-rdf's are slop-rdf, HOWL's are howl
+        # (and the CLI's howl-cli), each from the nearest slop.toml above it.
+        cmd = [str(compiler_bin), "transpile"] + package_flags(
+            {name: info.path for name, info in graph.modules.items()}) + source_files
         print(f"  Running: slop-compiler transpile ({len(source_files)} files)")
         result = subprocess.run(cmd, capture_output=True, text=True)
 

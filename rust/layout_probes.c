@@ -38,7 +38,7 @@ SIZE(howl_TermIn)        OFFSET(howl_TermIn, blank) OFFSET(howl_TermIn, value)
                          OFFSET(howl_TermIn, datatype) OFFSET(howl_TermIn, lang) WIDTH(howl_TermIn, kind)
 SIZE(howl_TurtleResult)  OFFSET(howl_TurtleResult, message) OFFSET(howl_TurtleResult, line)
                          OFFSET(howl_TurtleResult, column) WIDTH(howl_TurtleResult, ok)
-SIZE(types_Termination)  OFFSET(types_Termination, data) WIDTH(types_Termination, tag)
+SIZE(howl_types_Termination)  OFFSET(howl_types_Termination, data) WIDTH(howl_types_Termination, tag)
 
 /* Every enum value the crate reads or writes, in the order of
  * `ffi::CONSTANTS`. A reordered verdict is the worst drift there is:
@@ -46,15 +46,15 @@ SIZE(types_Termination)  OFFSET(types_Termination, data) WIDTH(types_Termination
  * a pass. */
 long howl_layout_constant(int which) {
     static const long values[] = {
-        types_Verdict_verdict_coherent, types_Verdict_verdict_incoherent, types_Verdict_verdict_inconclusive,
-        types_Profile_profile_el, types_Profile_profile_el_plus_plus,
-        types_Profile_profile_horn_sriq, types_Profile_profile_sriq,
+        howl_types_Verdict_verdict_coherent, howl_types_Verdict_verdict_incoherent, howl_types_Verdict_verdict_inconclusive,
+        howl_types_Profile_profile_el, howl_types_Profile_profile_el_plus_plus,
+        howl_types_Profile_profile_horn_sriq, howl_types_Profile_profile_sriq,
         howl_FaultKind_fault_none, howl_FaultKind_fault_cancelled, howl_FaultKind_fault_input_error,
         howl_FaultKind_fault_unavailable, howl_FaultKind_fault_invalid_options,
-        rdf_TermKind_iri, rdf_TermKind_blank, rdf_TermKind_literal,
-        types_Termination_fixpoint, types_Termination_resource_limit,
-        probe_QueryKind_query_unsatisfiable, probe_QueryKind_query_subsumed,
-        probe_ProbeAnswer_answer_yes, probe_ProbeAnswer_answer_no, probe_ProbeAnswer_answer_unknown,
+        slop_rdf_rdf_TermKind_iri, slop_rdf_rdf_TermKind_blank, slop_rdf_rdf_TermKind_literal,
+        howl_types_Termination_fixpoint, howl_types_Termination_resource_limit,
+        howl_probe_QueryKind_query_unsatisfiable, howl_probe_QueryKind_query_subsumed,
+        howl_probe_ProbeAnswer_answer_yes, howl_probe_ProbeAnswer_answer_no, howl_probe_ProbeAnswer_answer_unknown,
     };
     return (which >= 0 && which < (int)(sizeof values / sizeof values[0])) ? values[which] : -1;
 }

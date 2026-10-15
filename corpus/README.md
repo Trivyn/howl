@@ -6,13 +6,15 @@ Three tiers, separated by what they can prove and what it costs to keep them.
 corpus/
   fixtures/          committed, hand-written, 131 files — the only tier in git
     v0/              one per in-profile construct        (20)
-    hazards/         the fail-silent cases               (31)
+    hazards/         the fail-silent cases               (34)
     out-of-profile/  one per construct the el gate must enumerate (13)
     el++/            inside el++, outside el: §5.4's constructs alone and
                      combined, read by make test's engine-vs-reference
                      differential and pinned under both rungs (36)
     probes/          targeted probes for the differential (29)
     imports/         a root and its attested import      (2)
+    syntax/          Turtle HOWL must refuse, outside the globbed
+                     directories; read by `make acceptance` (1)
   MANIFEST.toml      pinned external ontologies: versioned URL + SHA-256
   fetch.sh           fetch + verify           (`make corpus`)
   census.py          construct census against SPEC.md §5.2
