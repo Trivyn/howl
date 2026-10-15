@@ -6,8 +6,8 @@ This is for working on HOWL itself. Using it is the [README](README.md).
 
 - **Building and testing:** a C compiler and pthreads. The transpiled C is committed in `csrc/`,
   so no SLOP toolchain is needed.
-- **Changing SLOP sources:** the SLOP toolchain at 0.4.3 (`SLOP_HOME` pointing at it), and
-  [slop-rdf](https://github.com/slop-lang/slop-rdf) 0.5.2 checked out beside this repository
+- **Changing SLOP sources:** the SLOP toolchain at 0.5.1 (`SLOP_HOME` pointing at it), and
+  [slop-rdf](https://github.com/slop-lang/slop-rdf) 0.6.0 checked out beside this repository
   (`../slop-rdf`), which `slop.toml` includes.
 - **The differential and the benchmark:** a JDK (provisioned if missing), network access once,
   Python 3 with `rdflib` 7.6.0, and the corpus (`./corpus/fetch.sh`).

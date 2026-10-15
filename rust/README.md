@@ -7,7 +7,7 @@ cannot see.
 
 The crate builds the engine from vendored C. It needs a C compiler and pthreads, and no SLOP
 toolchain. The RDF and runtime C come from [`slop-rdf-sys`](https://crates.io/crates/slop-rdf-sys)
-0.5.2 and [`slop-std-sys`](https://crates.io/crates/slop-std-sys) 0.4.3.
+0.6 and [`slop-std-sys`](https://crates.io/crates/slop-std-sys) 0.5.
 
 ## Quick start
 
@@ -160,8 +160,8 @@ the FFI as a struct: it stays behind an opaque run handle, and the crate copies 
 API's accessors, then frees it. Rust mirrors only the API's small value types (options, an input
 term, a Turtle result, a termination, `slop_string`) and its enum values. Tests assert each
 mirror's sizes, offsets and field widths, and every enum value, against the generated header
-(`layout_probes.c`). `build.rs` refuses to build if HOWL's `slop_runtime.h` differs from the one
-`slop-std-sys` ships.
+(`layout_probes.c`). The build fails if HOWL's C and the `-sys` crates' C were generated for
+different SLOP runtime ABIs: every generated header checks `SLOP_RUNTIME_ABI`.
 
 ## Minimum Rust version
 

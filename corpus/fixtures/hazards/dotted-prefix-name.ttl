@@ -1,0 +1,19 @@
+# Dots inside a prefix name and a blank-node label (slop-rdf #13, fixed in
+# slop-rdf 0.6.0). Turtle allows '.' anywhere in PN_PREFIX and
+# BLANK_NODE_LABEL but last, and rdflib writes prefixes such as `j.0:`.
+# Before the fix `@prefix j.0:` failed to parse, and `_:r.1` was cut to `_:r`
+# with the leftover `1` read as the next statement's subject. Read whole, A is
+# subsumed by `∃p.B`, so A ⊑ C (C ≡ ∃p.B) and A ⊑ D: COHERENT (exit 0).
+
+@prefix j.0:  <http://example.org/dotted#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/dotted> a owl:Ontology .
+j.0:A a owl:Class . j.0:B a owl:Class . j.0:C a owl:Class . j.0:D a owl:Class .
+j.0:p a owl:ObjectProperty .
+j.0:A rdfs:subClassOf _:r.1 .
+_:r.1 a owl:Restriction ; owl:onProperty j.0:p ; owl:someValuesFrom j.0:B .
+j.0:C owl:equivalentClass _:r.2 .
+_:r.2 a owl:Restriction ; owl:onProperty j.0:p ; owl:someValuesFrom j.0:B .
+j.0:C rdfs:subClassOf j.0:D .

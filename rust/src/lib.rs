@@ -173,7 +173,7 @@ impl Profile {
         }
     }
 
-    /// From a C `types_Profile`, as an accessor returns it.
+    /// From a C `howl_types_Profile`, as an accessor returns it.
     fn from_ffi(d: c_int) -> Self {
         match d {
             ffi::PROFILE_EL => Profile::El,

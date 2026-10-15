@@ -1,0 +1,11 @@
+# A literal in subject position is not Turtle (slop-rdf 0.6.0 rejects it; its
+# parser used to accept it). HOWL reports a parse error, an INPUT ERROR (exit
+# 3), rather than reading a triple no OWL mapping can have produced. It lives
+# outside the globbed fixture directories, whose harnesses expect a parse.
+
+@prefix :     <http://example.org/t#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+<http://example.org/t> a owl:Ontology .
+:A a owl:Class .
+"A" a owl:Class .

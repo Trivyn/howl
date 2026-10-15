@@ -37,9 +37,25 @@
     release flags), with identical reports.
   - CI's macOS job builds and tests with clang too.
   - Linux and Windows are unchanged (gcc, MinGW gcc).
+- **Generated with slop 0.5.1 and slop-rdf 0.6.0.** The crate depends on `slop-std-sys` 0.5 and
+  `slop-rdf-sys` 0.6.
+  - **Breaking for C callers:** slop 0.5 adds the package to generated C names (slop #360), so
+    the enum and struct types in `howl.h` are renamed. `types_Verdict_*`, `types_Profile_*`,
+    `types_Termination*`, `probe_QueryKind_*` and `probe_ProbeAnswer_*` gain a `howl_` prefix
+    (`howl_types_Verdict_verdict_coherent`), and `rdf_TermKind_*` becomes
+    `slop_rdf_rdf_TermKind_*`. Values and layouts are unchanged, as are the `howl_*` functions and
+    the Rust API.
+  - The crate's `-sys` dependencies are caret ranges again, where they were pinned exactly. Its
+    build no longer compares the runtime header byte for byte. Every generated header checks
+    `SLOP_RUNTIME_ABI` instead, so C generated for another runtime ABI fails to compile, and a
+    header that differs only in comments builds.
 
 ### Fixed
 
+- **Turtle: a dot inside a prefix name or blank-node label** (slop-rdf #13). `@prefix j.0:`, as
+  rdflib writes it, failed to parse. `_:b.1` was cut to `_:b` and the leftover read as the next
+  statement's subject, a silently wrong triple. Both now read as Turtle defines them. A literal in
+  subject position is now a parse error (exit 3); it used to be read as a triple.
 - **`sriq`: a `DisjointUnion` headed by `owl:Thing` or `owl:Nothing` no longer faults.** The head
   reached the clause boundary as a plain class name, which has no id for a built-in, so a valid
   ontology was refused as an input error. It now lowers to `⊤` or `⊥`, as decode reads those names

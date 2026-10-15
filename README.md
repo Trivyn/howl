@@ -177,7 +177,7 @@ howl_Input in = howl_input_new();
 howl_TurtleResult parsed = howl_input_add_turtle(in, (slop_string){ len, text });
 howl_Run run = howl_run_classify(in, howl_default_options());
 
-if (howl_run_ok(run) && howl_run_verdict(run) == types_Verdict_verdict_coherent) {
+if (howl_run_ok(run) && howl_run_verdict(run) == howl_types_Verdict_verdict_coherent) {
     /* the only pass */
 }
 for (int64_t i = 0; i < howl_run_unsat_len(run); i++) {

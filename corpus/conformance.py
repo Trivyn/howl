@@ -228,8 +228,8 @@ def w3c_tests():
             premise = Graph()
             premise.parse(data=str(rdfxml), format="xml")
             ttl = os.path.join(out_dir, name + ".ttl")
-            # N-Triples, a subset of Turtle, so no prefix rdflib generates
-            # (`j.0:`, legal Turtle) can trip HOWL's parser.
+            # N-Triples, a subset of Turtle with no prefixes. (slop-rdf before
+            # 0.6.0 refused rdflib's generated `j.0:`; that is fixed.)
             premise.serialize(ttl, format="nt")
         else:
             fs = g.value(t, T.fsPremiseOntology)

@@ -28,12 +28,12 @@ include = [
 name = "howl"
 
 [dependencies]
-# slop 0.4.3 and slop-rdf 0.5.2: the generation HOWL's csrc/ is built with.
-# build.rs checks that the runtime header matches byte for byte, so the pins
-# are exact: 0.1.0's caret let a fresh build resolve slop-std-sys 0.4.2 and
-# fail.
-slop-std-sys = "=0.4.3"
-slop-rdf-sys = "=0.5.2"
+# The -sys crates generated on slop 0.5.0, runtime ABI 202601 (HOWL's C is
+# generated on 0.5.1, the same ABI). Caret ranges: a later -sys release on
+# another runtime ABI fails to compile against HOWL's runtime header (the
+# generated headers' SLOP_RUNTIME_ABI check) instead of linking skewed.
+slop-std-sys = "0.5.0"
+slop-rdf-sys = "0.6.0"
 
 [build-dependencies]
 cc = "1"
