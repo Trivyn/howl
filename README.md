@@ -14,7 +14,8 @@ From these two axioms HOWL derives `Mother ⊑ Parent`. The only route to that c
 the existential on `Parent`'s *defining* side, so a rule engine that materializes forward never
 finds it.
 
-HOWL is a consequence-based reasoner for the OWL 2 EL family. It is written in
+HOWL is a consequence-based reasoner for the OWL 2 EL family and, under `--profile sriq`, the SRIQ
+object fragment. It is written in
 [SLOP](https://github.com/slop-lang/slop) and compiled to C. It is the sibling of
 [GROWL](https://github.com/Trivyn/growl), which materializes OWL 2 RL; the two compose through RDF.
 
@@ -95,6 +96,7 @@ That includes a property used without a declaration: in `:A :editorNote "x"` an 
 howl validate <ontology.ttl> [--profile P] [--strict] [--no-imports] [-I FILE]...
                              [--report] [--timings] [--max-iterations N] [--workers N]
                              [--probe FILE]... [--ask-unsat C]... [--ask-sub A B]...
+howl ask <ontology.ttl> [--profile P] [-I FILE]... [--probe FILE]... --ask-unsat C | --ask-sub A B ...
 howl --version
 ```
 
@@ -143,7 +145,7 @@ howl --version
 
 ## What HOWL reasons over
 
-**HOWL tracks OWL 2 EL construct by construct.** Of the 23 rows in
+**HOWL tracks OWL 2 EL construct by construct.** Of the 24 rows in
 [`docs/coverage.md`](docs/coverage.md), `el++` reasons over 21 and `el` over 14. They are:
 - **class constructors:** intersection, existential and `hasValue` restrictions, single-individual
   nominals and `hasSelf`;
@@ -251,22 +253,22 @@ ELK or HermiT over every pair of named classes. The protocol, history and memory
 
 ## Status
 
-**Beta.** The `el` and `el++` profiles are built. Their testing:
+**Beta.** The `el`, `el++` and `sriq` profiles are built. The testing of `el` and `el++`:
 - **fixtures:** compared with HermiT, and with ELK where ELK is probed capable of the construct;
 - **conformance:** the W3C OWL 2 and ELK conformance suites, against their expected answers;
-- **real ontologies:** each of four has its in-profile part compared with its routed oracle (ELK or
+- **real ontologies:** each of six has its in-profile part compared with its routed oracle (ELK or
   HermiT) over every pair of named classes;
 - **generated ontologies:** compared with HermiT.
 
 Results are byte-identical across worker counts. `sriq`
 ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) runs single-threaded. It classifies BFO-core and CCO
-whole: CCO takes 32 rounds, about 9 s and 1.6 GB, and agrees with HermiT. Each of its rules is a
+whole: CCO takes 32 rounds, about 7 s and 0.9 GB, and agrees with HermiT. Each of its rules is a
 function whose contracts Z3 proves where it can, and whose tests pin the paper's own derivations
 ([SPEC §7](SPEC.md#7-verification--contracts) records what is proved and what is owed). OBI is out
 of its reach: `--profile sriq` stops there at the clause budget, and `auto` steps down to `el++`.
-`howl classify` (Turtle output
-of the inferred hierarchy with `--emit`, and `--reduce`) is planned; until then both flags are
-refused with exit 3.
+
+`howl classify` (Turtle output of the inferred hierarchy with `--emit`, and `--reduce`) is planned;
+until then both flags are refused with exit 3.
 
 ## Documentation
 
