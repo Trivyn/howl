@@ -33,7 +33,7 @@
   (import normalize (Decoded))
   (import strlib (starts-with))
 
-  (export con-bot con-top axiom-local axiom-symbols module-axioms ModuleOut module-decoded)
+  (export con-bot con-top axiom-local axiom-symbols axiom-readable module-axioms ModuleOut module-decoded)
 
   ;; What extraction returns: M in O's order, and S = the seed ∪ sig(M).
   (type ModuleOut (record
@@ -316,6 +316,70 @@
     (@intent "Push an assertion's role and both individuals")
     (@spec ((RawEdge (Set IRI)) -> Unit))
     (do (add-role (. e role) out) (add-node (. e from) out) (add-node (. e to) out)))
+
+  ;; ============================================================
+  ;; Readable: every symbol known (L3's condition)
+  ;; ============================================================
+
+  (fn axiom-readable ((ax RawAxiom))
+    (@intent "Does axiom-symbols name every symbol ax mentions? Not when it carries only an InputRef, or a data range or undecodable class expression (SPEC §8.4 L3)")
+    (@spec ((RawAxiom) -> Bool))
+    (match ax
+      ((ra-sub-class-of c d)            (and (concept-readable (deref c)) (concept-readable (deref d))))
+      ((ra-equivalent-classes cs)       (concepts-readable cs))
+      ((ra-disjoint-classes cs)         (concepts-readable cs))
+      ((ra-sub-object-property _ _)     true)
+      ((ra-property-chain _)            true)
+      ((ra-equivalent-properties _)     true)
+      ((ra-transitive-property _)       true)
+      ((ra-object-property-domain _ c)  (concept-readable (deref c)))
+      ((ra-object-property-range _ c)   (concept-readable (deref c)))
+      ((ra-class-assertion ca)          (concept-readable (deref (. ca concept))))
+      ((ra-object-property-assertion _) true)
+      ((ra-declaration _)               true)
+      ((ra-annotation)                  true)
+      ((ra-inert-data)                  true)
+      ((ra-inverse-properties _ _)      true)
+      ((ra-property-characteristic _ _) true)
+      ((ra-disjoint-properties _)       true)
+      ((ra-same-individual _)           true)
+      ((ra-different-individuals _)     true)
+      ((ra-negative-assertion _)        true)
+      ((ra-disjoint-union du)           (concepts-readable (. du members)))
+      ((ra-has-key _)                   false)
+      ((ra-data-axiom _)                false)
+      ((ra-builtin-role _)              false)
+      ((ra-anonymous-individual _)      false)
+      ((ra-reserved-vocabulary _)       false)
+      ((ra-swrl-rule _)                 false)
+      ((ra-unrecognized _)              false)))
+
+  (fn concept-readable ((c RawConcept))
+    (@intent "Does c contain no data range and no undecodable class expression?")
+    (@spec ((RawConcept) -> Bool))
+    (match c
+      ((rc-name _)          true)
+      ((rc-thing)           true)
+      ((rc-nothing)         true)
+      ((rc-and cs)          (concepts-readable cs))
+      ((rc-some _ f)        (concept-readable (deref f)))
+      ((rc-or cs)           (concepts-readable cs))
+      ((rc-not f)           (concept-readable (deref f)))
+      ((rc-all _ f)         (concept-readable (deref f)))
+      ((rc-oneof _)         true)
+      ((rc-has-value _ _)   true)
+      ((rc-has-self _)      true)
+      ((rc-card _ _ _)      true)
+      ((rc-qcard _ _ _ f)   (concept-readable (deref f)))
+      ((rc-data _)          false)
+      ((rc-anon _)          false)))
+
+  (fn concepts-readable ((cs (List RawConcept)))
+    (@intent "Is every concept readable?")
+    (@spec (((List RawConcept)) -> Bool))
+    (let ((mut ok true))
+      (do (for-each (c cs) (when (not (concept-readable c)) (set! ok false)))
+          ok)))
 
   ;; ============================================================
   ;; Extraction (SPEC §8.4, "The module")

@@ -5513,8 +5513,13 @@ query declarations. The two-run mode is unchanged.
     - An inconsistent M makes O inconsistent too, so every answer is a flagged, vacuous `yes`.
 - **The module run is used only when it is complete, or found an inconsistency.** Otherwise (an
   omission inside M, a round cap or the clause budget stopping it) the answer run classifies the
-  whole of O instead, which is exactly the two-run mode's probe run. The second run costs time only
-  when the module's falls short.
+  whole of O instead, which is exactly the two-run mode's probe run. When M's gate already omits an
+  axiom, M's run could not be complete, so M is not classified at all and O is classified directly.
+  So a second run costs time only when a cap or the budget stops M's run. The cost of the shortcut:
+  an inconsistency M's incomplete run could still have proved is found only if O's run finds it,
+  and an RBox gate that rejects O's whole RBox (an irregular chain anywhere) can keep it from doing
+  so. Every answer stays sound and keeps the two-run mode's; that edge case answers `unknown` where
+  classifying M would have answered a flagged `yes`.
 - **So it keeps every `yes` and `no` the two-run mode gives** (Constraint 499c3842):
   - When the module run is used and complete, its answers are exact (L4), and so is every
     two-run `yes` and `no`.
@@ -5525,6 +5530,30 @@ query declarations. The two-run mode is unchanged.
     answers where that mode says `unknown`.
   - The tests hold the two modes to this on every class pair of the fixtures, under el, el++ and
     sriq.
+
+- **Evidence (P3, 2026-10-14).**
+  - **The extractor against the OWL API's** (`make modules`, `corpus/module-differential.txt`).
+    `SyntacticLocalityModuleExtractor` (BOT) ran through the pinned oracle on 50 seeds per corpus
+    entry, compared by signature. Every module HOWL can read in full contains the OWL API's.
+    - **Exact matches:** BFO-core, CCO, OBI, GO and EL-GALEN, symbol for symbol. The mean module is
+      6, 420, 473, 28 and 4,919 symbols.
+    - **RO falls back on every seed.** Its SWRL rules are in every module and HOWL never reads them
+      (L3), so the answers come from the whole input.
+  - **Answers against the routed oracle on the whole ontology** (`make answers`,
+    `corpus/answer-differential.txt`). The oracle is HermiT, or ELK for EL-GALEN. With 30 queries
+    per entry, none of the answers is wrong and none drops a two-run answer.
+    - On GO, the module answers 15 `no`s that the two-run mode leaves `unknown`.
+    - On Core (= CCO), it takes 0.2 s against 14.1 s.
+  - **The fuzzer** (`abox_fuzz --ask`): 400 generated `sriq` ontologies and 2,321 queries, under el
+    and under auto, the inconsistent ones included. No answer is wrong.
+  - **Limits found:**
+    - SWRL rules, data assertions and other text-only axioms are in every module, as are
+      decode-level omissions such as an undeclared property. Any of them makes every module run
+      incomplete, so the answer run falls back to the whole input.
+    - On Core with Trivyn's own files, the answers therefore equal the two-run mode's, at about
+      half the time.
+    - One module for all of a call's queries takes the union of their signatures. On GO that
+      module needs `sriq` (13 s) where each query's own module would be small.
 
 [CGHKS08] Cuenca Grau, Horrocks, Kazakov, Sattler, *Modular Reuse of Ontologies: Theory and
 Practice*, JAIR 31 (2008), 273–318.

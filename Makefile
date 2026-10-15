@@ -52,7 +52,7 @@ ALL_SRCS    := $(wildcard $(CSRC)/*.c)
 SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
-.PHONY: all cli lib test test-bin diff-elim diff-elim-corpus diff-elim-long clean release dist csrc slop-build verify corpus census project project-verify example \
+.PHONY: modules answers all cli lib test test-bin diff-elim diff-elim-corpus diff-elim-long clean release dist csrc slop-build verify corpus census project project-verify example \
         acceptance corpus-acceptance golden golden-update test-asan golden-asan c-example crate-vendor crate-build crate-test crate-package crate-publish \
         oracle probes probes-update diff-fixtures conformance-fetch conformance conformance-update \
         materialize diff-corpus diff-corpus-update test-tsan determinism determinism-corpus bench bench-el++ bench-check abox-fuzz
@@ -641,6 +641,19 @@ abox-fuzz: cli oracle
 	python3 corpus/abox_fuzz.py --negation
 	python3 corpus/abox_fuzz.py --elpp
 	python3 corpus/abox_fuzz.py --sriq
+	python3 corpus/abox_fuzz.py --ask
+
+# THE ANSWER RUN'S MODULE (SPEC.md §8.4; Track P, P3). `modules`: HOWL's
+# ⊥-locality modules against the OWL API's (BOT) on every corpus entry, by
+# signature; every module HOWL can read in full must contain the OWL API's.
+# `answers`: howl ask against HermiT (ELK for EL-GALEN) on the whole of each
+# corpus ontology, and against the two-run mode. Both need the pinned corpus
+# (./corpus/fetch.sh) and record what they find (--update).
+modules: test-bin cli oracle
+	python3 corpus/modules.py
+
+answers: cli oracle
+	python3 corpus/answers.py
 
 # EXTERNAL CONFORMANCE: expected answers nobody on this project wrote — the
 # W3C OWL 2 conformance suite's approved EL (in)consistency tests, and ELK's

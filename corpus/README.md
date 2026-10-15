@@ -178,3 +178,29 @@ projected theory is essentially the ontology as published.
   (MANIFEST `provenance`). It is functional syntax, so `fetch.sh` converts it
   with the pinned OWL API (`make oracle` first); that conversion is deterministic,
   so its output is pinned too (`derived_sha256`).
+
+## The answer run's module (SPEC.md §8.4; Track P, P3)
+
+`howl ask` classifies the ⊥-locality module of its input for the queried classes. Three harnesses
+hold it to outside answers:
+
+- **`make modules`** (`modules.py`, record `module-differential.txt`) compares HOWL's module with
+  the OWL API's `SyntacticLocalityModuleExtractor` (BOT), through the pinned oracle, by signature.
+  It uses 25 single classes and 25 pairs per corpus entry, drawn with a fixed seed.
+  - A module HOWL can read in full must contain the OWL API's.
+  - A module holding an axiom HOWL cannot read (SWRL, keys, data axioms) may miss that axiom's
+    symbols. It is counted `fallback`, because its run is incomplete and the answer run then
+    classifies the whole input.
+  - BFO-core, CCO, OBI, GO and EL-GALEN match the OWL API exactly. RO falls back on every seed,
+    because of its SWRL rules.
+- **`make answers`** (`answers.py`, record `answer-differential.txt`) asks 30 queries of each whole
+  ontology: 15 the oracle entails and 15 drawn pairs. The oracle is HermiT, or ELK for EL-GALEN,
+  which HermiT does not finish in 30 minutes.
+  - A `yes` must be entailed and a `no` must not be. The answers are also compared with the two-run
+    mode's, along with both modes' times.
+  - The oracle's report is cached in `build/answers/`. Cap its heap with `HOWL_ORACLE_XMX`.
+- **`abox_fuzz.py --ask`** asks up to ten queries of each generated `sriq` ontology, under el and
+  under auto, against HermiT. It asks five entailed subsumptions where that many exist, and five
+  drawn pairs. An inconsistent ontology's classes come from the file, since HermiT's report then has
+  no hierarchy.
+

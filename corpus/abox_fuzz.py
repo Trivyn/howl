@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A randomized ABox differential: HOWL against HermiT (SPEC.md §5.3, M1 (f)).
 
-    python3 corpus/abox_fuzz.py [--seeds FIRST:LAST] [--update] [--negation | --elpp | --sriq]
+    python3 corpus/abox_fuzz.py [--seeds FIRST:LAST] [--update] [--negation | --elpp | --sriq | --ask]
 
 §5.3 proves the direct-edge ABox encoding sound and complete for the calculus.
 This checks the CODE against that argument, over ontologies nobody wrote by
@@ -35,6 +35,13 @@ global restriction, which the gate enforces), roles may be reflexive, and the
 ABox gains sameAs, differentFrom, AllDifferent and negative property
 assertions. It is recorded on its own line too.
 
+With --ask the ontologies are sriq's and HOWL answers queries instead of
+classifying (SPEC.md §8.4, the answer run): ten per ontology, five subsumptions
+HermiT entails and five class pairs drawn from the seed, through `howl ask`
+under el (where most of sriq's constructs are omissions, so the module and its
+fallback both run) and under auto. A `yes` must be entailed by HermiT and a
+`no` must not be; `unknown` is counted, never failed.
+
 With --sriq the ontologies are sriq's (SPEC.md §5.5, M5 (e)) and HOWL runs
 under `--profile sriq`: besides v0's constructs, class expressions may be
 unions, complements, ∀r.C, ∃r⁻.C (an inverse role), qualified ≤n / ≥n (n ≤ 3)
@@ -62,6 +69,7 @@ import entdiff  # noqa: E402
 
 HOWL = os.environ.get("HOWL", os.path.join(ROOT, "build", "howl"))
 ORACLE = os.path.join(ROOT, "oracle", "build", "oracle")
+OWL_NS = "http://www.w3.org/2002/07/owl#"
 OUT = os.path.join(ROOT, "build", "abox-fuzz")
 RECORD = os.path.join(HERE, "abox-fuzz.txt")
 DEFAULT_SEEDS = (1, 400)
@@ -348,6 +356,108 @@ def run_hermit(files):
     return reports
 
 
+ASK_PROFILES = ("el", "auto")
+
+
+def declared_classes(path):
+    """The generator's classes, from its `:Cn a owl:Class .` lines."""
+    out = []
+    for line in open(path, encoding="utf-8"):
+        if line.startswith(":") and line.rstrip().endswith(" a owl:Class ."):
+            out.append("http://example.org/fuzz#" + line.split()[0][1:])
+    return sorted(out)
+
+
+def ask_queries(stem, h, path):
+    """Five subsumptions HermiT entails and five class pairs, fixed by the seed. An
+    inconsistent ontology's report has no hierarchy, so its classes come from the file,
+    and every pair is then entailed."""
+    classes = sorted(c for c in h.subs if not c.startswith(OWL_NS)) or declared_classes(path)
+    rnd = random.Random("ask:" + stem)
+    subs = sorted((a, b) for a in classes for b in h.subs.get(a, ()) if a != b and not b.startswith(OWL_NS))
+    qs = rnd.sample(subs, min(5, len(subs)))
+    if len(classes) >= 2:
+        qs += [tuple(rnd.sample(classes, 2)) for _ in range(5)]
+    return qs
+
+
+def hermit_entails(h, a, b):
+    return h.inconsistent or a == b or a in h.unsat or b in h.subs.get(a, ())
+
+
+def ask_one(path, qs, profile):
+    """howl ask's answers, {(A, B): yes|no|unknown}."""
+    flags = []
+    for a, b in qs:
+        flags += ["--ask-sub", a, b]
+    p = subprocess.run([HOWL, "ask", path, "--profile", profile] + flags, capture_output=True, text=True)
+    out = {}
+    for line in p.stdout.splitlines():
+        parts = line.split()
+        if parts[:2] == ["probe", "subsumed"]:
+            out[(parts[2], parts[3])] = parts[4]
+    return out
+
+
+def ask_mode(first, last, update):
+    files = generate((first, last), False, False, True)
+    try:
+        hermit = run_hermit(files)
+    except RuntimeError as e:
+        print(f"  cannot run: {e}")
+        return 3
+    queries, wrong = 0, 0
+    counts = {p: {"yes": 0, "no": 0, "unknown": 0} for p in ASK_PROFILES}
+    for f in files:
+        stem = os.path.basename(f)[:-4]
+        if stem not in hermit:
+            print(f"  FAIL {stem}: HermiT gave no report")
+            wrong += 1
+            continue
+        h = entdiff.parse(hermit[stem])
+        qs = ask_queries(stem, h, f)
+        if not qs:
+            print(f"  FAIL {stem}: no query could be drawn")
+            wrong += 1
+            continue
+        queries += len(qs)
+        for profile in ASK_PROFILES:
+            got = ask_one(f, qs, profile)
+            for a, b in qs:
+                ans = got.get((a, b))
+                if ans is None:
+                    print(f"  FAIL {stem} --profile {profile}: no answer to {a} ⊑ {b}")
+                    wrong += 1
+                    continue
+                counts[profile][ans] += 1
+                ent = hermit_entails(h, a, b)
+                if (ans == "yes" and not ent) or (ans == "no" and ent):
+                    print(f"  FAIL {stem} --profile {profile}: {a} ⊑ {b} answered {ans}, "
+                          f"HermiT {'entails it' if ent else 'does not'}")
+                    wrong += 1
+    line = (f"ask seeds {first}:{last} ontologies {last - first + 1} queries {queries} wrong {wrong} "
+            + " ".join(f"{p} yes {counts[p]['yes']} no {counts[p]['no']} unknown {counts[p]['unknown']}"
+                       for p in ASK_PROFILES))
+    print(f"  {line}")
+    recorded = []
+    if os.path.exists(RECORD):
+        recorded = [l.strip() for l in open(RECORD, encoding="utf-8") if not l.startswith("#") and l.strip()]
+    mine = [l for l in recorded if l.startswith("ask ")]
+    if update:
+        others = [l for l in recorded if not l.startswith("ask ")]
+        with open(RECORD, "w", encoding="utf-8") as fh:
+            fh.write("# corpus/abox_fuzz.py outcome (make abox-fuzz). Regenerate with --update.\n")
+            for l in others + [line]:
+                fh.write(l + "\n")
+    elif not mine:
+        print("  NOT RECORDED: corpus/abox-fuzz.txt has no `ask seeds` line (record it with --update)")
+        return 1
+    elif mine[0] != line and f"ask seeds {first}:{last} " in mine[0]:
+        print(f"  DRIFT from corpus/abox-fuzz.txt: recorded `{mine[0]}`")
+        return 1
+    return 0 if wrong == 0 else 1
+
+
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("--seeds", default=f"{DEFAULT_SEEDS[0]}:{DEFAULT_SEEDS[1]}")
@@ -356,12 +466,15 @@ def main(argv):
     mode_arg.add_argument("--negation", action="store_true")
     mode_arg.add_argument("--elpp", action="store_true")
     mode_arg.add_argument("--sriq", action="store_true")
+    mode_arg.add_argument("--ask", action="store_true")
     args = ap.parse_args(argv[1:])
     first, last = (int(x) for x in args.seeds.split(":"))
     for tool in (HOWL, ORACLE):
         if not os.path.exists(tool):
             print(f"  cannot run: {tool} is missing (make cli oracle)")
             return 3
+    if args.ask:
+        return ask_mode(first, last, args.update)
     files = generate((first, last), args.negation, args.elpp, args.sriq)
     howl = run_howl(files, "el++" if args.elpp else "sriq" if args.sriq else "el")
     try:
@@ -407,7 +520,7 @@ def main(argv):
             + (f" budget {counts['budget']}" if args.sriq else ""))
     print(f"  {line}")
     # One line per mode; each run checks, or rewrites, only its own.
-    modes = ("", "negation ", "el++ ", "sriq ")
+    modes = ("", "negation ", "el++ ", "sriq ", "ask ")
 
     def mode_of(l):
         return next((m for m in modes[1:] if l.startswith(m)), "")
