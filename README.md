@@ -204,6 +204,12 @@ howl_input_free(in);
 - **Cancellation.** Point `options.cancel` at a `uint32_t`. Setting it non-zero stops the run at the
   next round boundary. HOWL never reads a clock, so timeouts are yours.
 - **Threads.** Distinct inputs and runs may be used from different threads at once.
+- **Where an omission came from.** `howl_run_omission_kind` gives an omission's head token
+  (`SubClassOf`, `MissingDeclaration`, ...). `howl_run_omission_document` gives the index of the
+  document that introduced it, counting `add` calls from 0, or -1 when no single document did. A
+  host that loads a background ontology before its own document can tell the two apart in one run.
+  The probe run's omissions also say whether that document is an input or a probe document
+  (`howl_run_probe_omission_source`).
 
 The library always runs as the CLI does without `--strict`: an omission is reported, never refused.
 

@@ -74,7 +74,7 @@
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
                 Signature make-signature copy-axioms copy-signature RawDisjointUnion))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
-  (import decode (Stage0 Stage1 stage0-header stage0-encoded decode-axioms))
+  (import decode (Stage0 Stage1 stage0-header stage0-encoded decode-axioms decode-axioms-sourced))
   (import termstore (Encoded encode-triples))
   (import saturate (make-initial-saturation deliver-seed))
   (import canon (string-cmp))
@@ -107,7 +107,14 @@
   (type Decoded (record
     (axioms    (List RawAxiom))
     (signature Signature)
-    (omissions (List Omission))))    ; stage 0's: unresolved imports
+    (omissions (List Omission))      ; stage 0's unresolved imports, then stage 1's undeclared properties
+    ;; WHICH DOCUMENT EACH CAME FROM (issue #67). With one document both
+    ;; lists are empty and every answer is 0. With more, axiom-docs[i] is
+    ;; axioms[i]'s document and omission-docs[i] omissions[i]'s, -1 when no
+    ;; one document is it.
+    (documents     Int)
+    (axiom-docs    (List Int))
+    (omission-docs (List Int))))
 
   (type NormResult (record
     (axioms     (List NormAxiom))
@@ -859,19 +866,26 @@
     (match (stage0-encoded arena doc imports-resolved)
       ((error f) (error f))
       ((ok s0)
-        (match (decode-axioms arena (. s0 dict) (. s0 triples))
+        (match (decode-axioms-sourced arena (. s0 dict) (. s0 triples) (. s0 docs))
           ((error f) (error f))
           ((ok s1)
             ;; Stage 0's unresolved imports, then stage 1's undeclared
-            ;; properties; the gate sorts coverage again as one list.
-            (let ((mut oms (list-new arena Omission)))
+            ;; properties; the gate sorts coverage again as one list. Their
+            ;; documents follow the same concatenation.
+            (let ((mut oms  (list-new arena Omission))
+                  (mut odocs (list-new arena Int)))
               (do
                 (for-each (o (. s0 omissions)) (list-push oms o))
                 (for-each (o (. s1 omitted)) (list-push oms o))
+                (for-each (k (. s0 omission-docs)) (list-push odocs k))
+                (for-each (k (. s1 omission-docs)) (list-push odocs k))
                 (ok (record-new Decoded
-                      (axioms    (. s1 axioms))
-                      (signature (. s1 signature))
-                      (omissions oms))))))))))
+                      (axioms        (. s1 axioms))
+                      (signature     (. s1 signature))
+                      (omissions     oms)
+                      (documents     (cast Int (list-len (. doc starts))))
+                      (axiom-docs    (. s1 axiom-docs))
+                      (omission-docs odocs))))))))))
 
   (fn copy-decoded ((arena Arena) (d Decoded))
     (@intent "The decoded document, every string and operand owned in arena")
@@ -886,9 +900,19 @@
     (@post {(list-len (. $result axioms)) == (list-len (. d axioms))})
     (let ((axioms (copy-axioms arena (. d axioms))))
       (record-new Decoded
-        (axioms    axioms)
-        (signature (copy-signature arena (. d signature)))
-        (omissions (copy-omissions arena (. d omissions))))))
+        (axioms        axioms)
+        (signature     (copy-signature arena (. d signature)))
+        (omissions     (copy-omissions arena (. d omissions)))
+        (documents     (. d documents))
+        (axiom-docs    (copy-ints arena (. d axiom-docs)))
+        (omission-docs (copy-ints arena (. d omission-docs))))))
+
+  (fn copy-ints ((arena Arena) (xs (List Int)))
+    (@intent "xs, copied into arena")
+    (@spec ((Arena (List Int)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)))
+      (do (for-each (x xs) (list-push out x)) out)))
 
   (fn normalize-decoded ((arena Arena) (scratch Arena) (d Decoded))
     (@intent "The front end's second half: gate, normalize, rename, initialize")
@@ -930,7 +954,8 @@
           (record-new NormResult
             (axioms     (. rno axioms))
             (saturation sat)
-            (coverage   (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))))
+            (coverage   (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))
+                                             (origins (list-new arena Int))))
             (names      names))))))
 
   (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))

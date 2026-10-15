@@ -21,6 +21,12 @@ typedef struct { void* fn; void* env; } slop_closure_t;
 
 /* Type definitions */
 typedef enum {
+    howl_DocumentSource_document_none,
+    howl_DocumentSource_document_input,
+    howl_DocumentSource_document_probe
+} howl_DocumentSource;
+
+typedef enum {
     howl_FaultKind_fault_none,
     howl_FaultKind_fault_cancelled,
     howl_FaultKind_fault_input_error,
@@ -56,6 +62,15 @@ typedef enum {
     howl_probe_QueryKind_query_unsatisfiable,
     howl_probe_QueryKind_query_subsumed
 } howl_probe_QueryKind;
+
+typedef enum {
+    howl_types_EntityKind_entity_class,
+    howl_types_EntityKind_entity_object_property,
+    howl_types_EntityKind_entity_data_property,
+    howl_types_EntityKind_entity_annotation_property,
+    howl_types_EntityKind_entity_individual,
+    howl_types_EntityKind_entity_datatype
+} howl_types_EntityKind;
 
 typedef enum {
     howl_types_Profile_profile_el,
@@ -130,13 +145,20 @@ void howl_run_free(howl_Run r);
 uint8_t howl_run_inconsistent(howl_Run r);
 uint8_t howl_run_ok(howl_Run r);
 slop_string howl_run_omission(howl_Run r, int64_t i);
+int64_t howl_run_omission_document(howl_Run r, int64_t i);
+howl_types_EntityKind howl_run_omission_entity_kind(howl_Run r, int64_t i);
+slop_string howl_run_omission_kind(howl_Run r, int64_t i);
 int64_t howl_run_omission_len(howl_Run r);
 howl_probe_ProbeAnswer howl_run_probe_answer(howl_Run r, int64_t i);
 uint8_t howl_run_probe_inconsistent(howl_Run r);
 howl_probe_QueryKind howl_run_probe_kind(howl_Run r, int64_t i);
 int64_t howl_run_probe_len(howl_Run r);
 slop_string howl_run_probe_omission(howl_Run r, int64_t i);
+int64_t howl_run_probe_omission_document(howl_Run r, int64_t i);
+howl_types_EntityKind howl_run_probe_omission_entity_kind(howl_Run r, int64_t i);
+slop_string howl_run_probe_omission_kind(howl_Run r, int64_t i);
 int64_t howl_run_probe_omission_len(howl_Run r);
+howl_DocumentSource howl_run_probe_omission_source(howl_Run r, int64_t i);
 slop_string howl_run_probe_sub(howl_Run r, int64_t i);
 slop_string howl_run_probe_sup(howl_Run r, int64_t i);
 howl_types_Profile howl_run_profile(howl_Run r);

@@ -23,6 +23,7 @@
 #include "slop_classify.h"
 #include "slop_gate.h"
 #include "slop_canon.h"
+#include "slop_strlib.h"
 #include "slop_sriqclauses.h"
 #include "slop_sriqref.h"
 #include "slop_sriqabox.h"
@@ -44,6 +45,12 @@ typedef struct howl_Options howl_Options;
 typedef struct howl_TermIn howl_TermIn;
 typedef struct howl_TurtleResult howl_TurtleResult;
 typedef struct howl_RunState howl_RunState;
+
+typedef enum {
+    howl_DocumentSource_document_none,
+    howl_DocumentSource_document_input,
+    howl_DocumentSource_document_probe
+} howl_DocumentSource;
 
 typedef enum {
     howl_FaultKind_fault_none,
@@ -375,6 +382,7 @@ int64_t howl_out_of_profile_count(slop_list_howl_types_Omission oms);
 howl_AutoChoice howl_auto_profile(howl_normalize_Decoded d);
 int64_t howl_rung_count(slop_arena* scratch, howl_normalize_Decoded d, howl_types_Profile p);
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_in_profile(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
+slop_result_howl_Prepared_howl_types_Fault howl_prepare_sourced(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
 uint8_t howl_strict_refuses(howl_types_ReasonerConfig config, howl_types_Coverage cov);
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_el(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_ksc(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
@@ -407,6 +415,7 @@ slop_list_slop_rdf_rdf_IRI howl_query_seed(slop_arena* arena, slop_list_howl_pro
 slop_result_howl_probe_Probing_howl_types_Fault howl_probe_outcome(slop_arena* arena, slop_result_howl_types_Outcome_howl_types_Fault r, slop_list_howl_probe_Query queries);
 howl_probe_Probing howl_probing_of(slop_arena* arena, howl_types_Outcome o, slop_list_howl_probe_Query queries);
 howl_probe_Probing howl_no_probing(slop_arena* arena);
+slop_list_int howl_copy_origins(slop_arena* arena, slop_list_int xs);
 howl_InputState* howl_input_state(howl_Input in);
 howl_RunState howl_run_state(howl_Run r);
 howl_Input howl_input_new(void);
@@ -457,6 +466,12 @@ slop_string howl_run_sub(howl_Run r, int64_t i);
 slop_string howl_run_super(howl_Run r, int64_t i);
 int64_t howl_run_omission_len(howl_Run r);
 slop_string howl_run_omission(howl_Run r, int64_t i);
+slop_string howl_omission_kind(slop_arena* arena, howl_types_Omission om);
+howl_types_EntityKind howl_omission_entity_kind(howl_types_Omission om);
+int64_t howl_origin_at(slop_list_int origins, int64_t i);
+slop_string howl_run_omission_kind(howl_Run r, int64_t i);
+howl_types_EntityKind howl_run_omission_entity_kind(howl_Run r, int64_t i);
+int64_t howl_run_omission_document(howl_Run r, int64_t i);
 int64_t howl_run_probe_len(howl_Run r);
 slop_option_howl_probe_Answered howl_probe_at(howl_Run r, int64_t i);
 howl_probe_QueryKind howl_run_probe_kind(howl_Run r, int64_t i);
@@ -466,6 +481,11 @@ howl_probe_ProbeAnswer howl_run_probe_answer(howl_Run r, int64_t i);
 uint8_t howl_run_probe_inconsistent(howl_Run r);
 int64_t howl_run_probe_omission_len(howl_Run r);
 slop_string howl_run_probe_omission(howl_Run r, int64_t i);
+slop_string howl_run_probe_omission_kind(howl_Run r, int64_t i);
+howl_types_EntityKind howl_run_probe_omission_entity_kind(howl_Run r, int64_t i);
+int64_t howl_probe_origin(howl_probe_Probing p, int64_t i);
+howl_DocumentSource howl_run_probe_omission_source(howl_Run r, int64_t i);
+int64_t howl_run_probe_omission_document(howl_Run r, int64_t i);
 int64_t howl_run_report_len(howl_Run r);
 slop_string howl_run_report_line(howl_Run r, int64_t i);
 

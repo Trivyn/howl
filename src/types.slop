@@ -508,8 +508,11 @@
   ;;   source : the document the axiom was read from, so imports stay
   ;;            distinguishable. OPTIONAL, because the frozen port
   ;;            flattens every document into one unlabelled buffer and
-  ;;            the information is simply not there (§8.5 A1). The CLI
-  ;;            populates it; the port degrades to text-only identity.
+  ;;            the information is simply not there (§8.5 A1). Nothing
+  ;;            populates it yet, so identity is text alone. An omission's
+  ;;            document reaches the API through Coverage.origins instead,
+  ;;            which leaves this identity, and so the canonical order,
+  ;;            dedup and hash, untouched.
   ;;   text   : canonical OWL functional syntax, canonicalization
   ;;            already applied and annotations stripped. Blank nodes
   ;;            are rendered by canonical position, never by
@@ -559,8 +562,15 @@
 
   ;; EMPTY means full coverage; anything here means the run saw less
   ;; than the intended theory, whatever the reason.
+  ;;
+  ;; `origins` says which input document each omission came from (issue
+  ;; #67): empty, or origins[i] is omitted[i]'s document, by index in the
+  ;; order the documents were begun, and -1 when no one document is it. It
+  ;; is provenance beside the coverage, never part of it: omissions are
+  ;; compared, ordered, deduplicated, rendered and hashed without it.
   (type Coverage (record
-    (omitted (List Omission))))
+    (omitted (List Omission))
+    (origins (List Int))))
 
   ;; NOTE cancellation is NOT here. A cancelled run stops at a
   ;; scheduler-dependent point, so its partial state is not

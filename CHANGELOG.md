@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+Each omission now says where it came from: its kind and the document that introduced it (issue #67).
+A host that loads a background ontology (BFO and CCO, say) before its own document can tell its own
+coverage gaps from the background's in one run, instead of classifying the background alone and
+diffing omission strings. The C API and the Rust crate only gain: nothing existing changes shape,
+the report lines are byte-identical, and the slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are
+unchanged.
+
+### Added
+
+- **Omission provenance** (SPEC §8.4, issue #67). Every omission of a classify run, of its probe run
+  and of an answer run has three things:
+  - its **kind**, the head token of its rendering (`MissingDeclaration`, `UndeclaredProperty`,
+    `UnresolvedImport`, `SubClassOf`, `DataAxiom`, `HasKey`, `Unrecognized`, ...);
+  - a `MissingDeclaration`'s **entity kind**;
+  - its **document**, the index of the document that introduced it in `add` order (from 0), or none
+    when no single document did, for example a `MissingDeclaration` cited from two documents. The
+    probe run's omissions are placed among the input's documents or the probe documents.
+  - An axiom stated in two documents is omitted once per copy under `el` and `el++`, and each copy
+    names its own document. `sriq` keeps one copy, which names the first document.
+  - The document is provenance beside the coverage, never part of an omission's identity. Omissions
+    are compared, ordered, deduplicated and hashed exactly as before.
+  - **C API:** `howl_run_omission_kind`, `howl_run_omission_entity_kind`,
+    `howl_run_omission_document`; `howl_run_probe_omission_kind`, `_entity_kind`, `_document`,
+    `_source`; the enums `types_EntityKind` and `DocumentSource`. Each is total: out of range it
+    gives `""`, `entity_class` or -1.
+  - **Rust:** `Report::omission_details`, `Report::probe_omission_details`,
+    `Answers::omission_details`, each `&[Omission]` in the order of the matching `omissions` list;
+    the struct `Omission { kind, entity_kind, document, text }` and the `#[non_exhaustive]` enums
+    `EntityKind` and `Document { Input(usize), Probe(usize) }`. All additive.
+
 ## 0.5.0 — 2026-10-14
 
 Probe queries can be answered without classifying the whole ontology first: `howl ask`,

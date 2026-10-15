@@ -16,10 +16,12 @@ howl_termstore_TermStore howl_termstore_build_store(slop_arena* arena, slop_list
 howl_termstore_TermStore howl_termstore_empty_store(slop_arena* arena);
 howl_termstore_TermStore howl_termstore_store_over(slop_arena* arena, howl_termstore_TermStore dict);
 howl_termstore_Encoded* howl_termstore_new_encoded(slop_arena* arena);
+slop_list_int howl_termstore_first_start(slop_arena* arena);
 int64_t howl_termstore_max_blank_in(slop_rdf_rdf_Term t);
 slop_rdf_rdf_Term howl_termstore_shift_blanks(slop_arena* arena, slop_rdf_rdf_Term t, int64_t offset);
 void howl_termstore_encoded_add(slop_arena* arena, howl_termstore_Encoded* p, slop_rdf_rdf_Triple t);
 void howl_termstore_encoded_next_document(slop_arena* arena, howl_termstore_Encoded* p);
+int64_t howl_termstore_doc_at(slop_list_int starts, int64_t i, int64_t cur);
 howl_termstore_Encoded howl_termstore_encode_triples(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples);
 slop_list_slop_rdf_rdf_Term howl_termstore_store_objects(slop_arena* arena, howl_termstore_TermStore st, slop_rdf_rdf_Term s, slop_rdf_rdf_Term p);
 int64_t howl_termstore_store_object_count(howl_termstore_TermStore st, slop_rdf_rdf_Term s, slop_rdf_rdf_Term p);
@@ -292,8 +294,16 @@ howl_termstore_TermStore howl_termstore_store_over(slop_arena* arena, howl_terms
 howl_termstore_Encoded* howl_termstore_new_encoded(slop_arena* arena) {
     {
         __auto_type p = ((howl_termstore_Encoded*)(({ __auto_type _alloc = (howl_termstore_Encoded*)slop_arena_alloc(arena, sizeof(howl_termstore_Encoded)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
-        (*p) = ((howl_termstore_Encoded){.dict = howl_termstore_empty_store(arena), .triples = ((slop_list_howl_termstore_IdTriple){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .offset = 0, .max_blank = 0});
+        (*p) = ((howl_termstore_Encoded){.dict = howl_termstore_empty_store(arena), .triples = ((slop_list_howl_termstore_IdTriple){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .offset = 0, .max_blank = 0, .starts = howl_termstore_first_start(arena)});
         return p;
+    }
+}
+
+slop_list_int howl_termstore_first_start(slop_arena* arena) {
+    {
+        __auto_type s = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        (void)(({ __auto_type _lst_p = &(s); __auto_type _item = (0); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+        return s;
     }
 }
 
@@ -333,7 +343,7 @@ slop_rdf_rdf_Term howl_termstore_shift_blanks(slop_arena* arena, slop_rdf_rdf_Te
         case slop_rdf_rdf_Term_term_blank:
         {
             __auto_type b = _mv_704.data.term_blank;
-            return rdf_make_blank(arena, SLOP_RANGE(slop_rdf_rdf_BlankNodeId, (b.id + offset), 1, 0, 0, 0, "BlankNodeId (Int 0 ..) at termstore.slop:405:43"));
+            return rdf_make_blank(arena, SLOP_RANGE(slop_rdf_rdf_BlankNodeId, (b.id + offset), 1, 0, 0, 0, "BlankNodeId (Int 0 ..) at termstore.slop:415:43"));
         }
         case slop_rdf_rdf_Term_term_iri:
         {
@@ -375,7 +385,19 @@ void howl_termstore_encoded_next_document(slop_arena* arena, howl_termstore_Enco
     {
         __auto_type e = (*p);
         e.offset = (e.max_blank + 1);
+        (void)(({ __auto_type _lst_p = &(e.starts); __auto_type _item = (((int64_t)(((int64_t)((e.triples).len))))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
         (*p) = e;
+    }
+}
+
+int64_t howl_termstore_doc_at(slop_list_int starts, int64_t i, int64_t cur) {
+    {
+        int64_t k = cur;
+        __auto_type n = ((int64_t)(((int64_t)((starts).len))));
+        while (((k + 1) < n) && ({ __auto_type _mv = ({ __auto_type _lst = starts; size_t _idx = (size_t)(k + 1); slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type s = _mv.value; (s <= i); }) : (0); })) {
+            k = (k + 1);
+        }
+        return k;
     }
 }
 

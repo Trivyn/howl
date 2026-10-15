@@ -44,7 +44,7 @@
                 concept-cmp sort-concepts concept-at
                 render-axiom render-role
                 signature-has-class signature-has-object-property))
-  (import canon (role-cmp sort-omissions sort-range iri-cmp sort-axiom-refs string-cmp str-at))
+  (import canon (role-cmp sort-omissions sort-range iri-cmp sort-axiom-refs string-cmp str-at omission-cmp))
   (import sriqrbox (SriqRbox sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple))
   (import owl2 (render-axiom))
 
@@ -53,7 +53,7 @@
     axiom-input-ref
     expand-sugar expand-negation drop-top-role-tautologies
     non-simple-roles self-roles-simple
-    gate-axioms
+    gate-axioms gate-expand omission-origins
     collect-rbox-roles role-idx
     told-closure check-regularity
     RangeEntry collect-ranges chain-range-ok
@@ -68,10 +68,9 @@
     (@intent "The canonical identity of an axiom, for an omission")
     (@spec ((Arena RawAxiom) -> InputRef))
     (@alloc arena)
-    ;; `source` is none here: the decoder receives one flat triple list
-    ;; and never sees document boundaries (§8.5 A1). The CLI populates
-    ;; it when it knows which file an axiom came from; through the
-    ;; frozen port the identity degrades to canonical text alone.
+    ;; `source` is none here, and so the identity is canonical text alone
+    ;; (§8.5 A1). Which document an omission came from is not part of its
+    ;; identity: `omission-origins` reports it beside the coverage.
     (let ((no-source (Option IRI) (none)))
       (union-new InputRef owl-axiom
         (record-new AxiomRef
@@ -617,8 +616,7 @@
     ;;
     ;; Under el++, inclusions into owl:topObjectProperty are tautologies
     ;; and are dropped first (§5.4 K0), so no RBox condition sees them.
-    (let ((expanded (drop-top-role-tautologies arena p
-                      (expand-negation arena p (expand-sugar arena axs))))
+    (let ((expanded (gate-expand arena axs p))
           (mut accepted (list-new arena RawAxiom))
           (mut omitted  (list-new arena Omission)))
       (do
@@ -704,6 +702,156 @@
           (accepted  (sort-axioms arena accepted))
           (omissions (sort-omissions arena omitted))
           (signature sig)))))
+
+  (fn gate-expand ((arena Arena) (axs (List RawAxiom)) (p Profile))
+    (@intent "The axioms the gate judges: sugar expanded, negation rewritten, el++'s tautologies dropped")
+    (@spec ((Arena (List RawAxiom) Profile) -> (List RawAxiom)))
+    (@alloc arena)
+    ;; Each step rewrites axiom by axiom, so expanding one axiom at a time
+    ;; and concatenating gives this list (`omission-origins` relies on it).
+    (drop-top-role-tautologies arena p (expand-negation arena p (expand-sugar arena axs))))
+
+  ;; ============================================================
+  ;; Which document each omission came from (issue #67)
+  ;;
+  ;; PROVENANCE BESIDE THE COVERAGE, NOT IN IT. An omission's identity is
+  ;; its canonical text (AxiomRef), and that identity is what is ordered,
+  ;; deduplicated and hashed (§6.8). Carrying a document inside it would
+  ;; split two documents' copies of one axiom into two omissions under
+  ;; sriq's dedup, and reorder ties. So the omissions are computed as ever,
+  ;; and their documents are found AFTERWARDS, from the decoded axioms'
+  ;; documents: an out-of-profile omission's text is `render-axiom` of an
+  ;; axiom the gate judged, and the gate judged `gate-expand` of the
+  ;; decoded axioms, one axiom at a time.
+  ;; ============================================================
+
+  (fn omission-origins ((arena Arena) (scratch Arena) (oms (List Omission))
+                        (axs (List RawAxiom)) (adocs (List Int))
+                        (carried (List Omission)) (cdocs (List Int))
+                        (documents Int) (p Profile))
+    (@intent "Each omission's document, parallel to oms: by index in the order begun, -1 when no one document is it")
+    (@spec ((Arena Arena (List Omission) (List RawAxiom) (List Int) (List Omission) (List Int) Int Profile) -> (List Int)))
+    (@alloc arena)
+    ;; axs and adocs are what the gate was given and each one's document;
+    ;; carried and cdocs the decode-level omissions and theirs. With one
+    ;; document every answer is 0, and nothing is rendered. The working
+    ;; tables are built in scratch; only the answers are in arena.
+    ;;
+    ;; - out-of-profile: the k-th of the equal omissions takes the k-th
+    ;;   lowest document its text was decoded from. el and el++ keep an
+    ;;   axiom stated in two documents twice, and each copy gets its own;
+    ;;   sriq keeps it once, and it gets the lowest.
+    ;; - missing-declaration: the one document every referring axiom is
+    ;;   from (each taking its lowest), else -1.
+    ;; - unresolved-import, undeclared-property: decode's answer, carried.
+    ;; - -1 for an omission no decoded axiom renders to (one sriq's
+    ;;   normaliser rewrote), rather than a guess.
+    (let ((mut out (list-new arena Int)))
+      (do
+        (if (<= documents 1)
+          (for-each (o oms) (list-push out 0))
+          (let ((needed (needed-texts scratch oms))
+                (by-text (texts-to-docs scratch needed axs adocs p))
+                (seen    (map-new scratch String Int)))
+            (for-each (o oms)
+              (list-push out
+                (match o
+                  ((out-of-profile r)
+                    (match r
+                      ((owl-axiom a)
+                        (let ((k (match (map-get seen (. a text)) ((some n) n) ((none) 0))))
+                          (do
+                            (map-put seen (. a text) (+ k 1))
+                            (nth-doc by-text (. a text) k))))
+                      ((rdf-fragment _) -1)
+                      ((synthetic _)    -1)))
+                  ((missing-declaration md)
+                    (let ((mut found -2))
+                      (do
+                        (for-each (ar (. md referring))
+                          (let ((d (nth-doc by-text (. ar text) 0)))
+                            (set! found (if (or (== found -2) (== found d)) d -1))))
+                        (if (== found -2) -1 found))))
+                  ((unresolved-import _)   (carried-doc o carried cdocs))
+                  ((undeclared-property _) (carried-doc o carried cdocs)))))))
+        out)))
+
+  (fn needed-texts ((arena Arena) (oms (List Omission)))
+    (@intent "The axiom texts the omissions name: out-of-profile axioms and referring axioms")
+    (@spec ((Arena (List Omission)) -> (Set String)))
+    (@alloc arena)
+    (let ((s (set-new arena String)))
+      (do
+        (for-each (o oms)
+          (match o
+            ((out-of-profile r)
+              (match r
+                ((owl-axiom a)    (set-put s (. a text)))
+                ((rdf-fragment _) (do))
+                ((synthetic _)    (do))))
+            ((missing-declaration md)
+              (for-each (ar (. md referring)) (set-put s (. ar text))))
+            ((unresolved-import _)   (do))
+            ((undeclared-property _) (do))))
+        s)))
+
+  (fn texts-to-docs ((arena Arena) (needed (Set String)) (axs (List RawAxiom)) (adocs (List Int)) (p Profile))
+    (@intent "For each needed text, the documents of the decoded axioms that expand to it, ascending, one per copy")
+    (@spec ((Arena (Set String) (List RawAxiom) (List Int) Profile) -> (Map String (List Int))))
+    (@alloc arena)
+    ;; Nothing is rendered when no omission names an axiom: an input with
+    ;; no omission, or only decode-level ones, pays nothing.
+    (let ((m (map-new arena String (List Int)))
+          (mut k 0))
+      (do
+        (when (> (set-len needed) 0)
+          (for-each (ax axs)
+            (let ((d (match (list-get adocs k) ((some x) x) ((none) -1)))
+                  (mut one (list-new arena RawAxiom)))
+              (do
+                (list-push one ax)
+                (for-each (e (gate-expand arena one p))
+                  (let ((t (render-axiom arena e)))
+                    (when (set-has needed t)
+                      (map-put m t (insert-ascending arena (match (map-get m t)
+                                                             ((some l) l)
+                                                             ((none)   (list-new arena Int)))
+                                                     d)))))
+                (set! k (+ k 1))))))
+        m)))
+
+  (fn insert-ascending ((arena Arena) (xs (List Int)) (x Int))
+    (@intent "xs (ascending) with x added in place")
+    (@spec ((Arena (List Int) Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int))
+          (mut put false))
+      (do
+        (for-each (y xs)
+          (do
+            (when (and (not put) (< x y)) (do (list-push out x) (set! put true)))
+            (list-push out y)))
+        (when (not put) (list-push out x))
+        out)))
+
+  (fn nth-doc ((by-text (Map String (List Int))) (t String) (k Int))
+    (@intent "The k-th lowest document text t was decoded from, or -1")
+    (@spec (((Map String (List Int)) String Int) -> Int))
+    (match (map-get by-text t)
+      ((some l) (match (list-get l k) ((some d) d) ((none) -1)))
+      ((none)   -1)))
+
+  (fn carried-doc ((o Omission) (carried (List Omission)) (cdocs (List Int)))
+    (@intent "The document decode gave the carried omission equal to o, or -1")
+    (@spec ((Omission (List Omission) (List Int)) -> Int))
+    (let ((mut found -1) (mut i 0))
+      (do
+        (for-each (c carried)
+          (do
+            (when (== (omission-cmp c o) 0)
+              (match (list-get cdocs i) ((some d) (set! found d)) ((none) (do))))
+            (set! i (+ i 1))))
+        found)))
 
   (fn rbox-omits ((sriq Bool) (rbox-bad Bool) (ax RawAxiom))
     (@intent "Is ax an RBox axiom that a collective RBox failure omits?")

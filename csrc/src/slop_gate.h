@@ -28,6 +28,11 @@ typedef struct howl_gate_EntityRef howl_gate_EntityRef;
 SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
 #endif
 
+#ifndef SLOP_OPTION_LIST_INT_DEFINED
+#define SLOP_OPTION_LIST_INT_DEFINED
+SLOP_OPTION_DEFINE(slop_list_int, slop_option_list_int)
+#endif
+
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
@@ -201,6 +206,13 @@ slop_list_howl_owl2_RawAxiom howl_gate_admitted(slop_arena* arena, howl_types_Pr
 uint8_t howl_gate_is_rbox_axiom(howl_owl2_RawAxiom ax);
 uint8_t howl_gate_axiom_range_ok(slop_list_howl_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_howl_types_RoleId roles, howl_owl2_RawAxiom ax);
 howl_gate_GateResult howl_gate_gate_axioms(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_owl2_Signature sig, slop_list_howl_types_Omission carried, howl_types_Profile p);
+slop_list_howl_owl2_RawAxiom howl_gate_gate_expand(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_types_Profile p);
+slop_list_int howl_gate_omission_origins(slop_arena* arena, slop_arena* scratch, slop_list_howl_types_Omission oms, slop_list_howl_owl2_RawAxiom axs, slop_list_int adocs, slop_list_howl_types_Omission carried, slop_list_int cdocs, int64_t documents, howl_types_Profile p);
+slop_map* howl_gate_needed_texts(slop_arena* arena, slop_list_howl_types_Omission oms);
+slop_map* howl_gate_texts_to_docs(slop_arena* arena, slop_map* needed, slop_list_howl_owl2_RawAxiom axs, slop_list_int adocs, howl_types_Profile p);
+slop_list_int howl_gate_insert_ascending(slop_arena* arena, slop_list_int xs, int64_t x);
+int64_t howl_gate_nth_doc(slop_map* by_text, slop_string t, int64_t k);
+int64_t howl_gate_carried_doc(howl_types_Omission o, slop_list_howl_types_Omission carried, slop_list_int cdocs);
 uint8_t howl_gate_rbox_omits(uint8_t sriq, uint8_t rbox_bad, howl_owl2_RawAxiom ax);
 slop_list_howl_owl2_RawAxiom howl_gate_sort_axioms(slop_arena* arena, slop_list_howl_owl2_RawAxiom xs);
 slop_list_string howl_gate_axiom_texts(slop_arena* arena, slop_list_howl_owl2_RawAxiom xs);
@@ -275,6 +287,11 @@ SLOP_OPTION_DEFINE(howl_gate_RangeEntry, slop_option_howl_gate_RangeEntry)
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
+#ifndef SLOP_OPTION_LIST_INT_DEFINED
+#define SLOP_OPTION_LIST_INT_DEFINED
+SLOP_OPTION_DEFINE(slop_list_int, slop_option_list_int)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_GATE_RBOXVERDICT_DEFINED

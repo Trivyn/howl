@@ -62,10 +62,18 @@ input. The `Report` holds:
 - `subsumptions` as `(sub, super)` pairs.
 - `omissions`: what the run did not cover. They are never dropped, and any omission makes an
   otherwise clean run `Inconclusive`.
+- `omission_details()`: the same omissions, in the same order, as `Omission` values. Each has a
+  `kind` (the head token, such as `SubClassOf` or `MissingDeclaration`), an `entity_kind` for a
+  `MissingDeclaration`, a `document`, and the `text`. `document` is `Document::Input(i)` when the
+  `i`-th `add_*` call introduced it (counting from 0), or `None` when no single document did. With a
+  background ontology added before your own document, this is how you tell your coverage gaps from
+  the background's without a second run.
 - `termination` and `rounds`.
 - `lines()`: the canonical report, the bytes `howl validate --report` prints, then the probe lines
   when a query was asked.
 - `probes`, `probe_inconsistent` and `probe_omissions`: the answers to probe queries (below).
+  `probe_omission_details()` places each probe-run omission in an input document
+  (`Document::Input(i)`) or a probe document (`Document::Probe(i)`, counting `add_probe_*` calls).
 
 Every list is in the engine's canonical order. The report is identical at every worker count, so it
 can be hashed.
@@ -133,8 +141,9 @@ for p in &answers.probes {
 }
 ```
 
-- `answers.probes`, `answers.inconsistent` and `answers.omissions` mean what `report.probes`,
-  `report.probe_inconsistent` and `report.probe_omissions` do.
+- `answers.probes`, `answers.inconsistent`, `answers.omissions` and `answers.omission_details()`
+  mean what `report.probes`, `report.probe_inconsistent`, `report.probe_omissions` and
+  `report.probe_omission_details()` do.
 - `answers.profile` is the profile the probe run ran. Under `ProfileSelection::Auto` the probe
   documents can move it. It is `None` when nothing was asked, so nothing ran.
 - `answers.lines()` are what `howl ask` prints: `profile P`, then the probe lines.
@@ -158,7 +167,8 @@ The crate binds HOWL's public C API. That API is written in SLOP (the `:c-name` 
 `src/howl.slop`), and slop generates its header, `include/howl.h`. The engine's result never crosses
 the FFI as a struct: it stays behind an opaque run handle, and the crate copies it out through the
 API's accessors, then frees it. Rust mirrors only the API's small value types (options, an input
-term, a Turtle result, a termination, `slop_string`) and its enum values. Tests assert each
+term, a Turtle result, a termination, `slop_string`) and its enum values, among them an
+omission's entity kind and document source. Tests assert each
 mirror's sizes, offsets and field widths, and every enum value, against the generated header
 (`layout_probes.c`). The build fails if HOWL's C and the `-sys` crates' C were generated for
 different SLOP runtime ABIs: every generated header checks `SLOP_RUNTIME_ABI`.

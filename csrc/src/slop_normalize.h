@@ -150,6 +150,9 @@ struct howl_normalize_Decoded {
     slop_list_howl_owl2_RawAxiom axioms;
     howl_owl2_Signature signature;
     slop_list_howl_types_Omission omissions;
+    int64_t documents;
+    slop_list_int axiom_docs;
+    slop_list_int omission_docs;
 };
 typedef struct howl_normalize_Decoded howl_normalize_Decoded;
 
@@ -326,6 +329,7 @@ howl_normalize_NormOutput howl_normalize_rename_output(slop_arena* arena, howl_t
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_normalize_decode_document(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples, slop_list_slop_rdf_rdf_IRI imports_resolved);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_normalize_decode_encoded(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved);
 howl_normalize_Decoded howl_normalize_copy_decoded(slop_arena* arena, howl_normalize_Decoded d);
+slop_list_int howl_normalize_copy_ints(slop_arena* arena, slop_list_int xs);
 howl_normalize_NormResult howl_normalize_normalize_decoded(slop_arena* arena, slop_arena* scratch, howl_normalize_Decoded d);
 slop_result_howl_normalize_NormResult_howl_types_Fault howl_normalize_normalize_input(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config);
 
