@@ -245,8 +245,8 @@ median of 5 runs, and both sides timed from axioms in hand to finished taxonomy:
 
 | Ontology | HOWL `el` | HOWL `el++` | ELK | HOWL peak memory (`el`) |
 |---|---|---|---|---|
-| Gene Ontology (2026-07-26) | 0.38 s | 0.59 s | 0.46 s | 0.57 GB |
-| EL-GALEN | 0.82 s | 1.44 s | 0.28 s | 0.59 GB |
+| Gene Ontology (2026-07-26) | 0.42 s | 0.52 s | 0.51 s | 0.57 GB |
+| EL-GALEN | 0.87 s | 1.42 s | 0.29 s | 0.60 GB |
 
 Every timed run reproduced the certified result. Each ontology's in-profile part is checked against
 ELK or HermiT over every pair of named classes. The protocol, history and memory figures are in
