@@ -23,3 +23,4 @@ corpus/__pycache__/
 # The differential oracle build (oracle/, Gradle)
 oracle/build/
 oracle/.gradle/
+/.env
