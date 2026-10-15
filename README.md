@@ -110,7 +110,7 @@ howl --version
   |---|---|---|
   | `el` (default) | ELH⊥R+: EL with role hierarchies, ⊥, transitive roles and property chains, domains and ranges, ABox assertions, and `¬` in a superclass, domain or range | built |
   | `el++` | the OWL 2 EL object fragment: `el` plus nominals, `hasValue`, `hasSelf`, reflexive roles, individual equality and inequality, and negative assertions | built |
-  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | built; single-threaded, and bounded by a budget of 500,000 clauses (a run that passes it is inconclusive) |
+  | `sriq` | the SRIQ object fragment with an ABox: `el` plus inverses, `∀`, unions, full negation, qualified cardinalities and every OWL 2 DL property characteristic ([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) | built; bounded by a budget of 500,000 clauses (a run that passes it is inconclusive) |
   | `auto` | the cheapest built profile that covers the whole ontology (else the one omitting the fewest axioms). If that is `sriq` and it passes its clause budget with nothing definitive, `auto` steps down to `el` or `el++` and says so on stderr | built |
 
   The report names the profile that ran. `el` and `el++` run in polynomial time, and `sriq` in
@@ -124,6 +124,7 @@ howl --version
   on the machine or the run (no timings, paths or worker counts), so it is byte-identical across
   runs and worker counts, and safe to hash or diff.
 - **`--workers N`** (1–64, default 4) sets the number of worker threads. It never changes the result.
+  `sriq` runs on one thread whatever N is.
 - **`--max-iterations N`** (0–10000, default 1000) caps the reasoning rounds. A run that hits the cap
   is inconclusive, unless it has already found an incoherence (which stands, exit 1).
 - **`--timings`** prints phase durations and peak memory to stderr, never into the report.
@@ -260,12 +261,12 @@ ELK or HermiT over every pair of named classes. The protocol, history and memory
   HermiT) over every pair of named classes;
 - **generated ontologies:** compared with HermiT.
 
-Results are byte-identical across worker counts. `sriq`
-([SPEC §5.5](SPEC.md#55-the-sriq-calculus)) runs single-threaded. It classifies BFO-core and CCO
-whole: CCO takes 32 rounds, about 7 s and 0.9 GB, and agrees with HermiT. Each of its rules is a
-function whose contracts Z3 proves where it can, and whose tests pin the paper's own derivations
-([SPEC §7](SPEC.md#7-verification--contracts) records what is proved and what is owed). OBI is out
-of its reach: `--profile sriq` stops there at the clause budget, and `auto` steps down to `el++`.
+Results are byte-identical across worker counts. `sriq` ([SPEC §5.5](SPEC.md#55-the-sriq-calculus))
+classifies BFO-core and CCO whole: CCO takes 32 rounds, about 7 s and 0.9 GB, and agrees with
+HermiT. Each of its rules is a function whose contracts Z3 proves where it can, and whose tests pin
+the paper's own derivations ([SPEC §7](SPEC.md#7-verification--contracts) records what is proved and
+what is owed). OBI is out of its reach: `--profile sriq` stops there at the clause budget, and
+`auto` steps down to `el++`.
 
 `howl classify` (Turtle output of the inferred hierarchy with `--emit`, and `--reduce`) is planned;
 until then both flags are refused with exit 3.
