@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-10-14
+
+Probe queries can be answered without classifying the whole ontology first: `howl ask`,
+`howl_run_answer` and `Reasoner::answer` classify only the queried classes' module. On Core (BFO and
+CCO merged), 30 queries take about 1 s, where the two-run mode takes 14 s. HOWL is now generated
+with slop 0.5.1, which renames the enum and struct types in `howl.h`, so C callers must update those
+names (see Changed). The existing Rust API and the report grammar are unchanged.
 
 ### Added
 
