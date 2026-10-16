@@ -131,8 +131,9 @@ the verdict.
 
 When you need only the answers, `Reasoner::answer` runs the probe run alone, with no main
 classification before it, over only the queries' ⊥-locality module: one small classification
-instead of two of the whole input. (When the module's run falls short, the whole input is
-classified too.) It gives every `Yes` and `No` that `classify` puts in
+instead of two of the whole input. (When the module's run falls short in a way the whole
+input's might not, such as a round cap, the whole input is classified too. An omission no profile
+reads, such as a datatype restriction, does not count: the whole input omits it too.) It gives every `Yes` and `No` that `classify` puts in
 `report.probes`. Because an omission outside the module no longer counts, it may answer `Yes` or
 `No` where `classify` says `Unknown`:
 

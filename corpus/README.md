@@ -191,8 +191,8 @@ hold it to outside answers:
   It uses 25 single classes and 25 pairs per corpus entry, drawn with a fixed seed.
   - A module HOWL can read in full must contain the OWL API's.
   - A module holding an axiom HOWL cannot read (SWRL, keys, data axioms) may miss that axiom's
-    symbols. It is counted `fallback`, because its run is incomplete and the answer run then
-    classifies the whole input.
+    symbols. It is counted `fallback`, because its run is incomplete and so answers no `no`
+    (SPEC §8.4 L3, L5).
   - BFO-core, CCO, OBI, GO and EL-GALEN match the OWL API exactly. RO falls back on every seed,
     because of its SWRL rules.
 - **`make answers`** (`answers.py`, record `answer-differential.txt`) asks 30 queries of each whole

@@ -42,7 +42,7 @@
                 disposition axiom-in-profile is-el-plus-plus is-sriq
                 concept-in-profile concepts-in-profile role-in-profile
                 concept-cmp sort-concepts concept-at
-                render-axiom render-role
+                render-axiom render-role render-omission
                 signature-has-class signature-has-object-property))
   (import canon (role-cmp sort-omissions sort-range iri-cmp sort-axiom-refs string-cmp str-at omission-cmp))
   (import sriqrbox (SriqRbox sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple))
@@ -54,6 +54,7 @@
     expand-sugar expand-negation drop-top-role-tautologies
     non-simple-roles self-roles-simple
     gate-axioms gate-expand omission-origins
+    unread-by-every module-omissions-shared
     collect-rbox-roles role-idx
     told-closure check-regularity
     RangeEntry collect-ranges chain-range-ok
@@ -710,6 +711,91 @@
     ;; Each step rewrites axiom by axiom, so expanding one axiom at a time
     ;; and concatenating gives this list (`omission-origins` relies on it).
     (drop-top-role-tautologies arena p (expand-negation arena p (expand-sugar arena axs))))
+
+  ;; ============================================================
+  ;; Omissions a whole-input run would share (SPEC §8.4, 0.6.1)
+  ;;
+  ;; The answer run classifies M, the ⊥-locality module of O for the
+  ;; queries. A `yes` O's run gives and M's does not would need an axiom
+  ;; of M that O's run reads and M's omits: every axiom outside M is local
+  ;; for M's signature, so O_read ∩ M is a module of O_read, and its
+  ;; entailments over the queries are M_read's whenever O_read ∩ M ⊆
+  ;; M_read. That holds when every axiom M's run omits is one NO RUNG O's
+  ;; run could use would read: the rung asked for, or all three under
+  ;; auto, which chooses O's rung apart from M's. Each rung's own
+  ;; expansion is judged, since gate-expand depends on the rung.
+  ;; ============================================================
+
+  (fn piece-read ((p Profile) (ax RawAxiom))
+    (@intent "Does the gate read this expanded axiom under p, by its own form (no collective condition)?")
+    (@spec ((Profile RawAxiom) -> Bool))
+    (@pure)
+    (match (disposition p ax)
+      ('d-in-profile     (axiom-in-profile p ax))
+      ('d-consumed       false)
+      ('d-inert          false)
+      ('d-out-of-profile false)))
+
+  (fn piece-omitted ((p Profile) (ax RawAxiom))
+    (@intent "Does the gate omit this expanded axiom under p, by its own form?")
+    (@spec ((Profile RawAxiom) -> Bool))
+    (@pure)
+    (match (disposition p ax)
+      ('d-in-profile     (not (axiom-in-profile p ax)))
+      ('d-consumed       false)
+      ('d-inert          false)
+      ('d-out-of-profile true)))
+
+  (fn one-axiom ((arena Arena) (ax RawAxiom))
+    (@intent "A list of one axiom, for gate-expand")
+    (@spec ((Arena RawAxiom) -> (List RawAxiom)))
+    (@alloc arena)
+    (let ((mut xs (list-new arena RawAxiom)))
+      (do (list-push xs ax) xs)))
+
+  (fn unread-by-every ((arena Arena) (ax RawAxiom) (rungs (List Profile)))
+    (@intent "Does no rung in rungs read any piece of ax, each under its own expansion?")
+    (@spec ((Arena RawAxiom (List Profile)) -> Bool))
+    (@alloc arena)
+    (let ((mut unread true))
+      (do
+        (for-each (r rungs)
+          (for-each (e (gate-expand arena (one-axiom arena ax) r))
+            (when (piece-read r e) (set! unread false))))
+        unread)))
+
+  (fn module-omissions-shared ((arena Arena) (axs (List RawAxiom)) (carried (List Omission))
+                               (oms (List Omission)) (p Profile) (rungs (List Profile)))
+    (@intent "Is every omission of M's gate under p (oms) one that a run under any of rungs would make too?")
+    (@spec ((Arena (List RawAxiom) (List Omission) (List Omission) Profile (List Profile)) -> Bool))
+    (@alloc arena)
+    ;; axs are M's decoded axioms and carried its decode-level omissions,
+    ;; which every module keeps whole and every rung omits. An axiom of M
+    ;; must be either unread by every rung, or read whole under p. Then
+    ;; every out-of-profile omission must render as one of those unread
+    ;; axioms' pieces, or a carried one: an RBox, simple-role or range
+    ;; omission of a piece p reads by its form cannot, since equal text is
+    ;; the same piece. Missing declarations drop no axiom; unresolved
+    ;; imports and undeclared properties are decided over O at decode.
+    (let ((allowed (set-new arena String))
+          (mut ok true))
+      (do
+        (for-each (o carried) (set-put allowed (render-omission arena o)))
+        (for-each (ax axs)
+          (if (unread-by-every arena ax rungs)
+            (for-each (e (gate-expand arena (one-axiom arena ax) p))
+              (set-put allowed
+                (render-omission arena (union-new Omission out-of-profile (axiom-input-ref arena e)))))
+            (for-each (e (gate-expand arena (one-axiom arena ax) p))
+              (when (piece-omitted p e) (set! ok false)))))
+        (for-each (o oms)
+          (match o
+            ((out-of-profile _)
+              (when (not (set-has allowed (render-omission arena o))) (set! ok false)))
+            ((unresolved-import _)   (do))
+            ((missing-declaration _) (do))
+            ((undeclared-property _) (do))))
+        ok)))
 
   ;; ============================================================
   ;; Which document each omission came from (issue #67)

@@ -32,7 +32,7 @@
   (import select (select-profile choose-auto choose-auto-low profile-implemented unavailable-message))
   (import saturate (RoundResult saturate reuse-arena))
   (import classify (extract-findings entails-sub extract-ksc-findings))
-  (import gate (gate-axioms axiom-input-ref omission-origins))
+  (import gate (gate-axioms axiom-input-ref omission-origins module-omissions-shared))
   (import canon (sort-omissions omission-cmp))
   (import owl2 (RawAxiom))
   (import strlib (index-of substring))
@@ -201,6 +201,13 @@
     (work       Work)
     (coverage   Coverage)
     (names      Names)))      ; el's axioms, index and saturation are renamed (types.slop)
+
+  ;; The answer run's Prepared, and whether its gate's omissions are ones
+  ;; a run over the whole input would make too (gate.slop,
+  ;; module-omissions-shared). Always true for a whole input.
+  (type ModulePrepared (record
+    (prepared Prepared)
+    (shared   Bool)))
 
   (fn decode ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)))
     (@intent "The front end's first half: header pre-pass and decode, triples to axioms")
@@ -687,12 +694,14 @@
     (@intent "The front end over an encoded document, owning everything it returns")
     (@spec ((Arena Encoded (List IRI) ReasonerConfig) -> (Result Prepared Fault)))
     (@alloc arena)
-    (prepare-encoded-within arena doc imports-resolved config false (list-new arena IRI)))
+    (match (prepare-encoded-within arena doc imports-resolved config false (list-new arena IRI))
+      ((ok mp)   (ok (. mp prepared)))
+      ((error f) (error f))))
 
   (fn prepare-encoded-within ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
                               (modular Bool) (seed (List IRI)))
     (@intent "The front end over an encoded document, or, when modular, over its ⊥-locality module for seed (SPEC §8.4)")
-    (@spec ((Arena Encoded (List IRI) ReasonerConfig Bool (List IRI)) -> (Result Prepared Fault)))
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig Bool (List IRI)) -> (Result ModulePrepared Fault)))
     (@alloc arena)
     ;; The CLI's `decode-held` and `prepare-from` as one call. `doc` is only
     ;; read: decode's working memory is a scratch arena of its own, freed
@@ -706,11 +715,44 @@
         (arena-free front)
         ;; The `ok` arm first: slop types a match's result from its first arm.
         (let ((res (match d
-                     ((ok dd)   (prepare-decoded arena (within-seed held dd modular seed) config))
+                     ((ok dd)   (prepare-module arena held (within-seed held dd modular seed) config modular))
                      ((error f) (error (copy-fault arena f))))))
           (do
             (arena-free held)
             res)))))
+
+  (fn prepare-module ((arena Arena) (held Arena) (m Decoded) (config ReasonerConfig) (modular Bool))
+    (@intent "prepare-decoded over m, and, when m is a module, whether its gate's omissions are shared by every rung the whole input's run could use")
+    (@spec ((Arena Arena Decoded ReasonerConfig Bool) -> (Result ModulePrepared Fault)))
+    (@alloc arena)
+    ;; Judged here, while m's axioms are alive in held, and only when the
+    ;; gate omitted something: with nothing omitted there is nothing to share.
+    (match (prepare-decoded arena m config)
+      ((ok p)
+        (ok (record-new ModulePrepared
+              (prepared p)
+              (shared   (or (not modular)
+                            (== (list-len (. (. p coverage) omitted)) 0)
+                            (module-omissions-shared held (. m axioms) (. m omissions)
+                              (. (. p coverage) omitted) (. p profile)
+                              (answer-rungs held (. config selection))))))))
+      ((error f) (error f))))
+
+  (fn answer-rungs ((arena Arena) (selection ProfileSelection))
+    (@intent "The rungs a run over the whole input could use: the one asked for, or every built rung under auto")
+    (@spec ((Arena ProfileSelection) -> (List Profile)))
+    (@alloc arena)
+    ;; auto chooses the whole input's rung apart from the module's, and
+    ;; can step down from sriq, so under auto any of the three may run.
+    (let ((mut rs (list-new arena Profile)))
+      (do
+        (match selection
+          ((explicit p) (list-push rs p))
+          ((auto)
+            (do (list-push rs 'profile-el)
+                (list-push rs 'profile-el-plus-plus)
+                (list-push rs 'profile-sriq))))
+        rs)))
 
   (fn within-seed ((held Arena) (d Decoded) (modular Bool) (seed (List IRI)))
     (@intent "d itself, or, when modular, its module for the seed")
@@ -752,40 +794,79 @@
 
   (fn probe-classified ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
                         (modular Bool) (queries (List Query)))
-    (@intent "The probe input classified: over its module for the queries when modular, and that run is used only when it is complete or inconsistent; otherwise over the whole input (SPEC §8.4)")
+    (@intent "The probe input classified: over its module for the queries when modular, and that run is used when it is complete, inconsistent, or stopped only by omissions the whole input shares; otherwise over the whole input (SPEC §8.4)")
     (@spec ((Arena Encoded (List IRI) ReasonerConfig Bool (List Query)) -> (Result Outcome Fault)))
     (@alloc arena)
     ;; A complete run on the module answers exactly as a complete run on
     ;; the whole input would (L2, L4), and an inconsistency it finds is
-    ;; O's. Short of that (an omission inside the module, a cap, the
-    ;; budget), its answers could fall short of the two-run mode's, so the
-    ;; whole input is classified instead: the two-run mode's own probe run.
-    ;; That keeps every yes and no the two-run mode gives (Constraint
-    ;; 499c3842), and costs a second run only when the module's falls short.
-    ;; When the module's gate already omits something, its run cannot be
-    ;; complete, so it is not run at all: straight to the whole input.
+    ;; O's. A run that reached its fixpoint with omissions every rung O's
+    ;; run could use would make too gives every yes O's run could (O can
+    ;; read nothing of M that M's run does not), and its omissions rule out
+    ;; a no in both: so it is used as it stands (L5). Short of that (an
+    ;; omission O's run might read, a cap, the budget, a step-down), its
+    ;; answers could fall short of the two-run mode's, so the whole input is
+    ;; classified instead: the two-run mode's own probe run. That keeps
+    ;; every yes and no the two-run mode gives (Constraint 3e0a1e72).
+    ;; When the module's gate already omits something O might read, M is
+    ;; not run at all: straight to the whole input.
     (if (not modular)
       (classify-within arena doc imports-resolved config false (list-new arena IRI))
       (match (prepare-encoded-within arena doc imports-resolved config true (query-seed arena queries))
         ((error f) (error f))
-        ((ok p)
-          (if (> (list-len (. (. p coverage) omitted)) 0)
+        ((ok mp)
+          (if (not (. mp shared))
             (classify-within arena doc imports-resolved config false (list-new arena IRI))
-            (module-or-whole arena doc imports-resolved config (reason arena p config)))))))
+            (let ((omitted (. (. (. mp prepared) coverage) omitted)))
+              (module-or-whole arena doc imports-resolved config
+                (out-of-profile-count omitted)
+                (reason arena (. mp prepared) (module-budget config (> (list-len omitted) 0))))))))))
+
+  (fn module-budget ((config ReasonerConfig) (omits Bool))
+    (@intent "The module run's config: a tenth of sriq's clause budget when its gate omitted something, the whole otherwise")
+    (@spec ((ReasonerConfig Bool) -> ReasonerConfig))
+    (@pure)
+    ;; A module run with omissions is incomplete, so it pays only when it
+    ;; finishes: its yeses stand and the whole input is not classified.
+    ;; When it would not (OBI's sriq module passes the budget after 25 s,
+    ;; where the whole input's run takes 5 s), the whole input is classified
+    ;; anyway, as up to 0.6.0. A tenth of the budget bounds that waste and
+    ;; leaves the answers as they were. A count, not a clock: answers stay
+    ;; input-determined (§6.8). A module with no omission keeps the whole
+    ;; budget, as before.
+    (let ((mut c config))
+      (do
+        (when omits
+          (set! c clause-budget (cast (Int 1 ..) (max 1 (/ (cast Int (. config clause-budget)) 10)))))
+        c)))
 
   (fn module-or-whole ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
-                       (m (Result Outcome Fault)))
-    (@intent "The module's run when it is complete or inconsistent; otherwise the whole input classified instead")
-    (@spec ((Arena Encoded (List IRI) ReasonerConfig (Result Outcome Fault)) -> (Result Outcome Fault)))
+                       (gated Int) (m (Result Outcome Fault)))
+    (@intent "The module's run when it is complete, inconsistent, or at its fixpoint with only the gate's shared omissions; otherwise the whole input classified instead")
+    (@spec ((Arena Encoded (List IRI) ReasonerConfig Int (Result Outcome Fault)) -> (Result Outcome Fault)))
     (@alloc arena)
+    ;; `gated` is how many out-of-profile omissions M's gate made, all of
+    ;; them shared. More in the outcome means sriq's S1 guard omitted
+    ;; something its language reads; a step-down reran under a lower rung.
     (match m
       ((ok o)
-        (if (or (outcome-is-complete o) (. (. o findings) inconsistent))
+        (if (or (outcome-is-complete o)
+                (. (. o findings) inconsistent)
+                (and (at-fixpoint (. o termination))
+                     (not (. o stepped-down))
+                     (== (out-of-profile-count (. (. o coverage) omitted)) gated)))
           m
           (do
             (release-outcome o)
             (classify-within arena doc imports-resolved config false (list-new arena IRI)))))
       ((error _) m)))
+
+  (fn at-fixpoint ((t Termination))
+    (@intent "Did the run reach its fixpoint, rather than stop at a cap or the budget?")
+    (@spec ((Termination) -> Bool))
+    (@pure)
+    (match t
+      ((fixpoint)         true)
+      ((resource-limit _) false)))
 
   (fn classify-within ((arena Arena) (doc Encoded) (imports-resolved (List IRI)) (config ReasonerConfig)
                        (modular Bool) (seed (List IRI)))
@@ -794,7 +875,7 @@
     (@alloc arena)
     (match (prepare-encoded-within arena doc imports-resolved config modular seed)
       ((error f) (error f))
-      ((ok p)    (reason arena p config))))
+      ((ok mp)   (reason arena (. mp prepared) config))))
 
   (fn query-seed ((arena Arena) (queries (List Query)))
     (@intent "Σ₀: every class a query names (SPEC §8.4)")

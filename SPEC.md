@@ -5396,10 +5396,10 @@ have a value), and *queries*: is `C` unsatisfiable, is `A ⊑ B`, for named clas
   probe document that does not parse, refuses the input as a bad document does.
 - **The answer run asks without classifying first** (`howl_run_answer`, `Reasoner::answer`,
   `howl ask`). It is the probe run alone, with no main run before it: one classification, of the
-  queries' module, instead of two of the whole input. When the module's run falls short it
-  classifies the whole input too (below) (Requirement e99fc9a2).
+  queries' module, instead of two of the whole input. When the module's run falls short in a way
+  the whole input's might not, it classifies the whole input too (below) (Requirement e99fc9a2).
   - **It keeps every `yes` and `no` the two-run mode gives**, for the same input and options
-    (Constraint 499c3842). It runs the same probe input, over its module for the queries (below),
+    (Constraint 3e0a1e72, amending 499c3842). It runs the same probe input, over its module for the queries (below),
     so where the two-run mode is held back by an omission outside the module, it can answer `yes`
     or `no` instead of `unknown`. The tests hold the two modes to that on every class pair of the
     fixtures under el, el++ and sriq, and on the probe scenarios: an omission, a cap of 0 and an
@@ -5424,8 +5424,9 @@ module** of O for Σ₀ [CGHKS08]. O is the probe run's input: the input, the pr
 query declarations. The two-run mode is unchanged.
 - **Why.** When HOWL can read every axiom of M, M entails exactly what O entails over the symbols
   that matter, and is consistent exactly when O is (L2 below). When it cannot, M's run is
-  incomplete (L3), and the answer run falls back to O. So a complete run on M answers `no` soundly for O, even when O has
-  omissions outside M. M is usually far smaller than O. `auto` gates M, not O, so a module inside
+  incomplete (L3) and answers no `no`. That run still answers when every axiom it omits is one O's
+  run would omit too (L5); otherwise the answer run falls back to O. So a complete run on M answers
+  `no` soundly for O, even when O has omissions outside M. M is usually far smaller than O. `auto` gates M, not O, so a module inside
   `el` runs under `el`.
 - **Locality.** S is a set of IRIs (classes, properties and individuals alike: a punned IRI is in S
   once). A role R, or its inverse, is *outside* S when its property IRI is not in S. A fresh role
@@ -5517,20 +5518,52 @@ query declarations. The two-run mode is unchanged.
     - `no` needs M's run complete. Then M ⊭ β by the calculus's completeness, so O ⊭ β by L2, and O
       is consistent by L2, so the `no` is not vacuous.
     - An inconsistent M makes O inconsistent too, so every answer is a flagged, vacuous `yes`.
-- **The module run is used only when it is complete, or found an inconsistency.** Otherwise (an
-  omission inside M, a round cap or the clause budget stopping it) the answer run classifies the
-  whole of O instead, which is exactly the two-run mode's probe run. When M's gate already omits an
-  axiom, M's run could not be complete, so M is not classified at all and O is classified directly.
-  So a second run costs time only when a cap or the budget stops M's run. The cost of the shortcut:
-  an inconsistency M's incomplete run could still have proved is found only if O's run finds it,
-  and an RBox gate that rejects O's whole RBox (an irregular chain anywhere) can keep it from doing
-  so. Every answer stays sound and keeps the two-run mode's; that edge case answers `unknown` where
-  classifying M would have answered a flagged `yes`.
-- **So it keeps every `yes` and `no` the two-run mode gives** (Constraint 499c3842):
+  - **L5 (0.6.1).** Let R be the rungs O's run could use: the one asked for, or el, el++ and sriq
+    under `auto`, which chooses O's rung apart from M's and may step down. Suppose every axiom M's
+    run omits is read by no rung in R, judged under each rung's own expansion (`unread-by-every`).
+    Then classifying O adds no `yes` to M's run, and allows no `no`.
+    - O under any r ∈ R omits those axioms too, so O_read ∩ M ⊆ M_read, where X_read is what a
+      run reads of X.
+    - Every axiom of O_read outside M is local for S, and syntactic locality for S implies
+      locality for any subset of S, so O_read ∩ M is a module of O_read for Σ₀ (L2's argument over
+      O_read). So O's run entails β over S only if O_read ∩ M does, and then M_read does.
+    - Both runs carry the omitted axioms, so neither answers `no` to a query they touch (L4).
+    - M's `yes`es can exceed O's: O can read less of M than M does, for example when an irregular
+      chain anywhere makes O's gate omit its whole RBox. Each is sound, since M ⊆ O.
+- **The module run is used when it is complete, found an inconsistency, or satisfies L5.** L5 is
+  checked twice:
+  - **Before reasoning**, over M's decoded axioms (`module-omissions-shared`). Every axiom of M must
+    be either unread by every rung in R, or read whole by M's rung by its own form. Every
+    out-of-profile omission of M's gate must render as a piece of an unread axiom, or as a carried
+    decode-level omission. An RBox, simple-role or range omission of a piece the rung reads cannot
+    match, since equal text is the same piece. Missing declarations drop no axiom, and unresolved
+    imports and undeclared properties are decided over O at decode.
+  - **After reasoning:** the run reached its fixpoint, did not step down, and has no out-of-profile
+    omission beyond its gate's (sriq's S1 guard adds some).
+  - **A module run whose gate omitted something gets a tenth of sriq's clause budget.** Such a run
+    pays only when it finishes. When it would not, the whole input is classified anyway, as up to
+    0.6.0. On OBI, the `sriq` module passes the full budget after 25 s, where the whole input's run
+    takes 5 s. The tenth bounds that waste (OBI's 30 queries: 6.1 s against 0.6.0's 5.5 s) and
+    leaves the answers as they were. It is a count, so answers stay input-determined (§6.8). A
+    module with no omission keeps the whole budget.
+
+  Otherwise the answer run classifies the whole of O instead, which is exactly the two-run mode's
+  probe run. That covers an omission another rung in R would read, a collective or S1 omission, a
+  round cap or the clause budget stopping M's run, and a step-down. When the first check already
+  fails, M is not classified at all and O is classified directly. The cost of that shortcut: an
+  inconsistency M's run could still have proved is found only if O's run finds it, and an RBox gate
+  that rejects O's whole RBox (an irregular chain anywhere) can keep it from doing so. That edge case
+  answers `unknown` where classifying M would have answered a flagged `yes`.
+- **An answer run's omissions are its own run's.** When M answers, they are M's (each with its kind
+  and document), not O's; O's may also name axioms and missing declarations outside M.
+- **So it keeps every `yes` and `no` the two-run mode gives** (Constraint 3e0a1e72):
   - When the module run is used and complete, its answers are exact (L4), and so is every
     two-run `yes` and `no`.
   - An inconsistency the module run finds is O's (M ⊆ O). Every answer is then a flagged `yes`, as
     the two-run mode's would be.
+  - When the module run is used under L5, it gives every `yes` the two-run mode gives, and neither
+    gives a `no` to a query whose module holds the omission. It may give a `yes` where the two-run
+    mode says `unknown`, which the constraint allows.
   - Otherwise the answers are the two-run mode's own.
   - Where the module run is complete but the two-run mode is not (an omission outside M), it
     answers where that mode says `unknown`.
@@ -5555,9 +5588,10 @@ query declarations. The two-run mode is unchanged.
   - **Limits found:**
     - SWRL rules, data assertions and other text-only axioms are in every module, as are
       decode-level omissions such as an undeclared property. Any of them makes every module run
-      incomplete, so the answer run falls back to the whole input.
-    - On Core with Trivyn's own files, the answers therefore equal the two-run mode's, at about
-      half the time.
+      incomplete. Up to 0.6.0 that sent the answer run to the whole input. Since 0.6.1 these, like a
+      datatype restriction, are omissions no rung reads (L5), so the module's run answers.
+    - On Core with Trivyn's own files, the 0.5.0 answers therefore equalled the two-run mode's, at
+      about half the time.
     - One module for all of a call's queries takes the union of their signatures. On GO that
       module needs `sriq` (13 s) where each query's own module would be small.
 

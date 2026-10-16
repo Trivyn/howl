@@ -38,6 +38,7 @@ typedef struct howl_StepDown howl_StepDown;
 typedef struct howl_AutoChoice howl_AutoChoice;
 typedef struct howl_Work howl_Work;
 typedef struct howl_Prepared howl_Prepared;
+typedef struct howl_ModulePrepared howl_ModulePrepared;
 typedef struct howl_Input howl_Input;
 typedef struct howl_Run howl_Run;
 typedef struct howl_InputState howl_InputState;
@@ -102,6 +103,12 @@ SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
 SLOP_LIST_DEFINE(howl_owl2_RawAxiom, slop_list_howl_owl2_RawAxiom)
 #endif
 
+#ifndef SLOP_LIST_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_PROFILE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_Profile, slop_list_howl_types_Profile)
+#endif
+
 #ifndef SLOP_LIST_HOWL_PROBE_QUERY_DEFINED
 #define SLOP_LIST_HOWL_PROBE_QUERY_DEFINED
 #define SLOP_LIST_HOWL_PROBE_QUERY_IMPL_DEFINED
@@ -141,6 +148,11 @@ SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Profile, slop_option_howl_types_Profile)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
@@ -352,6 +364,17 @@ typedef struct howl_Prepared howl_Prepared;
 SLOP_OPTION_DEFINE(howl_Prepared, slop_option_howl_Prepared)
 #endif
 
+struct howl_ModulePrepared {
+    howl_Prepared prepared;
+    uint8_t shared;
+};
+typedef struct howl_ModulePrepared howl_ModulePrepared;
+
+#ifndef SLOP_OPTION_HOWL_MODULEPREPARED_DEFINED
+#define SLOP_OPTION_HOWL_MODULEPREPARED_DEFINED
+SLOP_OPTION_DEFINE(howl_ModulePrepared, slop_option_howl_ModulePrepared)
+#endif
+
 #ifndef SLOP_RESULT_HOWL_NORMALIZE_DECODED_HOWL_TYPES_FAULT_DEFINED
 #define SLOP_RESULT_HOWL_NORMALIZE_DECODED_HOWL_TYPES_FAULT_DEFINED
 typedef struct { bool is_ok; union { howl_normalize_Decoded ok; howl_types_Fault err; } data; } slop_result_howl_normalize_Decoded_howl_types_Fault;
@@ -365,6 +388,11 @@ typedef struct { bool is_ok; union { howl_Prepared ok; howl_types_Fault err; } d
 #ifndef SLOP_RESULT_HOWL_TYPES_OUTCOME_HOWL_TYPES_FAULT_DEFINED
 #define SLOP_RESULT_HOWL_TYPES_OUTCOME_HOWL_TYPES_FAULT_DEFINED
 typedef struct { bool is_ok; union { howl_types_Outcome ok; howl_types_Fault err; } data; } slop_result_howl_types_Outcome_howl_types_Fault;
+#endif
+
+#ifndef SLOP_RESULT_HOWL_MODULEPREPARED_HOWL_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_HOWL_MODULEPREPARED_HOWL_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { howl_ModulePrepared ok; howl_types_Fault err; } data; } slop_result_howl_ModulePrepared_howl_types_Fault;
 #endif
 
 #ifndef SLOP_RESULT_HOWL_PROBE_PROBING_HOWL_TYPES_FAULT_DEFINED
@@ -404,12 +432,16 @@ howl_types_Outcome howl_sriq_outcome(slop_arena* arena, howl_Prepared p, howl_Sr
 slop_result_howl_types_Outcome_howl_types_Fault howl_classify(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config);
 void howl_release_outcome(howl_types_Outcome o);
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_encoded(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config);
-slop_result_howl_Prepared_howl_types_Fault howl_prepare_encoded_within(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config, uint8_t modular, slop_list_slop_rdf_rdf_IRI seed);
+slop_result_howl_ModulePrepared_howl_types_Fault howl_prepare_encoded_within(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config, uint8_t modular, slop_list_slop_rdf_rdf_IRI seed);
+slop_result_howl_ModulePrepared_howl_types_Fault howl_prepare_module(slop_arena* arena, slop_arena* held, howl_normalize_Decoded m, howl_types_ReasonerConfig config, uint8_t modular);
+slop_list_howl_types_Profile howl_answer_rungs(slop_arena* arena, howl_types_ProfileSelection selection);
 howl_normalize_Decoded howl_within_seed(slop_arena* held, howl_normalize_Decoded d, uint8_t modular, slop_list_slop_rdf_rdf_IRI seed);
 slop_result_howl_types_Outcome_howl_types_Fault howl_classify_encoded(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config);
 slop_result_howl_probe_Probing_howl_types_Fault howl_probe_encoded(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, slop_list_howl_probe_Query queries, howl_types_ReasonerConfig config, uint8_t modular);
 slop_result_howl_types_Outcome_howl_types_Fault howl_probe_classified(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config, uint8_t modular, slop_list_howl_probe_Query queries);
-slop_result_howl_types_Outcome_howl_types_Fault howl_module_or_whole(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config, slop_result_howl_types_Outcome_howl_types_Fault m);
+howl_types_ReasonerConfig howl_module_budget(howl_types_ReasonerConfig config, uint8_t omits);
+slop_result_howl_types_Outcome_howl_types_Fault howl_module_or_whole(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config, int64_t gated, slop_result_howl_types_Outcome_howl_types_Fault m);
+uint8_t howl_at_fixpoint(howl_types_Termination t);
 slop_result_howl_types_Outcome_howl_types_Fault howl_classify_within(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config, uint8_t modular, slop_list_slop_rdf_rdf_IRI seed);
 slop_list_slop_rdf_rdf_IRI howl_query_seed(slop_arena* arena, slop_list_howl_probe_Query queries);
 slop_result_howl_probe_Probing_howl_types_Fault howl_probe_outcome(slop_arena* arena, slop_result_howl_types_Outcome_howl_types_Fault r, slop_list_howl_probe_Query queries);
@@ -544,6 +576,11 @@ SLOP_OPTION_DEFINE(howl_Work, slop_option_howl_Work)
 SLOP_OPTION_DEFINE(howl_Prepared, slop_option_howl_Prepared)
 #endif
 
+#ifndef SLOP_OPTION_HOWL_MODULEPREPARED_DEFINED
+#define SLOP_OPTION_HOWL_MODULEPREPARED_DEFINED
+SLOP_OPTION_DEFINE(howl_ModulePrepared, slop_option_howl_ModulePrepared)
+#endif
+
 #ifndef SLOP_OPTION_SLOP_RDF_RDF_TRIPLE_DEFINED
 #define SLOP_OPTION_SLOP_RDF_RDF_TRIPLE_DEFINED
 SLOP_OPTION_DEFINE(slop_rdf_rdf_Triple, slop_option_slop_rdf_rdf_Triple)
@@ -557,6 +594,11 @@ SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Profile, slop_option_howl_types_Profile)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED

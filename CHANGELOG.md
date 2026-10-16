@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.6.1 — 2026-10-15
+
+The answer run (`Reasoner::answer`, `howl_run_answer`, `howl ask`) no longer classifies the whole
+input over an omission the whole input shares. Before, any omission inside the queries' module sent
+it to the whole input, which carries the same omission and so could only give the same `unknown`,
+after a full classification. A class with a datatype restriction, such as `rdfs:label` exactly 1,
+was enough. On CCO with one such class, `howl ask --profile auto --ask-unsat` took 7.1 s and now
+takes 0.02 s, with the same answers. Nothing changes shape. Every report golden is byte-identical,
+and the slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged.
+
+### Changed
+
+- **The module's run answers when every axiom it omits is read by no profile the whole input's run
+  could use** (SPEC §8.4 L5). That set is the profile asked for, or el, el++ and sriq under `auto`.
+  - Such omissions include a datatype restriction, a data axiom, SWRL and a key, and the decode-level
+    omissions (an undeclared property, an unresolved import).
+  - The run must reach its fixpoint, without a step-down.
+  - Its `yes`es stand, and its omissions rule out a `no`, as the whole input's would.
+- **The fallback to the whole input stays** for:
+  - a round cap or the clause budget;
+  - `auto`'s step-down;
+  - an RBox, simple-role or S1-guard omission;
+  - an omission another profile could read. Under `auto`, the whole input may choose a profile that
+    reads it: for example a union, which `sriq` reads and `el++` omits.
+- **A module run with omissions gets a tenth of `sriq`'s clause budget.** When it would not finish,
+  the whole input is classified anyway, so the tenth bounds the wasted run. On OBI's `sriq` module
+  that wasted run took 25 s of a 30 s answer run; it now takes about 0.7 s more than 0.6.0's 5.5 s.
+- **An answer run's omissions are its own run's.** When the module answers, `Answers::omissions`
+  and `omission_details` (and the C accessors) list the module's omissions, each with its kind and
+  document, rather than the whole input's.
+- **Constraint (SPEC §8.4):** the answer run may now give a `yes` where the two-run mode says
+  `unknown`, from a run that is not complete. Every such `yes` is sound, since the module is part of
+  the input. It still never contradicts a two-run `yes` or `no`, and gives `no` only from a complete
+  run.
+
 ## 0.6.0 — 2026-10-15
 
 Each omission now says where it came from: its kind and the document that introduced it (issue #67).

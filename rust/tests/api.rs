@@ -284,9 +284,47 @@ fn probe_document_omissions_are_attributed_as_probe() {
             (Some(Probe(0)), "MissingDeclaration(Class(urn:probe:1))"),
         ]
     );
+    // The answer run is answered by urn:probe:2's module, which holds both
+    // unions but not urn:probe:1's axiom, so not its missing declaration
+    // either. Each omission keeps the document the two-run mode gives it.
     let a = Reasoner::with_config(config).answer(&input).unwrap();
     assert_details_agree(&a.omissions, a.omission_details());
-    assert_eq!(a.omission_details(), r.probe_omission_details());
+    assert_eq!(a.omission_details(), &r.probe_omission_details()[..2]);
+}
+
+/// 0.6.1: a background document and the host's own, whose class carries
+/// a datatype restriction no rung reads. The answer run answers from the
+/// class's module and does not classify the background: its one omission
+/// is the host's, in document 1, not the background's in document 0. A
+/// `yes` from the read axioms stands beside it.
+#[test]
+fn an_omission_no_rung_reads_keeps_the_answer_on_the_module() {
+    use howl::Answer;
+    const DATA: &str = "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .";
+    let background = format!(
+        "{PREFIXES} {DATA} :B a owl:Class . :X a owl:Class . :code a owl:DatatypeProperty .
+        :X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :code ;
+            owl:maxQualifiedCardinality \"1\"^^xsd:nonNegativeInteger ; owl:onDataRange xsd:string ] ."
+    );
+    let host = format!(
+        "{PREFIXES} {DATA} :A a owl:Class . :name a owl:DatatypeProperty .
+        :A rdfs:subClassOf :B , [ a owl:Restriction ; owl:onProperty :name ;
+            owl:maxQualifiedCardinality \"1\"^^xsd:nonNegativeInteger ; owl:onDataRange xsd:string ] ."
+    );
+    let mut input = turtle(&background);
+    input.add_turtle(&host).unwrap();
+    input.ask_unsatisfiable(&format!("{EX}A"));
+    input.ask_subsumed(&format!("{EX}A"), &format!("{EX}B"));
+    for selection in [ProfileSelection::Auto, ProfileSelection::Explicit(Profile::El), ProfileSelection::Explicit(Profile::Sriq)] {
+        let a = Reasoner::with_config(Config { selection, ..Config::default() }).answer(&input).unwrap();
+        let answers: Vec<_> = a.probes.iter().map(|p| p.answer).collect();
+        assert_eq!(answers, [Answer::Unknown, Answer::Yes], "{selection:?}");
+        assert_details_agree(&a.omissions, a.omission_details());
+        let d = &a.omission_details()[..];
+        assert_eq!(d.len(), 1, "{selection:?}: {:?}", a.omissions);
+        assert_eq!((d[0].kind.as_str(), d[0].document), ("SubClassOf", Some(howl::Document::Input(1))), "{selection:?}");
+        assert!(d[0].text.contains(&format!("{EX}name")), "{selection:?}: {}", d[0].text);
+    }
 }
 
 /// Issue #68: whether `:p` can have a value, asked through a probe class

@@ -2,7 +2,8 @@
 """The answer run against HermiT on the whole of each corpus ontology (SPEC §8.4; Track P, P3).
 
 `howl ask` classifies the queries' ⊥-locality module, and falls back to the
-whole input when the module's run is incomplete. This holds its answers to
+whole input when the module's run falls short in a way the whole input's might
+not (SPEC §8.4 L5). This holds its answers to
 HermiT's classification of the WHOLE ontology, the input HOWL was given:
 
 - `yes` must be entailed: HermiT has `sub A B`, or A unsatisfiable, or the
@@ -13,7 +14,7 @@ HermiT's classification of the WHOLE ontology, the input HOWL was given:
 
 The same queries also go through `howl validate`'s two-run mode, for the answer
 counts and times side by side. The answer run must keep every `yes` and `no`
-the two-run mode gives (Constraint 499c3842).
+the two-run mode gives (Constraint 3e0a1e72).
 
 Per entry: 15 subsumptions HermiT entails and 15 class pairs drawn with a fixed
 random seed (mostly not entailed), all among the classes HermiT's report names.

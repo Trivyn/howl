@@ -633,9 +633,10 @@ impl Report {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Answers {
     /// The rung the run that answered ran: under `Auto`, the one chosen for
-    /// the queries' module (or, when the module's run fell short and the
-    /// whole input was classified instead, for the input plus its probe
-    /// documents). `None` when nothing was asked, so nothing ran.
+    /// the queries' module, or for the input plus its probe documents when
+    /// the whole input was classified instead (a cap, the budget, or an
+    /// omission another rung could read). `None` when nothing was asked, so
+    /// nothing ran.
     pub profile: Option<Profile>,
     /// Each query once, in canonical order (unsatisfiable before
     /// subsumed, then by class).
@@ -643,8 +644,9 @@ pub struct Answers {
     /// Whether the probe run was inconsistent: every answer is then a
     /// vacuous `Yes`.
     pub inconsistent: bool,
-    /// What the probe run did not cover, rendered as
-    /// [`Report::omissions`] are. Any rules out a `No`.
+    /// What the run that answered did not cover, rendered as
+    /// [`Report::omissions`] are: the module's own when the module
+    /// answered. Any rules out a `No`.
     pub omissions: Vec<String>,
     lines: Vec<String>,
     details: Vec<Omission>,

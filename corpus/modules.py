@@ -19,8 +19,8 @@ OWL's own vocabulary. The extra symbols are counted and shown, not failed.
 A module that holds an axiom HOWL cannot read in full (`unreadable` > 0: SWRL,
 keys, data axioms, a data range in a class position) may lack the symbols that
 axiom names, since HOWL never reads them (SPEC §8.4 L3). Its run is then
-incomplete and the answer run classifies the whole input instead, so such a
-seed is counted as `fallback`, not failed.
+incomplete and answers no `no`, and the missing symbols cannot change a `yes`
+(L5), so such a seed is counted as `fallback`, not failed.
 
     python3 corpus/modules.py [ENTRY...]     # default: every entry with a vendor file
     python3 corpus/modules.py --update       # also writes corpus/module-differential.txt
@@ -115,9 +115,9 @@ def one(entry):
         lost = o_sym - h_sym
         more = h_sym - o_sym
         # A module holding an axiom HOWL cannot read in full (L3) may miss
-        # symbols that axiom names: its run is then incomplete, and the
-        # answer run classifies the whole input instead. Only a module with
-        # every axiom readable must contain the OWL API's.
+        # symbols that axiom names: its run is then incomplete and answers
+        # no `no` (L3, L5). Only a module with every axiom readable must
+        # contain the OWL API's.
         if lost and h_unread > 0:
             fallback += 1
         elif lost:

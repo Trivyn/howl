@@ -1346,6 +1346,12 @@ slop_list_string howl_test_rendered_sorted(slop_arena* arena, slop_list_howl_owl
 uint8_t howl_test_lines_equal(slop_list_string a, slop_list_string b);
 slop_string howl_test_module_answer(slop_arena* arena, slop_string text, slop_string sub, slop_string sup);
 uint8_t howl_test_test_module_answers(slop_arena* arena);
+slop_string howl_test_answer_under(slop_arena* arena, slop_string text, howl_types_Profile profile, uint8_t slop_auto, int64_t rounds, slop_list_string unsat, slop_string sub, slop_string sup);
+slop_string howl_test_shared_omission_doc(void);
+uint8_t howl_test_shared_omission_answered_by_module(slop_arena* arena, howl_types_Profile profile, uint8_t slop_auto);
+uint8_t howl_test_test_shared_omission_keeps_the_module_run(slop_arena* arena);
+uint8_t howl_test_test_auto_falls_back_over_a_rung_dependent_omission(slop_arena* arena);
+uint8_t howl_test_contains_line(slop_arena* arena, slop_string text, slop_string line);
 uint8_t howl_test_ends_with_line(slop_arena* arena, slop_string text, slop_string line);
 int64_t howl_test_gate_omissions_of_ttl(slop_arena* arena, slop_string ttl);
 slop_string howl_test_gate_accepted_of_ttl(slop_arena* arena, slop_string ttl);
