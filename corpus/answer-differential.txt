@@ -1,7 +1,7 @@
 # corpus/answers.py: howl ask against HermiT on the whole ontology, and against the two-run mode. Times are wall seconds on the recording machine. Regenerate with --update.
-bfo-core-2024-02-07 oracle hermit queries 30 wrong 0 dropped 0 ask yes 16 no 14 unknown 0 profile el two-run yes 16 no 14 unknown 0 seconds ask 0.2 two-run 0.3
-cco-2024-11-06 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 15 unknown 0 profile sriq two-run yes 15 no 15 unknown 0 seconds ask 0.2 two-run 14.3
-ro-2025-12-17 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 0 unknown 15 profile el++ two-run yes 15 no 0 unknown 15 seconds ask 4.6 two-run 8.9
-obi-2026-07-27 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 0 unknown 15 profile el++ two-run yes 15 no 0 unknown 15 seconds ask 5.7 two-run 11.1
+bfo-core-2024-02-07 oracle hermit queries 30 wrong 0 dropped 0 ask yes 16 no 14 unknown 0 profile el two-run yes 16 no 14 unknown 0 seconds ask 0.0 two-run 0.0
+cco-2024-11-06 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 15 unknown 0 profile sriq two-run yes 15 no 15 unknown 0 seconds ask 0.1 two-run 14.3
+ro-2025-12-17 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 0 unknown 15 profile sriq two-run yes 15 no 0 unknown 15 seconds ask 0.2 two-run 8.2
+obi-2026-07-27 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 0 unknown 15 profile el++ two-run yes 15 no 0 unknown 15 seconds ask 5.9 two-run 10.5
 go-2026-07-26 oracle hermit queries 30 wrong 0 dropped 0 ask yes 15 no 15 unknown 0 profile sriq two-run yes 15 no 0 unknown 15 seconds ask 13.6 two-run 7.9
-el-galen-2011-04-12 oracle elk queries 30 wrong 0 dropped 0 ask yes 15 no 15 unknown 0 profile el two-run yes 15 no 15 unknown 0 seconds ask 0.7 two-run 2.3
+el-galen-2011-04-12 oracle elk queries 30 wrong 0 dropped 0 ask yes 15 no 15 unknown 0 profile el two-run yes 15 no 15 unknown 0 seconds ask 0.4 two-run 1.9
