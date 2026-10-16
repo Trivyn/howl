@@ -55,6 +55,10 @@ long howl_layout_constant(int which) {
         howl_types_Termination_fixpoint, howl_types_Termination_resource_limit,
         howl_probe_QueryKind_query_unsatisfiable, howl_probe_QueryKind_query_subsumed,
         howl_probe_ProbeAnswer_answer_yes, howl_probe_ProbeAnswer_answer_no, howl_probe_ProbeAnswer_answer_unknown,
+        howl_types_EntityKind_entity_class, howl_types_EntityKind_entity_object_property,
+        howl_types_EntityKind_entity_data_property, howl_types_EntityKind_entity_annotation_property,
+        howl_types_EntityKind_entity_individual, howl_types_EntityKind_entity_datatype,
+        howl_DocumentSource_document_none, howl_DocumentSource_document_input, howl_DocumentSource_document_probe,
     };
     return (which >= 0 && which < (int)(sizeof values / sizeof values[0])) ? values[which] : -1;
 }

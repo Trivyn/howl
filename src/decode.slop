@@ -80,7 +80,7 @@
 
   (import rdf (Term Triple IRI BlankNode
                make-iri term-eq))
-  (import termstore (TermStore IdTriple Encoded lookup-term term-of triple-of encode-triples
+  (import termstore (TermStore IdTriple Encoded lookup-term term-of triple-of encode-triples doc-at
                      store-over store-insert-ids empty-store store-insert build-store
                      store-objects store-object-count store-sole-object store-typed
                      store-contains store-has-any))
@@ -141,7 +141,7 @@
     term-iri-value
     CONCEPT_FUEL box-concept decode-concept
     build-signature
-    Stage1 decode-axioms decode-axioms-with decode-store render-triple
+    Stage1 decode-axioms decode-axioms-sourced decode-axioms-with decode-store render-triple
     declaration-conflict)
 
   ;; ============================================================
@@ -286,7 +286,13 @@
     (triples          (List IdTriple))  ; logical triples: header consumed, reified axioms restored
     (imports-declared (List IRI))       ; canonically sorted — Findings.imports-seen
     (omissions        (List Omission))  ; (unresolved-import ...), canonically sorted
-    (ontology-iri     (Option IRI))))
+    (ontology-iri     (Option IRI))
+    ;; WHICH DOCUMENT EACH CAME FROM (issue #67), by index in the order the
+    ;; documents were begun. Empty when the input is one document, where
+    ;; every answer is 0; otherwise docs[i] is triples[i]'s document and
+    ;; omission-docs[i] omissions[i]'s, -1 when no one document is it.
+    (docs             (List Int))
+    (omission-docs    (List Int))))
 
   (fn term-iri-value ((t Term))
     (@intent "The IRI of an IRI term, or none for blank/literal/triple terms")
@@ -388,6 +394,70 @@
           (when (and (== (. it p) type-pred) (== (. it o) type-id))
             (when (not (set-has seen (. it s)))
               (do (set-put seen (. it s)) (list-push out (. it s))))))
+        out)))
+
+  (fn typed-docs-in-order ((arena Arena) (doc Encoded) (type-iri String))
+    (@intent "typed-ids-in-order's subjects' documents: each one's first typing triple's, in the same order")
+    (@spec ((Arena Encoded String) -> (List Int)))
+    (@alloc arena)
+    ;; The same walk as typed-ids-in-order, so out[i] is the document of
+    ;; that list's i-th subject. A blank subject is one document's alone
+    ;; (its ids are shifted apart per document); an IRI one is given the
+    ;; document that first types it.
+    (let ((type-pred (. (. doc dict) rdf-type))
+          (type-id   (vocab-id arena (. doc dict) type-iri))
+          (starts    (. doc starts))
+          (seen      (set-new arena Int))
+          (mut out   (list-new arena Int))
+          (mut i     0)
+          (mut cur   0))
+      (do
+        (for-each (it (. doc triples))
+          (do
+            (when (and (== (. it p) type-pred) (== (. it o) type-id))
+              (when (not (set-has seen (. it s)))
+                (do (set-put seen (. it s))
+                    (set! cur (doc-at starts i cur))
+                    (list-push out cur))))
+            (set! i (+ i 1))))
+        out)))
+
+  (fn import-doc ((arena Arena) (doc Encoded) (target IRI))
+    (@intent "The document whose owl:imports names target, or -1 when several do")
+    (@spec ((Arena Encoded IRI) -> Int))
+    (@alloc arena)
+    (let ((imports-id (vocab-id arena (. doc dict) OWL_IMPORTS))
+          (starts     (. doc starts))
+          (mut found  -2)
+          (mut i      0)
+          (mut cur    0))
+      (do
+        (for-each (it (. doc triples))
+          (do
+            (when (== (. it p) imports-id)
+              (match (term-iri-value (term-of (. doc dict) (. it o)))
+                ((some x)
+                  (when (== (iri-cmp x target) 0)
+                    (do
+                      (set! cur (doc-at starts i cur))
+                      (set! found (if (or (== found -2) (== found cur)) cur -1)))))
+                ((none) (do))))
+            (set! i (+ i 1))))
+        (if (== found -2) -1 found))))
+
+  (fn import-docs ((arena Arena) (doc Encoded) (oms (List Omission)))
+    (@intent "Each unresolved import's document, parallel to oms")
+    (@spec ((Arena Encoded (List Omission)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)))
+      (do
+        (for-each (o oms)
+          (list-push out
+            (match o
+              ((unresolved-import i)   (import-doc arena doc i))
+              ((out-of-profile _)      -1)
+              ((missing-declaration _) -1)
+              ((undeclared-property _) -1))))
         out)))
 
   (fn logical-predicate ((pv String))
@@ -535,6 +605,7 @@
   ;; the fault of the LAST node that could not be rebuilt.
   (type Rebuilt (record
     (triples (List IdTriple))
+    (docs    (List Int))        ; triples[i]'s document, when ax-docs was given
     (fault   (Option String))))
 
   (fn term-id ((st TermStore) (t Term))
@@ -563,21 +634,28 @@
                       (p (term-id st pred))
                       (o (term-id st obj)))))))))))
 
-  (fn rebuild-candidates ((arena Arena) (st TermStore) (ax-subjs (List Int)))
+  (fn rebuild-candidates ((arena Arena) (st TermStore) (ax-subjs (List Int)) (ax-docs (List Int)))
     (@intent "Each owl:Axiom node's rebuilt triple, from a store of the annotated* triples")
-    (@spec ((Arena TermStore (List Int)) -> Rebuilt))
+    (@spec ((Arena TermStore (List Int) (List Int)) -> Rebuilt))
     (@alloc arena)
+    ;; ax-docs is empty, or parallel to ax-subjs: then each rebuilt triple
+    ;; takes its node's document.
     (let ((src-pred  (make-iri arena OWL_ANNOTATED_SOURCE))
           (prop-pred (make-iri arena OWL_ANNOTATED_PROPERTY))
           (tgt-pred  (make-iri arena OWL_ANNOTATED_TARGET))
           (mut out   (list-new arena IdTriple))
-          (mut fault (Option String) (none)))
+          (mut docs  (list-new arena Int))
+          (mut fault (Option String) (none))
+          (mut k     0))
       (do
         (for-each (ai ax-subjs)
-          (match (rebuild-one arena st (term-of st ai) src-pred prop-pred tgt-pred)
-            ((error m) (set! fault (some m)))
-            ((ok t)    (list-push out t))))
-        (record-new Rebuilt (triples out) (fault fault)))))
+          (do
+            (match (rebuild-one arena st (term-of st ai) src-pred prop-pred tgt-pred)
+              ((error m) (set! fault (some m)))
+              ((ok t)    (do (list-push out t)
+                             (match (list-get ax-docs k) ((some d) (list-push docs d)) ((none) (do))))))
+            (set! k (+ k 1))))
+        (record-new Rebuilt (triples out) (docs docs) (fault fault)))))
 
   (fn asserted-among ((arena Arena) (candidates (List IdTriple)) (doc Encoded))
     (@intent "The candidates that occur in the input, as a set")
@@ -628,7 +706,11 @@
           (ann-subjs (typed-ids-in-order scratch doc OWL_ANNOTATION))
           (declared  (collect-imports arena doc))
           (dict      (. doc dict))
+          (starts    (. doc starts))
+          (multi     (> (list-len starts) 1))
+          (ax-docs   (if multi (typed-docs-in-order scratch doc OWL_AXIOM) (list-new scratch Int)))
           (mut out   (list-new arena IdTriple))
+          (mut docs  (list-new arena Int))
           (mut ont   (Option IRI) (none))
           (mut fault (Option String) (none)))
       (do
@@ -636,22 +718,34 @@
         ;; A header node's LOGICAL triples are not header material: they go
         ;; on to the decoder (header-consumable). Only a header subject's
         ;; triples are read as terms.
-        (let ((header (id-set scratch ont-subjs ax-subjs ann-subjs)))
+        (let ((header (id-set scratch ont-subjs ax-subjs ann-subjs))
+              (mut i 0)
+              (mut cur 0))
           (for-each (it (. doc triples))
-            (when (or (not (set-has header (. it s)))
-                      (not (header-consumable (triple-of dict it))))
-              (list-push out it))))
+            (do
+              (when (or (not (set-has header (. it s)))
+                        (not (header-consumable (triple-of dict it))))
+                (do
+                  (list-push out it)
+                  (when multi
+                    (do (set! cur (doc-at starts i cur)) (list-push docs cur)))))
+              (set! i (+ i 1)))))
 
         ;; Rebuild each reified axiom, unless the document also asserts it
         ;; - anywhere in the INPUT, header triples included. annotation-
         ;; heavy.ttl asserts the axiom AND reifies it; without the test the
         ;; axiom decodes twice.
-        (let ((rb       (rebuild-candidates scratch (annotated-store scratch doc) ax-subjs))
-              (asserted (asserted-among scratch (. rb triples) doc)))
+        (let ((rb       (rebuild-candidates scratch (annotated-store scratch doc) ax-subjs ax-docs))
+              (asserted (asserted-among scratch (. rb triples) doc))
+              (mut k    0))
           (do
             (for-each (c (. rb triples))
-              (when (not (set-has asserted c))
-                (list-push out c)))
+              (do
+                (when (not (set-has asserted c))
+                  (do
+                    (list-push out c)
+                    (match (list-get (. rb docs) k) ((some d) (list-push docs d)) ((none) (do)))))
+                (set! k (+ k 1))))
             (set! fault (. rb fault))))
 
         ;; The ontology IRI: the last IRI-named ontology node, in order.
@@ -663,12 +757,15 @@
         (match fault
           ((some msg) (error (union-new Fault input-error msg)))
           ((none)
-            (ok (record-new Stage0
-                  (dict             dict)
-                  (triples          out)
-                  (imports-declared declared)
-                  (omissions        (unresolved-imports arena declared imports-resolved))
-                  (ontology-iri     ont))))))))
+            (let ((oms (unresolved-imports arena declared imports-resolved)))
+              (ok (record-new Stage0
+                    (dict             dict)
+                    (triples          out)
+                    (imports-declared declared)
+                    (omissions        oms)
+                    (ontology-iri     ont)
+                    (docs             docs)
+                    (omission-docs    (if multi (import-docs arena doc oms) (list-new arena Int)))))))))))
 
   ;; ============================================================
   ;; Stage 1a — class expressions
@@ -1319,7 +1416,12 @@
     (axioms    (List RawAxiom))
     (signature Signature)
     (inert     Int)         ; inert axioms recognized and dropped (annotations, the data lemma's)
-    (omitted   (List Omission))))  ; (undeclared-property ...), one per property, canonically sorted
+    (omitted   (List Omission))  ; (undeclared-property ...), one per property, canonically sorted
+    ;; Empty unless the walk was given each triple's document: then
+    ;; axiom-docs[i] is axioms[i]'s, and omission-docs[i] omitted[i]'s, -1
+    ;; when its triples come from more than one (issue #67).
+    (axiom-docs    (List Int))
+    (omission-docs (List Int))))
 
   ;; Deterministic N-Triples-ish rendering, for the InputRef an
   ;; out-of-profile or unrecognized axiom carries.
@@ -2141,8 +2243,14 @@
     ;; THE STORE IS SCRATCH, freed before returning, and indexes only what
     ;; decode asks of it (`decode-store`). The axioms and signature are
     ;; built in `arena`; their terms are the dictionary's.
+    (decode-axioms-sourced arena dict triples (list-new arena Int)))
+
+  (fn decode-axioms-sourced ((arena Arena) (dict TermStore) (triples (List IdTriple)) (docs (List Int)))
+    (@intent "Stage 1, each axiom and omission given its document when docs gives each triple's")
+    (@spec ((Arena TermStore (List IdTriple) (List Int)) -> (Result Stage1 Fault)))
+    (@alloc arena)
     (let ((scratch (arena-new 16777216))
-          (res     (decode-axioms-with arena (decode-store scratch dict triples) dict triples)))
+          (res     (decode-axioms-with arena (decode-store scratch dict triples) dict triples docs)))
       (do
         (arena-free scratch)
         res)))
@@ -2228,7 +2336,22 @@
     (inert     Int)
     (uprops    (List IRI))       ; undeclared properties, one per triple naming one
     (utexts    (List String))    ; utexts[i] renders the triple uprops[i] came from
-    (fault     (Option String))))
+    (fault     (Option String))
+    ;; Which document each came from (issue #67): docs[pos] is the current
+    ;; triple's, when given; adocs parallels out and udocs uprops.
+    (docs      (List Int))
+    (pos       Int)
+    (adocs     (List Int))
+    (udocs     (List Int))))
+
+  (fn push-axiom ((c (Ptr Decoding)) (ax RawAxiom))
+    (@intent "Keep an axiom for the gate, with the current triple's document when known")
+    (@spec (((Ptr Decoding) RawAxiom) -> Unit))
+    (do
+      (list-push (. (deref c) out) ax)
+      (match (list-get (. (deref c) docs) (. (deref c) pos))
+        ((some d) (list-push (. (deref c) adocs) d))
+        ((none)   (do)))))
 
   (fn keep-axiom ((c (Ptr Decoding)) (ax RawAxiom))
     (@intent "A decoded axiom: counted when inert, kept for the gate otherwise")
@@ -2236,9 +2359,9 @@
     (do
       (match (disposition 'profile-el ax)
         ('d-inert          (set! (. (deref c) inert) (+ (. (deref c) inert) 1)))
-        ('d-consumed       (list-push (. (deref c) out) ax))
-        ('d-in-profile     (list-push (. (deref c) out) ax))
-        ('d-out-of-profile (list-push (. (deref c) out) ax)))
+        ('d-consumed       (push-axiom c ax))
+        ('d-in-profile     (push-axiom c ax))
+        ('d-out-of-profile (push-axiom c ax)))
       true))
 
   (fn decode-triple ((arena Arena) (c (Ptr Decoding)) (it IdTriple) (t Triple))
@@ -2247,7 +2370,7 @@
     (@alloc arena)
     (cond
       ((malformed-inverse arena (. (deref c) ig) t)
-        (do (list-push (. (deref c) out) (union-new RawAxiom ra-unrecognized (frag arena t))) true))
+        (do (push-axiom c (union-new RawAxiom ra-unrecognized (frag arena t))) true))
       ;; Read through another triple's axiom: structural, a negative
       ;; assertion's part, or inside a tree the data lemma set aside.
       ((or (structural-triple t)
@@ -2261,15 +2384,18 @@
           ((some up)
             (do (list-push (. (deref c) uprops) up)
                 (list-push (. (deref c) utexts) (render-triple arena t))
+                (match (list-get (. (deref c) docs) (. (deref c) pos))
+                  ((some d) (list-push (. (deref c) udocs) d))
+                  ((none)   (do)))
                 true))
           ((none)
             (match (decode-axiom arena (. (deref c) ig) (. (deref c) sig) t)
               ((error m) (do (set! (. (deref c) fault) (some m)) true))
               ((ok ax)   (keep-axiom c ax))))))))
 
-  (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)))
-    (@intent "Stage 1 over a store built by the caller")
-    (@spec ((Arena TermStore TermStore (List IdTriple)) -> (Result Stage1 Fault)))
+  (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)) (docs (List Int)))
+    (@intent "Stage 1 over a store built by the caller; docs is empty, or each triple's document")
+    (@spec ((Arena TermStore TermStore (List IdTriple) (List Int)) -> (Result Stage1 Fault)))
     (@alloc arena)
     ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
     ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the decoded
@@ -2294,13 +2420,48 @@
                           (npa-nodes npa-nodes) (npa-parts npa-parts)
                           (out (list-new arena RawAxiom)) (inert 0)
                           (uprops (list-new arena IRI)) (utexts (list-new arena String))
-                          (fault conflict)))
-        (for-each (it triples) (decode-triple arena c it (triple-of dict it)))
+                          (fault conflict)
+                          (docs docs) (pos 0)
+                          (adocs (list-new arena Int)) (udocs (list-new arena Int))))
+        (for-each (it triples)
+          (do
+            (decode-triple arena c it (triple-of dict it))
+            (set! (. (deref c) pos) (+ (. (deref c) pos) 1))))
         (match (. (deref c) fault)
           ((some m) (error (union-new Fault input-error m)))
-          ((none)   (ok (record-new Stage1 (axioms (. (deref c) out)) (signature sig)
-                          (inert (. (deref c) inert))
-                          (omitted (undeclared-omissions arena (. (deref c) uprops) (. (deref c) utexts))))))))))
+          ((none)
+            (let ((oms (undeclared-omissions arena (. (deref c) uprops) (. (deref c) utexts))))
+              (ok (record-new Stage1 (axioms (. (deref c) out)) (signature sig)
+                    (inert (. (deref c) inert))
+                    (omitted oms)
+                    (axiom-docs (. (deref c) adocs))
+                    (omission-docs (undeclared-docs arena (. (deref c) uprops) (. (deref c) udocs) oms))))))))))
+
+  (fn undeclared-docs ((arena Arena) (ps (List IRI)) (docs (List Int)) (oms (List Omission)))
+    (@intent "Each undeclared-property omission's document: its triples' one document, or -1; empty when docs is")
+    (@spec ((Arena (List IRI) (List Int) (List Omission)) -> (List Int)))
+    (@alloc arena)
+    ;; docs[i] is the document of the triple naming ps[i].
+    (let ((mut out (list-new arena Int)))
+      (do
+        (when (> (list-len docs) 0)
+          (for-each (o oms)
+            (match o
+              ((undeclared-property u)
+                (let ((mut found -2) (mut i 0))
+                  (do
+                    (for-each (p ps)
+                      (do
+                        (when (== (iri-cmp p (. u property)) 0)
+                          (match (list-get docs i)
+                            ((some d) (set! found (if (or (== found -2) (== found d)) d -1)))
+                            ((none)   (set! found -1))))
+                        (set! i (+ i 1))))
+                    (list-push out (if (== found -2) -1 found)))))
+              ((out-of-profile _)      (list-push out -1))
+              ((unresolved-import _)   (list-push out -1))
+              ((missing-declaration _) (list-push out -1)))))
+        out)))
 
   ;; AN UNDECLARED USER PROPERTY IS AN OMISSION, NOT A GUESS (§5.2).
   ;; `:a :p :b` with `:p` undeclared is ambiguous between an object

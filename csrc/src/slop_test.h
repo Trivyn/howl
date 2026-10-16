@@ -1850,6 +1850,13 @@ slop_list_slop_rdf_rdf_IRI howl_test_unique_classes(slop_arena* arena, slop_list
 howl_probe_ProbeAnswer howl_test_expected_answer(howl_types_Outcome o, slop_string a, slop_string b);
 uint8_t howl_test_probe_answer_is(howl_Run r, int64_t i, howl_probe_QueryKind kind, slop_string a, slop_string b, howl_probe_ProbeAnswer want);
 uint8_t howl_test_answers_agree(howl_Run r, howl_types_Outcome o, slop_list_slop_rdf_rdf_IRI cs);
+uint8_t howl_test_test_doc_at_skips_empty_documents(slop_arena* arena);
+slop_rdf_rdf_Triple howl_test_ex_triple(slop_arena* arena, slop_string s, slop_string o);
+uint8_t howl_test_ints_are(slop_list_int xs, slop_list_int want);
+uint8_t howl_test_test_probe_document_numbers_its_documents(slop_arena* arena);
+slop_list_int howl_test_omission_documents(slop_arena* arena, slop_list_string texts);
+slop_list_string howl_test_lines_of_documents(slop_arena* arena, slop_list_string texts);
+uint8_t howl_test_test_omissions_name_their_document(slop_arena* arena);
 uint8_t howl_test_main_lines_unchanged(slop_arena* arena, howl_Run r, slop_list_string want);
 uint8_t howl_test_probes_agree_with_report(slop_arena* arena, slop_string path, howl_types_Profile profile);
 uint8_t howl_test_probes_agree_on(slop_arena* arena, slop_string text, howl_types_Outcome o, slop_string path, howl_types_Profile profile);
@@ -2216,6 +2223,11 @@ SLOP_OPTION_DEFINE(howl_sriq_PCands, slop_option_howl_sriq_PCands)
 SLOP_OPTION_DEFINE(howl_types_ClassAnswer, slop_option_howl_types_ClassAnswer)
 #endif
 
+#ifndef SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
+#define SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
+SLOP_OPTION_DEFINE(howl_probe_Query, slop_option_howl_probe_Query)
+#endif
+
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_DEFINED
 #define SLOP_LIST_ARENA_PTR_IMPL_DEFINED
@@ -2256,6 +2268,12 @@ SLOP_LIST_DEFINE(howl_sriq_PCands, slop_list_howl_sriq_PCands)
 #define SLOP_LIST_HOWL_TYPES_CLASSANSWER_DEFINED
 #define SLOP_LIST_HOWL_TYPES_CLASSANSWER_IMPL_DEFINED
 SLOP_LIST_DEFINE(howl_types_ClassAnswer, slop_list_howl_types_ClassAnswer)
+#endif
+
+#ifndef SLOP_LIST_HOWL_PROBE_QUERY_DEFINED
+#define SLOP_LIST_HOWL_PROBE_QUERY_DEFINED
+#define SLOP_LIST_HOWL_PROBE_QUERY_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_probe_Query, slop_list_howl_probe_Query)
 #endif
 
 

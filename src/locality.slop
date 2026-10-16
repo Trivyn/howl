@@ -38,7 +38,8 @@
   ;; What extraction returns: M in O's order, and S = the seed ∪ sig(M).
   (type ModuleOut (record
     (axioms  (List RawAxiom))
-    (symbols (Set IRI))))
+    (symbols (Set IRI))
+    (in-m    (List Bool))))   ; in-m[i]: is the input's i-th axiom in M
 
   ;; ============================================================
   ;; Outside S
@@ -416,7 +417,7 @@
                 (do
                   (list-set in-m k true)
                   (for-each (j (admit-symbols arena (sym-of arena sigs k) s index in-m)) (list-push queue j)))))))
-        (record-new ModuleOut (axioms (kept arena axs in-m)) (symbols s)))))
+        (record-new ModuleOut (axioms (kept arena axs in-m)) (symbols s) (in-m in-m)))))
 
   (fn admit-symbols ((arena Arena) (syms (List IRI)) (s (Set IRI)) (index (Map IRI (List Int))) (in-m (List Bool)))
     (@intent "Put each new symbol in S; the axioms outside M that name one, to test again")
@@ -501,11 +502,26 @@
     ;; Decode-level omissions (unresolved imports, undeclared properties)
     ;; name no axiom, so they cannot be placed inside or outside M: they
     ;; stay, and keep M's run incomplete.
+    ;; Each kept axiom keeps its document (issue #67).
     (let ((m (module-axioms arena (. d axioms) seed)))
       (record-new Decoded
-        (axioms    (. m axioms))
-        (signature (restricted arena (. d signature) (. m symbols)))
-        (omissions (. d omissions)))))
+        (axioms        (. m axioms))
+        (signature     (restricted arena (. d signature) (. m symbols)))
+        (omissions     (. d omissions))
+        (documents     (. d documents))
+        (axiom-docs    (kept-docs arena (. d axiom-docs) (. m in-m)))
+        (omission-docs (. d omission-docs)))))
+
+  (fn kept-docs ((arena Arena) (docs (List Int)) (in-m (List Bool)))
+    (@intent "The documents of the axioms marked in M, in their order; empty when docs is")
+    (@spec ((Arena (List Int) (List Bool)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int))
+          (mut k 0))
+      (do (for-each (x docs)
+            (do (when (bool-of in-m k) (list-push out x))
+                (set! k (+ k 1))))
+          out)))
 
   (fn restricted ((arena Arena) (sig Signature) (s (Set IRI)))
     (@intent "The signature's classes, object properties and individuals in S or OWL's own; the rest as they are")

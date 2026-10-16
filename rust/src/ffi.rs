@@ -109,9 +109,18 @@ pub const QUERY_SUBSUMED: c_int = 1;
 pub const ANSWER_YES: c_int = 0;
 pub const ANSWER_NO: c_int = 1;
 pub const ANSWER_UNKNOWN: c_int = 2;
+pub const ENTITY_CLASS: c_int = 0;
+pub const ENTITY_OBJECT_PROPERTY: c_int = 1;
+pub const ENTITY_DATA_PROPERTY: c_int = 2;
+pub const ENTITY_ANNOTATION_PROPERTY: c_int = 3;
+pub const ENTITY_INDIVIDUAL: c_int = 4;
+pub const ENTITY_DATATYPE: c_int = 5;
+pub const DOCUMENT_NONE: c_int = 0;
+pub const DOCUMENT_INPUT: c_int = 1;
+pub const DOCUMENT_PROBE: c_int = 2;
 
 /// Every constant above, in `howl_layout_constant`'s order.
-pub const CONSTANTS: [(&str, c_int); 22] = [
+pub const CONSTANTS: [(&str, c_int); 31] = [
     ("VERDICT_COHERENT", VERDICT_COHERENT),
     ("VERDICT_INCOHERENT", VERDICT_INCOHERENT),
     ("VERDICT_INCONCLUSIVE", VERDICT_INCONCLUSIVE),
@@ -134,6 +143,15 @@ pub const CONSTANTS: [(&str, c_int); 22] = [
     ("ANSWER_YES", ANSWER_YES),
     ("ANSWER_NO", ANSWER_NO),
     ("ANSWER_UNKNOWN", ANSWER_UNKNOWN),
+    ("ENTITY_CLASS", ENTITY_CLASS),
+    ("ENTITY_OBJECT_PROPERTY", ENTITY_OBJECT_PROPERTY),
+    ("ENTITY_DATA_PROPERTY", ENTITY_DATA_PROPERTY),
+    ("ENTITY_ANNOTATION_PROPERTY", ENTITY_ANNOTATION_PROPERTY),
+    ("ENTITY_INDIVIDUAL", ENTITY_INDIVIDUAL),
+    ("ENTITY_DATATYPE", ENTITY_DATATYPE),
+    ("DOCUMENT_NONE", DOCUMENT_NONE),
+    ("DOCUMENT_INPUT", DOCUMENT_INPUT),
+    ("DOCUMENT_PROBE", DOCUMENT_PROBE),
 ];
 
 extern "C" {
@@ -170,6 +188,9 @@ extern "C" {
     pub fn howl_run_super(run: Run, i: i64) -> SlopString;
     pub fn howl_run_omission_len(run: Run) -> i64;
     pub fn howl_run_omission(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_omission_kind(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_omission_entity_kind(run: Run, i: i64) -> c_int;
+    pub fn howl_run_omission_document(run: Run, i: i64) -> i64;
     pub fn howl_run_report_len(run: Run) -> i64;
     pub fn howl_run_report_line(run: Run, i: i64) -> SlopString;
     pub fn howl_run_probe_len(run: Run) -> i64;
@@ -180,6 +201,10 @@ extern "C" {
     pub fn howl_run_probe_inconsistent(run: Run) -> u8;
     pub fn howl_run_probe_omission_len(run: Run) -> i64;
     pub fn howl_run_probe_omission(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_probe_omission_kind(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_probe_omission_entity_kind(run: Run, i: i64) -> c_int;
+    pub fn howl_run_probe_omission_source(run: Run, i: i64) -> c_int;
+    pub fn howl_run_probe_omission_document(run: Run, i: i64) -> i64;
 }
 
 #[cfg(test)]

@@ -4059,9 +4059,12 @@ GROWL's `Delta`.
 ;;   - `source`   : the document IRI the axiom was read from, so imports stay distinguishable.
 ;;                  OPTIONAL, because the frozen port flattens all documents into one
 ;;                  unlabelled buffer and the information is simply not there (§8.5, A1).
-;;                  The CLI populates it — align-check reads three separate files — so
-;;                  source-sensitive repair works there and degrades to text-only identity
-;;                  through the port. A real capability difference, not a formatting one.
+;;                  The CLI's align-check (M4) is to populate it — it reads three separate
+;;                  files — so source-sensitive repair works there and degrades to text-only
+;;                  identity through the port. A real capability difference, not a formatting
+;;                  one. Nothing populates it yet. An omission's DOCUMENT reaches HOWL's own
+;;                  API beside the coverage instead (`Coverage.origins`, §8.4), never inside
+;;                  this identity, so ordering, dedup and the hash are unchanged by it.
 ;;   - `text`     : the axiom in canonical OWL functional syntax, with the §6.3 step-1
 ;;                  canonicalization already applied (flattened/deduped/sorted operands) and
 ;;                  annotations stripped. Blank nodes are rendered by their position in the
@@ -5578,6 +5581,14 @@ field each, so no engine struct reaches the header. `libhowl.a` with that header
 - **The `Report`** holds the profile that ran, the engine's verdict (never recomputed in Rust),
   `inconsistent`, the unsatisfiable classes, the subsumptions, the omissions (rendered as the report
   renders them), the termination, the rounds, and the canonical report lines.
+- **Each omission says where it came from** (issue #67): its kind (the rendering's head token), a
+  `MissingDeclaration`'s entity kind, and the index of the document that introduced it, in `add`
+  order, or none when no single document did. The probe run's omissions are placed among the input's
+  documents or the probe documents. This is provenance BESIDE the coverage (`Coverage.origins`),
+  found after the gate from each decoded axiom's document. It is not part of an omission's identity,
+  so the report, its order and its hash are unchanged. In C it is `howl_run_omission_kind`,
+  `_entity_kind` and `_document`, plus the `howl_run_probe_omission_*` equivalents and `_source`. In
+  Rust it is `Report::omission_details`, `probe_omission_details` and `Answers::omission_details`.
 - **It always runs non-strict.**
 - **An `Input`** holds one or more documents, each standardized apart as `-I` does, plus the
   caller's `imports_resolved` attestation. It is encoded as the CLI encodes, and classified by
@@ -5624,7 +5635,10 @@ A1 has a partial workaround worth noting: `AxiomRef.source` is `Option`al, and t
 it** because `align-check` reads three separate files and therefore has document identity the port
 discards. So source-sensitive repair works from the CLI before A1 lands, and identity degrades to
 canonical text alone through the port. That is a real difference in capability between the two
-surfaces, stated rather than papered over.
+surfaces, stated rather than papered over. (align-check is M4: until it is built, nothing populates
+`source`.) HOWL's own API already has document identity, because each `add` call is a document. Each
+omission's document is reported through it ([§8.4](#84-the-moose-tboxreasoner-port), issue #67).
+That is the API, not the port: A1 is still what the port needs.
 
 Sequencing: A1–A2 gate M2's *correctness* claims, A3–A4 gate M2's *feature* claims, so the port
 amendment is its own milestone ahead of the adapter ([§12](#12-milestones--acceptance-criteria)).

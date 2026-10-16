@@ -32,9 +32,10 @@
   (import select (select-profile choose-auto choose-auto-low profile-implemented unavailable-message))
   (import saturate (RoundResult saturate reuse-arena))
   (import classify (extract-findings entails-sub extract-ksc-findings))
-  (import gate (gate-axioms axiom-input-ref))
+  (import gate (gate-axioms axiom-input-ref omission-origins))
   (import canon (sort-omissions omission-cmp))
   (import owl2 (RawAxiom))
+  (import strlib (index-of substring))
   (import sriqclauses (SriqIds))
   (import sriqref (RefIn RefStatus copy-clauses))
   (import sriqabox (Inputs SplitRun split-inputs split-run-of split-findings sriq-config))
@@ -81,6 +82,7 @@
     run-profile run-verdict run-inconsistent run-termination run-rounds
     run-unsat-len run-unsat run-sub-len run-sub run-super
     run-omission-len run-omission run-report-len run-report-line
+    DocumentSource run-omission-kind run-omission-entity-kind run-omission-document
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
     Decoded
     decode
@@ -264,10 +266,10 @@
       ((some profile)
         (if (not (profile-implemented profile))
           (error (union-new Fault unavailable profile))
-          (prepare-in-profile arena d config profile)))
+          (prepare-sourced arena d config profile)))
       ((none)
         (let ((ch (auto-profile d)))
-          (match (prepare-in-profile arena d config (. ch profile))
+          (match (prepare-sourced arena d config (. ch profile))
             ((ok p)    (ok (with-step-down arena p d (. ch low))))
             ((error f) (error f)))))))
 
@@ -344,6 +346,34 @@
       ('profile-horn-sriq    (prepare-el arena d config profile))
       ('profile-sriq         (prepare-sriq arena d config profile))))
 
+  (fn prepare-sourced ((arena Arena) (d Decoded) (config ReasonerConfig) (profile Profile))
+    (@intent "prepare-in-profile, each omission given the document it came from (issue #67)")
+    (@spec ((Arena Decoded ReasonerConfig Profile) -> (Result Prepared Fault)))
+    (@alloc arena)
+    ;; After the gate, over the coverage it produced: the omissions are
+    ;; exactly what they were, and their documents are found beside them
+    ;; (gate.slop, omission-origins). el's gate runs under el for
+    ;; horn-sriq too (normalize-decoded), so its axioms expand as el's.
+    (match (prepare-in-profile arena d config profile)
+      ((ok p)
+        (let ((scratch (arena-new 16777216))
+              (gp      (match (. p profile)
+                         ('profile-el-plus-plus 'profile-el-plus-plus)
+                         ('profile-sriq         'profile-sriq)
+                         ('profile-el           'profile-el)
+                         ('profile-horn-sriq    'profile-el)))
+              (origins (omission-origins arena scratch (. (. p coverage) omitted)
+                         (. d axioms) (. d axiom-docs) (. d omissions) (. d omission-docs)
+                         (. d documents) gp)))
+          (do
+            (arena-free scratch)
+            (ok (record-new Prepared
+                  (profile  (. p profile))
+                  (work     (. p work))
+                  (coverage (record-new Coverage (omitted (. (. p coverage) omitted)) (origins origins)))
+                  (names    (. p names)))))))
+      ((error f) (error f))))
+
   (fn strict-refuses ((config ReasonerConfig) (cov Coverage))
     (@intent "--strict refuses a run with any omission")
     (@spec ((ReasonerConfig Coverage) -> Bool))
@@ -389,7 +419,8 @@
     ;; omissions - is copied into `arena` with its strings.
     (let ((scratch (arena-new 16777216))
           (gr      (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el-plus-plus))
-          (cov     (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))))
+          (cov     (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))
+                                        (origins (list-new arena Int))))
           (res     (if (strict-refuses config cov)
                      (error (union-new Fault refused (. cov omitted)))
                      (ok (record-new Prepared
@@ -428,7 +459,8 @@
               each once; --strict refuses any")
     (@spec ((Arena ReasonerConfig Profile (List Omission) Inputs) -> (Result Prepared Fault)))
     (@alloc arena)
-    (let ((cov (record-new Coverage (omitted (sriq-omissions arena gate-oms (. in omitted))))))
+    (let ((cov (record-new Coverage (omitted (sriq-omissions arena gate-oms (. in omitted)))
+                                    (origins (list-new arena Int)))))
       (if (strict-refuses config cov)
         (error (union-new Fault refused (. cov omitted)))
         (ok (record-new Prepared
@@ -587,7 +619,7 @@
     (@spec ((Arena StepDown ReasonerConfig) -> (Result Outcome Fault)))
     (@alloc arena)
     ;; The rerun has the whole round budget: it is the run that answers.
-    (match (prepare-in-profile arena (. s decoded) config (. s profile))
+    (match (prepare-sourced arena (. s decoded) config (. s profile))
       ((ok lp)
         (match (reason arena lp config)
           ((ok o)    (ok (stepped arena o)))
@@ -786,11 +818,15 @@
     (@intent "A probe run's answers and coverage, owned in arena; the run's own arenas released")
     (@spec ((Arena Outcome (List Query)) -> Probing))
     (@alloc arena)
+    ;; The documents are numbered by probe-run, which knows the input.
     (let ((p (record-new Probing
                (answers      (answer-queries arena o queries))
                (inconsistent (. (. o findings) inconsistent))
                (omissions    (copy-omissions arena (. (. o coverage) omitted)))
-               (profile      (. o profile)))))
+               (profile      (. o profile))
+               (origins      (copy-origins arena (. (. o coverage) origins)))
+               (input-docs   0)
+               (probe-docs   0))))
       (do
         (release-outcome o)
         p)))
@@ -801,7 +837,15 @@
     (@alloc arena)
     ;; No probe run ran, so its profile is never read: no line names it.
     (record-new Probing (answers (list-new arena Answered)) (inconsistent false)
-      (omissions (list-new arena Omission)) (profile 'profile-el)))
+      (omissions (list-new arena Omission)) (profile 'profile-el)
+      (origins (list-new arena Int)) (input-docs 0) (probe-docs 0)))
+
+  (fn copy-origins ((arena Arena) (xs (List Int)))
+    (@intent "Omission documents, copied into arena")
+    (@spec ((Arena (List Int)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)))
+      (do (for-each (x xs) (list-push out x)) out)))
 
   ;; ============================================================
   ;; The public C API
@@ -866,6 +910,13 @@
     (message String)               ; owned by the input
     (line    Int)
     (column  Int)))
+
+  ;; Where an omission's document is (issue #67): one of the input's, one
+  ;; of the probe documents, or no one document.
+  (type DocumentSource (enum
+    document-none
+    document-input
+    document-probe))
 
   (type FaultKind (enum
     fault-none                     ; the run has a result
@@ -1205,7 +1256,14 @@
           (res (probe-encoded a (deref doc) (. st imports) qs (options-config o) modular)))
       (do
         (arena-free pa)
-        res)))
+        (match res
+          ((ok p)
+            (let ((mut q p))
+              (do
+                (set! q input-docs (cast Int (list-len (. (deref (. st enc)) starts))))
+                (set! q probe-docs (cast Int (list-len (. (deref (. st probes)) starts))))
+                (ok q))))
+          ((error f) (error f))))))
 
   (fn with-probes ((a Arena) (st InputState) (out Outcome) (o Options))
     (@intent "The run over a finished outcome, its probe queries answered by a run of their own")
@@ -1411,6 +1469,62 @@
                     ((none)    "")))
         ((none)   ""))))
 
+  (fn omission-kind ((arena Arena) (om Omission))
+    (@intent "The omission's kind: its rendering's head token, up to the first `(`")
+    (@spec ((Arena Omission) -> String))
+    (@alloc arena)
+    ;; Taken from the rendering, so the kind is the report's by
+    ;; construction: an out-of-profile axiom's head is any of RawAxiom's
+    ;; forms (SubClassOf, DataAxiom, Unrecognized, ...), and a fixed enum
+    ;; would have to grow with it.
+    (let ((t (render-omission arena om)))
+      (match (index-of t "(")
+        ((some n) (substring arena t 0 n))
+        ((none)   t))))
+
+  (fn omission-entity-kind ((om Omission))
+    (@intent "A missing declaration's entity kind; entity-class for any other omission")
+    (@spec ((Omission) -> EntityKind))
+    (match om
+      ((missing-declaration md) (. md kind))
+      ((out-of-profile _)       'entity-class)
+      ((unresolved-import _)    'entity-class)
+      ((undeclared-property _)  'entity-class)))
+
+  (fn origin-at ((origins (List Int)) (i Int))
+    (@intent "The i-th omission's document as numbered when it was found, or -1")
+    (@spec (((List Int) Int) -> Int))
+    (match (list-get origins i) ((some d) d) ((none) -1)))
+
+  (fn run-omission-kind ((r Run) (i Int))
+    (@intent "The i-th omission's kind: the head token of its `omission` line (MissingDeclaration, SubClassOf, ...)")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_omission_kind"
+    (let ((st (run-state r)))
+      (match (. st outcome)
+        ((some o) (match (list-get (. (. o coverage) omitted) i)
+                    ((some om) (omission-kind (. st arena) om))
+                    ((none)    "")))
+        ((none)   ""))))
+
+  (fn run-omission-entity-kind ((r Run) (i Int))
+    (@intent "The i-th omission's entity kind, when it is a MissingDeclaration; entity-class otherwise")
+    (@spec ((Run Int) -> EntityKind))
+    :c-name "howl_run_omission_entity_kind"
+    (match (. (run-state r) outcome)
+      ((some o) (match (list-get (. (. o coverage) omitted) i)
+                  ((some om) (omission-entity-kind om))
+                  ((none)    'entity-class)))
+      ((none)   'entity-class)))
+
+  (fn run-omission-document ((r Run) (i Int))
+    (@intent "The input document the i-th omission came from, by index in add order; -1 when no one document is it")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_omission_document"
+    (match (. (run-state r) outcome)
+      ((some o) (origin-at (. (. o coverage) origins) i))
+      ((none)   -1)))
+
   ;; The probe run's answers (§8.5 A4): empty when nothing was asked.
   (fn run-probe-len ((r Run))
     (@intent "How many queries the probe run answered, each once")
@@ -1475,6 +1589,48 @@
       (match (list-get (. (. st probing) omissions) i)
         ((some om) (render-omission (. st arena) om))
         ((none)    ""))))
+
+  (fn run-probe-omission-kind ((r Run) (i Int))
+    (@intent "The probe run's i-th omission's kind, as run-omission-kind gives it")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_probe_omission_kind"
+    (let ((st (run-state r)))
+      (match (list-get (. (. st probing) omissions) i)
+        ((some om) (omission-kind (. st arena) om))
+        ((none)    ""))))
+
+  (fn run-probe-omission-entity-kind ((r Run) (i Int))
+    (@intent "The probe run's i-th omission's entity kind, as run-omission-entity-kind gives it")
+    (@spec ((Run Int) -> EntityKind))
+    :c-name "howl_run_probe_omission_entity_kind"
+    (match (list-get (. (. (run-state r) probing) omissions) i)
+      ((some om) (omission-entity-kind om))
+      ((none)    'entity-class)))
+
+  (fn probe-origin ((p Probing) (i Int))
+    (@intent "The probe run's i-th omission's document, numbered over the probe run's whole input")
+    (@spec ((Probing Int) -> Int))
+    (origin-at (. p origins) i))
+
+  (fn run-probe-omission-source ((r Run) (i Int))
+    (@intent "Whether the probe run's i-th omission came from an input document, a probe document, or no one document")
+    (@spec ((Run Int) -> DocumentSource))
+    :c-name "howl_run_probe_omission_source"
+    (let ((p (. (run-state r) probing))
+          (k (probe-origin p i)))
+      (if (< k 0) 'document-none
+        (if (< k (. p input-docs)) 'document-input
+          (if (< k (+ (. p input-docs) (. p probe-docs))) 'document-probe 'document-none)))))
+
+  (fn run-probe-omission-document ((r Run) (i Int))
+    (@intent "The probe run's i-th omission's document: its index among the input's, or among the probe documents (run-probe-omission-source says which); -1 for none")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_probe_omission_document"
+    (let ((p (. (run-state r) probing))
+          (k (probe-origin p i)))
+      (if (< k 0) -1
+        (if (< k (. p input-docs)) k
+          (if (< k (+ (. p input-docs) (. p probe-docs))) (- k (. p input-docs)) -1)))))
 
   (fn run-report-len ((r Run))
     (@intent "How many lines the canonical report has")

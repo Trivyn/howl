@@ -12,7 +12,8 @@
  *
  * Then probe queries (SPEC §8.4, issue #68): a probe document as Turtle
  * and another as triples, three queries, and their answers through every
- * probe accessor, on every built profile.
+ * probe accessor, on every built profile. Then each omission's kind and
+ * document (issue #67), in the main run and the probe run.
  *
  * Then the refusals: out-of-range options, the dropped profile, a term
  * HOWL does not take, and Turtle that does not parse.
@@ -59,11 +60,22 @@ static char* report_of(howl_Run run) {
     for (int64_t i = 0; i < howl_run_unsat_len(run); i++) touched += howl_run_unsat(run, i).len;
     for (int64_t i = 0; i < howl_run_sub_len(run); i++)
         touched += howl_run_sub(run, i).len + howl_run_super(run, i).len;
-    for (int64_t i = 0; i < howl_run_omission_len(run); i++) touched += howl_run_omission(run, i).len;
+    for (int64_t i = 0; i < howl_run_omission_len(run); i++)
+        touched += howl_run_omission(run, i).len + howl_run_omission_kind(run, i).len
+                 + (size_t)howl_run_omission_entity_kind(run, i) + (size_t)(howl_run_omission_document(run, i) + 1);
     for (int64_t i = 0; i < howl_run_probe_len(run); i++)
         touched += howl_run_probe_sub(run, i).len + howl_run_probe_sup(run, i).len
                  + (size_t)howl_run_probe_kind(run, i) + (size_t)howl_run_probe_answer(run, i);
-    for (int64_t i = 0; i < howl_run_probe_omission_len(run); i++) touched += howl_run_probe_omission(run, i).len;
+    for (int64_t i = 0; i < howl_run_probe_omission_len(run); i++)
+        touched += howl_run_probe_omission(run, i).len + howl_run_probe_omission_kind(run, i).len
+                 + (size_t)howl_run_probe_omission_entity_kind(run, i) + (size_t)howl_run_probe_omission_source(run, i)
+                 + (size_t)(howl_run_probe_omission_document(run, i) + 1);
+    /* Out of range: empty, entity-class, no document - never a read past the end. */
+    CHECK(howl_run_omission_kind(run, -1).len == 0 && howl_run_omission_document(run, howl_run_omission_len(run)) == -1
+          && howl_run_probe_omission_source(run, -1) == howl_DocumentSource_document_none
+          && howl_run_probe_omission_document(run, howl_run_probe_omission_len(run)) == -1
+          && howl_run_omission_entity_kind(run, -1) == howl_types_EntityKind_entity_class,
+          "an out-of-range omission accessor is not total");
     (void)howl_run_probe_inconsistent(run);
     (void)howl_run_termination(run);
     (void)howl_run_rounds(run);
@@ -227,6 +239,48 @@ static void probes(void) {
     howl_input_free(in);
 }
 
+/* Issue #67: each omission's kind and document. The first document is
+ * clean; the second omits a union and uses an undeclared class; the
+ * second probe document omits a union of its own. */
+static const char* PREFIXES =
+    "@prefix : <http://example.org/t#> . @prefix owl: <http://www.w3.org/2002/07/owl#> .\n"
+    "@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n";
+
+static howl_TurtleResult add(howl_Input in, int probe, const char* body) {
+    char buf[1024];
+    snprintf(buf, sizeof buf, "%s%s", PREFIXES, body);
+    return probe ? howl_input_add_probe_turtle(in, str(buf)) : howl_input_add_turtle(in, str(buf));
+}
+
+static void omission_documents(void) {
+    howl_Input in = howl_input_new();
+    CHECK(add(in, 0, ":A a owl:Class . :C a owl:Class .").ok, "first document");
+    CHECK(add(in, 0, ":A rdfs:subClassOf [ owl:unionOf ( :A :C ) ] . :C rdfs:subClassOf :Z .").ok, "second document");
+    CHECK(add(in, 1, "<urn:probe:1> rdfs:subClassOf :A .").ok, "first probe document");
+    CHECK(add(in, 1, "<urn:probe:2> rdfs:subClassOf [ owl:unionOf ( :A :C ) ] .").ok, "second probe document");
+    howl_input_ask_unsatisfiable(in, str("urn:probe:2"));
+    howl_Run r = howl_run_classify(in, howl_default_options());
+    CHECK(howl_run_ok(r), "omission documents: no result");
+    /* Canonical order: out-of-profile before missing declarations. */
+    CHECK(howl_run_omission_len(r) == 2, "omission documents: %d omissions", (int)howl_run_omission_len(r));
+    CHECK(msg_is(howl_run_omission_kind(r, 0), "SubClassOf") && howl_run_omission_document(r, 0) == 1,
+          "the union is the second document's SubClassOf");
+    CHECK(msg_is(howl_run_omission_kind(r, 1), "MissingDeclaration") && howl_run_omission_document(r, 1) == 1
+          && howl_run_omission_entity_kind(r, 1) == howl_types_EntityKind_entity_class,
+          "the undeclared class is the second document's");
+    int probe_union = 0, input_union = 0;
+    for (int64_t i = 0; i < howl_run_probe_omission_len(r); i++) {
+        if (!msg_is(howl_run_probe_omission_kind(r, i), "SubClassOf")) continue;
+        howl_DocumentSource s = howl_run_probe_omission_source(r, i);
+        int64_t d = howl_run_probe_omission_document(r, i);
+        if (s == howl_DocumentSource_document_probe && d == 1) probe_union++;
+        if (s == howl_DocumentSource_document_input && d == 1) input_union++;
+    }
+    CHECK(probe_union == 1 && input_union == 1, "the probe run places its unions: probe %d, input %d", probe_union, input_union);
+    howl_run_free(r);
+    howl_input_free(in);
+}
+
 static void refusals(const char* path) {
     howl_Input in = input_for(path);
 
@@ -299,11 +353,12 @@ int main(int argc, char** argv) {
     }
     for (int i = 1; i < argc; i++) fixture(argv[i]);
     probes();
+    omission_documents();
     refusals(argv[1]);
     if (failures) {
         fprintf(stderr, "%d check(s) failed\n", failures);
         return 1;
     }
-    printf("C API: %d fixtures x {el, el++, sriq} x W in {1,2,4}, twice each; probes; refusals: ok\n", argc - 1);
+    printf("C API: %d fixtures x {el, el++, sriq} x W in {1,2,4}, twice each; probes; omission documents; refusals: ok\n", argc - 1);
     return 0;
 }

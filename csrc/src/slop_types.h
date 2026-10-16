@@ -777,6 +777,7 @@ SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
 
 struct howl_types_Coverage {
     slop_list_howl_types_Omission omitted;
+    slop_list_int origins;
 };
 typedef struct howl_types_Coverage howl_types_Coverage;
 

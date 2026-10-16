@@ -32,6 +32,14 @@ make bench-check  # results.txt still names the certified reports, and its verdi
 make corpus-acceptance   # RO and OBI end to end (run ./corpus/fetch.sh ro obi first)
 ```
 
+The Homebrew `slop` ships without z3, so `make verify` fails with "verifier module not found"
+([slop#386](https://github.com/slop-lang/slop/issues/386)). Install it into slop's own Python,
+and again after each `brew upgrade slop`:
+
+```sh
+$(brew --prefix slop)/libexec/bin/python -m pip install 'z3-solver>=4.12.0'
+```
+
 The differential ([SPEC §10](./SPEC.md#10-testing-strategy) item 1) needs a JDK to run Gradle and
 the network once. The wrapper provisions the pinned JDK 21 if the host has none, and `rdflib` 7.6.0
 routes fixtures by construct:

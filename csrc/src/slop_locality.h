@@ -17,15 +17,15 @@
 
 typedef struct howl_locality_ModuleOut howl_locality_ModuleOut;
 
-#ifndef SLOP_OPTION_LIST_INT_DEFINED
-#define SLOP_OPTION_LIST_INT_DEFINED
-SLOP_OPTION_DEFINE(slop_list_int, slop_option_list_int)
-#endif
-
 #ifndef SLOP_LIST_U8_DEFINED
 #define SLOP_LIST_U8_DEFINED
 #define SLOP_LIST_U8_IMPL_DEFINED
 SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
+#endif
+
+#ifndef SLOP_OPTION_LIST_INT_DEFINED
+#define SLOP_OPTION_LIST_INT_DEFINED
+SLOP_OPTION_DEFINE(slop_list_int, slop_option_list_int)
 #endif
 
 #ifndef SLOP_LIST_LIST_SLOP_RDF_RDF_IRI_DEFINED
@@ -102,6 +102,7 @@ SLOP_OPTION_DEFINE(howl_types_Node, slop_option_howl_types_Node)
 struct howl_locality_ModuleOut {
     slop_list_howl_owl2_RawAxiom axioms;
     slop_map* symbols;
+    slop_list_u8 in_m;
 };
 typedef struct howl_locality_ModuleOut howl_locality_ModuleOut;
 
@@ -167,6 +168,7 @@ uint8_t howl_locality_bool_of(slop_list_u8 xs, int64_t k);
 howl_owl2_RawAxiom howl_locality_axiom_of(slop_list_howl_owl2_RawAxiom axs, int64_t k);
 slop_list_slop_rdf_rdf_IRI howl_locality_sym_of(slop_arena* arena, slop_list_list_slop_rdf_rdf_IRI sigs, int64_t k);
 howl_normalize_Decoded howl_locality_module_decoded(slop_arena* arena, howl_normalize_Decoded d, slop_list_slop_rdf_rdf_IRI seed);
+slop_list_int howl_locality_kept_docs(slop_arena* arena, slop_list_int docs, slop_list_u8 in_m);
 howl_owl2_Signature howl_locality_restricted(slop_arena* arena, howl_owl2_Signature sig, slop_map* s);
 slop_map* howl_locality_within(slop_arena* arena, slop_map* xs, slop_map* s);
 
@@ -178,6 +180,11 @@ SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
 #ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
 #define SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
 SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_LOCALITY_MODULEOUT_DEFINED
@@ -203,11 +210,6 @@ SLOP_OPTION_DEFINE(howl_types_Node, slop_option_howl_types_Node)
 #ifndef SLOP_OPTION_LIST_INT_DEFINED
 #define SLOP_OPTION_LIST_INT_DEFINED
 SLOP_OPTION_DEFINE(slop_list_int, slop_option_list_int)
-#endif
-
-#ifndef SLOP_OPTION_U8_DEFINED
-#define SLOP_OPTION_U8_DEFINED
-SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
 #ifndef SLOP_OPTION_LIST_SLOP_RDF_RDF_IRI_DEFINED

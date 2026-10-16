@@ -60,7 +60,14 @@
     (answers      (List Answered))   ; one per query, in canonical order
     (inconsistent Bool)              ; every answer is then a vacuous yes
     (omissions    (List Omission))   ; the probe run's coverage gaps; any rules out `no`
-    (profile      Profile)))         ; the profile the probe run ran
+    (profile      Profile)           ; the profile the probe run ran
+    ;; Which document each omission came from (issue #67), numbered over
+    ;; the probe run's input (probe-document): the input's documents
+    ;; [0, input-docs), then the probe documents [input-docs, input-docs +
+    ;; probe-docs), then the queried classes' declarations; -1 for none.
+    (origins      (List Int))
+    (input-docs   Int)
+    (probe-docs   Int)))
 
   ;; ============================================================
   ;; Canonical order: unsatisfiable before subsumed, then sub, then sup
@@ -124,11 +131,30 @@
     ;; already kept apart when they were added. A declared class has a
     ;; context in el and an answer in el++, so every class a query names is
     ;; one - and a probe class never becomes a MissingDeclaration.
-    (let ((p (new-encoded arena)))
+    ;;
+    ;; Its documents are the input's, then the probe documents, then the
+    ;; declarations (Probing's numbering): the probe documents' starts are
+    ;; shifted past the input's triples. Starts are only positions, so
+    ;; they are put back after the triples that fill them.
+    (let ((p (new-encoded arena))
+          (base (cast Int (list-len (. main triples)))))
       (do
         (for-each (it (. main triples)) (encoded-add arena p (triple-of (. main dict) it)))
+        (let ((mut e (deref p))
+              (mut starts (list-new arena Int)))
+          (do
+            (for-each (s (. main starts)) (list-push starts s))
+            (set! (. e starts) starts)
+            (set! (deref p) e)))
         (encoded-next-document arena p)
         (for-each (it (. probes triples)) (encoded-add arena p (triple-of (. probes dict) it)))
+        (let ((mut e (deref p))
+              (mut k 0))
+          (do
+            (for-each (s (. probes starts))
+              (do (when (> k 0) (list-push (. e starts) (+ base s)))
+                  (set! k (+ k 1))))
+            (set! (deref p) e)))
         (encoded-next-document arena p)
         (for-each (q queries)
           (do

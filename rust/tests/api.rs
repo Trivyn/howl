@@ -135,6 +135,160 @@ fn an_undeclared_property_is_an_omission() {
     assert!(r.subsumptions.iter().any(|(s, t)| s == &format!("{EX}B") && t == &format!("{EX}A")));
 }
 
+/// Each detail is its plain omission's text, with that text's head token
+/// as its kind.
+fn assert_details_agree(texts: &[String], details: &[howl::Omission]) {
+    assert_eq!(details.len(), texts.len());
+    for (t, d) in texts.iter().zip(details) {
+        assert_eq!(&d.text, t);
+        assert_eq!(d.kind, t[..t.find('(').unwrap()]);
+        assert_eq!(d.entity_kind.is_some(), d.kind == "MissingDeclaration", "{d:?}");
+    }
+}
+
+/// `(document, text)` for each detail, for comparing in one assertion.
+fn placed(details: &[howl::Omission]) -> Vec<(Option<howl::Document>, &str)> {
+    details.iter().map(|d| (d.document, d.text.as_str())).collect()
+}
+
+const PREFIXES: &str = r#"
+@prefix : <http://example.org/t#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+"#;
+
+/// Issue #67: a background ontology and the host's own document. Each
+/// omission names the document that introduced it, a blank node's
+/// included (HasKey's list, rendered as its triples), so the host can
+/// tell its own coverage gaps from the background's in one run.
+#[test]
+fn omissions_name_the_document_they_came_from() {
+    let background = format!(
+        "{PREFIXES}
+        :A a owl:Class . :B a owl:Class . :C a owl:Class . :p a owl:ObjectProperty .
+        :A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom :B ] .
+        :A owl:hasKey ( :p ) ."
+    );
+    let own = format!(
+        "{PREFIXES}
+        <http://example.org/own> a owl:Ontology ; owl:imports <http://example.org/elsewhere> .
+        :B rdfs:subClassOf [ owl:unionOf ( :A :C ) ] .
+        :C owl:hasKey ( :p ) .
+        :A :q :B ."
+    );
+    let mut input = turtle(&background);
+    input.add_turtle(&own).unwrap();
+    let r = Reasoner::new().classify(&input).unwrap();
+    assert_details_agree(&r.omissions, r.omission_details());
+
+    use howl::Document::Input as Doc;
+    let p = |n: &str| format!("<{EX}{n}>");
+    let has_key_0 = format!("HasKey({} <http://www.w3.org/2002/07/owl#hasKey> _:b1 .)", p("A"));
+    let has_key_1 = format!("HasKey({} <http://www.w3.org/2002/07/owl#hasKey> _:b5 .)", p("C"));
+    let all_0 = format!("SubClassOf({EX}A ObjectAllValuesFrom({EX}p {EX}B))");
+    let union_1 = format!("SubClassOf({EX}B ObjectUnionOf({EX}A {EX}C))");
+    let import_1 = "UnresolvedImport(http://example.org/elsewhere)".to_string();
+    let undeclared_1 = format!("UndeclaredProperty({EX}q)");
+    assert_eq!(
+        placed(r.omission_details()),
+        vec![
+            (Some(Doc(0)), has_key_0.as_str()),
+            (Some(Doc(1)), has_key_1.as_str()),
+            (Some(Doc(0)), all_0.as_str()),
+            (Some(Doc(1)), union_1.as_str()),
+            (Some(Doc(1)), import_1.as_str()),
+            (Some(Doc(1)), undeclared_1.as_str()),
+        ]
+    );
+    // The report is the one a run without provenance prints.
+    assert_eq!(r.lines().iter().filter(|l| l.starts_with("omission ")).count(), 6);
+}
+
+/// A MissingDeclaration names its entity's kind, and its document when
+/// every axiom citing it is from one; cited from two, it has none.
+#[test]
+fn a_missing_declaration_names_its_entity_kind() {
+    let first = format!("{PREFIXES} :A a owl:Class . :A rdfs:subClassOf :Z .");
+    let second = format!("{PREFIXES} :B a owl:Class . :B rdfs:subClassOf :Y . :B rdfs:subClassOf :Z .");
+    let mut input = turtle(&first);
+    input.add_turtle(&second).unwrap();
+    let r = Reasoner::new().classify(&input).unwrap();
+    assert_details_agree(&r.omissions, r.omission_details());
+    let got: Vec<_> = r.omission_details().iter().map(|d| (d.entity_kind, d.document, d.text.as_str())).collect();
+    use howl::{Document::Input as Doc, EntityKind};
+    let (y, z) = (format!("MissingDeclaration(Class({EX}Y))"), format!("MissingDeclaration(Class({EX}Z))"));
+    assert_eq!(
+        got,
+        vec![(Some(EntityKind::Class), Some(Doc(1)), y.as_str()), (Some(EntityKind::Class), None, z.as_str())]
+    );
+}
+
+/// The same axiom stated in two documents: el keeps both copies, one per
+/// document; sriq keeps it once, and it takes the first document.
+#[test]
+fn an_axiom_in_two_documents_is_placed_by_each_copy() {
+    let doc = format!(
+        "{PREFIXES} :A a owl:Class . :B a owl:Class . :p a owl:ObjectProperty .
+        :A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom :B ] .
+        :A owl:equivalentClass [ owl:oneOf ( :i :j ) ] . :i a owl:NamedIndividual . :j a owl:NamedIndividual ."
+    );
+    let mut input = turtle(&doc);
+    input.add_turtle(&doc).unwrap();
+    use howl::Document::Input as Doc;
+    let el = classify_with(&input, Config { selection: ProfileSelection::Explicit(Profile::El), ..Config::default() });
+    assert_details_agree(&el.omissions, el.omission_details());
+    let docs: Vec<_> = el.omission_details().iter().map(|d| d.document).collect();
+    assert_eq!(docs, [0, 1, 0, 1, 0, 1].map(|n| Some(Doc(n))));
+    let sriq = classify_with(&input, Config { selection: ProfileSelection::Explicit(Profile::Sriq), ..Config::default() });
+    assert_details_agree(&sriq.omissions, sriq.omission_details());
+    // `A ≡ {i, j}` is two inclusions; sriq omits only the nominal halves.
+    let docs: Vec<_> = sriq.omission_details().iter().map(|d| d.document).collect();
+    assert_eq!(docs, [Some(Doc(0)), Some(Doc(0))]);
+}
+
+/// One document: every omission is from it.
+#[test]
+fn a_single_document_owns_every_omission() {
+    let r = Reasoner::new().classify(&turtle(&fixture("hazards/undeclared-property.ttl"))).unwrap();
+    assert_details_agree(&r.omissions, r.omission_details());
+    assert!(!r.omissions.is_empty());
+    assert!(r.omission_details().iter().all(|d| d.document == Some(howl::Document::Input(0))));
+    assert!(r.probe_omission_details().is_empty());
+}
+
+/// The probe run's omissions name their document among the input's or
+/// among the probe documents, in classify's report and in an answer run.
+#[test]
+fn probe_document_omissions_are_attributed_as_probe() {
+    let main = format!(
+        "{PREFIXES} :A a owl:Class . :C a owl:Class .
+        :A rdfs:subClassOf [ owl:unionOf ( :A :C ) ] ."
+    );
+    let mut input = turtle(&format!("{PREFIXES} :D a owl:Class ."));
+    input.add_turtle(&main).unwrap();
+    input.add_probe_turtle(&format!("{PREFIXES} <urn:probe:1> rdfs:subClassOf :A .")).unwrap();
+    input.add_probe_turtle(&format!("{PREFIXES} <urn:probe:2> rdfs:subClassOf [ owl:unionOf ( :A :C ) ] .")).unwrap();
+    input.ask_unsatisfiable("urn:probe:2");
+    let config = Config { selection: ProfileSelection::Explicit(Profile::El), ..Config::default() };
+    let r = classify_with(&input, config);
+    assert_details_agree(&r.omissions, r.omission_details());
+    assert_details_agree(&r.probe_omissions, r.probe_omission_details());
+    use howl::Document::{Input as Doc, Probe};
+    assert_eq!(r.omission_details().iter().map(|d| d.document).collect::<Vec<_>>(), [Some(Doc(1))]);
+    assert_eq!(
+        placed(r.probe_omission_details()),
+        vec![
+            (Some(Doc(1)), format!("SubClassOf({EX}A ObjectUnionOf({EX}A {EX}C))").as_str()),
+            (Some(Probe(1)), "SubClassOf(urn:probe:2 ObjectUnionOf(http://example.org/t#A http://example.org/t#C))"),
+            // Not asked about, so not declared for the probe run.
+            (Some(Probe(0)), "MissingDeclaration(Class(urn:probe:1))"),
+        ]
+    );
+    let a = Reasoner::with_config(config).answer(&input).unwrap();
+    assert_details_agree(&a.omissions, a.omission_details());
+    assert_eq!(a.omission_details(), r.probe_omission_details());
+}
+
 /// Issue #68: whether `:p` can have a value, asked through a probe class
 /// the host never has to declare, filter out or re-verdict. `:p`'s two
 /// domains are disjoint, so it cannot; `:q` can.

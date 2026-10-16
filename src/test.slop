@@ -22,7 +22,7 @@
 
   (import rdf (IRI Triple Term make-iri make-blank make-literal make-triple make-triple-term term-eq))
   (import termstore (IdTriple encode-triples build-store store-objects store-typed store-contains store-has-any triple-of
-                     store-over store-insert-ids))
+                     store-over store-insert-ids Encoded new-encoded encoded-add encoded-next-document doc-at))
   (import vocab (RDF_FIRST RDF_REST RDF_NIL RDFS_SUBCLASS_OF OWL_EQUIVALENT_CLASS
                  OWL_THING OWL_NOTHING RDFS_LABEL RDF_TYPE OWL_ONTOLOGY))
   (import decode (graph-to-indexed nt-escape rdf-list-checked term-at stage0-header Stage0
@@ -85,9 +85,11 @@
                 run-inconsistent run-unsat-len run-unsat
                 run-probe-omission-len run-probe-omission run-answer run-profile run-rounds
                 run-sub-len run-unsat-len run-omission-len
+                DocumentSource run-omission-document run-omission-kind
+                run-probe-omission-source run-probe-omission-document
                 Prepared ElWork prepare reason decode-owned prepare-in-profile sriq-omissions))
   (import el (apply-el-rules apply-el-rules-reference))
-  (import probe (QueryKind ProbeAnswer))
+  (import probe (QueryKind ProbeAnswer Query probe-document))
   (import locality (axiom-local axiom-readable module-axioms ModuleOut))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
@@ -176,7 +178,7 @@
               (record-new IRI (value "http://example.org/missing-import")))))
         (record-new Outcome
           (profile     'profile-el)
-          (coverage    (record-new Coverage (omitted omitted)))
+          (coverage    (record-new Coverage (omitted omitted) (origins (list-new arena Int))))
           (termination (if reached-fixpoint
                          (union-new Termination fixpoint)
                          (union-new Termination resource-limit 1000)))
@@ -1463,9 +1465,9 @@
             (let ((full (store-over arena (. s0 dict))))
               (do
                 (for-each (it (. s0 triples)) (store-insert-ids arena full it))
-                (let ((a (decode-rendered arena (decode-axioms-with arena full (. s0 dict) (. s0 triples))))
+                (let ((a (decode-rendered arena (decode-axioms-with arena full (. s0 dict) (. s0 triples) (list-new arena Int))))
                       (b (decode-rendered arena (decode-axioms-with arena (decode-store arena (. s0 dict) (. s0 triples))
-                                                   (. s0 dict) (. s0 triples))))
+                                                   (. s0 dict) (. s0 triples) (list-new arena Int))))
                       (mut same (== (list-len a) (list-len b)))
                       (mut i 0))
                   (do
@@ -10344,6 +10346,118 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
               (set! i (+ i 1)))))
         ok)))
 
+  ;; ============================================================
+  ;; Which document an omission came from (issue #67)
+  ;; ============================================================
+
+  (fn test-doc-at-skips-empty-documents ((arena Arena))
+    (@intent "doc-at finds a triple's document past empty ones, searching forward from a cursor")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Documents 0 and 2 are empty: [0,0) [0,3) [3,3) [3,5) [5,..).
+    (let ((mut s (list-new arena Int))
+          (mut one (list-new arena Int)))
+      (do
+        (for-each (x (list Int 0 0 3 3 5)) (list-push s x))
+        (list-push one 0)
+        (and (== (doc-at s 0 0) 1) (== (doc-at s 2 0) 1) (== (doc-at s 3 1) 3)
+             (== (doc-at s 4 0) 3) (== (doc-at s 9 0) 4) (== (doc-at one 7 0) 0)))))
+
+  (fn ex-triple ((arena Arena) (s String) (o String))
+    (@intent "<ex:s> rdfs:label <ex:o>, a triple to fill a document with")
+    (@spec ((Arena String String) -> Triple))
+    (@alloc arena)
+    (make-triple arena (make-iri arena (string-concat arena "http://example.org/t#" s))
+      (make-iri arena "http://www.w3.org/2000/01/rdf-schema#label")
+      (make-iri arena (string-concat arena "http://example.org/t#" o))))
+
+  (fn ints-are ((xs (List Int)) (want (List Int)))
+    (@intent "Two lists of ints, equal element by element")
+    (@spec (((List Int) (List Int)) -> Bool))
+    (let ((mut ok (== (list-len xs) (list-len want))) (mut i 0))
+      (do
+        (for-each (w want)
+          (do (when (!= (match (list-get xs i) ((some x) x) ((none) -9)) w) (set! ok false))
+              (set! i (+ i 1))))
+        ok)))
+
+  (fn test-probe-document-numbers-its-documents ((arena Arena))
+    (@intent "The probe run's input keeps every document's start: the input's, then each probe document's, then the declarations'")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((main   (new-encoded arena))
+          (probes (new-encoded arena))
+          (qs     (list-new arena Query)))
+      (do
+        (encoded-add arena main (ex-triple arena "a" "b"))
+        (encoded-add arena main (ex-triple arena "c" "d"))
+        (encoded-next-document arena main)
+        (encoded-add arena main (ex-triple arena "e" "f"))
+        (encoded-add arena probes (ex-triple arena "g" "h"))
+        (encoded-next-document arena probes)
+        (encoded-add arena probes (ex-triple arena "i" "j"))
+        (let ((pd (deref (probe-document arena (deref main) (deref probes) qs))))
+          (ints-are (. pd starts) (list Int 0 2 3 4 5))))))
+
+  (fn omission-documents ((arena Arena) (texts (List String)))
+    (@intent "The main run's omissions' documents, each document added as Turtle in order")
+    (@spec ((Arena (List String)) -> (List Int)))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut out (list-new arena Int))
+          (mut i 0))
+      (do
+        (for-each (t texts) (input-add-turtle in (string-concat arena (probe-prefixes) t)))
+        (let ((r (run-classify in (default-options))))
+          (do
+            (while (< i (run-omission-len r))
+              (do (list-push out (run-omission-document r i)) (set! i (+ i 1))))
+            (run-free r)))
+        (input-free in)
+        out)))
+
+  (fn lines-of-documents ((arena Arena) (texts (List String)))
+    (@intent "The main run's report lines, each document added as Turtle in order")
+    (@spec ((Arena (List String)) -> (List String)))
+    (@alloc arena)
+    (let ((in (input-new)))
+      (do
+        (for-each (t texts) (input-add-turtle in (string-concat arena (probe-prefixes) t)))
+        (let ((r (run-classify in (default-options)))
+              (ls (api-lines arena r)))
+          (do (run-free r) (input-free in) ls)))))
+
+  (fn test-omissions-name-their-document ((arena Arena))
+    (@intent "Each omission's document is the one that stated it, and placing them changes no report line")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The ∀ axiom is in both documents, so el omits it twice, once for
+    ;; each; the union only in the second. As one document, every
+    ;; omission is that document's, and the report is the same bytes.
+    (let ((d0 ":A a owl:Class . :B a owl:Class . :p a owl:ObjectProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom :B ] .
+")
+          (d1 ":C a owl:Class . :C rdfs:subClassOf [ owl:unionOf ( :A :B ) ] .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :p ; owl:allValuesFrom :B ] .
+")
+          (mut split (list-new arena String))
+          (mut whole (list-new arena String)))
+      (do
+        (list-push split d0)
+        (list-push split d1)
+        (list-push whole (string-concat arena d0 d1))
+        (let ((a (lines-of-documents arena split))
+              (b (lines-of-documents arena whole))
+              (mut same (== (list-len a) (list-len b)))
+              (mut i 0))
+          (do
+            (while (and same (< i (cast Int (list-len a))))
+              (do (when (not (string-eq (str-at a i) (str-at b i))) (set! same false))
+                  (set! i (+ i 1))))
+            (and same
+                 (ints-are (omission-documents arena split) (list Int 0 1 1))
+                 (ints-are (omission-documents arena whole) (list Int 0 0 0))))))))
+
   (fn main-lines-unchanged ((arena Arena) (r Run) (want (List String)))
     (@intent "The run's lines are the main report's, then the probe lines")
     (@spec ((Arena Run (List String)) -> Bool))
@@ -13200,6 +13314,18 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-undeclared-property-is-an-omission arena)))
             (print-test-result "declarations: an ambiguous undeclared property is OMITTED" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-doc-at-skips-empty-documents arena)))
+            (print-test-result "documents: a triple's document, past empty ones" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-probe-document-numbers-its-documents arena)))
+            (print-test-result "documents: the probe run's input keeps every document's start" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-omissions-name-their-document arena)))
+            (print-test-result "documents: each omission names its document; the report is unchanged" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-unknown-owl-vocabulary-still-decodes arena)))

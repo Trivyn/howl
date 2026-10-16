@@ -174,41 +174,51 @@ work it out a third time.
 - A `set!` local read back as the function's `Int` result, or passed through a constructor whose
   `@post` states the field (`run-result`).
 - A `c-inline` inside a function that the loop calls (`cancel-requested`).
+- `or` and `and` in a function body.
+- An `if` choosing between two `record-new`s. Field projection on `$result` survives
+  ([#70](https://github.com/slop-lang/slop/issues/70)).
 
 ### Not provable
 
-- **`or` or `and` in a function body.** The return value becomes opaque.
-- **A quantified `@property` over a result built in a loop.** It comes back unknown, because the
-  exact model only follows loop-free bodies.
+- **A quantified `@property` over a result built in a loop.** It comes back unknown, flagged
+  vacuous, while the same claim as a `@post` with the same `@loop-invariant` proves
+  ([#385](https://github.com/slop-lang/slop/issues/385)).
 - **A loop in the body.** `$result` becomes opaque.
-- **An `if` choosing between two `record-new`s.** Field projection on `$result` is lost
-  ([#70](https://github.com/slop-lang/slop/issues/70), open).
-- **A premise the prover treats as an opaque predicate,** such as `node-eq` or `set-has`. Equal
-  inputs are not known to give equal answers.
-- **`const` values.** They are opaque, so `{$result == EXIT_ERROR}` cannot be proved.
-- **`set-elements` and `list-get`.** They are uninterpreted functions.
+- **A premise the prover treats as an opaque predicate,** such as `node-eq`. It is not known to be
+  equality, so `node-eq(b, a1)` and `node-eq(b, a2)` do not give `a1 == a2`.
+- **A `const` defined in the same module.** It is opaque, so `{$result == EXIT_ERROR}` cannot be
+  proved. The same `const` imported from another module proves
+  ([#380](https://github.com/slop-lang/slop/issues/380)).
+- **`list-get`.** It is an uninterpreted function, so even a read straight after a push is unknown
+  ([#382](https://github.com/slop-lang/slop/issues/382)).
+- **`set-elements`.** It is not linked to `set-has`, so `(list-contains (set-elements s) x)` does
+  not follow from `(set-has s x)` ([#383](https://github.com/slop-lang/slop/issues/383)).
 - **A call nested inside an expression.** In `(record-new T (f (callee x)))` the prover does not
-  see `callee`'s `@post`.
-- **`(list-visited xs)` over a local list.** The list must be a parameter.
+  see `callee`'s `@post`. Binding the call in a `let` proves
+  ([#381](https://github.com/slop-lang/slop/issues/381)).
+- **`(list-visited xs)` over a local list.** The list must be a parameter
+  ([#263](https://github.com/slop-lang/slop/issues/263)).
 - **A `set!` local used in a `record-new` that is the function's result.** The field is
   unconstrained, so a true `(. $result rounds) <= budget` fails with a counterexample
   ([#279](https://github.com/slop-lang/slop/issues/279)).
 - **A `c-inline` directly in a loop body.** Every `@loop-invariant` of that loop comes back unknown
-  ([#280](https://github.com/slop-lang/slop/issues/280)). The same happens to a loop with a `break`,
-  or one that calls a function handed the `Saturation`.
+  ([#280](https://github.com/slop-lang/slop/issues/280)). The same happens to a loop with a `break`
+  or `continue` ([#384](https://github.com/slop-lang/slop/issues/384)), or one that calls a function
+  handed the `Saturation`: SLOP has no way to state what a call writes (compare
+  [#242](https://github.com/slop-lang/slop/issues/242)).
 
 ## Writing contracts that verify
 
-**Use `if`, not `or`/`and`.** These two bodies have the same contract:
+**`or`/`and` in a body no longer need rewriting as `if`.** On earlier slop releases these two
+bodies did not verify the same contract. On 0.5.1 both do:
 
 ```
-(or (. r b) (> (. r n) 0))          ; fails with a counterexample
+(or (. r b) (> (. r n) 0))          ; failed with a counterexample; verifies on 0.5.1
 (if (. r b) true (> (. r n) 0))     ; verifies
 ```
 
-A boolean record field is visible to the prover. A boolean operator in the body is what makes the
-result opaque. `findings-are-incoherent` and `entails-sub` are written as `if` chains for this
-reason. Try `if` before deciding something cannot be verified.
+`findings-are-incoherent` and `entails-sub` are written as `if` chains for this reason. They can
+stay as they are.
 
 **Push from one place.** `cr-and-on-sub` fires from either conjunct of `B₁ ⊓ B₂ ⊑ A` and emits at
 most one message. With a `list-push` in each of two branches, the bound `<= 1` fails with a

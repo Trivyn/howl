@@ -108,6 +108,7 @@ struct howl_termstore_Encoded {
     slop_list_howl_termstore_IdTriple triples;
     int64_t offset;
     int64_t max_blank;
+    slop_list_int starts;
 };
 typedef struct howl_termstore_Encoded howl_termstore_Encoded;
 
@@ -259,10 +260,12 @@ howl_termstore_TermStore howl_termstore_build_store(slop_arena* arena, slop_list
 howl_termstore_TermStore howl_termstore_empty_store(slop_arena* arena);
 howl_termstore_TermStore howl_termstore_store_over(slop_arena* arena, howl_termstore_TermStore dict);
 howl_termstore_Encoded* howl_termstore_new_encoded(slop_arena* arena);
+slop_list_int howl_termstore_first_start(slop_arena* arena);
 int64_t howl_termstore_max_blank_in(slop_rdf_rdf_Term t);
 slop_rdf_rdf_Term howl_termstore_shift_blanks(slop_arena* arena, slop_rdf_rdf_Term t, int64_t offset);
 void howl_termstore_encoded_add(slop_arena* arena, howl_termstore_Encoded* p, slop_rdf_rdf_Triple t);
 void howl_termstore_encoded_next_document(slop_arena* arena, howl_termstore_Encoded* p);
+int64_t howl_termstore_doc_at(slop_list_int starts, int64_t i, int64_t cur);
 howl_termstore_Encoded howl_termstore_encode_triples(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples);
 slop_list_slop_rdf_rdf_Term howl_termstore_store_objects(slop_arena* arena, howl_termstore_TermStore st, slop_rdf_rdf_Term s, slop_rdf_rdf_Term p);
 int64_t howl_termstore_store_object_count(howl_termstore_TermStore st, slop_rdf_rdf_Term s, slop_rdf_rdf_Term p);

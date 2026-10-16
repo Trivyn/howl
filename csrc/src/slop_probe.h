@@ -87,6 +87,9 @@ struct howl_probe_Probing {
     uint8_t inconsistent;
     slop_list_howl_types_Omission omissions;
     howl_types_Profile profile;
+    slop_list_int origins;
+    int64_t input_docs;
+    int64_t probe_docs;
 };
 typedef struct howl_probe_Probing howl_probe_Probing;
 

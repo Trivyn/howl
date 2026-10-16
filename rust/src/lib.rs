@@ -496,6 +496,61 @@ pub enum Answer {
     Unknown,
 }
 
+/// The kind of entity a `MissingDeclaration` omission names.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum EntityKind {
+    Class,
+    ObjectProperty,
+    DataProperty,
+    AnnotationProperty,
+    NamedIndividual,
+    Datatype,
+}
+
+impl EntityKind {
+    /// From a C `howl_types_EntityKind`, as an accessor returns it.
+    fn from_ffi(k: c_int) -> Self {
+        match k {
+            ffi::ENTITY_CLASS => EntityKind::Class,
+            ffi::ENTITY_OBJECT_PROPERTY => EntityKind::ObjectProperty,
+            ffi::ENTITY_DATA_PROPERTY => EntityKind::DataProperty,
+            ffi::ENTITY_ANNOTATION_PROPERTY => EntityKind::AnnotationProperty,
+            ffi::ENTITY_INDIVIDUAL => EntityKind::NamedIndividual,
+            ffi::ENTITY_DATATYPE => EntityKind::Datatype,
+            k => panic!("the engine returned entity kind {k}"),
+        }
+    }
+}
+
+/// The document an omission came from, by index in the order the
+/// documents were added: each `add_turtle` / `add_triples` call is one
+/// input document, and each `add_probe_*` call one probe document,
+/// numbered from 0 among their own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum Document {
+    Input(usize),
+    Probe(usize),
+}
+
+/// One omission, with what the engine knows about it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Omission {
+    /// The head token of `text`: `MissingDeclaration`,
+    /// `UndeclaredProperty`, `UnresolvedImport`, or an out-of-profile
+    /// axiom's form (`SubClassOf`, `DataAxiom`, `Unrecognized`, ...).
+    pub kind: String,
+    /// For a `MissingDeclaration`, the kind of entity it names.
+    pub entity_kind: Option<EntityKind>,
+    /// The document it came from. `None` when no one document is it: a
+    /// `MissingDeclaration` whose referring axioms, or an
+    /// `UndeclaredProperty` whose triples, come from more than one.
+    pub document: Option<Document>,
+    /// Rendered exactly as the matching entry of the plain omission list.
+    pub text: String,
+}
+
 /// One query and its answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProbeAnswer {
@@ -536,9 +591,24 @@ pub struct Report {
     /// rules out a `No`.
     pub probe_omissions: Vec<String>,
     lines: Vec<String>,
+    details: Vec<Omission>,
+    probe_details: Vec<Omission>,
 }
 
 impl Report {
+    /// [`omissions`](Self::omissions), each with its kind and the input
+    /// document it came from. The same list, in the same order: entry `i`
+    /// has `omissions[i]` as its `text`.
+    pub fn omission_details(&self) -> &[Omission] {
+        &self.details
+    }
+
+    /// [`probe_omissions`](Self::probe_omissions), each with its kind and
+    /// document: one of the input's, or one of the probe documents.
+    pub fn probe_omission_details(&self) -> &[Omission] {
+        &self.probe_details
+    }
+
     /// The canonical report (SPEC §6.7), one line per element: the
     /// bytes `howl validate --report` prints, and the ones a run is
     /// compared by. It holds no worker count, timing or path, so it is
@@ -573,9 +643,16 @@ pub struct Answers {
     /// [`Report::omissions`] are. Any rules out a `No`.
     pub omissions: Vec<String>,
     lines: Vec<String>,
+    details: Vec<Omission>,
 }
 
 impl Answers {
+    /// [`omissions`](Self::omissions), each with its kind and document:
+    /// one of the input's, or one of the probe documents.
+    pub fn omission_details(&self) -> &[Omission] {
+        &self.details
+    }
+
     /// The lines `howl ask` prints: `profile P` when a probe run ran, then
     /// the probe lines.
     pub fn lines(&self) -> &[String] {
@@ -681,6 +758,7 @@ impl Run {
                     .map(|i| owned(ffi::howl_run_probe_omission(r, i)))
                     .collect(),
                 lines: (0..ffi::howl_run_report_len(r)).map(|i| owned(ffi::howl_run_report_line(r, i))).collect(),
+                details: (0..ffi::howl_run_probe_omission_len(r)).map(|i| probe_omission(r, i)).collect(),
             })
         }
     }
@@ -719,8 +797,44 @@ impl Run {
                     .map(|i| owned(ffi::howl_run_probe_omission(r, i)))
                     .collect(),
                 lines: (0..ffi::howl_run_report_len(r)).map(|i| owned(ffi::howl_run_report_line(r, i))).collect(),
+                details: (0..ffi::howl_run_omission_len(r)).map(|i| omission(r, i)).collect(),
+                probe_details: (0..ffi::howl_run_probe_omission_len(r)).map(|i| probe_omission(r, i)).collect(),
             })
         }
+    }
+}
+
+/// A `MissingDeclaration`'s entity kind, from the accessor's value.
+fn entity_kind(kind: &str, k: c_int) -> Option<EntityKind> {
+    (kind == "MissingDeclaration").then(|| EntityKind::from_ffi(k))
+}
+
+/// The run's i-th omission.
+unsafe fn omission(r: ffi::Run, i: i64) -> Omission {
+    let kind = owned(ffi::howl_run_omission_kind(r, i));
+    let d = ffi::howl_run_omission_document(r, i);
+    Omission {
+        entity_kind: entity_kind(&kind, ffi::howl_run_omission_entity_kind(r, i)),
+        kind,
+        document: (d >= 0).then(|| Document::Input(d as usize)),
+        text: owned(ffi::howl_run_omission(r, i)),
+    }
+}
+
+/// The probe run's i-th omission.
+unsafe fn probe_omission(r: ffi::Run, i: i64) -> Omission {
+    let kind = owned(ffi::howl_run_probe_omission_kind(r, i));
+    let d = ffi::howl_run_probe_omission_document(r, i) as usize;
+    Omission {
+        entity_kind: entity_kind(&kind, ffi::howl_run_probe_omission_entity_kind(r, i)),
+        kind,
+        document: match ffi::howl_run_probe_omission_source(r, i) {
+            ffi::DOCUMENT_NONE => None,
+            ffi::DOCUMENT_INPUT => Some(Document::Input(d)),
+            ffi::DOCUMENT_PROBE => Some(Document::Probe(d)),
+            s => panic!("the engine returned document source {s}"),
+        },
+        text: owned(ffi::howl_run_probe_omission(r, i)),
     }
 }
 

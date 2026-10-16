@@ -59,6 +59,7 @@
     new-encoded
     encoded-add
     encoded-next-document
+    doc-at
     encode-triples
     store-over
     store-insert-ids
@@ -368,7 +369,8 @@
     (dict      TermStore)
     (triples   (List IdTriple))
     (offset    Int)             ; blank-id shift for the current document
-    (max-blank Int)))           ; highest blank id encoded so far (0 when none)
+    (max-blank Int)             ; highest blank id encoded so far (0 when none)
+    (starts    (List Int))))    ; starts[k]: the index in `triples` where document k begins
 
   (fn new-encoded ((arena Arena))
     (@intent "An empty encoded document, its first document begun")
@@ -380,8 +382,16 @@
                           (dict      (empty-store arena))
                           (triples   (list-new arena IdTriple))
                           (offset    0)
-                          (max-blank 0)))
+                          (max-blank 0)
+                          (starts    (first-start arena))))
         p)))
+
+  (fn first-start ((arena Arena))
+    (@intent "The starts of an encoding with one document, begun at 0")
+    (@spec ((Arena) -> (List Int)))
+    (@alloc arena)
+    (let ((mut s (list-new arena Int)))
+      (do (list-push s 0) s)))
 
   (fn max-blank-in ((t Term))
     (@intent "Highest blank-node id in a term, recursing into triple terms")
@@ -436,10 +446,28 @@
     (@intent "Begin the next document: shift its blank ids apart from everything encoded so far")
     (@spec ((Arena (Ptr Encoded)) -> Unit))
     (@alloc arena)
+    ;; And note where it begins, so that a triple's document is known
+    ;; (`doc-at`): the k-th document is the k-th begun, counting from 0.
     (let ((mut e (deref p)))
       (do
         (set! (. e offset) (+ (. e max-blank) 1))
+        (list-push (. e starts) (cast Int (list-len (. e triples))))
         (set! (deref p) e))))
+
+  (fn doc-at ((starts (List Int)) (i Int) (cur Int))
+    (@intent "The document triple i belongs to, searching forward from document cur")
+    (@spec (((List Int) Int Int) -> Int))
+    (@pure)
+    ;; The largest k >= cur with starts[k] <= i. A walk over the triples in
+    ;; order passes its last answer back as cur, so the whole walk is one
+    ;; pass over the starts. Equal starts are empty documents, skipped.
+    (let ((mut k cur)
+          (n (cast Int (list-len starts))))
+      (do
+        (while (and (< (+ k 1) n)
+                    (match (list-get starts (+ k 1)) ((some s) (<= s i)) ((none) false)))
+          (set! k (+ k 1)))
+        k)))
 
   (fn encode-triples ((arena Arena) (triples (List Triple)))
     (@intent "One document's triples, encoded")
