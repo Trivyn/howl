@@ -62,6 +62,12 @@ SLOP_LIST_DEFINE(howl_types_RoleId, slop_list_howl_types_RoleId)
 SLOP_LIST_DEFINE(howl_owl2_RawConcept, slop_list_howl_owl2_RawConcept)
 #endif
 
+#ifndef SLOP_LIST_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_PROFILE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_Profile, slop_list_howl_types_Profile)
+#endif
+
 #ifndef SLOP_LIST_SLOP_RDF_RDF_IRI_DEFINED
 #define SLOP_LIST_SLOP_RDF_RDF_IRI_DEFINED
 #define SLOP_LIST_SLOP_RDF_RDF_IRI_IMPL_DEFINED
@@ -86,6 +92,11 @@ SLOP_OPTION_DEFINE(howl_types_RoleId, slop_option_howl_types_RoleId)
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWCONCEPT_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWCONCEPT_DEFINED
 SLOP_OPTION_DEFINE(howl_owl2_RawConcept, slop_option_howl_owl2_RawConcept)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Profile, slop_option_howl_types_Profile)
 #endif
 
 #ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
@@ -207,6 +218,11 @@ uint8_t howl_gate_is_rbox_axiom(howl_owl2_RawAxiom ax);
 uint8_t howl_gate_axiom_range_ok(slop_list_howl_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_howl_types_RoleId roles, howl_owl2_RawAxiom ax);
 howl_gate_GateResult howl_gate_gate_axioms(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_owl2_Signature sig, slop_list_howl_types_Omission carried, howl_types_Profile p);
 slop_list_howl_owl2_RawAxiom howl_gate_gate_expand(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_types_Profile p);
+uint8_t howl_gate_piece_read(howl_types_Profile p, howl_owl2_RawAxiom ax);
+uint8_t howl_gate_piece_omitted(howl_types_Profile p, howl_owl2_RawAxiom ax);
+slop_list_howl_owl2_RawAxiom howl_gate_one_axiom(slop_arena* arena, howl_owl2_RawAxiom ax);
+uint8_t howl_gate_unread_by_every(slop_arena* arena, howl_owl2_RawAxiom ax, slop_list_howl_types_Profile rungs);
+uint8_t howl_gate_module_omissions_shared(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, slop_list_howl_types_Omission carried, slop_list_howl_types_Omission oms, howl_types_Profile p, slop_list_howl_types_Profile rungs);
 slop_list_int howl_gate_omission_origins(slop_arena* arena, slop_arena* scratch, slop_list_howl_types_Omission oms, slop_list_howl_owl2_RawAxiom axs, slop_list_int adocs, slop_list_howl_types_Omission carried, slop_list_int cdocs, int64_t documents, howl_types_Profile p);
 slop_map* howl_gate_needed_texts(slop_arena* arena, slop_list_howl_types_Omission oms);
 slop_map* howl_gate_texts_to_docs(slop_arena* arena, slop_map* needed, slop_list_howl_owl2_RawAxiom axs, slop_list_int adocs, howl_types_Profile p);
@@ -287,6 +303,11 @@ SLOP_OPTION_DEFINE(howl_gate_RangeEntry, slop_option_howl_gate_RangeEntry)
 #ifndef SLOP_OPTION_U8_DEFINED
 #define SLOP_OPTION_U8_DEFINED
 SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_PROFILE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_Profile, slop_option_howl_types_Profile)
 #endif
 
 #ifndef SLOP_OPTION_LIST_INT_DEFINED

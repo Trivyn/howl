@@ -93,7 +93,7 @@
   (import locality (axiom-local axiom-readable module-axioms ModuleOut))
   (import premise (RuleIndex build-rule-index))
   (import report (report-lines))
-  (import strlib (starts-with parse-int is-digit char-at substring))
+  (import strlib (starts-with parse-int is-digit char-at substring index-of))
   (import select (profile-name parse-profile profile-dropped unavailable-message))
   (import kscnormal (KscOutput normalize-ksc render-ksc-axiom))
   (import types (KscAxiom KName KFact KElem KscResult ClassAnswer kname-eq kfact-eq kelem-eq ind-elem name-term
@@ -2275,6 +2275,90 @@
                        (ends-with-line arena incons "probe subsumed http://example.org/t#B http://example.org/t#A yes"))))
           (do (when (not ok) (do (println "  [module] answers:") (print top) (print thing) (print outside) (print inside) (print incons)))
               ok)))))
+
+  (fn answer-under ((arena Arena) (text String) (profile Profile) (auto Bool) (rounds Int)
+                     (unsat (List String)) (sub String) (sup String))
+    (@intent "The answer run's lines over a document of the example namespace: unsat asks, then sub ⊑ sup when sub is given, under a rung or auto")
+    (@spec ((Arena String Profile Bool Int (List String) String String) -> String))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile profile)
+        (set! o auto-select auto)
+        (set! o max-iterations rounds)
+        (input-add-turtle in (string-concat arena (probe-prefixes)
+                               (string-concat arena "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n" text)))
+        (for-each (c unsat) (input-ask-unsatisfiable in (string-concat arena "http://example.org/t#" c)))
+        (when (> (string-len sub) 0)
+          (input-ask-subsumed in (string-concat arena "http://example.org/t#" sub) (string-concat arena "http://example.org/t#" sup)))
+        (let ((r   (run-answer in o))
+              (out (lines-text arena r)))
+          (do (run-free r) (input-free in) out)))))
+
+  (fn shared-omission-doc ()
+    (@intent "A ⊑ B and a datatype restriction on A, which no rung reads; another on X, outside A's module")
+    (@spec (() -> String))
+    (@pure)
+    ;; O omits both restrictions under every rung; A's module holds one.
+    ;; So an answer naming one omission came from the module's run, and
+    ;; one naming two from the whole input's.
+    ":A a owl:Class . :B a owl:Class . :X a owl:Class .\n:name a owl:DatatypeProperty . :code a owl:DatatypeProperty .\n:A rdfs:subClassOf :B , [ a owl:Restriction ; owl:onProperty :name ; owl:maxQualifiedCardinality \"1\"^^xsd:nonNegativeInteger ; owl:onDataRange xsd:string ] .\n:X rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :code ; owl:maxQualifiedCardinality \"1\"^^xsd:nonNegativeInteger ; owl:onDataRange xsd:string ] .\n")
+
+  (fn shared-omission-answered-by-module ((arena Arena) (profile Profile) (auto Bool))
+    (@intent "Under this rung (or auto), the module's run answers: one omission, unsat A unknown, A ⊑ B yes")
+    (@spec ((Arena Profile Bool) -> Bool))
+    (@alloc arena)
+    (let ((out (answer-under arena (shared-omission-doc) profile auto 1000 (list String "A") "A" "B")))
+      (let ((ok (and (contains-line arena out "probe-omitted 1")
+                     (contains-line arena out "probe unsatisfiable http://example.org/t#A unknown")
+                     (ends-with-line arena out "probe subsumed http://example.org/t#A http://example.org/t#B yes"))))
+        (do (when (not ok) (do (println "  [shared] answers:") (print out))) ok))))
+
+  (fn test-shared-omission-keeps-the-module-run ((arena Arena))
+    (@intent "0.6.1: an omission no usable rung reads keeps the answer run on the module, under every rung and auto; a cap still falls back")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Trivyn's repro in small: a datatype restriction is unreadable under
+    ;; el, el++ and sriq, so the whole input omits it too and classifying
+    ;; it can neither add a yes nor allow a no. A yes from read axioms
+    ;; stands beside it. A run the round cap stops still falls back, and
+    ;; the whole input's answer names both omissions.
+    (let ((capped (answer-under arena (shared-omission-doc) 'profile-el false 0 (list String "A") "A" "B")))
+      (let ((ok (and (shared-omission-answered-by-module arena 'profile-el false)
+                     (shared-omission-answered-by-module arena 'profile-el-plus-plus false)
+                     (shared-omission-answered-by-module arena 'profile-sriq false)
+                     (shared-omission-answered-by-module arena 'profile-el true)
+                     (contains-line arena capped "probe-omitted 2"))))
+        (do (when (not ok) (do (println "  [shared] capped:") (print capped))) ok))))
+
+  (fn test-auto-falls-back-over-a-rung-dependent-omission ((arena Arena))
+    (@intent "0.6.1: under auto, an omission another rung would read still sends the answer run to the whole input")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; THE CASE THE RULE EXISTS FOR. The module (A, D, E, F) has a union
+    ;; and two hasValue fillers: el omits 3, el++ 1 (the union), sriq 2
+    ;; (the nominals), so auto runs it under el++ and omits A ⊑ B ⊔ C. The
+    ;; three unions outside it push the whole input to sriq, which reads
+    ;; the union and proves A ⊑ D. Answering from the module would drop
+    ;; that yes. Under an explicit el++ both runs omit the union, so the
+    ;; module answers, unknown, naming its one omission.
+    (let ((doc ":A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class . :E a owl:Class . :F a owl:Class .\n:X1 a owl:Class . :X2 a owl:Class . :X3 a owl:Class . :Y a owl:Class . :Z a owl:Class .\n:r a owl:ObjectProperty . :a a owl:NamedIndividual . :b a owl:NamedIndividual .\n:A rdfs:subClassOf [ owl:unionOf ( :B :C ) ] . :B rdfs:subClassOf :D . :C rdfs:subClassOf :D .\n:E rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :a ] .\n:F rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:hasValue :b ] .\n:X1 rdfs:subClassOf [ owl:unionOf ( :Y :Z ) ] . :X2 rdfs:subClassOf [ owl:unionOf ( :Y :Z ) ] . :X3 rdfs:subClassOf [ owl:unionOf ( :Y :Z ) ] .\n"))
+      (let ((auto   (answer-under arena doc 'profile-el true 1000 (list String "E" "F") "A" "D"))
+            (elpp   (answer-under arena doc 'profile-el-plus-plus false 1000 (list String "E" "F") "A" "D")))
+        (let ((ok (and (contains-line arena auto "profile sriq")
+                       (ends-with-line arena auto "probe subsumed http://example.org/t#A http://example.org/t#D yes")
+                       (contains-line arena elpp "probe-omitted 1")
+                       (ends-with-line arena elpp "probe subsumed http://example.org/t#A http://example.org/t#D unknown"))))
+          (do (when (not ok) (do (println "  [auto] answers:") (print auto) (print elpp))) ok)))))
+
+  (fn contains-line ((arena Arena) (text String) (line String))
+    (@intent "Is line one of the text's lines?")
+    (@spec ((Arena String String) -> Bool))
+    (@alloc arena)
+    (match (index-of (string-concat arena "\n" text) (string-concat arena "\n" (string-concat arena line "\n")))
+      ((some _) true)
+      ((none)   false)))
 
   (fn ends-with-line ((arena Arena) (text String) (line String))
     (@intent "Is line the text's last line?")
@@ -13475,6 +13559,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-module-order-free arena)))
             (print-test-result "§8.4: the module is the same whatever the axioms' order" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-shared-omission-keeps-the-module-run arena)))
+            (print-test-result "0.6.1: an omission no usable rung reads keeps the answer run on the module; a cap falls back" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-auto-falls-back-over-a-rung-dependent-omission arena)))
+            (print-test-result "0.6.1: under auto, an omission another rung reads still falls back" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-module-answers arena)))

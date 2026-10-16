@@ -12,8 +12,8 @@ slop_option_howl_types_Profile howl_select_parse_profile(slop_string s);
 
 slop_option_howl_types_Profile howl_select_select_profile(howl_types_ProfileSelection selection) {
     slop_option_howl_types_Profile _retval = {0};
-    __auto_type _mv_1442 = selection;
-    switch (_mv_1442.tag) {
+    __auto_type _mv_1448 = selection;
+    switch (_mv_1448.tag) {
         case howl_types_ProfileSelection_slop_auto:
         {
             _retval = (slop_option_howl_types_Profile){.has_value = false};
@@ -21,7 +21,7 @@ slop_option_howl_types_Profile howl_select_select_profile(howl_types_ProfileSele
         }
         case howl_types_ProfileSelection_explicit:
         {
-            __auto_type p = _mv_1442.data.explicit;
+            __auto_type p = _mv_1448.data.explicit;
             _retval = (slop_option_howl_types_Profile){.has_value = 1, .value = p};
             goto _slop_post;
         }
@@ -63,17 +63,17 @@ howl_types_Profile howl_select_choose_auto_low(int64_t out_of_el, int64_t out_of
 
 uint8_t howl_select_profile_implemented(howl_types_Profile p) {
     uint8_t _retval = {0};
-    __auto_type _mv_1443 = p;
-    if (_mv_1443 == howl_types_Profile_profile_el) {
+    __auto_type _mv_1449 = p;
+    if (_mv_1449 == howl_types_Profile_profile_el) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_1443 == howl_types_Profile_profile_el_plus_plus) {
+    } else if (_mv_1449 == howl_types_Profile_profile_el_plus_plus) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_1443 == howl_types_Profile_profile_horn_sriq) {
+    } else if (_mv_1449 == howl_types_Profile_profile_horn_sriq) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_1443 == howl_types_Profile_profile_sriq) {
+    } else if (_mv_1449 == howl_types_Profile_profile_sriq) {
         _retval = 1;
         goto _slop_post;
     }
@@ -85,17 +85,17 @@ uint8_t howl_select_profile_implemented(howl_types_Profile p) {
 
 uint8_t howl_select_profile_dropped(howl_types_Profile p) {
     uint8_t _retval = {0};
-    __auto_type _mv_1444 = p;
-    if (_mv_1444 == howl_types_Profile_profile_el) {
+    __auto_type _mv_1450 = p;
+    if (_mv_1450 == howl_types_Profile_profile_el) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_1444 == howl_types_Profile_profile_el_plus_plus) {
+    } else if (_mv_1450 == howl_types_Profile_profile_el_plus_plus) {
         _retval = 0;
         goto _slop_post;
-    } else if (_mv_1444 == howl_types_Profile_profile_horn_sriq) {
+    } else if (_mv_1450 == howl_types_Profile_profile_horn_sriq) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_1444 == howl_types_Profile_profile_sriq) {
+    } else if (_mv_1450 == howl_types_Profile_profile_sriq) {
         _retval = 0;
         goto _slop_post;
     }
@@ -117,14 +117,14 @@ slop_string howl_select_unavailable_message(slop_arena* arena, howl_types_Profil
 }
 
 slop_string howl_select_profile_name(howl_types_Profile p) {
-    __auto_type _mv_1445 = p;
-    if (_mv_1445 == howl_types_Profile_profile_el) {
+    __auto_type _mv_1451 = p;
+    if (_mv_1451 == howl_types_Profile_profile_el) {
         return SLOP_STR("el");
-    } else if (_mv_1445 == howl_types_Profile_profile_el_plus_plus) {
+    } else if (_mv_1451 == howl_types_Profile_profile_el_plus_plus) {
         return SLOP_STR("el++");
-    } else if (_mv_1445 == howl_types_Profile_profile_horn_sriq) {
+    } else if (_mv_1451 == howl_types_Profile_profile_horn_sriq) {
         return SLOP_STR("horn-sriq");
-    } else if (_mv_1445 == howl_types_Profile_profile_sriq) {
+    } else if (_mv_1451 == howl_types_Profile_profile_sriq) {
         return SLOP_STR("sriq");
     }
     SLOP_UNREACHABLE();
