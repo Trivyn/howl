@@ -4321,7 +4321,10 @@ accepting it** — the gate can still enumerate an unsupported AST variant as ou
 0. **Reconcile the ontology header, and merge documents properly.** Collect every `owl:imports`
    target and compare it against the caller's closure attestation
    ([§8.4](#84-the-moose-tboxreasoner-port)). Each declared import the caller did **not** attest to
-   supplying is appended to `coverage.omitted` as `(unresolved-import IRI)`. Runs outside the
+   supplying is appended to `coverage.omitted` as `(unresolved-import IRI)`. OWL 2 lets an import
+   name the ontology IRI or its version IRI, so an attested ontology's `owl:versionIRI`, as the
+   supplied documents declare it, counts as attested too; a version IRI declared by an unattested
+   ontology does not (issue #71). Runs outside the
    three-category gate because imports are header metadata rather than logical vocabulary
    ([§5.2](#52-the-exact-v0-language)).
 

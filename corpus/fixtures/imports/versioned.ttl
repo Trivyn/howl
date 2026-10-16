@@ -1,0 +1,6 @@
+# The document by-version.ttl imports by its version IRI (see there).
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+
+<http://example.org/versioned> a owl:Ontology ;
+    owl:versionIRI <http://example.org/versioned/2.0> .
+<http://example.org/t#A> a owl:Class .

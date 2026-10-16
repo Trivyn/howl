@@ -1362,6 +1362,51 @@
                 (and (== (cast Int (list-len (. s0 imports-declared))) 1)
                      (== (cast Int (list-len (. s0 omissions))) 0)))))))))
 
+  (fn version-import-omissions ((arena Arena) (attested (List IRI)))
+    (@intent "by-version.ttl merged with versioned.ttl: Stage 0's omission count under an attestation, -1 if either fails")
+    (@spec ((Arena (List IRI)) -> Int))
+    (@alloc arena)
+    ;; Neither document has a blank node, so appending the two triple
+    ;; lists is the CLI's merge without its standardizing apart.
+    (match (parse-ttl-file arena "corpus/fixtures/imports/by-version.ttl")
+      ((error _) -1)
+      ((ok main)
+        (match (parse-ttl-file arena "corpus/fixtures/imports/versioned.ttl")
+          ((error _) -1)
+          ((ok base)
+            (let ((mut all (list-new arena Triple)))
+              (do
+                (for-each (t (. main triples)) (list-push all t))
+                (for-each (t (. base triples)) (list-push all t))
+                (match (stage0-header arena all attested)
+                  ((error _) -1)
+                  ((ok s0) (cast Int (list-len (. s0 omissions))))))))))))
+
+  (fn test-import-by-version-iri-resolves ((arena Arena))
+    (@intent "#71: an import naming an attested ontology's owl:versionIRI resolves")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The caller attests the ontology IRI; the import names the version
+    ;; IRI the supplied document declares. A host should not have to know
+    ;; which form each importer used.
+    (let ((mut resolved (list-new arena IRI)))
+      (do
+        (list-push resolved (record-new IRI (value "http://example.org/versioned")))
+        (== (version-import-omissions arena resolved) 0))))
+
+  (fn test-unattested-version-iri-stays-unresolved ((arena Arena))
+    (@intent "#71's trust boundary: a version IRI resolves only through an ATTESTED ontology")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; The other half. versioned.ttl declares the version IRI in both runs;
+    ;; without an attestation of its ontology, or with one of a different
+    ;; ontology, the import is still a coverage gap.
+    (let ((mut other (list-new arena IRI)))
+      (do
+        (list-push other (record-new IRI (value "http://example.org/elsewhere")))
+        (and (== (version-import-omissions arena (list-new arena IRI)) 1)
+             (== (version-import-omissions arena other) 1)))))
+
   (fn test-term-store-by-content ((arena Arena))
     (@intent "The term store keys terms by content, collapses duplicates, and answers only what it holds")
     (@spec ((Arena) -> Bool))
@@ -12814,6 +12859,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-attested-import-yields-none arena)))
             (print-test-result "§12(b): the same import, attested, gates clean" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-import-by-version-iri-resolves arena)))
+            (print-test-result "#71: an import by an attested ontology's version IRI resolves" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-unattested-version-iri-stays-unresolved arena)))
+            (print-test-result "#71: a version IRI resolves only through an attested ontology" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-header-and-reification-are-consumed arena)))

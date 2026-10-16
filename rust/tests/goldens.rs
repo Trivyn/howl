@@ -115,6 +115,20 @@ fn imports_golden() {
     assert_eq!(got, golden(&corpus().join("goldens/imports/root.report")));
 }
 
+/// `howl validate by-version.ttl -I versioned.ttl --report` (#71): the
+/// import names the version IRI, the host attests the ontology IRI, and
+/// the supplied document's `owl:versionIRI` joins the two.
+#[test]
+fn import_by_version_iri_golden() {
+    let dir = corpus().join("fixtures/imports");
+    let got = report(
+        &[dir.join("by-version.ttl"), dir.join("versioned.ttl")],
+        &["http://example.org/versioned"],
+        ProfileSelection::Explicit(Profile::El),
+    );
+    assert_eq!(got, golden(&corpus().join("goldens/imports/by-version.report")));
+}
+
 /// `howl validate main.ttl --probe probe.ttl --ask-... --report`: the
 /// main report unchanged, then the probe run's lines, the queries each
 /// once and in canonical order however they were asked.

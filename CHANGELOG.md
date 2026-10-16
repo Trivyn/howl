@@ -1,13 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 — 2026-10-15
 
 Each omission now says where it came from: its kind and the document that introduced it (issue #67).
 A host that loads a background ontology (BFO and CCO, say) before its own document can tell its own
 coverage gaps from the background's in one run, instead of classifying the background alone and
 diffing omission strings. The C API and the Rust crate only gain: nothing existing changes shape,
 the report lines are byte-identical, and the slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are
-unchanged.
+unchanged. An `owl:imports` that names an attested ontology's version IRI now resolves (issue
+#71).
 
 ### Added
 
@@ -31,6 +32,15 @@ unchanged.
     `Answers::omission_details`, each `&[Omission]` in the order of the matching `omissions` list;
     the struct `Omission { kind, entity_kind, document, text }` and the `#[non_exhaustive]` enums
     `EntityKind` and `Document { Input(usize), Probe(usize) }`. All additive.
+
+### Fixed
+
+- **An import by version IRI resolves** (issue #71). OWL 2 lets `owl:imports` name the imported
+  ontology's IRI or its version IRI. An import naming the version stayed an `UnresolvedImport`, and
+  the run inconclusive, even with the document supplied and attested. Now an attested ontology's
+  `owl:versionIRI`, as the supplied documents declare it, counts as attested too, so neither `-I`
+  nor a library host has to know which form each importer used. A version IRI declared by an
+  ontology nobody attested still resolves nothing. Pinned by the `by-version` import golden.
 
 ## 0.5.0 — 2026-10-14
 
