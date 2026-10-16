@@ -42,7 +42,9 @@ document, as in Turtle.
 `attest_import(iri)` is the caller's statement that an `owl:imports` target is resolved: its
 document has been added. HOWL never fetches anything. A declared import that is not attested is a
 coverage gap, so the run is `Inconclusive`. The check catches a forgotten import, but it cannot catch
-a false one. An attested IRI whose triples were never added passes silently.
+a false one. An attested IRI whose triples were never added passes silently. Attest the ontology
+IRI: an import that names its `owl:versionIRI` instead resolves too, as long as the added document
+declares that version.
 
 A document that fails to parse returns `Fault::InputError`, and so does every later `classify` of
 that input, because the triples before the error were already added.

@@ -32,6 +32,15 @@ unchanged.
     the struct `Omission { kind, entity_kind, document, text }` and the `#[non_exhaustive]` enums
     `EntityKind` and `Document { Input(usize), Probe(usize) }`. All additive.
 
+### Fixed
+
+- **An import by version IRI resolves** (issue #71). OWL 2 lets `owl:imports` name the imported
+  ontology's IRI or its version IRI. An import naming the version stayed an `UnresolvedImport`, and
+  the run inconclusive, even with the document supplied and attested. Now an attested ontology's
+  `owl:versionIRI`, as the supplied documents declare it, counts as attested too, so neither `-I`
+  nor a library host has to know which form each importer used. A version IRI declared by an
+  ontology nobody attested still resolves nothing. Pinned by the `by-version` import golden.
+
 ## 0.5.0 — 2026-10-14
 
 Probe queries can be answered without classifying the whole ontology first: `howl ask`,

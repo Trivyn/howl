@@ -91,7 +91,7 @@
                  OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY
                  OWL_TOP_DATA_PROPERTY OWL_BOTTOM_DATA_PROPERTY
                  SWRL_IMP
-                 OWL_ONTOLOGY OWL_IMPORTS
+                 OWL_ONTOLOGY OWL_IMPORTS OWL_VERSION_IRI
                  OWL_THING OWL_NOTHING
                  OWL_INTERSECTION_OF OWL_UNION_OF OWL_COMPLEMENT_OF OWL_ONE_OF
                  OWL_SOME_VALUES_FROM OWL_ALL_VALUES_FROM
@@ -333,6 +333,32 @@
               ((some i) (when (not (iri-in-list out i)) (list-push out i)))
               ((none)   (do)))))
         (sort-iris arena out))))
+
+  (fn attested-versions ((arena Arena) (doc Encoded) (resolved (List IRI)))
+    (@intent "The attested IRIs, plus the owl:versionIRI of every attested ontology the document names")
+    (@spec ((Arena Encoded (List IRI)) -> (List IRI)))
+    (@alloc arena)
+    ;; OWL 2 lets an import name the ontology IRI OR the version IRI
+    ;; (Structural Specification §3.4). The caller attests the ontology it
+    ;; supplied, by whichever IRI it knows; the supplied document says
+    ;; which version that is. Reading the version from the document is
+    ;; what spares a host from knowing which form each importer used
+    ;; (#71). The trust boundary is unchanged: only an ATTESTED
+    ;; ontology's version is added, never a version named by itself.
+    (let ((version-id (vocab-id arena (. doc dict) OWL_VERSION_IRI))
+          (mut out (list-new arena IRI)))
+      (do
+        (for-each (r resolved) (list-push out r))
+        (for-each (it (. doc triples))
+          (when (== (. it p) version-id)
+            (match (term-iri-value (term-of (. doc dict) (. it s)))
+              ((some o)
+                (when (iri-in-list resolved o)
+                  (match (term-iri-value (term-of (. doc dict) (. it o)))
+                    ((some v) (when (not (iri-in-list out v)) (list-push out v)))
+                    ((none)   (do)))))
+              ((none) (do)))))
+        out)))
 
   (fn vocab-id ((arena Arena) (dict TermStore) (iri String))
     (@intent "The id of an IRI in the document's dictionary, or -1 if the document never uses it")
@@ -757,7 +783,7 @@
         (match fault
           ((some msg) (error (union-new Fault input-error msg)))
           ((none)
-            (let ((oms (unresolved-imports arena declared imports-resolved)))
+            (let ((oms (unresolved-imports arena declared (attested-versions scratch doc imports-resolved))))
               (ok (record-new Stage0
                     (dict             dict)
                     (triples          out)

@@ -433,7 +433,7 @@ GOLDEN_SRIQ_CORPUS   := bfo-core-2024-02-07 cco-2024-11-06
 # DOC:IMPORT pair in corpus/fixtures/imports/. They pin the CLI's merge of
 # an attested import - its blank nodes standardized apart from the root's -
 # which no single-file golden reaches.
-GOLDEN_IMPORTS  := root:imported
+GOLDEN_IMPORTS  := root:imported by-version:versioned
 # THE PROBE RUN, `howl validate MAIN --probe PROBE --ask-... --report` over
 # corpus/fixtures/probe-queries/ (SPEC §8.4): the main report unchanged, then
 # the probe lines. Each query once and in canonical order, whatever the order

@@ -478,6 +478,7 @@ slop_result_list_slop_rdf_rdf_Term_howl_decode_ListFault howl_decode_rdf_list_ch
 slop_option_slop_rdf_rdf_IRI howl_decode_term_iri_value(slop_rdf_rdf_Term t);
 uint8_t howl_decode_iri_in_list(slop_list_slop_rdf_rdf_IRI xs, slop_rdf_rdf_IRI target);
 slop_list_slop_rdf_rdf_IRI howl_decode_collect_imports(slop_arena* arena, howl_termstore_Encoded doc);
+slop_list_slop_rdf_rdf_IRI howl_decode_attested_versions(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI resolved);
 int64_t howl_decode_vocab_id(slop_arena* arena, howl_termstore_TermStore dict, slop_string iri);
 slop_list_howl_types_Omission howl_decode_unresolved_imports(slop_arena* arena, slop_list_slop_rdf_rdf_IRI declared, slop_list_slop_rdf_rdf_IRI resolved);
 uint8_t howl_decode_typed_as(slop_rdf_rdf_Triple t, slop_string type_iri);

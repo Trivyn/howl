@@ -1,0 +1,14 @@
+# AN IMPORT BY VERSION IRI (#71). OWL 2 lets owl:imports name the imported
+# ontology's IRI or its version IRI; this document names the version.
+# Pinned by `golden` with
+#   howl validate by-version.ttl -I versioned.ttl --report
+# -I attests versioned.ttl's ontology IRI, <http://example.org/versioned>,
+# and that document declares the version IRI imported here, so the import
+# resolves. Expect: coherent, nothing omitted, B ⊑ A.
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/by-version> a owl:Ontology ;
+    owl:imports <http://example.org/versioned/2.0> .
+<http://example.org/t#B> a owl:Class ;
+    rdfs:subClassOf <http://example.org/t#A> .

@@ -99,6 +99,12 @@ SLOP_LIST_DEFINE(howl_types_NormAxiom, slop_list_howl_types_NormAxiom)
 SLOP_LIST_DEFINE(slop_rdf_rdf_Triple, slop_list_slop_rdf_rdf_Triple)
 #endif
 
+#ifndef SLOP_LIST_SLOP_RDF_RDF_IRI_DEFINED
+#define SLOP_LIST_SLOP_RDF_RDF_IRI_DEFINED
+#define SLOP_LIST_SLOP_RDF_RDF_IRI_IMPL_DEFINED
+SLOP_LIST_DEFINE(slop_rdf_rdf_IRI, slop_list_slop_rdf_rdf_IRI)
+#endif
+
 #ifndef SLOP_LIST_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_HOWL_OWL2_RAWAXIOM_IMPL_DEFINED
@@ -115,12 +121,6 @@ SLOP_LIST_DEFINE(howl_types_AxiomRef, slop_list_howl_types_AxiomRef)
 #define SLOP_LIST_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_LIST_HOWL_TYPES_OMISSION_IMPL_DEFINED
 SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
-#endif
-
-#ifndef SLOP_LIST_SLOP_RDF_RDF_IRI_DEFINED
-#define SLOP_LIST_SLOP_RDF_RDF_IRI_DEFINED
-#define SLOP_LIST_SLOP_RDF_RDF_IRI_IMPL_DEFINED
-SLOP_LIST_DEFINE(slop_rdf_rdf_IRI, slop_list_slop_rdf_rdf_IRI)
 #endif
 
 #ifndef SLOP_LIST_HOWL_SROIQ_SAXIOM_DEFINED
@@ -251,6 +251,11 @@ SLOP_OPTION_DEFINE(howl_types_NormAxiom, slop_option_howl_types_NormAxiom)
 SLOP_OPTION_DEFINE(slop_rdf_rdf_Triple, slop_option_slop_rdf_rdf_Triple)
 #endif
 
+#ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
+#define SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
@@ -274,11 +279,6 @@ SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 #ifndef SLOP_OPTION_HOWL_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_HOWL_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(howl_gate_GateResult, slop_option_howl_gate_GateResult)
-#endif
-
-#ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
-#define SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_SROIQ_SAXIOM_DEFINED
@@ -1296,6 +1296,9 @@ slop_rdf_rdf_Term howl_test_ex_iri(slop_arena* arena, slop_string local);
 int64_t howl_test_count_subclass_triples(slop_list_slop_rdf_rdf_Triple ts, slop_rdf_rdf_Term pred);
 uint8_t howl_test_test_unattested_import_yields_an_omission(slop_arena* arena);
 uint8_t howl_test_test_attested_import_yields_none(slop_arena* arena);
+int64_t howl_test_version_import_omissions(slop_arena* arena, slop_list_slop_rdf_rdf_IRI attested);
+uint8_t howl_test_test_import_by_version_iri_resolves(slop_arena* arena);
+uint8_t howl_test_test_unattested_version_iri_stays_unresolved(slop_arena* arena);
 uint8_t howl_test_test_term_store_by_content(slop_arena* arena);
 uint8_t howl_test_test_term_store_quoted_and_tagged(slop_arena* arena);
 slop_list_slop_rdf_rdf_Triple howl_test_stage0_triples(slop_arena* arena, howl_decode_Stage0 s0);
@@ -2013,6 +2016,11 @@ SLOP_OPTION_DEFINE(howl_types_NormAxiom, slop_option_howl_types_NormAxiom)
 SLOP_OPTION_DEFINE(slop_rdf_rdf_Triple, slop_option_slop_rdf_rdf_Triple)
 #endif
 
+#ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
+#define SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
+SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
@@ -2036,11 +2044,6 @@ SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 #ifndef SLOP_OPTION_HOWL_GATE_GATERESULT_DEFINED
 #define SLOP_OPTION_HOWL_GATE_GATERESULT_DEFINED
 SLOP_OPTION_DEFINE(howl_gate_GateResult, slop_option_howl_gate_GateResult)
-#endif
-
-#ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
-#define SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
-SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_SROIQ_SAXIOM_DEFINED

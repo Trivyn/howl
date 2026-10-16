@@ -103,7 +103,8 @@ howl --version
 - **`-I FILE`** loads an imported document and attests it. HOWL never fetches anything, so each
   `owl:imports` target must be passed as a file. One that isn't stays an omission
   (`UnresolvedImport`), and the run is inconclusive. The file must declare its `owl:Ontology` IRI,
-  and its blank nodes are kept apart from the root document's.
+  and its blank nodes are kept apart from the root document's. An import may name that IRI or the
+  file's `owl:versionIRI`.
 - **`--profile P`** picks the logic to reason in:
 
   | Profile | Logic | Status |

@@ -378,6 +378,10 @@ impl Input {
     /// content once documents are merged, so attesting an import whose
     /// triples were never added passes silently. The attestation is a
     /// trust boundary, not a proof.
+    ///
+    /// OWL 2 lets an import name an ontology's IRI or its version IRI.
+    /// Attest the ontology IRI: an import naming its `owl:versionIRI`
+    /// resolves too, when an added document declares that version.
     pub fn attest_import(&mut self, iri: &str) {
         unsafe { ffi::howl_input_attest_import(self.raw, ffi::SlopString::borrow(iri)) }
     }
