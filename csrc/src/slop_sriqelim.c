@@ -66,11 +66,11 @@ uint8_t howl_sriqelim_ria_complex(howl_sriqrbox_SriqRbox rb, howl_sroiq_SRia x) 
 }
 
 howl_types_RoleId howl_sriqelim_role_at(slop_list_howl_types_RoleId w, int64_t i) {
-    __auto_type _mv_312 = ({ __auto_type _lst = w; size_t _idx = (size_t)i; slop_option_howl_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_312.has_value) {
-        __auto_type r = _mv_312.value;
+    __auto_type _mv_317 = ({ __auto_type _lst = w; size_t _idx = (size_t)i; slop_option_howl_types_RoleId _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_317.has_value) {
+        __auto_type r = _mv_317.value;
         return r;
-    } else if (!_mv_312.has_value) {
+    } else if (!_mv_317.has_value) {
         return ((howl_types_RoleId){ .tag = howl_types_RoleId_fresh_role, .data.fresh_role = 0 });
     }
     SLOP_UNREACHABLE();
@@ -103,11 +103,11 @@ slop_list_howl_types_RoleId howl_sriqelim_inv_word(slop_arena* arena, slop_list_
 slop_list_howl_sroiq_SRia howl_sriqelim_rc_of(slop_arena* arena, howl_sriqrbox_SriqRbox rb, howl_sroiq_SAxiom a) {
     {
         __auto_type out = ((slop_list_howl_sroiq_SRia){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_313 = a;
-        switch (_mv_313.tag) {
+        __auto_type _mv_318 = a;
+        switch (_mv_318.tag) {
             case howl_sroiq_SAxiom_sa_ria:
             {
-                __auto_type x = _mv_313.data.sa_ria;
+                __auto_type x = _mv_318.data.sa_ria;
                 if (howl_sriqelim_ria_complex(rb, x)) {
                     ({ __auto_type _lst_p = &(out); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                     ({ __auto_type _lst_p = &(out); __auto_type _item = (((howl_sroiq_SRia){.word = howl_sriqelim_inv_word(arena, x.word), .super = howl_sroiq_inv_role(x.super)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -238,47 +238,47 @@ howl_sroiq_SConcept howl_sriqelim_label(slop_arena* arena, howl_sriqelim_S1State
 }
 
 howl_sroiq_SConcept howl_sriqelim_rewrite(slop_arena* arena, howl_sriqelim_S1State* p, howl_sroiq_SConcept c, uint8_t pos) {
-    __auto_type _mv_316 = c;
-    switch (_mv_316.tag) {
+    __auto_type _mv_321 = c;
+    switch (_mv_321.tag) {
         case howl_sroiq_SConcept_sc_not:
         {
-            __auto_type f = _mv_316.data.sc_not;
+            __auto_type f = _mv_321.data.sc_not;
             return ((howl_sroiq_SConcept){ .tag = howl_sroiq_SConcept_sc_not, .data.sc_not = howl_sroiq_box_sc(arena, howl_sriqelim_rewrite(arena, p, (*f), !(pos))) });
         }
         case howl_sroiq_SConcept_sc_and:
         {
-            __auto_type xs = _mv_316.data.sc_and;
+            __auto_type xs = _mv_321.data.sc_and;
             return ((howl_sroiq_SConcept){ .tag = howl_sroiq_SConcept_sc_and, .data.sc_and = howl_sriqelim_rewrite_each(arena, p, xs, pos) });
         }
         case howl_sroiq_SConcept_sc_or:
         {
-            __auto_type xs = _mv_316.data.sc_or;
+            __auto_type xs = _mv_321.data.sc_or;
             return ((howl_sroiq_SConcept){ .tag = howl_sroiq_SConcept_sc_or, .data.sc_or = howl_sriqelim_rewrite_each(arena, p, xs, pos) });
         }
         case howl_sroiq_SConcept_sc_some:
         {
-            __auto_type r = _mv_316.data.sc_some.f0;
-            __auto_type f = _mv_316.data.sc_some.f1;
+            __auto_type r = _mv_321.data.sc_some.f0;
+            __auto_type f = _mv_321.data.sc_some.f1;
             return howl_sriqelim_rewrite_some(arena, p, r, (*f), pos);
         }
         case howl_sroiq_SConcept_sc_all:
         {
-            __auto_type r = _mv_316.data.sc_all.f0;
-            __auto_type f = _mv_316.data.sc_all.f1;
+            __auto_type r = _mv_321.data.sc_all.f0;
+            __auto_type f = _mv_321.data.sc_all.f1;
             return howl_sriqelim_rewrite_all(arena, p, r, (*f), pos);
         }
         case howl_sroiq_SConcept_sc_atleast:
         {
-            __auto_type n = _mv_316.data.sc_atleast.f0;
-            __auto_type r = _mv_316.data.sc_atleast.f1;
-            __auto_type f = _mv_316.data.sc_atleast.f2;
+            __auto_type n = _mv_321.data.sc_atleast.f0;
+            __auto_type r = _mv_321.data.sc_atleast.f1;
+            __auto_type f = _mv_321.data.sc_atleast.f2;
             return ((howl_sroiq_SConcept){ .tag = howl_sroiq_SConcept_sc_atleast, .data.sc_atleast = { .f0 = n, .f1 = r, .f2 = howl_sroiq_box_sc(arena, howl_sriqelim_rewrite(arena, p, (*f), pos)) } });
         }
         case howl_sroiq_SConcept_sc_atmost:
         {
-            __auto_type n = _mv_316.data.sc_atmost.f0;
-            __auto_type r = _mv_316.data.sc_atmost.f1;
-            __auto_type f = _mv_316.data.sc_atmost.f2;
+            __auto_type n = _mv_321.data.sc_atmost.f0;
+            __auto_type r = _mv_321.data.sc_atmost.f1;
+            __auto_type f = _mv_321.data.sc_atmost.f2;
             return ((howl_sroiq_SConcept){ .tag = howl_sroiq_SConcept_sc_atmost, .data.sc_atmost = { .f0 = n, .f1 = r, .f2 = howl_sroiq_box_sc(arena, howl_sriqelim_rewrite(arena, p, (*f), !(pos))) } });
         }
         default: {
@@ -405,11 +405,11 @@ uint8_t howl_sriqelim_expand_key(slop_arena* arena, howl_sriqelim_S1State* p, ho
 }
 
 howl_sriqelim_Pending howl_sriqelim_pending_at(slop_list_howl_sriqelim_Pending xs, int64_t i) {
-    __auto_type _mv_317 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_howl_sriqelim_Pending _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_317.has_value) {
-        __auto_type e = _mv_317.value;
+    __auto_type _mv_322 = ({ __auto_type _lst = xs; size_t _idx = (size_t)i; slop_option_howl_sriqelim_Pending _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_322.has_value) {
+        __auto_type e = _mv_322.value;
         return e;
-    } else if (!_mv_317.has_value) {
+    } else if (!_mv_322.has_value) {
         return ((howl_sriqelim_Pending){.forall = 1, .role = ((howl_types_RoleId){ .tag = howl_types_RoleId_fresh_role, .data.fresh_role = 0 }), .filler = ((howl_sroiq_SConcept){ .tag = howl_sroiq_SConcept_sc_top })});
     }
     SLOP_UNREACHABLE();
@@ -431,11 +431,11 @@ uint8_t howl_sriqelim_s1_init(slop_arena* arena, howl_sriqelim_S1State* p, slop_
         __auto_type _coll = axs;
         for (size_t _i = 0; _i < _coll.len; _i++) {
             __auto_type a = _coll.data[_i];
-            __auto_type _mv_318 = a;
-            switch (_mv_318.tag) {
+            __auto_type _mv_323 = a;
+            switch (_mv_323.tag) {
                 case howl_sroiq_SAxiom_sa_ria:
                 {
-                    __auto_type x = _mv_318.data.sa_ria;
+                    __auto_type x = _mv_323.data.sa_ria;
                     if (!(howl_sriqelim_ria_complex((*p).rb, x))) {
                         howl_sriqelim_emit(arena, p, a);
                     }
@@ -443,8 +443,8 @@ uint8_t howl_sriqelim_s1_init(slop_arena* arena, howl_sriqelim_S1State* p, slop_
                 }
                 case howl_sroiq_SAxiom_sa_gci:
                 {
-                    __auto_type l = _mv_318.data.sa_gci.f0;
-                    __auto_type r = _mv_318.data.sa_gci.f1;
+                    __auto_type l = _mv_323.data.sa_gci.f0;
+                    __auto_type r = _mv_323.data.sa_gci.f1;
                     howl_sriqelim_emit_gci(arena, p, howl_sriqelim_rewrite(arena, p, (*l), 0), howl_sriqelim_rewrite(arena, p, (*r), 1));
                     break;
                 }
@@ -459,11 +459,11 @@ uint8_t howl_sriqelim_s1_init(slop_arena* arena, howl_sriqelim_S1State* p, slop_
 }
 
 uint8_t howl_sriqelim_is_chain(howl_sroiq_SAxiom a) {
-    __auto_type _mv_319 = a;
-    switch (_mv_319.tag) {
+    __auto_type _mv_324 = a;
+    switch (_mv_324.tag) {
         case howl_sroiq_SAxiom_sa_ria:
         {
-            __auto_type x = _mv_319.data.sa_ria;
+            __auto_type x = _mv_324.data.sa_ria;
             return (((int64_t)((x.word).len)) > 1);
         }
         default: {
@@ -494,11 +494,11 @@ howl_sriqelim_S1 howl_sriqelim_guarded(slop_arena* arena, slop_list_howl_sroiq_S
 slop_result_howl_sriqelim_S1_string howl_sriqelim_s1_result(slop_arena* arena, howl_sriqnormal_S0 s0, howl_sriqelim_S1State* p) {
     {
         __auto_type st = (*p);
-        __auto_type _mv_320 = st.fault;
-        if (_mv_320.has_value) {
-            __auto_type m = _mv_320.value;
+        __auto_type _mv_325 = st.fault;
+        if (_mv_325.has_value) {
+            __auto_type m = _mv_325.value;
             return ((slop_result_howl_sriqelim_S1_string){ .is_ok = false, .data.err = m });
-        } else if (!_mv_320.has_value) {
+        } else if (!_mv_325.has_value) {
             if (st.count > st.bound) {
                 return ((slop_result_howl_sriqelim_S1_string){ .is_ok = true, .data.ok = howl_sriqelim_guarded(arena, s0.axioms, st.count) });
             } else {
@@ -519,8 +519,8 @@ slop_result_howl_sriqelim_S1_string howl_sriqelim_sriq_s1(slop_arena* arena, how
 }
 
 uint8_t howl_sriqelim_is_atom(howl_sroiq_SConcept c) {
-    __auto_type _mv_321 = c;
-    switch (_mv_321.tag) {
+    __auto_type _mv_326 = c;
+    switch (_mv_326.tag) {
         case howl_sroiq_SConcept_sc_elim:
         {
             return 1;
@@ -532,11 +532,11 @@ uint8_t howl_sriqelim_is_atom(howl_sroiq_SConcept c) {
 }
 
 uint8_t howl_sriqelim_item1_p(howl_sroiq_SConcept l, howl_sroiq_SConcept r) {
-    __auto_type _mv_322 = r;
-    switch (_mv_322.tag) {
+    __auto_type _mv_327 = r;
+    switch (_mv_327.tag) {
         case howl_sroiq_SConcept_sc_all:
         {
-            __auto_type f = _mv_322.data.sc_all.f1;
+            __auto_type f = _mv_327.data.sc_all.f1;
             return (howl_sriqelim_is_atom(l) && howl_sriqelim_is_atom((*f)));
         }
         default: {
@@ -546,43 +546,43 @@ uint8_t howl_sriqelim_item1_p(howl_sroiq_SConcept l, howl_sroiq_SConcept r) {
 }
 
 uint8_t howl_sriqelim_labelled_left(howl_sriqrbox_SriqRbox rb, howl_sroiq_SConcept c, uint8_t pos) {
-    __auto_type _mv_323 = c;
-    switch (_mv_323.tag) {
+    __auto_type _mv_328 = c;
+    switch (_mv_328.tag) {
         case howl_sroiq_SConcept_sc_not:
         {
-            __auto_type f = _mv_323.data.sc_not;
+            __auto_type f = _mv_328.data.sc_not;
             return howl_sriqelim_labelled_left(rb, (*f), !(pos));
         }
         case howl_sroiq_SConcept_sc_and:
         {
-            __auto_type xs = _mv_323.data.sc_and;
+            __auto_type xs = _mv_328.data.sc_and;
             return howl_sriqelim_labelled_any(rb, xs, pos);
         }
         case howl_sroiq_SConcept_sc_or:
         {
-            __auto_type xs = _mv_323.data.sc_or;
+            __auto_type xs = _mv_328.data.sc_or;
             return howl_sriqelim_labelled_any(rb, xs, pos);
         }
         case howl_sroiq_SConcept_sc_some:
         {
-            __auto_type r = _mv_323.data.sc_some.f0;
-            __auto_type f = _mv_323.data.sc_some.f1;
+            __auto_type r = _mv_328.data.sc_some.f0;
+            __auto_type f = _mv_328.data.sc_some.f1;
             return ((!(pos) && howl_sriqelim_nonsimple(rb, r)) || howl_sriqelim_labelled_left(rb, (*f), pos));
         }
         case howl_sroiq_SConcept_sc_all:
         {
-            __auto_type r = _mv_323.data.sc_all.f0;
-            __auto_type f = _mv_323.data.sc_all.f1;
+            __auto_type r = _mv_328.data.sc_all.f0;
+            __auto_type f = _mv_328.data.sc_all.f1;
             return ((pos && howl_sriqelim_nonsimple(rb, r)) || howl_sriqelim_labelled_left(rb, (*f), pos));
         }
         case howl_sroiq_SConcept_sc_atleast:
         {
-            __auto_type f = _mv_323.data.sc_atleast.f2;
+            __auto_type f = _mv_328.data.sc_atleast.f2;
             return howl_sriqelim_labelled_left(rb, (*f), pos);
         }
         case howl_sroiq_SConcept_sc_atmost:
         {
-            __auto_type f = _mv_323.data.sc_atmost.f2;
+            __auto_type f = _mv_328.data.sc_atmost.f2;
             return howl_sriqelim_labelled_left(rb, (*f), !(pos));
         }
         default: {
@@ -615,11 +615,11 @@ uint8_t howl_sriqelim_has_axiom(slop_list_howl_sroiq_SAxiom axs, howl_sroiq_SAxi
         while ((lo <= hi) && !(found)) {
             {
                 __auto_type mid = ((lo + hi) / 2);
-                __auto_type _mv_324 = ({ __auto_type _lst = axs; size_t _idx = (size_t)mid; slop_option_howl_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (!_mv_324.has_value) {
+                __auto_type _mv_329 = ({ __auto_type _lst = axs; size_t _idx = (size_t)mid; slop_option_howl_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                if (!_mv_329.has_value) {
                     hi = -1;
-                } else if (_mv_324.has_value) {
-                    __auto_type x = _mv_324.value;
+                } else if (_mv_329.has_value) {
+                    __auto_type x = _mv_329.value;
                     {
                         __auto_type d = howl_sroiq_sa_cmp(x, a);
                         if (d == 0) {
@@ -662,17 +662,17 @@ slop_list_howl_sroiq_SAxiom howl_sriqelim_some_axioms(slop_arena* arena, howl_sr
 }
 
 slop_list_howl_sroiq_SAxiom howl_sriqelim_atom_axioms(slop_arena* arena, howl_sroiq_SConcept c) {
-    __auto_type _mv_325 = c;
-    switch (_mv_325.tag) {
+    __auto_type _mv_330 = c;
+    switch (_mv_330.tag) {
         case howl_sroiq_SConcept_sc_elim:
         {
-            __auto_type k = _mv_325.data.sc_elim.f0;
-            __auto_type r = _mv_325.data.sc_elim.f1;
-            __auto_type f = _mv_325.data.sc_elim.f2;
-            __auto_type _mv_326 = k;
-            if (_mv_326 == howl_sroiq_ElimKind_ek_i_all) {
+            __auto_type k = _mv_330.data.sc_elim.f0;
+            __auto_type r = _mv_330.data.sc_elim.f1;
+            __auto_type f = _mv_330.data.sc_elim.f2;
+            __auto_type _mv_331 = k;
+            if (_mv_331 == howl_sroiq_ElimKind_ek_i_all) {
                 return howl_sriqelim_all_axioms(arena, c, r, (*f));
-            } else if (_mv_326 == howl_sroiq_ElimKind_ek_f_some) {
+            } else if (_mv_331 == howl_sroiq_ElimKind_ek_f_some) {
                 return howl_sriqelim_some_axioms(arena, c, r, (*f));
             } else {
                 return ((slop_list_howl_sroiq_SAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -687,8 +687,8 @@ slop_list_howl_sroiq_SAxiom howl_sriqelim_atom_axioms(slop_arena* arena, howl_sr
 slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sroiq_SConcept c) {
     {
         __auto_type out = ((slop_list_howl_sroiq_SConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_327 = c;
-        switch (_mv_327.tag) {
+        __auto_type _mv_332 = c;
+        switch (_mv_332.tag) {
             case howl_sroiq_SConcept_sc_elim:
             {
                 ({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -696,7 +696,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_not:
             {
-                __auto_type f = _mv_327.data.sc_not;
+                __auto_type f = _mv_332.data.sc_not;
                 {
                     __auto_type _coll = howl_sriqelim_atoms_of(arena, (*f));
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -708,7 +708,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_and:
             {
-                __auto_type xs = _mv_327.data.sc_and;
+                __auto_type xs = _mv_332.data.sc_and;
                 {
                     __auto_type _coll = xs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -726,7 +726,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_or:
             {
-                __auto_type xs = _mv_327.data.sc_or;
+                __auto_type xs = _mv_332.data.sc_or;
                 {
                     __auto_type _coll = xs;
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -744,7 +744,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_some:
             {
-                __auto_type f = _mv_327.data.sc_some.f1;
+                __auto_type f = _mv_332.data.sc_some.f1;
                 {
                     __auto_type _coll = howl_sriqelim_atoms_of(arena, (*f));
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -756,7 +756,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_all:
             {
-                __auto_type f = _mv_327.data.sc_all.f1;
+                __auto_type f = _mv_332.data.sc_all.f1;
                 {
                     __auto_type _coll = howl_sriqelim_atoms_of(arena, (*f));
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -768,7 +768,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_atleast:
             {
-                __auto_type f = _mv_327.data.sc_atleast.f2;
+                __auto_type f = _mv_332.data.sc_atleast.f2;
                 {
                     __auto_type _coll = howl_sriqelim_atoms_of(arena, (*f));
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -780,7 +780,7 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_atoms_of(slop_arena* arena, howl_sro
             }
             case howl_sroiq_SConcept_sc_atmost:
             {
-                __auto_type f = _mv_327.data.sc_atmost.f2;
+                __auto_type f = _mv_332.data.sc_atmost.f2;
                 {
                     __auto_type _coll = howl_sriqelim_atoms_of(arena, (*f));
                     for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -822,11 +822,11 @@ slop_list_howl_sroiq_SConcept howl_sriqelim_append_atoms(slop_arena* arena, slop
 slop_list_string howl_sriqelim_axiom_problems(slop_arena* arena, howl_sriqrbox_SriqRbox rb, slop_list_howl_sroiq_SAxiom axs, howl_sroiq_SAxiom a) {
     {
         __auto_type bad = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        __auto_type _mv_328 = a;
-        switch (_mv_328.tag) {
+        __auto_type _mv_333 = a;
+        switch (_mv_333.tag) {
             case howl_sroiq_SAxiom_sa_ria:
             {
-                __auto_type x = _mv_328.data.sa_ria;
+                __auto_type x = _mv_333.data.sa_ria;
                 if (howl_sriqelim_ria_complex(rb, x)) {
                     ({ __auto_type _lst_p = &(bad); __auto_type _item = (string_concat(arena, SLOP_STR("a complex RIA is left: "), howl_sroiq_render_saxiom(arena, a))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
@@ -834,8 +834,8 @@ slop_list_string howl_sriqelim_axiom_problems(slop_arena* arena, howl_sriqrbox_S
             }
             case howl_sroiq_SAxiom_sa_gci:
             {
-                __auto_type l = _mv_328.data.sa_gci.f0;
-                __auto_type r = _mv_328.data.sa_gci.f1;
+                __auto_type l = _mv_333.data.sa_gci.f0;
+                __auto_type r = _mv_333.data.sa_gci.f1;
                 if (!(howl_sriqelim_item1_p((*l), (*r))) && (howl_sriqelim_labelled_left(rb, (*l), 0) || howl_sriqelim_labelled_left(rb, (*r), 1))) {
                     ({ __auto_type _lst_p = &(bad); __auto_type _item = (string_concat(arena, SLOP_STR("a labelled restriction is left: "), howl_sroiq_render_saxiom(arena, a))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                 }
@@ -869,19 +869,19 @@ uint8_t howl_sriqelim_same_axioms(slop_list_howl_sroiq_SAxiom a, slop_list_howl_
         uint8_t ok = (((int64_t)((a).len)) == ((int64_t)((b).len)));
         int64_t i = 0;
         while (ok && (i < ((int64_t)(((int64_t)((a).len)))))) {
-            __auto_type _mv_329 = ({ __auto_type _lst = a; size_t _idx = (size_t)i; slop_option_howl_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-            if (_mv_329.has_value) {
-                __auto_type x = _mv_329.value;
-                __auto_type _mv_330 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_howl_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (_mv_330.has_value) {
-                    __auto_type y = _mv_330.value;
+            __auto_type _mv_334 = ({ __auto_type _lst = a; size_t _idx = (size_t)i; slop_option_howl_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+            if (_mv_334.has_value) {
+                __auto_type x = _mv_334.value;
+                __auto_type _mv_335 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_howl_sroiq_SAxiom _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                if (_mv_335.has_value) {
+                    __auto_type y = _mv_335.value;
                     if (howl_sroiq_sa_cmp(x, y) != 0) {
                         ok = 0;
                     }
-                } else if (!_mv_330.has_value) {
+                } else if (!_mv_335.has_value) {
                     ok = 0;
                 }
-            } else if (!_mv_329.has_value) {
+            } else if (!_mv_334.has_value) {
                 ok = 0;
             }
             i = (i + 1);

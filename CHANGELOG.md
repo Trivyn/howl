@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.7.0 — unreleased
+
+Each omission now says why its axiom was dropped (issue #125). A host that wants to refuse an edit
+breaking an OWL 2 DL global restriction no longer has to diff omission sets, which also catch
+harmless profile gaps, or parse an omission's text. Every report golden is byte-identical, and the
+slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged.
+
+### Added
+
+- **`Omission::reason`** (Rust) and **`howl_run_omission_reason`** / **`howl_run_omission_reason_role`**
+  (C), with probe-run equivalents. The reasons:
+  - `OutOfProfile`: the construct is not in the profile;
+  - `IrregularRbox`: an RBox axiom of an RBox that is not regular;
+  - `NonSimpleRole { role }`: a simple-role-only axiom or restriction over a non-simple role, naming
+    the canonically least such role;
+  - `RangeCondition`: an `el` / `el++` chain that breaks the range condition;
+  - `ResourceGuard`: a `sriq` number restriction above 16, or a chain set aside by chain
+    elimination's size guard;
+  - `Undeclared`, `UnresolvedImport` and `Unrecognized`.
+- When an axiom fails several conditions, the first in the gate's order decides (SPEC §6.2).
+- The reason comes from checks the gate already runs, so classification costs the same.
+
+### Changed
+
+- **`Omission` is `#[non_exhaustive]`, and gains a field.** Code that built an `Omission` with a
+  struct literal no longer compiles; reading its fields is unchanged. A later witness for an
+  irregular RBox will then not need another breaking change.
+
 ## 0.6.1 — 2026-10-15
 
 The answer run (`Reasoner::answer`, `howl_run_answer`, `howl ask`) no longer classifies the whole

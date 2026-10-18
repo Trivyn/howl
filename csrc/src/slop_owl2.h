@@ -349,6 +349,9 @@ uint8_t howl_owl2_roles_in_profile(howl_types_Profile p, slop_list_howl_types_Ro
 uint8_t howl_owl2_concepts_in_profile(howl_types_Profile p, slop_list_howl_owl2_RawConcept cs);
 uint8_t howl_owl2_concept_in_profile(howl_types_Profile p, howl_owl2_RawConcept c);
 uint8_t howl_owl2_axiom_in_profile(howl_types_Profile p, howl_owl2_RawAxiom ax);
+uint8_t howl_owl2_concepts_in_profile_at(howl_types_Profile p, int64_t cap, slop_list_howl_owl2_RawConcept cs);
+uint8_t howl_owl2_concept_in_profile_at(howl_types_Profile p, int64_t cap, howl_owl2_RawConcept c);
+uint8_t howl_owl2_axiom_in_profile_at(howl_types_Profile p, int64_t cap, howl_owl2_RawAxiom ax);
 int64_t howl_owl2_concept_tag_rank(howl_owl2_RawConcept c);
 int64_t howl_owl2_concept_list_cmp(slop_list_howl_owl2_RawConcept a, slop_list_howl_owl2_RawConcept b);
 howl_owl2_RawConcept howl_owl2_concept_at(slop_list_howl_owl2_RawConcept xs, int64_t i);
@@ -382,6 +385,7 @@ howl_owl2_Signature howl_owl2_copy_signature(slop_arena* arena, howl_owl2_Signat
 slop_list_howl_owl2_RawConcept howl_owl2_sort_concepts(slop_arena* arena, slop_list_howl_owl2_RawConcept xs);
 
 #define howl_owl2_SRIQ_MAX_COUNT (16)
+#define howl_owl2_NO_COUNT_CAP (4611686018427387904)
 
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWCONCEPT_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWCONCEPT_DEFINED

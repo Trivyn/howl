@@ -143,7 +143,83 @@ fn assert_details_agree(texts: &[String], details: &[howl::Omission]) {
         assert_eq!(&d.text, t);
         assert_eq!(d.kind, t[..t.find('(').unwrap()]);
         assert_eq!(d.entity_kind.is_some(), d.kind == "MissingDeclaration", "{d:?}");
+        // Issue #125: the reason agrees with the kind wherever the kind fixes it.
+        let undeclared = d.kind == "MissingDeclaration" || d.kind == "UndeclaredProperty";
+        assert_eq!(d.reason == howl::OmissionReason::Undeclared, undeclared, "{d:?}");
+        assert_eq!(d.reason == howl::OmissionReason::UnresolvedImport, d.kind == "UnresolvedImport", "{d:?}");
+        if d.kind == "Unrecognized" {
+            assert_eq!(d.reason, howl::OmissionReason::Unrecognized, "{d:?}");
+        }
+        if let howl::OmissionReason::NonSimpleRole { role } = &d.reason {
+            assert!(!role.is_empty(), "{d:?}");
+        }
     }
+}
+
+/// The reasons a document's omissions give under one profile.
+fn reasons_under(profile: Profile, body: &str) -> Vec<howl::OmissionReason> {
+    let decls = ":r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty .
+        :u a owl:ObjectProperty . :A a owl:Class . :B a owl:Class . :Agent a owl:Class .";
+    let input = turtle(&format!("{PREFIXES} {decls} {body}"));
+    let r = classify_with(&input, Config { selection: ProfileSelection::Explicit(profile), ..Config::default() });
+    assert_details_agree(&r.omissions, r.omission_details());
+    r.omission_details().iter().map(|d| d.reason.clone()).collect()
+}
+
+/// Issue #125: each omission says why it was dropped, so a host can tell
+/// a profile gap from an edit that broke an OWL 2 DL global restriction.
+#[test]
+fn omissions_say_why() {
+    use howl::OmissionReason::*;
+    let role = |n: &str| NonSimpleRole { role: format!("{EX}{n}") };
+    // A functional property that becomes the head of a chain.
+    assert_eq!(
+        reasons_under(Profile::Sriq, ":r owl:propertyChainAxiom ( :s :t ) . :r a owl:FunctionalProperty ."),
+        [role("r")]
+    );
+    // A cardinality restriction on a chain's super-property.
+    assert_eq!(
+        reasons_under(
+            Profile::Sriq,
+            ":r rdfs:subPropertyOf :u . :r owl:propertyChainAxiom ( :s :t ) .
+             :A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :u ; owl:maxCardinality 1 ] ."
+        ),
+        [role("u")]
+    );
+    // Two chains that define each other.
+    let cycle = ":s owl:propertyChainAxiom ( :r :s ) . :r owl:propertyChainAxiom ( :s :r ) .";
+    for p in [Profile::El, Profile::Sriq] {
+        assert_eq!(reasons_under(p, cycle), [IrregularRbox, IrregularRbox], "{p:?}");
+    }
+    // An ObjectAllValuesFrom under el++.
+    assert_eq!(
+        reasons_under(
+            Profile::ElPlusPlus,
+            ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] ."
+        ),
+        [OutOfProfile]
+    );
+    // A chain whose target's range its last role lacks; a count over 16.
+    assert_eq!(reasons_under(Profile::El, ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range :Agent ."), [RangeCondition]);
+    let count = ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 17 ] .";
+    assert_eq!(reasons_under(Profile::Sriq, count), [ResourceGuard]);
+    assert_eq!(reasons_under(Profile::El, count), [OutOfProfile]);
+}
+
+/// Issue #125: the answer run's omissions carry the reasons of the run
+/// that answered.
+#[test]
+fn answer_omissions_say_why() {
+    let mut input = turtle(&format!(
+        "{PREFIXES} :t a owl:ObjectProperty , owl:TransitiveProperty . :A a owl:Class . :B a owl:Class .
+         :A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:hasSelf true ] ."
+    ));
+    input.ask_subsumed(&format!("{EX}A"), &format!("{EX}B"));
+    let config = Config { selection: ProfileSelection::Explicit(Profile::ElPlusPlus), ..Config::default() };
+    let a = Reasoner::with_config(config).answer(&input).unwrap();
+    assert_details_agree(&a.omissions, a.omission_details());
+    let reasons: Vec<_> = a.omission_details().iter().map(|d| d.reason.clone()).collect();
+    assert_eq!(reasons, [howl::OmissionReason::NonSimpleRole { role: format!("{EX}t") }]);
 }
 
 /// `(document, text)` for each detail, for comparing in one assertion.

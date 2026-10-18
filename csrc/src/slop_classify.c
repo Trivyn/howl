@@ -18,11 +18,11 @@ uint8_t howl_classify_ksc_entails_sub(howl_types_KscResult r, howl_types_KName a
 uint8_t howl_classify_context_has_bottom(howl_types_Saturation sat, howl_types_Node n) {
     {
         __auto_type bottom = howl_types_node_bottom();
-        __auto_type _mv_1128 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-        if (_mv_1128.has_value) {
-            __auto_type ctx = _mv_1128.value;
+        __auto_type _mv_1138 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+        if (_mv_1138.has_value) {
+            __auto_type ctx = _mv_1138.value;
             return slop_map_has(ctx.subsumers, &(bottom));
-        } else if (!_mv_1128.has_value) {
+        } else if (!_mv_1138.has_value) {
             return 0;
         }
         SLOP_UNREACHABLE();
@@ -50,21 +50,21 @@ uint8_t howl_classify_detect_inconsistent(howl_types_Saturation sat, howl_types_
 }
 
 uint8_t howl_classify_is_individual(howl_types_Names names, howl_types_Node n) {
-    __auto_type _mv_1130 = howl_types_original_node(names, n);
-    switch (_mv_1130.tag) {
+    __auto_type _mv_1140 = howl_types_original_node(names, n);
+    switch (_mv_1140.tag) {
         case howl_types_Node_individual_node:
         {
-            __auto_type _ = _mv_1130.data.individual_node;
+            __auto_type _ = _mv_1140.data.individual_node;
             return 1;
         }
         case howl_types_Node_class_node:
         {
-            __auto_type _ = _mv_1130.data.class_node;
+            __auto_type _ = _mv_1140.data.class_node;
             return 0;
         }
         case howl_types_Node_fresh_node:
         {
-            __auto_type _ = _mv_1130.data.fresh_node;
+            __auto_type _ = _mv_1140.data.fresh_node;
             return 0;
         }
     }
@@ -79,31 +79,31 @@ uint8_t howl_classify_entails_sub(howl_types_Saturation sat, howl_types_Names na
             _retval = 1;
             goto _slop_post;
         } else {
-            __auto_type _mv_1131 = howl_types_renamed_node(names, a);
-            if (!_mv_1131.has_value) {
+            __auto_type _mv_1141 = howl_types_renamed_node(names, a);
+            if (!_mv_1141.has_value) {
                 _retval = 0;
                 goto _slop_post;
-            } else if (_mv_1131.has_value) {
-                __auto_type ra = _mv_1131.value;
-                __auto_type _mv_1133 = ({ void* _ptr = slop_map_get(sat.contexts, &(ra)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-                if (_mv_1133.has_value) {
-                    __auto_type ctx = _mv_1133.value;
+            } else if (_mv_1141.has_value) {
+                __auto_type ra = _mv_1141.value;
+                __auto_type _mv_1143 = ({ void* _ptr = slop_map_get(sat.contexts, &(ra)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+                if (_mv_1143.has_value) {
+                    __auto_type ctx = _mv_1143.value;
                     if (slop_map_has(ctx.subsumers, &(bottom))) {
                         _retval = 1;
                         goto _slop_post;
                     } else {
-                        __auto_type _mv_1135 = howl_types_renamed_node(names, b);
-                        if (_mv_1135.has_value) {
-                            __auto_type rb = _mv_1135.value;
+                        __auto_type _mv_1145 = howl_types_renamed_node(names, b);
+                        if (_mv_1145.has_value) {
+                            __auto_type rb = _mv_1145.value;
                             _retval = slop_map_has(ctx.subsumers, &(rb));
                             goto _slop_post;
-                        } else if (!_mv_1135.has_value) {
+                        } else if (!_mv_1145.has_value) {
                             _retval = 0;
                             goto _slop_post;
                         }
                         SLOP_UNREACHABLE();
                     }
-                } else if (!_mv_1133.has_value) {
+                } else if (!_mv_1143.has_value) {
                     _retval = 0;
                     goto _slop_post;
                 }
@@ -130,11 +130,11 @@ slop_list_slop_rdf_rdf_IRI howl_classify_collect_unsatisfiable(slop_arena* arena
                 {
                     howl_types_Node n = *(howl_types_Node*)slop_map_key_at(_coll, _i);
                     howl_types_Context ctx = *(howl_types_Context*)slop_map_value_at(_coll, _i);
-                    __auto_type _mv_1137 = howl_types_original_node(names, n);
-                    switch (_mv_1137.tag) {
+                    __auto_type _mv_1147 = howl_types_original_node(names, n);
+                    switch (_mv_1147.tag) {
                         case howl_types_Node_class_node:
                         {
-                            __auto_type iri = _mv_1137.data.class_node;
+                            __auto_type iri = _mv_1147.data.class_node;
                             if (!(howl_classify_is_bottom_iri(iri))) {
                                 if (slop_map_has(ctx.subsumers, &(bottom))) {
                                     ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -144,12 +144,12 @@ slop_list_slop_rdf_rdf_IRI howl_classify_collect_unsatisfiable(slop_arena* arena
                         }
                         case howl_types_Node_individual_node:
                         {
-                            __auto_type _ = _mv_1137.data.individual_node;
+                            __auto_type _ = _mv_1147.data.individual_node;
                             break;
                         }
                         case howl_types_Node_fresh_node:
                         {
-                            __auto_type _ = _mv_1137.data.fresh_node;
+                            __auto_type _ = _mv_1147.data.fresh_node;
                             break;
                         }
                     }
@@ -170,11 +170,11 @@ slop_list_howl_types_SubPair howl_classify_collect_taxonomy(slop_arena* arena, h
                 {
                     howl_types_Node rn = *(howl_types_Node*)slop_map_key_at(_coll, _i);
                     howl_types_Context ctx = *(howl_types_Context*)slop_map_value_at(_coll, _i);
-                    __auto_type _mv_1139 = howl_types_original_node(names, rn);
-                    switch (_mv_1139.tag) {
+                    __auto_type _mv_1149 = howl_types_original_node(names, rn);
+                    switch (_mv_1149.tag) {
                         case howl_types_Node_class_node:
                         {
-                            __auto_type iri = _mv_1139.data.class_node;
+                            __auto_type iri = _mv_1149.data.class_node;
                             if (!(howl_classify_is_bottom_iri(iri))) {
                                 if (slop_map_has(ctx.subsumers, &(bottom))) {
                                     {
@@ -187,11 +187,11 @@ slop_list_howl_types_SubPair howl_classify_collect_taxonomy(slop_arena* arena, h
                                         for (size_t _i = 0; _i < _coll->len; _i++) {
                                             {
                                                 howl_types_Node rb = *(howl_types_Node*)slop_map_key_at(_coll, _i);
-                                                __auto_type _mv_1141 = howl_types_original_node(names, rb);
-                                                switch (_mv_1141.tag) {
+                                                __auto_type _mv_1151 = howl_types_original_node(names, rb);
+                                                switch (_mv_1151.tag) {
                                                     case howl_types_Node_class_node:
                                                     {
-                                                        __auto_type _ = _mv_1141.data.class_node;
+                                                        __auto_type _ = _mv_1151.data.class_node;
                                                         {
                                                             __auto_type n = howl_types_original_node(names, rn);
                                                             __auto_type b = howl_types_original_node(names, rb);
@@ -201,12 +201,12 @@ slop_list_howl_types_SubPair howl_classify_collect_taxonomy(slop_arena* arena, h
                                                     }
                                                     case howl_types_Node_individual_node:
                                                     {
-                                                        __auto_type _ = _mv_1141.data.individual_node;
+                                                        __auto_type _ = _mv_1151.data.individual_node;
                                                         break;
                                                     }
                                                     case howl_types_Node_fresh_node:
                                                     {
-                                                        __auto_type _ = _mv_1141.data.fresh_node;
+                                                        __auto_type _ = _mv_1151.data.fresh_node;
                                                         break;
                                                     }
                                                 }
@@ -219,12 +219,12 @@ slop_list_howl_types_SubPair howl_classify_collect_taxonomy(slop_arena* arena, h
                         }
                         case howl_types_Node_individual_node:
                         {
-                            __auto_type _ = _mv_1139.data.individual_node;
+                            __auto_type _ = _mv_1149.data.individual_node;
                             break;
                         }
                         case howl_types_Node_fresh_node:
                         {
-                            __auto_type _ = _mv_1139.data.fresh_node;
+                            __auto_type _ = _mv_1149.data.fresh_node;
                             break;
                         }
                     }
@@ -249,11 +249,11 @@ slop_list_slop_rdf_rdf_IRI howl_classify_ksc_unsatisfiable(slop_arena* arena, ho
             __auto_type _coll = r.answers;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type a = _coll.data[_i];
-                __auto_type _mv_1142 = a.cls;
-                switch (_mv_1142.tag) {
+                __auto_type _mv_1152 = a.cls;
+                switch (_mv_1152.tag) {
                     case howl_types_KName_k_class:
                     {
-                        __auto_type iri = _mv_1142.data.k_class;
+                        __auto_type iri = _mv_1152.data.k_class;
                         if (!(howl_classify_is_bottom_iri(iri))) {
                             if (a.unsat) {
                                 ({ __auto_type _lst_p = &(unsat); __auto_type _item = (iri); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
@@ -263,7 +263,7 @@ slop_list_slop_rdf_rdf_IRI howl_classify_ksc_unsatisfiable(slop_arena* arena, ho
                     }
                     case howl_types_KName_k_fresh:
                     {
-                        __auto_type _ = _mv_1142.data.k_fresh;
+                        __auto_type _ = _mv_1152.data.k_fresh;
                         break;
                     }
                 }
@@ -281,11 +281,11 @@ slop_list_howl_types_SubPair howl_classify_ksc_taxonomy(slop_arena* arena, howl_
             __auto_type _coll = r.answers;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type a = _coll.data[_i];
-                __auto_type _mv_1143 = a.cls;
-                switch (_mv_1143.tag) {
+                __auto_type _mv_1153 = a.cls;
+                switch (_mv_1153.tag) {
                     case howl_types_KName_k_class:
                     {
-                        __auto_type iri = _mv_1143.data.k_class;
+                        __auto_type iri = _mv_1153.data.k_class;
                         if (!(howl_classify_is_bottom_iri(iri))) {
                             {
                                 __auto_type n = ((howl_types_Node){ .tag = howl_types_Node_class_node, .data.class_node = iri });
@@ -296,17 +296,17 @@ slop_list_howl_types_SubPair howl_classify_ksc_taxonomy(slop_arena* arena, howl_
                                         __auto_type _coll = a.subsumers;
                                         for (size_t _i = 0; _i < _coll.len; _i++) {
                                             __auto_type b = _coll.data[_i];
-                                            __auto_type _mv_1144 = b;
-                                            switch (_mv_1144.tag) {
+                                            __auto_type _mv_1154 = b;
+                                            switch (_mv_1154.tag) {
                                                 case howl_types_KName_k_class:
                                                 {
-                                                    __auto_type biri = _mv_1144.data.k_class;
+                                                    __auto_type biri = _mv_1154.data.k_class;
                                                     ({ __auto_type _lst_p = &(subs); __auto_type _item = (((howl_types_SubPair){.sub = n, .super = ((howl_types_Node){ .tag = howl_types_Node_class_node, .data.class_node = biri })})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                     break;
                                                 }
                                                 case howl_types_KName_k_fresh:
                                                 {
-                                                    __auto_type _ = _mv_1144.data.k_fresh;
+                                                    __auto_type _ = _mv_1154.data.k_fresh;
                                                     break;
                                                 }
                                             }
@@ -319,7 +319,7 @@ slop_list_howl_types_SubPair howl_classify_ksc_taxonomy(slop_arena* arena, howl_
                     }
                     case howl_types_KName_k_fresh:
                     {
-                        __auto_type _ = _mv_1143.data.k_fresh;
+                        __auto_type _ = _mv_1153.data.k_fresh;
                         break;
                     }
                 }

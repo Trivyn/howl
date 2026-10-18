@@ -95,6 +95,7 @@ slop_list_slop_rdf_rdf_IRI howl_canon_sort_iris(slop_arena* arena, slop_list_slo
 slop_list_howl_types_Node howl_canon_sort_nodes(slop_arena* arena, slop_list_howl_types_Node xs);
 slop_list_howl_types_SubPair howl_canon_sort_sub_pairs(slop_arena* arena, slop_list_howl_types_SubPair xs);
 slop_list_howl_types_AxiomRef howl_canon_sort_axiom_refs(slop_arena* arena, slop_list_howl_types_AxiomRef xs);
+slop_list_int howl_canon_omission_order(slop_arena* arena, slop_list_howl_types_Omission xs);
 slop_list_howl_types_Omission howl_canon_sort_omissions(slop_arena* arena, slop_list_howl_types_Omission xs);
 
 #ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED

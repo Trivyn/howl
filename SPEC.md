@@ -4141,6 +4141,26 @@ GROWL's `Delta`.
 (type Coverage (record
   (omitted (List Omission))))
 
+;; WHY EACH OMISSION WAS DROPPED (issue #125) is reported beside the coverage, like its
+;; document (§8.4), never inside an Omission: `Coverage.reasons[i]` is omitted[i]'s cause,
+;; and omissions are compared, ordered, deduplicated, rendered and hashed without it. The
+;; gate records it when it omits the axiom:
+;;     out-of-profile    the construct is not in the rung's language
+;;     irregular-rbox    an RBox axiom of an RBox that failed regularity (§5.2, §5.5)
+;;     non-simple-role   an axiom or restriction only a simple role may carry, over a role
+;;                       the RBox makes non-simple; it names the canonically least such role
+;;     range-condition   an el/el++ RIA that breaks §5.2's range/composition condition
+;;     resource-guard    a sriq guard: a count above SRIQ_MAX_COUNT, or a chain S1's size
+;;                       guard set aside
+;;     undeclared        MissingDeclaration, UndeclaredProperty
+;;     unresolved-import
+;;     unrecognized      an input read as no axiom (ra-unrecognized)
+;; When an axiom fails several conditions, the first in the gate's order decides: the
+;; language check (where a count above the bound is a resource guard, not out of profile),
+;; then regularity, then simple roles, then the range condition. When sriq's gate and S1's
+;; guard give the same omission, it is listed once, with the earlier reason in the list
+;; above. Under auto, or in an answer run, the reasons are those of the rung that ran.
+
 ;; NOTE cancellation is NOT here. A cancelled run stops at a scheduler-dependent point,
 ;; so its partial state is not reproducible (§6.8) and must never be serialized or hashed.
 ;; Modelling it as a Termination variant forced Outcome to carry maybe-absent findings AND
@@ -5626,6 +5646,13 @@ field each, so no engine struct reaches the header. `libhowl.a` with that header
   so the report, its order and its hash are unchanged. In C it is `howl_run_omission_kind`,
   `_entity_kind` and `_document`, plus the `howl_run_probe_omission_*` equivalents and `_source`. In
   Rust it is `Report::omission_details`, `probe_omission_details` and `Answers::omission_details`.
+- **Each omission says why it was dropped** (issue #125): out of profile, an irregular RBox, a
+  non-simple role (naming the role), the range condition, a resource guard, undeclared, an
+  unresolved import, or unrecognized (§6.2, `Coverage.reasons`). The gate records it as it omits the
+  axiom, from the checks it already runs, so it costs an accepted axiom nothing. Like the document,
+  it is not part of an omission's identity. In C it is `howl_run_omission_reason` and
+  `howl_run_omission_reason_role`, and the `howl_run_probe_omission_*` equivalents. In Rust it is
+  `Omission::reason`.
 - **It always runs non-strict.**
 - **An `Input`** holds one or more documents, each standardized apart as `-I` does, plus the
   caller's `imports_resolved` attestation. It is encoded as the CLI encodes, and classified by

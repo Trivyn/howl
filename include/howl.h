@@ -73,6 +73,17 @@ typedef enum {
 } howl_types_EntityKind;
 
 typedef enum {
+    howl_types_OmissionReason_reason_out_of_profile,
+    howl_types_OmissionReason_reason_irregular_rbox,
+    howl_types_OmissionReason_reason_non_simple_role,
+    howl_types_OmissionReason_reason_range_condition,
+    howl_types_OmissionReason_reason_resource_guard,
+    howl_types_OmissionReason_reason_undeclared,
+    howl_types_OmissionReason_reason_unresolved_import,
+    howl_types_OmissionReason_reason_unrecognized
+} howl_types_OmissionReason;
+
+typedef enum {
     howl_types_Profile_profile_el,
     howl_types_Profile_profile_el_plus_plus,
     howl_types_Profile_profile_horn_sriq,
@@ -149,6 +160,8 @@ int64_t howl_run_omission_document(howl_Run r, int64_t i);
 howl_types_EntityKind howl_run_omission_entity_kind(howl_Run r, int64_t i);
 slop_string howl_run_omission_kind(howl_Run r, int64_t i);
 int64_t howl_run_omission_len(howl_Run r);
+howl_types_OmissionReason howl_run_omission_reason(howl_Run r, int64_t i);
+slop_string howl_run_omission_reason_role(howl_Run r, int64_t i);
 howl_probe_ProbeAnswer howl_run_probe_answer(howl_Run r, int64_t i);
 uint8_t howl_run_probe_inconsistent(howl_Run r);
 howl_probe_QueryKind howl_run_probe_kind(howl_Run r, int64_t i);
@@ -158,6 +171,8 @@ int64_t howl_run_probe_omission_document(howl_Run r, int64_t i);
 howl_types_EntityKind howl_run_probe_omission_entity_kind(howl_Run r, int64_t i);
 slop_string howl_run_probe_omission_kind(howl_Run r, int64_t i);
 int64_t howl_run_probe_omission_len(howl_Run r);
+howl_types_OmissionReason howl_run_probe_omission_reason(howl_Run r, int64_t i);
+slop_string howl_run_probe_omission_reason_role(howl_Run r, int64_t i);
 howl_DocumentSource howl_run_probe_omission_source(howl_Run r, int64_t i);
 slop_string howl_run_probe_sub(howl_Run r, int64_t i);
 slop_string howl_run_probe_sup(howl_Run r, int64_t i);

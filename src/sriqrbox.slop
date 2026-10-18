@@ -22,7 +22,7 @@
 
   (export
     Ria SriqRbox
-    sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple sriq-role-simple
+    sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple sriq-axiom-nonsimple sriq-role-simple lesser-role
     sriq-node node-role inv-node)
 
   ;; ============================================================
@@ -648,52 +648,79 @@
       ((inverse-role i) (== (string-cmp (. i value) OWL_BOTTOM_OBJECT_PROPERTY) 0))
       ((fresh-role _)   false)))
 
-  (fn sriq-concept-simple ((rb SriqRbox) (c RawConcept))
-    (@intent "Is every number restriction and Self in this concept on a simple role?")
-    (@spec ((SriqRbox RawConcept) -> Bool))
+  ;; The non-simple role an axiom names (issue #125). Several can: the
+  ;; canonically least is named, so the answer does not depend on the
+  ;; order operands were written in. `none` is "every one is simple".
+  (fn lesser-role ((a (Option RoleId)) (b (Option RoleId)))
+    (@intent "The canonically lesser of two optional roles; none only if both are")
+    (@spec (((Option RoleId) (Option RoleId)) -> (Option RoleId)))
+    (@pure)
+    (match a
+      ((none) b)
+      ((some x) (match b
+                  ((none) a)
+                  ((some y) (if (<= (role-cmp x y) 0) a b))))))
+
+  (fn role-nonsimple ((rb SriqRbox) (r RoleId))
+    (@intent "r when the RBox makes it non-simple")
+    (@spec ((SriqRbox RoleId) -> (Option RoleId)))
+    (@pure)
+    (if (sriq-role-simple rb r) (none) (some r)))
+
+  (fn sriq-concept-nonsimple ((rb SriqRbox) (c RawConcept))
+    (@intent "The least non-simple role a number restriction or Self in this concept is on")
+    (@spec ((SriqRbox RawConcept) -> (Option RoleId)))
     (@pure)
     (match c
-      ((rc-card _ r _)    (sriq-role-simple rb r))
-      ((rc-qcard _ r _ f) (and (sriq-role-simple rb r) (sriq-concept-simple rb (deref f))))
-      ((rc-has-self r)    (sriq-role-simple rb r))
-      ((rc-and cs)        (sriq-concepts-simple rb cs))
-      ((rc-or cs)         (sriq-concepts-simple rb cs))
-      ((rc-not f)         (sriq-concept-simple rb (deref f)))
-      ((rc-some _ f)      (sriq-concept-simple rb (deref f)))
-      ((rc-all _ f)       (sriq-concept-simple rb (deref f)))
-      (_ true)))
+      ((rc-card _ r _)    (role-nonsimple rb r))
+      ((rc-qcard _ r _ f) (lesser-role (role-nonsimple rb r) (sriq-concept-nonsimple rb (deref f))))
+      ((rc-has-self r)    (role-nonsimple rb r))
+      ((rc-and cs)        (sriq-concepts-nonsimple rb cs))
+      ((rc-or cs)         (sriq-concepts-nonsimple rb cs))
+      ((rc-not f)         (sriq-concept-nonsimple rb (deref f)))
+      ((rc-some _ f)      (sriq-concept-nonsimple rb (deref f)))
+      ((rc-all _ f)       (sriq-concept-nonsimple rb (deref f)))
+      (_ (none))))
 
-  (fn sriq-concepts-simple ((rb SriqRbox) (cs (List RawConcept)))
-    (@intent "sriq-concept-simple over a list")
-    (@spec ((SriqRbox (List RawConcept)) -> Bool))
+  (fn sriq-concepts-nonsimple ((rb SriqRbox) (cs (List RawConcept)))
+    (@intent "sriq-concept-nonsimple over a list")
+    (@spec ((SriqRbox (List RawConcept)) -> (Option RoleId)))
     (@pure)
-    (let ((mut ok true))
-      (do (for-each (c cs) (when (not (sriq-concept-simple rb c)) (set! ok false))) ok)))
+    (let ((mut out (Option RoleId) (none)))
+      (do (for-each (c cs) (set! out (lesser-role out (sriq-concept-nonsimple rb c)))) out)))
 
-  (fn sriq-axiom-simple ((rb SriqRbox) (ax RawAxiom))
-    (@intent "Does this axiom put on simple roles everything OWL 2 §11.2 restricts to them?")
-    (@spec ((SriqRbox RawAxiom) -> Bool))
+  (fn sriq-axiom-nonsimple ((rb SriqRbox) (ax RawAxiom))
+    (@intent "The least non-simple role this axiom puts where OWL 2 §11.2 wants a simple one")
+    (@spec ((SriqRbox RawAxiom) -> (Option RoleId)))
     (@pure)
     ;; Number restrictions, Self, functional, inverse-functional,
     ;; irreflexive and asymmetric roles, and disjointness (§5.5). Per
     ;; axiom: the offending axiom is its own witness.
     (match ax
       ((ra-sub-class-of l r)
-        (and (sriq-concept-simple rb (deref l)) (sriq-concept-simple rb (deref r))))
-      ((ra-equivalent-classes cs)      (sriq-concepts-simple rb cs))
-      ((ra-disjoint-classes cs)        (sriq-concepts-simple rb cs))
-      ((ra-object-property-domain _ c) (sriq-concept-simple rb (deref c)))
-      ((ra-object-property-range _ c)  (sriq-concept-simple rb (deref c)))
-      ((ra-class-assertion ca)         (sriq-concept-simple rb (deref (. ca concept))))
-      ((ra-disjoint-union du)          (sriq-concepts-simple rb (. du members)))
+        (lesser-role (sriq-concept-nonsimple rb (deref l)) (sriq-concept-nonsimple rb (deref r))))
+      ((ra-equivalent-classes cs)      (sriq-concepts-nonsimple rb cs))
+      ((ra-disjoint-classes cs)        (sriq-concepts-nonsimple rb cs))
+      ((ra-object-property-domain _ c) (sriq-concept-nonsimple rb (deref c)))
+      ((ra-object-property-range _ c)  (sriq-concept-nonsimple rb (deref c)))
+      ((ra-class-assertion ca)         (sriq-concept-nonsimple rb (deref (. ca concept))))
+      ((ra-disjoint-union du)          (sriq-concepts-nonsimple rb (. du members)))
       ((ra-property-characteristic c r)
         (if (or (== c 'prop-functional) (or (== c 'prop-inverse-functional)
                 (or (== c 'prop-irreflexive) (== c 'prop-asymmetric))))
-          (sriq-role-simple rb r)
-          true))
+          (role-nonsimple rb r)
+          (none)))
       ((ra-disjoint-properties rs)
-        (let ((mut ok true))
-          (do (for-each (r rs) (when (not (sriq-role-simple rb r)) (set! ok false))) ok)))
-      (_ true)))
+        (let ((mut out (Option RoleId) (none)))
+          (do (for-each (r rs) (set! out (lesser-role out (role-nonsimple rb r)))) out)))
+      (_ (none))))
+
+  (fn sriq-axiom-simple ((rb SriqRbox) (ax RawAxiom))
+    (@intent "Does this axiom put on simple roles everything OWL 2 §11.2 restricts to them?")
+    (@spec ((SriqRbox RawAxiom) -> Bool))
+    (@pure)
+    (match (sriq-axiom-nonsimple rb ax)
+      ((none)   true)
+      ((some _) false)))
 
 )

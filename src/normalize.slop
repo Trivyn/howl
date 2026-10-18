@@ -70,7 +70,7 @@
                  Saturation ReasonerConfig Fault LogicalEdge
                  Derived Addressed EdgePair emit-edge
                  node-top node-bottom node-eq role-eq
-                 Names empty-names intern-node intern-role copy-omissions))
+                 Names empty-names intern-node intern-role copy-omissions copy-causes))
   (import owl2 (RawAxiom RawConcept RawChain render-concept concept-at render-role
                 Signature make-signature copy-axioms copy-signature RawDisjointUnion))
   (import gate (GateResult collect-rbox-roles told-closure role-idx gate-axioms))
@@ -955,7 +955,8 @@
             (axioms     (. rno axioms))
             (saturation sat)
             (coverage   (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))
-                                             (origins (list-new arena Int))))
+                                             (origins (list-new arena Int))
+                                             (reasons (copy-causes arena (. gr reasons)))))
             (names      names))))))
 
   (fn normalize-input ((arena Arena) (triples (List Triple)) (imports-resolved (List IRI)) (config ReasonerConfig))

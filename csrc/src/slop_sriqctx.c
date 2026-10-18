@@ -73,22 +73,22 @@ uint32_t howl_sriqctx_no_id(void) {
 }
 
 uint8_t howl_sriqctx_flag_at(slop_list_u8 xs, uint32_t i) {
-    __auto_type _mv_447 = ({ __auto_type _lst = xs; size_t _idx = (size_t)((int64_t)(i)); slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_447.has_value) {
-        __auto_type v = _mv_447.value;
+    __auto_type _mv_452 = ({ __auto_type _lst = xs; size_t _idx = (size_t)((int64_t)(i)); slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_452.has_value) {
+        __auto_type v = _mv_452.value;
         return v;
-    } else if (!_mv_447.has_value) {
+    } else if (!_mv_452.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 uint32_t howl_sriqctx_u32_at(slop_list_u32 xs, uint32_t i) {
-    __auto_type _mv_448 = ({ __auto_type _lst = xs; size_t _idx = (size_t)((int64_t)(i)); slop_option_u32 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_448.has_value) {
-        __auto_type v = _mv_448.value;
+    __auto_type _mv_453 = ({ __auto_type _lst = xs; size_t _idx = (size_t)((int64_t)(i)); slop_option_u32 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_453.has_value) {
+        __auto_type v = _mv_453.value;
         return v;
-    } else if (!_mv_448.has_value) {
+    } else if (!_mv_453.has_value) {
         return howl_sriqctx_no_id();
     }
     SLOP_UNREACHABLE();
@@ -168,19 +168,19 @@ uint8_t howl_sriqctx_has_lit(slop_list_howl_types_Lit ls, howl_types_Lit l) {
 }
 
 uint8_t howl_sriqctx_note_body_lit(howl_sriqctx_Triggers tr, howl_types_Lit l) {
-    __auto_type _mv_449 = l.form;
-    if (_mv_449 == howl_types_LitForm_lf_unary) {
+    __auto_type _mv_454 = l.form;
+    if (_mv_454 == howl_types_LitForm_lf_unary) {
         if (howl_sriqctx_is_kind(l.t1, howl_types_AKind_ak_x)) {
             return howl_sriqctx_raise(tr.unary, l.pred);
         } else {
             return 0;
         }
-    } else if (_mv_449 == howl_types_LitForm_lf_binary) {
+    } else if (_mv_454 == howl_types_LitForm_lf_binary) {
         howl_sriqctx_raise(tr.body, l.pred);
         return howl_sriqctx_note_role_sides(tr, l);
-    } else if (_mv_449 == howl_types_LitForm_lf_eq) {
+    } else if (_mv_454 == howl_types_LitForm_lf_eq) {
         return 0;
-    } else if (_mv_449 == howl_types_LitForm_lf_neq) {
+    } else if (_mv_454 == howl_types_LitForm_lf_neq) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -197,15 +197,15 @@ uint8_t howl_sriqctx_note_role_sides(howl_sriqctx_Triggers tr, howl_types_Lit l)
 }
 
 uint8_t howl_sriqctx_note_any_lit(howl_sriqctx_Triggers tr, slop_list_u8 many, howl_types_Lit l) {
-    __auto_type _mv_450 = l.form;
-    if (_mv_450 == howl_types_LitForm_lf_unary) {
+    __auto_type _mv_455 = l.form;
+    if (_mv_455 == howl_types_LitForm_lf_unary) {
         howl_sriqctx_raise(tr.cls, l.pred);
         return howl_sriqctx_note_sole(tr, many, l);
-    } else if (_mv_450 == howl_types_LitForm_lf_binary) {
+    } else if (_mv_455 == howl_types_LitForm_lf_binary) {
         return howl_sriqctx_raise(tr.role, l.pred);
-    } else if (_mv_450 == howl_types_LitForm_lf_eq) {
+    } else if (_mv_455 == howl_types_LitForm_lf_eq) {
         return 0;
-    } else if (_mv_450 == howl_types_LitForm_lf_neq) {
+    } else if (_mv_455 == howl_types_LitForm_lf_neq) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -318,17 +318,17 @@ uint8_t howl_sriqctx_su_binary(howl_sriqctx_Triggers tr, howl_types_Lit l) {
 
 uint8_t howl_sriqctx_in_su(howl_sriqctx_Triggers tr, howl_types_Lit l) {
     uint8_t _retval = {0};
-    __auto_type _mv_451 = l.form;
-    if (_mv_451 == howl_types_LitForm_lf_unary) {
+    __auto_type _mv_456 = l.form;
+    if (_mv_456 == howl_types_LitForm_lf_unary) {
         _retval = howl_sriqctx_su_unary(tr, l);
         goto _slop_post;
-    } else if (_mv_451 == howl_types_LitForm_lf_binary) {
+    } else if (_mv_456 == howl_types_LitForm_lf_binary) {
         _retval = howl_sriqctx_su_binary(tr, l);
         goto _slop_post;
-    } else if (_mv_451 == howl_types_LitForm_lf_eq) {
+    } else if (_mv_456 == howl_types_LitForm_lf_eq) {
         _retval = howl_sriqctx_both_kinds(l, howl_types_AKind_ak_u, howl_types_AKind_ak_u);
         goto _slop_post;
-    } else if (_mv_451 == howl_types_LitForm_lf_neq) {
+    } else if (_mv_456 == howl_types_LitForm_lf_neq) {
         _retval = 0;
         goto _slop_post;
     }
@@ -359,17 +359,17 @@ uint8_t howl_sriqctx_pr_eq(howl_types_Lit l) {
 
 uint8_t howl_sriqctx_in_pr(howl_sriqctx_Triggers tr, howl_types_Lit l) {
     uint8_t _retval = {0};
-    __auto_type _mv_452 = l.form;
-    if (_mv_452 == howl_types_LitForm_lf_unary) {
+    __auto_type _mv_457 = l.form;
+    if (_mv_457 == howl_types_LitForm_lf_unary) {
         _retval = howl_sriqctx_pr_unary(tr, l);
         goto _slop_post;
-    } else if (_mv_452 == howl_types_LitForm_lf_binary) {
+    } else if (_mv_457 == howl_types_LitForm_lf_binary) {
         _retval = howl_sriqctx_pr_binary(tr, l);
         goto _slop_post;
-    } else if (_mv_452 == howl_types_LitForm_lf_eq) {
+    } else if (_mv_457 == howl_types_LitForm_lf_eq) {
         _retval = howl_sriqctx_pr_eq(l);
         goto _slop_post;
-    } else if (_mv_452 == howl_types_LitForm_lf_neq) {
+    } else if (_mv_457 == howl_types_LitForm_lf_neq) {
         _retval = 0;
         goto _slop_post;
     }
@@ -384,17 +384,17 @@ uint8_t howl_sriqctx_sur_binary(howl_sriqctx_Triggers tr, howl_types_Lit l) {
 
 uint8_t howl_sriqctx_in_sur(howl_sriqctx_Triggers tr, howl_types_Lit l) {
     uint8_t _retval = {0};
-    __auto_type _mv_453 = l.form;
-    if (_mv_453 == howl_types_LitForm_lf_unary) {
+    __auto_type _mv_458 = l.form;
+    if (_mv_458 == howl_types_LitForm_lf_unary) {
         _retval = (howl_sriqctx_is_kind(l.t1, howl_types_AKind_ak_u) && howl_sriqctx_flag_at(tr.cls, l.pred));
         goto _slop_post;
-    } else if (_mv_453 == howl_types_LitForm_lf_binary) {
+    } else if (_mv_458 == howl_types_LitForm_lf_binary) {
         _retval = howl_sriqctx_sur_binary(tr, l);
         goto _slop_post;
-    } else if (_mv_453 == howl_types_LitForm_lf_eq) {
+    } else if (_mv_458 == howl_types_LitForm_lf_eq) {
         _retval = howl_sriqctx_both_kinds(l, howl_types_AKind_ak_u, howl_types_AKind_ak_u);
         goto _slop_post;
-    } else if (_mv_453 == howl_types_LitForm_lf_neq) {
+    } else if (_mv_458 == howl_types_LitForm_lf_neq) {
         _retval = 0;
         goto _slop_post;
     }
@@ -469,14 +469,14 @@ int64_t howl_sriqctx_pow2_sat(int64_t k) {
 
 int64_t howl_sriqctx_omega(howl_sriqctx_Strategy s, howl_sriqctx_Triggers tr) {
     int64_t _retval = {0};
-    __auto_type _mv_454 = s;
-    if (_mv_454 == howl_sriqctx_Strategy_st_trivial) {
+    __auto_type _mv_459 = s;
+    if (_mv_459 == howl_sriqctx_Strategy_st_trivial) {
         _retval = 1;
         goto _slop_post;
-    } else if (_mv_454 == howl_sriqctx_Strategy_st_cautious) {
+    } else if (_mv_459 == howl_sriqctx_Strategy_st_cautious) {
         _retval = howl_sriqctx_count_true(tr.cls);
         goto _slop_post;
-    } else if (_mv_454 == howl_sriqctx_Strategy_st_eager) {
+    } else if (_mv_459 == howl_sriqctx_Strategy_st_eager) {
         _retval = howl_sriqctx_pow2_sat(((howl_sriqctx_count_true(tr.cls)) + (howl_sriqctx_count_true(tr.role)) + (1)));
         goto _slop_post;
     }
@@ -523,14 +523,14 @@ howl_sriqctx_CoreChoice howl_sriqctx_cautious_choice(howl_sriqctx_Triggers tr, u
 
 howl_sriqctx_CoreChoice howl_sriqctx_strat_choice(howl_sriqctx_Strategy s, howl_sriqctx_Triggers tr, uint32_t f, slop_list_howl_types_Lit k1) {
     howl_sriqctx_CoreChoice _retval = {0};
-    __auto_type _mv_455 = s;
-    if (_mv_455 == howl_sriqctx_Strategy_st_trivial) {
+    __auto_type _mv_460 = s;
+    if (_mv_460 == howl_sriqctx_Strategy_st_trivial) {
         _retval = howl_sriqctx_choice_of(howl_sriqctx_CoreKind_cc_empty, howl_sriqctx_no_id());
         goto _slop_post;
-    } else if (_mv_455 == howl_sriqctx_Strategy_st_eager) {
+    } else if (_mv_460 == howl_sriqctx_Strategy_st_eager) {
         _retval = howl_sriqctx_choice_of(howl_sriqctx_CoreKind_cc_k1, howl_sriqctx_no_id());
         goto _slop_post;
-    } else if (_mv_455 == howl_sriqctx_Strategy_st_cautious) {
+    } else if (_mv_460 == howl_sriqctx_Strategy_st_cautious) {
         _retval = howl_sriqctx_cautious_choice(tr, f, k1);
         goto _slop_post;
     }
@@ -641,13 +641,13 @@ uint8_t howl_sriqctx_lits_same(slop_list_howl_types_Lit a, slop_list_howl_types_
             __auto_type _coll = a;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type l = _coll.data[_i];
-                __auto_type _mv_456 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_howl_types_Lit _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                if (_mv_456.has_value) {
-                    __auto_type m = _mv_456.value;
+                __auto_type _mv_461 = ({ __auto_type _lst = b; size_t _idx = (size_t)i; slop_option_howl_types_Lit _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                if (_mv_461.has_value) {
+                    __auto_type m = _mv_461.value;
                     if (!(howl_types_lit_eq(l, m))) {
                         ok = 0;
                     }
-                } else if (!_mv_456.has_value) {
+                } else if (!_mv_461.has_value) {
                     ok = 0;
                 }
                 i = (i + 1);
@@ -685,18 +685,18 @@ uint32_t howl_sriqctx_ctx_by_core(howl_sriqctx_Structure st, slop_list_howl_type
 }
 
 uint8_t howl_sriqctx_var_ok(howl_types_ATerm t, uint8_t root) {
-    __auto_type _mv_457 = t.kind;
-    if (_mv_457 == howl_types_AKind_ak_x) {
+    __auto_type _mv_462 = t.kind;
+    if (_mv_462 == howl_types_AKind_ak_x) {
         return !(root);
-    } else if (_mv_457 == howl_types_AKind_ak_fx) {
+    } else if (_mv_462 == howl_types_AKind_ak_fx) {
         return !(root);
-    } else if (_mv_457 == howl_types_AKind_ak_fu) {
+    } else if (_mv_462 == howl_types_AKind_ak_fu) {
         return root;
-    } else if (_mv_457 == howl_types_AKind_ak_y) {
+    } else if (_mv_462 == howl_types_AKind_ak_y) {
         return 1;
-    } else if (_mv_457 == howl_types_AKind_ak_u) {
+    } else if (_mv_462 == howl_types_AKind_ak_u) {
         return 1;
-    } else if (_mv_457 == howl_types_AKind_ak_z) {
+    } else if (_mv_462 == howl_types_AKind_ak_z) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -756,11 +756,11 @@ uint8_t howl_sriqctx_ctx_clause_ok(uint8_t root, howl_types_Clause c) {
 }
 
 slop_list_howl_types_Clause howl_sriqctx_set_or_none(slop_arena* arena, howl_sriqctx_Structure st, int64_t v) {
-    __auto_type _mv_458 = ({ __auto_type _lst = st.sets; size_t _idx = (size_t)v; slop_option_howl_sriqctx_CtxSet _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_458.has_value) {
-        __auto_type s = _mv_458.value;
+    __auto_type _mv_463 = ({ __auto_type _lst = st.sets; size_t _idx = (size_t)v; slop_option_howl_sriqctx_CtxSet _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_463.has_value) {
+        __auto_type s = _mv_463.value;
         return s.cs;
-    } else if (!_mv_458.has_value) {
+    } else if (!_mv_463.has_value) {
         return ((slop_list_howl_types_Clause){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
     }
     SLOP_UNREACHABLE();

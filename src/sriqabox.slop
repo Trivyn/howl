@@ -326,9 +326,9 @@
                   ((some x) (do (list-push cs x) (when (is-assertion x) (set! rest true))))
                   ((none) (do)))))
           (record-new Split
-            (h (record-new GateResult (accepted hs) (omissions (. gr omissions))
+            (h (record-new GateResult (accepted hs) (omissions (. gr omissions)) (reasons (. gr reasons))
                                       (signature (with-individuals (. gr signature) (set-new arena IRI)))))
-            (c (record-new GateResult (accepted cs) (omissions (. gr omissions))
+            (c (record-new GateResult (accepted cs) (omissions (. gr omissions)) (reasons (. gr reasons))
                                       (signature (with-individuals (. gr signature) bad))))
             (has-c rest)))))
 

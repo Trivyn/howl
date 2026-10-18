@@ -118,9 +118,17 @@ pub const ENTITY_DATATYPE: c_int = 5;
 pub const DOCUMENT_NONE: c_int = 0;
 pub const DOCUMENT_INPUT: c_int = 1;
 pub const DOCUMENT_PROBE: c_int = 2;
+pub const REASON_OUT_OF_PROFILE: c_int = 0;
+pub const REASON_IRREGULAR_RBOX: c_int = 1;
+pub const REASON_NON_SIMPLE_ROLE: c_int = 2;
+pub const REASON_RANGE_CONDITION: c_int = 3;
+pub const REASON_RESOURCE_GUARD: c_int = 4;
+pub const REASON_UNDECLARED: c_int = 5;
+pub const REASON_UNRESOLVED_IMPORT: c_int = 6;
+pub const REASON_UNRECOGNIZED: c_int = 7;
 
 /// Every constant above, in `howl_layout_constant`'s order.
-pub const CONSTANTS: [(&str, c_int); 31] = [
+pub const CONSTANTS: [(&str, c_int); 39] = [
     ("VERDICT_COHERENT", VERDICT_COHERENT),
     ("VERDICT_INCOHERENT", VERDICT_INCOHERENT),
     ("VERDICT_INCONCLUSIVE", VERDICT_INCONCLUSIVE),
@@ -152,6 +160,14 @@ pub const CONSTANTS: [(&str, c_int); 31] = [
     ("DOCUMENT_NONE", DOCUMENT_NONE),
     ("DOCUMENT_INPUT", DOCUMENT_INPUT),
     ("DOCUMENT_PROBE", DOCUMENT_PROBE),
+    ("REASON_OUT_OF_PROFILE", REASON_OUT_OF_PROFILE),
+    ("REASON_IRREGULAR_RBOX", REASON_IRREGULAR_RBOX),
+    ("REASON_NON_SIMPLE_ROLE", REASON_NON_SIMPLE_ROLE),
+    ("REASON_RANGE_CONDITION", REASON_RANGE_CONDITION),
+    ("REASON_RESOURCE_GUARD", REASON_RESOURCE_GUARD),
+    ("REASON_UNDECLARED", REASON_UNDECLARED),
+    ("REASON_UNRESOLVED_IMPORT", REASON_UNRESOLVED_IMPORT),
+    ("REASON_UNRECOGNIZED", REASON_UNRECOGNIZED),
 ];
 
 extern "C" {
@@ -191,6 +207,8 @@ extern "C" {
     pub fn howl_run_omission_kind(run: Run, i: i64) -> SlopString;
     pub fn howl_run_omission_entity_kind(run: Run, i: i64) -> c_int;
     pub fn howl_run_omission_document(run: Run, i: i64) -> i64;
+    pub fn howl_run_omission_reason(run: Run, i: i64) -> c_int;
+    pub fn howl_run_omission_reason_role(run: Run, i: i64) -> SlopString;
     pub fn howl_run_report_len(run: Run) -> i64;
     pub fn howl_run_report_line(run: Run, i: i64) -> SlopString;
     pub fn howl_run_probe_len(run: Run) -> i64;
@@ -205,6 +223,8 @@ extern "C" {
     pub fn howl_run_probe_omission_entity_kind(run: Run, i: i64) -> c_int;
     pub fn howl_run_probe_omission_source(run: Run, i: i64) -> c_int;
     pub fn howl_run_probe_omission_document(run: Run, i: i64) -> i64;
+    pub fn howl_run_probe_omission_reason(run: Run, i: i64) -> c_int;
+    pub fn howl_run_probe_omission_reason_role(run: Run, i: i64) -> SlopString;
 }
 
 #[cfg(test)]

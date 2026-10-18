@@ -42,6 +42,7 @@ typedef struct howl_types_InputRef howl_types_InputRef;
 typedef struct howl_types_MissingDeclaration howl_types_MissingDeclaration;
 typedef struct howl_types_UndeclaredProperty howl_types_UndeclaredProperty;
 typedef struct howl_types_Omission howl_types_Omission;
+typedef struct howl_types_OmissionCause howl_types_OmissionCause;
 typedef struct howl_types_Coverage howl_types_Coverage;
 typedef struct howl_types_Termination howl_types_Termination;
 typedef struct howl_types_SubPair howl_types_SubPair;
@@ -80,6 +81,17 @@ typedef enum {
     howl_types_EntityKind_entity_individual,
     howl_types_EntityKind_entity_datatype
 } howl_types_EntityKind;
+
+typedef enum {
+    howl_types_OmissionReason_reason_out_of_profile,
+    howl_types_OmissionReason_reason_irregular_rbox,
+    howl_types_OmissionReason_reason_non_simple_role,
+    howl_types_OmissionReason_reason_range_condition,
+    howl_types_OmissionReason_reason_resource_guard,
+    howl_types_OmissionReason_reason_undeclared,
+    howl_types_OmissionReason_reason_unresolved_import,
+    howl_types_OmissionReason_reason_unrecognized
+} howl_types_OmissionReason;
 
 typedef enum {
     howl_types_Profile_profile_el,
@@ -775,9 +787,27 @@ SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
 #endif
 
+struct howl_types_OmissionCause {
+    howl_types_OmissionReason reason;
+    slop_string role;
+};
+typedef struct howl_types_OmissionCause howl_types_OmissionCause;
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
+#endif
+
+#ifndef SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_OmissionCause, slop_list_howl_types_OmissionCause)
+#endif
+
 struct howl_types_Coverage {
     slop_list_howl_types_Omission omitted;
     slop_list_int origins;
+    slop_list_howl_types_OmissionCause reasons;
 };
 typedef struct howl_types_Coverage howl_types_Coverage;
 
@@ -1203,6 +1233,10 @@ howl_types_AxiomRef howl_types_copy_axiom_ref(slop_arena* arena, howl_types_Axio
 howl_types_InputRef howl_types_copy_input_ref(slop_arena* arena, howl_types_InputRef r);
 howl_types_Omission howl_types_copy_omission(slop_arena* arena, howl_types_Omission o);
 slop_list_howl_types_Omission howl_types_copy_omissions(slop_arena* arena, slop_list_howl_types_Omission os);
+slop_list_howl_types_OmissionCause howl_types_copy_causes(slop_arena* arena, slop_list_howl_types_OmissionCause cs);
+howl_types_OmissionCause howl_types_cause_of(howl_types_OmissionReason r);
+howl_types_OmissionCause howl_types_variant_cause(howl_types_Omission o);
+int64_t howl_types_reason_rank(howl_types_OmissionReason r);
 howl_types_Fault howl_types_copy_fault(slop_arena* arena, howl_types_Fault f);
 slop_option_howl_types_Node howl_types_renamed_node(howl_types_Names names, howl_types_Node n);
 howl_types_Node howl_types_original_node(howl_types_Names names, howl_types_Node n);
@@ -1377,6 +1411,11 @@ SLOP_OPTION_DEFINE(howl_types_UndeclaredProperty, slop_option_howl_types_Undecla
 #ifndef SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_TYPES_COVERAGE_DEFINED

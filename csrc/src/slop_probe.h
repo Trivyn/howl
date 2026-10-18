@@ -42,9 +42,20 @@ SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
 #endif
 
+#ifndef SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_OmissionCause, slop_list_howl_types_OmissionCause)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
 #endif
 
 struct howl_probe_Query {
@@ -88,6 +99,7 @@ struct howl_probe_Probing {
     slop_list_howl_types_Omission omissions;
     howl_types_Profile profile;
     slop_list_int origins;
+    slop_list_howl_types_OmissionCause reasons;
     int64_t input_docs;
     int64_t probe_docs;
 };
@@ -127,6 +139,11 @@ SLOP_OPTION_DEFINE(howl_probe_Answered, slop_option_howl_probe_Answered)
 #ifndef SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_PROBE_PROBING_DEFINED
