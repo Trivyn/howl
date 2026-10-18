@@ -37,22 +37,24 @@
   (import rdf (IRI))
   (import vocab (OWL_TOP_OBJECT_PROPERTY OWL_BOTTOM_OBJECT_PROPERTY))
   (import types (Omission Fault InputRef AxiomRef Node RoleId EntityKind
-                 MissingDeclaration Profile))
+                 MissingDeclaration Profile OmissionReason OmissionCause
+                 cause-of variant-cause))
   (import owl2 (RawAxiom RawConcept RawChain Signature RawDisjointUnion
-                disposition axiom-in-profile is-el-plus-plus is-sriq
+                disposition axiom-in-profile axiom-in-profile-at NO_COUNT_CAP is-el-plus-plus is-sriq
                 concept-in-profile concepts-in-profile role-in-profile
                 concept-cmp sort-concepts concept-at
                 render-axiom render-role render-omission
                 signature-has-class signature-has-object-property))
-  (import canon (role-cmp sort-omissions sort-range iri-cmp sort-axiom-refs string-cmp str-at omission-cmp))
-  (import sriqrbox (SriqRbox sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple))
+  (import canon (role-cmp omission-order omission-at sort-range iri-cmp sort-axiom-refs string-cmp str-at omission-cmp))
+  (import sriqrbox (SriqRbox sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-nonsimple lesser-role))
   (import owl2 (render-axiom))
 
   (export
     GateResult RboxVerdict
     axiom-input-ref
     expand-sugar expand-negation drop-top-role-tautologies
-    non-simple-roles self-roles-simple
+    non-simple-roles self-roles-simple self-role-nonsimple
+    cause-at
     gate-axioms gate-expand omission-origins
     unread-by-every module-omissions-shared
     collect-rbox-roles role-idx
@@ -63,6 +65,7 @@
   (type GateResult (record
     (accepted  (List RawAxiom))    ; in profile, sugar already expanded, canonically sorted
     (omissions (List Omission))    ; canonically sorted
+    (reasons   (List OmissionCause)) ; reasons[i] is why omissions[i] (issue #125)
     (signature Signature)))
 
   (fn axiom-input-ref ((arena Arena) (ax RawAxiom))
@@ -527,40 +530,48 @@
                 (_ (do))))))
         out)))
 
-  (fn concept-self-roles-simple ((nonsimple (List RoleId)) (c RawConcept))
-    (@intent "Is every ∃R.Self inside this concept on a simple role?")
-    (@spec (((List RoleId) RawConcept) -> Bool))
+  (fn concept-self-nonsimple ((nonsimple (List RoleId)) (c RawConcept))
+    (@intent "The least non-simple role an ∃R.Self inside this concept is on")
+    (@spec (((List RoleId) RawConcept) -> (Option RoleId)))
     (@pure)
     (match c
-      ((rc-has-self r) (not (role-listed nonsimple r)))
-      ((rc-and cs)
-        (let ((mut ok true))
-          (do
-            (for-each (x cs) (when (not (concept-self-roles-simple nonsimple x)) (set! ok false)))
-            ok)))
-      ((rc-some _ f)   (concept-self-roles-simple nonsimple (deref f)))
-      (_ true)))
+      ((rc-has-self r) (if (role-listed nonsimple r) (some r) (none)))
+      ((rc-and cs)     (concepts-self-nonsimple nonsimple cs))
+      ((rc-some _ f)   (concept-self-nonsimple nonsimple (deref f)))
+      (_ (none))))
+
+  (fn concepts-self-nonsimple ((nonsimple (List RoleId)) (cs (List RawConcept)))
+    (@intent "concept-self-nonsimple over a list")
+    (@spec (((List RoleId) (List RawConcept)) -> (Option RoleId)))
+    (@pure)
+    (let ((mut out (Option RoleId) (none)))
+      (do (for-each (x cs) (set! out (lesser-role out (concept-self-nonsimple nonsimple x)))) out)))
+
+  (fn self-role-nonsimple ((nonsimple (List RoleId)) (ax RawAxiom))
+    (@intent "The least non-simple role an ObjectHasSelf in this axiom is on (issue #125)")
+    (@spec (((List RoleId) RawAxiom) -> (Option RoleId)))
+    (@pure)
+    ;; Only the class-expression positions can hold Self. An empty
+    ;; `nonsimple` list — every rung but el++ — makes this none, which is
+    ;; right: Self is out of profile there by `concept-in-profile`. The
+    ;; least role, so the answer does not depend on operand order.
+    (match ax
+      ((ra-sub-class-of l r)
+        (lesser-role (concept-self-nonsimple nonsimple (deref l))
+                     (concept-self-nonsimple nonsimple (deref r))))
+      ((ra-disjoint-classes cs)        (concepts-self-nonsimple nonsimple cs))
+      ((ra-object-property-domain _ c) (concept-self-nonsimple nonsimple (deref c)))
+      ((ra-object-property-range _ c)  (concept-self-nonsimple nonsimple (deref c)))
+      ((ra-class-assertion ca)         (concept-self-nonsimple nonsimple (deref (. ca concept))))
+      (_ (none))))
 
   (fn self-roles-simple ((nonsimple (List RoleId)) (ax RawAxiom))
     (@intent "Is every ObjectHasSelf this axiom uses on a simple role?")
     (@spec (((List RoleId) RawAxiom) -> Bool))
     (@pure)
-    ;; Only the class-expression positions can hold Self. An empty
-    ;; `nonsimple` list — every rung but el++ — makes this true, which is
-    ;; right: Self is out of profile there by `concept-in-profile`.
-    (match ax
-      ((ra-sub-class-of l r)
-        (and (concept-self-roles-simple nonsimple (deref l))
-             (concept-self-roles-simple nonsimple (deref r))))
-      ((ra-disjoint-classes cs)
-        (let ((mut ok true))
-          (do
-            (for-each (x cs) (when (not (concept-self-roles-simple nonsimple x)) (set! ok false)))
-            ok)))
-      ((ra-object-property-domain _ c) (concept-self-roles-simple nonsimple (deref c)))
-      ((ra-object-property-range _ c)  (concept-self-roles-simple nonsimple (deref c)))
-      ((ra-class-assertion ca)         (concept-self-roles-simple nonsimple (deref (. ca concept))))
-      (_ true)))
+    (match (self-role-nonsimple nonsimple ax)
+      ((none)   true)
+      ((some _) false)))
 
   (fn box-c ((arena Arena) (c RawConcept))
     (@intent "Heap-box a concept for a union variant that carries a pointer")
@@ -619,9 +630,12 @@
     ;; and are dropped first (§5.4 K0), so no RBox condition sees them.
     (let ((expanded (gate-expand arena axs p))
           (mut accepted (list-new arena RawAxiom))
-          (mut omitted  (list-new arena Omission)))
+          (mut omitted  (list-new arena Omission))
+          (mut causes   (list-new arena OmissionCause)))
       (do
-        (for-each (o carried) (list-push omitted o))
+        (for-each (o carried)
+          (do (list-push omitted o)
+              (list-push causes (variant-cause o))))
         ;; A COLLECTIVE RBOX FAILURE OMITS THE WHOLE RBOX. The tempting
         ;; alternative is to delete a witness and carry on, but that
         ;; needs a REMOVAL SET and a witness is not one: several
@@ -669,28 +683,19 @@
             ;; useless rather than merely incomplete.
             ('d-inert    (do))
             ('d-in-profile
-              (if (and (axiom-in-profile p ax)
-                       (not (rbox-omits sriq rbox-bad ax))
-                       ;; Self only on a simple role (§5.4), and under sriq
-                       ;; every restriction OWL 2 §11.2 puts on simple
-                       ;; roles: per axiom, like the range condition.
-                       (if sriq
-                         (sriq-axiom-simple srb ax)
-                         (self-roles-simple nonsimple ax))
-                       ;; A range-condition violation is PER-AXIOM:
-                       ;; the offending RIA is its own witness, so it
-                       ;; is omitted alone rather than collapsing the
-                       ;; whole RBox the way non-regularity does. sriq has
-                       ;; no range condition: [TGH21] needs none.
-                       (or sriq (axiom-range-ok ranges told nr rroles ax)))
-                (list-push accepted ax)
-                ;; In-profile FORM with out-of-profile operands, or an
-                ;; RBox axiom in an RBox that failed regularity.
-                (list-push omitted
-                  (union-new Omission out-of-profile (axiom-input-ref arena ax)))))
+              (match (gate-verdict arena p sriq rbox-bad srb nonsimple ranges told nr rroles ax)
+                ((none) (list-push accepted ax))
+                ;; In-profile FORM with out-of-profile operands, an RBox
+                ;; axiom in an RBox that failed regularity, a simple-role
+                ;; condition or the range condition: the cause says which.
+                ((some c)
+                  (do (list-push omitted
+                        (union-new Omission out-of-profile (axiom-input-ref arena ax)))
+                      (list-push causes c)))))
             ('d-out-of-profile
-              (list-push omitted
-                (union-new Omission out-of-profile (axiom-input-ref arena ax)))))))
+              (do (list-push omitted
+                    (union-new Omission out-of-profile (axiom-input-ref arena ax)))
+                  (list-push causes (form-cause p ax)))))))
         ;; Declaration checks run over the ACCEPTED axioms only. An
         ;; out-of-profile axiom is already reported; also reporting the
         ;; classes it happens to mention would turn one rejected axiom
@@ -698,11 +703,71 @@
         ;; problem.
         (for-each (o (missing-declarations arena sig
                        (collect-entity-refs arena accepted)))
-          (list-push omitted o))
-        (record-new GateResult
-          (accepted  (sort-axioms arena accepted))
-          (omissions (sort-omissions arena omitted))
-          (signature sig)))))
+          (do (list-push omitted o)
+              (list-push causes (variant-cause o))))
+        ;; One permutation sorts both: causes[i] stays omitted[i]'s.
+        (let ((idx (omission-order arena omitted))
+              (mut oms (list-new arena Omission))
+              (mut cs  (list-new arena OmissionCause)))
+          (do
+            (for-each (k idx)
+              (do (list-push oms (omission-at omitted k))
+                  (list-push cs (cause-at causes k))))
+            (record-new GateResult
+              (accepted  (sort-axioms arena accepted))
+              (omissions oms)
+              (reasons   cs)
+              (signature sig)))))))
+
+  (fn form-cause ((p Profile) (ax RawAxiom))
+    (@intent "Why an axiom the language check refused is omitted: unreadable, a count over sriq's bound, or out of profile")
+    (@spec ((Profile RawAxiom) -> OmissionCause))
+    (@pure)
+    ;; Asked only of an axiom already refused, so the uncapped re-check
+    ;; costs nothing on an accepted one (Constraint: omission reasons
+    ;; cost nothing measurable).
+    (match ax
+      ((ra-unrecognized _) (cause-of 'reason-unrecognized))
+      (_ (if (and (is-sriq p) (axiom-in-profile-at p NO_COUNT_CAP ax))
+           (cause-of 'reason-resource-guard)
+           (cause-of 'reason-out-of-profile)))))
+
+  (fn gate-verdict ((arena Arena) (p Profile) (sriq Bool) (rbox-bad Bool) (srb SriqRbox)
+                    (nonsimple (List RoleId)) (ranges (List RangeEntry)) (told (List Bool)) (nr Int)
+                    (rroles (List RoleId)) (ax RawAxiom))
+    (@intent "none to accept an in-profile form; else why it is omitted, the first failed condition deciding")
+    (@spec ((Arena Profile Bool Bool SriqRbox (List RoleId) (List RangeEntry) (List Bool) Int
+             (List RoleId) RawAxiom) -> (Option OmissionCause)))
+    (@alloc arena)
+    ;; The conditions, in the order the gate has always asked them, each
+    ;; asked only if those before it passed: an accepted axiom costs what
+    ;; it did when this was one `and` (issue #125).
+    (if (not (axiom-in-profile p ax))
+      (some (form-cause p ax))
+      (if (rbox-omits sriq rbox-bad ax)
+        (some (cause-of 'reason-irregular-rbox))
+        ;; Self only on a simple role (§5.4), and under sriq every
+        ;; restriction OWL 2 §11.2 puts on simple roles: per axiom, like
+        ;; the range condition.
+        (match (if sriq (sriq-axiom-nonsimple srb ax) (self-role-nonsimple nonsimple ax))
+          ((some r)
+            (some (record-new OmissionCause (reason 'reason-non-simple-role) (role (render-role arena r)))))
+          ;; A range-condition violation is PER-AXIOM: the offending RIA
+          ;; is its own witness, so it is omitted alone rather than
+          ;; collapsing the whole RBox the way non-regularity does. sriq
+          ;; has no range condition: [TGH21] needs none.
+          ((none)
+            (if (or sriq (axiom-range-ok ranges told nr rroles ax))
+              (none)
+              (some (cause-of 'reason-range-condition))))))))
+
+  (fn cause-at ((cs (List OmissionCause)) (i Int))
+    (@intent "cs[i]; out of range, an out-of-profile cause")
+    (@spec (((List OmissionCause) Int) -> OmissionCause))
+    (@pure)
+    (match (list-get cs i)
+      ((some c) c)
+      ((none)   (cause-of 'reason-out-of-profile))))
 
   (fn gate-expand ((arena Arena) (axs (List RawAxiom)) (p Profile))
     (@intent "The axioms the gate judges: sugar expanded, negation rewritten, el++'s tautologies dropped")

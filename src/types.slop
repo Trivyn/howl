@@ -41,6 +41,7 @@
     MissingDeclaration
     UndeclaredProperty
     Omission
+    OmissionReason OmissionCause
     Coverage
     Termination
     SubPair
@@ -72,6 +73,7 @@
     make-queue
     empty-names
     copy-iri
+    copy-causes cause-of variant-cause reason-rank
     copy-node
     copy-role
     copy-input-ref
@@ -560,17 +562,46 @@
     (missing-declaration MissingDeclaration)
     (undeclared-property UndeclaredProperty)))
 
+  ;; WHY an axiom was omitted (issue #125). The order is the gate's:
+  ;; when one axiom fails several conditions, the first decides it.
+  ;; - out-of-profile: the construct is not in the rung's language;
+  ;; - irregular-rbox: an RBox axiom, omitted because the RBox failed
+  ;;   regularity (el's §11.2 check, sriq's ≺-regularity);
+  ;; - non-simple-role: an axiom or restriction only a simple role may
+  ;;   carry, over a role the RBox makes non-simple (OmissionCause.role);
+  ;; - range-condition: an el/el++ RIA that breaks §5.2's range condition;
+  ;; - resource-guard: one of sriq's guards, a count over SRIQ_MAX_COUNT
+  ;;   or a chain S1's size guard set aside;
+  ;; - undeclared: a MissingDeclaration or UndeclaredProperty;
+  ;; - unresolved-import;
+  ;; - unrecognized: an input HOWL cannot read as an axiom.
+  (type OmissionReason (enum
+    reason-out-of-profile
+    reason-irregular-rbox
+    reason-non-simple-role
+    reason-range-condition
+    reason-resource-guard
+    reason-undeclared
+    reason-unresolved-import
+    reason-unrecognized))
+
+  (type OmissionCause (record
+    (reason OmissionReason)
+    (role   String)))     ; render-role of the non-simple role, else ""
+
   ;; EMPTY means full coverage; anything here means the run saw less
   ;; than the intended theory, whatever the reason.
   ;;
   ;; `origins` says which input document each omission came from (issue
   ;; #67): empty, or origins[i] is omitted[i]'s document, by index in the
-  ;; order the documents were begun, and -1 when no one document is it. It
-  ;; is provenance beside the coverage, never part of it: omissions are
-  ;; compared, ordered, deduplicated, rendered and hashed without it.
+  ;; order the documents were begun, and -1 when no one document is it.
+  ;; `reasons` says why (issue #125): empty, or reasons[i] is omitted[i]'s
+  ;; cause. Both are beside the coverage, never part of it: omissions are
+  ;; compared, ordered, deduplicated, rendered and hashed without them.
   (type Coverage (record
     (omitted (List Omission))
-    (origins (List Int))))
+    (origins (List Int))
+    (reasons (List OmissionCause))))
 
   ;; NOTE cancellation is NOT here. A cancelled run stops at a
   ;; scheduler-dependent point, so its partial state is not
@@ -1256,6 +1287,48 @@
       (do
         (for-each (o os) (list-push out (copy-omission arena o)))
         out)))
+
+  (fn copy-causes ((arena Arena) (cs (List OmissionCause)))
+    (@intent "Every cause, in order, owning its strings in arena")
+    (@spec ((Arena (List OmissionCause)) -> (List OmissionCause)))
+    (@alloc arena)
+    (let ((mut out (list-new arena OmissionCause)))
+      (do
+        (for-each (c cs)
+          (list-push out (record-new OmissionCause (reason (. c reason)) (role (copy-string arena (. c role))))))
+        out)))
+
+  (fn cause-of ((r OmissionReason))
+    (@intent "A cause with no role")
+    (@spec ((OmissionReason) -> OmissionCause))
+    (@pure)
+    (record-new OmissionCause (reason r) (role "")))
+
+  (fn variant-cause ((o Omission))
+    (@intent "The cause an omission's own variant fixes: all but an out-of-profile one's")
+    (@spec ((Omission) -> OmissionCause))
+    (@pure)
+    ;; An out-of-profile omission's cause is the gate's to say; this is
+    ;; out-of-profile only as the answer for omissions no gate judged.
+    (match o
+      ((out-of-profile _)      (cause-of 'reason-out-of-profile))
+      ((unresolved-import _)   (cause-of 'reason-unresolved-import))
+      ((missing-declaration _) (cause-of 'reason-undeclared))
+      ((undeclared-property _) (cause-of 'reason-undeclared))))
+
+  (fn reason-rank ((r OmissionReason))
+    (@intent "The gate's precedence: the lower ranked reason decides")
+    (@spec ((OmissionReason) -> Int))
+    (@pure)
+    (match r
+      ('reason-out-of-profile    0)
+      ('reason-irregular-rbox    1)
+      ('reason-non-simple-role   2)
+      ('reason-range-condition   3)
+      ('reason-resource-guard    4)
+      ('reason-undeclared        5)
+      ('reason-unresolved-import 6)
+      ('reason-unrecognized      7)))
 
   (fn copy-fault ((arena Arena) (f Fault))
     (@intent "f, owning its strings in arena")

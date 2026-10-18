@@ -24,7 +24,7 @@
 
   (import rdf (IRI Triple make-iri make-triple))
   (import vocab (RDF_TYPE OWL_CLASS OWL_THING OWL_NOTHING))
-  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission Findings Profile kname-eq
+  (import types (Node Outcome Evidence Saturation KscResult KName ClassAnswer Omission OmissionCause Findings Profile kname-eq
                  outcome-is-complete renamed-node copy-iri))
   (import canon (string-cmp iri-cmp sort-range))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document triple-of))
@@ -66,6 +66,7 @@
     ;; [0, input-docs), then the probe documents [input-docs, input-docs +
     ;; probe-docs), then the queried classes' declarations; -1 for none.
     (origins      (List Int))
+    (reasons      (List OmissionCause))  ; why each omission (issue #125), parallel to omissions
     (input-docs   Int)
     (probe-docs   Int)))
 

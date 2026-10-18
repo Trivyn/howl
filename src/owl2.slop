@@ -56,6 +56,7 @@
     RawAxiom Disposition
     Signature
     disposition concept-in-profile concepts-in-profile axiom-in-profile role-in-profile
+    axiom-in-profile-at NO_COUNT_CAP
     is-el-plus-plus is-sriq SRIQ_MAX_COUNT
     concept-tag-rank concept-cmp concept-at sort-concepts
     render-concept render-axiom render-role render-omission
@@ -75,6 +76,9 @@
   ;; its head; this is a resource guard, and a gate stricter than its proof
   ;; is allowed (Constraint ae25e3d4).
   (const SRIQ_MAX_COUNT Int 16)
+  ;; No bound at all: what axiom-in-profile-at is asked with to find
+  ;; whether only a count kept an axiom out.
+  (const NO_COUNT_CAP Int 4611686018427387904)
 
   (type PropCharacteristic (enum
     prop-functional
@@ -442,15 +446,38 @@
     (@intent "Is every concept in this list within the fragment?")
     (@spec ((Profile (List RawConcept)) -> Bool))
     (@pure)
-    (let ((mut ok true))
-      (do
-        (for-each (c cs)
-          (when (not (concept-in-profile p c)) (set! ok false)))
-        ok)))
+    (concepts-in-profile-at p SRIQ_MAX_COUNT cs))
 
   (fn concept-in-profile ((p Profile) (c RawConcept))
     (@intent "Is this class expression inside the rung's language?")
     (@spec ((Profile RawConcept) -> Bool))
+    (@pure)
+    (concept-in-profile-at p SRIQ_MAX_COUNT c))
+
+  (fn axiom-in-profile ((p Profile) (ax RawAxiom))
+    (@intent "In-profile FORM whose operands are also in the rung's language")
+    (@spec ((Profile RawAxiom) -> Bool))
+    (@pure)
+    (axiom-in-profile-at p SRIQ_MAX_COUNT ax))
+
+  ;; The three below take sriq's count bound as `cap`. The gate passes
+  ;; SRIQ_MAX_COUNT through the wrappers above; asking again with
+  ;; NO_COUNT_CAP, only for an axiom already refused, tells a count over
+  ;; the bound (a resource guard) from a construct outside the language
+  ;; (issue #125).
+  (fn concepts-in-profile-at ((p Profile) (cap Int) (cs (List RawConcept)))
+    (@intent "Is every concept in this list within the fragment, counts bounded by cap?")
+    (@spec ((Profile Int (List RawConcept)) -> Bool))
+    (@pure)
+    (let ((mut ok true))
+      (do
+        (for-each (c cs)
+          (when (not (concept-in-profile-at p cap c)) (set! ok false)))
+        ok)))
+
+  (fn concept-in-profile-at ((p Profile) (cap Int) (c RawConcept))
+    (@intent "Is this class expression inside the rung's language, counts bounded by cap?")
+    (@spec ((Profile Int RawConcept) -> Bool))
     (@pure)
     ;; No catch-all: a new RawConcept variant must be given an answer
     ;; here, and -Werror=switch makes forgetting a build error. The
@@ -460,15 +487,15 @@
       ((rc-name _)        true)
       ((rc-thing)         true)
       ((rc-nothing)       true)
-      ((rc-and cs)        (concepts-in-profile p cs))
-      ((rc-some r f)      (and (role-in-profile p r) (concept-in-profile p (deref f))))
+      ((rc-and cs)        (concepts-in-profile-at p cap cs))
+      ((rc-some r f)      (and (role-in-profile p r) (concept-in-profile-at p cap (deref f))))
       ;; sriq (§5.5) takes union, full negation and ∀ anywhere. Under el
       ;; and el++ ¬E is never a concept: where it is a superclass, domain
       ;; or range (or a conjunct of one), the gate rewrites the AXIOM into
       ;; ⊥ GCIs before asking (gate.slop, expand-negation).
-      ((rc-or cs)         (and (is-sriq p) (concepts-in-profile p cs)))
-      ((rc-not f)         (and (is-sriq p) (concept-in-profile p (deref f))))
-      ((rc-all r f)       (and (is-sriq p) (role-in-profile p r) (concept-in-profile p (deref f))))
+      ((rc-or cs)         (and (is-sriq p) (concepts-in-profile-at p cap cs)))
+      ((rc-not f)         (and (is-sriq p) (concept-in-profile-at p cap (deref f))))
+      ((rc-all r f)       (and (is-sriq p) (role-in-profile p r) (concept-in-profile-at p cap (deref f))))
       ;; el++ (§5.4): a nominal of ONE individual — more is a disjunction —
       ;; and a value restriction. sriq takes no class nominal (§5.5); they
       ;; are sroiq's. Self is el++'s and sriq's; whether its role is simple
@@ -476,17 +503,17 @@
       ((rc-oneof ns)       (and (is-el-plus-plus p) (== (list-len ns) 1)))
       ((rc-has-value r _)  (and (is-el-plus-plus p) (role-in-profile p r)))
       ((rc-has-self r)     (and (or (is-el-plus-plus p) (is-sriq p)) (role-in-profile p r)))
-      ;; sriq's number restrictions, n ≤ 16: a resource guard, not a proof
+      ;; sriq's number restrictions, n ≤ cap (SRIQ_MAX_COUNT, 16): a resource guard, not a proof
       ;; condition (§5.5). That the role is simple is the gate's question.
-      ((rc-card _ r n)    (and (is-sriq p) (<= n SRIQ_MAX_COUNT) (role-in-profile p r)))
-      ((rc-qcard _ r n f) (and (is-sriq p) (<= n SRIQ_MAX_COUNT) (role-in-profile p r)
-                               (concept-in-profile p (deref f))))
+      ((rc-card _ r n)    (and (is-sriq p) (<= n cap) (role-in-profile p r)))
+      ((rc-qcard _ r n f) (and (is-sriq p) (<= n cap) (role-in-profile p r)
+                               (concept-in-profile-at p cap (deref f))))
       ((rc-data _)        false)
       ((rc-anon _)        false)))
 
-  (fn axiom-in-profile ((p Profile) (ax RawAxiom))
-    (@intent "In-profile FORM whose operands are also in the rung's language")
-    (@spec ((Profile RawAxiom) -> Bool))
+  (fn axiom-in-profile-at ((p Profile) (cap Int) (ax RawAxiom))
+    (@intent "In-profile FORM whose operands are also in the rung's language, counts bounded by cap")
+    (@spec ((Profile Int RawAxiom) -> Bool))
     (@pure)
     (if (!= (disposition p ax) 'd-in-profile)
       false
@@ -495,14 +522,14 @@
       ;; check — the exact gap this function exists to close.
       (match ax
         ((ra-sub-class-of l r)
-          (and (concept-in-profile p (deref l)) (concept-in-profile p (deref r))))
-        ((ra-equivalent-classes cs)      (concepts-in-profile p cs))
-        ((ra-disjoint-classes cs)        (concepts-in-profile p cs))
+          (and (concept-in-profile-at p cap (deref l)) (concept-in-profile-at p cap (deref r))))
+        ((ra-equivalent-classes cs)      (concepts-in-profile-at p cap cs))
+        ((ra-disjoint-classes cs)        (concepts-in-profile-at p cap cs))
         ((ra-object-property-domain r c)
-          (and (role-in-profile p r) (concept-in-profile p (deref c))))
+          (and (role-in-profile p r) (concept-in-profile-at p cap (deref c))))
         ((ra-object-property-range r c)
-          (and (role-in-profile p r) (concept-in-profile p (deref c))))
-        ((ra-class-assertion ca)         (concept-in-profile p (deref (. ca concept))))
+          (and (role-in-profile p r) (concept-in-profile-at p cap (deref c))))
+        ((ra-class-assertion ca)         (concept-in-profile-at p cap (deref (. ca concept))))
         ((ra-sub-object-property a b)    (and (role-in-profile p a) (role-in-profile p b)))
         ((ra-property-chain ch)
           (and (roles-in-profile p (. ch steps)) (role-in-profile p (. ch super))))
@@ -529,7 +556,7 @@
         ((ra-inverse-properties a b)     (and (role-in-profile p a) (role-in-profile p b)))
         ((ra-disjoint-properties rs)     (and (>= (list-len rs) 2) (roles-in-profile p rs)))
         ((ra-disjoint-union du)          (and (>= (list-len (. du members)) 2)
-                                              (concepts-in-profile p (. du members))))
+                                              (concepts-in-profile-at p cap (. du members))))
         ((ra-has-key _)                  false)
         ((ra-data-axiom _)               false)
         ((ra-builtin-role _)             false)

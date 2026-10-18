@@ -97,6 +97,12 @@ SLOP_LIST_DEFINE(slop_rdf_rdf_Triple, slop_list_slop_rdf_rdf_Triple)
 SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
 #endif
 
+#ifndef SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_OmissionCause, slop_list_howl_types_OmissionCause)
+#endif
+
 #ifndef SLOP_LIST_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_LIST_HOWL_OWL2_RAWAXIOM_IMPL_DEFINED
@@ -143,6 +149,11 @@ SLOP_OPTION_DEFINE(slop_rdf_rdf_Triple, slop_option_slop_rdf_rdf_Triple)
 #ifndef SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
@@ -415,9 +426,8 @@ uint8_t howl_strict_refuses(howl_types_ReasonerConfig config, howl_types_Coverag
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_el(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_ksc(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
 slop_result_howl_Prepared_howl_types_Fault howl_prepare_sriq(slop_arena* arena, howl_normalize_Decoded d, howl_types_ReasonerConfig config, howl_types_Profile profile);
-slop_result_howl_Prepared_howl_types_Fault howl_sriq_prepared(slop_arena* arena, howl_types_ReasonerConfig config, howl_types_Profile profile, slop_list_howl_types_Omission gate_oms, howl_sriqabox_Inputs in);
-slop_list_howl_types_Omission howl_sriq_omissions(slop_arena* arena, slop_list_howl_types_Omission gate_oms, slop_list_howl_owl2_RawAxiom s1);
-slop_list_howl_types_Omission howl_distinct_omissions(slop_arena* arena, slop_list_howl_types_Omission os);
+slop_result_howl_Prepared_howl_types_Fault howl_sriq_prepared(slop_arena* arena, howl_types_ReasonerConfig config, howl_types_Profile profile, slop_list_howl_types_Omission gate_oms, slop_list_howl_types_OmissionCause gate_causes, howl_sriqabox_Inputs in);
+howl_types_Coverage howl_sriq_coverage(slop_arena* arena, slop_list_howl_types_Omission gate_oms, slop_list_howl_types_OmissionCause gate_causes, slop_list_howl_owl2_RawAxiom s1);
 howl_sriqref_RefIn howl_copy_refin(slop_arena* arena, howl_sriqref_RefIn in);
 slop_list_slop_rdf_rdf_IRI howl_query_iris(slop_arena* arena, howl_sriqclauses_SriqIds ids);
 slop_list_howl_types_KName howl_copy_knames(slop_arena* arena, slop_list_howl_types_KName ns);
@@ -504,6 +514,9 @@ int64_t howl_origin_at(slop_list_int origins, int64_t i);
 slop_string howl_run_omission_kind(howl_Run r, int64_t i);
 howl_types_EntityKind howl_run_omission_entity_kind(howl_Run r, int64_t i);
 int64_t howl_run_omission_document(howl_Run r, int64_t i);
+howl_types_OmissionCause howl_omission_cause(slop_list_howl_types_Omission oms, slop_list_howl_types_OmissionCause causes, int64_t i);
+howl_types_OmissionReason howl_run_omission_reason(howl_Run r, int64_t i);
+slop_string howl_run_omission_reason_role(howl_Run r, int64_t i);
 int64_t howl_run_probe_len(howl_Run r);
 slop_option_howl_probe_Answered howl_probe_at(howl_Run r, int64_t i);
 howl_probe_QueryKind howl_run_probe_kind(howl_Run r, int64_t i);
@@ -515,6 +528,8 @@ int64_t howl_run_probe_omission_len(howl_Run r);
 slop_string howl_run_probe_omission(howl_Run r, int64_t i);
 slop_string howl_run_probe_omission_kind(howl_Run r, int64_t i);
 howl_types_EntityKind howl_run_probe_omission_entity_kind(howl_Run r, int64_t i);
+howl_types_OmissionReason howl_run_probe_omission_reason(howl_Run r, int64_t i);
+slop_string howl_run_probe_omission_reason_role(howl_Run r, int64_t i);
 int64_t howl_probe_origin(howl_probe_Probing p, int64_t i);
 howl_DocumentSource howl_run_probe_omission_source(howl_Run r, int64_t i);
 int64_t howl_run_probe_omission_document(howl_Run r, int64_t i);
@@ -589,6 +604,11 @@ SLOP_OPTION_DEFINE(slop_rdf_rdf_Triple, slop_option_slop_rdf_rdf_Triple)
 #ifndef SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED

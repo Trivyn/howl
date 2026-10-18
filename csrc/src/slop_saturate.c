@@ -39,13 +39,13 @@ slop_list_arena_ptr howl_saturate_commit_arenas(slop_arena* arena, int64_t w);
 slop_result_howl_saturate_RoundResult_howl_types_Fault howl_saturate_saturate(slop_arena* arena, howl_types_Saturation sat, howl_premise_RuleIndex idx, howl_types_ReasonerConfig config);
 uint8_t howl_saturate_deliver_seed(slop_arena* arena, howl_types_Saturation sat, howl_types_Node to, howl_types_Derived d);
 
-typedef struct { slop_arena* qa; slop_arena* ca; howl_types_Saturation sat; slop_list_howl_saturate_Touched share; howl_saturate_Queues qs; } howl_saturate__lambda_810_env_t;
+typedef struct { slop_arena* qa; slop_arena* ca; howl_types_Saturation sat; slop_list_howl_saturate_Touched share; howl_saturate_Queues qs; } howl_saturate__lambda_815_env_t;
 
-static int64_t howl_saturate__lambda_810(howl_saturate__lambda_810_env_t* _env) { return howl_saturate_commit_bucket(_env->qa, _env->ca, _env->sat, _env->share, _env->qs); }
+static int64_t howl_saturate__lambda_815(howl_saturate__lambda_815_env_t* _env) { return howl_saturate_commit_bucket(_env->qa, _env->ca, _env->sat, _env->share, _env->qs); }
 
-typedef struct { slop_arena* wa; howl_types_Saturation sat; howl_premise_RuleIndex idx; howl_saturate_RoundDelta d; slop_list_howl_types_Node share; } howl_saturate__lambda_814_env_t;
+typedef struct { slop_arena* wa; howl_types_Saturation sat; howl_premise_RuleIndex idx; howl_saturate_RoundDelta d; slop_list_howl_types_Node share; } howl_saturate__lambda_819_env_t;
 
-static int64_t howl_saturate__lambda_814(howl_saturate__lambda_814_env_t* _env) { return howl_saturate_round_join_part(_env->wa, _env->sat, _env->idx, _env->d, _env->share); }
+static int64_t howl_saturate__lambda_819(howl_saturate__lambda_819_env_t* _env) { return howl_saturate_round_join_part(_env->wa, _env->sat, _env->idx, _env->d, _env->share); }
 
 slop_option_howl_types_Context howl_saturate_context_of(howl_types_Saturation sat, howl_types_Node n) {
     return ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
@@ -56,40 +56,40 @@ slop_option_howl_types_Queue howl_saturate_queue_of(howl_types_Saturation sat, h
 }
 
 uint8_t howl_saturate_store_has_sub(howl_types_Saturation sat, howl_types_Node x, howl_types_Node b) {
-    __auto_type _mv_756 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-    if (_mv_756.has_value) {
-        __auto_type ctx = _mv_756.value;
+    __auto_type _mv_761 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+    if (_mv_761.has_value) {
+        __auto_type ctx = _mv_761.value;
         return slop_map_has(ctx.subsumers, &(b));
-    } else if (!_mv_756.has_value) {
+    } else if (!_mv_761.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 uint8_t howl_saturate_store_has_succ(howl_types_Saturation sat, howl_types_Node x, howl_types_RoleId r, howl_types_Node y) {
-    __auto_type _mv_759 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-    if (_mv_759.has_value) {
-        __auto_type ctx = _mv_759.value;
-        __auto_type _mv_761 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-        if (_mv_761.has_value) {
-            __auto_type ys = _mv_761.value;
+    __auto_type _mv_764 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+    if (_mv_764.has_value) {
+        __auto_type ctx = _mv_764.value;
+        __auto_type _mv_766 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+        if (_mv_766.has_value) {
+            __auto_type ys = _mv_766.value;
             return slop_map_has(ys, &(y));
-        } else if (!_mv_761.has_value) {
+        } else if (!_mv_766.has_value) {
             return 0;
         }
         SLOP_UNREACHABLE();
-    } else if (!_mv_759.has_value) {
+    } else if (!_mv_764.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
 }
 
 howl_types_Context howl_saturate_delta_context(slop_arena* arena, howl_saturate_RoundDelta delta, howl_types_Node x) {
-    __auto_type _mv_764 = ({ void* _ptr = slop_map_get(delta.pending, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-    if (_mv_764.has_value) {
-        __auto_type c = _mv_764.value;
+    __auto_type _mv_769 = ({ void* _ptr = slop_map_get(delta.pending, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+    if (_mv_769.has_value) {
+        __auto_type c = _mv_769.value;
         return c;
-    } else if (!_mv_764.has_value) {
+    } else if (!_mv_769.has_value) {
         {
             __auto_type c = howl_types_make_context(arena, x);
             ({ howl_types_Context _val = c; slop_map_put(NULL, delta.pending, &(x), &_val, sizeof(_val)); });
@@ -100,11 +100,11 @@ howl_types_Context howl_saturate_delta_context(slop_arena* arena, howl_saturate_
 }
 
 void howl_saturate_add_succ(slop_arena* arena, howl_types_Context ctx, howl_types_RoleId r, howl_types_Node y) {
-    __auto_type _mv_767 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-    if (_mv_767.has_value) {
-        __auto_type s = _mv_767.value;
+    __auto_type _mv_772 = ({ void* _ptr = slop_map_get(ctx.succs, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+    if (_mv_772.has_value) {
+        __auto_type s = _mv_772.value;
         ({ slop_map_put(NULL, s, &(y), NULL, 0); });
-    } else if (!_mv_767.has_value) {
+    } else if (!_mv_772.has_value) {
         {
             __auto_type s = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_types_Node, slop_hash_howl_types_Node, slop_eq_howl_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
             ({ slop_map_put(NULL, s, &(y), NULL, 0); });
@@ -114,11 +114,11 @@ void howl_saturate_add_succ(slop_arena* arena, howl_types_Context ctx, howl_type
 }
 
 void howl_saturate_add_pred(slop_arena* arena, howl_types_Context ctx, howl_types_RoleId r, howl_types_Node x) {
-    __auto_type _mv_772 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-    if (_mv_772.has_value) {
-        __auto_type s = _mv_772.value;
+    __auto_type _mv_777 = ({ void* _ptr = slop_map_get(ctx.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+    if (_mv_777.has_value) {
+        __auto_type s = _mv_777.value;
         ({ slop_map_put(NULL, s, &(x), NULL, 0); });
-    } else if (!_mv_772.has_value) {
+    } else if (!_mv_777.has_value) {
         {
             __auto_type s = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_types_Node, slop_hash_howl_types_Node, slop_eq_howl_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
             ({ slop_map_put(NULL, s, &(x), NULL, 0); });
@@ -151,18 +151,18 @@ void howl_saturate_admit_edge(slop_arena* arena, howl_types_Saturation sat, howl
 }
 
 void howl_saturate_admit(slop_arena* arena, howl_types_Saturation sat, howl_saturate_RoundDelta delta, howl_types_Addressed m) {
-    __auto_type _mv_777 = m.what;
-    switch (_mv_777.tag) {
+    __auto_type _mv_782 = m.what;
+    switch (_mv_782.tag) {
         case howl_types_Derived_derived_sub:
         {
-            __auto_type b = _mv_777.data.derived_sub;
+            __auto_type b = _mv_782.data.derived_sub;
             howl_saturate_admit_sub(arena, sat, delta, m.to, b);
             break;
         }
         case howl_types_Derived_derived_succ:
         {
-            __auto_type r = _mv_777.data.derived_succ.f0;
-            __auto_type y = _mv_777.data.derived_succ.f1;
+            __auto_type r = _mv_782.data.derived_succ.f0;
+            __auto_type y = _mv_782.data.derived_succ.f1;
             howl_saturate_admit_edge(arena, sat, delta, ((howl_types_LogicalEdge){.from = m.to, .role = r, .to = y}));
             break;
         }
@@ -209,12 +209,12 @@ void howl_saturate_reuse_arena(slop_arena* a) {
 }
 
 void howl_saturate_join_context(slop_arena* arena, slop_arena* ra, howl_types_Saturation sat, howl_premise_RuleIndex idx, howl_saturate_RoundDelta delta, howl_types_Node n) {
-    __auto_type _mv_778 = howl_saturate_context_of(sat, n);
-    if (_mv_778.has_value) {
-        __auto_type ctx = _mv_778.value;
-        __auto_type _mv_779 = howl_saturate_queue_of(sat, n);
-        if (_mv_779.has_value) {
-            __auto_type q = _mv_779.value;
+    __auto_type _mv_783 = howl_saturate_context_of(sat, n);
+    if (_mv_783.has_value) {
+        __auto_type ctx = _mv_783.value;
+        __auto_type _mv_784 = howl_saturate_queue_of(sat, n);
+        if (_mv_784.has_value) {
+            __auto_type q = _mv_784.value;
             {
                 __auto_type _coll = q.items;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -229,18 +229,18 @@ void howl_saturate_join_context(slop_arena* arena, slop_arena* ra, howl_types_Sa
                 }
             }
             howl_saturate_reuse_arena(ra);
-        } else if (!_mv_779.has_value) {
+        } else if (!_mv_784.has_value) {
         }
-    } else if (!_mv_778.has_value) {
+    } else if (!_mv_783.has_value) {
     }
 }
 
 howl_types_Context howl_saturate_ensure_context(slop_arena* arena, howl_types_Saturation sat, howl_types_Node n) {
-    __auto_type _mv_781 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-    if (_mv_781.has_value) {
-        __auto_type c = _mv_781.value;
+    __auto_type _mv_786 = ({ void* _ptr = slop_map_get(sat.contexts, &(n)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+    if (_mv_786.has_value) {
+        __auto_type c = _mv_786.value;
         return c;
-    } else if (!_mv_781.has_value) {
+    } else if (!_mv_786.has_value) {
         {
             __auto_type c = howl_types_make_context(arena, n);
             ({ howl_types_Context _val = c; slop_map_put(NULL, sat.contexts, &(n), &_val, sizeof(_val)); });
@@ -260,16 +260,16 @@ howl_saturate_Bucket howl_saturate_bucketed(slop_arena* arena, slop_option_howl_
 
 int64_t howl_saturate_partition_one(slop_arena* arena, slop_arena* run, howl_types_Saturation sat, howl_saturate_Partition part, howl_types_Node x, howl_types_Context dc, int64_t turn, int64_t w) {
     howl_saturate_ensure_context(run, sat, x);
-    __auto_type _mv_784 = ({ void* _ptr = slop_map_get(part.owner, &(x)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
-    if (_mv_784.has_value) {
-        __auto_type o = _mv_784.value;
+    __auto_type _mv_789 = ({ void* _ptr = slop_map_get(part.owner, &(x)); _ptr ? (slop_option_int){ .has_value = true, .value = *(int64_t*)_ptr } : (slop_option_int){ .has_value = false }; });
+    if (_mv_789.has_value) {
+        __auto_type o = _mv_789.value;
         {
             __auto_type e = ((howl_saturate_Touched){.node = x, .pending = dc});
             __auto_type b = howl_saturate_bucketed(arena, ({ void* _ptr = slop_map_get(part.by_owner, &(int64_t){o}); _ptr ? (slop_option_howl_saturate_Bucket){ .has_value = true, .value = *(howl_saturate_Bucket*)_ptr } : (slop_option_howl_saturate_Bucket){ .has_value = false }; }), e);
             ({ howl_saturate_Bucket _val = b; slop_map_put(NULL, part.by_owner, &(int64_t){o}, &_val, sizeof(_val)); });
             return turn;
         }
-    } else if (!_mv_784.has_value) {
+    } else if (!_mv_789.has_value) {
         {
             __auto_type k = (turn % w);
             __auto_type e = ((howl_saturate_Touched){.node = x, .pending = dc});
@@ -300,11 +300,11 @@ int64_t howl_saturate_partition_delta(slop_arena* arena, slop_arena* run, howl_t
 }
 
 slop_list_howl_saturate_Touched howl_saturate_bucket_items(slop_arena* arena, slop_option_howl_saturate_Bucket found) {
-    __auto_type _mv_790 = found;
-    if (_mv_790.has_value) {
-        __auto_type b = _mv_790.value;
+    __auto_type _mv_795 = found;
+    if (_mv_795.has_value) {
+        __auto_type b = _mv_795.value;
         return b.items;
-    } else if (!_mv_790.has_value) {
+    } else if (!_mv_795.has_value) {
         return ((slop_list_howl_saturate_Touched){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
     }
     SLOP_UNREACHABLE();
@@ -326,16 +326,16 @@ howl_saturate_Partition howl_saturate_partition_round(slop_arena* arena, slop_ar
 }
 
 uint8_t howl_saturate_commit_succ(slop_arena* arena, howl_types_Context store, howl_types_RoleId r, howl_types_Node y) {
-    __auto_type _mv_792 = ({ void* _ptr = slop_map_get(store.succs, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-    if (_mv_792.has_value) {
-        __auto_type s = _mv_792.value;
+    __auto_type _mv_797 = ({ void* _ptr = slop_map_get(store.succs, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+    if (_mv_797.has_value) {
+        __auto_type s = _mv_797.value;
         if (slop_map_has(s, &(y))) {
             return 0;
         } else {
             ({ slop_map_put(arena, s, &(y), NULL, 0); });
             return 1;
         }
-    } else if (!_mv_792.has_value) {
+    } else if (!_mv_797.has_value) {
         {
             __auto_type s = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_types_Node, slop_hash_howl_types_Node, slop_eq_howl_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
             ({ slop_map_put(arena, s, &(y), NULL, 0); });
@@ -347,16 +347,16 @@ uint8_t howl_saturate_commit_succ(slop_arena* arena, howl_types_Context store, h
 }
 
 uint8_t howl_saturate_commit_pred(slop_arena* arena, howl_types_Context store, howl_types_RoleId r, howl_types_Node x) {
-    __auto_type _mv_798 = ({ void* _ptr = slop_map_get(store.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
-    if (_mv_798.has_value) {
-        __auto_type s = _mv_798.value;
+    __auto_type _mv_803 = ({ void* _ptr = slop_map_get(store.preds, &(r)); _ptr ? (slop_option_map_ptr){ .has_value = true, .value = *(slop_map**)_ptr } : (slop_option_map_ptr){ .has_value = false }; });
+    if (_mv_803.has_value) {
+        __auto_type s = _mv_803.value;
         if (slop_map_has(s, &(x))) {
             return 0;
         } else {
             ({ slop_map_put(arena, s, &(x), NULL, 0); });
             return 1;
         }
-    } else if (!_mv_798.has_value) {
+    } else if (!_mv_803.has_value) {
         {
             __auto_type s = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_types_Node, slop_hash_howl_types_Node, slop_eq_howl_types_Node, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
             ({ slop_map_put(arena, s, &(x), NULL, 0); });
@@ -380,9 +380,9 @@ void howl_saturate_commit_entry(slop_arena* arena, slop_arena* ca, howl_types_Sa
     {
         __auto_type x = e.node;
         __auto_type dc = e.pending;
-        __auto_type _mv_806 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
-        if (_mv_806.has_value) {
-            __auto_type store = _mv_806.value;
+        __auto_type _mv_811 = ({ void* _ptr = slop_map_get(sat.contexts, &(x)); _ptr ? (slop_option_howl_types_Context){ .has_value = true, .value = *(howl_types_Context*)_ptr } : (slop_option_howl_types_Context){ .has_value = false }; });
+        if (_mv_811.has_value) {
+            __auto_type store = _mv_811.value;
             {
                 __auto_type q = ({ __auto_type _mv = ({ void* _ptr = slop_map_get(qs.by_node, &(x)); _ptr ? (slop_option_howl_types_Queue){ .has_value = true, .value = *(howl_types_Queue*)_ptr } : (slop_option_howl_types_Queue){ .has_value = false }; }); _mv.has_value ? ({ __auto_type q0 = _mv.value; q0; }) : (howl_types_make_queue(arena)); });
                 {
@@ -438,7 +438,7 @@ void howl_saturate_commit_entry(slop_arena* arena, slop_arena* ca, howl_types_Sa
                 }
                 ({ howl_types_Queue _val = q; slop_map_put(arena, qs.by_node, &(x), &_val, sizeof(_val)); });
             }
-        } else if (!_mv_806.has_value) {
+        } else if (!_mv_811.has_value) {
         }
     }
 }
@@ -472,7 +472,7 @@ howl_types_Saturation howl_saturate_commit_round(slop_arena* arena, slop_arena* 
                 if (w <= 1) {
                     howl_saturate_commit_bucket(qa, ca, sat, share, qs);
                 } else {
-                    (void)(({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (scratch); slop_closure_t _spawn_cl = ({ howl_saturate__lambda_810_env_t* howl_saturate__lambda_810_env = (howl_saturate__lambda_810_env_t*)slop_arena_alloc(_spawn_a, sizeof(howl_saturate__lambda_810_env_t)); *howl_saturate__lambda_810_env = (howl_saturate__lambda_810_env_t){ .qa = qa, .ca = ca, .sat = sat, .share = share, .qs = qs }; (slop_closure_t){ (void*)howl_saturate__lambda_810, (void*)howl_saturate__lambda_810_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                    (void)(({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (scratch); slop_closure_t _spawn_cl = ({ howl_saturate__lambda_815_env_t* howl_saturate__lambda_815_env = (howl_saturate__lambda_815_env_t*)slop_arena_alloc(_spawn_a, sizeof(howl_saturate__lambda_815_env_t)); *howl_saturate__lambda_815_env = (howl_saturate__lambda_815_env_t){ .qa = qa, .ca = ca, .sat = sat, .share = share, .qs = qs }; (slop_closure_t){ (void*)howl_saturate__lambda_815, (void*)howl_saturate__lambda_815_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                 }
                 k = (k + 1);
             }
@@ -594,11 +594,11 @@ howl_saturate_Joined howl_saturate_parallel_join(slop_arena* arena, howl_types_S
                         __auto_type part = ((slop_list_howl_types_Node){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                         int64_t i = lo;
                         while (i < hi) {
-                            __auto_type _mv_813 = ({ __auto_type _lst = nodes; size_t _idx = (size_t)i; slop_option_howl_types_Node _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                            if (_mv_813.has_value) {
-                                __auto_type x = _mv_813.value;
+                            __auto_type _mv_818 = ({ __auto_type _lst = nodes; size_t _idx = (size_t)i; slop_option_howl_types_Node _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                            if (_mv_818.has_value) {
+                                __auto_type x = _mv_818.value;
                                 ({ __auto_type _lst_p = &(part); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                            } else if (!_mv_813.has_value) {
+                            } else if (!_mv_818.has_value) {
                             }
                             i = (i + 1);
                         }
@@ -607,7 +607,7 @@ howl_saturate_Joined howl_saturate_parallel_join(slop_arena* arena, howl_types_S
                             __auto_type share = part;
                             (void)(({ __auto_type _lst_p = &(arenas); __auto_type _item = (wa); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                             (void)(({ __auto_type _lst_p = &(deltas); __auto_type _item = (d); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
-                            (void)(({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (arena); slop_closure_t _spawn_cl = ({ howl_saturate__lambda_814_env_t* howl_saturate__lambda_814_env = (howl_saturate__lambda_814_env_t*)slop_arena_alloc(_spawn_a, sizeof(howl_saturate__lambda_814_env_t)); *howl_saturate__lambda_814_env = (howl_saturate__lambda_814_env_t){ .wa = wa, .sat = sat, .idx = idx, .d = d, .share = share }; (slop_closure_t){ (void*)howl_saturate__lambda_814, (void*)howl_saturate__lambda_814_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                            (void)(({ __auto_type _lst_p = &(threads); __auto_type _item = (({ slop_arena* _spawn_a = (arena); slop_closure_t _spawn_cl = ({ howl_saturate__lambda_819_env_t* howl_saturate__lambda_819_env = (howl_saturate__lambda_819_env_t*)slop_arena_alloc(_spawn_a, sizeof(howl_saturate__lambda_819_env_t)); *howl_saturate__lambda_819_env = (howl_saturate__lambda_819_env_t){ .wa = wa, .sat = sat, .idx = idx, .d = d, .share = share }; (slop_closure_t){ (void*)howl_saturate__lambda_819, (void*)howl_saturate__lambda_819_env }; }); slop_thread_int* _spawn_th = slop_arena_alloc(_spawn_a, sizeof(slop_thread_int)); *_spawn_th = (slop_thread_int){ .func = _spawn_cl.fn, .env = _spawn_cl.env, .done = false }; slop_thread_start(&_spawn_th->id, (void*)slop_thread_int_entry, (void*)_spawn_th); _spawn_th; })); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                         }
                     }
                 }
@@ -780,33 +780,33 @@ slop_result_howl_saturate_RoundResult_howl_types_Fault howl_saturate_saturate(sl
 }
 
 uint8_t howl_saturate_deliver_seed(slop_arena* arena, howl_types_Saturation sat, howl_types_Node to, howl_types_Derived d) {
-    __auto_type _mv_822 = ({ void* _ptr = slop_map_get(sat.queues, &(to)); _ptr ? (slop_option_howl_types_Queue){ .has_value = true, .value = *(howl_types_Queue*)_ptr } : (slop_option_howl_types_Queue){ .has_value = false }; });
-    if (!_mv_822.has_value) {
+    __auto_type _mv_827 = ({ void* _ptr = slop_map_get(sat.queues, &(to)); _ptr ? (slop_option_howl_types_Queue){ .has_value = true, .value = *(howl_types_Queue*)_ptr } : (slop_option_howl_types_Queue){ .has_value = false }; });
+    if (!_mv_827.has_value) {
         return 0;
-    } else if (_mv_822.has_value) {
-        __auto_type q = _mv_822.value;
+    } else if (_mv_827.has_value) {
+        __auto_type q = _mv_827.value;
         {
             __auto_type qq = q;
             __auto_type store = howl_saturate_ensure_context(arena, sat, to);
-            __auto_type _mv_823 = d;
-            switch (_mv_823.tag) {
+            __auto_type _mv_828 = d;
+            switch (_mv_828.tag) {
                 case howl_types_Derived_derived_sub:
                 {
-                    __auto_type b = _mv_823.data.derived_sub;
+                    __auto_type b = _mv_828.data.derived_sub;
                     ({ slop_map_put(NULL, store.subsumers, &(b), NULL, 0); });
                     break;
                 }
                 case howl_types_Derived_derived_succ:
                 {
-                    __auto_type r = _mv_823.data.derived_succ.f0;
-                    __auto_type y = _mv_823.data.derived_succ.f1;
+                    __auto_type r = _mv_828.data.derived_succ.f0;
+                    __auto_type y = _mv_828.data.derived_succ.f1;
                     howl_saturate_add_succ(arena, store, r, y);
                     break;
                 }
                 case howl_types_Derived_derived_pred:
                 {
-                    __auto_type r = _mv_823.data.derived_pred.f0;
-                    __auto_type x = _mv_823.data.derived_pred.f1;
+                    __auto_type r = _mv_828.data.derived_pred.f0;
+                    __auto_type x = _mv_828.data.derived_pred.f1;
                     howl_saturate_add_pred(arena, store, r, x);
                     break;
                 }

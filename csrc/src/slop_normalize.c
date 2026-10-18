@@ -98,11 +98,11 @@ howl_owl2_RawConcept howl_normalize_rc_of_node(howl_types_Node n) {
 }
 
 howl_types_Node howl_normalize_neg_atom(slop_arena* arena, howl_normalize_NormState* p, howl_owl2_RawConcept c) {
-    __auto_type _mv_1408 = c;
-    switch (_mv_1408.tag) {
+    __auto_type _mv_1418 = c;
+    switch (_mv_1418.tag) {
         case howl_owl2_RawConcept_rc_name:
         {
-            __auto_type n = _mv_1408.data.rc_name;
+            __auto_type n = _mv_1418.data.rc_name;
             return n;
         }
         case howl_owl2_RawConcept_rc_thing:
@@ -115,8 +115,8 @@ howl_types_Node howl_normalize_neg_atom(slop_arena* arena, howl_normalize_NormSt
         }
         case howl_owl2_RawConcept_rc_some:
         {
-            __auto_type r = _mv_1408.data.rc_some.f0;
-            __auto_type f = _mv_1408.data.rc_some.f1;
+            __auto_type r = _mv_1418.data.rc_some.f0;
+            __auto_type f = _mv_1418.data.rc_some.f1;
             {
                 __auto_type text = howl_naming_concept_key(arena, c);
                 __auto_type x = ((howl_types_Node){ .tag = howl_types_Node_fresh_node, .data.fresh_node = howl_normalize_st_fresh_id(arena, p, text) });
@@ -129,7 +129,7 @@ howl_types_Node howl_normalize_neg_atom(slop_arena* arena, howl_normalize_NormSt
         }
         case howl_owl2_RawConcept_rc_and:
         {
-            __auto_type cs = _mv_1408.data.rc_and;
+            __auto_type cs = _mv_1418.data.rc_and;
             {
                 __auto_type flat = howl_naming_flatten_and(arena, c, ((slop_list_howl_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena }));
                 __auto_type n = ((int64_t)(((int64_t)((flat).len))));
@@ -165,11 +165,11 @@ howl_types_Node howl_normalize_fold_conjuncts(slop_arena* arena, howl_normalize_
 }
 
 howl_types_Node howl_normalize_pos_atom(slop_arena* arena, howl_normalize_NormState* p, howl_owl2_RawConcept c) {
-    __auto_type _mv_1409 = c;
-    switch (_mv_1409.tag) {
+    __auto_type _mv_1419 = c;
+    switch (_mv_1419.tag) {
         case howl_owl2_RawConcept_rc_name:
         {
-            __auto_type n = _mv_1409.data.rc_name;
+            __auto_type n = _mv_1419.data.rc_name;
             return n;
         }
         case howl_owl2_RawConcept_rc_thing:
@@ -210,11 +210,11 @@ uint8_t howl_normalize_emit_inclusion(slop_arena* arena, howl_normalize_NormStat
 }
 
 uint8_t howl_normalize_normalize_gci(slop_arena* arena, howl_normalize_NormState* p, howl_owl2_RawConcept lhs, howl_owl2_RawConcept rhs) {
-    __auto_type _mv_1410 = rhs;
-    switch (_mv_1410.tag) {
+    __auto_type _mv_1420 = rhs;
+    switch (_mv_1420.tag) {
         case howl_owl2_RawConcept_rc_and:
         {
-            __auto_type ds = _mv_1410.data.rc_and;
+            __auto_type ds = _mv_1420.data.rc_and;
             {
                 uint8_t ok = 1;
                 {
@@ -235,11 +235,11 @@ uint8_t howl_normalize_normalize_gci(slop_arena* arena, howl_normalize_NormState
             {
                 __auto_type conj = howl_naming_flatten_and(arena, lhs, ((slop_list_howl_owl2_RawConcept){ .data = NULL, .len = 0, .cap = 0, .arena = arena }));
                 __auto_type n = ((int64_t)(((int64_t)((conj).len))));
-                __auto_type _mv_1411 = rhs;
-                switch (_mv_1411.tag) {
+                __auto_type _mv_1421 = rhs;
+                switch (_mv_1421.tag) {
                     case howl_owl2_RawConcept_rc_name:
                     {
-                        __auto_type b = _mv_1411.data.rc_name;
+                        __auto_type b = _mv_1421.data.rc_name;
                         return howl_normalize_emit_inclusion(arena, p, conj, n, b);
                     }
                     case howl_owl2_RawConcept_rc_nothing:
@@ -248,8 +248,8 @@ uint8_t howl_normalize_normalize_gci(slop_arena* arena, howl_normalize_NormState
                     }
                     case howl_owl2_RawConcept_rc_some:
                     {
-                        __auto_type r = _mv_1411.data.rc_some.f0;
-                        __auto_type f = _mv_1411.data.rc_some.f1;
+                        __auto_type r = _mv_1421.data.rc_some.f0;
+                        __auto_type f = _mv_1421.data.rc_some.f1;
                         {
                             __auto_type bnode = howl_normalize_pos_atom(arena, p, (*f));
                             __auto_type lnode = (((n == 1)) ? howl_normalize_neg_atom(arena, p, howl_owl2_concept_at(conj, 0)) : howl_normalize_fold_conjuncts(arena, p, conj, n));
@@ -298,12 +298,12 @@ slop_list_howl_normalize_RangeFact howl_normalize_collect_range_facts(slop_arena
             __auto_type _coll = axs;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_1412 = ax;
-                switch (_mv_1412.tag) {
+                __auto_type _mv_1422 = ax;
+                switch (_mv_1422.tag) {
                     case howl_owl2_RawAxiom_ra_object_property_range:
                     {
-                        __auto_type r = _mv_1412.data.ra_object_property_range.f0;
-                        __auto_type c = _mv_1412.data.ra_object_property_range.f1;
+                        __auto_type r = _mv_1422.data.ra_object_property_range.f0;
+                        __auto_type c = _mv_1422.data.ra_object_property_range.f1;
                         {
                             __auto_type ir = howl_gate_role_idx(roles, r);
                             if (ir >= 0) {
@@ -355,11 +355,11 @@ slop_list_howl_types_Node howl_normalize_ran_t(slop_arena* arena, slop_list_howl
 }
 
 uint8_t howl_normalize_mat_get_b(slop_list_u8 m, int64_t i) {
-    __auto_type _mv_1413 = ({ __auto_type _lst = m; size_t _idx = (size_t)i; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-    if (_mv_1413.has_value) {
-        __auto_type v = _mv_1413.value;
+    __auto_type _mv_1423 = ({ __auto_type _lst = m; size_t _idx = (size_t)i; slop_option_u8 _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+    if (_mv_1423.has_value) {
+        __auto_type v = _mv_1423.value;
         return v;
-    } else if (!_mv_1413.has_value) {
+    } else if (!_mv_1423.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -370,21 +370,21 @@ slop_string howl_normalize_range_elim_key(slop_arena* arena, howl_types_RoleId r
 }
 
 slop_string howl_normalize_render_node_name(slop_arena* arena, howl_types_Node n) {
-    __auto_type _mv_1414 = n;
-    switch (_mv_1414.tag) {
+    __auto_type _mv_1424 = n;
+    switch (_mv_1424.tag) {
         case howl_types_Node_class_node:
         {
-            __auto_type i = _mv_1414.data.class_node;
+            __auto_type i = _mv_1424.data.class_node;
             return i.value;
         }
         case howl_types_Node_individual_node:
         {
-            __auto_type i = _mv_1414.data.individual_node;
+            __auto_type i = _mv_1424.data.individual_node;
             return string_concat(arena, SLOP_STR("{"), string_concat(arena, i.value, SLOP_STR("}")));
         }
         case howl_types_Node_fresh_node:
         {
-            __auto_type k = _mv_1414.data.fresh_node;
+            __auto_type k = _mv_1424.data.fresh_node;
             return string_concat(arena, SLOP_STR("_:fresh"), int_to_string(arena, k));
         }
     }
@@ -399,13 +399,13 @@ uint8_t howl_normalize_eliminate_ranges(slop_arena* arena, howl_normalize_NormSt
             __auto_type _coll = existing;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type ax = _coll.data[_i];
-                __auto_type _mv_1415 = ax;
-                switch (_mv_1415.tag) {
+                __auto_type _mv_1425 = ax;
+                switch (_mv_1425.tag) {
                     case howl_types_NormAxiom_sub_some_rhs:
                     {
-                        __auto_type c = _mv_1415.data.sub_some_rhs.f0;
-                        __auto_type r = _mv_1415.data.sub_some_rhs.f1;
-                        __auto_type d = _mv_1415.data.sub_some_rhs.f2;
+                        __auto_type c = _mv_1425.data.sub_some_rhs.f0;
+                        __auto_type r = _mv_1425.data.sub_some_rhs.f1;
+                        __auto_type d = _mv_1425.data.sub_some_rhs.f2;
                         {
                             __auto_type fillers = howl_normalize_ran_t(arena, facts, told, n, howl_gate_role_idx(roles, r));
                             if (((int64_t)(((int64_t)((fillers).len)))) == 0) {
@@ -464,23 +464,23 @@ slop_list_howl_types_Addressed howl_normalize_edge_range_seeds(slop_arena* arena
 }
 
 uint8_t howl_normalize_normalize_axiom(slop_arena* arena, howl_normalize_NormState* p, howl_owl2_RawAxiom ax) {
-    __auto_type _mv_1416 = ax;
-    switch (_mv_1416.tag) {
+    __auto_type _mv_1426 = ax;
+    switch (_mv_1426.tag) {
         case howl_owl2_RawAxiom_ra_sub_class_of:
         {
-            __auto_type l = _mv_1416.data.ra_sub_class_of.f0;
-            __auto_type r = _mv_1416.data.ra_sub_class_of.f1;
+            __auto_type l = _mv_1426.data.ra_sub_class_of.f0;
+            __auto_type r = _mv_1426.data.ra_sub_class_of.f1;
             return howl_normalize_normalize_gci(arena, p, (*l), (*r));
         }
         case howl_owl2_RawAxiom_ra_disjoint_classes:
         {
-            __auto_type cs = _mv_1416.data.ra_disjoint_classes;
+            __auto_type cs = _mv_1426.data.ra_disjoint_classes;
             return howl_normalize_normalize_gci(arena, p, ((howl_owl2_RawConcept){ .tag = howl_owl2_RawConcept_rc_and, .data.rc_and = cs }), ((howl_owl2_RawConcept){ .tag = howl_owl2_RawConcept_rc_nothing }));
         }
         case howl_owl2_RawAxiom_ra_object_property_domain:
         {
-            __auto_type r = _mv_1416.data.ra_object_property_domain.f0;
-            __auto_type c = _mv_1416.data.ra_object_property_domain.f1;
+            __auto_type r = _mv_1426.data.ra_object_property_domain.f0;
+            __auto_type c = _mv_1426.data.ra_object_property_domain.f1;
             {
                 __auto_type top_c = ((howl_owl2_RawConcept){ .tag = howl_owl2_RawConcept_rc_thing });
                 return howl_normalize_normalize_gci(arena, p, ((howl_owl2_RawConcept){ .tag = howl_owl2_RawConcept_rc_some, .data.rc_some = { .f0 = r, .f1 = howl_normalize_box_rc(arena, top_c) } }), (*c));
@@ -488,24 +488,24 @@ uint8_t howl_normalize_normalize_axiom(slop_arena* arena, howl_normalize_NormSta
         }
         case howl_owl2_RawAxiom_ra_sub_object_property:
         {
-            __auto_type a = _mv_1416.data.ra_sub_object_property.f0;
-            __auto_type b = _mv_1416.data.ra_sub_object_property.f1;
+            __auto_type a = _mv_1426.data.ra_sub_object_property.f0;
+            __auto_type b = _mv_1426.data.ra_sub_object_property.f1;
             return howl_normalize_st_emit(arena, p, ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_sub_role, .data.sub_role = { .f0 = a, .f1 = b } }));
         }
         case howl_owl2_RawAxiom_ra_property_chain:
         {
-            __auto_type ch = _mv_1416.data.ra_property_chain;
+            __auto_type ch = _mv_1426.data.ra_property_chain;
             return howl_normalize_decompose_chain(arena, p, ch);
         }
         case howl_owl2_RawAxiom_ra_class_assertion:
         {
-            __auto_type ca = _mv_1416.data.ra_class_assertion;
+            __auto_type ca = _mv_1426.data.ra_class_assertion;
             howl_normalize_st_note_asserted(arena, p, ca.subject);
             return howl_normalize_normalize_gci(arena, p, howl_normalize_rc_of_node(ca.subject), (*ca.concept));
         }
         case howl_owl2_RawAxiom_ra_object_property_assertion:
         {
-            __auto_type e = _mv_1416.data.ra_object_property_assertion;
+            __auto_type e = _mv_1426.data.ra_object_property_assertion;
             return howl_normalize_st_emit_edge(arena, p, ((howl_types_LogicalEdge){.from = e.from, .role = e.role, .to = e.to}));
         }
         default: {
@@ -558,7 +558,7 @@ howl_normalize_NormOutput howl_normalize_ex_asserting_stewie(slop_arena* arena) 
 howl_owl2_Signature howl_normalize_ex_declaring_stewie(slop_arena* arena) {
     {
         __auto_type sig = howl_owl2_make_signature(arena);
-        (void)(({ slop_rdf_rdf_IRI _key_1417 = (((slop_rdf_rdf_IRI){.value = SLOP_STR("http://example.org/stewie")})); slop_map_put(NULL, sig.individuals, &_key_1417, NULL, 0); }));
+        (void)(({ slop_rdf_rdf_IRI _key_1427 = (((slop_rdf_rdf_IRI){.value = SLOP_STR("http://example.org/stewie")})); slop_map_put(NULL, sig.individuals, &_key_1427, NULL, 0); }));
         return sig;
     }
 }
@@ -681,46 +681,46 @@ uint8_t howl_normalize_install_seeds(slop_arena* arena, howl_types_Saturation sa
 }
 
 howl_types_NormAxiom howl_normalize_rename_axiom(slop_arena* arena, howl_types_Names names, howl_types_NormAxiom ax) {
-    __auto_type _mv_1432 = ax;
-    switch (_mv_1432.tag) {
+    __auto_type _mv_1442 = ax;
+    switch (_mv_1442.tag) {
         case howl_types_NormAxiom_sub_name:
         {
-            __auto_type a = _mv_1432.data.sub_name.f0;
-            __auto_type b = _mv_1432.data.sub_name.f1;
+            __auto_type a = _mv_1442.data.sub_name.f0;
+            __auto_type b = _mv_1442.data.sub_name.f1;
             return ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_sub_name, .data.sub_name = { .f0 = howl_types_intern_node(arena, names, a), .f1 = howl_types_intern_node(arena, names, b) } });
         }
         case howl_types_NormAxiom_sub_and:
         {
-            __auto_type a1 = _mv_1432.data.sub_and.f0;
-            __auto_type a2 = _mv_1432.data.sub_and.f1;
-            __auto_type b = _mv_1432.data.sub_and.f2;
+            __auto_type a1 = _mv_1442.data.sub_and.f0;
+            __auto_type a2 = _mv_1442.data.sub_and.f1;
+            __auto_type b = _mv_1442.data.sub_and.f2;
             return ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_sub_and, .data.sub_and = { .f0 = howl_types_intern_node(arena, names, a1), .f1 = howl_types_intern_node(arena, names, a2), .f2 = howl_types_intern_node(arena, names, b) } });
         }
         case howl_types_NormAxiom_sub_some_rhs:
         {
-            __auto_type a = _mv_1432.data.sub_some_rhs.f0;
-            __auto_type r = _mv_1432.data.sub_some_rhs.f1;
-            __auto_type b = _mv_1432.data.sub_some_rhs.f2;
+            __auto_type a = _mv_1442.data.sub_some_rhs.f0;
+            __auto_type r = _mv_1442.data.sub_some_rhs.f1;
+            __auto_type b = _mv_1442.data.sub_some_rhs.f2;
             return ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_sub_some_rhs, .data.sub_some_rhs = { .f0 = howl_types_intern_node(arena, names, a), .f1 = howl_types_intern_role(arena, names, r), .f2 = howl_types_intern_node(arena, names, b) } });
         }
         case howl_types_NormAxiom_sub_some_lhs:
         {
-            __auto_type r = _mv_1432.data.sub_some_lhs.f0;
-            __auto_type b = _mv_1432.data.sub_some_lhs.f1;
-            __auto_type a = _mv_1432.data.sub_some_lhs.f2;
+            __auto_type r = _mv_1442.data.sub_some_lhs.f0;
+            __auto_type b = _mv_1442.data.sub_some_lhs.f1;
+            __auto_type a = _mv_1442.data.sub_some_lhs.f2;
             return ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_sub_some_lhs, .data.sub_some_lhs = { .f0 = howl_types_intern_role(arena, names, r), .f1 = howl_types_intern_node(arena, names, b), .f2 = howl_types_intern_node(arena, names, a) } });
         }
         case howl_types_NormAxiom_sub_role:
         {
-            __auto_type r = _mv_1432.data.sub_role.f0;
-            __auto_type s = _mv_1432.data.sub_role.f1;
+            __auto_type r = _mv_1442.data.sub_role.f0;
+            __auto_type s = _mv_1442.data.sub_role.f1;
             return ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_sub_role, .data.sub_role = { .f0 = howl_types_intern_role(arena, names, r), .f1 = howl_types_intern_role(arena, names, s) } });
         }
         case howl_types_NormAxiom_role_chain:
         {
-            __auto_type r = _mv_1432.data.role_chain.f0;
-            __auto_type s = _mv_1432.data.role_chain.f1;
-            __auto_type t = _mv_1432.data.role_chain.f2;
+            __auto_type r = _mv_1442.data.role_chain.f0;
+            __auto_type s = _mv_1442.data.role_chain.f1;
+            __auto_type t = _mv_1442.data.role_chain.f2;
             return ((howl_types_NormAxiom){ .tag = howl_types_NormAxiom_role_chain, .data.role_chain = { .f0 = howl_types_intern_role(arena, names, r), .f1 = howl_types_intern_role(arena, names, s), .f2 = howl_types_intern_role(arena, names, t) } });
         }
     }
@@ -728,23 +728,23 @@ howl_types_NormAxiom howl_normalize_rename_axiom(slop_arena* arena, howl_types_N
 }
 
 howl_types_Derived howl_normalize_rename_derived(slop_arena* arena, howl_types_Names names, howl_types_Derived d) {
-    __auto_type _mv_1433 = d;
-    switch (_mv_1433.tag) {
+    __auto_type _mv_1443 = d;
+    switch (_mv_1443.tag) {
         case howl_types_Derived_derived_sub:
         {
-            __auto_type b = _mv_1433.data.derived_sub;
+            __auto_type b = _mv_1443.data.derived_sub;
             return ((howl_types_Derived){ .tag = howl_types_Derived_derived_sub, .data.derived_sub = howl_types_intern_node(arena, names, b) });
         }
         case howl_types_Derived_derived_succ:
         {
-            __auto_type r = _mv_1433.data.derived_succ.f0;
-            __auto_type y = _mv_1433.data.derived_succ.f1;
+            __auto_type r = _mv_1443.data.derived_succ.f0;
+            __auto_type y = _mv_1443.data.derived_succ.f1;
             return ((howl_types_Derived){ .tag = howl_types_Derived_derived_succ, .data.derived_succ = { .f0 = howl_types_intern_role(arena, names, r), .f1 = howl_types_intern_node(arena, names, y) } });
         }
         case howl_types_Derived_derived_pred:
         {
-            __auto_type r = _mv_1433.data.derived_pred.f0;
-            __auto_type x = _mv_1433.data.derived_pred.f1;
+            __auto_type r = _mv_1443.data.derived_pred.f0;
+            __auto_type x = _mv_1443.data.derived_pred.f1;
             return ((howl_types_Derived){ .tag = howl_types_Derived_derived_pred, .data.derived_pred = { .f0 = howl_types_intern_role(arena, names, r), .f1 = howl_types_intern_node(arena, names, x) } });
         }
     }
@@ -800,18 +800,18 @@ slop_result_howl_normalize_Decoded_howl_types_Fault howl_normalize_decode_docume
 }
 
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_normalize_decode_encoded(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved) {
-    __auto_type _mv_1434 = howl_decode_stage0_encoded(arena, doc, imports_resolved);
-    if (!_mv_1434.is_ok) {
-        __auto_type f = _mv_1434.data.err;
+    __auto_type _mv_1444 = howl_decode_stage0_encoded(arena, doc, imports_resolved);
+    if (!_mv_1444.is_ok) {
+        __auto_type f = _mv_1444.data.err;
         return ((slop_result_howl_normalize_Decoded_howl_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_1434.is_ok) {
-        __auto_type s0 = _mv_1434.data.ok;
-        __auto_type _mv_1435 = howl_decode_decode_axioms_sourced(arena, s0.dict, s0.triples, s0.docs);
-        if (!_mv_1435.is_ok) {
-            __auto_type f = _mv_1435.data.err;
+    } else if (_mv_1444.is_ok) {
+        __auto_type s0 = _mv_1444.data.ok;
+        __auto_type _mv_1445 = howl_decode_decode_axioms_sourced(arena, s0.dict, s0.triples, s0.docs);
+        if (!_mv_1445.is_ok) {
+            __auto_type f = _mv_1445.data.err;
             return ((slop_result_howl_normalize_Decoded_howl_types_Fault){ .is_ok = false, .data.err = f });
-        } else if (_mv_1435.is_ok) {
-            __auto_type s1 = _mv_1435.data.ok;
+        } else if (_mv_1445.is_ok) {
+            __auto_type s1 = _mv_1445.data.ok;
             {
                 __auto_type oms = ((slop_list_howl_types_Omission){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
                 __auto_type odocs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -887,18 +887,18 @@ howl_normalize_NormResult howl_normalize_normalize_decoded(slop_arena* arena, sl
         {
             __auto_type sat = howl_saturate_make_initial_saturation(arena, sig);
             howl_normalize_install_seeds(arena, sat, rno);
-            return ((howl_normalize_NormResult){.axioms = rno.axioms, .saturation = sat, .coverage = ((howl_types_Coverage){.omitted = howl_types_copy_omissions(arena, gr.omissions), .origins = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena })}), .names = names});
+            return ((howl_normalize_NormResult){.axioms = rno.axioms, .saturation = sat, .coverage = ((howl_types_Coverage){.omitted = howl_types_copy_omissions(arena, gr.omissions), .origins = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .reasons = howl_types_copy_causes(arena, gr.reasons)}), .names = names});
         }
     }
 }
 
 slop_result_howl_normalize_NormResult_howl_types_Fault howl_normalize_normalize_input(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples, slop_list_slop_rdf_rdf_IRI imports_resolved, howl_types_ReasonerConfig config) {
-    __auto_type _mv_1436 = howl_normalize_decode_document(arena, triples, imports_resolved);
-    if (!_mv_1436.is_ok) {
-        __auto_type f = _mv_1436.data.err;
+    __auto_type _mv_1446 = howl_normalize_decode_document(arena, triples, imports_resolved);
+    if (!_mv_1446.is_ok) {
+        __auto_type f = _mv_1446.data.err;
         return ((slop_result_howl_normalize_NormResult_howl_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_1436.is_ok) {
-        __auto_type d = _mv_1436.data.ok;
+    } else if (_mv_1446.is_ok) {
+        __auto_type d = _mv_1446.data.ok;
         return ((slop_result_howl_normalize_NormResult_howl_types_Fault){ .is_ok = true, .data.ok = howl_normalize_normalize_decoded(arena, arena, d) });
     }
     SLOP_UNREACHABLE();

@@ -212,6 +212,11 @@ howl_input_free(in);
   host that loads a background ontology before its own document can tell the two apart in one run.
   The probe run's omissions also say whether that document is an input or a probe document
   (`howl_run_probe_omission_source`).
+- **Why an omission was dropped.** `howl_run_omission_reason` says which gate condition it failed:
+  out of profile, an irregular RBox, a non-simple role, the range condition, a resource guard,
+  undeclared, an unresolved import, or unrecognized. For a non-simple role,
+  `howl_run_omission_reason_role` names the role. A host can refuse an edit that breaks an OWL 2 DL
+  global restriction without also refusing a harmless profile gap. The probe run has the same pair.
 
 The library always runs as the CLI does without `--strict`: an omission is reported, never refused.
 

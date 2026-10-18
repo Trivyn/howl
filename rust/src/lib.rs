@@ -538,8 +538,56 @@ pub enum Document {
     Probe(usize),
 }
 
+/// Why an axiom was omitted. When an axiom fails several of the gate's
+/// conditions, the first in this order decides.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum OmissionReason {
+    /// The construct is not in the run's profile.
+    OutOfProfile,
+    /// An RBox axiom, omitted because the RBox is not regular (OWL 2
+    /// §11.2 under `el` and `el++`, ≺-regularity under `sriq`).
+    IrregularRbox,
+    /// An axiom or restriction only a simple role may carry, over a role
+    /// the RBox makes non-simple: a chain's head, a super-property of
+    /// one, or a transitive role. `role` is that role in functional
+    /// syntax (an IRI, or `ObjectInverseOf(IRI)`); when several are, the
+    /// canonically least.
+    NonSimpleRole { role: String },
+    /// An `el` / `el++` property chain that breaks the range condition:
+    /// its target has a range the chain's last role does not share.
+    RangeCondition,
+    /// One of `sriq`'s resource guards: a number restriction above 16, or
+    /// a property chain set aside by chain elimination's size guard.
+    ResourceGuard,
+    /// A `MissingDeclaration` or an `UndeclaredProperty`.
+    Undeclared,
+    /// An `owl:imports` the caller did not attest to.
+    UnresolvedImport,
+    /// Input HOWL cannot read as an axiom.
+    Unrecognized,
+}
+
+impl OmissionReason {
+    /// From a C `howl_types_OmissionReason` and the role accessor's value.
+    fn from_ffi(k: c_int, role: String) -> Self {
+        match k {
+            ffi::REASON_OUT_OF_PROFILE => OmissionReason::OutOfProfile,
+            ffi::REASON_IRREGULAR_RBOX => OmissionReason::IrregularRbox,
+            ffi::REASON_NON_SIMPLE_ROLE => OmissionReason::NonSimpleRole { role },
+            ffi::REASON_RANGE_CONDITION => OmissionReason::RangeCondition,
+            ffi::REASON_RESOURCE_GUARD => OmissionReason::ResourceGuard,
+            ffi::REASON_UNDECLARED => OmissionReason::Undeclared,
+            ffi::REASON_UNRESOLVED_IMPORT => OmissionReason::UnresolvedImport,
+            ffi::REASON_UNRECOGNIZED => OmissionReason::Unrecognized,
+            k => panic!("the engine returned omission reason {k}"),
+        }
+    }
+}
+
 /// One omission, with what the engine knows about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Omission {
     /// The head token of `text`: `MissingDeclaration`,
     /// `UndeclaredProperty`, `UnresolvedImport`, or an out-of-profile
@@ -553,6 +601,8 @@ pub struct Omission {
     pub document: Option<Document>,
     /// Rendered exactly as the matching entry of the plain omission list.
     pub text: String,
+    /// Why it was omitted.
+    pub reason: OmissionReason,
 }
 
 /// One query and its answer.
@@ -824,6 +874,10 @@ unsafe fn omission(r: ffi::Run, i: i64) -> Omission {
         kind,
         document: (d >= 0).then(|| Document::Input(d as usize)),
         text: owned(ffi::howl_run_omission(r, i)),
+        reason: OmissionReason::from_ffi(
+            ffi::howl_run_omission_reason(r, i),
+            owned(ffi::howl_run_omission_reason_role(r, i)),
+        ),
     }
 }
 
@@ -841,6 +895,10 @@ unsafe fn probe_omission(r: ffi::Run, i: i64) -> Omission {
             s => panic!("the engine returned document source {s}"),
         },
         text: owned(ffi::howl_run_probe_omission(r, i)),
+        reason: OmissionReason::from_ffi(
+            ffi::howl_run_probe_omission_reason(r, i),
+            owned(ffi::howl_run_probe_omission_reason_role(r, i)),
+        ),
     }
 }
 

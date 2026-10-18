@@ -13,7 +13,9 @@
  * Then probe queries (SPEC §8.4, issue #68): a probe document as Turtle
  * and another as triples, three queries, and their answers through every
  * probe accessor, on every built profile. Then each omission's kind and
- * document (issue #67), in the main run and the probe run.
+ * document (issue #67), in the main run and the probe run. Every
+ * omission's reason (issue #125) must agree with its kind, and name a
+ * role exactly when it is a non-simple role.
  *
  * Then the refusals: out-of-range options, the dropped profile, a term
  * HOWL does not take, and Turtle that does not parse.
@@ -44,6 +46,19 @@ static char* read_file(const char* path, size_t* len) {
     return text;
 }
 
+/* An omission's reason agrees with its kind; only a non-simple role names a role. */
+static void check_reason(slop_string kind, howl_types_OmissionReason why, slop_string role, const char* run) {
+    int undeclared = msg_is(kind, "MissingDeclaration") || msg_is(kind, "UndeclaredProperty");
+    CHECK(undeclared == (why == howl_types_OmissionReason_reason_undeclared),
+          "%s: a %.*s omission has reason %d", run, (int)kind.len, kind.data, (int)why);
+    CHECK(msg_is(kind, "UnresolvedImport") == (why == howl_types_OmissionReason_reason_unresolved_import),
+          "%s: a %.*s omission has reason %d", run, (int)kind.len, kind.data, (int)why);
+    CHECK(!msg_is(kind, "Unrecognized") || why == howl_types_OmissionReason_reason_unrecognized,
+          "%s: an Unrecognized omission has reason %d", run, (int)why);
+    CHECK((role.len > 0) == (why == howl_types_OmissionReason_reason_non_simple_role),
+          "%s: reason %d with a role of length %zu", run, (int)why, (size_t)role.len);
+}
+
 /* The report as one buffer, every accessor read on the way. */
 static char* report_of(howl_Run run) {
     size_t cap = 1 << 16, n = 0;
@@ -60,21 +75,31 @@ static char* report_of(howl_Run run) {
     for (int64_t i = 0; i < howl_run_unsat_len(run); i++) touched += howl_run_unsat(run, i).len;
     for (int64_t i = 0; i < howl_run_sub_len(run); i++)
         touched += howl_run_sub(run, i).len + howl_run_super(run, i).len;
-    for (int64_t i = 0; i < howl_run_omission_len(run); i++)
+    for (int64_t i = 0; i < howl_run_omission_len(run); i++) {
         touched += howl_run_omission(run, i).len + howl_run_omission_kind(run, i).len
                  + (size_t)howl_run_omission_entity_kind(run, i) + (size_t)(howl_run_omission_document(run, i) + 1);
+        check_reason(howl_run_omission_kind(run, i), howl_run_omission_reason(run, i),
+                     howl_run_omission_reason_role(run, i), "main run");
+    }
     for (int64_t i = 0; i < howl_run_probe_len(run); i++)
         touched += howl_run_probe_sub(run, i).len + howl_run_probe_sup(run, i).len
                  + (size_t)howl_run_probe_kind(run, i) + (size_t)howl_run_probe_answer(run, i);
-    for (int64_t i = 0; i < howl_run_probe_omission_len(run); i++)
+    for (int64_t i = 0; i < howl_run_probe_omission_len(run); i++) {
         touched += howl_run_probe_omission(run, i).len + howl_run_probe_omission_kind(run, i).len
                  + (size_t)howl_run_probe_omission_entity_kind(run, i) + (size_t)howl_run_probe_omission_source(run, i)
                  + (size_t)(howl_run_probe_omission_document(run, i) + 1);
+        check_reason(howl_run_probe_omission_kind(run, i), howl_run_probe_omission_reason(run, i),
+                     howl_run_probe_omission_reason_role(run, i), "probe run");
+    }
     /* Out of range: empty, entity-class, no document - never a read past the end. */
     CHECK(howl_run_omission_kind(run, -1).len == 0 && howl_run_omission_document(run, howl_run_omission_len(run)) == -1
           && howl_run_probe_omission_source(run, -1) == howl_DocumentSource_document_none
           && howl_run_probe_omission_document(run, howl_run_probe_omission_len(run)) == -1
-          && howl_run_omission_entity_kind(run, -1) == howl_types_EntityKind_entity_class,
+          && howl_run_omission_entity_kind(run, -1) == howl_types_EntityKind_entity_class
+          && howl_run_omission_reason(run, -1) == howl_types_OmissionReason_reason_out_of_profile
+          && howl_run_omission_reason_role(run, howl_run_omission_len(run)).len == 0
+          && howl_run_probe_omission_reason(run, howl_run_probe_omission_len(run)) == howl_types_OmissionReason_reason_out_of_profile
+          && howl_run_probe_omission_reason_role(run, -1).len == 0,
           "an out-of-range omission accessor is not total");
     (void)howl_run_probe_inconsistent(run);
     (void)howl_run_termination(run);

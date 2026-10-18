@@ -50,6 +50,12 @@ SLOP_LIST_DEFINE(howl_owl2_RawAxiom, slop_list_howl_owl2_RawAxiom)
 SLOP_LIST_DEFINE(howl_types_Omission, slop_list_howl_types_Omission)
 #endif
 
+#ifndef SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_OmissionCause, slop_list_howl_types_OmissionCause)
+#endif
+
 #ifndef SLOP_LIST_HOWL_TYPES_ROLEID_DEFINED
 #define SLOP_LIST_HOWL_TYPES_ROLEID_DEFINED
 #define SLOP_LIST_HOWL_TYPES_ROLEID_IMPL_DEFINED
@@ -84,6 +90,11 @@ SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 #endif
 
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_TYPES_ROLEID_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_ROLEID_DEFINED
 SLOP_OPTION_DEFINE(howl_types_RoleId, slop_option_howl_types_RoleId)
@@ -107,6 +118,7 @@ SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
 struct howl_gate_GateResult {
     slop_list_howl_owl2_RawAxiom accepted;
     slop_list_howl_types_Omission omissions;
+    slop_list_howl_types_OmissionCause reasons;
     howl_owl2_Signature signature;
 };
 typedef struct howl_gate_GateResult howl_gate_GateResult;
@@ -210,13 +222,18 @@ uint8_t howl_gate_into_top_role(howl_owl2_RawAxiom ax);
 slop_list_howl_owl2_RawAxiom howl_gate_drop_top_role_tautologies(slop_arena* arena, howl_types_Profile p, slop_list_howl_owl2_RawAxiom axs);
 uint8_t howl_gate_role_listed(slop_list_howl_types_RoleId rs, howl_types_RoleId r);
 slop_list_howl_types_RoleId howl_gate_non_simple_roles(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs);
-uint8_t howl_gate_concept_self_roles_simple(slop_list_howl_types_RoleId nonsimple, howl_owl2_RawConcept c);
+slop_option_howl_types_RoleId howl_gate_concept_self_nonsimple(slop_list_howl_types_RoleId nonsimple, howl_owl2_RawConcept c);
+slop_option_howl_types_RoleId howl_gate_concepts_self_nonsimple(slop_list_howl_types_RoleId nonsimple, slop_list_howl_owl2_RawConcept cs);
+slop_option_howl_types_RoleId howl_gate_self_role_nonsimple(slop_list_howl_types_RoleId nonsimple, howl_owl2_RawAxiom ax);
 uint8_t howl_gate_self_roles_simple(slop_list_howl_types_RoleId nonsimple, howl_owl2_RawAxiom ax);
 howl_owl2_RawConcept* howl_gate_box_c(slop_arena* arena, howl_owl2_RawConcept c);
 slop_list_howl_owl2_RawAxiom howl_gate_admitted(slop_arena* arena, howl_types_Profile p, slop_list_howl_owl2_RawAxiom axs);
 uint8_t howl_gate_is_rbox_axiom(howl_owl2_RawAxiom ax);
 uint8_t howl_gate_axiom_range_ok(slop_list_howl_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_howl_types_RoleId roles, howl_owl2_RawAxiom ax);
 howl_gate_GateResult howl_gate_gate_axioms(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_owl2_Signature sig, slop_list_howl_types_Omission carried, howl_types_Profile p);
+howl_types_OmissionCause howl_gate_form_cause(howl_types_Profile p, howl_owl2_RawAxiom ax);
+slop_option_howl_types_OmissionCause howl_gate_gate_verdict(slop_arena* arena, howl_types_Profile p, uint8_t sriq, uint8_t rbox_bad, howl_sriqrbox_SriqRbox srb, slop_list_howl_types_RoleId nonsimple, slop_list_howl_gate_RangeEntry ranges, slop_list_u8 told, int64_t nr, slop_list_howl_types_RoleId rroles, howl_owl2_RawAxiom ax);
+howl_types_OmissionCause howl_gate_cause_at(slop_list_howl_types_OmissionCause cs, int64_t i);
 slop_list_howl_owl2_RawAxiom howl_gate_gate_expand(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_types_Profile p);
 uint8_t howl_gate_piece_read(howl_types_Profile p, howl_owl2_RawAxiom ax);
 uint8_t howl_gate_piece_omitted(howl_types_Profile p, howl_owl2_RawAxiom ax);
@@ -273,6 +290,11 @@ SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
 #ifndef SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_OMISSION_DEFINED
 SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_GATE_GATERESULT_DEFINED

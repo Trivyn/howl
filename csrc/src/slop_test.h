@@ -1866,6 +1866,15 @@ uint8_t howl_test_test_probe_document_numbers_its_documents(slop_arena* arena);
 slop_list_int howl_test_omission_documents(slop_arena* arena, slop_list_string texts);
 slop_list_string howl_test_lines_of_documents(slop_arena* arena, slop_list_string texts);
 uint8_t howl_test_test_omissions_name_their_document(slop_arena* arena);
+slop_string howl_test_reason_name(howl_types_OmissionReason r);
+slop_string howl_test_cause_text(slop_arena* arena, howl_types_OmissionReason reason, slop_string role);
+slop_string howl_test_run_causes(slop_arena* arena, howl_Run r);
+slop_string howl_test_probe_causes(slop_arena* arena, howl_Run r);
+slop_string howl_test_reason_prefixes(void);
+uint8_t howl_test_causes_are(slop_arena* arena, slop_string label, slop_string text, howl_types_Profile p, slop_string want);
+uint8_t howl_test_test_omissions_say_why(slop_arena* arena);
+uint8_t howl_test_test_omission_reasons_are_total(slop_arena* arena);
+uint8_t howl_test_test_sriq_coverage_keeps_the_first_cause(slop_arena* arena);
 uint8_t howl_test_main_lines_unchanged(slop_arena* arena, howl_Run r, slop_list_string want);
 uint8_t howl_test_probes_agree_with_report(slop_arena* arena, slop_string path, howl_types_Profile profile);
 uint8_t howl_test_probes_agree_on(slop_arena* arena, slop_string text, howl_types_Outcome o, slop_string path, howl_types_Profile profile);
@@ -2192,6 +2201,11 @@ SLOP_OPTION_DEFINE(howl_test_RunAs, slop_option_howl_test_RunAs)
 SLOP_OPTION_DEFINE(howl_owl2_Signature, slop_option_howl_owl2_Signature)
 #endif
 
+#ifndef SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+SLOP_OPTION_DEFINE(howl_types_OmissionCause, slop_option_howl_types_OmissionCause)
+#endif
+
 #ifndef SLOP_OPTION_ARENA_PTR_DEFINED
 #define SLOP_OPTION_ARENA_PTR_DEFINED
 SLOP_OPTION_DEFINE(slop_arena*, slop_option_arena_ptr)
@@ -2235,6 +2249,12 @@ SLOP_OPTION_DEFINE(howl_types_ClassAnswer, slop_option_howl_types_ClassAnswer)
 #ifndef SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
 #define SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
 SLOP_OPTION_DEFINE(howl_probe_Query, slop_option_howl_probe_Query)
+#endif
+
+#ifndef SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_DEFINED
+#define SLOP_LIST_HOWL_TYPES_OMISSIONCAUSE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_OmissionCause, slop_list_howl_types_OmissionCause)
 #endif
 
 #ifndef SLOP_LIST_ARENA_PTR_DEFINED

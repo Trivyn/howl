@@ -29,7 +29,8 @@
                   one-object decode-concept CONCEPT_FUEL build-signature
                   decode-axioms decode-axioms-with decode-store Stage1))
   (import gate (GateResult RboxVerdict expand-sugar gate-axioms check-regularity
-                expand-negation drop-top-role-tautologies missing-declarations collect-entity-refs))
+                expand-negation drop-top-role-tautologies missing-declarations collect-entity-refs
+                axiom-input-ref cause-at))
   (import normalize (NormOutput normalize-accepted))
   (import owl2 (RawConcept Signature signature-has-class render-omission
                 signature-has-object-property signature-has-annotation-property
@@ -67,12 +68,12 @@
   (import rdf (Graph))
   (import types (Node RoleId NormAxiom Derived Addressed EdgePair LogicalEdge
                  Context Queue Saturation
-                 Omission Coverage Termination SubPair Findings Outcome Evidence Fault AxiomRef
+                 Omission OmissionCause OmissionReason Coverage Termination SubPair Findings Outcome Evidence Fault AxiomRef
                  ReasonerConfig Profile ProfileSelection
                  default-config emit-edge make-context make-queue
                  Names empty-names intern-node intern-role renamed-node original-node original-role
                  node-top node-bottom node-eq role-eq derived-eq addressed-eq
-                 outcome-is-complete findings-are-incoherent))
+                 outcome-is-complete findings-are-incoherent cause-of))
   (import canon (string-cmp iri-cmp node-cmp sort-iris sort-nodes sort-sub-pairs iri-at int-at str-at omission-at sort-range
                  sub-pair-cmp omission-cmp))
   (import saturate (RoundResult RoundDelta saturate make-initial-saturation commit-round queue-of context-of))
@@ -87,7 +88,8 @@
                 run-sub-len run-unsat-len run-omission-len
                 DocumentSource run-omission-document run-omission-kind
                 run-probe-omission-source run-probe-omission-document
-                Prepared ElWork prepare reason decode-owned prepare-in-profile sriq-omissions))
+                run-omission run-omission-reason run-omission-reason-role run-probe-omission-reason run-probe-omission-reason-role
+                Prepared ElWork prepare reason decode-owned prepare-in-profile sriq-coverage))
   (import el (apply-el-rules apply-el-rules-reference))
   (import probe (QueryKind ProbeAnswer Query probe-document))
   (import locality (axiom-local axiom-readable module-axioms ModuleOut))
@@ -178,7 +180,8 @@
               (record-new IRI (value "http://example.org/missing-import")))))
         (record-new Outcome
           (profile     'profile-el)
-          (coverage    (record-new Coverage (omitted omitted) (origins (list-new arena Int))))
+          (coverage    (record-new Coverage (omitted omitted) (origins (list-new arena Int))
+                                           (reasons (list-new arena OmissionCause))))
           (termination (if reached-fixpoint
                          (union-new Termination fixpoint)
                          (union-new Termination resource-limit 1000)))
@@ -7635,8 +7638,9 @@
           ((ok in)
             (wired-says arena "the guard's chain is omitted, and listed once though both runs could set it aside"
                         (and (== (list-len (. in omitted)) 1)
-                             (== (list-len (sriq-omissions arena (list-new arena Omission)
-                                                           (twice arena (. in omitted)))) 1))))))))
+                             (== (list-len (. (sriq-coverage arena (list-new arena Omission)
+                                                             (list-new arena OmissionCause)
+                                                             (twice arena (. in omitted))) omitted)) 1))))))))
 
   (fn twice ((arena Arena) (xs (List RawAxiom)))
     (@intent "xs, then xs again")
@@ -7818,6 +7822,7 @@
           (list-push axs (union-new RawAxiom ra-class-assertion (record-new RawClassAssertion (concept (boxed arena c)) (subject a))))
           (list-push axs (union-new RawAxiom ra-different-individuals ns))
           (let ((sp (abox-split arena (record-new GateResult (accepted axs) (omissions (list-new arena Omission))
+                                                             (reasons (list-new arena OmissionCause))
                                                              (signature (make-signature arena))))))
             (split-says arena "a DifferentIndividuals list with a class member: kept whole for Run C, nothing folded" 'st-cautious
                         (and (. sp has-c) (== (list-len (. (. sp h) accepted)) 0) (== (list-len (. (. sp c) accepted)) 2)
@@ -10586,6 +10591,196 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (and same
                  (ints-are (omission-documents arena split) (list Int 0 1 1))
                  (ints-are (omission-documents arena whole) (list Int 0 0 0))))))))
+
+  ;; ============================================================
+  ;; Why each omission was dropped (issue #125)
+  ;; ============================================================
+
+  (fn reason-name ((r OmissionReason))
+    (@intent "A reason's name, for the tables below")
+    (@spec ((OmissionReason) -> String))
+    (@pure)
+    (match r
+      ('reason-out-of-profile    "out-of-profile")
+      ('reason-irregular-rbox    "irregular-rbox")
+      ('reason-non-simple-role   "non-simple-role")
+      ('reason-range-condition   "range-condition")
+      ('reason-resource-guard    "resource-guard")
+      ('reason-undeclared        "undeclared")
+      ('reason-unresolved-import "unresolved-import")
+      ('reason-unrecognized      "unrecognized")))
+
+  (fn cause-text ((arena Arena) (reason OmissionReason) (role String))
+    (@intent "reason, or reason:role when a role is named")
+    (@spec ((Arena OmissionReason String) -> String))
+    (@alloc arena)
+    (if (== (string-len role) 0)
+      (reason-name reason)
+      (string-concat arena (reason-name reason) (string-concat arena ":" role))))
+
+  (fn run-causes ((arena Arena) (r Run))
+    (@intent "The run's omissions' causes, space-separated, in report order")
+    (@spec ((Arena Run) -> String))
+    (@alloc arena)
+    (let ((n (run-omission-len r))
+          (mut out "")
+          (mut i 0))
+      (do
+        (while (< i n)
+          (do (when (> i 0) (set! out (string-concat arena out " ")))
+              (set! out (string-concat arena out
+                          (cause-text arena (run-omission-reason r i) (run-omission-reason-role r i))))
+              (set! i (+ i 1))))
+        out)))
+
+  (fn probe-causes ((arena Arena) (r Run))
+    (@intent "The probe run's omissions' causes, space-separated, in report order")
+    (@spec ((Arena Run) -> String))
+    (@alloc arena)
+    (let ((n (run-probe-omission-len r))
+          (mut out "")
+          (mut i 0))
+      (do
+        (while (< i n)
+          (do (when (> i 0) (set! out (string-concat arena out " ")))
+              (set! out (string-concat arena out
+                          (cause-text arena (run-probe-omission-reason r i) (run-probe-omission-reason-role r i))))
+              (set! i (+ i 1))))
+        out)))
+
+  (fn reason-prefixes ()
+    (@intent "The prefixes and declarations the reason table shares")
+    (@spec (() -> String))
+    (@pure)
+    "@prefix : <http://example.org/t#> .\n@prefix owl: <http://www.w3.org/2002/07/owl#> .\n@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .\n:r a owl:ObjectProperty . :s a owl:ObjectProperty . :t a owl:ObjectProperty . :u a owl:ObjectProperty .\n:A a owl:Class . :B a owl:Class . :Agent a owl:Class .\n")
+
+  (fn causes-are ((arena Arena) (label String) (text String) (p Profile) (want String))
+    (@intent "Classify a document of the reason table under a rung; are its omissions' causes want?")
+    (@spec ((Arena String String Profile String) -> Bool))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile p)
+        (input-add-turtle in (string-concat arena (reason-prefixes) text))
+        (let ((r   (run-classify in o))
+              (got (run-causes arena r))
+              (ok  (string-eq got want)))
+          (do
+            (when (not ok)
+              (do (print "  [reasons] ") (print label) (print " (") (print (profile-name p))
+                  (print "): got '") (print got) (print "', want '") (print want) (println "'")
+                  (let ((mut i 0))
+                    (while (< i (run-omission-len r))
+                      (do (print "    omission ") (println (run-omission r i)) (set! i (+ i 1)))))))
+            (run-free r)
+            (input-free in)
+            ok)))))
+
+  (fn test-omissions-say-why ((arena Arena))
+    (@intent "Each omission names the gate condition it failed, the first deciding, and its non-simple role")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((chain-head ":r owl:propertyChainAxiom ( :s :t ) . :r a owl:FunctionalProperty .")
+          (card-super ":r rdfs:subPropertyOf :u . :r owl:propertyChainAxiom ( :s :t ) .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :u ; owl:maxCardinality 1 ] .")
+          (card-inv   ":t a owl:TransitiveProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty [ owl:inverseOf :t ] ; owl:maxCardinality 1 ] .")
+          (self-trans ":t a owl:TransitiveProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:hasSelf true ] .")
+          (cycle      ":s owl:propertyChainAxiom ( :r :s ) . :r owl:propertyChainAxiom ( :s :r ) .")
+          (all        ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:allValuesFrom :B ] .")
+          (range      ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range :Agent .")
+          (count17    ":A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:maxCardinality 17 ] .")
+          (count17t   ":t a owl:TransitiveProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:maxCardinality 17 ] .")
+          (unreadable "[] a owl:AllDisjointClasses ; owl:members ( :A ) .")
+          (undeclared ":A rdfs:subClassOf :Nowhere .")
+          (import     "<http://example.org/t> a owl:Ontology ; owl:imports <http://example.org/elsewhere> .")
+          (two-roles  ":r owl:propertyChainAxiom ( :s :t ) . :u owl:propertyChainAxiom ( :s :t ) .
+[] a owl:AllDisjointProperties ; owl:members ( :u :r ) .")
+          (self-union ":t a owl:TransitiveProperty .
+:A rdfs:subClassOf [ owl:unionOf ( [ a owl:Restriction ; owl:onProperty :t ; owl:hasSelf true ] :B ) ] ."))
+      (and
+        ;; Trivyn's four (the issue's tests)
+        (causes-are arena "a functional chain head" chain-head 'profile-sriq "non-simple-role:http://example.org/t#r")
+        (causes-are arena "a cardinality on a chain's super-property" card-super 'profile-sriq
+                    "non-simple-role:http://example.org/t#u")
+        (causes-are arena "chains defining each other" cycle 'profile-el "irregular-rbox irregular-rbox")
+        (causes-are arena "chains defining each other" cycle 'profile-sriq "irregular-rbox irregular-rbox")
+        (causes-are arena "ObjectAllValuesFrom" all 'profile-el-plus-plus "out-of-profile")
+        ;; the rest of the table
+        (causes-are arena "a cardinality on an inverse of a transitive role" card-inv 'profile-sriq
+                    "non-simple-role:ObjectInverseOf(http://example.org/t#t)")
+        (causes-are arena "Self on a transitive role" self-trans 'profile-el-plus-plus
+                    "non-simple-role:http://example.org/t#t")
+        (causes-are arena "a chain whose target's range s lacks" range 'profile-el "range-condition")
+        (causes-are arena "a chain whose target's range s lacks" range 'profile-el-plus-plus "range-condition")
+        (causes-are arena "a count of 17" count17 'profile-sriq "resource-guard")
+        (causes-are arena "a count of 17" count17 'profile-el "out-of-profile")
+        (causes-are arena "a one-member AllDisjointClasses" unreadable 'profile-el "unrecognized")
+        (causes-are arena "an undeclared class" undeclared 'profile-el "undeclared")
+        (causes-are arena "an unattested import" import 'profile-el "unresolved-import")
+        ;; two non-simple roles: the canonically least is named, not the first written
+        (causes-are arena "a disjointness of two chain heads" two-roles 'profile-sriq "non-simple-role:http://example.org/t#r")
+        ;; precedence: the first failed condition decides
+        (causes-are arena "Self on a transitive role, in a union" self-union 'profile-el-plus-plus "out-of-profile")
+        (causes-are arena "a count of 17 on a transitive role" count17t 'profile-sriq "resource-guard")
+        (causes-are arena "a range-breaking chain in an irregular RBox" (string-concat arena range cycle) 'profile-el
+                    "irregular-rbox irregular-rbox irregular-rbox"))))
+
+  (fn test-omission-reasons-are-total ((arena Arena))
+    (@intent "Out of range, a reason is out-of-profile with no role; the answer run's are its own run's")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Self on a transitive role is an RBox condition, so the answer run
+    ;; falls back to the whole input, whose gate gives the cause.
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile 'profile-el-plus-plus)
+        (input-add-turtle in (string-concat arena (reason-prefixes) ":t a owl:TransitiveProperty .
+:A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :t ; owl:hasSelf true ] ."))
+        (input-ask-subsumed in "http://example.org/t#A" "http://example.org/t#B")
+        (let ((r  (run-answer in o))
+              (ok (and (run-ok r)
+                       (string-eq (probe-causes arena r) "non-simple-role:http://example.org/t#t")
+                       (== (run-probe-omission-reason r -1) 'reason-out-of-profile)
+                       (== (string-len (run-probe-omission-reason-role r 1)) 0)
+                       (== (run-omission-reason r 0) 'reason-out-of-profile)
+                       (== (string-len (run-omission-reason-role r -1)) 0))))
+          (do
+            (when (not ok) (do (print "  [reasons] answer run: got '") (print (probe-causes arena r)) (println "'")))
+            (run-free r)
+            (input-free in)
+            ok)))))
+
+  (fn test-sriq-coverage-keeps-the-first-cause ((arena Arena))
+    (@intent "An omission both the gate and S1's guard give is listed once, with the gate's precedence deciding its cause")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (match (gate-ttl-in arena (string-concat arena (reason-prefixes) ":r owl:propertyChainAxiom ( :s :t ) .") 'profile-sriq)
+      ((none) false)
+      ((some gr)
+        (match (list-get (. gr accepted) 0)
+          ((none) false)
+          ((some a)
+            (let ((chain   (list RawAxiom a))
+                  (gate-om (list Omission (union-new Omission out-of-profile (axiom-input-ref arena a))))
+                  (before  (sriq-coverage arena gate-om (list OmissionCause (cause-of 'reason-irregular-rbox)) chain))
+                  (after   (sriq-coverage arena gate-om (list OmissionCause (cause-of 'reason-unrecognized)) chain))
+                  (guard   (sriq-coverage arena (list-new arena Omission) (list-new arena OmissionCause)
+                             (twice arena chain))))
+              ;; S1's guard's cause ranks below the gate's irregular-rbox
+              ;; and above an unrecognized one: either way the lower wins.
+              (and (== (list-len (. gr accepted)) 1)
+                   (== (list-len (. before omitted)) 1)
+                   (== (. (cause-at (. before reasons) 0) reason) 'reason-irregular-rbox)
+                   (== (list-len (. after omitted)) 1)
+                   (== (. (cause-at (. after reasons) 0) reason) 'reason-resource-guard)
+                   (== (list-len (. guard omitted)) 1)
+                   (== (list-len (. guard reasons)) 1)
+                   (== (. (cause-at (. guard reasons) 0) reason) 'reason-resource-guard))))))))
 
   (fn main-lines-unchanged ((arena Arena) (r Run) (want (List String)))
     (@intent "The run's lines are the main report's, then the probe lines")
@@ -13463,6 +13658,18 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-omissions-name-their-document arena)))
             (print-test-result "documents: each omission names its document; the report is unchanged" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-omissions-say-why arena)))
+            (print-test-result "#125: each omission names the gate condition it failed, the first deciding" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-omission-reasons-are-total arena)))
+            (print-test-result "#125: reasons are total, and the answer run's are its own run's" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-sriq-coverage-keeps-the-first-cause arena)))
+            (print-test-result "#125: an omission the gate and S1's guard both give keeps the first cause" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-unknown-owl-vocabulary-still-decodes arena)))

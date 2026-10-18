@@ -166,8 +166,11 @@ howl_sriqrbox_Edges howl_sriqrbox_constraint_edges(slop_arena* arena, slop_list_
 howl_sriqrbox_SriqRbox howl_sriqrbox_sriq_rbox(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs);
 uint8_t howl_sriqrbox_sriq_role_simple(howl_sriqrbox_SriqRbox rb, howl_types_RoleId r);
 uint8_t howl_sriqrbox_is_bottom_role(howl_types_RoleId r);
-uint8_t howl_sriqrbox_sriq_concept_simple(howl_sriqrbox_SriqRbox rb, howl_owl2_RawConcept c);
-uint8_t howl_sriqrbox_sriq_concepts_simple(howl_sriqrbox_SriqRbox rb, slop_list_howl_owl2_RawConcept cs);
+slop_option_howl_types_RoleId howl_sriqrbox_lesser_role(slop_option_howl_types_RoleId a, slop_option_howl_types_RoleId b);
+slop_option_howl_types_RoleId howl_sriqrbox_role_nonsimple(howl_sriqrbox_SriqRbox rb, howl_types_RoleId r);
+slop_option_howl_types_RoleId howl_sriqrbox_sriq_concept_nonsimple(howl_sriqrbox_SriqRbox rb, howl_owl2_RawConcept c);
+slop_option_howl_types_RoleId howl_sriqrbox_sriq_concepts_nonsimple(howl_sriqrbox_SriqRbox rb, slop_list_howl_owl2_RawConcept cs);
+slop_option_howl_types_RoleId howl_sriqrbox_sriq_axiom_nonsimple(howl_sriqrbox_SriqRbox rb, howl_owl2_RawAxiom ax);
 uint8_t howl_sriqrbox_sriq_axiom_simple(howl_sriqrbox_SriqRbox rb, howl_owl2_RawAxiom ax);
 
 #ifndef SLOP_OPTION_HOWL_TYPES_ROLEID_DEFINED

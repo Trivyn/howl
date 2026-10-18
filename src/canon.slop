@@ -64,7 +64,7 @@
     missing-declaration-cmp undeclared-property-cmp omission-cmp
     sort-range
     sort-strings sort-iris sort-nodes sort-sub-pairs
-    sort-axiom-refs sort-omissions
+    sort-axiom-refs sort-omissions omission-order
     int-at str-at iri-at omission-at)
 
   ;; ============================================================
@@ -534,11 +534,19 @@
           (mut out (list-new arena AxiomRef)))
       (do (for-each (k idx) (list-push out (axiom-ref-at xs k))) out)))
 
+  (fn omission-order ((arena Arena) (xs (List Omission)))
+    (@intent "The permutation that sorts xs canonically: xs[idx[0]], xs[idx[1]], ...")
+    (@spec ((Arena (List Omission)) -> (List Int)))
+    (@alloc arena)
+    ;; Lifted out of sort-omissions so a list kept beside the omissions
+    ;; (Coverage.reasons) can be put in the same order.
+    (sort-range arena (cast Int (list-len xs))
+      (fn ((i Int) (j Int)) (omission-cmp (omission-at xs i) (omission-at xs j)))))
+
   (fn sort-omissions ((arena Arena) (xs (List Omission)))
     (@intent "Canonically sorted copy — Coverage.omitted, which is hashed (§6.8)")
     (@spec ((Arena (List Omission)) -> (List Omission)))
     (@alloc arena)
-    (let ((idx (sort-range arena (cast Int (list-len xs))
-                 (fn ((i Int) (j Int)) (omission-cmp (omission-at xs i) (omission-at xs j)))))
+    (let ((idx (omission-order arena xs))
           (mut out (list-new arena Omission)))
       (do (for-each (k idx) (list-push out (omission-at xs k))) out))))
