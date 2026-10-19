@@ -73,7 +73,7 @@
     make-queue
     empty-names
     copy-iri
-    copy-causes cause-of variant-cause reason-rank
+    copy-causes copy-strings cause-of variant-cause reason-rank
     copy-node
     copy-role
     copy-input-ref
@@ -596,12 +596,16 @@
   ;; #67): empty, or origins[i] is omitted[i]'s document, by index in the
   ;; order the documents were begun, and -1 when no one document is it.
   ;; `reasons` says why (issue #125): empty, or reasons[i] is omitted[i]'s
-  ;; cause. Both are beside the coverage, never part of it: omissions are
-  ;; compared, ordered, deduplicated, rendered and hashed without them.
+  ;; cause. `witness` is an irregular RBox's §5.2 witness, the rendered
+  ;; axioms that make it so, sorted, each once; empty unless some reason
+  ;; is irregular-rbox. All three are beside the coverage, never part of
+  ;; it: omissions are compared, ordered, deduplicated, rendered and
+  ;; hashed without them.
   (type Coverage (record
     (omitted (List Omission))
     (origins (List Int))
-    (reasons (List OmissionCause))))
+    (reasons (List OmissionCause))
+    (witness (List String))))
 
   ;; NOTE cancellation is NOT here. A cancelled run stops at a
   ;; scheduler-dependent point, so its partial state is not
@@ -1297,6 +1301,13 @@
         (for-each (c cs)
           (list-push out (record-new OmissionCause (reason (. c reason)) (role (copy-string arena (. c role))))))
         out)))
+
+  (fn copy-strings ((arena Arena) (xs (List String)))
+    (@intent "Every string, in order, owned in arena")
+    (@spec ((Arena (List String)) -> (List String)))
+    (@alloc arena)
+    (let ((mut out (list-new arena String)))
+      (do (for-each (x xs) (list-push out (copy-string arena x))) out)))
 
   (fn cause-of ((r OmissionReason))
     (@intent "A cause with no role")

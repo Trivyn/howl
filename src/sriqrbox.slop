@@ -22,7 +22,7 @@
 
   (export
     Ria SriqRbox
-    sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple sriq-axiom-nonsimple sriq-role-simple lesser-role
+    sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-simple sriq-axiom-nonsimple sriq-role-simple lesser-role sriq-witness
     sriq-node node-role inv-node)
 
   ;; ============================================================
@@ -120,12 +120,18 @@
     (off (List Int))     ; node v's targets are adj[off[v] .. off[v+1])
     (adj (List Int))))
 
+  (type Edges (record
+    (src  (List Int))
+    (dst  (List Int))
+    (from (List Int))))   ; per edge, the index in `rias` of the RIA that demanded it
+
   (type SriqRbox (record
-    (props     (List RoleId))   ; the named properties, canonically sorted
-    (nonsimple (List Bool))     ; per node
-    (rep       (List Int))      ; per node: its component's representative (S0's collapse)
-    (rias      (List Ria))      ; S0's role inclusions, as node words, before the collapse
-    (regular   Bool)))
+    (props       (List RoleId))   ; the named properties, canonically sorted
+    (nonsimple   (List Bool))     ; per node
+    (rep         (List Int))      ; per node: its component's representative (S0's collapse)
+    (rias        (List Ria))      ; S0's role inclusions, as node words, before the collapse
+    (constraints Edges)           ; ≺'s constraint graph, over representatives
+    (regular     Bool)))
 
   (fn ints-new ((arena Arena) (n Int) (v Int))
     (@intent "An n-long list of v")
@@ -307,6 +313,17 @@
     ;; pair. Each row returns its own list, for expand-sugar's reason.
     (let ((mut out (list-new arena Ria)))
       (do (for-each (ax axs) (for-each (r (rias-of arena props ax)) (list-push out r)))
+          out)))
+
+  (fn ria-sources ((arena Arena) (props (List RoleId)) (axs (List RawAxiom)))
+    (@intent "Per RIA of sriq-rias, the index in axs of the axiom it came from")
+    (@spec ((Arena (List RoleId) (List RawAxiom)) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int))
+          (mut k 0))
+      (do (for-each (ax axs)
+            (do (for-each (r (rias-of arena props ax)) (list-push out k))
+                (set! k (+ k 1))))
           out)))
 
   (fn sriq-nodes ((arena Arena) (props (List RoleId)) (rs (List RoleId)))
@@ -548,11 +565,10 @@
     (@spec ((Arena) -> SriqRbox))
     (@alloc arena)
     (record-new SriqRbox (props (list-new arena RoleId)) (nonsimple (list-new arena Bool))
-                         (rep (list-new arena Int)) (rias (list-new arena Ria)) (regular true)))
-
-  (type Edges (record
-    (src (List Int))
-    (dst (List Int))))
+                         (rep (list-new arena Int)) (rias (list-new arena Ria))
+                         (constraints (record-new Edges (src (list-new arena Int)) (dst (list-new arena Int))
+                                                        (from (list-new arena Int))))
+                         (regular true)))
 
   (fn hierarchy-edges ((arena Arena) (rias (List Ria)))
     (@intent "→: each one-step inclusion R ⊑ S, and inv(R) ⊑ inv(S) with it")
@@ -567,7 +583,7 @@
                   (s (. ria super)))
               (do (list-push fs x) (list-push fd s)
                   (list-push fs (inv-node x)) (list-push fd (inv-node s))))))
-        (record-new Edges (src fs) (dst fd)))))
+        (record-new Edges (src fs) (dst fd) (from (list-new arena Int))))))
 
   (fn composite-seeds ((arena Arena) (props (List RoleId)) (rias (List Ria)))
     (@intent "The composite roles: each chain's super and its inverse, and owl:bottomObjectProperty")
@@ -587,17 +603,22 @@
     (@spec ((Arena (List Ria) (List Bool) (List Int)) -> Edges))
     (@alloc arena)
     (let ((mut cs (list-new arena Int))
-          (mut cd (list-new arena Int)))
+          (mut cd (list-new arena Int))
+          (mut cf (list-new arena Int))
+          (mut k 0))
       (do
         (for-each (ria rias)
-          (when (or (> (list-len (. ria word)) 1) (bool-at nonsimple (. ria super)))
-            (let ((w (rep-word arena (. ria word) rep))
-                  (s (int-at rep (. ria super))))
-              (do
-                (for-each (x (ria-constraints arena w s)) (do (list-push cs x) (list-push cd s)))
-                (for-each (x (ria-constraints arena (inv-word arena w) (inv-node s)))
-                  (do (list-push cs x) (list-push cd (inv-node s))))))))
-        (record-new Edges (src cs) (dst cd)))))
+          (do
+            (when (or (> (list-len (. ria word)) 1) (bool-at nonsimple (. ria super)))
+              (let ((w (rep-word arena (. ria word) rep))
+                    (s (int-at rep (. ria super))))
+                (do
+                  (for-each (x (ria-constraints arena w s))
+                    (do (list-push cs x) (list-push cd s) (list-push cf k)))
+                  (for-each (x (ria-constraints arena (inv-word arena w) (inv-node s)))
+                    (do (list-push cs x) (list-push cd (inv-node s)) (list-push cf k))))))
+            (set! k (+ k 1))))
+        (record-new Edges (src cs) (dst cd) (from cf)))))
 
   (fn sriq-rbox ((arena Arena) (axs (List RawAxiom)))
     (@intent "§5.5's RBox gate: which roles are simple, and is the collapsed completion ≺-regular?")
@@ -621,11 +642,62 @@
           (rep       (sriq-reps arena fwd bwd n))
           (c         (constraint-edges arena rias nonsimple rep)))
       (record-new SriqRbox
-        (props     props)
-        (nonsimple nonsimple)
-        (rep       rep)
-        (rias      rias)
-        (regular   (csr-acyclic arena (csr-build arena n (. c src) (. c dst)) n)))))
+        (props       props)
+        (nonsimple   nonsimple)
+        (rep         rep)
+        (rias        rias)
+        (constraints c)
+        (regular     (csr-acyclic arena (csr-build arena n (. c src) (. c dst)) n)))))
+
+  ;; ============================================================
+  ;; The witness of an irregular RBox (§5.2's policy, §5.5; issue #125)
+  ;;
+  ;; Every RIA contributing a constraint to a CYCLE COMPONENT of the
+  ;; constraint graph: an edge u → v lies in one exactly when u and v are
+  ;; in one strongly connected component, which covers both a self-loop
+  ;; and a component of several nodes. Components are unique, so nothing
+  ;; is chosen. Asked only of an RBox already found irregular.
+  ;; ============================================================
+
+  (fn component-ids ((arena Arena) (fwd Csr) (bwd Csr) (n Int))
+    (@intent "Each node's strongly connected component, named by its least node")
+    (@spec ((Arena Csr Csr Int) -> (List Int)))
+    (@alloc arena)
+    ;; As sriq-reps: a component is what a node reaches and is reached
+    ;; from. Nodes are visited in order, so each is named by its least.
+    (let ((ids (ints-new arena n -1))
+          (mut v 0))
+      (do
+        (while (< v n)
+          (do
+            (when (< (int-at ids v) 0)
+              (let ((mut one (list-new arena Int)))
+                (do (list-push one v)
+                    (mark-component ids (csr-reach arena fwd n one) (csr-reach arena bwd n one) n v))))
+            (set! v (+ v 1))))
+        ids)))
+
+  (fn sriq-witness ((arena Arena) (axs (List RawAxiom)) (rb SriqRbox))
+    (@intent "The indices in axs, the axioms sriq-rbox judged, of every axiom whose RIA constrains a cycle component")
+    (@spec ((Arena (List RawAxiom) SriqRbox) -> (List Int)))
+    (@alloc arena)
+    ;; Which axiom each RIA came from is found here, not kept by
+    ;; sriq-rbox: only an irregular RBox needs it.
+    (let ((c   (. rb constraints))
+          (src (ria-sources arena (. rb props) axs))
+          (n   (* 2 (cast Int (list-len (. rb props)))))
+          (fwd (csr-build arena n (. c src) (. c dst)))
+          (bwd (csr-build arena n (. c dst) (. c src)))
+          (ids (component-ids arena fwd bwd n))
+          (mut out (list-new arena Int))
+          (mut e 0))
+      (do
+        (for-each (u (. c src))
+          (do
+            (when (== (int-at ids u) (int-at ids (int-at (. c dst) e)))
+              (list-push out (int-at src (int-at (. c from) e))))
+            (set! e (+ e 1))))
+        out)))
 
   (fn sriq-role-simple ((rb SriqRbox) (r RoleId))
     (@intent "Is this role simple in the RBox §5.5's gate judged?")

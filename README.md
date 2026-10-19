@@ -217,6 +217,8 @@ howl_input_free(in);
   undeclared, an unresolved import, or unrecognized. For a non-simple role,
   `howl_run_omission_reason_role` names the role. A host can refuse an edit that breaks an OWL 2 DL
   global restriction without also refusing a harmless profile gap. The probe run has the same pair.
+  For an irregular RBox, `howl_run_omission_witness_len` and `howl_run_omission_witness` list the
+  axioms that make it irregular (SPEC §5.2), which is the edit to undo.
 
 The library always runs as the CLI does without `--strict`: an omission is reported, never refused.
 

@@ -89,6 +89,7 @@
                 DocumentSource run-omission-document run-omission-kind
                 run-probe-omission-source run-probe-omission-document
                 run-omission run-omission-reason run-omission-reason-role run-probe-omission-reason run-probe-omission-reason-role
+                run-omission-witness-len run-omission-witness run-probe-omission-witness-len run-probe-omission-witness
                 Prepared ElWork prepare reason decode-owned prepare-in-profile sriq-coverage))
   (import el (apply-el-rules apply-el-rules-reference))
   (import probe (QueryKind ProbeAnswer Query probe-document))
@@ -181,7 +182,8 @@
         (record-new Outcome
           (profile     'profile-el)
           (coverage    (record-new Coverage (omitted omitted) (origins (list-new arena Int))
-                                           (reasons (list-new arena OmissionCause))))
+                                           (reasons (list-new arena OmissionCause))
+                                           (witness (list-new arena String))))
           (termination (if reached-fixpoint
                          (union-new Termination fixpoint)
                          (union-new Termination resource-limit 1000)))
@@ -7640,6 +7642,7 @@
                         (and (== (list-len (. in omitted)) 1)
                              (== (list-len (. (sriq-coverage arena (list-new arena Omission)
                                                              (list-new arena OmissionCause)
+                                                             (list-new arena String)
                                                              (twice arena (. in omitted))) omitted)) 1))))))))
 
   (fn twice ((arena Arena) (xs (List RawAxiom)))
@@ -7823,6 +7826,7 @@
           (list-push axs (union-new RawAxiom ra-different-individuals ns))
           (let ((sp (abox-split arena (record-new GateResult (accepted axs) (omissions (list-new arena Omission))
                                                              (reasons (list-new arena OmissionCause))
+                                                             (witness (list-new arena String))
                                                              (signature (make-signature arena))))))
             (split-says arena "a DifferentIndividuals list with a class member: kept whole for Run C, nothing folded" 'st-cautious
                         (and (. sp has-c) (== (list-len (. (. sp h) accepted)) 0) (== (list-len (. (. sp c) accepted)) 2)
@@ -10729,6 +10733,176 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
         (causes-are arena "a range-breaking chain in an irregular RBox" (string-concat arena range cycle) 'profile-el
                     "irregular-rbox irregular-rbox irregular-rbox"))))
 
+  (fn run-witness ((arena Arena) (r Run) (probe Bool))
+    (@intent "The witness the run's irregular-rbox omissions carry, ' | '-joined; '<inconsistent>' if they differ, if a
+              witness names an axiom no omission does, or if any other omission carries one")
+    (@spec ((Arena Run Bool) -> String))
+    (@alloc arena)
+    (let ((n (if probe (run-probe-omission-len r) (run-omission-len r)))
+          (mut texts (list-new arena String))
+          (mut first "")
+          (mut seen false)
+          (mut ok true)
+          (mut i 0))
+      (do
+        (while (< i n)
+          (do (list-push texts (if probe (run-probe-omission r i) (run-omission r i)))
+              (set! i (+ i 1))))
+        (set! i 0)
+        (while (< i n)
+          (let ((irregular (== (if probe (run-probe-omission-reason r i) (run-omission-reason r i)) 'reason-irregular-rbox))
+                (len (if probe (run-probe-omission-witness-len r i) (run-omission-witness-len r i)))
+                (mut w "")
+                (mut k 0))
+            (do
+              (when (and (not irregular) (> len 0)) (set! ok false))
+              (while (< k len)
+                (let ((x (if probe (run-probe-omission-witness r i k) (run-omission-witness r i k))))
+                  (do
+                    (when (not (strs-contain texts x)) (set! ok false))
+                    (when (> k 0) (set! w (string-concat arena w " | ")))
+                    (set! w (string-concat arena w x))
+                    (set! k (+ k 1)))))
+              (when irregular
+                (if seen
+                  (when (not (string-eq w first)) (set! ok false))
+                  (do (set! first w) (set! seen true))))
+              (set! i (+ i 1)))))
+        (if ok first "<inconsistent>"))))
+
+  (fn strs-contain ((xs (List String)) (x String))
+    (@intent "Is x among xs?")
+    (@spec (((List String) String) -> Bool))
+    (@pure)
+    (let ((mut found false))
+      (do (for-each (y xs) (when (string-eq x y) (set! found true))) found)))
+
+  (fn witness-is ((arena Arena) (label String) (text String) (p Profile) (want String))
+    (@intent "Classify a document of the reason table under a rung; is its omissions' witness want?")
+    (@spec ((Arena String String Profile String) -> Bool))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile p)
+        (input-add-turtle in (string-concat arena (reason-prefixes) text))
+        (let ((r   (run-classify in o))
+              (got (run-witness arena r false))
+              (ok  (string-eq got want)))
+          (do
+            (when (not ok)
+              (do (print "  [witness] ") (print label) (print " (") (print (profile-name p))
+                  (print "): got '") (print got) (print "', want '") (print want) (println "'")))
+            (run-free r)
+            (input-free in)
+            ok)))))
+
+  (fn ex-sub ((arena Arena) (a String) (b String))
+    (@intent "SubObjectPropertyOf(a b) over the example namespace, rendered")
+    (@spec ((Arena String String) -> String))
+    (@alloc arena)
+    (string-concat arena "SubObjectPropertyOf(http://example.org/t#"
+      (string-concat arena a (string-concat arena " http://example.org/t#" (string-concat arena b ")")))))
+
+  (fn ex-chain ((arena Arena) (a String) (b String) (sup String))
+    (@intent "SubObjectPropertyOf(ObjectPropertyChain(a b) sup) over the example namespace, rendered")
+    (@spec ((Arena String String String) -> String))
+    (@alloc arena)
+    (string-concat arena "SubObjectPropertyOf(ObjectPropertyChain(http://example.org/t#"
+      (string-concat arena a (string-concat arena " http://example.org/t#"
+        (string-concat arena b (string-concat arena ") http://example.org/t#" (string-concat arena sup ")")))))))
+
+  (fn joined ((arena Arena) (xs (List String)))
+    (@intent "xs, ' | '-joined")
+    (@spec ((Arena (List String)) -> String))
+    (@alloc arena)
+    (let ((mut out "")
+          (mut first true))
+      (do (for-each (x xs)
+            (do (when (not first) (set! out (string-concat arena out " | ")))
+                (set! out (string-concat arena out x))
+                (set! first false)))
+          out)))
+
+  (fn test-irregular-rbox-names-its-witness ((arena Arena))
+    (@intent "§5.2's witness: a cycle's chains; a hierarchy violation's path chains and told inclusions; the union of
+              every failure; the same whatever the axioms' order; none for a regular RBox")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((decls ":v a owl:ObjectProperty . :a a owl:ObjectProperty . :b a owl:ObjectProperty . :c a owl:ObjectProperty .
+:q a owl:ObjectProperty . :q2 a owl:ObjectProperty . :w a owl:ObjectProperty .\n")
+          (cycle   ":s owl:propertyChainAxiom ( :r :s ) . :r owl:propertyChainAxiom ( :s :r ) .\n")
+          (cycle2  ":u owl:propertyChainAxiom ( :t :u ) . :t owl:propertyChainAxiom ( :u :t ) .\n")
+          (hier    ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:subPropertyOf :r . :u rdfs:subPropertyOf :v .\n")
+          (trans   ":b owl:propertyChainAxiom ( :a :q ) . :c owl:propertyChainAxiom ( :b :q2 ) . :c rdfs:subPropertyOf :a .\n")
+          (trans-r ":c rdfs:subPropertyOf :a . :c owl:propertyChainAxiom ( :b :q2 ) . :b owl:propertyChainAxiom ( :a :q ) .\n")
+          (range   ":t owl:propertyChainAxiom ( :r :s ) . :t rdfs:range :Agent .\n")
+          ;; omitted with the RBox, but on no violation's path
+          (bystander ":v owl:propertyChainAxiom ( :a :b ) .\n")
+          (equiv   ":r rdfs:subPropertyOf :w . :w rdfs:subPropertyOf :r .\n"))
+      (let ((both-chains (joined arena (list String (ex-chain arena "r" "s" "s") (ex-chain arena "s" "r" "r"))))
+            (hier-w      (joined arena (list String (ex-chain arena "r" "s" "t") (ex-sub arena "t" "r"))))
+            (trans-w     (joined arena (list String (ex-chain arena "a" "q" "b") (ex-chain arena "b" "q2" "c")
+                                                    (ex-sub arena "c" "a"))))
+            (four        (joined arena (list String (ex-chain arena "r" "s" "s") (ex-chain arena "s" "r" "r")
+                                                    (ex-chain arena "t" "u" "u") (ex-chain arena "u" "t" "t")))))
+        (and
+          ;; a constraint cycle: its component's chains (the issue's case)
+          (witness-is arena "chains defining each other" cycle 'profile-el both-chains)
+          (witness-is arena "chains defining each other" cycle 'profile-el-plus-plus both-chains)
+          (witness-is arena "chains defining each other" cycle 'profile-sriq both-chains)
+          ;; a hierarchy violation: the chain on the r-to-t path and t ⊑ r; u ⊑ v is omitted, not a witness
+          (witness-is arena "a chain whose target is told under its first role" (string-concat arena decls hier)
+                      'profile-el hier-w)
+          (witness-is arena "a chain whose target is told under its first role" (string-concat arena decls hier)
+                      'profile-sriq hier-w)
+          ;; only transitivity of ≺ shows this one: both chains and c ⊑ a
+          (witness-is arena "a violation transitivity implies" (string-concat arena decls trans) 'profile-el trans-w)
+          (witness-is arena "a violation transitivity implies, reordered" (string-concat arena decls trans-r)
+                      'profile-el trans-w)
+          ;; a chain outside every violation is omitted but no witness
+          (witness-is arena "a cycle beside an unrelated chain" (string-concat arena decls (string-concat arena cycle bystander))
+                      'profile-el both-chains)
+          (witness-is arena "a cycle beside an unrelated chain" (string-concat arena decls (string-concat arena cycle bystander))
+                      'profile-sriq both-chains)
+          ;; a cycle's witness is its chains: an equivalence on one of its roles is not on any violation's path
+          (witness-is arena "a cycle through a role with an equivalent" (string-concat arena decls (string-concat arena cycle equiv))
+                      'profile-el both-chains)
+          (witness-is arena "a cycle through a role with an equivalent" (string-concat arena decls (string-concat arena cycle equiv))
+                      'profile-sriq both-chains)
+          ;; two failures: the union
+          (witness-is arena "two independent cycles" (string-concat arena cycle cycle2) 'profile-el four)
+          (witness-is arena "two independent cycles" (string-concat arena cycle cycle2) 'profile-sriq four)
+          ;; no irregular RBox, no witness
+          (witness-is arena "a range-breaking chain" range 'profile-el "")
+          (witness-is arena "a regular RBox" ":t owl:propertyChainAxiom ( :r :s ) ." 'profile-sriq "")))))
+
+  (fn test-answer-run-names-the-witness ((arena Arena))
+    (@intent "The answer run's irregular-rbox omissions carry the witness of the run that answered")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; A's module holds both chains (r and s are in its signature), so its
+    ;; run omits the RBox and the answer run falls back to the whole input.
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile 'profile-el)
+        (input-add-turtle in (string-concat arena (reason-prefixes)
+          ":s owl:propertyChainAxiom ( :r :s ) . :r owl:propertyChainAxiom ( :s :r ) . :A rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :r ; owl:someValuesFrom [ a owl:Restriction ; owl:onProperty :s ; owl:someValuesFrom :B ] ] ."))
+        (input-ask-subsumed in "http://example.org/t#A" "http://example.org/t#B")
+        (let ((r    (run-answer in o))
+              (got  (run-witness arena r true))
+              (want (joined arena (list String (ex-chain arena "r" "s" "s") (ex-chain arena "s" "r" "r"))))
+              (ok   (and (run-ok r) (string-eq got want)
+                         (== (run-probe-omission-witness-len r -1) 0)
+                         (== (string-len (run-probe-omission-witness r 0 99)) 0)
+                         (== (run-omission-witness-len r 0) 0))))
+          (do
+            (when (not ok) (do (print "  [witness] answer run: got '") (print got) (println "'")))
+            (run-free r)
+            (input-free in)
+            ok)))))
+
   (fn test-omission-reasons-are-total ((arena Arena))
     (@intent "Out of range, a reason is out-of-profile with no role; the answer run's are its own run's")
     (@spec ((Arena) -> Bool))
@@ -10767,9 +10941,10 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
           ((some a)
             (let ((chain   (list RawAxiom a))
                   (gate-om (list Omission (union-new Omission out-of-profile (axiom-input-ref arena a))))
-                  (before  (sriq-coverage arena gate-om (list OmissionCause (cause-of 'reason-irregular-rbox)) chain))
-                  (after   (sriq-coverage arena gate-om (list OmissionCause (cause-of 'reason-unrecognized)) chain))
-                  (guard   (sriq-coverage arena (list-new arena Omission) (list-new arena OmissionCause)
+                  (none-w  (list-new arena String))
+                  (before  (sriq-coverage arena gate-om (list OmissionCause (cause-of 'reason-irregular-rbox)) none-w chain))
+                  (after   (sriq-coverage arena gate-om (list OmissionCause (cause-of 'reason-unrecognized)) none-w chain))
+                  (guard   (sriq-coverage arena (list-new arena Omission) (list-new arena OmissionCause) none-w
                              (twice arena chain))))
               ;; S1's guard's cause ranks below the gate's irregular-rbox
               ;; and above an unrecognized one: either way the lower wins.
@@ -13662,6 +13837,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-omissions-say-why arena)))
             (print-test-result "#125: each omission names the gate condition it failed, the first deciding" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-irregular-rbox-names-its-witness arena)))
+            (print-test-result "#125: an irregular RBox's omissions name §5.2's witness, the union over every failure" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-answer-run-names-the-witness arena)))
+            (print-test-result "#125: the answer run's irregular-rbox omissions carry its run's witness" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-omission-reasons-are-total arena)))

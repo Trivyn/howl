@@ -12,7 +12,9 @@ slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged.
 - **`Omission::reason`** (Rust) and **`howl_run_omission_reason`** / **`howl_run_omission_reason_role`**
   (C), with probe-run equivalents. The reasons:
   - `OutOfProfile`: the construct is not in the profile;
-  - `IrregularRbox`: an RBox axiom of an RBox that is not regular;
+  - `IrregularRbox { witness }`: an RBox axiom of an RBox that is not regular. `witness` lists the
+    axioms that make it so (SPEC §5.2's policy, the union over every failure), the same on every
+    such omission. In C: `howl_run_omission_witness_len` / `howl_run_omission_witness`;
   - `NonSimpleRole { role }`: a simple-role-only axiom or restriction over a non-simple role, naming
     the canonically least such role;
   - `RangeCondition`: an `el` / `el++` chain that breaks the range condition;

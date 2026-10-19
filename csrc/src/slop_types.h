@@ -808,6 +808,7 @@ struct howl_types_Coverage {
     slop_list_howl_types_Omission omitted;
     slop_list_int origins;
     slop_list_howl_types_OmissionCause reasons;
+    slop_list_string witness;
 };
 typedef struct howl_types_Coverage howl_types_Coverage;
 
@@ -1234,6 +1235,7 @@ howl_types_InputRef howl_types_copy_input_ref(slop_arena* arena, howl_types_Inpu
 howl_types_Omission howl_types_copy_omission(slop_arena* arena, howl_types_Omission o);
 slop_list_howl_types_Omission howl_types_copy_omissions(slop_arena* arena, slop_list_howl_types_Omission os);
 slop_list_howl_types_OmissionCause howl_types_copy_causes(slop_arena* arena, slop_list_howl_types_OmissionCause cs);
+slop_list_string howl_types_copy_strings(slop_arena* arena, slop_list_string xs);
 howl_types_OmissionCause howl_types_cause_of(howl_types_OmissionReason r);
 howl_types_OmissionCause howl_types_variant_cause(howl_types_Omission o);
 int64_t howl_types_reason_rank(howl_types_OmissionReason r);

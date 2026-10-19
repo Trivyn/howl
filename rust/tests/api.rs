@@ -153,6 +153,11 @@ fn assert_details_agree(texts: &[String], details: &[howl::Omission]) {
         if let howl::OmissionReason::NonSimpleRole { role } = &d.reason {
             assert!(!role.is_empty(), "{d:?}");
         }
+        // Every axiom a witness names is itself an omission.
+        if let howl::OmissionReason::IrregularRbox { witness } = &d.reason {
+            assert!(!witness.is_empty(), "{d:?}");
+            assert!(witness.iter().all(|w| texts.contains(w)), "{d:?}");
+        }
     }
 }
 
@@ -186,11 +191,19 @@ fn omissions_say_why() {
         ),
         [role("u")]
     );
-    // Two chains that define each other.
+    // Two chains that define each other: each is omitted, and both are the witness.
     let cycle = ":s owl:propertyChainAxiom ( :r :s ) . :r owl:propertyChainAxiom ( :s :r ) .";
+    let chain = |a: &str, b: &str, t: &str| format!("SubObjectPropertyOf(ObjectPropertyChain({EX}{a} {EX}{b}) {EX}{t})");
+    let both = IrregularRbox { witness: vec![chain("r", "s", "s"), chain("s", "r", "r")] };
     for p in [Profile::El, Profile::Sriq] {
-        assert_eq!(reasons_under(p, cycle), [IrregularRbox, IrregularRbox], "{p:?}");
+        assert_eq!(reasons_under(p, cycle), [both.clone(), both.clone()], "{p:?}");
     }
+    // A chain whose target is told under its first role: the chain and that inclusion,
+    // not the unrelated `u ⊑ v`, which is omitted with the rest of the RBox.
+    let hier = ":v a owl:ObjectProperty . :t owl:propertyChainAxiom ( :r :s ) . :t rdfs:subPropertyOf :r .
+        :u rdfs:subPropertyOf :v .";
+    let w = IrregularRbox { witness: vec![chain("r", "s", "t"), format!("SubObjectPropertyOf({EX}t {EX}r)")] };
+    assert_eq!(reasons_under(Profile::El, hier), [w.clone(), w.clone(), w], "el");
     // An ObjectAllValuesFrom under el++.
     assert_eq!(
         reasons_under(

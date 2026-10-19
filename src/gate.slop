@@ -45,8 +45,8 @@
                 concept-cmp sort-concepts concept-at
                 render-axiom render-role render-omission
                 signature-has-class signature-has-object-property))
-  (import canon (role-cmp omission-order omission-at sort-range iri-cmp sort-axiom-refs string-cmp str-at omission-cmp))
-  (import sriqrbox (SriqRbox sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-nonsimple lesser-role))
+  (import canon (role-cmp sort-strings omission-order omission-at sort-range iri-cmp sort-axiom-refs string-cmp str-at omission-cmp))
+  (import sriqrbox (SriqRbox sriq-rbox sriq-rbox-none is-sriq-ria sriq-axiom-nonsimple lesser-role sriq-witness))
   (import owl2 (render-axiom))
 
   (export
@@ -58,7 +58,7 @@
     gate-axioms gate-expand omission-origins
     unread-by-every module-omissions-shared
     collect-rbox-roles role-idx
-    told-closure check-regularity
+    told-closure check-regularity regularity-witness
     RangeEntry collect-ranges chain-range-ok
     EntityRef collect-entity-refs missing-declarations)
 
@@ -66,6 +66,7 @@
     (accepted  (List RawAxiom))    ; in profile, sugar already expanded, canonically sorted
     (omissions (List Omission))    ; canonically sorted
     (reasons   (List OmissionCause)) ; reasons[i] is why omissions[i] (issue #125)
+    (witness   (List String))     ; an irregular RBox's §5.2 witness, sorted; else empty
     (signature Signature)))
 
   (fn axiom-input-ref ((arena Arena) (ax RawAxiom))
@@ -631,7 +632,8 @@
     (let ((expanded (gate-expand arena axs p))
           (mut accepted (list-new arena RawAxiom))
           (mut omitted  (list-new arena Omission))
-          (mut causes   (list-new arena OmissionCause)))
+          (mut causes   (list-new arena OmissionCause))
+          (mut witness  (list-new arena String)))
       (do
         (for-each (o carried)
           (do (list-push omitted o)
@@ -650,8 +652,9 @@
               ;; sriq's RBox gate (§5.5) replaces el's: simple roles over
               ;; AllOPE, the collapse, and [Sim12]'s ≺-regularity. It reads
               ;; the RBox axioms the rung admits one by one.
+              (adm    (if (is-sriq p) (admitted arena p expanded) (list-new arena RawAxiom)))
               (srb    (if (is-sriq p)
-                        (sriq-rbox arena (admitted arena p expanded))
+                        (sriq-rbox arena adm)
                         (sriq-rbox-none arena)))
               (rbox-bad (if (is-sriq p)
                           (not (. srb regular))
@@ -670,6 +673,12 @@
               (nonsimple (if (is-el-plus-plus p)
                            (non-simple-roles arena rview)
                            (list-new arena RoleId))))
+          (do
+          ;; Only a failed RBox pays for its witness (issue #125).
+          (when rbox-bad
+            (set! witness (if sriq
+                            (witness-texts arena adm (sriq-witness arena adm srb))
+                            (witness-texts arena rview (regularity-witness arena rview)))))
           (for-each (ax expanded)
           (match (disposition p ax)
             ;; Consumed: read into the signature already, yields no
@@ -695,7 +704,7 @@
             ('d-out-of-profile
               (do (list-push omitted
                     (union-new Omission out-of-profile (axiom-input-ref arena ax)))
-                  (list-push causes (form-cause p ax)))))))
+                  (list-push causes (form-cause p ax))))))))
         ;; Declaration checks run over the ACCEPTED axioms only. An
         ;; out-of-profile axiom is already reported; also reporting the
         ;; classes it happens to mention would turn one rejected axiom
@@ -717,7 +726,25 @@
               (accepted  (sort-axioms arena accepted))
               (omissions oms)
               (reasons   cs)
+              (witness   witness)
               (signature sig)))))))
+
+  (fn witness-texts ((arena Arena) (axs (List RawAxiom)) (idx (List Int)))
+    (@intent "The axioms at idx, rendered as their omissions are, canonically sorted, each once")
+    (@spec ((Arena (List RawAxiom) (List Int)) -> (List String)))
+    (@alloc arena)
+    (let ((mut texts (list-new arena String))
+          (mut out (list-new arena String)))
+      (do
+        (for-each (k idx)
+          (match (list-get axs k)
+            ((some ax) (list-push texts (render-axiom arena ax)))
+            ((none)    (do))))
+        (for-each (x (sort-strings arena texts))
+          (match (list-get out (- (cast Int (list-len out)) 1))
+            ((some last) (when (!= (string-cmp last x) 0) (list-push out x)))
+            ((none)      (list-push out x))))
+        out)))
 
   (fn form-cause ((p Profile) (ax RawAxiom))
     (@intent "Why an axiom the language check refused is omitted: unreadable, a count over sriq's bound, or out of profile")
@@ -1287,10 +1314,14 @@
                 (string-concat arena " sub-property-of "
                   (render-role arena (role-at roles i))))))))))
 
-  (fn add-dominant-case ((ch RawChain) (roles (List RoleId)) (n Int) (cmat (List Bool))
-                         (len Int) (left-ok Bool) (right-ok Bool))
-    (@intent "Add the ≺ edges of the ⊆-least case the chain matches: left-, right-recursive or generic")
-    (@spec ((RawChain (List RoleId) Int (List Bool) Int Bool Bool) -> Bool))
+  (type CaseRange (record
+    (from Int)    ; the positions [from, to] a chain constrains; empty when from > to
+    (to   Int)))
+
+  (fn dominant-range ((ch RawChain) (len Int) (left-ok Bool) (right-ok Bool))
+    (@intent "The positions the ⊆-least case the chain matches constrains: left-, right-recursive or generic")
+    (@spec ((RawChain Int Bool Bool) -> CaseRange))
+    (@pure)
     ;; CANDIDATES ARE WHOLE CASES, never independently-skipped end
     ;; positions. `t ∘ a ∘ t ⊑ t` matches left-recursion with {a≺t, t≺t}
     ;; and right-recursion with {t≺t, a≺t}; skipping both ends
@@ -1301,26 +1332,33 @@
           (lft (if left-ok  (candidate-size ch 1 (- len 1)) 1000000))
           (rgt (if right-ok (candidate-size ch 0 (- len 2)) 1000000)))
       (cond
-        ((and (<= lft rgt) (<= lft gen)) (add-chain-constraints ch roles n cmat 1 (- len 1)))
-        ((<= rgt gen)                    (add-chain-constraints ch roles n cmat 0 (- len 2)))
-        (else                            (add-chain-constraints ch roles n cmat 0 (- len 1))))))
+        ((and (<= lft rgt) (<= lft gen)) (record-new CaseRange (from 1) (to (- len 1))))
+        ((<= rgt gen)                    (record-new CaseRange (from 0) (to (- len 2))))
+        (else                            (record-new CaseRange (from 0) (to (- len 1)))))))
 
-  (fn add-case-constraints ((ch RawChain) (roles (List RoleId)) (n Int) (cmat (List Bool)))
-    (@intent "Add the ≺ edges a chain of length ≥ 2 generates under §11.2's cases")
-    (@spec ((RawChain (List RoleId) Int (List Bool)) -> Bool))
+  (fn case-range ((ch RawChain))
+    (@intent "The positions whose roles must precede the super, under §11.2's cases")
+    (@spec ((RawChain) -> CaseRange))
+    (@pure)
     (let ((steps (. ch steps))
           (len (cast Int (list-len (. ch steps))))
           (sup (. ch super)))
       (if (< len 2)
-        true
+        (record-new CaseRange (from 1) (to 0))
         (let ((left-ok  (== (role-cmp (role-at steps 0) sup) 0))
               (right-ok (== (role-cmp (role-at steps (- len 1)) sup) 0)))
           ;; Transitivity `t ∘ t ⊑ t` generates NOTHING. It also matches
           ;; the generic case, which would yield `t ≺ t` and falsely
           ;; reject — dominance picks the ⊆-least set, and ∅ wins.
           (if (and (== len 2) left-ok right-ok)
-            true
-            (add-dominant-case ch roles n cmat len left-ok right-ok))))))
+            (record-new CaseRange (from 1) (to 0))
+            (dominant-range ch len left-ok right-ok))))))
+
+  (fn add-case-constraints ((ch RawChain) (roles (List RoleId)) (n Int) (cmat (List Bool)))
+    (@intent "Add the ≺ edges a chain of length ≥ 2 generates under §11.2's cases")
+    (@spec ((RawChain (List RoleId) Int (List Bool)) -> Bool))
+    (let ((cr (case-range ch)))
+      (add-chain-constraints ch roles n cmat (. cr from) (. cr to))))
 
   (fn row-violation ((cmat (List Bool)) (told (List Bool)) (n Int) (i Int))
     (@intent "The least j with i ≺ j where the told hierarchy has j ⊑* i, or -1")
@@ -1386,6 +1424,123 @@
             ;; a ≺ c, which c ⊑* a forbids.
             (mat-close cmat n)
             (regularity-verdict arena roles cmat told n))))))
+
+  ;; ============================================================
+  ;; The witness of an irregular RBox (§5.2's policy; issue #125)
+  ;;
+  ;; Read off the one constraint graph dominance gives, so nothing is
+  ;; chosen. A violated pair (x, y) has x ≺⁺ y and y ⊑* x; a cycle is
+  ;; the pair (x, x). Its witness is every chain contributing an edge on
+  ;; some x-to-y path of the constraint graph, and, for x ≠ y, every told
+  ;; ⊑ axiom on some y-to-x path of the hierarchy. A cycle's is its
+  ;; component's chains alone, as §5.2's cycle case says. An edge u → v
+  ;; lies on an x-to-y path exactly when x ≺* u and v ≺* y. The run's
+  ;; witness is the union over every violated pair. Asked only of an RBox
+  ;; check-regularity has already rejected, so the matrices below cost
+  ;; nothing on a regular one.
+  ;; ============================================================
+
+  (fn reach-or-same ((prec (List Bool)) (n Int) (a Int) (b Int))
+    (@intent "a ≺* b: equal, or a ≺⁺ b")
+    (@spec (((List Bool) Int Int Int) -> Bool))
+    (@pure)
+    (or (== a b) (mat-get prec (+ (* a n) b))))
+
+  (fn violated ((prec (List Bool)) (told (List Bool)) (n Int) (x Int) (y Int))
+    (@intent "Is (x, y) a violated pair: x ≺⁺ y while y ⊑* x?")
+    (@spec (((List Bool) (List Bool) Int Int Int) -> Bool))
+    (@pure)
+    (and (mat-get prec (+ (* x n) y)) (mat-get told (+ (* y n) x))))
+
+  (fn on-violated-path ((w (List Bool)) (prec (List Bool)) (n Int) (u Int) (v Int))
+    (@intent "Does the edge u → v lie on an x-to-y path of some violated pair? w[u][y] says some x ≺* u has (x, y) violated")
+    (@spec (((List Bool) (List Bool) Int Int Int) -> Bool))
+    (@pure)
+    (let ((mut found false)
+          (mut y 0))
+      (do
+        (while (and (not found) (< y n))
+          (do (when (and (mat-get w (+ (* u n) y)) (reach-or-same prec n v y)) (set! found true))
+              (set! y (+ y 1))))
+        found)))
+
+  (fn on-violated-hierarchy ((t (List Bool)) (told (List Bool)) (n Int) (a Int) (b Int))
+    (@intent "Does a ⊑ b lie on a y-to-x hierarchy path of some violated (x, y), x ≠ y? t[a][x] says some such y has y ⊑* a")
+    (@spec (((List Bool) (List Bool) Int Int Int) -> Bool))
+    (@pure)
+    (let ((mut found false)
+          (mut x 0))
+      (do
+        (while (and (not found) (< x n))
+          (do (when (and (mat-get t (+ (* a n) x)) (mat-get told (+ (* b n) x))) (set! found true))
+              (set! x (+ x 1))))
+        found)))
+
+  (fn chain-on-violated-path ((w (List Bool)) (prec (List Bool)) (roles (List RoleId)) (n Int) (ch RawChain))
+    (@intent "Does any ≺ edge this chain contributes lie on a violated pair's path?")
+    (@spec (((List Bool) (List Bool) (List RoleId) Int RawChain) -> Bool))
+    (@pure)
+    (let ((cr   (case-range ch))
+          (isup (role-idx roles (. ch super)))
+          (mut found false)
+          (mut i (. cr from)))
+      (do
+        (while (<= i (. cr to))
+          (do
+            (let ((ist (role-idx roles (role-at (. ch steps) i))))
+              (when (and (>= ist 0) (>= isup 0) (on-violated-path w prec n ist isup))
+                (set! found true)))
+            (set! i (+ i 1))))
+        found)))
+
+  (fn regularity-witness ((arena Arena) (axs (List RawAxiom)))
+    (@intent "The indices in axs of §5.2's witness of an irregular RBox, over every violated pair")
+    (@spec ((Arena (List RawAxiom)) -> (List Int)))
+    (@alloc arena)
+    (let ((roles (collect-rbox-roles arena axs))
+          (n     (cast Int (list-len roles)))
+          (told  (told-closure arena axs roles n))
+          (prec  (mat-new arena (* n n)))
+          (w     (mat-new arena (* n n)))
+          (t     (mat-new arena (* n n)))
+          (mut out (list-new arena Int)))
+      (do
+        (for-each (ax axs)
+          (match ax
+            ((ra-property-chain ch) (do (add-case-constraints ch roles n prec) (do)))
+            (_ (do))))
+        (mat-close prec n)
+        ;; w[u][y]: some x ≺* u has (x, y) violated. t[a][x]: some y ≠ x
+        ;; with (x, y) violated has y ⊑* a.
+        (let ((mut x 0))
+          (while (< x n)
+            (do
+              (let ((mut y 0))
+                (while (< y n)
+                  (do
+                    (when (violated prec told n x y)
+                      (let ((mut u 0))
+                        (while (< u n)
+                          (do
+                            (when (reach-or-same prec n x u) (list-set w (+ (* u n) y) true))
+                            (when (and (!= x y) (mat-get told (+ (* y n) u))) (list-set t (+ (* u n) x) true))
+                            (set! u (+ u 1))))))
+                    (set! y (+ y 1)))))
+              (set! x (+ x 1)))))
+        (let ((mut k 0))
+          (for-each (ax axs)
+            (do
+              (match ax
+                ((ra-property-chain ch)
+                  (when (chain-on-violated-path w prec roles n ch) (list-push out k)))
+                ((ra-sub-object-property a b)
+                  (let ((ia (role-idx roles a))
+                        (ib (role-idx roles b)))
+                    (when (and (>= ia 0) (>= ib 0) (on-violated-hierarchy t told n ia ib))
+                      (list-push out k))))
+                (_ (do)))
+              (set! k (+ k 1)))))
+        out)))
 
   ;; ============================================================
   ;; RBox gate 2 — the range/composition condition (§5.2)

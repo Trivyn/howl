@@ -15,7 +15,8 @@
  * probe accessor, on every built profile. Then each omission's kind and
  * document (issue #67), in the main run and the probe run. Every
  * omission's reason (issue #125) must agree with its kind, and name a
- * role exactly when it is a non-simple role.
+ * role exactly when it is a non-simple role; an irregular-RBox one must
+ * name a witness, every axiom of which is itself an omission.
  *
  * Then the refusals: out-of-range options, the dropped profile, a term
  * HOWL does not take, and Turtle that does not parse.
@@ -59,6 +60,25 @@ static void check_reason(slop_string kind, howl_types_OmissionReason why, slop_s
           "%s: reason %d with a role of length %zu", run, (int)why, (size_t)role.len);
 }
 
+/* An omission's witness: non-empty exactly for an irregular RBox, and every
+ * axiom it names is one of the run's omissions. */
+typedef slop_string (*omission_text_fn)(howl_Run, int64_t);
+typedef int64_t (*witness_len_fn)(howl_Run, int64_t);
+typedef slop_string (*witness_fn)(howl_Run, int64_t, int64_t);
+static void check_witness(howl_Run run, int64_t i, int64_t n, howl_types_OmissionReason why,
+                          omission_text_fn text, witness_len_fn wlen, witness_fn wit, const char* label) {
+    int64_t len = wlen(run, i);
+    CHECK((len > 0) == (why == howl_types_OmissionReason_reason_irregular_rbox),
+          "%s: reason %d with a witness of %lld axioms", label, (int)why, (long long)len);
+    for (int64_t k = 0; k < len; k++) {
+        slop_string w = wit(run, i, k);
+        int found = 0;
+        for (int64_t j = 0; j < n && !found; j++) found = same_str(w, text(run, j));
+        CHECK(found, "%s: witness axiom %.*s is no omission", label, (int)w.len, w.data);
+    }
+    CHECK(wit(run, i, len).len == 0 && wit(run, i, -1).len == 0, "%s: an out-of-range witness axiom is not empty", label);
+}
+
 /* The report as one buffer, every accessor read on the way. */
 static char* report_of(howl_Run run) {
     size_t cap = 1 << 16, n = 0;
@@ -80,6 +100,8 @@ static char* report_of(howl_Run run) {
                  + (size_t)howl_run_omission_entity_kind(run, i) + (size_t)(howl_run_omission_document(run, i) + 1);
         check_reason(howl_run_omission_kind(run, i), howl_run_omission_reason(run, i),
                      howl_run_omission_reason_role(run, i), "main run");
+        check_witness(run, i, howl_run_omission_len(run), howl_run_omission_reason(run, i), howl_run_omission,
+                      howl_run_omission_witness_len, howl_run_omission_witness, "main run");
     }
     for (int64_t i = 0; i < howl_run_probe_len(run); i++)
         touched += howl_run_probe_sub(run, i).len + howl_run_probe_sup(run, i).len
@@ -90,6 +112,9 @@ static char* report_of(howl_Run run) {
                  + (size_t)(howl_run_probe_omission_document(run, i) + 1);
         check_reason(howl_run_probe_omission_kind(run, i), howl_run_probe_omission_reason(run, i),
                      howl_run_probe_omission_reason_role(run, i), "probe run");
+        check_witness(run, i, howl_run_probe_omission_len(run), howl_run_probe_omission_reason(run, i),
+                      howl_run_probe_omission, howl_run_probe_omission_witness_len, howl_run_probe_omission_witness,
+                      "probe run");
     }
     /* Out of range: empty, entity-class, no document - never a read past the end. */
     CHECK(howl_run_omission_kind(run, -1).len == 0 && howl_run_omission_document(run, howl_run_omission_len(run)) == -1
@@ -99,7 +124,9 @@ static char* report_of(howl_Run run) {
           && howl_run_omission_reason(run, -1) == howl_types_OmissionReason_reason_out_of_profile
           && howl_run_omission_reason_role(run, howl_run_omission_len(run)).len == 0
           && howl_run_probe_omission_reason(run, howl_run_probe_omission_len(run)) == howl_types_OmissionReason_reason_out_of_profile
-          && howl_run_probe_omission_reason_role(run, -1).len == 0,
+          && howl_run_probe_omission_reason_role(run, -1).len == 0
+          && howl_run_omission_witness_len(run, -1) == 0
+          && howl_run_probe_omission_witness_len(run, howl_run_probe_omission_len(run)) == 0,
           "an out-of-range omission accessor is not total");
     (void)howl_run_probe_inconsistent(run);
     (void)howl_run_termination(run);

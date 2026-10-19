@@ -19,6 +19,7 @@
 typedef struct howl_gate_GateResult howl_gate_GateResult;
 typedef struct howl_gate_NegSplit howl_gate_NegSplit;
 typedef struct howl_gate_RboxVerdict howl_gate_RboxVerdict;
+typedef struct howl_gate_CaseRange howl_gate_CaseRange;
 typedef struct howl_gate_RangeEntry howl_gate_RangeEntry;
 typedef struct howl_gate_EntityRef howl_gate_EntityRef;
 
@@ -119,6 +120,7 @@ struct howl_gate_GateResult {
     slop_list_howl_owl2_RawAxiom accepted;
     slop_list_howl_types_Omission omissions;
     slop_list_howl_types_OmissionCause reasons;
+    slop_list_string witness;
     howl_owl2_Signature signature;
 };
 typedef struct howl_gate_GateResult howl_gate_GateResult;
@@ -155,6 +157,17 @@ typedef struct howl_gate_RboxVerdict howl_gate_RboxVerdict;
 #ifndef SLOP_OPTION_HOWL_GATE_RBOXVERDICT_DEFINED
 #define SLOP_OPTION_HOWL_GATE_RBOXVERDICT_DEFINED
 SLOP_OPTION_DEFINE(howl_gate_RboxVerdict, slop_option_howl_gate_RboxVerdict)
+#endif
+
+struct howl_gate_CaseRange {
+    int64_t from;
+    int64_t to;
+};
+typedef struct howl_gate_CaseRange howl_gate_CaseRange;
+
+#ifndef SLOP_OPTION_HOWL_GATE_CASERANGE_DEFINED
+#define SLOP_OPTION_HOWL_GATE_CASERANGE_DEFINED
+SLOP_OPTION_DEFINE(howl_gate_CaseRange, slop_option_howl_gate_CaseRange)
 #endif
 
 struct howl_gate_RangeEntry {
@@ -231,6 +244,7 @@ slop_list_howl_owl2_RawAxiom howl_gate_admitted(slop_arena* arena, howl_types_Pr
 uint8_t howl_gate_is_rbox_axiom(howl_owl2_RawAxiom ax);
 uint8_t howl_gate_axiom_range_ok(slop_list_howl_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_howl_types_RoleId roles, howl_owl2_RawAxiom ax);
 howl_gate_GateResult howl_gate_gate_axioms(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_owl2_Signature sig, slop_list_howl_types_Omission carried, howl_types_Profile p);
+slop_list_string howl_gate_witness_texts(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, slop_list_int idx);
 howl_types_OmissionCause howl_gate_form_cause(howl_types_Profile p, howl_owl2_RawAxiom ax);
 slop_option_howl_types_OmissionCause howl_gate_gate_verdict(slop_arena* arena, howl_types_Profile p, uint8_t sriq, uint8_t rbox_bad, howl_sriqrbox_SriqRbox srb, slop_list_howl_types_RoleId nonsimple, slop_list_howl_gate_RangeEntry ranges, slop_list_u8 told, int64_t nr, slop_list_howl_types_RoleId rroles, howl_owl2_RawAxiom ax);
 howl_types_OmissionCause howl_gate_cause_at(slop_list_howl_types_OmissionCause cs, int64_t i);
@@ -265,11 +279,18 @@ int64_t howl_gate_candidate_size(howl_owl2_RawChain ch, int64_t from, int64_t to
 uint8_t howl_gate_seen_before(slop_list_howl_types_RoleId steps, int64_t from, int64_t i);
 uint8_t howl_gate_add_chain_constraints(howl_owl2_RawChain ch, slop_list_howl_types_RoleId roles, int64_t n, slop_list_u8 cmat, int64_t from, int64_t to);
 slop_string howl_gate_describe_violation(slop_arena* arena, slop_list_howl_types_RoleId roles, int64_t i, int64_t j);
-uint8_t howl_gate_add_dominant_case(howl_owl2_RawChain ch, slop_list_howl_types_RoleId roles, int64_t n, slop_list_u8 cmat, int64_t len, uint8_t left_ok, uint8_t right_ok);
+howl_gate_CaseRange howl_gate_dominant_range(howl_owl2_RawChain ch, int64_t len, uint8_t left_ok, uint8_t right_ok);
+howl_gate_CaseRange howl_gate_case_range(howl_owl2_RawChain ch);
 uint8_t howl_gate_add_case_constraints(howl_owl2_RawChain ch, slop_list_howl_types_RoleId roles, int64_t n, slop_list_u8 cmat);
 int64_t howl_gate_row_violation(slop_list_u8 cmat, slop_list_u8 told, int64_t n, int64_t i);
 howl_gate_RboxVerdict howl_gate_regularity_verdict(slop_arena* arena, slop_list_howl_types_RoleId roles, slop_list_u8 cmat, slop_list_u8 told, int64_t n);
 howl_gate_RboxVerdict howl_gate_check_regularity(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs);
+uint8_t howl_gate_reach_or_same(slop_list_u8 prec, int64_t n, int64_t a, int64_t b);
+uint8_t howl_gate_violated(slop_list_u8 prec, slop_list_u8 told, int64_t n, int64_t x, int64_t y);
+uint8_t howl_gate_on_violated_path(slop_list_u8 w, slop_list_u8 prec, int64_t n, int64_t u, int64_t v);
+uint8_t howl_gate_on_violated_hierarchy(slop_list_u8 t, slop_list_u8 told, int64_t n, int64_t a, int64_t b);
+uint8_t howl_gate_chain_on_violated_path(slop_list_u8 w, slop_list_u8 prec, slop_list_howl_types_RoleId roles, int64_t n, howl_owl2_RawChain ch);
+slop_list_int howl_gate_regularity_witness(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs);
 slop_list_howl_gate_RangeEntry howl_gate_collect_ranges(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, slop_list_howl_types_RoleId roles);
 uint8_t howl_gate_has_inherited_range(slop_list_howl_gate_RangeEntry entries, slop_list_u8 told, int64_t n, int64_t base, howl_owl2_RawConcept c);
 uint8_t howl_gate_chain_range_ok(slop_list_howl_gate_RangeEntry entries, slop_list_u8 told, int64_t n, slop_list_howl_types_RoleId roles, howl_owl2_RawChain ch);
@@ -340,6 +361,11 @@ SLOP_OPTION_DEFINE(slop_list_int, slop_option_list_int)
 #ifndef SLOP_OPTION_HOWL_GATE_RBOXVERDICT_DEFINED
 #define SLOP_OPTION_HOWL_GATE_RBOXVERDICT_DEFINED
 SLOP_OPTION_DEFINE(howl_gate_RboxVerdict, slop_option_howl_gate_RboxVerdict)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_GATE_CASERANGE_DEFINED
+#define SLOP_OPTION_HOWL_GATE_CASERANGE_DEFINED
+SLOP_OPTION_DEFINE(howl_gate_CaseRange, slop_option_howl_gate_CaseRange)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_GATE_ENTITYREF_DEFINED
