@@ -1,11 +1,12 @@
 # Changelog
 
-## 0.7.0 — unreleased
+## 0.7.0 — 2026-10-18
 
-Each omission now says why its axiom was dropped (issue #125). A host that wants to refuse an edit
-breaking an OWL 2 DL global restriction no longer has to diff omission sets, which also catch
-harmless profile gaps, or parse an omission's text. Every report golden is byte-identical, and the
-slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged.
+Each omission now says why its axiom was dropped, and an irregular RBox's omissions name the axioms
+that make it irregular (issue #125). A host that wants to refuse an edit breaking an OWL 2 DL global
+restriction no longer has to diff omission sets, which also catch harmless profile gaps, or parse an
+omission's text, and it can point at the edit to undo. Every report golden is byte-identical, and
+the slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged.
 
 ### Added
 
