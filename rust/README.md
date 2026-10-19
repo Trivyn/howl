@@ -70,9 +70,10 @@ input. The `Report` holds:
   `i`-th `add_*` call introduced it (counting from 0), or `None` when no single document did. With a
   background ontology added before your own document, this is how you tell your coverage gaps from
   the background's without a second run. `reason` says why it was dropped: `OutOfProfile`,
-  `IrregularRbox`, `NonSimpleRole { role }`, `RangeCondition`, `ResourceGuard`, `Undeclared`,
+  `IrregularRbox { witness }`, `NonSimpleRole { role }`, `RangeCondition`, `ResourceGuard`, `Undeclared`,
   `UnresolvedImport` or `Unrecognized`. That tells an edit breaking an OWL 2 DL global restriction
-  apart from a construct the profile does not cover.
+  apart from a construct the profile does not cover. An irregular RBox's `witness` lists the axioms
+  that make it irregular.
 - `termination` and `rounds`.
 - `lines()`: the canonical report, the bytes `howl validate --report` prints, then the probe lines
   when a query was asked.

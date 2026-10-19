@@ -67,6 +67,7 @@
     ;; probe-docs), then the queried classes' declarations; -1 for none.
     (origins      (List Int))
     (reasons      (List OmissionCause))  ; why each omission (issue #125), parallel to omissions
+    (witness      (List String))         ; an irregular RBox's witness, as Coverage.witness
     (input-docs   Int)
     (probe-docs   Int)))
 

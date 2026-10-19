@@ -209,6 +209,8 @@ extern "C" {
     pub fn howl_run_omission_document(run: Run, i: i64) -> i64;
     pub fn howl_run_omission_reason(run: Run, i: i64) -> c_int;
     pub fn howl_run_omission_reason_role(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_omission_witness_len(run: Run, i: i64) -> i64;
+    pub fn howl_run_omission_witness(run: Run, i: i64, k: i64) -> SlopString;
     pub fn howl_run_report_len(run: Run) -> i64;
     pub fn howl_run_report_line(run: Run, i: i64) -> SlopString;
     pub fn howl_run_probe_len(run: Run) -> i64;
@@ -225,6 +227,8 @@ extern "C" {
     pub fn howl_run_probe_omission_document(run: Run, i: i64) -> i64;
     pub fn howl_run_probe_omission_reason(run: Run, i: i64) -> c_int;
     pub fn howl_run_probe_omission_reason_role(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_probe_omission_witness_len(run: Run, i: i64) -> i64;
+    pub fn howl_run_probe_omission_witness(run: Run, i: i64, k: i64) -> SlopString;
 }
 
 #[cfg(test)]

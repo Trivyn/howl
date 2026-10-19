@@ -17,8 +17,8 @@
 
 typedef struct howl_sriqrbox_Ria howl_sriqrbox_Ria;
 typedef struct howl_sriqrbox_Csr howl_sriqrbox_Csr;
-typedef struct howl_sriqrbox_SriqRbox howl_sriqrbox_SriqRbox;
 typedef struct howl_sriqrbox_Edges howl_sriqrbox_Edges;
+typedef struct howl_sriqrbox_SriqRbox howl_sriqrbox_SriqRbox;
 
 #ifndef SLOP_LIST_U8_DEFINED
 #define SLOP_LIST_U8_DEFINED
@@ -92,11 +92,24 @@ typedef struct howl_sriqrbox_Csr howl_sriqrbox_Csr;
 SLOP_OPTION_DEFINE(howl_sriqrbox_Csr, slop_option_howl_sriqrbox_Csr)
 #endif
 
+struct howl_sriqrbox_Edges {
+    slop_list_int src;
+    slop_list_int dst;
+    slop_list_int from;
+};
+typedef struct howl_sriqrbox_Edges howl_sriqrbox_Edges;
+
+#ifndef SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
+#define SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqrbox_Edges, slop_option_howl_sriqrbox_Edges)
+#endif
+
 struct howl_sriqrbox_SriqRbox {
     slop_list_howl_types_RoleId props;
     slop_list_u8 nonsimple;
     slop_list_int rep;
     slop_list_howl_sriqrbox_Ria rias;
+    howl_sriqrbox_Edges constraints;
     uint8_t regular;
 };
 typedef struct howl_sriqrbox_SriqRbox howl_sriqrbox_SriqRbox;
@@ -104,17 +117,6 @@ typedef struct howl_sriqrbox_SriqRbox howl_sriqrbox_SriqRbox;
 #ifndef SLOP_OPTION_HOWL_SRIQRBOX_SRIQRBOX_DEFINED
 #define SLOP_OPTION_HOWL_SRIQRBOX_SRIQRBOX_DEFINED
 SLOP_OPTION_DEFINE(howl_sriqrbox_SriqRbox, slop_option_howl_sriqrbox_SriqRbox)
-#endif
-
-struct howl_sriqrbox_Edges {
-    slop_list_int src;
-    slop_list_int dst;
-};
-typedef struct howl_sriqrbox_Edges howl_sriqrbox_Edges;
-
-#ifndef SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
-#define SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
-SLOP_OPTION_DEFINE(howl_sriqrbox_Edges, slop_option_howl_sriqrbox_Edges)
 #endif
 
 int64_t howl_sriqrbox_prop_idx(slop_list_howl_types_RoleId props, howl_types_RoleId r);
@@ -141,6 +143,7 @@ slop_list_howl_sriqrbox_Ria howl_sriqrbox_rias_inverse(slop_arena* arena, slop_l
 slop_list_howl_sriqrbox_Ria howl_sriqrbox_rias_symmetric(slop_arena* arena, slop_list_howl_types_RoleId props, howl_owl2_PropCharacteristic c, howl_types_RoleId r);
 slop_list_howl_sriqrbox_Ria howl_sriqrbox_rias_of(slop_arena* arena, slop_list_howl_types_RoleId props, howl_owl2_RawAxiom ax);
 slop_list_howl_sriqrbox_Ria howl_sriqrbox_sriq_rias(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_owl2_RawAxiom axs);
+slop_list_int howl_sriqrbox_ria_sources(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_owl2_RawAxiom axs);
 slop_list_int howl_sriqrbox_sriq_nodes(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_types_RoleId rs);
 uint8_t howl_sriqrbox_all_nodes(slop_list_int ns);
 howl_sriqrbox_Csr howl_sriqrbox_csr_build(slop_arena* arena, int64_t n, slop_list_int src, slop_list_int dst);
@@ -164,6 +167,8 @@ howl_sriqrbox_Edges howl_sriqrbox_hierarchy_edges(slop_arena* arena, slop_list_h
 slop_list_int howl_sriqrbox_composite_seeds(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_sriqrbox_Ria rias);
 howl_sriqrbox_Edges howl_sriqrbox_constraint_edges(slop_arena* arena, slop_list_howl_sriqrbox_Ria rias, slop_list_u8 nonsimple, slop_list_int rep);
 howl_sriqrbox_SriqRbox howl_sriqrbox_sriq_rbox(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs);
+slop_list_int howl_sriqrbox_component_ids(slop_arena* arena, howl_sriqrbox_Csr fwd, howl_sriqrbox_Csr bwd, int64_t n);
+slop_list_int howl_sriqrbox_sriq_witness(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_sriqrbox_SriqRbox rb);
 uint8_t howl_sriqrbox_sriq_role_simple(howl_sriqrbox_SriqRbox rb, howl_types_RoleId r);
 uint8_t howl_sriqrbox_is_bottom_role(howl_types_RoleId r);
 slop_option_howl_types_RoleId howl_sriqrbox_lesser_role(slop_option_howl_types_RoleId a, slop_option_howl_types_RoleId b);
@@ -193,6 +198,11 @@ SLOP_OPTION_DEFINE(howl_sriqrbox_Ria, slop_option_howl_sriqrbox_Ria)
 SLOP_OPTION_DEFINE(howl_sriqrbox_Csr, slop_option_howl_sriqrbox_Csr)
 #endif
 
+#ifndef SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
+#define SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
+SLOP_OPTION_DEFINE(howl_sriqrbox_Edges, slop_option_howl_sriqrbox_Edges)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_SRIQRBOX_SRIQRBOX_DEFINED
 #define SLOP_OPTION_HOWL_SRIQRBOX_SRIQRBOX_DEFINED
 SLOP_OPTION_DEFINE(howl_sriqrbox_SriqRbox, slop_option_howl_sriqrbox_SriqRbox)
@@ -201,11 +211,6 @@ SLOP_OPTION_DEFINE(howl_sriqrbox_SriqRbox, slop_option_howl_sriqrbox_SriqRbox)
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_OWL2_RAWAXIOM_DEFINED
 SLOP_OPTION_DEFINE(howl_owl2_RawAxiom, slop_option_howl_owl2_RawAxiom)
-#endif
-
-#ifndef SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
-#define SLOP_OPTION_HOWL_SRIQRBOX_EDGES_DEFINED
-SLOP_OPTION_DEFINE(howl_sriqrbox_Edges, slop_option_howl_sriqrbox_Edges)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_OWL2_RAWCONCEPT_DEFINED

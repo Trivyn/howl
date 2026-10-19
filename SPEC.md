@@ -842,6 +842,14 @@ graph:
    All sorted canonically. Determinism here is not cosmetic: these `AxiomRef`s are hashed into the
    consumer's verdict identity ([§6.8](#68-determinism-binding)).
 
+   **Several failures give one witness, their union** (issue #125). Every RBox axiom is omitted with
+   the same cause, so the run reports a single witness, the union of every failure's set: every
+   cycle component and every violated closure pair. Its axioms are rendered as their omissions are,
+   sorted by byte, each once. A cycle is the violated pair `(x, x)`; its witness is its component's
+   chains, and a told `⊑` axiom joins only for a pair `(x, y)` with `x ≠ y`. The witness is reported
+   beside the coverage (`Coverage.witness`, [§6.2](#62-data-model)), as the diagnostics below say,
+   not as report lines. So a consumer that hashes it does so from the API.
+
 > **A generic cycle detector over role inclusions is wrong in both directions, and both are
 > false-fails.** Mutually inclusive roles (`r ⊑ s`, `s ⊑ r` — equivalent *simple* roles) form a
 > non-trivial SCC in the inclusion graph while being perfectly regular; a naive detector rejects a
@@ -4155,6 +4163,9 @@ GROWL's `Delta`.
 ;;     undeclared        MissingDeclaration, UndeclaredProperty
 ;;     unresolved-import
 ;;     unrecognized      an input read as no axiom (ra-unrecognized)
+;; An irregular RBox's witness (§5.2's policy, the union over every failure) is
+;; `Coverage.witness`: its axioms rendered as their omissions, sorted, each once; empty
+;; unless some reason is irregular-rbox. Like reasons, it is outside identity and hash.
 ;; When an axiom fails several conditions, the first in the gate's order decides: the
 ;; language check (where a count above the bound is a resource guard, not out of profile),
 ;; then regularity, then simple roles, then the range condition. When sriq's gate and S1's
@@ -5653,6 +5664,10 @@ field each, so no engine struct reaches the header. `libhowl.a` with that header
   it is not part of an omission's identity. In C it is `howl_run_omission_reason` and
   `howl_run_omission_reason_role`, and the `howl_run_probe_omission_*` equivalents. In Rust it is
   `Omission::reason`.
+- **An irregular RBox's omissions name its witness** (§5.2's policy, `Coverage.witness`): the axioms
+  that make it irregular, the same for each of them. It is computed only when the RBox has failed. In
+  C it is `howl_run_omission_witness_len` and `howl_run_omission_witness`, and the probe
+  equivalents. In Rust it is `OmissionReason::IrregularRbox { witness }`.
 - **It always runs non-strict.**
 - **An `Input`** holds one or more documents, each standardized apart as `-I` does, plus the
   caller's `imports_resolved` attestation. It is encoded as the CLI encodes, and classified by

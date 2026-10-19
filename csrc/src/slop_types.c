@@ -49,6 +49,7 @@ howl_types_InputRef howl_types_copy_input_ref(slop_arena* arena, howl_types_Inpu
 howl_types_Omission howl_types_copy_omission(slop_arena* arena, howl_types_Omission o);
 slop_list_howl_types_Omission howl_types_copy_omissions(slop_arena* arena, slop_list_howl_types_Omission os);
 slop_list_howl_types_OmissionCause howl_types_copy_causes(slop_arena* arena, slop_list_howl_types_OmissionCause cs);
+slop_list_string howl_types_copy_strings(slop_arena* arena, slop_list_string xs);
 howl_types_OmissionCause howl_types_cause_of(howl_types_OmissionReason r);
 howl_types_OmissionCause howl_types_variant_cause(howl_types_Omission o);
 int64_t howl_types_reason_rank(howl_types_OmissionReason r);
@@ -914,6 +915,20 @@ slop_list_howl_types_OmissionCause howl_types_copy_causes(slop_arena* arena, slo
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type c = _coll.data[_i];
                 (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (((howl_types_OmissionCause){.reason = c.reason, .role = howl_types_copy_string(arena, c.role)})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+            }
+        }
+        return out;
+    }
+}
+
+slop_list_string howl_types_copy_strings(slop_arena* arena, slop_list_string xs) {
+    {
+        __auto_type out = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = xs;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type x = _coll.data[_i];
+                (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (howl_types_copy_string(arena, x)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
             }
         }
         return out;

@@ -21,7 +21,7 @@
   (import types (Node RoleId Concept NormAxiom
                  Derived Addressed Context Saturation
                  EntityKind AxiomRef InputRef MissingDeclaration Omission Coverage Termination
-                 OmissionReason OmissionCause copy-causes cause-of reason-rank variant-cause
+                 OmissionReason OmissionCause copy-causes copy-strings cause-of reason-rank variant-cause
                  EdgePair
                  SubPair Findings Outcome Fault Names Verdict verdict
                  Profile ProfileSelection ReasonerConfig
@@ -84,7 +84,7 @@
     run-unsat-len run-unsat run-sub-len run-sub run-super
     run-omission-len run-omission run-report-len run-report-line
     DocumentSource run-omission-kind run-omission-entity-kind run-omission-document
-    run-omission-reason run-omission-reason-role
+    run-omission-reason run-omission-reason-role run-omission-witness-len run-omission-witness
     ;; The pipeline, split at the front end (timing seam, §12 M1 (c))
     Decoded
     decode
@@ -380,7 +380,8 @@
                   (profile  (. p profile))
                   (work     (. p work))
                   (coverage (record-new Coverage (omitted (. (. p coverage) omitted)) (origins origins)
-                                                 (reasons (. (. p coverage) reasons))))
+                                                 (reasons (. (. p coverage) reasons))
+                                                 (witness (. (. p coverage) witness))))
                   (names    (. p names)))))))
       ((error f) (error f))))
 
@@ -431,7 +432,8 @@
           (gr      (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-el-plus-plus))
           (cov     (record-new Coverage (omitted (copy-omissions arena (. gr omissions)))
                                         (origins (list-new arena Int))
-                                        (reasons (copy-causes arena (. gr reasons)))))
+                                        (reasons (copy-causes arena (. gr reasons)))
+                                        (witness (copy-strings arena (. gr witness)))))
           (res     (if (strict-refuses config cov)
                      (error (union-new Fault refused (. cov omitted)))
                      (ok (record-new Prepared
@@ -459,19 +461,20 @@
     (let ((scratch (arena-new 16777216))
           (gr      (gate-axioms scratch (. d axioms) (. d signature) (. d omissions) 'profile-sriq))
           (res     (match (split-inputs scratch gr)
-                     ((ok in)    (sriq-prepared arena config profile (. gr omissions) (. gr reasons) in))
+                     ((ok in)    (sriq-prepared arena config profile (. gr omissions) (. gr reasons) (. gr witness) in))
                      ((error m)  (error (union-new Fault input-error (copy-string arena m)))))))
       (do
         (arena-free scratch)
         res)))
 
   (fn sriq-prepared ((arena Arena) (config ReasonerConfig) (profile Profile) (gate-oms (List Omission))
-                     (gate-causes (List OmissionCause)) (in Inputs))
+                     (gate-causes (List OmissionCause)) (gate-witness (List String)) (in Inputs))
     (@intent "The Prepared for a split: coverage is the gate's omissions and every chain S1's guard set aside, sorted,
               each once; --strict refuses any")
-    (@spec ((Arena ReasonerConfig Profile (List Omission) (List OmissionCause) Inputs) -> (Result Prepared Fault)))
+    (@spec ((Arena ReasonerConfig Profile (List Omission) (List OmissionCause) (List String) Inputs)
+             -> (Result Prepared Fault)))
     (@alloc arena)
-    (let ((cov (sriq-coverage arena gate-oms gate-causes (. in omitted))))
+    (let ((cov (sriq-coverage arena gate-oms gate-causes gate-witness (. in omitted))))
       (if (strict-refuses config cov)
         (error (union-new Fault refused (. cov omitted)))
         (ok (record-new Prepared
@@ -484,10 +487,10 @@
               (names    (empty-names arena)))))))
 
   (fn sriq-coverage ((arena Arena) (gate-oms (List Omission)) (gate-causes (List OmissionCause))
-                     (s1 (List RawAxiom)))
+                     (gate-witness (List String)) (s1 (List RawAxiom)))
     (@intent "The gate's omissions and S1's guard's (each an out-of-profile axiom, a resource guard), copied into
               arena, sorted, each once, each with its cause")
-    (@spec ((Arena (List Omission) (List OmissionCause) (List RawAxiom)) -> Coverage))
+    (@spec ((Arena (List Omission) (List OmissionCause) (List String) (List RawAxiom)) -> Coverage))
     (@alloc arena)
     ;; The two runs' guards can set the same chain aside, so equal
     ;; omissions are kept once. Equal omissions with different causes keep
@@ -516,7 +519,8 @@
                       ((none) (do (list-push out o) (list-push cs c))))))
                 (record-new Coverage (omitted (copy-omissions arena out))
                                      (origins (list-new arena Int))
-                                     (reasons (copy-causes arena cs))))))))
+                                     (reasons (copy-causes arena cs))
+                                     (witness (copy-strings arena gate-witness))))))))
 
   (fn copy-refin ((arena Arena) (in RefIn))
     (@intent "in, its clauses and hidden ids copied into arena")
@@ -926,6 +930,7 @@
                (profile      (. o profile))
                (origins      (copy-origins arena (. (. o coverage) origins)))
                (reasons      (copy-causes arena (. (. o coverage) reasons)))
+               (witness      (copy-strings arena (. (. o coverage) witness)))
                (input-docs   0)
                (probe-docs   0))))
       (do
@@ -939,7 +944,8 @@
     ;; No probe run ran, so its profile is never read: no line names it.
     (record-new Probing (answers (list-new arena Answered)) (inconsistent false)
       (omissions (list-new arena Omission)) (profile 'profile-el)
-      (origins (list-new arena Int)) (reasons (list-new arena OmissionCause)) (input-docs 0) (probe-docs 0)))
+      (origins (list-new arena Int)) (reasons (list-new arena OmissionCause))
+      (witness (list-new arena String)) (input-docs 0) (probe-docs 0)))
 
   (fn copy-origins ((arena Arena) (xs (List Int)))
     (@intent "Omission documents, copied into arena")
@@ -1651,6 +1657,41 @@
       ((some o) (. (omission-cause (. (. o coverage) omitted) (. (. o coverage) reasons) i) role))
       ((none)   "")))
 
+  (fn omission-witness ((oms (List Omission)) (causes (List OmissionCause)) (witness (List String)) (i Int))
+    (@intent "The i-th omission's witness: the RBox's, when its reason is irregular-rbox; else none")
+    (@spec (((List Omission) (List OmissionCause) (List String) Int) -> (Option (List String))))
+    (if (== (. (omission-cause oms causes i) reason) 'reason-irregular-rbox) (some witness) (none)))
+
+  (fn witness-len ((w (Option (List String))))
+    (@intent "How many axioms a witness names; 0 for none")
+    (@spec (((Option (List String))) -> Int))
+    (match w ((some xs) (cast Int (list-len xs))) ((none) 0)))
+
+  (fn witness-at ((w (Option (List String))) (k Int))
+    (@intent "A witness's k-th axiom; empty for none or out of range")
+    (@spec (((Option (List String)) Int) -> String))
+    (match w
+      ((some xs) (match (list-get xs k) ((some x) x) ((none) "")))
+      ((none)    "")))
+
+  (fn run-omission-witness-len ((r Run) (i Int))
+    (@intent "How many axioms the i-th omission's irregular-RBox witness names; 0 for any other omission")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_omission_witness_len"
+    (match (. (run-state r) outcome)
+      ((some o) (witness-len (omission-witness (. (. o coverage) omitted) (. (. o coverage) reasons)
+                               (. (. o coverage) witness) i)))
+      ((none)   0)))
+
+  (fn run-omission-witness ((r Run) (i Int) (k Int))
+    (@intent "The k-th axiom of the i-th omission's witness, rendered as its omission is; empty out of range")
+    (@spec ((Run Int Int) -> String))
+    :c-name "howl_run_omission_witness"
+    (match (. (run-state r) outcome)
+      ((some o) (witness-at (omission-witness (. (. o coverage) omitted) (. (. o coverage) reasons)
+                              (. (. o coverage) witness) i) k))
+      ((none)   "")))
+
   ;; The probe run's answers (§8.5 A4): empty when nothing was asked.
   (fn run-probe-len ((r Run))
     (@intent "How many queries the probe run answered, each once")
@@ -1746,6 +1787,20 @@
     :c-name "howl_run_probe_omission_reason_role"
     (let ((p (. (run-state r) probing)))
       (. (omission-cause (. p omissions) (. p reasons) i) role)))
+
+  (fn run-probe-omission-witness-len ((r Run) (i Int))
+    (@intent "How many axioms the probe run's i-th omission's witness names, as run-omission-witness-len gives it")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_probe_omission_witness_len"
+    (let ((p (. (run-state r) probing)))
+      (witness-len (omission-witness (. p omissions) (. p reasons) (. p witness) i))))
+
+  (fn run-probe-omission-witness ((r Run) (i Int) (k Int))
+    (@intent "The k-th axiom of the probe run's i-th omission's witness, as run-omission-witness gives it")
+    (@spec ((Run Int Int) -> String))
+    :c-name "howl_run_probe_omission_witness"
+    (let ((p (. (run-state r) probing)))
+      (witness-at (omission-witness (. p omissions) (. p reasons) (. p witness) i) k)))
 
   (fn probe-origin ((p Probing) (i Int))
     (@intent "The probe run's i-th omission's document, numbered over the probe run's whole input")

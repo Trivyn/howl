@@ -547,7 +547,11 @@ pub enum OmissionReason {
     OutOfProfile,
     /// An RBox axiom, omitted because the RBox is not regular (OWL 2
     /// §11.2 under `el` and `el++`, ≺-regularity under `sriq`).
-    IrregularRbox,
+    /// `witness` is SPEC §5.2's witness: the axioms that make it so,
+    /// rendered as their omissions are, canonically sorted, each once. It
+    /// is the union over every failure, so every `IrregularRbox` omission
+    /// of a run carries the same one.
+    IrregularRbox { witness: Vec<String> },
     /// An axiom or restriction only a simple role may carry, over a role
     /// the RBox makes non-simple: a chain's head, a super-property of
     /// one, or a transitive role. `role` is that role in functional
@@ -569,11 +573,12 @@ pub enum OmissionReason {
 }
 
 impl OmissionReason {
-    /// From a C `howl_types_OmissionReason` and the role accessor's value.
-    fn from_ffi(k: c_int, role: String) -> Self {
+    /// From a C `howl_types_OmissionReason` and the role and witness
+    /// accessors' values.
+    fn from_ffi(k: c_int, role: String, witness: Vec<String>) -> Self {
         match k {
             ffi::REASON_OUT_OF_PROFILE => OmissionReason::OutOfProfile,
-            ffi::REASON_IRREGULAR_RBOX => OmissionReason::IrregularRbox,
+            ffi::REASON_IRREGULAR_RBOX => OmissionReason::IrregularRbox { witness },
             ffi::REASON_NON_SIMPLE_ROLE => OmissionReason::NonSimpleRole { role },
             ffi::REASON_RANGE_CONDITION => OmissionReason::RangeCondition,
             ffi::REASON_RESOURCE_GUARD => OmissionReason::ResourceGuard,
@@ -877,6 +882,7 @@ unsafe fn omission(r: ffi::Run, i: i64) -> Omission {
         reason: OmissionReason::from_ffi(
             ffi::howl_run_omission_reason(r, i),
             owned(ffi::howl_run_omission_reason_role(r, i)),
+            (0..ffi::howl_run_omission_witness_len(r, i)).map(|k| owned(ffi::howl_run_omission_witness(r, i, k))).collect(),
         ),
     }
 }
@@ -898,6 +904,9 @@ unsafe fn probe_omission(r: ffi::Run, i: i64) -> Omission {
         reason: OmissionReason::from_ffi(
             ffi::howl_run_probe_omission_reason(r, i),
             owned(ffi::howl_run_probe_omission_reason_role(r, i)),
+            (0..ffi::howl_run_probe_omission_witness_len(r, i))
+                .map(|k| owned(ffi::howl_run_probe_omission_witness(r, i, k)))
+                .collect(),
         ),
     }
 }

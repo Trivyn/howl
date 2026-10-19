@@ -25,6 +25,7 @@ slop_list_howl_sriqrbox_Ria howl_sriqrbox_rias_inverse(slop_arena* arena, slop_l
 slop_list_howl_sriqrbox_Ria howl_sriqrbox_rias_symmetric(slop_arena* arena, slop_list_howl_types_RoleId props, howl_owl2_PropCharacteristic c, howl_types_RoleId r);
 slop_list_howl_sriqrbox_Ria howl_sriqrbox_rias_of(slop_arena* arena, slop_list_howl_types_RoleId props, howl_owl2_RawAxiom ax);
 slop_list_howl_sriqrbox_Ria howl_sriqrbox_sriq_rias(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_owl2_RawAxiom axs);
+slop_list_int howl_sriqrbox_ria_sources(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_owl2_RawAxiom axs);
 slop_list_int howl_sriqrbox_sriq_nodes(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_types_RoleId rs);
 uint8_t howl_sriqrbox_all_nodes(slop_list_int ns);
 howl_sriqrbox_Csr howl_sriqrbox_csr_build(slop_arena* arena, int64_t n, slop_list_int src, slop_list_int dst);
@@ -48,6 +49,8 @@ howl_sriqrbox_Edges howl_sriqrbox_hierarchy_edges(slop_arena* arena, slop_list_h
 slop_list_int howl_sriqrbox_composite_seeds(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_sriqrbox_Ria rias);
 howl_sriqrbox_Edges howl_sriqrbox_constraint_edges(slop_arena* arena, slop_list_howl_sriqrbox_Ria rias, slop_list_u8 nonsimple, slop_list_int rep);
 howl_sriqrbox_SriqRbox howl_sriqrbox_sriq_rbox(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs);
+slop_list_int howl_sriqrbox_component_ids(slop_arena* arena, howl_sriqrbox_Csr fwd, howl_sriqrbox_Csr bwd, int64_t n);
+slop_list_int howl_sriqrbox_sriq_witness(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_sriqrbox_SriqRbox rb);
 uint8_t howl_sriqrbox_sriq_role_simple(howl_sriqrbox_SriqRbox rb, howl_types_RoleId r);
 uint8_t howl_sriqrbox_is_bottom_role(howl_types_RoleId r);
 slop_option_howl_types_RoleId howl_sriqrbox_lesser_role(slop_option_howl_types_RoleId a, slop_option_howl_types_RoleId b);
@@ -524,6 +527,28 @@ slop_list_howl_sriqrbox_Ria howl_sriqrbox_sriq_rias(slop_arena* arena, slop_list
     }
 }
 
+slop_list_int howl_sriqrbox_ria_sources(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_owl2_RawAxiom axs) {
+    {
+        __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t k = 0;
+        {
+            __auto_type _coll = axs;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type ax = _coll.data[_i];
+                {
+                    __auto_type _coll = howl_sriqrbox_rias_of(arena, props, ax);
+                    for (size_t _i = 0; _i < _coll.len; _i++) {
+                        __auto_type r = _coll.data[_i];
+                        (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (k); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                    }
+                }
+                k = (k + 1);
+            }
+        }
+        return out;
+    }
+}
+
 slop_list_int howl_sriqrbox_sriq_nodes(slop_arena* arena, slop_list_howl_types_RoleId props, slop_list_howl_types_RoleId rs) {
     {
         __auto_type ns = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
@@ -843,7 +868,7 @@ uint8_t howl_sriqrbox_csr_acyclic(slop_arena* arena, howl_sriqrbox_Csr g, int64_
 }
 
 howl_sriqrbox_SriqRbox howl_sriqrbox_sriq_rbox_none(slop_arena* arena) {
-    return ((howl_sriqrbox_SriqRbox){.props = ((slop_list_howl_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .nonsimple = ((slop_list_u8){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .rep = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .rias = ((slop_list_howl_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .regular = 1});
+    return ((howl_sriqrbox_SriqRbox){.props = ((slop_list_howl_types_RoleId){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .nonsimple = ((slop_list_u8){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .rep = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .rias = ((slop_list_howl_sriqrbox_Ria){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .constraints = ((howl_sriqrbox_Edges){.src = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .dst = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .from = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena })}), .regular = 1});
 }
 
 howl_sriqrbox_Edges howl_sriqrbox_hierarchy_edges(slop_arena* arena, slop_list_howl_sriqrbox_Ria rias) {
@@ -866,7 +891,7 @@ howl_sriqrbox_Edges howl_sriqrbox_hierarchy_edges(slop_arena* arena, slop_list_h
                 }
             }
         }
-        return ((howl_sriqrbox_Edges){.src = fs, .dst = fd});
+        return ((howl_sriqrbox_Edges){.src = fs, .dst = fd, .from = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
     }
 }
 
@@ -896,6 +921,8 @@ howl_sriqrbox_Edges howl_sriqrbox_constraint_edges(slop_arena* arena, slop_list_
     {
         __auto_type cs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type cd = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type cf = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t k = 0;
         {
             __auto_type _coll = rias;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -910,6 +937,7 @@ howl_sriqrbox_Edges howl_sriqrbox_constraint_edges(slop_arena* arena, slop_list_
                                 __auto_type x = _coll.data[_i];
                                 (void)(({ __auto_type _lst_p = &(cs); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                                 (void)(({ __auto_type _lst_p = &(cd); __auto_type _item = (s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                                (void)(({ __auto_type _lst_p = &(cf); __auto_type _item = (k); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                             }
                         }
                         {
@@ -918,13 +946,15 @@ howl_sriqrbox_Edges howl_sriqrbox_constraint_edges(slop_arena* arena, slop_list_
                                 __auto_type x = _coll.data[_i];
                                 (void)(({ __auto_type _lst_p = &(cs); __auto_type _item = (x); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                                 (void)(({ __auto_type _lst_p = &(cd); __auto_type _item = (howl_sriqrbox_inv_node(s)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                                (void)(({ __auto_type _lst_p = &(cf); __auto_type _item = (k); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                             }
                         }
                     }
                 }
+                k = (k + 1);
             }
         }
-        return ((howl_sriqrbox_Edges){.src = cs, .dst = cd});
+        return ((howl_sriqrbox_Edges){.src = cs, .dst = cd, .from = cf});
     }
 }
 
@@ -939,7 +969,49 @@ howl_sriqrbox_SriqRbox howl_sriqrbox_sriq_rbox(slop_arena* arena, slop_list_howl
         __auto_type nonsimple = howl_sriqrbox_csr_reach(arena, fwd, n, howl_sriqrbox_composite_seeds(arena, props, rias));
         __auto_type rep = howl_sriqrbox_sriq_reps(arena, fwd, bwd, n);
         __auto_type c = howl_sriqrbox_constraint_edges(arena, rias, nonsimple, rep);
-        return ((howl_sriqrbox_SriqRbox){.props = props, .nonsimple = nonsimple, .rep = rep, .rias = rias, .regular = howl_sriqrbox_csr_acyclic(arena, howl_sriqrbox_csr_build(arena, n, c.src, c.dst), n)});
+        return ((howl_sriqrbox_SriqRbox){.props = props, .nonsimple = nonsimple, .rep = rep, .rias = rias, .constraints = c, .regular = howl_sriqrbox_csr_acyclic(arena, howl_sriqrbox_csr_build(arena, n, c.src, c.dst), n)});
+    }
+}
+
+slop_list_int howl_sriqrbox_component_ids(slop_arena* arena, howl_sriqrbox_Csr fwd, howl_sriqrbox_Csr bwd, int64_t n) {
+    {
+        __auto_type ids = howl_sriqrbox_ints_new(arena, n, -1);
+        int64_t v = 0;
+        while (v < n) {
+            if (howl_sriqrbox_int_at(ids, v) < 0) {
+                {
+                    __auto_type one = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+                    (void)(({ __auto_type _lst_p = &(one); __auto_type _item = (v); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                    howl_sriqrbox_mark_component(ids, howl_sriqrbox_csr_reach(arena, fwd, n, one), howl_sriqrbox_csr_reach(arena, bwd, n, one), n, v);
+                }
+            }
+            v = (v + 1);
+        }
+        return ids;
+    }
+}
+
+slop_list_int howl_sriqrbox_sriq_witness(slop_arena* arena, slop_list_howl_owl2_RawAxiom axs, howl_sriqrbox_SriqRbox rb) {
+    {
+        __auto_type c = rb.constraints;
+        __auto_type src = howl_sriqrbox_ria_sources(arena, rb.props, axs);
+        __auto_type n = (2 * ((int64_t)(((int64_t)((rb.props).len)))));
+        __auto_type fwd = howl_sriqrbox_csr_build(arena, n, c.src, c.dst);
+        __auto_type bwd = howl_sriqrbox_csr_build(arena, n, c.dst, c.src);
+        __auto_type ids = howl_sriqrbox_component_ids(arena, fwd, bwd, n);
+        __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t e = 0;
+        {
+            __auto_type _coll = c.src;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type u = _coll.data[_i];
+                if (howl_sriqrbox_int_at(ids, u) == howl_sriqrbox_int_at(ids, howl_sriqrbox_int_at(c.dst, e))) {
+                    (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (howl_sriqrbox_int_at(src, howl_sriqrbox_int_at(c.from, e))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                }
+                e = (e + 1);
+            }
+        }
+        return out;
     }
 }
 

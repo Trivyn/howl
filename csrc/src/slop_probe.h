@@ -100,6 +100,7 @@ struct howl_probe_Probing {
     howl_types_Profile profile;
     slop_list_int origins;
     slop_list_howl_types_OmissionCause reasons;
+    slop_list_string witness;
     int64_t input_docs;
     int64_t probe_docs;
 };
