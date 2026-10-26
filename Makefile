@@ -299,6 +299,7 @@ acceptance: cli
 	check corpus/fixtures/hazards/logical-triple-on-header-node.ttl 2; \
 	check corpus/fixtures/hazards/unsatisfiable-consistent.ttl 1; \
 	check corpus/fixtures/hazards/dotted-prefix-name.ttl 0; \
+	check corpus/fixtures/hazards/escaped-local-name.ttl 0; \
 	checkmsg corpus/fixtures/syntax/literal-subject.ttl 3 "cannot parse"; \
 	check corpus/fixtures/hazards/cyclic-hierarchy.ttl 0; \
 	check corpus/fixtures/hazards/range-complex-fillers.ttl 0; \

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Turtle local names with `%XX` escapes, `\` escapes, `:` and dot runs now parse.** Generated
+  against slop-rdf 0.6.1, and the crate needs `slop-rdf-sys` 0.6.1. Before, any one of these failed
+  the whole file, MITRE D3FEND among them (`d3fend:Reference-CAR-2020-09-001%3A...`). A `%XX` stays
+  verbatim in the IRI and a `\` is dropped, as Turtle's PN_LOCAL requires. New fixture
+  `hazards/escaped-local-name.ttl`.
+
 ## 0.7.0 — 2026-10-18
 
 Each omission now says why its axiom was dropped, and an irregular RBox's omissions name the axioms

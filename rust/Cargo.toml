@@ -33,7 +33,7 @@ name = "howl"
 # another runtime ABI fails to compile against HOWL's runtime header (the
 # generated headers' SLOP_RUNTIME_ABI check) instead of linking skewed.
 slop-std-sys = "0.5.0"
-slop-rdf-sys = "0.6.0"
+slop-rdf-sys = "0.6.1"
 
 [build-dependencies]
 cc = "1"

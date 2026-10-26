@@ -1,0 +1,24 @@
+# Escapes, ':' and dot runs in a prefixed name's local part (fixed in
+# slop-rdf 0.6.1). Turtle's PN_LOCAL allows '%' HEX HEX, kept verbatim in the
+# IRI, '\' before a reserved character, dropped from it, ':', and '.' anywhere
+# but last. MITRE D3FEND writes `d3fend:Reference-CAR-2020-09-001%3A...`, and
+# before the fix any of these failed the whole file to parse. Each class is
+# named once as a prefixed name and once as a full IRI, so the subsumptions
+# below hold only if both spell the same IRI. A ⊑ B, D, F, H by way of the
+# four spellings: COHERENT (exit 0). Decoding `%3A` to ':', or keeping the
+# '\', splits a class in two and loses its subsumption.
+
+@prefix e:    <http://example.org/escaped#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<http://example.org/escaped> a owl:Ontology .
+e:A a owl:Class . e:B a owl:Class . e:D a owl:Class .
+e:F a owl:Class . e:H a owl:Class .
+e:x%3Ay a owl:Class . e:p\-q a owl:Class . e:m:n a owl:Class . e:u..v a owl:Class.
+
+e:A rdfs:subClassOf e:x%3Ay, e:p\-q, e:m:n, e:u..v .
+<http://example.org/escaped#x%3Ay> rdfs:subClassOf e:B .
+<http://example.org/escaped#p-q> rdfs:subClassOf e:D .
+<http://example.org/escaped#m:n> rdfs:subClassOf e:F .
+<http://example.org/escaped#u..v> rdfs:subClassOf e:H .
