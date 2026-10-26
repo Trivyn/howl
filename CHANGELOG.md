@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 — 2026-10-26
+
+Turtle that escapes or punctuates a prefixed name's local part now parses, so MITRE D3FEND loads.
+HOWL's reasoning is unchanged and every report golden is byte-identical. The crate now needs
+slop-rdf-sys 0.6.1, still within the 0.6 range. slop-std-sys stays at 0.5.
 
 ### Fixed
 

@@ -138,7 +138,19 @@ def run_howl(files, profile=None):
 #    New-Feature-AnnotationAnnotations-001; hazards/annotated-annotation.ttl).
 #    No logical content is lost, but the unparsed-triple refusal is not
 #    weakened to admit it.
+# 3. AN ESCAPE IN A PREFIXED NAME'S LOCAL PART. Turtle's PN_LOCAL keeps `%3A`
+#    verbatim in the IRI and drops the `\` of `\-`. The OWL API 5.1.20 Turtle
+#    parser refuses the first ("unexpected token: %") and keeps the second's
+#    backslash, so `e:p\-q` names `#p\-q`, not `#p-q`
+#    (hazards/escaped-local-name.ttl). Unlike 1 and 2 this lives in the
+#    spelling, not the graph, so it is found in the source text.
 PAIRWISE_LISTS = ("members", "distinctMembers", "disjointUnionOf")
+
+# What a `%` or `\` can sit inside other than a prefixed name: strings (long
+# forms first), IRIs and comments. Matched left to right, so a `#` inside a
+# string or IRI never starts a comment.
+TURTLE_OPAQUE = re.compile(r'"""(?:[^"\\]|\\.|"(?!""))*"""' r"|'''(?:[^'\\]|\\.|'(?!''))*'''"
+                           r'|"(?:[^"\\\n]|\\.)*"' r"|'(?:[^'\\\n]|\\.)*'" r"|<[^>\s]*>|#[^\n]*")
 
 
 # HERMIT'S OWN FAULTS: input the OWL API loads faithfully but HermiT cannot
@@ -175,11 +187,18 @@ def _shape(g, t, seen=()):
     return tuple(sorted((str(p), _shape(g, o, seen + (t,))) for p, o in g.predicate_objects(t)))
 
 
-def owlapi_blind_spots(g):
-    """Why the OWL API cannot load `g` faithfully; empty when it can."""
+def owlapi_blind_spots(g, path):
+    """Why the OWL API cannot load `g`, read from Turtle file `path`,
+    faithfully; empty when it can."""
     from rdflib import OWL, RDF
     from rdflib.collection import Collection
     found = set()
+    with open(path, encoding="utf-8") as fh:
+        bare = TURTLE_OPAQUE.sub(" ", fh.read())
+    if "%" in bare:
+        found.add("a %XX escape in a prefixed name")
+    if "\\" in bare:
+        found.add("a backslash escape in a prefixed name")
     for _, p, head in g:
         if p in (OWL[n] for n in PAIRWISE_LISTS):
             shapes = [_shape(g, x) for x in Collection(g, head)]
@@ -197,7 +216,7 @@ def lossy_for_oracles(files):
     for f in files:
         g = Graph()
         g.parse(f, format="turtle")
-        spots = owlapi_blind_spots(g)
+        spots = owlapi_blind_spots(g, f)
         if spots:
             out[name_of(f)] = "; ".join(spots)
     return out
@@ -592,7 +611,7 @@ def cmd_corpus(update, also, timeout):
         ground = pins["ground_sha"]
         bnode_sha = pins["bnode_sha"]
         _, in_v0, _, inert, _ = census.census(path, graph=g, profile=PROFILE)
-        spots = owlapi_blind_spots(g)
+        spots = owlapi_blind_spots(g, path)
         gates_elk, why = elk_gates(routed_constructs(in_v0, inert), capable)
         routed = "elk" if gates_elk else "hermit"
         plan.append((e, stem, path, routed, why, spots, (ground, bnode_sha)))
