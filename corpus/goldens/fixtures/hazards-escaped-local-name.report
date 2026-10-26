@@ -1,0 +1,41 @@
+howl-report 2
+profile el
+verdict coherent
+termination fixpoint
+rounds 3
+inconsistent false
+omitted 0
+unsatisfiable 0
+subsumptions 31
+sub http://example.org/escaped#A http://example.org/escaped#A
+sub http://example.org/escaped#A http://example.org/escaped#B
+sub http://example.org/escaped#A http://example.org/escaped#D
+sub http://example.org/escaped#A http://example.org/escaped#F
+sub http://example.org/escaped#A http://example.org/escaped#H
+sub http://example.org/escaped#A http://example.org/escaped#m:n
+sub http://example.org/escaped#A http://example.org/escaped#p-q
+sub http://example.org/escaped#A http://example.org/escaped#u..v
+sub http://example.org/escaped#A http://example.org/escaped#x%3Ay
+sub http://example.org/escaped#A http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#B http://example.org/escaped#B
+sub http://example.org/escaped#B http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#D http://example.org/escaped#D
+sub http://example.org/escaped#D http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#F http://example.org/escaped#F
+sub http://example.org/escaped#F http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#H http://example.org/escaped#H
+sub http://example.org/escaped#H http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#m:n http://example.org/escaped#F
+sub http://example.org/escaped#m:n http://example.org/escaped#m:n
+sub http://example.org/escaped#m:n http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#p-q http://example.org/escaped#D
+sub http://example.org/escaped#p-q http://example.org/escaped#p-q
+sub http://example.org/escaped#p-q http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#u..v http://example.org/escaped#H
+sub http://example.org/escaped#u..v http://example.org/escaped#u..v
+sub http://example.org/escaped#u..v http://www.w3.org/2002/07/owl#Thing
+sub http://example.org/escaped#x%3Ay http://example.org/escaped#B
+sub http://example.org/escaped#x%3Ay http://example.org/escaped#x%3Ay
+sub http://example.org/escaped#x%3Ay http://www.w3.org/2002/07/owl#Thing
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+exit 0

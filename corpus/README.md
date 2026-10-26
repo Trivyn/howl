@@ -4,9 +4,9 @@ Three tiers, separated by what they can prove and what it costs to keep them.
 
 ```
 corpus/
-  fixtures/          committed, hand-written, 131 files — the only tier in git
+  fixtures/          committed, hand-written, 132 files — the only tier in git
     v0/              one per in-profile construct        (20)
-    hazards/         the fail-silent cases               (34)
+    hazards/         the fail-silent cases               (35)
     out-of-profile/  one per construct the el gate must enumerate (13)
     el++/            inside el++, outside el: §5.4's constructs alone and
                      combined, read by make test's engine-vs-reference
