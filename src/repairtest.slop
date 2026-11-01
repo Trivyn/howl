@@ -200,6 +200,35 @@
                                   (check-result 8 r))))))
           (do (arena-free arena) yes)))))
 
+  (fn partial-trial ((arena Arena) (family Int) (partial Int) (removed (List Int)))
+    (@spec ((Arena Int Int (List Int)) -> Checked))
+    (@alloc arena)
+    ;; As the model, but the trial removing exactly PARTIAL hits a round cap.
+    (let ((mut c (model arena family removed -1)))
+      (do
+        (when (== (mask-of removed) partial)
+          (do (set! c complete false) (set! c termination (union-new Termination resource-limit 0))))
+        (union-new Checked checked c))))
+
+  (fn incomplete-trials ()
+    (@spec (() -> Bool))
+    ;; An incomplete incoherent trial is still definitive, so it drives
+    ;; shrinking; only the final retained set must be certified complete.
+    ;; Cause {0,1} with {0,1} incomplete: {0,1,2} is not minimal, so no
+    ;; conflict may be reported. Cause {0} reached through incomplete {0,1}
+    ;; still certifies {0}, and the whole search stays complete.
+    (let ((arena (arena-new 1048576)))
+      (let ((a (match (search arena 3 (model arena 8 (list-new arena Int) -1) (default-search-options)
+                       (fn ((removed (List Int))) (partial-trial arena 8 4 removed)))
+                 ((error _) false)
+                 ((ok r) (and (not (. r complete)) (== (list-len (. r conflicts)) 0)
+                              (. (. r conflict-phase) unresolved) (check-result 8 r)))))
+            (b (match (search arena 3 (model arena 2 (list-new arena Int) -1) (default-search-options)
+                       (fn ((removed (List Int))) (partial-trial arena 2 4 removed)))
+                 ((error _) false)
+                 ((ok r) (and (. r complete) (contains-mask (. r conflicts) 1) (check-result 2 r))))))
+        (do (arena-free arena) (and a b)))))
+
   (fn fault-call ((removed (List Int)))
     (@spec (((List Int)) -> Checked))
     (union-new Checked check-fault (union-new Fault input-error "oracle fault")))
@@ -240,7 +269,8 @@
   (fn main ()
     (@spec (() -> Int))
     (let ((a (all-families)) (b (budget-boundaries)) (c (unknowns)) (d (fallback)) (e (test-cancelled))
-          (f (partial-positive)) (g (oracle-fault)) (h (zero-mappings)) (i (coverage-shortcut)))
+          (f (partial-positive)) (g (oracle-fault)) (h (zero-mappings)) (i (coverage-shortcut))
+          (j (incomplete-trials)))
       (do
         (if a (println "PASS: all 256 conflict families versus independent powerset oracle") (println "FAIL: conflict families"))
         (if b (println "PASS: every search-budget boundary") (println "FAIL: budget boundaries"))
@@ -251,5 +281,6 @@
         (if g (println "PASS: oracle faults propagate") (println "FAIL: oracle faults"))
         (if h (println "PASS: zero mappings and cached background") (println "FAIL: zero mappings"))
         (if i (println "PASS: coverage remains visible on unrepairable shortcut") (println "FAIL: shortcut coverage"))
-        (if (and a b c d e f g h i) 0 1))))
+        (if j (println "PASS: incomplete incoherent trials drive shrinking, never certify") (println "FAIL: incomplete trials"))
+        (if (and a b c d e f g h i j) 0 1))))
 )
