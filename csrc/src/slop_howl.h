@@ -16,7 +16,6 @@
 #include "slop_locality.h"
 #include "slop_aligninput.h"
 #include "slop_repair.h"
-#include "slop_alignmentreport.h"
 #include "slop_owl2.h"
 #include "slop_types.h"
 #include "slop_normalize.h"

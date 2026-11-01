@@ -134,3 +134,33 @@ fn alignment_sources_must_be_absolute_and_distinct() {
         Err(Fault::InputError(_))
     ));
 }
+
+#[test]
+fn merged_report_lines_are_the_plain_classification_report() {
+    let input = conflicting_input();
+    let reasoner = Reasoner::new();
+
+    let with_repair = reasoner
+        .align(&input, Some(RepairOptions::default()))
+        .unwrap();
+    assert!(with_repair.repair.is_some());
+    assert!(
+        with_repair
+            .merged
+            .lines()
+            .iter()
+            .all(|line| !line.starts_with("howl-repair")),
+        "repair block leaked into merged report: {:?}",
+        with_repair.merged.lines()
+    );
+
+    let check_only = reasoner.align(&input, None).unwrap();
+    assert_eq!(with_repair.merged.lines(), check_only.merged.lines());
+
+    let mut union = howl::Input::new();
+    union
+        .add_turtle(&format!("{PREFIXES} :A a owl:Class . :B a owl:Class . :C a owl:Class . :A owl:disjointWith :B . :C rdfs:subClassOf :A . :C rdfs:subClassOf :B ."))
+        .unwrap();
+    let plain = reasoner.classify(&union).unwrap();
+    assert_eq!(with_repair.merged.lines(), plain.lines());
+}

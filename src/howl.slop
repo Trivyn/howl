@@ -20,7 +20,6 @@
   (import aligninput (AlignmentBase alignment-base subset-decoded source-iri-valid))
   (import repair (Check Checked SearchOptions MappingSet Candidate Phase SearchCounts SearchResult
                   search candidate-reason-text))
-  (import alignmentreport (alignment-lines))
   (import owl2 (render-omission))
   (import types (Node RoleId Concept NormAxiom
                  Derived Addressed Context Saturation
@@ -1458,16 +1457,12 @@
 
   (fn alignment-finished ((a Arena) (aligned AlignmentOutcome))
     (@spec ((Arena AlignmentOutcome) -> Run))
-    (let ((out (. aligned outcome))
-          (lines (report-lines a (. aligned outcome))))
-      (do
-        (match (. aligned repair)
-          ((some sr) (for-each (l (alignment-lines a (. aligned mappings) sr)) (list-push lines l)))
-          ((none) (do)))
-        (new-run a (record-new RunState
-          (arena a) (outcome (some out)) (fault 'fault-none) (message "")
-          (fault-profile (. out profile)) (verdict (verdict out)) (probing (no-probing a))
-          (mappings (. aligned mappings)) (repair (. aligned repair)) (lines lines))))))
+    (let ((out (. aligned outcome)))
+      (new-run a (record-new RunState
+        (arena a) (outcome (some out)) (fault 'fault-none) (message "")
+        (fault-profile (. out profile)) (verdict (verdict out)) (probing (no-probing a))
+        (mappings (. aligned mappings)) (repair (. aligned repair))
+        (lines (report-lines a out))))))
 
   (fn new-run ((a Arena) (st RunState))
     (@intent "A Run handle over state stored in its own arena")
