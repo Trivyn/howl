@@ -1,0 +1,9 @@
+[project]
+name = "howl-aligninput-test"
+version = "0.1.0"
+entry = "main.slop"
+[build]
+output = "../../build/howl-aligninput-test"
+include = ["../../src", "../../src/rules", "../../../slop-rdf/src", "../../../slop-rdf/src/parse", "${SLOP_HOME}/lib/std"]
+type = "executable"
+no_arena_cap = true

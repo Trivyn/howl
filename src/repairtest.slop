@@ -1,0 +1,255 @@
+(module repairtest
+  (import repair (Check Checked SearchOptions MappingSet SearchResult Phase SearchCounts Candidate
+                  default-search-options search has-index indices subset remove-index set-cmp))
+  (import types (Verdict Fault Omission Termination))
+  (import rdf (IRI))
+
+  (fn power ((n Int))
+    (@spec ((Int) -> Int))
+    (let ((mut p 1) (mut i 0)) (do (while (< i n) (do (set! p (* p 2)) (set! i (+ i 1)))) p)))
+
+  (fn bit ((mask Int) (i Int))
+    (@spec ((Int Int) -> Bool))
+    (== (% (/ mask (power i)) 2) 1))
+
+  (fn mask-set ((arena Arena) (mask Int))
+    (@spec ((Arena Int) -> (List Int)))
+    (@alloc arena)
+    (let ((mut out (list-new arena Int)) (mut i 0))
+      (do (while (< i 3) (do (when (bit mask i) (list-push out i)) (set! i (+ i 1)))) out)))
+
+  (fn mask-of ((xs (List Int)))
+    (@spec (((List Int)) -> Int))
+    (let ((mut m 0)) (do (for-each (i xs) (set! m (+ m (power i)))) m)))
+
+  (fn model-bad ((family Int) (removed Int))
+    (@spec ((Int Int) -> Bool))
+    ;; Family's bit j selects present-set j as an incoherence cause.
+    ;; This oracle uses arithmetic masks, independently of the search.
+    (let ((mut bad false) (mut cause 0))
+      (do
+        (while (< cause 8)
+          (do
+            (when (bit family cause)
+              (let ((mut active true) (mut i 0))
+                (do (while (< i 3)
+                      (do (when (and (bit cause i) (bit removed i)) (set! active false))
+                          (set! i (+ i 1))))
+                    (when active (set! bad true)))))
+            (set! cause (+ cause 1)))) bad)))
+
+  (fn model ((arena Arena) (family Int) (removed (List Int)) (unknown Int))
+    (@spec ((Arena Int (List Int) Int) -> Check))
+    (@alloc arena)
+    (let ((u (== (mask-of removed) unknown)))
+      (record-new Check
+        (verdict (if u 'verdict-inconclusive (if (model-bad family (mask-of removed)) 'verdict-incoherent 'verdict-coherent)))
+        (complete (not u)) (omissions (list-new arena Omission))
+        (termination (if u (union-new Termination resource-limit 0) (union-new Termination fixpoint))))))
+
+  (fn model-call ((arena Arena) (family Int) (removed (List Int)) (unknown Int))
+    (@spec ((Arena Int (List Int) Int) -> Checked))
+    (@alloc arena)
+    (union-new Checked checked (model arena family removed unknown)))
+
+  (fn minimal-repair ((family Int) (removed Int))
+    (@spec ((Int Int) -> Bool))
+    (let ((mut yes (not (model-bad family removed))) (mut i 0))
+      (do
+        (while (< i 3)
+          (do (when (and (bit removed i) (not (model-bad family (- removed (power i))))) (set! yes false))
+              (set! i (+ i 1)))) yes)))
+
+  (fn minimal-conflict ((family Int) (present Int))
+    (@spec ((Int Int) -> Bool))
+    (let ((mut yes (model-bad family (- 7 present))) (mut i 0))
+      (do
+        (while (< i 3)
+          (do (when (and (bit present i) (model-bad family (+ (- 7 present) (power i)))) (set! yes false))
+              (set! i (+ i 1)))) yes)))
+
+  (fn contains-mask ((sets (List MappingSet)) (mask Int))
+    (@spec (((List MappingSet) Int) -> Bool))
+    (let ((mut yes false))
+      (do (for-each (s sets) (when (== (mask-of (. s items)) mask) (set! yes true))) yes)))
+
+  (fn ordered ((sets (List MappingSet)))
+    (@spec (((List MappingSet)) -> Bool))
+    (let ((mut yes true) (mut last (Option MappingSet) (none)))
+      (do (for-each (s sets)
+            (do (match last ((none) (do)) ((some p) (when (>= (set-cmp (. p items) (. s items)) 0) (set! yes false))))
+                (set! last (some s)))) yes)))
+
+  (fn check-result ((family Int) (r SearchResult))
+    (@spec ((Int SearchResult) -> Bool))
+    (let ((mut yes (ordered (. r verified))) (mut m 0))
+      (do
+        (for-each (s (. r verified)) (when (not (minimal-repair family (mask-of (. s items)))) (set! yes false)))
+        (for-each (s (. r conflicts)) (when (not (minimal-conflict family (mask-of (. s items)))) (set! yes false)))
+        (when (and (. r already-coherent) (model-bad family 0)) (set! yes false))
+        (when (and (. r unrepairable) (not (model-bad family 7))) (set! yes false))
+        (when (. r complete)
+          (do
+            (while (< m 8)
+              (do
+                (when (and (not (. r already-coherent))
+                           (!= (minimal-repair family m) (contains-mask (. r verified) m))) (set! yes false))
+                (when (and (not (. r already-coherent)) (not (. r unrepairable))
+                           (!= (minimal-conflict family m) (contains-mask (. r conflicts) m))) (set! yes false))
+                (set! m (+ m 1)))))) yes)))
+
+  (fn run-case ((arena Arena) (family Int) (options SearchOptions) (unknown Int) (require-complete Bool))
+    (@spec ((Arena Int SearchOptions Int Bool) -> Bool))
+    (@alloc arena)
+    (match (search arena 3 (model arena family (list-new arena Int) unknown) options
+             (fn ((removed (List Int))) (model-call arena family removed unknown)))
+      ((error _) false)
+      ((ok r)
+        (do
+        (and (or (not require-complete) (. r complete)) (check-result family r)
+             (<= (. (. r counts) conflict-calls) (. options conflict-calls))
+             (<= (. (. r counts) conflict-nodes) (. options conflict-nodes))
+             (<= (. (. r counts) hitting-nodes) (. options hitting-nodes))
+             (<= (. (. r counts) verification-calls) (. options verification-calls)))))))
+
+  (fn all-families ()
+    (@spec (() -> Bool))
+    (let ((mut family 0) (mut yes true))
+      (do
+        (while (< family 256)
+          (let ((arena (arena-new 1048576)))
+            (do (when (not (run-case arena family (default-search-options) -1 true))
+                  (do (println (int-to-string arena family)) (set! yes false)))
+                (arena-free arena) (set! family (+ family 1))))) yes)))
+
+  (fn budget-boundaries ()
+    (@spec (() -> Bool))
+    ;; Causes {0,1}, {1,2}; repairs {1}, {0,2}.
+    (let ((mut limit 0) (mut yes true))
+      (do
+        (while (< limit 20)
+          (let ((arena (arena-new 1048576)) (mut options (default-search-options)))
+            (do
+              (set! options conflict-calls limit)
+              (when (not (run-case arena 72 options -1 false)) (set! yes false))
+              (set! options (default-search-options)) (set! options conflict-nodes limit)
+              (when (not (run-case arena 72 options -1 false)) (set! yes false))
+              (set! options (default-search-options)) (set! options hitting-nodes limit)
+              (when (not (run-case arena 72 options -1 false)) (set! yes false))
+              (set! options (default-search-options)) (set! options verification-calls limit)
+              (when (not (run-case arena 72 options -1 false)) (set! yes false))
+              (arena-free arena) (set! limit (+ limit 1))))) yes)))
+
+  (fn unknowns ()
+    (@spec (() -> Bool))
+    (let ((mut unknown 0) (mut yes true))
+      (do (while (< unknown 8)
+            (let ((arena (arena-new 1048576)))
+              (do (when (not (run-case arena 72 (default-search-options) unknown false)) (set! yes false))
+                  (arena-free arena) (set! unknown (+ unknown 1))))) yes)))
+
+  (fn fallback ()
+    (@spec (() -> Bool))
+    (let ((arena (arena-new 1048576)) (mut options (default-search-options)))
+      (do
+        (set! options conflict-calls 0)
+        (let ((yes (match (search arena 3 (model arena 72 (list-new arena Int) -1) options
+                           (fn ((removed (List Int))) (model-call arena 72 removed -1)))
+                     ((error _) false)
+                     ((ok r) (and (not (. r complete)) (> (list-len (. r verified)) 0) (check-result 72 r))))))
+          (do (arena-free arena) yes)))))
+
+  (fn cancel-flag ()
+    (@spec (() -> I64))
+    (let ((mut p 0))
+      (do (c-inline "static uint32_t repair_test_cancel = 1; p = (int64_t)(uintptr_t)&repair_test_cancel;") (cast I64 p))))
+
+  (fn test-cancelled ()
+    (@spec (() -> Bool))
+    (let ((arena (arena-new 1048576)) (mut options (default-search-options)))
+      (do
+        (set! options cancel (cancel-flag))
+        (let ((yes (match (search arena 3 (model arena 72 (list-new arena Int) -1) options
+                           (fn ((removed (List Int))) (model-call arena 72 removed -1)))
+                     ((ok _) false)
+                     ((error f) (match f ((cancelled) true) (_ false))))))
+          (do (arena-free arena) yes)))))
+
+  (fn partial-call ((arena Arena) (removed (List Int)))
+    (@spec ((Arena (List Int)) -> Checked))
+    (@alloc arena)
+    (let ((mut c (model arena 8 removed -1)))
+      (do
+        (when (== (list-len removed) 0)
+          (do (set! c complete false) (set! c termination (union-new Termination resource-limit 0))))
+        (union-new Checked checked c))))
+
+  (fn partial-positive ()
+    (@spec (() -> Bool))
+    (let ((arena (arena-new 1048576)) (mut initial (model arena 8 (list-new arena Int) -1)))
+      (do
+        (set! initial complete false)
+        (set! initial termination (union-new Termination resource-limit 0))
+        (let ((yes (match (search arena 3 initial (default-search-options)
+                           (fn ((removed (List Int))) (partial-call arena removed)))
+                     ((error _) false)
+                     ((ok r) (and (not (. r complete)) (contains-mask (. r conflicts) 3)
+                                  (== (list-len (. r verified)) 0)
+                                  (== (list-len (. r candidates)) 2)
+                                  (. (. r verification-phase) unresolved)
+                                  (check-result 8 r))))))
+          (do (arena-free arena) yes)))))
+
+  (fn fault-call ((removed (List Int)))
+    (@spec (((List Int)) -> Checked))
+    (union-new Checked check-fault (union-new Fault input-error "oracle fault")))
+
+  (fn oracle-fault ()
+    (@spec (() -> Bool))
+    (let ((arena (arena-new 1048576)))
+      (let ((yes (match (search arena 3 (model arena 8 (list-new arena Int) -1) (default-search-options)
+                         (fn ((removed (List Int))) (fault-call removed)))
+                   ((ok _) false)
+                   ((error f) (match f ((input-error _) true) (_ false))))))
+        (do (arena-free arena) yes))))
+
+  (fn zero-mappings ()
+    (@spec (() -> Bool))
+    (let ((arena (arena-new 1048576)))
+      (let ((a (match (search arena 0 (model arena 0 (list-new arena Int) -1) (default-search-options)
+                       (fn ((removed (List Int))) (fault-call removed)))
+                 ((error _) false) ((ok r) (and (. r already-coherent) (. r complete)))))
+            (b (match (search arena 0 (model arena 1 (list-new arena Int) -1) (default-search-options)
+                       (fn ((removed (List Int))) (fault-call removed)))
+                 ((error _) false) ((ok r) (and (. r unrepairable) (. r complete))))))
+        (do (arena-free arena) (and a b)))))
+
+  (fn coverage-shortcut ()
+    (@spec (() -> Bool))
+    (let ((arena (arena-new 1048576)) (mut initial (model arena 1 (list-new arena Int) -1)))
+      (do
+        (set! initial complete false)
+        (list-push (. initial omissions) (union-new Omission unresolved-import (record-new IRI (value "urn:repair-test:missing"))))
+        (let ((yes (match (search arena 3 initial (default-search-options)
+                           (fn ((removed (List Int))) (model-call arena 1 removed -1)))
+                     ((error _) false)
+                     ((ok r) (and (. r unrepairable) (not (. r complete))
+                                  (== (list-len (. r omissions)) 1))))))
+          (do (arena-free arena) yes)))))
+
+  (fn main ()
+    (@spec (() -> Int))
+    (let ((a (all-families)) (b (budget-boundaries)) (c (unknowns)) (d (fallback)) (e (test-cancelled))
+          (f (partial-positive)) (g (oracle-fault)) (h (zero-mappings)) (i (coverage-shortcut)))
+      (do
+        (if a (println "PASS: all 256 conflict families versus independent powerset oracle") (println "FAIL: conflict families"))
+        (if b (println "PASS: every search-budget boundary") (println "FAIL: budget boundaries"))
+        (if c (println "PASS: unknown oracle answers") (println "FAIL: unknown answers"))
+        (if d (println "PASS: independent fallback verification budget") (println "FAIL: fallback"))
+        (if e (println "PASS: cancellation") (println "FAIL: cancellation"))
+        (if f (println "PASS: partial positive shrinks to certified conflict") (println "FAIL: partial positive"))
+        (if g (println "PASS: oracle faults propagate") (println "FAIL: oracle faults"))
+        (if h (println "PASS: zero mappings and cached background") (println "FAIL: zero mappings"))
+        (if i (println "PASS: coverage remains visible on unrepairable shortcut") (println "FAIL: shortcut coverage"))
+        (if (and a b c d e f g h i) 0 1))))
+)

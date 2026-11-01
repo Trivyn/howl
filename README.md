@@ -65,6 +65,35 @@ howl: refused (--strict), no report — 1 omitted
                                                                   # exit 2
 ```
 
+## Alignment and mapping repair
+
+Check two sources together with a mapping document, then enumerate the complete family of
+inclusion-minimal mapping removals:
+
+```sh
+howl align-check left.ttl right.ttl mappings.ttl --profile auto --repair
+```
+
+Source ontologies and supplied imports (`-I FILE`) stay fixed. A repair removes whole mapping
+axioms, including every annotated occurrence of that axiom in the mapping document. Finding a
+repair does not edit the input or change the original merge's exit code.
+
+The `howl-repair 1` output distinguishes `verified-repairs` from unverified `candidates` and says
+whether the family is complete. `already-coherent` means no removal is needed;
+`unrepairable-by-mappings` means the fixed union itself is incoherent. Partial searches never
+claim to have found all repairs.
+
+`--conflict-calls`, `--conflict-nodes`, `--hitting-nodes`, and `--verification-calls` control separate
+search allowances (defaults 128, 100000, 100000, 128). Existing per-classification round limits
+still apply. `--left-source`, `--right-source`, and `--mapping-source` supply stable document IRIs
+when output must remain identical after files move; otherwise source identities are absolute file
+IRIs. `--timings` writes elapsed times and peak memory to stderr.
+
+Rust exposes `AlignmentInput` and `Reasoner::align(&input, Some(RepairOptions::default()))`;
+`None` performs the merged coherence check alone. C uses `howl_input_set_document` to name each
+added document and `howl_run_align` to run it. All interfaces use the same SLOP implementation.
+See [the C example](examples/c/alignment_test.c) and [Rust tests](rust/tests/alignment.rs).
+
 ## Verdicts and exit codes
 
 | Exit | Verdict | Meaning |

@@ -39,6 +39,14 @@ struct howl_Input {
 };
 typedef struct howl_Input howl_Input;
 
+struct howl_RepairOptions {
+    int64_t conflict_calls;
+    int64_t conflict_nodes;
+    int64_t hitting_nodes;
+    int64_t verification_calls;
+};
+typedef struct howl_RepairOptions howl_RepairOptions;
+
 struct howl_Run {
     void* p;
 };
@@ -136,6 +144,7 @@ typedef struct howl_TermIn howl_TermIn;
 
 /* Public API */
 howl_Options howl_default_options(void);
+howl_RepairOptions howl_default_repair_options(void);
 uint8_t howl_input_add_probe_triple(howl_Input in, howl_TermIn s, howl_TermIn p, howl_TermIn o);
 howl_TurtleResult howl_input_add_probe_turtle(howl_Input in, slop_string text);
 uint8_t howl_input_add_triple(howl_Input in, howl_TermIn s, howl_TermIn p, howl_TermIn o);
@@ -147,13 +156,23 @@ void howl_input_begin_document(howl_Input in);
 void howl_input_begin_probe_document(howl_Input in);
 void howl_input_free(howl_Input in);
 howl_Input howl_input_new(void);
+uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping);
+howl_Run howl_run_align(howl_Input in, howl_Options o, uint8_t repair, howl_RepairOptions limits);
+uint8_t howl_run_already_coherent(howl_Run r);
 howl_Run howl_run_answer(howl_Input in, howl_Options o);
+int64_t howl_run_candidate_len(howl_Run r);
+int64_t howl_run_candidate_mapping(howl_Run r, int64_t i, int64_t j);
+slop_string howl_run_candidate_reason(howl_Run r, int64_t i);
+int64_t howl_run_candidate_size(howl_Run r, int64_t i);
 howl_Run howl_run_classify(howl_Input in, howl_Options o);
 howl_FaultKind howl_run_fault(howl_Run r);
 slop_string howl_run_fault_message(howl_Run r);
 howl_types_Profile howl_run_fault_profile(howl_Run r);
 void howl_run_free(howl_Run r);
 uint8_t howl_run_inconsistent(howl_Run r);
+int64_t howl_run_mapping_len(howl_Run r);
+slop_string howl_run_mapping_source(howl_Run r, int64_t i);
+slop_string howl_run_mapping_text(howl_Run r, int64_t i);
 uint8_t howl_run_ok(howl_Run r);
 slop_string howl_run_omission(howl_Run r, int64_t i);
 int64_t howl_run_omission_document(howl_Run r, int64_t i);
@@ -181,13 +200,25 @@ int64_t howl_run_probe_omission_witness_len(howl_Run r, int64_t i);
 slop_string howl_run_probe_sub(howl_Run r, int64_t i);
 slop_string howl_run_probe_sup(howl_Run r, int64_t i);
 howl_types_Profile howl_run_profile(howl_Run r);
+uint8_t howl_run_repair_complete(howl_Run r);
+int64_t howl_run_repair_len(howl_Run r);
+int64_t howl_run_repair_mapping(howl_Run r, int64_t i, int64_t j);
+uint8_t howl_run_repair_requested(howl_Run r);
+int64_t howl_run_repair_size(howl_Run r, int64_t i);
 int64_t howl_run_report_len(howl_Run r);
 slop_string howl_run_report_line(howl_Run r, int64_t i);
 int64_t howl_run_rounds(howl_Run r);
+int64_t howl_run_search_count(howl_Run r, int64_t metric);
+slop_string howl_run_search_omission(howl_Run r, int64_t i);
+int64_t howl_run_search_omission_len(howl_Run r);
+uint8_t howl_run_search_phase_capped(howl_Run r, int64_t phase);
+uint8_t howl_run_search_phase_exhausted(howl_Run r, int64_t phase);
+uint8_t howl_run_search_phase_unresolved(howl_Run r, int64_t phase);
 slop_string howl_run_sub(howl_Run r, int64_t i);
 int64_t howl_run_sub_len(howl_Run r);
 slop_string howl_run_super(howl_Run r, int64_t i);
 howl_types_Termination howl_run_termination(howl_Run r);
+uint8_t howl_run_unrepairable(howl_Run r);
 slop_string howl_run_unsat(howl_Run r, int64_t i);
 int64_t howl_run_unsat_len(howl_Run r);
 howl_types_Verdict howl_run_verdict(howl_Run r);

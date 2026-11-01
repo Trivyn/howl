@@ -1,0 +1,5 @@
+@prefix : <urn:howl:alignment:test:> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:A rdfs:subClassOf :X .
+:X rdfs:subClassOf :D .
+:E rdfs:subClassOf :X .

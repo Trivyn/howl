@@ -30,7 +30,7 @@ pattern = "*.slop"
 # `slop verify` reports as an error without falling back to the Python
 # parser. Excluding it loses no verification; it is compiled and run by
 # `make test`.
-exclude = ["src/test.slop"]
+exclude = ["src/test.slop", "src/repairtest.slop"]
 timeout = 120000
 
 [providers.openrouter]

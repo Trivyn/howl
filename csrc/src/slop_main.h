@@ -21,6 +21,7 @@
 #include "slop_ttl.h"
 #include "slop_vocab.h"
 #include "slop_canon.h"
+#include "slop_aligncli.h"
 #include <string.h>
 #include <sys/resource.h>
 

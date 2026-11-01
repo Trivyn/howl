@@ -1,0 +1,46 @@
+{
+  "protocol": "M4 full BFO/CCO, 32 mappings, W=4, explicit sriq, 1 warmup + 3 runs",
+  "platform": "macOS-26.5.1-arm64-arm-64bit",
+  "sources": {
+    "bfo-core-2024-02-07.ttl": "128f5fe1dab7ee804a3037a836813e5953c846eeeefee883a47d5db0b37a106b",
+    "cco-2024-11-06.ttl": "e609db27478a2c8b52b9bb5eb5ac979ac323510e851c368e4d9ec7d1c153fe5b"
+  },
+  "mapping_sha256": "4e107e1d7ed3b1065a71211e9fca45c861f08603fe46439c2734df510ccfd7ae",
+  "binary_sha256": "cce586e3259446d2ecea21ed826ef29d403076272fef1801a7626d20efb3c081",
+  "report_sha256": "87235cf9783e0961c5806401086d7afb5feb2c2b1f811e6ecc6160f2a661574a",
+  "oracle": {
+    "reasoner": "HermiT",
+    "subsets": 8,
+    "coherent_removed_masks": [
+      3,
+      4,
+      5,
+      6,
+      7
+    ]
+  },
+  "runs": [
+    {
+      "elapsed_seconds": 238.653,
+      "peak_mb": 936,
+      "conflict_calls": 39,
+      "verification_calls": 1
+    },
+    {
+      "elapsed_seconds": 248.819,
+      "peak_mb": 936,
+      "conflict_calls": 39,
+      "verification_calls": 1
+    },
+    {
+      "elapsed_seconds": 240.84,
+      "peak_mb": 936,
+      "conflict_calls": 39,
+      "verification_calls": 1
+    }
+  ],
+  "median_seconds": 240.84,
+  "threshold_seconds": 600,
+  "threshold_peak_mb": 8192,
+  "passed": true
+}

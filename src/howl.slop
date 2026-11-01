@@ -17,6 +17,10 @@
   (import report (report-lines probe-lines answer-lines node-text))
   (import probe (QueryKind ProbeAnswer Query Answered Probing sort-queries probe-document answer-queries))
   (import locality (module-decoded))
+  (import aligninput (AlignmentBase alignment-base subset-decoded source-iri-valid))
+  (import repair (Check Checked SearchOptions MappingSet Candidate Phase SearchCounts SearchResult
+                  search candidate-reason-text))
+  (import alignmentreport (alignment-lines))
   (import owl2 (render-omission))
   (import types (Node RoleId Concept NormAxiom
                  Derived Addressed Context Saturation
@@ -27,7 +31,7 @@
                  Profile ProfileSelection ReasonerConfig
                  KName KscAxiom Evidence KscResult SriqEvidence
                  default-config emit-edge make-context copy-fault copy-omissions empty-names copy-iri copy-string
-                 outcome-is-complete findings-are-incoherent))
+                 outcome-is-complete findings-are-incoherent copy-axiom-ref cancel-requested))
   (import normalize (Decoded NormResult decode-document decode-encoded copy-decoded normalize-decoded))
   (import termstore (Encoded new-encoded encoded-add encoded-next-document))
   (import select (select-profile choose-auto choose-auto-low profile-implemented unavailable-message))
@@ -79,6 +83,8 @@
     input-new input-free input-begin-document input-add-triple input-add-turtle
     input-attest-import
     default-options run-classify run-free
+    RepairOptions AlignmentOutcome default-repair-options repair-options-problem
+    align-encoded input-set-document run-align
     run-ok run-fault run-fault-message run-fault-profile
     run-profile run-verdict run-inconsistent run-termination run-rounds
     run-unsat-len run-unsat run-sub-len run-sub run-super
@@ -988,6 +994,8 @@
     (enc       (Ptr Encoded))
     (imports   (List IRI))
     (documents Int)
+    (sources   (List IRI))         ; alignment source identity, one per document; empty until named
+    (mapping-docs (List Bool))     ; explicit removable-document designation
     (probes    (Ptr Encoded))      ; the probe documents (§8.5 A4), classified only by the probe run
     (probe-docs Int)
     (queries   (List Query))       ; as asked; sorted and deduplicated when a run reads them
@@ -1002,6 +1010,17 @@
     (profile        Profile)       ; ignored when auto-select is set
     (auto-select    Bool)          ; the cheapest built profile covering the ontology
     (cancel         I64)))         ; address of a uint32 flag, 0 for none; read at round boundaries
+
+  (type RepairOptions (record
+    (conflict-calls Int)
+    (conflict-nodes Int)
+    (hitting-nodes Int)
+    (verification-calls Int)))
+
+  (type AlignmentOutcome (record
+    (outcome Outcome)
+    (mappings (List AxiomRef))
+    (repair (Option SearchResult))))
 
   ;; An RDF term. An empty `datatype` or `lang` is absent - neither may be
   ;; empty in RDF. `blank` is a blank node's id within its document.
@@ -1040,6 +1059,8 @@
     (fault-profile Profile)
     (verdict       Verdict)
     (probing       Probing)        ; empty unless a query was asked
+    (mappings      (List AxiomRef))
+    (repair        (Option SearchResult))
     (lines         (List String))))
 
   (fn input-state ((in Input))
@@ -1065,6 +1086,8 @@
                           (enc       (new-encoded a))
                           (imports   (list-new a IRI))
                           (documents 0)
+                          (sources (list-new a IRI))
+                          (mapping-docs (list-new a Bool))
                           (probes    (new-encoded a))
                           (probe-docs 0)
                           (queries   (list-new a Query))
@@ -1110,7 +1133,10 @@
           (encoded-next-document (. s arena) (target s probe)))
         (if probe
           (set! s probe-docs (+ n 1))
-          (set! s documents (+ n 1)))
+          (do
+            (set! s documents (+ n 1))
+            (list-push (. s sources) (record-new IRI (value "")))
+            (list-push (. s mapping-docs) false)))
         (set! (deref p) s))))
 
   (fn optional-string ((s String))
@@ -1218,6 +1244,26 @@
                 (set! (deref ptr) st)))
             res)))))
 
+  (fn input-set-document ((in Input) (index Int) (source String) (mapping Bool))
+    (@intent "Name an input document for alignment and designate its logical axioms as fixed or removable")
+    (@spec ((Input Int String Bool) -> Bool))
+    :c-name "howl_input_set_document"
+    (let ((ptr (input-state in)) (mut st (deref ptr)) (mut valid (source-iri-valid source)) (mut i 0))
+      (do
+        (when (or (< index 0) (>= index (. st documents))) (set! valid false))
+        (for-each (s (. st sources))
+          (do
+            (when (and (!= i index) (string-eq (. s value) source)) (set! valid false))
+            (set! i (+ i 1))))
+        (if valid
+          (do
+            (list-set (. st sources) index (record-new IRI (value (string-concat (. st arena) "" source))))
+            (list-set (. st mapping-docs) index mapping)
+            (do))
+          (set! st failed (some "alignment documents need distinct absolute source IRIs and valid document indices")))
+        (set! (deref ptr) st)
+        valid)))
+
   (fn input-attest-import ((in Input) (iri String))
     (@intent "Attest that an owl:imports target is resolved: its document has been added")
     (@spec ((Input String) -> Unit))
@@ -1306,6 +1352,123 @@
         (set! c cancel-ptr (. o cancel))
         c)))
 
+  (fn default-repair-options ()
+    (@intent "Deterministic M4 allowances, separate from each classification's round budget")
+    (@spec (() -> RepairOptions))
+    :c-name "howl_default_repair_options"
+    (record-new RepairOptions (conflict-calls 128) (conflict-nodes 100000)
+                             (hitting-nodes 100000) (verification-calls 128)))
+
+  (fn repair-options-problem ((o RepairOptions))
+    (@intent "Reject negative search limits instead of silently clamping them")
+    (@spec ((RepairOptions) -> (Option String)))
+    (if (or (< (. o conflict-calls) 0) (< (. o conflict-nodes) 0)
+            (< (. o hitting-nodes) 0) (< (. o verification-calls) 0))
+      (some "repair budgets must be nonnegative integers")
+      (none)))
+
+  (fn repair-config ((o RepairOptions) (cancel I64))
+    (@spec ((RepairOptions I64) -> SearchOptions))
+    (record-new SearchOptions (conflict-calls (. o conflict-calls))
+      (conflict-nodes (. o conflict-nodes)) (hitting-nodes (. o hitting-nodes))
+      (verification-calls (. o verification-calls)) (cancel cancel)))
+
+  (fn alignment-check ((a Arena) (out Outcome))
+    (@intent "An owned classification summary for exact subset caching")
+    (@spec ((Arena Outcome) -> Check))
+    (@alloc a)
+    (record-new Check (verdict (verdict out)) (complete (outcome-is-complete out))
+      (omissions (copy-omissions a (. (. out coverage) omitted)))
+      (termination (. out termination))))
+
+  (fn alignment-classify ((a Arena) (base AlignmentBase) (removed (List Int)) (cfg ReasonerConfig))
+    (@spec ((Arena AlignmentBase (List Int) ReasonerConfig) -> (Result Outcome Fault)))
+    (@alloc a)
+    (match (subset-decoded a base removed)
+      ((ok d) (match (prepare-decoded a d cfg)
+                ((ok p) (reason a p cfg))
+                ((error f) (error f))))
+      ((error f) (error f))))
+
+  (fn alignment-trial ((a Arena) (base AlignmentBase) (removed (List Int)) (cfg ReasonerConfig))
+    (@intent "One subset classification: retain only the owned summary, free all reasoning state")
+    (@spec ((Arena AlignmentBase (List Int) ReasonerConfig) -> Checked))
+    (@alloc a)
+    (let ((scratch (arena-new 16777216))
+          (res (match (alignment-classify scratch base removed cfg)
+                 ((ok out) (let ((summary (alignment-check a out)))
+                             (do (release-outcome out) (union-new Checked checked summary))))
+                 ((error f) (union-new Checked check-fault (copy-fault a f))))))
+      (do (arena-free scratch) res)))
+
+  (fn align-encoded ((a Arena) (enc Encoded) (imports (List IRI)) (sources (List IRI))
+                     (mapping-docs (List Bool)) (cfg ReasonerConfig) (repair Bool) (limits RepairOptions))
+    (@intent "The shared alignment service: full-merge verdict and optional minimal mapping repair search")
+    (@spec ((Arena Encoded (List IRI) (List IRI) (List Bool) ReasonerConfig Bool RepairOptions)
+             -> (Result AlignmentOutcome Fault)))
+    (@alloc a)
+    (if (cancel-requested (. cfg cancel-ptr))
+      (error (union-new Fault cancelled))
+      (match (repair-options-problem limits)
+        ((some why) (error (union-new Fault input-error why)))
+        ((none)
+          (let ((held (arena-new 16777216))
+                (res (match (alignment-base held enc imports sources mapping-docs)
+                       ((ok base) (align-base a base cfg repair limits))
+                       ((error f) (error (copy-fault a f))))))
+            (do (arena-free held) res))))))
+
+  (fn align-base ((a Arena) (base AlignmentBase) (cfg ReasonerConfig) (repair Bool) (limits RepairOptions))
+    (@spec ((Arena AlignmentBase ReasonerConfig Bool RepairOptions) -> (Result AlignmentOutcome Fault)))
+    (@alloc a)
+    (match (alignment-classify a base (list-new a Int) cfg)
+      ((ok out)
+        (let ((refs (list-new a AxiomRef)))
+          (do
+            (for-each (ref (. base mappings)) (list-push refs (copy-axiom-ref a ref)))
+            (if repair
+              (match (search a (cast Int (list-len refs)) (alignment-check a out)
+                       (repair-config limits (. cfg cancel-ptr))
+                       (fn ((removed (List Int))) (alignment-trial a base removed cfg)))
+                ((ok sr) (ok (record-new AlignmentOutcome (outcome out) (mappings refs) (repair (some sr)))))
+                ((error f) (do (release-outcome out) (error f))))
+              (ok (record-new AlignmentOutcome (outcome out) (mappings refs) (repair (none))))))))
+      ((error f) (error f))))
+
+  (fn run-align ((in Input) (o Options) (repair Bool) (limits RepairOptions))
+    (@intent "Align named fixed and mapping documents; all surfaces use align-encoded")
+    (@spec ((Input Options Bool RepairOptions) -> Run))
+    :c-name "howl_run_align"
+    (let ((a (arena-new 16777216)) (st (deref (input-state in))))
+      (match (options-problem o)
+        ((some why) (faulted a 'fault-invalid-options why (. o profile)))
+        ((none)
+          (match (repair-options-problem limits)
+            ((some why) (faulted a 'fault-invalid-options why (. o profile)))
+            ((none)
+              (match (. st failed)
+                ((some why) (faulted a 'fault-input-error (string-concat a "" why) (. o profile)))
+                ((none)
+                  (if (or (> (. st probe-docs) 0) (> (list-len (. st queries)) 0))
+                    (faulted a 'fault-input-error "alignment inputs cannot contain probe documents or queries" (. o profile))
+                    (match (align-encoded a (deref (. st enc)) (. st imports) (. st sources)
+                             (. st mapping-docs) (options-config o) repair limits)
+                      ((ok aligned) (alignment-finished a aligned))
+                      ((error f) (run-faulted a f "" (. o profile)))))))))))))
+
+  (fn alignment-finished ((a Arena) (aligned AlignmentOutcome))
+    (@spec ((Arena AlignmentOutcome) -> Run))
+    (let ((out (. aligned outcome))
+          (lines (report-lines a (. aligned outcome))))
+      (do
+        (match (. aligned repair)
+          ((some sr) (for-each (l (alignment-lines a (. aligned mappings) sr)) (list-push lines l)))
+          ((none) (do)))
+        (new-run a (record-new RunState
+          (arena a) (outcome (some out)) (fault 'fault-none) (message "")
+          (fault-profile (. out profile)) (verdict (verdict out)) (probing (no-probing a))
+          (mappings (. aligned mappings)) (repair (. aligned repair)) (lines lines))))))
+
   (fn new-run ((a Arena) (st RunState))
     (@intent "A Run handle over state stored in its own arena")
     (@spec ((Arena RunState) -> Run))
@@ -1320,6 +1483,7 @@
     (new-run a (record-new RunState
                  (arena a) (outcome (none)) (fault kind) (message message)
                  (fault-profile profile) (verdict 'verdict-inconclusive)
+                 (mappings (list-new a AxiomRef)) (repair (none))
                  (probing (no-probing a)) (lines (list-new a String)))))
 
   (fn run-classify ((in Input) (o Options))
@@ -1424,6 +1588,7 @@
     (new-run a (record-new RunState
                  (arena a) (outcome (none)) (fault 'fault-none) (message "")
                  (fault-profile (. p profile)) (verdict 'verdict-inconclusive)
+                 (mappings (list-new a AxiomRef)) (repair (none))
                  (probing p) (lines (answer-lines a p ran)))))
 
   (fn finished ((a Arena) (out Outcome) (p Probing) (asked Bool))
@@ -1436,6 +1601,7 @@
         (new-run a (record-new RunState
                      (arena a) (outcome (some out)) (fault 'fault-none) (message "")
                      (fault-profile (. out profile)) (verdict (verdict out))
+                     (mappings (list-new a AxiomRef)) (repair (none))
                      (probing p) (lines lines))))))
 
   (fn run-free ((r Run))
@@ -1838,4 +2004,172 @@
     (@spec ((Run Int) -> String))
     :c-name "howl_run_report_line"
     (match (list-get (. (run-state r) lines) i) ((some l) l) ((none) "")))
+  ;; M4 accessors are total, including faulted and ordinary classification runs.
+
+  (fn run-repair-requested ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_repair_requested"
+    (match (. (run-state r) repair) ((some _) true) ((none) false)))
+
+  (fn run-repair-complete ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_repair_complete"
+    (match (. (run-state r) repair) ((some sr) (. sr complete)) ((none) false)))
+
+  (fn run-already-coherent ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_already_coherent"
+    (match (. (run-state r) repair) ((some sr) (. sr already-coherent)) ((none) false)))
+
+  (fn run-unrepairable ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Bool))
+    :c-name "howl_run_unrepairable"
+    (match (. (run-state r) repair) ((some sr) (. sr unrepairable)) ((none) false)))
+
+  (fn run-mapping-len ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_mapping_len"
+    (cast Int (list-len (. (run-state r) mappings))))
+
+  (fn run-mapping-text ((r Run) (i Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_mapping_text"
+    (match (list-get (. (run-state r) mappings) i) ((some ref) (. ref text)) ((none) "")))
+
+  (fn run-mapping-source ((r Run) (i Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_mapping_source"
+    (match (list-get (. (run-state r) mappings) i)
+      ((some ref) (match (. ref source) ((some iri) (. iri value)) ((none) "")))
+      ((none) "")))
+
+  (fn run-repair-len ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_repair_len"
+    (match (. (run-state r) repair) ((some sr) (cast Int (list-len (. sr verified)))) ((none) 0)))
+
+  (fn run-repair-size ((r Run) (i Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_repair_size"
+    (match (. (run-state r) repair)
+      ((some sr) (match (list-get (. sr verified) i) ((some m) (cast Int (list-len (. m items)))) ((none) 0)))
+      ((none) 0)))
+
+  (fn run-repair-mapping ((r Run) (i Int) (j Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int Int) -> Int))
+    :c-name "howl_run_repair_mapping"
+    (match (. (run-state r) repair)
+      ((some sr) (match (list-get (. sr verified) i)
+        ((some m) (match (list-get (. m items) j) ((some k) k) ((none) -1))) ((none) -1)))
+      ((none) -1)))
+
+  (fn run-candidate-len ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_candidate_len"
+    (match (. (run-state r) repair) ((some sr) (cast Int (list-len (. sr candidates)))) ((none) 0)))
+
+  (fn run-candidate-size ((r Run) (i Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_candidate_size"
+    (match (. (run-state r) repair)
+      ((some sr) (match (list-get (. sr candidates) i) ((some m) (cast Int (list-len (. m removed)))) ((none) 0)))
+      ((none) 0)))
+
+  (fn run-candidate-mapping ((r Run) (i Int) (j Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int Int) -> Int))
+    :c-name "howl_run_candidate_mapping"
+    (match (. (run-state r) repair)
+      ((some sr) (match (list-get (. sr candidates) i)
+        ((some m) (match (list-get (. m removed) j) ((some k) k) ((none) -1))) ((none) -1)))
+      ((none) -1)))
+
+  (fn run-candidate-reason ((r Run) (i Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_candidate_reason"
+    (match (. (run-state r) repair)
+      ((some sr) (match (list-get (. sr candidates) i)
+        ((some c) (candidate-reason-text (. c reason))) ((none) "")))
+      ((none) "")))
+
+  (fn run-search-omission-len ((r Run))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run) -> Int))
+    :c-name "howl_run_search_omission_len"
+    (match (. (run-state r) repair) ((some sr) (cast Int (list-len (. sr omissions)))) ((none) 0)))
+
+  (fn run-search-omission ((r Run) (i Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> String))
+    :c-name "howl_run_search_omission"
+    (let ((st (run-state r)))
+      (match (. st repair)
+        ((some sr) (match (list-get (. sr omissions) i)
+          ((some om) (render-omission (. st arena) om)) ((none) "")))
+        ((none) ""))))
+
+  (fn run-search-phase-exhausted ((r Run) (phase Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> Bool))
+    :c-name "howl_run_search_phase_exhausted"
+    (match (. (run-state r) repair)
+      ((some sr) (cond
+        ((== phase 0) (. (. sr conflict-phase) exhausted))
+        ((== phase 1) (. (. sr hitting-phase) exhausted))
+        ((== phase 2) (. (. sr verification-phase) exhausted))
+        (else false)))
+      ((none) false)))
+
+  (fn run-search-phase-capped ((r Run) (phase Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> Bool))
+    :c-name "howl_run_search_phase_capped"
+    (match (. (run-state r) repair)
+      ((some sr) (cond
+        ((== phase 0) (. (. sr conflict-phase) capped))
+        ((== phase 1) (. (. sr hitting-phase) capped))
+        ((== phase 2) (. (. sr verification-phase) capped))
+        (else false)))
+      ((none) false)))
+
+  (fn run-search-phase-unresolved ((r Run) (phase Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> Bool))
+    :c-name "howl_run_search_phase_unresolved"
+    (match (. (run-state r) repair)
+      ((some sr) (cond
+        ((== phase 0) (. (. sr conflict-phase) unresolved))
+        ((== phase 1) (. (. sr hitting-phase) unresolved))
+        ((== phase 2) (. (. sr verification-phase) unresolved))
+        (else false)))
+      ((none) false)))
+
+  (fn run-search-count ((r Run) (metric Int))
+    (@intent "Read the alignment result without exposing engine storage")
+    (@spec ((Run Int) -> Int))
+    :c-name "howl_run_search_count"
+    (match (. (run-state r) repair)
+      ((some sr) (cond
+        ((== metric 0) (. (. sr counts) preflight-calls))
+        ((== metric 1) (. (. sr counts) conflict-calls))
+        ((== metric 2) (. (. sr counts) conflict-nodes))
+        ((== metric 3) (. (. sr counts) hitting-nodes))
+        ((== metric 4) (. (. sr counts) verification-calls))
+        ((== metric 5) (. (. sr counts) cache-hits))
+        (else 0)))
+      ((none) 0)))
+
 )

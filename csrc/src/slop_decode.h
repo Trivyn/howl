@@ -19,6 +19,7 @@
 
 typedef struct howl_decode_ListFault howl_decode_ListFault;
 typedef struct howl_decode_Stage0 howl_decode_Stage0;
+typedef struct howl_decode_TypedOccurrences howl_decode_TypedOccurrences;
 typedef struct howl_decode_Rebuilt howl_decode_Rebuilt;
 typedef struct howl_decode_IndividualTerm howl_decode_IndividualTerm;
 typedef struct howl_decode_NodeList howl_decode_NodeList;
@@ -31,6 +32,17 @@ typedef enum {
     howl_decode_LookupFault_lookup_missing,
     howl_decode_LookupFault_lookup_ambiguous
 } howl_decode_LookupFault;
+
+#ifndef SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
 
 #ifndef SLOP_LIST_SLOP_RDF_RDF_TERM_DEFINED
 #define SLOP_LIST_SLOP_RDF_RDF_TERM_DEFINED
@@ -178,6 +190,17 @@ typedef struct howl_decode_Stage0 howl_decode_Stage0;
 SLOP_OPTION_DEFINE(howl_decode_Stage0, slop_option_howl_decode_Stage0)
 #endif
 
+struct howl_decode_TypedOccurrences {
+    slop_list_int ids;
+    slop_list_int docs;
+};
+typedef struct howl_decode_TypedOccurrences howl_decode_TypedOccurrences;
+
+#ifndef SLOP_OPTION_HOWL_DECODE_TYPEDOCCURRENCES_DEFINED
+#define SLOP_OPTION_HOWL_DECODE_TYPEDOCCURRENCES_DEFINED
+SLOP_OPTION_DEFINE(howl_decode_TypedOccurrences, slop_option_howl_decode_TypedOccurrences)
+#endif
+
 struct howl_decode_Rebuilt {
     slop_list_howl_termstore_IdTriple triples;
     slop_list_int docs;
@@ -236,6 +259,7 @@ struct howl_decode_Stage1 {
     int64_t inert;
     slop_list_howl_types_Omission omitted;
     slop_list_int axiom_docs;
+    slop_list_int axiom_positions;
     slop_list_int omission_docs;
 };
 typedef struct howl_decode_Stage1 howl_decode_Stage1;
@@ -291,6 +315,8 @@ struct howl_decode_Decoding {
     slop_list_int docs;
     int64_t pos;
     slop_list_int adocs;
+    slop_list_int apos;
+    uint8_t positioned;
     slop_list_int udocs;
 };
 typedef struct howl_decode_Decoding howl_decode_Decoding;
@@ -483,7 +509,7 @@ int64_t howl_decode_vocab_id(slop_arena* arena, howl_termstore_TermStore dict, s
 slop_list_howl_types_Omission howl_decode_unresolved_imports(slop_arena* arena, slop_list_slop_rdf_rdf_IRI declared, slop_list_slop_rdf_rdf_IRI resolved);
 uint8_t howl_decode_typed_as(slop_rdf_rdf_Triple t, slop_string type_iri);
 slop_list_int howl_decode_typed_ids_in_order(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri);
-slop_list_int howl_decode_typed_docs_in_order(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri);
+howl_decode_TypedOccurrences howl_decode_typed_occurrences(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri);
 int64_t howl_decode_import_doc(slop_arena* arena, howl_termstore_Encoded doc, slop_rdf_rdf_IRI target);
 slop_list_int howl_decode_import_docs(slop_arena* arena, howl_termstore_Encoded doc, slop_list_howl_types_Omission oms);
 uint8_t howl_decode_logical_predicate(slop_string pv);
@@ -496,6 +522,7 @@ howl_termstore_TermStore howl_decode_annotated_store(slop_arena* arena, howl_ter
 int64_t howl_decode_term_id(howl_termstore_TermStore st, slop_rdf_rdf_Term t);
 slop_result_howl_termstore_IdTriple_string howl_decode_rebuild_one(slop_arena* arena, howl_termstore_TermStore st, slop_rdf_rdf_Term a, slop_rdf_rdf_Term src_pred, slop_rdf_rdf_Term prop_pred, slop_rdf_rdf_Term tgt_pred);
 howl_decode_Rebuilt howl_decode_rebuild_candidates(slop_arena* arena, howl_termstore_TermStore st, slop_list_int ax_subjs, slop_list_int ax_docs);
+slop_string howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d);
 slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore_IdTriple candidates, howl_termstore_Encoded doc);
 slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_arena* arena, slop_arena* scratch, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved);
 howl_owl2_RawConcept* howl_decode_box_concept(slop_arena* arena, howl_owl2_RawConcept c);
@@ -575,7 +602,9 @@ slop_list_string howl_decode_queried_predicates(slop_arena* arena);
 void howl_decode_push_axiom(howl_decode_Decoding* c, howl_owl2_RawAxiom ax);
 uint8_t howl_decode_keep_axiom(howl_decode_Decoding* c, howl_owl2_RawAxiom ax);
 uint8_t howl_decode_decode_triple(slop_arena* arena, howl_decode_Decoding* c, howl_termstore_IdTriple it, slop_rdf_rdf_Triple t);
+slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_positioned(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs);
 slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_with(slop_arena* arena, howl_termstore_TermStore ig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs);
+slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_detail(slop_arena* arena, howl_termstore_TermStore ig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs, uint8_t positioned);
 slop_list_int howl_decode_undeclared_docs(slop_arena* arena, slop_list_slop_rdf_rdf_IRI ps, slop_list_int docs, slop_list_howl_types_Omission oms);
 slop_option_slop_rdf_rdf_IRI howl_decode_undeclared_predicate(howl_owl2_Signature sig, slop_rdf_rdf_Triple t);
 slop_list_howl_types_Omission howl_decode_undeclared_omissions(slop_arena* arena, slop_list_slop_rdf_rdf_IRI ps, slop_list_string texts);
@@ -596,6 +625,8 @@ slop_map* howl_decode_negative_assertion_parts(slop_arena* arena, howl_termstore
 uint8_t howl_decode_negative_assertion_part(howl_termstore_IdTriple it, slop_map* nodes, slop_map* parts);
 int64_t howl_decode_property_kinds(howl_owl2_Signature sig, slop_rdf_rdf_IRI e);
 slop_option_string howl_decode_declaration_conflict(slop_arena* arena, howl_owl2_Signature sig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples);
+slop_list_u8 howl_decode_alignment_scaffolds(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples);
+slop_map* howl_decode_alignment_negative_roots(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples);
 
 #define howl_decode_CONCEPT_FUEL (64)
 
@@ -632,6 +663,11 @@ SLOP_OPTION_DEFINE(howl_types_Omission, slop_option_howl_types_Omission)
 #ifndef SLOP_OPTION_HOWL_DECODE_STAGE0_DEFINED
 #define SLOP_OPTION_HOWL_DECODE_STAGE0_DEFINED
 SLOP_OPTION_DEFINE(howl_decode_Stage0, slop_option_howl_decode_Stage0)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_DECODE_TYPEDOCCURRENCES_DEFINED
+#define SLOP_OPTION_HOWL_DECODE_TYPEDOCCURRENCES_DEFINED
+SLOP_OPTION_DEFINE(howl_decode_TypedOccurrences, slop_option_howl_decode_TypedOccurrences)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_DECODE_REBUILT_DEFINED
@@ -697,6 +733,11 @@ SLOP_OPTION_DEFINE(howl_decode_DataVocab, slop_option_howl_decode_DataVocab)
 #ifndef SLOP_OPTION_HOWL_DECODE_DATALEMMA_DEFINED
 #define SLOP_OPTION_HOWL_DECODE_DATALEMMA_DEFINED
 SLOP_OPTION_DEFINE(howl_decode_DataLemma, slop_option_howl_decode_DataLemma)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
 

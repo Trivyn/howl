@@ -1,0 +1,8 @@
+# Two conflicts {a,b} and {b,c}; minimal repairs are {b}, {a,c}.
+@prefix : <urn:howl:alignment:test:> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+:A a owl:Class ; owl:disjointWith :D .
+:E a owl:Class ; owl:disjointWith :D .
+:D a owl:Class .
+:X a owl:Class .

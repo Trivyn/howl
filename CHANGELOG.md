@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Add M4 alignment checks and source-aware minimal mapping repair through the CLI, C, and Rust.
+  Search results distinguish verified repairs, unverified candidates, and incomplete enumeration.
+  Source ontologies stay fixed and inputs are never rewritten.
+- Preserve identical reified/asserted axiom occurrences across documents so a mapping removal
+  cannot remove a fixed source axiom. Subset trials retain declarations and recompute contextual
+  preprocessing and profile gates.
+
 ## 0.7.1 — 2026-10-26
 
 Turtle that escapes or punctuates a prefixed name's local part now parses, so MITRE D3FEND loads.
