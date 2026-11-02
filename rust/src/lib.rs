@@ -36,6 +36,8 @@
 //! reports certify this crate's [`Report::lines`] byte for byte.
 
 pub mod ffi;
+pub mod alignment;
+pub use alignment::{AlignmentInput, AlignmentReport, AxiomRef, RepairCandidate, RepairOptions, RepairSearch, SearchCounts, SearchPhase, SearchPhases};
 
 // The engine's C references slop-rdf and the slop runtime; these keep
 // their native archives on the link line.

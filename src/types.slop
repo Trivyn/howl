@@ -76,6 +76,7 @@
     copy-causes copy-strings cause-of variant-cause reason-rank
     copy-node
     copy-role
+    copy-axiom-ref
     copy-input-ref
     copy-omissions
     copy-fault
@@ -510,8 +511,8 @@
   ;;   source : the document the axiom was read from, so imports stay
   ;;            distinguishable. OPTIONAL, because the frozen port
   ;;            flattens every document into one unlabelled buffer and
-  ;;            the information is simply not there (§8.5 A1). Nothing
-  ;;            populates it yet, so identity is text alone. An omission's
+  ;;            the information is simply not there (§8.5 A1). M4's named
+  ;;            alignment documents populate it for removal identity. An omission's
   ;;            document reaches the API through Coverage.origins instead,
   ;;            which leaves this identity, and so the canonical order,
   ;;            dedup and hash, untouched.

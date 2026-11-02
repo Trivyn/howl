@@ -14,6 +14,8 @@
 #include "slop_report.h"
 #include "slop_probe.h"
 #include "slop_locality.h"
+#include "slop_aligninput.h"
+#include "slop_repair.h"
 #include "slop_owl2.h"
 #include "slop_types.h"
 #include "slop_normalize.h"
@@ -43,6 +45,8 @@ typedef struct howl_Input howl_Input;
 typedef struct howl_Run howl_Run;
 typedef struct howl_InputState howl_InputState;
 typedef struct howl_Options howl_Options;
+typedef struct howl_RepairOptions howl_RepairOptions;
+typedef struct howl_AlignmentOutcome howl_AlignmentOutcome;
 typedef struct howl_TermIn howl_TermIn;
 typedef struct howl_TurtleResult howl_TurtleResult;
 typedef struct howl_RunState howl_RunState;
@@ -64,6 +68,17 @@ typedef enum {
 #ifndef SLOP_OPTION_LIST_STRING_DEFINED
 #define SLOP_OPTION_LIST_STRING_DEFINED
 SLOP_OPTION_DEFINE(slop_list_string, slop_option_list_string)
+#endif
+
+#ifndef SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_DEFINED
+#define SLOP_LIST_U8_IMPL_DEFINED
+SLOP_LIST_DEFINE(uint8_t, slop_list_u8)
+#endif
+
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
 #endif
 
 #ifndef SLOP_LIST_HOWL_TYPES_NORMAXIOM_DEFINED
@@ -126,6 +141,12 @@ SLOP_LIST_DEFINE(howl_types_Profile, slop_list_howl_types_Profile)
 SLOP_LIST_DEFINE(howl_probe_Query, slop_list_howl_probe_Query)
 #endif
 
+#ifndef SLOP_LIST_HOWL_TYPES_AXIOMREF_DEFINED
+#define SLOP_LIST_HOWL_TYPES_AXIOMREF_DEFINED
+#define SLOP_LIST_HOWL_TYPES_AXIOMREF_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_types_AxiomRef, slop_list_howl_types_AxiomRef)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_NORMAXIOM_DEFINED
 SLOP_OPTION_DEFINE(howl_types_NormAxiom, slop_option_howl_types_NormAxiom)
@@ -174,6 +195,16 @@ SLOP_OPTION_DEFINE(howl_types_Profile, slop_option_howl_types_Profile)
 #ifndef SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
 #define SLOP_OPTION_HOWL_PROBE_QUERY_DEFINED
 SLOP_OPTION_DEFINE(howl_probe_Query, slop_option_howl_probe_Query)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_AXIOMREF_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_AXIOMREF_DEFINED
+SLOP_OPTION_DEFINE(howl_types_AxiomRef, slop_option_howl_types_AxiomRef)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_REPAIR_SEARCHRESULT_DEFINED
+#define SLOP_OPTION_HOWL_REPAIR_SEARCHRESULT_DEFINED
+SLOP_OPTION_DEFINE(howl_repair_SearchResult, slop_option_howl_repair_SearchResult)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_TYPES_OUTCOME_DEFINED
@@ -262,6 +293,8 @@ struct howl_InputState {
     howl_termstore_Encoded* enc;
     slop_list_slop_rdf_rdf_IRI imports;
     int64_t documents;
+    slop_list_slop_rdf_rdf_IRI sources;
+    slop_list_u8 mapping_docs;
     howl_termstore_Encoded* probes;
     int64_t probe_docs;
     slop_list_howl_probe_Query queries;
@@ -286,6 +319,31 @@ typedef struct howl_Options howl_Options;
 #ifndef SLOP_OPTION_HOWL_OPTIONS_DEFINED
 #define SLOP_OPTION_HOWL_OPTIONS_DEFINED
 SLOP_OPTION_DEFINE(howl_Options, slop_option_howl_Options)
+#endif
+
+struct howl_RepairOptions {
+    int64_t conflict_calls;
+    int64_t conflict_nodes;
+    int64_t hitting_nodes;
+    int64_t verification_calls;
+};
+typedef struct howl_RepairOptions howl_RepairOptions;
+
+#ifndef SLOP_OPTION_HOWL_REPAIROPTIONS_DEFINED
+#define SLOP_OPTION_HOWL_REPAIROPTIONS_DEFINED
+SLOP_OPTION_DEFINE(howl_RepairOptions, slop_option_howl_RepairOptions)
+#endif
+
+struct howl_AlignmentOutcome {
+    howl_types_Outcome outcome;
+    slop_list_howl_types_AxiomRef mappings;
+    slop_option_howl_repair_SearchResult repair;
+};
+typedef struct howl_AlignmentOutcome howl_AlignmentOutcome;
+
+#ifndef SLOP_OPTION_HOWL_ALIGNMENTOUTCOME_DEFINED
+#define SLOP_OPTION_HOWL_ALIGNMENTOUTCOME_DEFINED
+SLOP_OPTION_DEFINE(howl_AlignmentOutcome, slop_option_howl_AlignmentOutcome)
 #endif
 
 struct howl_TermIn {
@@ -323,6 +381,8 @@ struct howl_RunState {
     howl_types_Profile fault_profile;
     howl_types_Verdict verdict;
     howl_probe_Probing probing;
+    slop_list_howl_types_AxiomRef mappings;
+    slop_option_howl_repair_SearchResult repair;
     slop_list_string lines;
 };
 typedef struct howl_RunState howl_RunState;
@@ -416,6 +476,11 @@ typedef struct { bool is_ok; union { howl_ModulePrepared ok; howl_types_Fault er
 typedef struct { bool is_ok; union { howl_probe_Probing ok; howl_types_Fault err; } data; } slop_result_howl_probe_Probing_howl_types_Fault;
 #endif
 
+#ifndef SLOP_RESULT_HOWL_ALIGNMENTOUTCOME_HOWL_TYPES_FAULT_DEFINED
+#define SLOP_RESULT_HOWL_ALIGNMENTOUTCOME_HOWL_TYPES_FAULT_DEFINED
+typedef struct { bool is_ok; union { howl_AlignmentOutcome ok; howl_types_Fault err; } data; } slop_result_howl_AlignmentOutcome_howl_types_Fault;
+#endif
+
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_decode(slop_arena* arena, slop_list_slop_rdf_rdf_Triple triples, slop_list_slop_rdf_rdf_IRI imports_resolved);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_decode_from(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_own_decoded(slop_arena* arena, slop_result_howl_normalize_Decoded_howl_types_Fault r);
@@ -479,6 +544,9 @@ uint8_t howl_add_triple_to(howl_Input in, uint8_t probe, howl_TermIn s, howl_Ter
 howl_TurtleResult howl_input_add_turtle(howl_Input in, slop_string text);
 howl_TurtleResult howl_input_add_probe_turtle(howl_Input in, slop_string text);
 howl_TurtleResult howl_add_turtle_to(howl_Input in, uint8_t probe, slop_string text);
+uint8_t howl_source_free(slop_list_slop_rdf_rdf_IRI sources, int64_t except, slop_string source);
+uint8_t howl_input_source_available(howl_Input in, slop_string source);
+uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping);
 void howl_input_attest_import(howl_Input in, slop_string iri);
 void howl_input_ask_unsatisfiable(howl_Input in, slop_string cls);
 void howl_input_ask_subsumed(howl_Input in, slop_string sub, slop_string sup);
@@ -486,6 +554,16 @@ void howl_ask(howl_Input in, howl_probe_QueryKind kind, slop_string sub, slop_st
 howl_Options howl_default_options(void);
 slop_option_string howl_options_problem(howl_Options o);
 howl_types_ReasonerConfig howl_options_config(howl_Options o);
+howl_RepairOptions howl_default_repair_options(void);
+slop_option_string howl_repair_options_problem(howl_RepairOptions o);
+howl_repair_SearchOptions howl_repair_config(howl_RepairOptions o, int64_t cancel);
+howl_repair_Check howl_alignment_check(slop_arena* a, howl_types_Outcome out);
+slop_result_howl_types_Outcome_howl_types_Fault howl_alignment_classify(slop_arena* a, howl_aligninput_AlignmentBase base, slop_list_int removed, howl_types_ReasonerConfig cfg);
+howl_repair_Checked howl_alignment_trial(slop_arena* a, howl_aligninput_AlignmentBase base, slop_list_int removed, howl_types_ReasonerConfig cfg);
+slop_result_howl_AlignmentOutcome_howl_types_Fault howl_align_encoded(slop_arena* a, howl_termstore_Encoded enc, slop_list_slop_rdf_rdf_IRI imports, slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs, howl_types_ReasonerConfig cfg, uint8_t repair, howl_RepairOptions limits);
+slop_result_howl_AlignmentOutcome_howl_types_Fault howl_align_base(slop_arena* a, howl_aligninput_AlignmentBase base, howl_types_ReasonerConfig cfg, uint8_t repair, howl_RepairOptions limits);
+howl_Run howl_run_align(howl_Input in, howl_Options o, uint8_t repair, howl_RepairOptions limits);
+howl_Run howl_alignment_finished(slop_arena* a, howl_AlignmentOutcome aligned);
 howl_Run howl_new_run(slop_arena* a, howl_RunState st);
 howl_Run howl_faulted(slop_arena* a, howl_FaultKind kind, slop_string message, howl_types_Profile profile);
 howl_Run howl_run_classify(howl_Input in, howl_Options o);
@@ -547,6 +625,26 @@ howl_DocumentSource howl_run_probe_omission_source(howl_Run r, int64_t i);
 int64_t howl_run_probe_omission_document(howl_Run r, int64_t i);
 int64_t howl_run_report_len(howl_Run r);
 slop_string howl_run_report_line(howl_Run r, int64_t i);
+uint8_t howl_run_repair_requested(howl_Run r);
+uint8_t howl_run_repair_complete(howl_Run r);
+uint8_t howl_run_already_coherent(howl_Run r);
+uint8_t howl_run_unrepairable(howl_Run r);
+int64_t howl_run_mapping_len(howl_Run r);
+slop_string howl_run_mapping_text(howl_Run r, int64_t i);
+slop_string howl_run_mapping_source(howl_Run r, int64_t i);
+int64_t howl_run_repair_len(howl_Run r);
+int64_t howl_run_repair_size(howl_Run r, int64_t i);
+int64_t howl_run_repair_mapping(howl_Run r, int64_t i, int64_t j);
+int64_t howl_run_candidate_len(howl_Run r);
+int64_t howl_run_candidate_size(howl_Run r, int64_t i);
+int64_t howl_run_candidate_mapping(howl_Run r, int64_t i, int64_t j);
+slop_string howl_run_candidate_reason(howl_Run r, int64_t i);
+int64_t howl_run_search_omission_len(howl_Run r);
+slop_string howl_run_search_omission(howl_Run r, int64_t i);
+uint8_t howl_run_search_phase_exhausted(howl_Run r, int64_t phase);
+uint8_t howl_run_search_phase_capped(howl_Run r, int64_t phase);
+uint8_t howl_run_search_phase_unresolved(howl_Run r, int64_t phase);
+int64_t howl_run_search_count(howl_Run r, int64_t metric);
 
 #ifndef SLOP_OPTION_HOWL_TYPES_NORMAXIOM_DEFINED
 #define SLOP_OPTION_HOWL_TYPES_NORMAXIOM_DEFINED
@@ -648,6 +746,11 @@ SLOP_OPTION_DEFINE(howl_Input, slop_option_howl_Input)
 SLOP_OPTION_DEFINE(howl_Run, slop_option_howl_Run)
 #endif
 
+#ifndef SLOP_OPTION_U8_DEFINED
+#define SLOP_OPTION_U8_DEFINED
+SLOP_OPTION_DEFINE(uint8_t, slop_option_u8)
+#endif
+
 #ifndef SLOP_OPTION_HOWL_INPUTSTATE_DEFINED
 #define SLOP_OPTION_HOWL_INPUTSTATE_DEFINED
 SLOP_OPTION_DEFINE(howl_InputState, slop_option_howl_InputState)
@@ -656,6 +759,26 @@ SLOP_OPTION_DEFINE(howl_InputState, slop_option_howl_InputState)
 #ifndef SLOP_OPTION_HOWL_OPTIONS_DEFINED
 #define SLOP_OPTION_HOWL_OPTIONS_DEFINED
 SLOP_OPTION_DEFINE(howl_Options, slop_option_howl_Options)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_REPAIROPTIONS_DEFINED
+#define SLOP_OPTION_HOWL_REPAIROPTIONS_DEFINED
+SLOP_OPTION_DEFINE(howl_RepairOptions, slop_option_howl_RepairOptions)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_TYPES_AXIOMREF_DEFINED
+#define SLOP_OPTION_HOWL_TYPES_AXIOMREF_DEFINED
+SLOP_OPTION_DEFINE(howl_types_AxiomRef, slop_option_howl_types_AxiomRef)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_REPAIR_SEARCHRESULT_DEFINED
+#define SLOP_OPTION_HOWL_REPAIR_SEARCHRESULT_DEFINED
+SLOP_OPTION_DEFINE(howl_repair_SearchResult, slop_option_howl_repair_SearchResult)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_ALIGNMENTOUTCOME_DEFINED
+#define SLOP_OPTION_HOWL_ALIGNMENTOUTCOME_DEFINED
+SLOP_OPTION_DEFINE(howl_AlignmentOutcome, slop_option_howl_AlignmentOutcome)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_TERMIN_DEFINED

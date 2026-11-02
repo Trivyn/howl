@@ -46,10 +46,10 @@ RUNTIME = csrc/runtime
 BIN     = build
 OBJ     = $(BIN)/obj
 
-# slop_main.c and slop_test.c each define main(), so they are excluded
-# from the shared set and linked in only by their own target.
+# Entry points and CLI platform helpers stay out of the shared library.
 ALL_SRCS    := $(wildcard $(CSRC)/*.c)
-SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c, $(ALL_SRCS))
+SHARED_SRCS := $(filter-out $(CSRC)/slop_main.c $(CSRC)/slop_test.c $(CSRC)/slop_aligncli.c, $(ALL_SRCS))
+CLI_SRCS := $(CSRC)/slop_main.c $(CSRC)/slop_aligncli.c
 SHARED_OBJS := $(patsubst $(CSRC)/%.c,$(OBJ)/%.o,$(SHARED_SRCS))
 
 .PHONY: modules answers all cli lib test test-bin diff-elim diff-elim-corpus diff-elim-long clean release dist csrc slop-build verify corpus census project project-verify example \
@@ -97,10 +97,29 @@ c-example: lib
 	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
 	  -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) -Iinclude examples/c/api_test.c $(LDFLAGS) -o $(BIN)/howl-api-test
 	$(BIN)/howl-api-test corpus/fixtures/v0/*.ttl corpus/fixtures/el++/*.ttl corpus/fixtures/hazards/*.ttl corpus/fixtures/imports/root.ttl
+	$(CC) -O1 -g -fsanitize=address,undefined -fno-sanitize=function -fno-sanitize-recover=undefined \
+	  -fno-omit-frame-pointer -w \
+	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
+	  -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) -Iinclude examples/c/alignment_test.c $(LDFLAGS) -o $(BIN)/howl-alignment-api-test
+	$(BIN)/howl-alignment-api-test
+
+.PHONY: alignment-test alignment-oracle alignment-bench
+alignment-test: cli
+	cd tests/aligninput && slop build
+	$(BIN)/howl-aligninput-test
+	cd tests/repair && slop build
+	$(BIN)/howl-repair-test
+	python3 corpus/alignment.py test
+
+alignment-oracle: oracle
+	python3 corpus/alignment.py oracle
+
+alignment-bench: cli oracle
+	python3 corpus/alignment.py bench
 
 cli: $(BIN)
 	@echo "Building howl..."
-	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(CLI_EXTRA) $(LDFLAGS) -o $(BIN)/howl
+	$(CC) $(CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CLI_SRCS) $(CLI_EXTRA) $(LDFLAGS) -o $(BIN)/howl
 	@echo "  -> $(BIN)/howl"
 
 # NO CLOCK UNDER src/. HOWL never consults a clock inside a reasoning call
@@ -161,7 +180,7 @@ golden-asan: $(BIN)
 	  -Wno-unused-function -Wno-unused-variable -Wno-return-type -Wno-pointer-sign \
 	  -DSLOP_ARENA_NO_CAP -DSLOP_INTERN_THREADSAFE -DSLOP_INTERN_BUCKET_COUNT=65536 \
 	  -DHOWL_VERSION=\"$(HOWL_VERSION)\" -I$(RUNTIME) -I$(CSRC) \
-	  $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/howl-asan
+	  $(SHARED_SRCS) $(CLI_SRCS) $(LDFLAGS) -o $(BIN)/howl-asan
 	ASAN_OPTIONS=detect_leaks=0:exitcode=99 $(MAKE) --no-print-directory golden \
 	  HOWL=./$(BIN)/howl-asan GOLDEN_CORPUS="ro-2025-12-17 obi-2026-07-27" GOLDEN_ELPP_CORPUS="ro-2025-12-17 obi-2026-07-27"
 
@@ -214,14 +233,14 @@ release: clean cli
 # writes bench/results.txt (commit it). Needs `make oracle` and `make materialize`.
 bench: oracle
 	@mkdir -p $(BIN)/bench
-	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/bench/howl
+	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CLI_SRCS) $(LDFLAGS) -o $(BIN)/bench/howl
 	HOWL=$(BIN)/bench/howl BENCH_CFLAGS='$(RELEASE_CFLAGS)' python3 bench/bench.py run
 
 # The el++ rung on its projections (bench/results-el++.txt): informational,
 # every entry timed and reported, none gated.
 bench-el++: oracle
 	@mkdir -p $(BIN)/bench
-	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CSRC)/slop_main.c $(LDFLAGS) -o $(BIN)/bench/howl
+	$(CC) $(RELEASE_CFLAGS) -I$(RUNTIME) -I$(CSRC) $(SHARED_SRCS) $(CLI_SRCS) $(LDFLAGS) -o $(BIN)/bench/howl
 	HOWL=$(BIN)/bench/howl BENCH_CFLAGS='$(RELEASE_CFLAGS)' python3 bench/bench.py --profile el++ run
 
 # Cheap: results.txt still names the certified reports, and its verdicts follow.
@@ -746,7 +765,7 @@ dist:
 SHARED_MODULES := common file index list rdf serialize_ttl strlib thread ttl vocab xsd
 # The CLI's and the test harness's entry points are not library code; the
 # crate's build.rs compiles every .c it is given.
-ENTRY_MODULES  := main test
+ENTRY_MODULES  := main aligncli test
 
 CRATE_SKIP  := $(SHARED_MODULES) $(ENTRY_MODULES)
 CRATE_ALL_C := $(wildcard $(CSRC)/*.c)

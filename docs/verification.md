@@ -13,14 +13,14 @@ contracts is in [SPEC §7](../SPEC.md#7-verification--contracts).
 
 | Check | Result |
 |---|---|
-| `make verify` | 90 functions verified, 0 failing, 0 unknown (last recorded 2026-10-08) |
+| `make verify` | 206 functions verified, 0 failing, 0 unknown (last recorded 2026-10-27) |
 | `make example` | 103 executable examples, all passing |
 | `el++` rule contracts under mutation | 112 mutants: 111 refuted, 1 unknown, none verified |
 
 CI runs `make verify`, but the step is non-blocking.
 
-This page covers the `el` and `el++` engines. The `sriq` engine's contracts, and what its tests hold
-instead, are listed per component in SPEC's verification table under
+This page covers the `el` and `el++` engines and M4 alignment repair. The `sriq` engine's contracts,
+and what its tests hold instead, are listed per component in SPEC's verification table under
 [§7](../SPEC.md#7-verification--contracts).
 
 ## What is proved
@@ -70,6 +70,23 @@ partner, and every partner's firing head is returned. Completeness is stated ove
 These contracts were tested with 112 mutants. 111 were refuted, each by exactly the contract it
 targets. One of those needs `make verify`'s 120-second timeout. The remaining mutant came back
 unknown. None verified.
+
+## M4 alignment repair
+
+The repair search's local contracts check set membership, removal and difference, default
+allowances, that repair options are refused exactly when a limit is negative, and the predicates
+that distinguish complete coherence from definitive incoherence. They do not prove
+the conflict enumeration or minimal-transversal algorithm complete.
+
+`make alignment-test` checks those algorithms against an independent powerset reference for all
+256 families of possible conflicts over three mappings, plus budget sweeps, unknown outcomes,
+partial positive results, cancellation, and faults. Front-end tests check source ownership,
+annotation identity, fixed duplicates, structural RDF removal, and contextual data preprocessing.
+CLI tests require the entire expected repair family and identical output across worker counts.
+`make alignment-oracle` checks all eight subsets of the small integration fixture with HermiT;
+`make alignment-bench` repeats that independent check on pinned full BFO/CCO and measures complete
+repair enumeration. The proof argument and exact gate are in the M4 implementation contract in
+[SPEC §12](../SPEC.md).
 
 ## What is owed
 

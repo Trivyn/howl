@@ -4070,7 +4070,7 @@ GROWL's `Delta`.
 ;;                  The CLI's align-check (M4) is to populate it — it reads three separate
 ;;                  files — so source-sensitive repair works there and degrades to text-only
 ;;                  identity through the port. A real capability difference, not a formatting
-;;                  one. Nothing populates it yet. An omission's DOCUMENT reaches HOWL's own
+;;                  one. M4 populates it for named alignment documents. An omission's DOCUMENT reaches HOWL's own
 ;;                  API beside the coverage instead (`Coverage.origins`, §8.4), never inside
 ;;                  this identity, so ordering, dedup and the hash are unchanged by it.
 ;;   - `text`     : the axiom in canonical OWL functional syntax, with the §6.3 step-1
@@ -5714,8 +5714,7 @@ A1 has a partial workaround worth noting: `AxiomRef.source` is `Option`al, and t
 it** because `align-check` reads three separate files and therefore has document identity the port
 discards. So source-sensitive repair works from the CLI before A1 lands, and identity degrades to
 canonical text alone through the port. That is a real difference in capability between the two
-surfaces, stated rather than papered over. (align-check is M4: until it is built, nothing populates
-`source`.) HOWL's own API already has document identity, because each `add` call is a document. Each
+surfaces, stated rather than papered over. (M4 populates `source` for alignment removal identities.) HOWL's own API already has document identity, because each `add` call is a document. Each
 omission's document is reported through it ([§8.4](#84-the-moose-tboxreasoner-port), issue #67).
 That is the API, not the port: A1 is still what the port needs.
 
@@ -6406,7 +6405,7 @@ flowchart TB
   > |---|---|
   > | `repairs` | the inclusion-minimal repairs found, canonically ordered |
   > | `coverage` / `termination` | as [§6.2](#62-data-model), but for the *search*. **`complete` is the conjunction of all four phases**, not just the first: (i) minimal-justification enumeration exhaustive, (ii) hitting-set enumeration exhaustive, (iii) candidate-verification queue drained, (iv) every classification used to establish repairhood or minimality itself `complete`. Any phase capped ⇒ the whole search is incomplete |
-  > | `unrepairable-by-mappings` | set when the merged theory is incoherent with **all** mappings removed, i.e. a source ontology is already incoherent and no mapping-only repair exists |
+  > | `unrepairable-by-mappings` | set when the merged theory is incoherent with **all** mappings removed, i.e. the fixed union is incoherent and no mapping-only repair exists (even if its sources are individually coherent) |
   > | `already-coherent` | set when the merge needs no repair at all |
   >
   > `already-coherent` exists so that `repairs` never has to carry the ambiguity: mathematically the
@@ -6415,8 +6414,9 @@ flowchart TB
   > `[]` for "found nothing yet". With the flag, `repairs` is `[]` in both cases and the flag says
   > which. M4 carries a fixture for it.
   >
-  > Only a `complete` search may describe its output as *all* minimal repairs; anything else reports
-  > *candidates*, which is a different thing and must be labelled as one. **A hitting set over an
+  > Only a `complete` search may describe its output as *all* minimal repairs. An incomplete search
+  > may return **individually verified minimal repairs**, with family completeness false, separately
+  > from **unverified candidates**. **A hitting set over an
   > incomplete set of justifications is not a repair** — it need not hit a conflict that was never
   > enumerated, so applying it can leave the merged theory incoherent. Promotion from candidate to
   > repair requires two verifications, neither optional:
@@ -6441,6 +6441,67 @@ flowchart TB
   > and so some repair to exist, is a claim about absence. The M4 test asserts the **entire expected repair family**, not one member —
   > "returns a correct minimal repair" is satisfiable by an implementation that stops after the
   > first, which is precisely the thing that needs testing.
+
+  **M4 implementation contract (accepted 2026-10-27).** The graph is authoritative:
+  Requirement `https://moosedev.dev/kg/Requirement/ffccd05e-09c8-40fa-9843-c784cb82dcb9` and
+  ArchitecturalDecision `https://moosedev.dev/kg/ArchitecturalDecision/7a3f3f63-daeb-417e-afb6-d902f3803785`.
+
+  Let `B` be the fixed sources and imports, and `M` the canonically indexed removable mapping
+  axioms. A conflict is an inclusion-minimal `J ⊆ M` such that `B ∪ J` is incoherent. This is a
+  justification **relative to B**, sufficient for all mapping-only repairs; full axiom explanations
+  stay post-M4. Preserve the original signature and declarations in every subset.
+
+  - **Input and identity:** named documents have unique absolute source IRIs and fixed/mapping
+    roles. Only completely decoded logical OWL axioms become removal units. Unsupported RDF and
+    data forms without OWL axiom identity remain explicit coverage gaps. Declarations, imports,
+    annotations and fixed logical axioms are never removal units. Annotation variants collapse
+    within a source; equivalent occurrences in distinct sources remain distinct. The front end
+    retains axiom anchor ownership and removes only scaffolding exclusively owned by removed
+    axioms, then recomputes decoding/data preprocessing, the gate and normalization. Reification
+    deduplication includes source document identity.
+  - **Oracle and search:** exact subset results are cached. A definitive incoherence can drive
+    search; coherence needs empty omissions and fixpoint. Conflicts are certified with a complete
+    incoherent retained set and complete coherent single-deletion checks. Deterministic block
+    deletion shrinks conflicts. An exclusion tree visits sets by cardinality then lexicographic
+    index order, branching on each member of a certified conflict. Hitting-set DFS branches on
+    the first unhit conflict and emits only inclusion-minimal transversals. Verification requires
+    complete coherence after removal and complete incoherence for every single reinsertion.
+    If conflict discovery is incomplete and B is completely coherent, verification first tries
+    minimizing the remove-all candidate. Unknown classifications never count as coherent.
+  - **Why exhaustive:** for any distinct minimal conflict K, a discovered minimal conflict J has
+    a member outside K; excluding that member leaves K in a child. Thus exhausting the exclusion
+    tree discovers all minimal conflicts. Repairs are exactly the hitting sets of those conflicts;
+    minimal transversal enumeration plus independent candidate checks establishes the entire
+    minimal repair family. Single-deletion/reinsertion checks suffice because incoherence is
+    monotone over the retained fixed signature.
+  - **Deterministic budgets:** defaults are 128 conflict classification cache misses, 100,000
+    conflict child attempts, 100,000 hitting-set child attempts, and 128 verification cache misses.
+    Preflight classifies the merge and fixed background at most once each. Charge child attempts
+    before allocation, duplicates included; cache hits do not spend classification allowances.
+    Zero is valid; negatives are refused. Each classification also keeps the existing round and
+    engine bounds. Discovery caps do not consume verification allowances. Cancellation returns
+    a fault without a result; the engine never reads a clock.
+  - **Interfaces:** `align-encoded` is shared by CLI, generated C (`howl_run_align`) and Rust
+    (`Reasoner::align` / `align_cancellable`). Named input documents are added through
+    `AlignmentInput` in Rust or named with `howl_input_set_document` in C. `RepairOptions` is
+    additive; existing `Options` and opaque handle layouts are unchanged. The original merge's
+    verdict determines CLI exit status, even when a repair is found. No input file is rewritten.
+    The consumer-owned port adapter and M3 emission are separate work.
+  - **CLI:** `align-check LEFT RIGHT MAPPINGS [--repair] [-I FILE]...`, with existing profile,
+    worker, strictness and round flags. `--left-source`, `--right-source`, `--mapping-source`
+    override default absolute file IRIs. Search options are `--conflict-calls`, `--conflict-nodes`,
+    `--hitting-nodes`, `--verification-calls`. The `howl-repair 1` block carries source-aware
+    mapping identities, verified repairs, separately labeled candidates, search omissions,
+    phase exhaustion/caps/unresolved checks, work counts and terminal flags. Timing and peak
+    memory are stderr-only.
+  - **Acceptance:** `make alignment-test`, `make alignment-oracle`, C/Rust API tests, existing
+    regression and verification gates. `make alignment-bench` uses pinned full BFO/CCO under
+    explicit sriq at W=4, with 32 mappings, two overlapping conflicts, and repairs of cardinality
+    one and two. HermiT checks all eight subsets of the three conflict-bearing mappings; the
+    other 29 mappings are tautological subclass axioms. One warm-up, then three measured runs:
+    median ≤600 seconds and every peak ≤8192 MiB. The benchmark records source/mapping/binary/
+    report hashes and verifies every timed repair family before recording success.
+
 - **M5 — `sriq` (`--profile sriq`, [§5.5](#55-the-sriq-calculus)).** The SRIQ object fragment
   with an ABox, on [Sim12]'s chain elimination and [TGH21]'s calculus.
 
@@ -6624,9 +6685,10 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
    rule ([§5.2](#52-the-exact-v0-language)). Concrete domains stay out; the
    consumer partitions datatype axioms and keeps a told-coherence side-check rather than HOWL
    growing a concrete domain. Revisit only if a later consumer's census differs.
-4. **Justification computation.** Black-box (repeated classification over axiom subsets) vs.
-   glass-box (track provenance in `Derived`). Glass-box is faster for repair but complicates the
-   soundness contracts. **Stays open, but design for widening:** the port's out-of-profile and
+4. **Justification computation.** **M4 chooses black-box classification** to enumerate minimal
+   mapping conflicts relative to fixed sources. It does not minimize source axioms or add full
+   source-axiom explanations; those remain post-M4. Tracking provenance in `Derived` would require
+   changes to all three calculi and their contracts. **Design for widening:** the port's out-of-profile and
    evidence fields are opaque descriptions today, sized to one consumer — yet steward-facing
    ratification is the natural consumer of MUPS ("*these two delta axioms conflict with this
    committed disjointness*" beating "*your delta broke something*"). Keep the report shape able to

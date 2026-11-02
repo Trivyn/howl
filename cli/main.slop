@@ -86,6 +86,7 @@
   (import ttl (parse-ttl-file-for-each-triple))
   (import vocab (RDF_TYPE OWL_ONTOLOGY))
   (import canon (string-cmp))
+  (import aligncli (align-main))
 
   (ffi "string.h"
     (strlen ((s (Ptr U8))) U64))
@@ -243,6 +244,10 @@
       (println "  howl validate    <ontology.ttl> [--profile P] [--strict] [--no-imports] [-I FILE]...")
       (println "  howl classify    <ontology.ttl>          (--reduce, --emit: not until M3)")
       (println "  howl ask         <ontology.ttl> [--profile P] [-I FILE]... [--probe FILE]... --ask-unsat C | --ask-sub A B ...")
+      (println "  howl align-check <left.ttl> <right.ttl> <mappings.ttl> [--repair] [--report]")
+      (println "                   [--left-source IRI] [--right-source IRI] [--mapping-source IRI]")
+      (println "                   [--conflict-calls N] [--conflict-nodes N] [--hitting-nodes N]")
+      (println "                   [--verification-calls N] [--profile P] [-I FILE]...")
       (println "  howl --version")
       (println "")
       (println "  -I FILE    attest FILE as a declared owl:Imports target; repeatable")
@@ -623,6 +628,8 @@
     ;; the CI line believes the run refused. Unknown commands, unknown
     ;; arguments and unimplemented flags all exit 3.
     (with-arena 268435456
+      (if (and (> argc 1) (string-eq (argv-to-string argv 1) "align-check"))
+        (align-main arena argc argv)
       (if (is-version-request argc argv)
         ;; The build's version, from the HOWL_VERSION every Makefile build
         ;; defines (slop.toml's, or the release tag's). It is never part of
@@ -832,4 +839,4 @@
                 (cond (failed EXIT_ERROR)
                       (ask    (ask-run arena front enc pfront penc resolved queries cfg))
                       (else   (validate-run arena front enc pfront penc resolved queries cfg report-mode
-                                timings t-start))))))))))))
+                                timings t-start)))))))))))))

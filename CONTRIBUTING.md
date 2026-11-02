@@ -24,6 +24,9 @@ make verify   # Z3 contract checking (needs the SLOP toolchain + z3)
 make example      # executable @example blocks: the completion rules, canon, context coverage
 make crate-test   # Rust crate: layout guards, API tests, every golden reproduced through it
 make crate-package  # the crate as `cargo publish` would package it (dry run, no upload)
+make alignment-test    # source identity, exhaustive search, CLI acceptance
+make alignment-oracle  # HermiT agreement on every small alignment subset
+make alignment-bench   # pinned BFO/CCO complete-repair performance gate
 make acceptance   # SPEC §12 criteria as CLI exit codes, over the committed fixtures
 make test-tsan    # the tests under ThreadSanitizer (every test runs the parallel round)
 make determinism  # reports byte-identical at W in {1,2,4,8} for every round cap (fixtures; -corpus for RO/OBI/GO/GALEN)
@@ -137,7 +140,7 @@ criteria.
 | M2a | port amendments A1–A4 | consumer-side, blocking |
 | M2b | port adapter | the C API (`include/howl.h`) and the Rust crate bind `classify`; the MOOSE `TBoxReasoner` adapter itself is consumer-side |
 | M3 | Turtle emission + GROWL round-trip | not started |
-| M4 | alignment + minimal repair | not started |
+| M4 | alignment + minimal repair | implemented; M4 correctness and BFO/CCO performance gates pass ([results](bench/results-alignment.json)) |
 
 ## Releasing
 

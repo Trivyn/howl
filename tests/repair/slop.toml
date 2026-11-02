@@ -1,0 +1,10 @@
+[project]
+name = "howl"
+version = "0.1.0"
+entry = "../../src/repairtest.slop"
+
+[build]
+output = "../../build/howl-repair-test"
+type = "executable"
+no_arena_cap = true
+include = ["../../src", "../../../slop-rdf", "${SLOP_HOME}/lib/std/"]

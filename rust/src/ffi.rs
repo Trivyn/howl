@@ -55,6 +55,16 @@ pub struct Options {
     pub cancel: i64,
 }
 
+/// `howl_RepairOptions`. The engine checks budgets before searching.
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct RepairOptions {
+    pub conflict_calls: i64,
+    pub conflict_nodes: i64,
+    pub hitting_nodes: i64,
+    pub verification_calls: i64,
+}
+
 /// `howl_TermIn`. An empty `datatype` or `lang` is absent.
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -177,6 +187,8 @@ extern "C" {
     pub fn howl_input_add_triple(input: Input, s: TermIn, p: TermIn, o: TermIn) -> u8;
     pub fn howl_input_add_turtle(input: Input, text: SlopString) -> TurtleResult;
     pub fn howl_input_attest_import(input: Input, iri: SlopString);
+    pub fn howl_input_source_available(input: Input, source: SlopString) -> u8;
+    pub fn howl_input_set_document(input: Input, index: i64, source: SlopString, mapping: u8) -> u8;
     pub fn howl_input_begin_probe_document(input: Input);
     pub fn howl_input_add_probe_triple(input: Input, s: TermIn, p: TermIn, o: TermIn) -> u8;
     pub fn howl_input_add_probe_turtle(input: Input, text: SlopString) -> TurtleResult;
@@ -184,7 +196,9 @@ extern "C" {
     pub fn howl_input_ask_subsumed(input: Input, sub: SlopString, sup: SlopString);
 
     pub fn howl_default_options() -> Options;
+    pub fn howl_default_repair_options() -> RepairOptions;
     pub fn howl_run_classify(input: Input, options: Options) -> Run;
+    pub fn howl_run_align(input: Input, options: Options, repair: u8, repair_options: RepairOptions) -> Run;
     pub fn howl_run_answer(input: Input, options: Options) -> Run;
     pub fn howl_run_free(run: Run);
 
@@ -229,6 +243,26 @@ extern "C" {
     pub fn howl_run_probe_omission_reason_role(run: Run, i: i64) -> SlopString;
     pub fn howl_run_probe_omission_witness_len(run: Run, i: i64) -> i64;
     pub fn howl_run_probe_omission_witness(run: Run, i: i64, k: i64) -> SlopString;
+    pub fn howl_run_repair_requested(run: Run) -> u8;
+    pub fn howl_run_repair_complete(run: Run) -> u8;
+    pub fn howl_run_already_coherent(run: Run) -> u8;
+    pub fn howl_run_unrepairable(run: Run) -> u8;
+    pub fn howl_run_mapping_len(run: Run) -> i64;
+    pub fn howl_run_mapping_text(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_mapping_source(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_repair_len(run: Run) -> i64;
+    pub fn howl_run_repair_size(run: Run, i: i64) -> i64;
+    pub fn howl_run_repair_mapping(run: Run, i: i64, j: i64) -> i64;
+    pub fn howl_run_candidate_len(run: Run) -> i64;
+    pub fn howl_run_candidate_size(run: Run, i: i64) -> i64;
+    pub fn howl_run_candidate_mapping(run: Run, i: i64, j: i64) -> i64;
+    pub fn howl_run_candidate_reason(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_search_omission_len(run: Run) -> i64;
+    pub fn howl_run_search_omission(run: Run, i: i64) -> SlopString;
+    pub fn howl_run_search_phase_exhausted(run: Run, phase: i64) -> u8;
+    pub fn howl_run_search_phase_capped(run: Run, phase: i64) -> u8;
+    pub fn howl_run_search_phase_unresolved(run: Run, phase: i64) -> u8;
+    pub fn howl_run_search_count(run: Run, metric: i64) -> i64;
 }
 
 #[cfg(test)]
@@ -252,6 +286,11 @@ mod layout_guard {
         fn howl_layout_sizeof_howl_Input() -> usize;
         fn howl_layout_sizeof_howl_Run() -> usize;
         fn howl_layout_sizeof_howl_Options() -> usize;
+        fn howl_layout_sizeof_howl_RepairOptions() -> usize;
+        fn howl_layout_offset_howl_RepairOptions_conflict_nodes() -> usize;
+        fn howl_layout_offset_howl_RepairOptions_hitting_nodes() -> usize;
+        fn howl_layout_offset_howl_RepairOptions_verification_calls() -> usize;
+        fn howl_layout_width_howl_RepairOptions_conflict_calls() -> usize;
         fn howl_layout_offset_howl_Options_max_iterations() -> usize;
         fn howl_layout_offset_howl_Options_profile() -> usize;
         fn howl_layout_offset_howl_Options_auto_select() -> usize;
@@ -301,12 +340,17 @@ mod layout_guard {
 
     #[test]
     fn structs_match_c_abi() {
-        let checks: [(&str, usize, usize); 26] = [
+        let checks: [(&str, usize, usize); 31] = [
                 ("slop_string", size_of::<SlopString>(), c(howl_layout_sizeof_slop_string)),
                 ("slop_string.data", offset_of!(SlopString, data), c(howl_layout_offset_slop_string_data)),
                 ("howl_Input", size_of::<Input>(), c(howl_layout_sizeof_howl_Input)),
                 ("howl_Run", size_of::<Run>(), c(howl_layout_sizeof_howl_Run)),
                 ("howl_Options", size_of::<Options>(), c(howl_layout_sizeof_howl_Options)),
+                ("howl_RepairOptions", size_of::<RepairOptions>(), c(howl_layout_sizeof_howl_RepairOptions)),
+                ("howl_RepairOptions.conflict_nodes", offset_of!(RepairOptions, conflict_nodes), c(howl_layout_offset_howl_RepairOptions_conflict_nodes)),
+                ("howl_RepairOptions.hitting_nodes", offset_of!(RepairOptions, hitting_nodes), c(howl_layout_offset_howl_RepairOptions_hitting_nodes)),
+                ("howl_RepairOptions.verification_calls", offset_of!(RepairOptions, verification_calls), c(howl_layout_offset_howl_RepairOptions_verification_calls)),
+                ("width howl_RepairOptions.conflict_calls", width_of!(RepairOptions, conflict_calls), c(howl_layout_width_howl_RepairOptions_conflict_calls)),
                 ("howl_Options.max_iterations", offset_of!(Options, max_iterations), c(howl_layout_offset_howl_Options_max_iterations)),
                 ("howl_Options.profile", offset_of!(Options, profile), c(howl_layout_offset_howl_Options_profile)),
                 ("howl_Options.auto_select", offset_of!(Options, auto_select), c(howl_layout_offset_howl_Options_auto_select)),

@@ -141,8 +141,8 @@
     term-iri-value
     CONCEPT_FUEL box-concept decode-concept
     build-signature
-    Stage1 decode-axioms decode-axioms-sourced decode-axioms-with decode-store render-triple
-    declaration-conflict)
+    Stage1 decode-axioms decode-axioms-sourced decode-axioms-positioned decode-axioms-with decode-store render-triple
+    declaration-conflict alignment-scaffolds alignment-negative-roots negative-assertion-parts)
 
   ;; ============================================================
   ;; Element access
@@ -403,11 +403,9 @@
     (@intent "Every subject typed <type-iri>, once each, in first-occurrence document order, as ids")
     (@spec ((Arena Encoded String) -> (List Int)))
     (@alloc arena)
-    ;; DOCUMENT ORDER, NOT A HASH SET'S. Stage 0 takes the owl:Axiom nodes
-    ;; from here, and that order reaches the output twice - the order
-    ;; rebuilt triples join the list, and which of several malformed
-    ;; reifications' faults is reported. Walking the document ties both
-    ;; to the input (§6.8).
+    ;; DOCUMENT ORDER, NOT A HASH SET'S. Stage 0 reads ontology and
+    ;; annotation subjects in first-occurrence order. Reified axiom roots
+    ;; use typed-occurrences below, which also preserves their source.
     ;;
     ;; Ids make deduplication exact: the dictionary gives equal terms one
     ;; id, quoted triples included, so a set of ids is `term-eq` itself.
@@ -422,31 +420,29 @@
               (do (set-put seen (. it s)) (list-push out (. it s))))))
         out)))
 
-  (fn typed-docs-in-order ((arena Arena) (doc Encoded) (type-iri String))
-    (@intent "typed-ids-in-order's subjects' documents: each one's first typing triple's, in the same order")
-    (@spec ((Arena Encoded String) -> (List Int)))
-    (@alloc arena)
-    ;; The same walk as typed-ids-in-order, so out[i] is the document of
-    ;; that list's i-th subject. A blank subject is one document's alone
-    ;; (its ids are shifted apart per document); an IRI one is given the
-    ;; document that first types it.
-    (let ((type-pred (. (. doc dict) rdf-type))
-          (type-id   (vocab-id arena (. doc dict) type-iri))
-          (starts    (. doc starts))
-          (seen      (set-new arena Int))
-          (mut out   (list-new arena Int))
-          (mut i     0)
-          (mut cur   0))
+  (type TypedOccurrences (record (ids (List Int)) (docs (List Int))))
+
+  (fn typed-occurrences ((arena Arena) (doc Encoded) (type-iri String))
+    (@intent "Typed roots once per source document, including IRI-named roots shared across documents")
+    (@spec ((Arena Encoded String) -> TypedOccurrences))
+    ;; docs stays empty for a single document: every root is in document 0.
+    (let ((multi (> (list-len (. doc starts)) 1))
+          (type-pred (. (. doc dict) rdf-type))
+          (type-id (vocab-id arena (. doc dict) type-iri))
+          (mut seen (set-new arena Int))
+          (ids (list-new arena Int)) (docs (list-new arena Int))
+          (mut pos 0) (mut cur 0))
       (do
         (for-each (it (. doc triples))
-          (do
-            (when (and (== (. it p) type-pred) (== (. it o) type-id))
-              (when (not (set-has seen (. it s)))
-                (do (set-put seen (. it s))
-                    (set! cur (doc-at starts i cur))
-                    (list-push out cur))))
-            (set! i (+ i 1))))
-        out)))
+          (let ((d (doc-at (. doc starts) pos cur)))
+            (do
+              (when (!= d cur) (set! seen (set-new arena Int)))
+              (set! cur d)
+              (when (and (== (. it p) type-pred) (== (. it o) type-id) (not (set-has seen (. it s))))
+                (do (set-put seen (. it s)) (list-push ids (. it s))
+                    (when multi (list-push docs cur))))
+              (set! pos (+ pos 1)))))
+        (record-new TypedOccurrences (ids ids) (docs docs)))))
 
   (fn import-doc ((arena Arena) (doc Encoded) (target IRI))
     (@intent "The document whose owl:imports names target, or -1 when several do")
@@ -683,19 +679,26 @@
             (set! k (+ k 1))))
         (record-new Rebuilt (triples out) (docs docs) (fault fault)))))
 
-  (fn asserted-among ((arena Arena) (candidates (List IdTriple)) (doc Encoded))
-    (@intent "The candidates that occur in the input, as a set")
-    (@spec ((Arena (List IdTriple) Encoded) -> (Set IdTriple)))
+  (type DocTriple (record (d Int) (s Int) (p Int) (o Int)))
+
+  (fn source-triple-key ((arena Arena) (t IdTriple) (d Int))
+    (@intent "Source/triple key for suppression within one document")
+    (@spec ((Arena IdTriple Int) -> DocTriple))
     (@alloc arena)
-    ;; In the INPUT, header triples included: a reified axiom whose triple
-    ;; the document also asserts - even on the ontology node, where stage 0
-    ;; consumes it - is not rebuilt. Equal triples have equal ids.
-    (let ((cands (set-new arena IdTriple))
-          (found (set-new arena IdTriple)))
+    (record-new DocTriple (d d) (s (. t s)) (p (. t p)) (o (. t o))))
+
+  (fn asserted-among ((arena Arena) (candidates (List IdTriple)) (doc Encoded))
+    (@intent "Candidate triples already asserted, keyed by their source as well as their terms")
+    (@spec ((Arena (List IdTriple) Encoded) -> (Set DocTriple)))
+    (let ((cands (set-new arena IdTriple)) (found (set-new arena DocTriple))
+          (mut pos 0) (mut cur 0))
       (do
         (for-each (c candidates) (set-put cands c))
         (for-each (it (. doc triples))
-          (when (set-has cands it) (set-put found it)))
+          (do
+            (set! cur (doc-at (. doc starts) pos cur))
+            (when (set-has cands it) (set-put found (source-triple-key arena it cur)))
+            (set! pos (+ pos 1))))
         found)))
 
   (fn stage0-scan ((arena Arena) (scratch Arena) (doc Encoded) (imports-resolved (List IRI)))
@@ -728,13 +731,14 @@
           ;; and the named ontology follows ont-subjs - so both come from
           ;; the document. ann-subjs is only ever a membership test.
           (ont-subjs (typed-ids-in-order scratch doc OWL_ONTOLOGY))
-          (ax-subjs  (typed-ids-in-order scratch doc OWL_AXIOM))
+          (ax-occ    (typed-occurrences scratch doc OWL_AXIOM))
+          (ax-subjs  (. ax-occ ids))
           (ann-subjs (typed-ids-in-order scratch doc OWL_ANNOTATION))
           (declared  (collect-imports arena doc))
           (dict      (. doc dict))
           (starts    (. doc starts))
           (multi     (> (list-len starts) 1))
-          (ax-docs   (if multi (typed-docs-in-order scratch doc OWL_AXIOM) (list-new scratch Int)))
+          (ax-docs   (. ax-occ docs))
           (mut out   (list-new arena IdTriple))
           (mut docs  (list-new arena Int))
           (mut ont   (Option IRI) (none))
@@ -757,8 +761,9 @@
                     (do (set! cur (doc-at starts i cur)) (list-push docs cur)))))
               (set! i (+ i 1)))))
 
-        ;; Rebuild each reified axiom, unless the document also asserts it
-        ;; - anywhere in the INPUT, header triples included. annotation-
+        ;; Rebuild each reified axiom unless its own source document also
+        ;; asserts it, header triples included. Copies in other documents
+        ;; must survive independently for mapping-only removal. annotation-
         ;; heavy.ttl asserts the axiom AND reifies it; without the test the
         ;; axiom decodes twice.
         (let ((rb       (rebuild-candidates scratch (annotated-store scratch doc) ax-subjs ax-docs))
@@ -767,10 +772,11 @@
           (do
             (for-each (c (. rb triples))
               (do
-                (when (not (set-has asserted c))
+                (when (not (set-has asserted (source-triple-key scratch c
+                              (match (list-get (. rb docs) k) ((some d) d) ((none) 0)))))
                   (do
                     (list-push out c)
-                    (match (list-get (. rb docs) k) ((some d) (list-push docs d)) ((none) (do)))))
+                    (when multi (match (list-get (. rb docs) k) ((some d) (list-push docs d)) ((none) (do))))))
                 (set! k (+ k 1))))
             (set! fault (. rb fault))))
 
@@ -1447,6 +1453,7 @@
     ;; axiom-docs[i] is axioms[i]'s, and omission-docs[i] omitted[i]'s, -1
     ;; when its triples come from more than one (issue #67).
     (axiom-docs    (List Int))
+    (axiom-positions (List Int)) ; positioned decode only: root index for each raw axiom
     (omission-docs (List Int))))
 
   ;; Deterministic N-Triples-ish rendering, for the InputRef an
@@ -2368,6 +2375,8 @@
     (docs      (List Int))
     (pos       Int)
     (adocs     (List Int))
+    (apos      (List Int))
+    (positioned Bool)
     (udocs     (List Int))))
 
   (fn push-axiom ((c (Ptr Decoding)) (ax RawAxiom))
@@ -2375,6 +2384,7 @@
     (@spec (((Ptr Decoding) RawAxiom) -> Unit))
     (do
       (list-push (. (deref c) out) ax)
+      (when (. (deref c) positioned) (list-push (. (deref c) apos) (. (deref c) pos)))
       (match (list-get (. (deref c) docs) (. (deref c) pos))
         ((some d) (list-push (. (deref c) adocs) d))
         ((none)   (do)))))
@@ -2419,9 +2429,20 @@
               ((error m) (do (set! (. (deref c) fault) (some m)) true))
               ((ok ax)   (keep-axiom c ax))))))))
 
+  (fn decode-axioms-positioned ((arena Arena) (dict TermStore) (triples (List IdTriple)) (docs (List Int)))
+    (@intent "Alignment inventory decode, also retaining each raw axiom's root position")
+    (@spec ((Arena TermStore (List IdTriple) (List Int)) -> (Result Stage1 Fault)))
+    (let ((scratch (arena-new 16777216))
+          (res (decode-axioms-detail arena (decode-store scratch dict triples) dict triples docs true)))
+      (do (arena-free scratch) res)))
+
   (fn decode-axioms-with ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)) (docs (List Int)))
-    (@intent "Stage 1 over a store built by the caller; docs is empty, or each triple's document")
     (@spec ((Arena TermStore TermStore (List IdTriple) (List Int)) -> (Result Stage1 Fault)))
+    (decode-axioms-detail arena ig dict triples docs false))
+
+  (fn decode-axioms-detail ((arena Arena) (ig TermStore) (dict TermStore) (triples (List IdTriple)) (docs (List Int)) (positioned Bool))
+    (@intent "Stage 1 over a store built by the caller; docs is empty, or each triple's document")
+    (@spec ((Arena TermStore TermStore (List IdTriple) (List Int) Bool) -> (Result Stage1 Fault)))
     (@alloc arena)
     ;; INERT AXIOMS ARE COUNTED, NOT KEPT. The gate would drop them
     ;; unread (§5.2's d-inert), and on GO they are ~0.8M of the decoded
@@ -2448,7 +2469,7 @@
                           (uprops (list-new arena IRI)) (utexts (list-new arena String))
                           (fault conflict)
                           (docs docs) (pos 0)
-                          (adocs (list-new arena Int)) (udocs (list-new arena Int))))
+                          (adocs (list-new arena Int)) (apos (list-new arena Int)) (positioned positioned) (udocs (list-new arena Int))))
         (for-each (it triples)
           (do
             (decode-triple arena c it (triple-of dict it))
@@ -2461,6 +2482,7 @@
                     (inert (. (deref c) inert))
                     (omitted oms)
                     (axiom-docs (. (deref c) adocs))
+                    (axiom-positions (. (deref c) apos))
                     (omission-docs (undeclared-docs arena (. (deref c) uprops) (. (deref c) udocs) oms))))))))))
 
   (fn undeclared-docs ((arena Arena) (ps (List IRI)) (docs (List Int)) (oms (List Omission)))
@@ -2892,4 +2914,29 @@
                                     (. e value))))))
               ((none) (do)))))
         bad)))
+  (fn alignment-scaffolds ((arena Arena) (dict TermStore) (triples (List IdTriple)))
+    (@intent "Structural triple positions; dependency traversal can remove only scaffolding owned by removed axioms")
+    (@spec ((Arena TermStore (List IdTriple)) -> (List Bool)))
+    (let ((nodes (negative-assertion-nodes arena dict triples))
+          (parts (negative-assertion-parts arena dict))
+          (out (list-new arena Bool)))
+      (do
+        (for-each (it triples)
+          (list-push out (or (structural-triple (triple-of dict it))
+                            (negative-assertion-part it nodes parts))))
+        out)))
+
+  (fn alignment-negative-roots ((arena Arena) (dict TermStore) (triples (List IdTriple)))
+    (@intent "Every negative-assertion root position, including opaque data assertions")
+    (@spec ((Arena TermStore (List IdTriple)) -> (Map Int Int)))
+    (let ((kind (vocab-id arena dict OWL_NEGATIVE_PROPERTY_ASSERTION))
+          (out (map-new arena Int Int)) (mut i 0))
+      (do
+        (for-each (t triples)
+          (do
+            (when (and (== (. t p) (. dict rdf-type)) (== (. t o) kind))
+              (map-put out i (. t s)))
+            (set! i (+ i 1))))
+        out)))
+
 )

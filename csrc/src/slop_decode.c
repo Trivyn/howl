@@ -16,7 +16,7 @@ int64_t howl_decode_vocab_id(slop_arena* arena, howl_termstore_TermStore dict, s
 slop_list_howl_types_Omission howl_decode_unresolved_imports(slop_arena* arena, slop_list_slop_rdf_rdf_IRI declared, slop_list_slop_rdf_rdf_IRI resolved);
 uint8_t howl_decode_typed_as(slop_rdf_rdf_Triple t, slop_string type_iri);
 slop_list_int howl_decode_typed_ids_in_order(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri);
-slop_list_int howl_decode_typed_docs_in_order(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri);
+howl_decode_TypedOccurrences howl_decode_typed_occurrences(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri);
 int64_t howl_decode_import_doc(slop_arena* arena, howl_termstore_Encoded doc, slop_rdf_rdf_IRI target);
 slop_list_int howl_decode_import_docs(slop_arena* arena, howl_termstore_Encoded doc, slop_list_howl_types_Omission oms);
 uint8_t howl_decode_logical_predicate(slop_string pv);
@@ -29,6 +29,7 @@ howl_termstore_TermStore howl_decode_annotated_store(slop_arena* arena, howl_ter
 int64_t howl_decode_term_id(howl_termstore_TermStore st, slop_rdf_rdf_Term t);
 slop_result_howl_termstore_IdTriple_string howl_decode_rebuild_one(slop_arena* arena, howl_termstore_TermStore st, slop_rdf_rdf_Term a, slop_rdf_rdf_Term src_pred, slop_rdf_rdf_Term prop_pred, slop_rdf_rdf_Term tgt_pred);
 howl_decode_Rebuilt howl_decode_rebuild_candidates(slop_arena* arena, howl_termstore_TermStore st, slop_list_int ax_subjs, slop_list_int ax_docs);
+howl_decode_DocTriple howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d);
 slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore_IdTriple candidates, howl_termstore_Encoded doc);
 slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_arena* arena, slop_arena* scratch, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved);
 howl_owl2_RawConcept* howl_decode_box_concept(slop_arena* arena, howl_owl2_RawConcept c);
@@ -108,7 +109,9 @@ slop_list_string howl_decode_queried_predicates(slop_arena* arena);
 void howl_decode_push_axiom(howl_decode_Decoding* c, howl_owl2_RawAxiom ax);
 uint8_t howl_decode_keep_axiom(howl_decode_Decoding* c, howl_owl2_RawAxiom ax);
 uint8_t howl_decode_decode_triple(slop_arena* arena, howl_decode_Decoding* c, howl_termstore_IdTriple it, slop_rdf_rdf_Triple t);
+slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_positioned(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs);
 slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_with(slop_arena* arena, howl_termstore_TermStore ig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs);
+slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_detail(slop_arena* arena, howl_termstore_TermStore ig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs, uint8_t positioned);
 slop_list_int howl_decode_undeclared_docs(slop_arena* arena, slop_list_slop_rdf_rdf_IRI ps, slop_list_int docs, slop_list_howl_types_Omission oms);
 slop_option_slop_rdf_rdf_IRI howl_decode_undeclared_predicate(howl_owl2_Signature sig, slop_rdf_rdf_Triple t);
 slop_list_howl_types_Omission howl_decode_undeclared_omissions(slop_arena* arena, slop_list_slop_rdf_rdf_IRI ps, slop_list_string texts);
@@ -129,6 +132,8 @@ slop_map* howl_decode_negative_assertion_parts(slop_arena* arena, howl_termstore
 uint8_t howl_decode_negative_assertion_part(howl_termstore_IdTriple it, slop_map* nodes, slop_map* parts);
 int64_t howl_decode_property_kinds(howl_owl2_Signature sig, slop_rdf_rdf_IRI e);
 slop_option_string howl_decode_declaration_conflict(slop_arena* arena, howl_owl2_Signature sig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples);
+slop_list_u8 howl_decode_alignment_scaffolds(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples);
+slop_map* howl_decode_alignment_negative_roots(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples);
 
 typedef struct { slop_list_slop_rdf_rdf_IRI ps; slop_list_string texts; } howl_decode__lambda_1005_env_t;
 
@@ -408,30 +413,38 @@ slop_list_int howl_decode_typed_ids_in_order(slop_arena* arena, howl_termstore_E
     }
 }
 
-slop_list_int howl_decode_typed_docs_in_order(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri) {
+howl_decode_TypedOccurrences howl_decode_typed_occurrences(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri) {
     {
+        __auto_type multi = (((int64_t)((doc.starts).len)) > 1);
         __auto_type type_pred = doc.dict.rdf_type;
         __auto_type type_id = howl_decode_vocab_id(arena, doc.dict, type_iri);
-        __auto_type starts = doc.starts;
         __auto_type seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
-        __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
-        int64_t i = 0;
+        __auto_type ids = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        __auto_type docs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        int64_t pos = 0;
         int64_t cur = 0;
         {
             __auto_type _coll = doc.triples;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
-                if ((it.p == type_pred) && (it.o == type_id)) {
-                    if (!(slop_map_has(seen, &(int64_t){it.s}))) {
-                        (void)(({ slop_map_put(NULL, seen, &(int64_t){it.s}, NULL, 0); }));
-                        cur = howl_termstore_doc_at(starts, i, cur);
-                        (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (cur); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                {
+                    __auto_type d = howl_termstore_doc_at(doc.starts, pos, cur);
+                    if (d != cur) {
+                        seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
                     }
+                    cur = d;
+                    if (((it.p == type_pred)) && ((it.o == type_id)) && (!(slop_map_has(seen, &(int64_t){it.s})))) {
+                        (void)(({ slop_map_put(NULL, seen, &(int64_t){it.s}, NULL, 0); }));
+                        (void)(({ __auto_type _lst_p = &(ids); __auto_type _item = (it.s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                        if (multi) {
+                            (void)(({ __auto_type _lst_p = &(docs); __auto_type _item = (cur); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                        }
+                    }
+                    pos = (pos + 1);
                 }
-                i = (i + 1);
             }
         }
-        return out;
+        return ((howl_decode_TypedOccurrences){.ids = ids, .docs = docs});
     }
 }
 
@@ -703,10 +716,16 @@ howl_decode_Rebuilt howl_decode_rebuild_candidates(slop_arena* arena, howl_terms
     }
 }
 
+howl_decode_DocTriple howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d) {
+    return ((howl_decode_DocTriple){.d = d, .s = t.s, .p = t.p, .o = t.o});
+}
+
 slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore_IdTriple candidates, howl_termstore_Encoded doc) {
     {
         __auto_type cands = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_termstore_IdTriple, slop_hash_howl_termstore_IdTriple, slop_eq_howl_termstore_IdTriple, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
-        __auto_type found = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_termstore_IdTriple, slop_hash_howl_termstore_IdTriple, slop_eq_howl_termstore_IdTriple, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type found = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_decode_DocTriple, slop_hash_howl_decode_DocTriple, slop_eq_howl_decode_DocTriple, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
+        int64_t pos = 0;
+        int64_t cur = 0;
         {
             __auto_type _coll = candidates;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -718,9 +737,11 @@ slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore
             __auto_type _coll = doc.triples;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
+                cur = howl_termstore_doc_at(doc.starts, pos, cur);
                 if (slop_map_has(cands, &(it))) {
-                    (void)(({ slop_map_put(NULL, found, &(it), NULL, 0); }));
+                    (void)(({ howl_decode_DocTriple _key_863 = (howl_decode_source_triple_key(arena, it, cur)); slop_map_put(NULL, found, &_key_863, NULL, 0); }));
                 }
+                pos = (pos + 1);
             }
         }
         return found;
@@ -730,13 +751,14 @@ slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore
 slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_arena* arena, slop_arena* scratch, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved) {
     {
         __auto_type ont_subjs = howl_decode_typed_ids_in_order(scratch, doc, slop_rdf_vocab_OWL_ONTOLOGY);
-        __auto_type ax_subjs = howl_decode_typed_ids_in_order(scratch, doc, slop_rdf_vocab_OWL_AXIOM);
+        __auto_type ax_occ = howl_decode_typed_occurrences(scratch, doc, slop_rdf_vocab_OWL_AXIOM);
+        __auto_type ax_subjs = ax_occ.ids;
         __auto_type ann_subjs = howl_decode_typed_ids_in_order(scratch, doc, slop_rdf_vocab_OWL_ANNOTATION);
         __auto_type declared = howl_decode_collect_imports(arena, doc);
         __auto_type dict = doc.dict;
         __auto_type starts = doc.starts;
         __auto_type multi = (((int64_t)((starts).len)) > 1);
-        __auto_type ax_docs = ((multi) ? howl_decode_typed_docs_in_order(scratch, doc, slop_rdf_vocab_OWL_AXIOM) : ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = scratch }));
+        __auto_type ax_docs = ax_occ.docs;
         __auto_type out = ((slop_list_howl_termstore_IdTriple){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type docs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         slop_option_slop_rdf_rdf_IRI ont = (slop_option_slop_rdf_rdf_IRI){.has_value = false};
@@ -768,13 +790,15 @@ slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_are
                 __auto_type _coll = rb.triples;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type c = _coll.data[_i];
-                    if (!(slop_map_has(asserted, &(c)))) {
+                    if (!(({ howl_decode_DocTriple _key_865 = (howl_decode_source_triple_key(scratch, c, ({ __auto_type _mv = ({ __auto_type _lst = rb.docs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type d = _mv.value; d; }) : (0); }))); slop_map_has(asserted, &_key_865); }))) {
                         (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
-                        __auto_type _mv_866 = ({ __auto_type _lst = rb.docs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
-                        if (_mv_866.has_value) {
-                            __auto_type d = _mv_866.value;
-                            ({ __auto_type _lst_p = &(docs); __auto_type _item = (d); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
-                        } else if (!_mv_866.has_value) {
+                        if (multi) {
+                            __auto_type _mv_866 = ({ __auto_type _lst = rb.docs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
+                            if (_mv_866.has_value) {
+                                __auto_type d = _mv_866.value;
+                                ({ __auto_type _lst_p = &(docs); __auto_type _item = (d); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
+                            } else if (!_mv_866.has_value) {
+                            }
                         }
                     }
                     k = (k + 1);
@@ -2606,6 +2630,9 @@ slop_list_string howl_decode_queried_predicates(slop_arena* arena) {
 
 void howl_decode_push_axiom(howl_decode_Decoding* c, howl_owl2_RawAxiom ax) {
     (void)(({ __auto_type _lst_p = &((*c).out); __auto_type _item = (ax); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+    if ((*c).positioned) {
+        (void)(({ __auto_type _lst_p = &((*c).apos); __auto_type _item = ((*c).pos); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+    }
     __auto_type _mv_995 = ({ __auto_type _lst = (*c).docs; size_t _idx = (size_t)(*c).pos; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });
     if (_mv_995.has_value) {
         __auto_type d = _mv_995.value;
@@ -2665,7 +2692,20 @@ uint8_t howl_decode_decode_triple(slop_arena* arena, howl_decode_Decoding* c, ho
     }
 }
 
+slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_positioned(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs) {
+    {
+        __auto_type scratch = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
+        __auto_type res = howl_decode_decode_axioms_detail(arena, howl_decode_decode_store(scratch, dict, triples), dict, triples, docs, 1);
+        (void)(({ slop_arena_free(scratch); free(scratch); }));
+        return res;
+    }
+}
+
 slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_with(slop_arena* arena, howl_termstore_TermStore ig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs) {
+    return howl_decode_decode_axioms_detail(arena, ig, dict, triples, docs, 0);
+}
+
+slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_detail(slop_arena* arena, howl_termstore_TermStore ig, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples, slop_list_int docs, uint8_t positioned) {
     {
         __auto_type sig = howl_decode_build_signature(arena, dict, triples);
         __auto_type conflict = howl_decode_declaration_conflict(arena, sig, dict, triples);
@@ -2674,7 +2714,7 @@ slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_with(s
         __auto_type dv = howl_decode_data_vocab(arena, dict);
         __auto_type lemma = howl_decode_data_lemma(arena, dict, sig, dv, triples);
         __auto_type c = ((howl_decode_Decoding*)(({ __auto_type _alloc = (howl_decode_Decoding*)slop_arena_alloc(arena, sizeof(howl_decode_Decoding)); if (_alloc == NULL) { fprintf(stderr, "SLOP: arena alloc failed at %s:%d\n", __FILE__, __LINE__); abort(); } _alloc; })));
-        (*c) = ((howl_decode_Decoding){.ig = ig, .sig = sig, .dv = dv, .lemma = lemma, .npa_nodes = npa_nodes, .npa_parts = npa_parts, .out = ((slop_list_howl_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .inert = 0, .uprops = ((slop_list_slop_rdf_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .utexts = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .fault = conflict, .docs = docs, .pos = 0, .adocs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .udocs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
+        (*c) = ((howl_decode_Decoding){.ig = ig, .sig = sig, .dv = dv, .lemma = lemma, .npa_nodes = npa_nodes, .npa_parts = npa_parts, .out = ((slop_list_howl_owl2_RawAxiom){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .inert = 0, .uprops = ((slop_list_slop_rdf_rdf_IRI){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .utexts = ((slop_list_string){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .fault = conflict, .docs = docs, .pos = 0, .adocs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .apos = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena }), .positioned = positioned, .udocs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena })});
         {
             __auto_type _coll = triples;
             for (size_t _i = 0; _i < _coll.len; _i++) {
@@ -2690,7 +2730,7 @@ slop_result_howl_decode_Stage1_howl_types_Fault howl_decode_decode_axioms_with(s
         } else if (!_mv_1001.has_value) {
             {
                 __auto_type oms = howl_decode_undeclared_omissions(arena, (*c).uprops, (*c).utexts);
-                return ((slop_result_howl_decode_Stage1_howl_types_Fault){ .is_ok = true, .data.ok = ((howl_decode_Stage1){.axioms = (*c).out, .signature = sig, .inert = (*c).inert, .omitted = oms, .axiom_docs = (*c).adocs, .omission_docs = howl_decode_undeclared_docs(arena, (*c).uprops, (*c).udocs, oms)}) });
+                return ((slop_result_howl_decode_Stage1_howl_types_Fault){ .is_ok = true, .data.ok = ((howl_decode_Stage1){.axioms = (*c).out, .signature = sig, .inert = (*c).inert, .omitted = oms, .axiom_docs = (*c).adocs, .axiom_positions = (*c).apos, .omission_docs = howl_decode_undeclared_docs(arena, (*c).uprops, (*c).udocs, oms)}) });
             }
         }
         SLOP_UNREACHABLE();
@@ -3137,6 +3177,41 @@ slop_option_string howl_decode_declaration_conflict(slop_arena* arena, howl_owl2
             }
         }
         return bad;
+    }
+}
+
+slop_list_u8 howl_decode_alignment_scaffolds(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples) {
+    {
+        __auto_type nodes = howl_decode_negative_assertion_nodes(arena, dict, triples);
+        __auto_type parts = howl_decode_negative_assertion_parts(arena, dict);
+        __auto_type out = ((slop_list_u8){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                (void)(({ __auto_type _lst_p = &(out); __auto_type _item = ((howl_decode_structural_triple(howl_termstore_triple_of(dict, it)) || howl_decode_negative_assertion_part(it, nodes, parts))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+            }
+        }
+        return out;
+    }
+}
+
+slop_map* howl_decode_alignment_negative_roots(slop_arena* arena, howl_termstore_TermStore dict, slop_list_howl_termstore_IdTriple triples) {
+    {
+        __auto_type kind = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_NEGATIVE_PROPERTY_ASSERTION);
+        __auto_type out = ({ static const slop_map_desc _d = SLOP_MAP_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS, int64_t); slop_map_new_ptr(arena, 0, &_d); });
+        int64_t i = 0;
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type t = _coll.data[_i];
+                if ((t.p == dict.rdf_type) && (t.o == kind)) {
+                    (void)(({ int64_t _val = t.s; slop_map_put(NULL, out, &(int64_t){i}, &_val, sizeof(_val)); }));
+                }
+                i = (i + 1);
+            }
+        }
+        return out;
     }
 }
 
