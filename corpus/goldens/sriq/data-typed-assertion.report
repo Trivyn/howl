@@ -1,0 +1,19 @@
+howl-report 2
+profile sriq
+verdict inconclusive
+termination fixpoint
+rounds 3
+inconsistent false
+omitted 2
+omission DataAxiom(<https://example.org/j> <https://example.org/v> "1" .)
+omission DataAxiom(<https://example.org/v> <http://www.w3.org/2000/01/rdf-schema#range> <http://www.w3.org/2001/XMLSchema#integer> .)
+unsatisfiable 0
+subsumptions 7
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/A http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/A https://example.org/A
+sub https://example.org/B http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/B https://example.org/B
+sub https://example.org/D http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/D https://example.org/D
+exit 2
