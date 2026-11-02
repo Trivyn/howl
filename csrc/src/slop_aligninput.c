@@ -17,9 +17,8 @@ uint8_t howl_aligninput_source_iri_valid(slop_string s);
 uint8_t howl_aligninput_metadata_problem(slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs, int64_t documents);
 slop_result_howl_aligninput_AlignmentBase_howl_types_Fault howl_aligninput_alignment_base(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports, slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs);
 howl_aligninput_AlignmentBase howl_aligninput_inventory(slop_arena* arena, howl_decode_Stage0 stage, howl_decode_Stage1 decoded, slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs);
-uint8_t howl_aligninput_negative_part(slop_rdf_rdf_Triple t);
 slop_map* howl_aligninput_live_negative(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_map* anchors, slop_map* removed, slop_map* roots);
-slop_map* howl_aligninput_reachable(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_list_u8 scaffolds, slop_map* anchors, slop_map* removed, slop_map* negative_roots, slop_list_u8 negative_parts);
+slop_map* howl_aligninput_reachable(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_list_u8 scaffolds, slop_map* anchors, slop_map* removed, slop_map* negative_live, slop_list_u8 negative_parts);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_aligninput_subset_decoded(slop_arena* arena, howl_aligninput_AlignmentBase base, slop_list_int removed);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_aligninput_subset_with(slop_arena* arena, howl_aligninput_AlignmentBase base, slop_map* gone);
 
@@ -407,7 +406,7 @@ uint8_t howl_aligninput_source_iri_valid(slop_string s) {
         int64_t i = 0;
         while (i < string_len(s)) {
             {
-                __auto_type c = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at aligninput.slop:156:41"))));
+                __auto_type c = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at aligninput.slop:155:41"))));
                 if (((c <= 32)) || ((c == 127)) || ((c == 60)) || ((c == 62)) || ((c == 34)) || ((c == 123)) || ((c == 125)) || ((c == 124)) || ((c == 92)) || ((c == 94)) || ((c == 96))) {
                     ok = 0;
                 }
@@ -548,27 +547,17 @@ howl_aligninput_AlignmentBase howl_aligninput_inventory(slop_arena* arena, howl_
         {
             __auto_type scaffolds = howl_decode_alignment_scaffolds(arena, stage.dict, stage.triples);
             __auto_type negative_parts = ((slop_list_u8){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
+            __auto_type part_ids = howl_decode_negative_assertion_parts(arena, stage.dict);
             {
                 __auto_type _coll = stage.triples;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type t = _coll.data[_i];
-                    (void)(({ __auto_type _lst_p = &(negative_parts); __auto_type _item = (howl_aligninput_negative_part(howl_termstore_triple_of(stage.dict, t))); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                    (void)(({ __auto_type _lst_p = &(negative_parts); __auto_type _item = (slop_map_has(part_ids, &(int64_t){t.p})); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                 }
             }
-            return ((howl_aligninput_AlignmentBase){.stage = stage, .signature = decoded.signature, .documents = ((int64_t)(((int64_t)((sources).len)))), .mappings = mappings, .anchors = anchors, .scaffolds = scaffolds, .negative_roots = negative_roots, .negative_parts = negative_parts, .owned = howl_aligninput_reachable(arena, stage.triples, scaffolds, anchors, ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), negative_roots, negative_parts)});
+            return ((howl_aligninput_AlignmentBase){.stage = stage, .signature = decoded.signature, .documents = ((int64_t)(((int64_t)((sources).len)))), .mappings = mappings, .anchors = anchors, .scaffolds = scaffolds, .negative_roots = negative_roots, .negative_parts = negative_parts, .owned = howl_aligninput_reachable(arena, stage.triples, scaffolds, anchors, ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), howl_aligninput_live_negative(arena, stage.triples, anchors, ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), negative_roots), negative_parts)});
         }
     }
-}
-
-uint8_t howl_aligninput_negative_part(slop_rdf_rdf_Triple t) {
-    __auto_type _mv_1655 = howl_decode_term_iri_value(t.predicate);
-    if (!_mv_1655.has_value) {
-        return 0;
-    } else if (_mv_1655.has_value) {
-        __auto_type p = _mv_1655.value;
-        return (((howl_canon_string_cmp(p.value, slop_rdf_vocab_OWL_SOURCE_INDIVIDUAL) == 0)) || ((howl_canon_string_cmp(p.value, slop_rdf_vocab_OWL_ASSERTION_PROPERTY) == 0)) || ((howl_canon_string_cmp(p.value, slop_rdf_vocab_OWL_TARGET_INDIVIDUAL) == 0)) || ((howl_canon_string_cmp(p.value, slop_rdf_vocab_OWL_TARGET_VALUE) == 0)));
-    }
-    SLOP_UNREACHABLE();
 }
 
 slop_map* howl_aligninput_live_negative(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_map* anchors, slop_map* removed, slop_map* roots) {
@@ -594,10 +583,9 @@ slop_map* howl_aligninput_live_negative(slop_arena* arena, slop_list_howl_termst
     }
 }
 
-slop_map* howl_aligninput_reachable(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_list_u8 scaffolds, slop_map* anchors, slop_map* removed, slop_map* negative_roots, slop_list_u8 negative_parts) {
+slop_map* howl_aligninput_reachable(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_list_u8 scaffolds, slop_map* anchors, slop_map* removed, slop_map* negative_live, slop_list_u8 negative_parts) {
     {
         __auto_type nodes = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
-        __auto_type negative_live = howl_aligninput_live_negative(arena, triples, anchors, removed, negative_roots);
         int64_t i = 0;
         uint8_t changed = 1;
         {
@@ -656,8 +644,8 @@ slop_result_howl_normalize_Decoded_howl_types_Fault howl_aligninput_subset_decod
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_aligninput_subset_with(slop_arena* arena, howl_aligninput_AlignmentBase base, slop_map* gone) {
     {
         __auto_type s0 = base.stage;
-        __auto_type live = howl_aligninput_reachable(arena, s0.triples, base.scaffolds, base.anchors, gone, base.negative_roots, base.negative_parts);
         __auto_type negative_live = howl_aligninput_live_negative(arena, s0.triples, base.anchors, gone, base.negative_roots);
+        __auto_type live = howl_aligninput_reachable(arena, s0.triples, base.scaffolds, base.anchors, gone, negative_live, base.negative_parts);
         __auto_type triples = ((slop_list_howl_termstore_IdTriple){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         __auto_type docs = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         int64_t i = 0;

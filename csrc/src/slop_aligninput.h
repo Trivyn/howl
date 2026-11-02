@@ -15,7 +15,6 @@
 #include "slop_owl2.h"
 #include "slop_decode.h"
 #include "slop_normalize.h"
-#include "slop_vocab.h"
 #include "slop_canon.h"
 #include "slop_strlib.h"
 
@@ -136,9 +135,8 @@ uint8_t howl_aligninput_source_iri_valid(slop_string s);
 uint8_t howl_aligninput_metadata_problem(slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs, int64_t documents);
 slop_result_howl_aligninput_AlignmentBase_howl_types_Fault howl_aligninput_alignment_base(slop_arena* arena, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports, slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs);
 howl_aligninput_AlignmentBase howl_aligninput_inventory(slop_arena* arena, howl_decode_Stage0 stage, howl_decode_Stage1 decoded, slop_list_slop_rdf_rdf_IRI sources, slop_list_u8 mapping_docs);
-uint8_t howl_aligninput_negative_part(slop_rdf_rdf_Triple t);
 slop_map* howl_aligninput_live_negative(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_map* anchors, slop_map* removed, slop_map* roots);
-slop_map* howl_aligninput_reachable(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_list_u8 scaffolds, slop_map* anchors, slop_map* removed, slop_map* negative_roots, slop_list_u8 negative_parts);
+slop_map* howl_aligninput_reachable(slop_arena* arena, slop_list_howl_termstore_IdTriple triples, slop_list_u8 scaffolds, slop_map* anchors, slop_map* removed, slop_map* negative_live, slop_list_u8 negative_parts);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_aligninput_subset_decoded(slop_arena* arena, howl_aligninput_AlignmentBase base, slop_list_int removed);
 slop_result_howl_normalize_Decoded_howl_types_Fault howl_aligninput_subset_with(slop_arena* arena, howl_aligninput_AlignmentBase base, slop_map* gone);
 

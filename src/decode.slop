@@ -142,7 +142,7 @@
     CONCEPT_FUEL box-concept decode-concept
     build-signature
     Stage1 decode-axioms decode-axioms-sourced decode-axioms-positioned decode-axioms-with decode-store render-triple
-    declaration-conflict alignment-scaffolds alignment-negative-roots)
+    declaration-conflict alignment-scaffolds alignment-negative-roots negative-assertion-parts)
 
   ;; ============================================================
   ;; Element access

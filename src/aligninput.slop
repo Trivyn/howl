@@ -1,15 +1,14 @@
 ;; Alignment inputs retain logical occurrence ownership before any rewriting.
 ;; The encoded dictionary must outlive AlignmentBase and its subset decodes.
 (module aligninput
-  (import rdf (IRI Triple))
-  (import termstore (Encoded IdTriple triple-of))
+  (import rdf (IRI))
+  (import termstore (Encoded IdTriple))
   (import types (AxiomRef Fault Omission Node RoleId))
   (import owl2 (RawAxiom RawConcept RawClassAssertion RawDisjointUnion Signature
                 render-axiom render-concept concept-cmp sort-concepts))
-  (import decode (Stage0 Stage1 stage0-encoded decode-axioms-sourced decode-axioms-positioned alignment-scaffolds alignment-negative-roots box-concept term-iri-value))
+  (import decode (Stage0 Stage1 stage0-encoded decode-axioms-sourced decode-axioms-positioned alignment-scaffolds alignment-negative-roots negative-assertion-parts box-concept))
   (import normalize (Decoded))
-  (import vocab (OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE))
-  (import canon (string-cmp iri-cmp axiom-ref-cmp sort-axiom-refs sort-nodes role-cmp sort-range))
+  (import canon (iri-cmp axiom-ref-cmp sort-axiom-refs sort-nodes role-cmp sort-range))
   (export AlignmentBase alignment-base subset-decoded canonical-mapping-axiom source-iri-valid)
   (import strlib (char-at))
   (import types (copy-iri copy-axiom-ref))
@@ -223,23 +222,16 @@
               ((some k) (map-put anchors (int-at positions i) k)) ((none) (do)))
             (set! i (+ i 1))))
         (let ((scaffolds (alignment-scaffolds arena (. stage dict) (. stage triples)))
-              (negative-parts (list-new arena Bool)))
+              (negative-parts (list-new arena Bool))
+              (part-ids (negative-assertion-parts arena (. stage dict))))
           (do
-            (for-each (t (. stage triples)) (list-push negative-parts (negative-part (triple-of (. stage dict) t))))
+            (for-each (t (. stage triples)) (list-push negative-parts (set-has part-ids (. t p))))
           (record-new AlignmentBase (stage stage) (signature (. decoded signature))
             (documents (cast Int (list-len sources))) (mappings mappings) (anchors anchors)
             (scaffolds scaffolds) (negative-roots negative-roots) (negative-parts negative-parts)
             (owned (reachable arena (. stage triples) scaffolds anchors (set-new arena Int)
-                               negative-roots negative-parts))))))))
-
-  (fn negative-part ((t Triple))
-    (@spec ((Triple) -> Bool))
-    (match (term-iri-value (. t predicate))
-      ((none) false)
-      ((some p) (or (== (string-cmp (. p value) OWL_SOURCE_INDIVIDUAL) 0)
-                    (== (string-cmp (. p value) OWL_ASSERTION_PROPERTY) 0)
-                    (== (string-cmp (. p value) OWL_TARGET_INDIVIDUAL) 0)
-                    (== (string-cmp (. p value) OWL_TARGET_VALUE) 0)))))
+                               (live-negative arena (. stage triples) anchors (set-new arena Int) negative-roots)
+                               negative-parts))))))))
 
   (fn live-negative ((arena Arena) (triples (List IdTriple)) (anchors (Map Int Int))
                       (removed (Set Int)) (roots (Map Int Int)))
@@ -255,11 +247,10 @@
 
   (fn reachable ((arena Arena) (triples (List IdTriple)) (scaffolds (List Bool))
                  (anchors (Map Int Int)) (removed (Set Int))
-                 (negative-roots (Map Int Int)) (negative-parts (List Bool)))
+                 (negative-live (Set Int)) (negative-parts (List Bool)))
     (@intent "Structural nodes referenced by surviving axiom roots, including fixed and opaque roots")
-    (@spec ((Arena (List IdTriple) (List Bool) (Map Int Int) (Set Int) (Map Int Int) (List Bool)) -> (Set Int)))
-    (let ((nodes (set-new arena Int))
-          (negative-live (live-negative arena triples anchors removed negative-roots)) (mut i 0) (mut changed true))
+    (@spec ((Arena (List IdTriple) (List Bool) (Map Int Int) (Set Int) (Set Int) (List Bool)) -> (Set Int)))
+    (let ((nodes (set-new arena Int)) (mut i 0) (mut changed true))
       (do
         (for-each (t triples)
           (do
@@ -290,9 +281,9 @@
   (fn subset-with ((arena Arena) (base AlignmentBase) (gone (Set Int)))
     (@spec ((Arena AlignmentBase (Set Int)) -> (Result Decoded Fault)))
     (let ((s0 (. base stage))
-          (live (reachable arena (. s0 triples) (. base scaffolds) (. base anchors) gone
-                           (. base negative-roots) (. base negative-parts)))
           (negative-live (live-negative arena (. s0 triples) (. base anchors) gone (. base negative-roots)))
+          (live (reachable arena (. s0 triples) (. base scaffolds) (. base anchors) gone
+                           negative-live (. base negative-parts)))
           (triples (list-new arena IdTriple)) (docs (list-new arena Int)) (mut i 0))
       (do
         (for-each (t (. s0 triples))
