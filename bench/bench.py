@@ -122,7 +122,8 @@ def verify_input(stem, rec, path):
     if (str(pins["ground_sha"])[:16], str(pins["bnode_sha"])[:16]) != (rec["ground"], rec["bnodes"]):
         raise Refusal("the projection's pins are not the ones the differential certified: rerun `make diff-corpus`")
     g = Graph()
-    g.parse(path, format="turtle")
+    # Read as written, as project.py pins it: normalizing rewrites a date-time's Z as +00:00.
+    project.parse_as_written(g, path, "turtle")
     errors = project.check_graph(g, pins, path, PROFILE)
     if errors:
         raise Refusal("the file is not the certified projection: " + "; ".join(errors))

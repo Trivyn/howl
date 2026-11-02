@@ -13,8 +13,11 @@ import io
 import os
 import re
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
+
+from rdflib import Graph
 
 # Loaded by path: under `python3 -m unittest bench/test_bench.py` the name
 # `bench` is this directory's package, not bench.py.
@@ -22,6 +25,11 @@ _spec = importlib.util.spec_from_file_location(
     "bench_harness", os.path.join(os.path.dirname(os.path.abspath(__file__)), "bench.py"))
 bench = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(bench)
+
+# verify_input imports project from corpus/; import it now, while bench.CORPUS
+# is still the real one, so the cached module is what it finds later.
+sys.path.insert(0, bench.CORPUS)
+import project  # noqa: E402
 
 REPORT = b"howl-report 2\nprofile el\nverdict coherent\ntermination fixpoint\nrounds 3\ninconsistent false\n" \
          b"omitted 0\nunsatisfiable 0\nsubsumptions 1\nsub http://x/A http://x/A\n"
@@ -125,6 +133,53 @@ class OracleSide(unittest.TestCase):
     def test_a_missing_header_is_refused(self):
         with self.assertRaises(bench.Refusal):
             bench.parse_oracle(oracle_out().split("\n", 1)[1], ENT[:16])
+
+
+DATETIME = ('<http://example.org/t#at> a <http://www.w3.org/2002/07/owl#DatatypeProperty> .\n'
+            '<http://example.org/t#e> <http://example.org/t#at> '
+            '"2024-01-01T10:00:00Z"^^<http://www.w3.org/2001/XMLSchema#dateTime> .\n')
+
+
+class InputAsWritten(unittest.TestCase):
+    """verify_input must read the projection as project.py pins it: a date-time's
+    Z is part of the pinned ground hash, and a normalizing parse rewrites it."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        d = self._tmp.name
+        os.makedirs(os.path.join(d, "projections"))
+        self.stem = "t-2024-01-01"
+        self.path = os.path.join(d, "t.ttl")
+        with open(self.path, "w", encoding="utf-8") as fh:
+            fh.write(DATETIME)
+        # The pins project would compute from the same as-written graph.
+        g = Graph()
+        project.parse_as_written(g, self.path, "turtle")
+        self.ground, bnodes = project.ground_digest(list(g))
+        self.bnode_sha = project.bnode_digest(list(g))
+        self.assertTrue(self.ground)
+        header = (f"# projected_ground_sha256 {self.ground}\n"
+                  f"# projected_bnode_triples {bnodes}\n"
+                  f"# projected_bnode_sha256  {self.bnode_sha}\n")
+        with open(os.path.join(d, "projections", self.stem + ".removals"), "w", encoding="utf-8") as fh:
+            fh.write(header)
+        self.pins = project.pinned_header(header)
+        self.rec = {"ground": self.ground[:16], "bnodes": self.bnode_sha[:16]}
+        saved = bench.CORPUS
+        bench.CORPUS = d
+        self.addCleanup(setattr, bench, "CORPUS", saved)
+
+    def test_the_as_written_projection_is_accepted(self):
+        bench.verify_input(self.stem, self.rec, self.path)
+
+    def test_a_normalizing_parse_would_be_refused(self):
+        # The regression: rdflib's default parse rewrites "...10:00:00Z" as
+        # "...10:00:00+00:00", so the ground hash no longer matches the pin.
+        g = Graph()
+        g.parse(self.path, format="turtle")
+        errors = project.check_graph(g, self.pins, self.path, "el")
+        self.assertTrue(any("ground sha256" in e for e in errors), errors)
 
 
 class Verdicts(unittest.TestCase):

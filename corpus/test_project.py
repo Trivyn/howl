@@ -49,6 +49,33 @@ RESTRICTION = """:A a owl:Class . :B a owl:Class . :r a owl:ObjectProperty . :s 
 """
 
 
+class AsWrittenTest(unittest.TestCase):
+    """The projector classifies literals as written, and materializes them so."""
+    XSD = "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n"
+
+    def test_projection_removes_what_the_census_rejects(self):
+        # rdflib normalizes "10:00Z" to "10:00:00+00:00" unless told not to.
+        text = self.XSD + ':v a owl:DatatypeProperty . :a a owl:NamedIndividual ; :v "2024-01-01T10:00Z"^^xsd:dateTime .'
+        _, _, out, _, _ = census.census(None, graph=census.parse_as_written(Graph(), None, "turtle", data=HEAD + text))
+        self.assertEqual(sum(out.values()), 1)
+        r = run_project(text)
+        self.assertEqual(r["triples"], 1)
+        self.assertEqual(r["axioms"], 1)
+
+    def test_materialize_round_trips_literals_exactly(self):
+        text = self.XSD + ':a rdfs:comment "1"^^xsd:boolean , "01"^^xsd:integer , "1.0"^^xsd:decimal , "x" .'
+        r = run_project(text)
+        old, project.HERE = project.HERE, tempfile.mkdtemp()
+        try:
+            os.mkdir(os.path.join(project.HERE, "vendor"))
+            e = {"name": "t", "version": "0"}
+            self.assertEqual(project.materialize(e, r), [])
+            back = census.parse_as_written(Graph(), project.materialized_path(e), "turtle")
+        finally:
+            project.HERE = old
+        self.assertEqual(set(back), set(census.parse_as_written(Graph(), None, "turtle", data=HEAD + text)))
+
+
 class BnodeDigestTest(unittest.TestCase):
     def test_label_free(self):
         # Two parses label blank nodes differently; the digest must not care.
