@@ -15,6 +15,7 @@ if the projection guaranteeing "empty coverage.omitted" were produced by the ver
 gate under test, the acceptance criterion would be self-certifying.
 """
 import os
+import re
 import sys
 from collections import Counter
 from rdflib import Graph, RDF, RDFS, OWL, XSD, BNode, URIRef, Literal, Namespace
@@ -496,6 +497,10 @@ _RANGE_HOLDS = {
 }
 
 
+# SPEC.md §5.2: the language tags a string-asserted property may carry.
+_LANG_TAG = re.compile(r"[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|[0-9]{3}))?", re.I)
+
+
 def _is_char(c):
     """XML 1.0 Char."""
     n = ord(c)
@@ -510,7 +515,7 @@ def _string_kind(lit):
     if not isinstance(lit, Literal) or not all(_is_char(c) for c in str(lit)):
         return None
     if lit.language is not None:
-        return "lang"
+        return "lang" if _LANG_TAG.fullmatch(lit.language) else None
     return "str" if lit.datatype is None or lit.datatype == XSD.string else None
 
 
@@ -519,7 +524,7 @@ def _string_asserted(triples, data, ann):
     every assertion a string literal on a named individual, every range one that
     holds them, and no other triple naming the property, in any position, but
     its declaration and annotations. Read over decoder_triples, after stage 0."""
-    cand = data - {OWL.topDataProperty, OWL.bottomDataProperty}
+    cand = {q for q in data if _named(q)}  # a reserved IRI is never eligible
     kinds, ranges, bad = {}, {}, set()
     for s, p, o in triples:
         if p in ann or p in BUILTIN_ANNOTATION:
