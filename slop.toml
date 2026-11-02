@@ -1,6 +1,6 @@
 [project]
 name = "howl"
-version = "0.7.1"
+version = "0.8.0"
 entry = "src/howl.slop"
 
 [build]

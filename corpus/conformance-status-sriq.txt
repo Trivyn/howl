@@ -35,7 +35,7 @@ w3c ok New-Feature-AsymmetricProperty-001
 w3c ok New-Feature-AxiomAnnotations-001
 w3c outside-sriq New-Feature-BottomDataProperty-001 ClassAssertion
 w3c ok New-Feature-BottomObjectProperty-001
-w3c outside-sriq New-Feature-DataQCR-001 DataAxiom
+w3c ok New-Feature-DataQCR-001
 w3c outside-sriq New-Feature-DisjointDataProperties-001 DataAxiom
 w3c outside-sriq New-Feature-DisjointDataProperties-002 DataAxiom
 w3c ok New-Feature-DisjointObjectProperties-001
@@ -368,7 +368,7 @@ w3c outside-sriq string-integer-clash ClassAssertion DataAxiom
 w3c-entailment outside-sriq Consistent-but-all-unsat SubClassOf
 w3c-entailment not-expressible DisjointClasses-001 ClassAssertion complementOf
 w3c-entailment not-expressible DisjointClasses-003 ClassAssertion complementOf
-w3c-entailment outside-sriq New-Feature-DataQCR-001 DataAxiom
+w3c-entailment not-expressible New-Feature-DataQCR-001 ClassAssertion minQualifiedCardinality onDataRange onProperty
 w3c-entailment outside-sriq New-Feature-DisjointDataProperties-002 DataAxiom
 w3c-entailment not-expressible New-Feature-DisjointObjectProperties-001 differentFrom
 w3c-entailment not-expressible New-Feature-DisjointObjectProperties-002 ClassAssertion first members rest
