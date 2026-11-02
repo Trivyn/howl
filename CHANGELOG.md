@@ -1,21 +1,44 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-11-01
 
-- Add M4 alignment checks and source-aware minimal mapping repair through the CLI, C, and Rust.
-  Search results distinguish verified repairs, unverified candidates, and incomplete enumeration.
-  Source ontologies stay fixed and inputs are never rewritten. A refused document name
-  (`howl_input_set_document`, Rust `add_*`) changes nothing and can be retried;
-  `howl_input_source_available` asks whether a name would be accepted.
-- Preserve identical reified/asserted axiom occurrences across documents so a mapping removal
-  cannot remove a fixed source axiom. Subset trials retain declarations and recompute contextual
-  preprocessing and profile gates.
+HOWL now checks ontology alignments: `howl align-check` classifies two fixed source ontologies plus
+a mapping document, and with `--repair` finds every inclusion-minimal set of mappings whose removal
+makes the merge coherent (SPEC M4). The same service is in the C API (`howl_run_align`) and the
+Rust crate (`Reasoner::align`). Separately, string-valued data property assertions no longer make
+every probe answer `unknown` (#133). The API changes are additions, and existing options and
+handle layouts are unchanged. Every existing report golden is byte-identical; only an input with
+string-valued data assertions reports differently. The slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges
+are unchanged.
+
+### Added
+
+- **Alignment checks and minimal mapping repair.** `howl align-check LEFT RIGHT MAPPINGS
+  [--repair]`, with `--left-source`, `--right-source` and `--mapping-source` for stable document
+  IRIs, and `--conflict-calls`, `--conflict-nodes`, `--hitting-nodes` and `--verification-calls`
+  for the search's budgets. Only mappings are removable; the source ontologies stay fixed and no
+  input is rewritten. The `howl-repair 1` block separates verified repairs from unverified
+  candidates, and says whether the search was complete, which phase ran out, and whether the merge
+  was already coherent or cannot be repaired by mappings alone. The original merge's verdict sets
+  the exit status.
+- **C API:** `howl_input_set_document` names each added document as fixed or mapping, and
+  `howl_input_source_available` asks whether a name would be accepted (a refused name changes
+  nothing). `howl_run_align` runs the check with `howl_RepairOptions`, and `howl_run_repair_*`,
+  `howl_run_candidate_*`, `howl_run_mapping_*` and `howl_run_search_*` read the result.
+- **Rust:** `AlignmentInput`, `Reasoner::align` / `align_cancellable`, `RepairOptions` and
+  `AlignmentReport`, whose `merged` report is the plain classification of the union and whose
+  `repair` carries the search.
+
+### Changed
+
 - **String assertions are inert, in every rung (#133).** SPEC §5.2's data lemma gains a second
   half. A data property whose only uses are `xsd:string` or `rdf:langString` assertions on named
   individuals, and whose ranges (if any) hold them, no longer puts its assertions and ranges in
-  every module and every report as omissions. A query outside them can now answer `no`. Typed
-  literals, and any property with a domain, a hierarchy, a restriction or a key, stay out of profile.
-  Every report golden is byte-identical.
+  every module and every report as omissions, so a query outside them can now answer `no`. Typed
+  literals, malformed language tags, reserved IRIs, and any property with a domain, a hierarchy, a
+  restriction or a key stay out of profile. Typed literals are #135.
+- **Reification deduplication includes the source document,** so an axiom asserted in one
+  document and reified in another is two occurrences. Single-document reports are unchanged.
 
 ## 0.7.1 — 2026-10-26
 
