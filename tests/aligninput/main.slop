@@ -106,7 +106,8 @@
 
   (fn unsupported-fixed ((a Arena))
     (@spec ((Arena) -> Bool))
-    (match (base a ":p a owl:DatatypeProperty . :a a owl:NamedIndividual ." ":a :p \"hello\" .")
+    ;; A typed literal: a string one is inert by §5.2's data lemma (#133).
+    (match (base a ":p a owl:DatatypeProperty . :a a owl:NamedIndividual ." ":a :p 1 .")
       ((error _) false)
       ((ok b) (and (== (list-len (. b mappings)) 0)
         (match (subset-decoded a b (list-new a Int))

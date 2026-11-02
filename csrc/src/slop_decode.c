@@ -122,6 +122,15 @@ uint8_t howl_decode_promote_uses(howl_decode_DataVocab v, slop_map* data, slop_m
 void howl_decode_collect_idle(howl_decode_DataVocab v, slop_map* used, slop_map* idle, int64_t bottom, slop_list_howl_termstore_IdTriple triples);
 howl_decode_DataLemma howl_decode_data_lemma(slop_arena* arena, howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_list_howl_termstore_IdTriple triples);
 void howl_decode_mark_data_uses(howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, slop_map* used, howl_termstore_IdTriple it);
+void howl_decode_collect_string_asserted(slop_arena* arena, howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, int64_t bottom, slop_map* strings, slop_list_howl_termstore_IdTriple triples);
+void howl_decode_mark_string_uses(howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, howl_decode_StringUses u, howl_termstore_IdTriple it);
+howl_decode_StringKind howl_decode_string_kind(howl_termstore_TermStore dict, int64_t id);
+uint8_t howl_decode_simple_lang_tag(slop_string t);
+int64_t howl_decode_tag_subtag_end(slop_string t, int64_t i);
+uint8_t howl_decode_tag_span_is(slop_string t, int64_t i, int64_t j, uint8_t letters);
+uint8_t howl_decode_reserved_id(howl_termstore_TermStore dict, int64_t id);
+uint8_t howl_decode_xml_chars(slop_string s);
+uint8_t howl_decode_datatype_absent_or(slop_option_string dt, slop_string iri);
 uint8_t howl_decode_predicate_is_annotation(howl_termstore_TermStore dict, howl_owl2_Signature sig, int64_t p);
 void howl_decode_collect_inert_trees(slop_arena* arena, howl_termstore_TermStore dict, howl_decode_DataVocab v, slop_map* idle, slop_map* tree, slop_list_howl_termstore_IdTriple triples);
 uint8_t howl_decode_filler_triple(slop_rdf_rdf_Triple t, uint8_t restriction, uint8_t single);
@@ -2852,7 +2861,7 @@ howl_types_Omission howl_decode_undeclared_of(slop_rdf_rdf_IRI p, slop_list_stri
 }
 
 howl_decode_DataVocab howl_decode_data_vocab(slop_arena* arena, howl_termstore_TermStore dict) {
-    return ((howl_decode_DataVocab){.rdf_type = dict.rdf_type, .data_property = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_DATATYPE_PROPERTY), .functional = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_FUNCTIONAL_PROPERTY), .domain = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_DOMAIN), .range = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_RANGE), .sub_property = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_SUBPROPERTY_OF), .equivalent = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_EQUIVALENT_PROPERTY), .disjoint = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_PROPERTY_DISJOINT_WITH), .top = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_TOP_DATA_PROPERTY), .on_datatype = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_ON_DATATYPE)});
+    return ((howl_decode_DataVocab){.rdf_type = dict.rdf_type, .data_property = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_DATATYPE_PROPERTY), .functional = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_FUNCTIONAL_PROPERTY), .domain = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_DOMAIN), .range = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_RANGE), .sub_property = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_SUBPROPERTY_OF), .equivalent = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_EQUIVALENT_PROPERTY), .disjoint = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_PROPERTY_DISJOINT_WITH), .top = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_TOP_DATA_PROPERTY), .on_datatype = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_ON_DATATYPE), .literal = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDFS_LITERAL), .plain_literal = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDF_PLAIN_LITERAL), .xsd_string = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_XSD_STRING), .lang_string = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_RDF_LANG_STRING)});
 }
 
 uint8_t howl_decode_promote_use(howl_decode_DataVocab v, slop_map* used, howl_termstore_IdTriple it) {
@@ -2906,6 +2915,7 @@ howl_decode_DataLemma howl_decode_data_lemma(slop_arena* arena, howl_termstore_T
         __auto_type data = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
         __auto_type used = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
         __auto_type idle = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type strings = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
         __auto_type tree = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
         __auto_type bottom = howl_decode_vocab_id(arena, dict, slop_rdf_vocab_OWL_BOTTOM_DATA_PROPERTY);
         uint8_t any = 0;
@@ -2941,9 +2951,10 @@ howl_decode_DataLemma howl_decode_data_lemma(slop_arena* arena, howl_termstore_T
                 changed = howl_decode_promote_uses(v, data, used, triples);
             }
             howl_decode_collect_idle(v, used, idle, bottom, triples);
+            howl_decode_collect_string_asserted(arena, dict, sig, v, data, bottom, strings, triples);
             howl_decode_collect_inert_trees(arena, dict, v, idle, tree, triples);
         }
-        return ((howl_decode_DataLemma){.data = data, .idle = idle, .tree = tree});
+        return ((howl_decode_DataLemma){.data = data, .idle = idle, .strings = strings, .tree = tree});
     }
 }
 
@@ -2979,12 +2990,245 @@ void howl_decode_mark_data_uses(howl_termstore_TermStore dict, howl_owl2_Signatu
     }
 }
 
+void howl_decode_collect_string_asserted(slop_arena* arena, howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, int64_t bottom, slop_map* strings, slop_list_howl_termstore_IdTriple triples) {
+    {
+        __auto_type u = ((howl_decode_StringUses){.spoiled = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), .plain = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), .tagged = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), .no_plain = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); }), .no_tagged = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); })});
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                howl_decode_mark_string_uses(dict, sig, v, data, u, it);
+            }
+        }
+        {
+            __auto_type _coll = triples;
+            for (size_t _i = 0; _i < _coll.len; _i++) {
+                __auto_type it = _coll.data[_i];
+                {
+                    __auto_type p = it.p;
+                    if (((slop_map_has(u.plain, &(int64_t){p}) || slop_map_has(u.tagged, &(int64_t){p}))) && (!(slop_map_has(u.spoiled, &(int64_t){p}))) && (!((slop_map_has(u.plain, &(int64_t){p}) && slop_map_has(u.no_plain, &(int64_t){p})))) && (!((slop_map_has(u.tagged, &(int64_t){p}) && slop_map_has(u.no_tagged, &(int64_t){p})))) && (!((p == v.top))) && (!((p == bottom)))) {
+                        (void)(({ slop_map_put(NULL, strings, &(int64_t){p}, NULL, 0); }));
+                    }
+                }
+            }
+        }
+    }
+}
+
+void howl_decode_mark_string_uses(howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, howl_decode_StringUses u, howl_termstore_IdTriple it) {
+    {
+        __auto_type s = it.s;
+        __auto_type p = it.p;
+        __auto_type o = it.o;
+        if (p == v.rdf_type) {
+            if (slop_map_has(data, &(int64_t){o})) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){o}, NULL, 0); }));
+            }
+            if (slop_map_has(data, &(int64_t){s}) && !((o == v.data_property))) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){s}, NULL, 0); }));
+            }
+        } else if (howl_decode_predicate_is_annotation(dict, sig, p)) {
+        } else if (p == v.range) {
+            if (slop_map_has(data, &(int64_t){o})) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){o}, NULL, 0); }));
+            }
+            if (slop_map_has(data, &(int64_t){s})) {
+                if ((o == v.literal) || (o == v.plain_literal)) {
+                } else if (o == v.xsd_string) {
+                    (void)(({ slop_map_put(NULL, u.no_tagged, &(int64_t){s}, NULL, 0); }));
+                } else if (o == v.lang_string) {
+                    (void)(({ slop_map_put(NULL, u.no_plain, &(int64_t){s}, NULL, 0); }));
+                } else {
+                    (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){s}, NULL, 0); }));
+                }
+            }
+        } else if (slop_map_has(data, &(int64_t){p})) {
+            if (slop_map_has(data, &(int64_t){s})) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){s}, NULL, 0); }));
+            }
+            if (slop_map_has(data, &(int64_t){o})) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){o}, NULL, 0); }));
+            }
+            if (howl_decode_reserved_id(dict, p)) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){p}, NULL, 0); }));
+            } else {
+                __auto_type _mv_1062 = howl_decode_individual_term(howl_termstore_term_of(dict, s));
+                switch (_mv_1062.tag) {
+                    case howl_decode_IndividualTerm_named_individual:
+                    {
+                        __auto_type _ = _mv_1062.data.named_individual;
+                        __auto_type _mv_1063 = howl_decode_string_kind(dict, o);
+                        if (_mv_1063 == howl_decode_StringKind_sk_string) {
+                            ({ slop_map_put(NULL, u.plain, &(int64_t){p}, NULL, 0); });
+                        } else if (_mv_1063 == howl_decode_StringKind_sk_lang) {
+                            ({ slop_map_put(NULL, u.tagged, &(int64_t){p}, NULL, 0); });
+                        } else if (_mv_1063 == howl_decode_StringKind_sk_other) {
+                            ({ slop_map_put(NULL, u.spoiled, &(int64_t){p}, NULL, 0); });
+                        }
+                        break;
+                    }
+                    default: {
+                        ({ slop_map_put(NULL, u.spoiled, &(int64_t){p}, NULL, 0); });
+                        break;
+                    }
+                }
+            }
+        } else {
+            if (slop_map_has(data, &(int64_t){s})) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){s}, NULL, 0); }));
+            }
+            if (slop_map_has(data, &(int64_t){o})) {
+                (void)(({ slop_map_put(NULL, u.spoiled, &(int64_t){o}, NULL, 0); }));
+            }
+        }
+    }
+}
+
+howl_decode_StringKind howl_decode_string_kind(howl_termstore_TermStore dict, int64_t id) {
+    __auto_type _mv_1072 = howl_termstore_term_of(dict, id);
+    switch (_mv_1072.tag) {
+        case slop_rdf_rdf_Term_term_literal:
+        {
+            __auto_type l = _mv_1072.data.term_literal;
+            if (!(howl_decode_xml_chars(l.value))) {
+                return howl_decode_StringKind_sk_other;
+            } else {
+                __auto_type _mv_1073 = l.lang;
+                if (_mv_1073.has_value) {
+                    __auto_type tag = _mv_1073.value;
+                    if (howl_decode_simple_lang_tag(tag) && howl_decode_datatype_absent_or(l.datatype, slop_rdf_vocab_RDF_LANG_STRING)) {
+                        return howl_decode_StringKind_sk_lang;
+                    } else {
+                        return howl_decode_StringKind_sk_other;
+                    }
+                } else if (!_mv_1073.has_value) {
+                    if (howl_decode_datatype_absent_or(l.datatype, slop_rdf_vocab_XSD_STRING)) {
+                        return howl_decode_StringKind_sk_string;
+                    } else {
+                        return howl_decode_StringKind_sk_other;
+                    }
+                }
+                SLOP_UNREACHABLE();
+            }
+        }
+        default: {
+            return howl_decode_StringKind_sk_other;
+        }
+    }
+}
+
+uint8_t howl_decode_simple_lang_tag(slop_string t) {
+    {
+        __auto_type n = string_len(t);
+        int64_t i = 0;
+        int64_t state = 0;
+        uint8_t ok = 1;
+        while (ok && (i <= n)) {
+            {
+                __auto_type j = howl_decode_tag_subtag_end(t, i);
+                {
+                    __auto_type len = (j - i);
+                    __auto_type alpha = howl_decode_tag_span_is(t, i, j, 1);
+                    __auto_type digit = howl_decode_tag_span_is(t, i, j, 0);
+                    if (((state == 0)) && (alpha) && ((len >= 2)) && ((len <= 3))) {
+                        state = 1;
+                    } else if (((state == 1)) && (alpha) && ((len == 4))) {
+                        state = 2;
+                    } else if (((state == 1) || (state == 2)) && ((alpha && (len == 2)) || (digit && (len == 3)))) {
+                        state = 3;
+                    } else {
+                        ok = 0;
+                    }
+                    i = (j + 1);
+                }
+            }
+        }
+        return (ok && (state >= 1));
+    }
+}
+
+int64_t howl_decode_tag_subtag_end(slop_string t, int64_t i) {
+    {
+        __auto_type n = string_len(t);
+        int64_t j = i;
+        while ((j < n) && !((((int64_t)(std_strlib_char_at(t, SLOP_RANGE(int64_t, j, 1, 0, 0, 0, "(Int 0 ..) at decode.slop:2910:59")))) == 45))) {
+            j = (j + 1);
+        }
+        return j;
+    }
+}
+
+uint8_t howl_decode_tag_span_is(slop_string t, int64_t i, int64_t j, uint8_t letters) {
+    {
+        uint8_t ok = (i < j);
+        int64_t k = i;
+        while (ok && (k < j)) {
+            {
+                __auto_type c = ((int64_t)(std_strlib_char_at(t, SLOP_RANGE(int64_t, k, 1, 0, 0, 0, "(Int 0 ..) at decode.slop:2923:41"))));
+                if (!(((letters) ? (((c >= 65) && (c <= 90)) || ((c >= 97) && (c <= 122))) : ((c >= 48) && (c <= 57))))) {
+                    ok = 0;
+                }
+                k = (k + 1);
+            }
+        }
+        return ok;
+    }
+}
+
+uint8_t howl_decode_reserved_id(howl_termstore_TermStore dict, int64_t id) {
+    __auto_type _mv_1074 = howl_decode_term_iri_value(howl_termstore_term_of(dict, id));
+    if (_mv_1074.has_value) {
+        __auto_type i = _mv_1074.value;
+        return howl_decode_is_reserved_iri(i.value);
+    } else if (!_mv_1074.has_value) {
+        return 0;
+    }
+    SLOP_UNREACHABLE();
+}
+
+uint8_t howl_decode_xml_chars(slop_string s) {
+    {
+        __auto_type n = string_len(s);
+        uint8_t ok = 1;
+        int64_t i = 0;
+        while (ok && (i < n)) {
+            {
+                __auto_type c = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at decode.slop:2950:42"))));
+                __auto_type c1 = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, (i + 1), 1, 0, 0, 0, "(Int 0 ..) at decode.slop:2951:42"))));
+                __auto_type c2 = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, (i + 2), 1, 0, 0, 0, "(Int 0 ..) at decode.slop:2952:42"))));
+                if (((c < 32)) && (!((c == 9))) && (!((c == 10))) && (!((c == 13)))) {
+                    ok = 0;
+                }
+                if ((c == 237) && (c1 >= 160)) {
+                    ok = 0;
+                }
+                if (((c == 239)) && ((c1 == 191)) && ((c2 >= 190))) {
+                    ok = 0;
+                }
+                i = (i + 1);
+            }
+        }
+        return ok;
+    }
+}
+
+uint8_t howl_decode_datatype_absent_or(slop_option_string dt, slop_string iri) {
+    __auto_type _mv_1075 = dt;
+    if (!_mv_1075.has_value) {
+        return 1;
+    } else if (_mv_1075.has_value) {
+        __auto_type d = _mv_1075.value;
+        return (howl_canon_string_cmp(d, iri) == 0);
+    }
+    SLOP_UNREACHABLE();
+}
+
 uint8_t howl_decode_predicate_is_annotation(howl_termstore_TermStore dict, howl_owl2_Signature sig, int64_t p) {
-    __auto_type _mv_1038 = howl_decode_term_iri_value(howl_termstore_term_of(dict, p));
-    if (_mv_1038.has_value) {
-        __auto_type i = _mv_1038.value;
+    __auto_type _mv_1076 = howl_decode_term_iri_value(howl_termstore_term_of(dict, p));
+    if (_mv_1076.has_value) {
+        __auto_type i = _mv_1076.value;
         return howl_owl2_signature_has_annotation_property(sig, i);
-    } else if (!_mv_1038.has_value) {
+    } else if (!_mv_1076.has_value) {
         return 0;
     }
     SLOP_UNREACHABLE();
@@ -3060,26 +3304,26 @@ uint8_t howl_decode_filler_triple(slop_rdf_rdf_Triple t, uint8_t restriction, ui
 }
 
 uint8_t howl_decode_id_is_blank(howl_termstore_TermStore dict, int64_t id) {
-    __auto_type _mv_1060 = howl_termstore_term_of(dict, id);
-    switch (_mv_1060.tag) {
+    __auto_type _mv_1098 = howl_termstore_term_of(dict, id);
+    switch (_mv_1098.tag) {
         case slop_rdf_rdf_Term_term_blank:
         {
-            __auto_type _ = _mv_1060.data.term_blank;
+            __auto_type _ = _mv_1098.data.term_blank;
             return 1;
         }
         case slop_rdf_rdf_Term_term_iri:
         {
-            __auto_type _ = _mv_1060.data.term_iri;
+            __auto_type _ = _mv_1098.data.term_iri;
             return 0;
         }
         case slop_rdf_rdf_Term_term_literal:
         {
-            __auto_type _ = _mv_1060.data.term_literal;
+            __auto_type _ = _mv_1098.data.term_literal;
             return 0;
         }
         case slop_rdf_rdf_Term_term_triple:
         {
-            __auto_type _ = _mv_1060.data.term_triple;
+            __auto_type _ = _mv_1098.data.term_triple;
             return 0;
         }
     }
@@ -3093,8 +3337,10 @@ uint8_t howl_decode_inert_data_axiom(howl_decode_DataVocab v, howl_decode_DataLe
         __auto_type o = it.o;
         __auto_type data = lemma.data;
         __auto_type idle = lemma.idle;
-        if ((p == v.domain) || (p == v.range)) {
+        if (p == v.domain) {
             return slop_map_has(idle, &(int64_t){s});
+        } else if (p == v.range) {
+            return (slop_map_has(idle, &(int64_t){s}) || slop_map_has(lemma.strings, &(int64_t){s}));
         } else if (p == v.rdf_type) {
             return ((o == v.functional) && slop_map_has(idle, &(int64_t){s}));
         } else if (p == v.sub_property) {
@@ -3103,6 +3349,8 @@ uint8_t howl_decode_inert_data_axiom(howl_decode_DataVocab v, howl_decode_DataLe
             return (slop_map_has(idle, &(int64_t){s}) && slop_map_has(idle, &(int64_t){o}));
         } else if (p == v.disjoint) {
             return ((slop_map_has(data, &(int64_t){s})) && (slop_map_has(data, &(int64_t){o})) && (!((s == v.top))) && (!((o == v.top))) && ((slop_map_has(idle, &(int64_t){s}) || slop_map_has(idle, &(int64_t){o}))));
+        } else if (slop_map_has(lemma.strings, &(int64_t){p})) {
+            return 1;
         } else {
             return 0;
         }
@@ -3165,13 +3413,13 @@ slop_option_string howl_decode_declaration_conflict(slop_arena* arena, howl_owl2
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type it = _coll.data[_i];
                 if (it.p == type_pred) {
-                    __auto_type _mv_1076 = howl_decode_term_iri_value(howl_termstore_term_of(dict, it.s));
-                    if (_mv_1076.has_value) {
-                        __auto_type e = _mv_1076.value;
+                    __auto_type _mv_1117 = howl_decode_term_iri_value(howl_termstore_term_of(dict, it.s));
+                    if (_mv_1117.has_value) {
+                        __auto_type e = _mv_1117.value;
                         if (howl_decode_property_kinds(sig, e) > 1) {
                             bad = (slop_option_string){.has_value = 1, .value = string_concat(arena, SLOP_STR("IRI declared under two disjoint property kinds: "), e.value)};
                         }
-                    } else if (!_mv_1076.has_value) {
+                    } else if (!_mv_1117.has_value) {
                     }
                 }
             }

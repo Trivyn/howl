@@ -1,0 +1,16 @@
+# THE DATA LEMMA, OUT OF PROFILE (SPEC.md §5.2; issue #133): the string half
+# covers only xsd:string and rdf:langString literals on named individuals. Here
+# :v is asserted "1"^^xsd:integer with range xsd:integer, a typed literal that is
+# not a string, so :v is NOT string-asserted. Its assertion and range stay out
+# of profile as omissions, and the verdict is INCONCLUSIVE (exit 2). The
+# disjointness and the typing of :j are still read.
+
+@prefix :     <https://example.org/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+:A a owl:Class . :B a owl:Class . :D a owl:Class .
+:A owl:disjointWith :B .
+:v a owl:DatatypeProperty ; rdfs:range xsd:integer .
+:j a :D ; :v "1"^^xsd:integer .

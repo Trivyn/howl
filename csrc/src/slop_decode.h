@@ -28,11 +28,18 @@ typedef struct howl_decode_Stage1 howl_decode_Stage1;
 typedef struct howl_decode_Decoding howl_decode_Decoding;
 typedef struct howl_decode_DataVocab howl_decode_DataVocab;
 typedef struct howl_decode_DataLemma howl_decode_DataLemma;
+typedef struct howl_decode_StringUses howl_decode_StringUses;
 
 typedef enum {
     howl_decode_LookupFault_lookup_missing,
     howl_decode_LookupFault_lookup_ambiguous
 } howl_decode_LookupFault;
+
+typedef enum {
+    howl_decode_StringKind_sk_string,
+    howl_decode_StringKind_sk_lang,
+    howl_decode_StringKind_sk_other
+} howl_decode_StringKind;
 
 #ifndef SLOP_LIST_U8_DEFINED
 #define SLOP_LIST_U8_DEFINED
@@ -300,6 +307,10 @@ struct howl_decode_DataVocab {
     int64_t disjoint;
     int64_t top;
     int64_t on_datatype;
+    int64_t literal;
+    int64_t plain_literal;
+    int64_t xsd_string;
+    int64_t lang_string;
 };
 typedef struct howl_decode_DataVocab howl_decode_DataVocab;
 
@@ -311,6 +322,7 @@ SLOP_OPTION_DEFINE(howl_decode_DataVocab, slop_option_howl_decode_DataVocab)
 struct howl_decode_DataLemma {
     slop_map* data;
     slop_map* idle;
+    slop_map* strings;
     slop_map* tree;
 };
 typedef struct howl_decode_DataLemma howl_decode_DataLemma;
@@ -318,6 +330,20 @@ typedef struct howl_decode_DataLemma howl_decode_DataLemma;
 #ifndef SLOP_OPTION_HOWL_DECODE_DATALEMMA_DEFINED
 #define SLOP_OPTION_HOWL_DECODE_DATALEMMA_DEFINED
 SLOP_OPTION_DEFINE(howl_decode_DataLemma, slop_option_howl_decode_DataLemma)
+#endif
+
+struct howl_decode_StringUses {
+    slop_map* spoiled;
+    slop_map* plain;
+    slop_map* tagged;
+    slop_map* no_plain;
+    slop_map* no_tagged;
+};
+typedef struct howl_decode_StringUses howl_decode_StringUses;
+
+#ifndef SLOP_OPTION_HOWL_DECODE_STRINGUSES_DEFINED
+#define SLOP_OPTION_HOWL_DECODE_STRINGUSES_DEFINED
+SLOP_OPTION_DEFINE(howl_decode_StringUses, slop_option_howl_decode_StringUses)
 #endif
 
 struct howl_decode_Decoding {
@@ -658,6 +684,15 @@ uint8_t howl_decode_promote_uses(howl_decode_DataVocab v, slop_map* data, slop_m
 void howl_decode_collect_idle(howl_decode_DataVocab v, slop_map* used, slop_map* idle, int64_t bottom, slop_list_howl_termstore_IdTriple triples);
 howl_decode_DataLemma howl_decode_data_lemma(slop_arena* arena, howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_list_howl_termstore_IdTriple triples);
 void howl_decode_mark_data_uses(howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, slop_map* used, howl_termstore_IdTriple it);
+void howl_decode_collect_string_asserted(slop_arena* arena, howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, int64_t bottom, slop_map* strings, slop_list_howl_termstore_IdTriple triples);
+void howl_decode_mark_string_uses(howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, howl_decode_StringUses u, howl_termstore_IdTriple it);
+howl_decode_StringKind howl_decode_string_kind(howl_termstore_TermStore dict, int64_t id);
+uint8_t howl_decode_simple_lang_tag(slop_string t);
+int64_t howl_decode_tag_subtag_end(slop_string t, int64_t i);
+uint8_t howl_decode_tag_span_is(slop_string t, int64_t i, int64_t j, uint8_t letters);
+uint8_t howl_decode_reserved_id(howl_termstore_TermStore dict, int64_t id);
+uint8_t howl_decode_xml_chars(slop_string s);
+uint8_t howl_decode_datatype_absent_or(slop_option_string dt, slop_string iri);
 uint8_t howl_decode_predicate_is_annotation(howl_termstore_TermStore dict, howl_owl2_Signature sig, int64_t p);
 void howl_decode_collect_inert_trees(slop_arena* arena, howl_termstore_TermStore dict, howl_decode_DataVocab v, slop_map* idle, slop_map* tree, slop_list_howl_termstore_IdTriple triples);
 uint8_t howl_decode_filler_triple(slop_rdf_rdf_Triple t, uint8_t restriction, uint8_t single);
@@ -781,6 +816,11 @@ SLOP_OPTION_DEFINE(howl_decode_DataVocab, slop_option_howl_decode_DataVocab)
 #ifndef SLOP_OPTION_HOWL_DECODE_DATALEMMA_DEFINED
 #define SLOP_OPTION_HOWL_DECODE_DATALEMMA_DEFINED
 SLOP_OPTION_DEFINE(howl_decode_DataLemma, slop_option_howl_decode_DataLemma)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_DECODE_STRINGUSES_DEFINED
+#define SLOP_OPTION_HOWL_DECODE_STRINGUSES_DEFINED
+SLOP_OPTION_DEFINE(howl_decode_StringUses, slop_option_howl_decode_StringUses)
 #endif
 
 #ifndef SLOP_OPTION_U8_DEFINED

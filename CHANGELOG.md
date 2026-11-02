@@ -10,6 +10,12 @@
 - Preserve identical reified/asserted axiom occurrences across documents so a mapping removal
   cannot remove a fixed source axiom. Subset trials retain declarations and recompute contextual
   preprocessing and profile gates.
+- **String assertions are inert, in every rung (#133).** SPEC §5.2's data lemma gains a second
+  half. A data property whose only uses are `xsd:string` or `rdf:langString` assertions on named
+  individuals, and whose ranges (if any) hold them, no longer puts its assertions and ranges in
+  every module and every report as omissions. A query outside them can now answer `no`. Typed
+  literals, and any property with a domain, a hierarchy, a restriction or a key, stay out of profile.
+  Every report golden is byte-identical.
 
 ## 0.7.1 — 2026-10-26
 

@@ -1,0 +1,20 @@
+# THE DATA LEMMA, STRING HALF (SPEC.md §5.2; issue #133): a data property whose
+# only uses are string literals on named individuals, and whose ranges hold
+# them, is string-asserted, and its assertions and ranges are inert in every
+# rung. :v is asserted "x" (plain) with range xsd:string, and :w is asserted
+# "y"@en with range rdfs:Literal. Both hold, so both are inert, and nothing is
+# omitted. :A and :B are disjoint and :D is unrelated to them, so the verdict
+# is COHERENT (exit 0). Before the fix, each assertion was an omission and
+# every probe answered unknown; now a probe about :D's unrelated class answers no.
+
+@prefix :     <https://example.org/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+:A a owl:Class . :B a owl:Class . :D a owl:Class .
+:A owl:disjointWith :B .
+:v a owl:DatatypeProperty ; rdfs:range xsd:string .
+:w a owl:DatatypeProperty ; rdfs:range rdfs:Literal .
+:j a :D ; :v "x" .
+:k a :D ; :w "y"@en .

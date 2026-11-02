@@ -470,7 +470,7 @@ because "ABox axioms are in v0" is not a grammar:
 | `C(a)`, `r(a,b)` | **in v0** — encoded as concepts, below |
 | `owl:sameAs`, `owl:differentFrom`, `AllDifferent` | **out-of-profile** in `el` — equality is what the nominal-free encoding deliberately lacks (`el++` and `sriq` take them) |
 | Negative property assertions | **out-of-profile** in `el` — `¬r(a,b)` is `{a} ⊓ ∃r.{b} ⊑ ⊥`, and the filler `{b}` is a nominal (`el++` and `sriq` take them) |
-| Datatype property assertions | **out-of-profile** (concrete domains) |
+| Datatype property assertions | **out-of-profile** (concrete domains), unless the property is string-asserted: then **inert** by the data lemma ([§5.2](#52-the-exact-v0-language)) |
 | Annotation assertions (`rdfs:label`, `rdfs:comment`, …) | **inert** |
 | Declaration triples (`rdf:type owl:Class` / `owl:ObjectProperty` / `owl:NamedIndividual`) | **inert semantically, but read** — see below |
 
@@ -898,7 +898,7 @@ through two gates at once.
 | Construct | Status |
 |---|---|
 | Inverse, functional, qualified cardinality | **`sriq`** ([§5.5](#55-the-sriq-calculus)) — the largest real gap, see [§8.4](#84-the-moose-tboxreasoner-port) |
-| Concrete domains / datatype properties, XSD ranges | **inert** when the data lemma below applies (the properties are idle); otherwise out-of-profile in every rung, and the consumer keeps a told-coherence side-check rather than HOWL growing a concrete domain ([§14](#14-non-goals)) |
+| Concrete domains / datatype properties, XSD ranges | **inert** when the data lemma below applies (the properties are idle, or string-asserted); otherwise out-of-profile in every rung, and the consumer keeps a told-coherence side-check rather than HOWL growing a concrete domain ([§14](#14-non-goals)) |
 | `ObjectHasSelf` | in the **OWL 2 EL profile**, but *not* in the cited EL++ class-constructor syntax — deferred |
 | **Reflexive role inclusions** (`ReflexiveObjectProperty`) | covered by the updated EL++ paper (global reflexive roles) and by OWL 2 EL — deferred |
 | `owl:topObjectProperty`, `owl:bottomObjectProperty` | built-in role semantics CR1–CR7 do not implement — see below |
@@ -930,7 +930,8 @@ judgement call.
 | `DisjointUnion` | **out-of-profile** — union |
 | `DisjointObjectProperties`, `IrreflexiveObjectProperty`, `SymmetricObjectProperty`, `AsymmetricObjectProperty`, `FunctionalObjectProperty`, `InverseFunctionalObjectProperty` | **out-of-profile** |
 | `SubDataPropertyOf`, `EquivalentDataProperties`, `DisjointDataProperties`, `FunctionalDataProperty`, `DataPropertyDomain`/`Range` on idle data properties | **inert**, in every rung — the data lemma, below |
-| `HasKey`, `DatatypeDefinition`, `DataPropertyAssertion`, `NegativeDataPropertyAssertion`, and the data-property axioms the data lemma does not set aside | **out-of-profile** |
+| `DataPropertyAssertion` of a string literal, and `DataPropertyRange`, on string-asserted data properties | **inert**, in every rung — the data lemma, below |
+| `HasKey`, `DatatypeDefinition`, `DataPropertyAssertion` other than on a string-asserted property, `NegativeDataPropertyAssertion`, and the data-property axioms the data lemma does not set aside | **out-of-profile** |
 | `InverseObjectProperties` | **out-of-profile** — in `sriq` ([§5.5](#55-the-sriq-calculus)) |
 | `SameIndividual`, `DifferentIndividuals`, `NegativeObjectPropertyAssertion` | **out-of-profile** |
 | Datatype properties, data ranges, literals in class positions | **out-of-profile** |
@@ -1010,47 +1011,123 @@ false-inconclusive on entirely valid documents. Separately enumerated, and *cons
 inert, are the RDF-mapping and header predicates that are syntax scaffolding
 ([§6.3](#63-normalization) step 0).
 
-**Data axioms on idle data properties are inert, in every rung: the data lemma.** No rung reasons
-over data. But the property axioms of a data property that nothing uses cannot change any answer,
-and omitting them made such ontologies inconclusive for nothing. CCO is the case in point: 8
-data-property domains and 8 ranges, and no other data.
+**Data axioms on idle data properties, and string assertions, are inert, in every rung: the data
+lemma.** No rung reasons over data. But the property axioms of a data property that nothing uses
+cannot change any answer, and omitting them made such ontologies inconclusive for nothing. CCO is
+the case in point: 8 data-property domains and 8 ranges, and no other data. Nor can a property whose
+only job is to attach strings to named individuals, such as an identifier or a title (issue #133).
 
 - **Idle.** A data property `P` is *idle* if neither `P` nor any data property below it in the told
   data-property hierarchy occurs in a class expression, an assertion or a key. The hierarchy is
   `SubDataPropertyOf` and `EquivalentDataProperties`, reflexive and transitive.
   `owl:topDataProperty` is never idle.
+- **String-asserted.** A data property `P` whose IRI is not reserved vocabulary (so neither
+  `owl:topDataProperty` nor `owl:bottomDataProperty`, and not `owl:sameAs` or `rdf:value` declared a
+  data property: a reserved IRI's meaning is fixed by its specification, not by this lemma) is
+  *string-asserted* if it has at least one assertion and all of these hold.
+  - **Its assertions are strings on named individuals.** In every `DataPropertyAssertion(P a lit)`,
+    `a` is a named individual: an IRI, not a blank node and not reserved vocabulary. And `lit` is a
+    *string literal*: an `xsd:string`, written plain (`"x"`, no datatype and no tag) or typed
+    (`"x"^^xsd:string`), or an `rdf:langString` (`"x"@en`), whose lexical form is a sequence of
+    XML 1.0 `Char`s. An `rdf:langString`'s tag must also match, ignoring case,
+
+    ```
+    [a-z]{2,3} ( "-" [a-z]{4} )? ( "-" ( [a-z]{2} | [0-9]{3} ) )?
+    ```
+
+    that is, a language, then optionally a script, then optionally a region: `en`, `en-US`,
+    `zh-Hans-CN`, `es-419`. RDF 1.1 requires a tag well-formed under BCP 47, and neither the Turtle
+    parser nor the triple API checks one, so `"x"@abcdefghi` arrives as a literal. Every tag the
+    pattern matches is well-formed. HOWL keeps out what it does not check, so a well-formed tag
+    outside the pattern also keeps `P` out: an extlang, a variant, an extension, private use
+    (`en-US-x-private`).
+
+    The two spellings of an `xsd:string` are distinct RDF terms with one value. Any other literal
+    keeps `P` out: a typed one, a tag with any datatype but `rdf:langString`, a tag outside the
+    pattern, and a form holding a character outside `Char` (a C0 control but tab, line feed and
+    carriage return; a surrogate; U+FFFE or U+FFFF). That last form is ill-typed, since no string
+    datatype's value space contains it. So does an individual as the value.
+  - **Its ranges hold them.** Every `DataPropertyRange(P DR)` has `DR` a named datatype that holds
+    every literal asserted on `P`:
+
+    | Range `DR` | Holds |
+    |---|---|
+    | `rdfs:Literal`, `rdf:PlainLiteral` | every string literal |
+    | `xsd:string` | the `xsd:string` literals |
+    | `rdf:langString` | the `rdf:langString` literals |
+
+    Any other range keeps `P` out: a blank-node data range, `xsd:integer`, a user datatype. `P` may
+    have no range at all.
+  - **Nothing else names it.** `P` occurs in no other axiom but its declaration and annotations. So
+    there is no domain, no `FunctionalDataProperty`, no other type and no key. There is no
+    `SubDataPropertyOf`, `EquivalentDataProperties` or `DisjointDataProperties` at either end
+    (`owl:propertyDisjointWith` or `owl:AllDisjointProperties`). There is no
+    `NegativeDataPropertyAssertion` and no class expression.
+
+  Read on the graph: every triple that names `P`, in any position, is one of `P rdf:type
+  owl:DatatypeProperty`, `P rdfs:range DR`, `a P lit`, or a triple whose predicate is an annotation
+  property. That reading runs after stage 0 ([§6.3](#63-normalization)). An annotated or reified
+  assertion is the triple stage 0 rebuilds from its `owl:Axiom` node, as for any other reified
+  axiom, and the node's own triples are header material, not occurrences. A string-asserted property
+  is asserted, so it is never idle.
 - **Set aside.** An axiom is *inert* when it is one of these:
   - `DataPropertyDomain(P C)`, `DataPropertyRange(P DR)` or `FunctionalDataProperty(P)`, with `P`
     idle;
   - `SubDataPropertyOf(P Q)`, with `P` idle;
   - `EquivalentDataProperties(P₁ … Pₙ)`, with every `Pᵢ` idle;
   - `DisjointDataProperties(P₁ … Pₙ)`, where every pair has an idle member;
-  - `SubDataPropertyOf(P owl:topDataProperty)`, a tautology.
+  - `SubDataPropertyOf(P owl:topDataProperty)`, a tautology;
+  - `DataPropertyAssertion(P a lit)` and `DataPropertyRange(P DR)`, with `P` string-asserted.
 - **What stays out of profile.**
-  - Every other data axiom.
+  - Every other data axiom. That includes every assertion on a property that is not
+    string-asserted, and every axiom on it.
+  - Typed literals, such as dates and numbers, even inside a range that names their datatype. An
+    ill-typed literal (`"x"^^xsd:integer`) is inconsistent, and no rung validates a lexical form
+    yet. They stay out of profile until one does (a follow-up issue). A string literal's only
+    ill-formed or ill-typed forms are a non-`Char` form and a malformed tag, and the definition
+    already excludes both. That is why string literals can go.
   - Any other use of `owl:topDataProperty`. OWL 2 DL forbids it (Structural Specification §11.2),
     and the argument below cannot cover it. The property's extension is never empty, so a range on
     it is inconsistent and a domain on it puts every individual into the class.
-- **Lemma.** Let `A` be the inert data axioms of `O`. Then `O` and `O ∖ A` agree on consistency, on
+- **Lemma.** Let `A` be the inert data axioms of `O` on idle properties, and `A₂` the assertions and
+  ranges of its string-asserted properties. Then `O` and `O ∖ (A ∪ A₂)` agree on consistency, on
   the satisfiability of every class, and on every subsumption between classes.
 
-  *Proof.* A model of `O` is a model of `O ∖ A`. For the converse, take a model `I` of `O ∖ A`, and
-  let `I′` be `I` with every idle property's extension emptied.
+  *Proof.* A model of `O` is a model of `O ∖ (A ∪ A₂)`. For the converse, take a model `I` of
+  `O ∖ (A ∪ A₂)`. Let `I′` be `I` with every idle property's extension emptied, and with each
+  string-asserted `P`'s extension set to exactly `{(aᴵ, val(lit)) | DataPropertyAssertion(P a lit)
+  ∈ O}`, where `val(lit)` is the literal's data value: a string, or a string with its tag.
   - **`A` holds in `I′`.** Domains, ranges and functionality hold vacuously. An inclusion from an
     empty property holds trivially. An equivalence between empty properties holds. So does a
     disjointness in which every pair has an empty member.
-  - **`O ∖ A` still holds.** The only axiom of `O ∖ A` that can mention an idle `P` is a
-    `DisjointDataProperties`, because every other data-property axiom naming `P` is in `A`: the
-    sub-properties of an idle property are idle. Emptying `P` keeps a disjointness true.
-  - **The classes do not change.** `I′` changes no class, individual or object property, and no
-    class expression or assertion mentions an idle property. So every class has the same extension
-    in `I′` as in `I`.
+  - **`A₂` holds in `I′`.** Each assertion holds by construction. Each range holds by the table
+    above: every value in `P`'s extension is a value of some asserted literal, and `DR`'s value
+    space contains it. Each literal's value exists: its form is a sequence of `Char`s, which is a
+    lexical form of `xsd:string`, and its tag, if any, is well-formed.
+  - **`O ∖ (A ∪ A₂)` still holds.** The only axiom of `O ∖ (A ∪ A₂)` that can mention an idle `P`
+    is a `DisjointDataProperties`, because every other data-property axiom naming `P` is in `A`:
+    the sub-properties of an idle property are idle. Emptying `P` keeps a disjointness true. No
+    axiom of `O ∖ (A ∪ A₂)` mentions a string-asserted property at all, by its definition. The two
+    sets are disjoint, since a string-asserted property is asserted and an idle one is not. And no
+    axiom of `O` links them: every axiom naming a string-asserted property is its declaration, an
+    annotation, or in `A₂`, and none of those names a second data property.
+  - **The classes do not change.** `I′` changes no class, individual or object property. No class
+    expression mentions an idle or string-asserted property, and no assertion an idle one. So every
+    class has the same extension in `I′` as in `I`.
 
   Hence `I′ ⊨ O`, with the same class extensions as `I`, and the claims follow.
+- **Not locality.** The alternative was to treat a string assertion as ⊥-local, so that it left
+  every module whose signature misses its property ([§8.4](#84-the-moose-tboxreasoner-port)).
+  That is unsound for data. An assertion outside the signature can still make `O` inconsistent,
+  through an ill-typed literal or a violated range, and an inconsistent `O` entails every query. So
+  a module without it could answer `no` where the answer is `yes`. The lemma proves instead that
+  the axioms it sets aside cannot do that, and keeps every other data axiom in every module as an
+  omission.
 - **Every rung applies it.** The lemma is about the theory, not a calculus. So `el` and `el++`
   reports on such input go from *inconclusive* to *coherent* when nothing else is omitted.
-- **What it does not touch.** Data assertions, data restrictions in class expressions and keys
-  still need a concrete domain, and no rung has one ([§14](#14-non-goals)).
+- **What it does not touch.** Typed-literal assertions, assertions on any property that is not
+  string-asserted, data restrictions in class expressions and keys still need a concrete domain or
+  lexical validation, and no rung has either ([§14](#14-non-goals)).
 
 The fallback covers what is left: a triple typable as neither a supported logical axiom nor an
 annotation assertion is **out-of-profile**, never dropped. Getting that default backwards in either
@@ -5617,7 +5694,8 @@ query declarations. The two-run mode is unchanged.
   - **The fuzzer** (`abox_fuzz --ask`): 400 generated `sriq` ontologies and 2,321 queries, under el
     and under auto, the inconsistent ones included. No answer is wrong.
   - **Limits found:**
-    - SWRL rules, data assertions and other text-only axioms are in every module, as are
+    - SWRL rules, data assertions (but a string-asserted property's, which the data lemma sets
+      aside) and other text-only axioms are in every module, as are
       decode-level omissions such as an undeclared property. Any of them makes every module run
       incomplete. Up to 0.6.0 that sent the answer run to the whole input. Since 0.6.1 these, like a
       datatype restriction, are omissions no rung reads (L5), so the module's run answers.
@@ -6653,8 +6731,9 @@ until one of those fires. That is now a statement about Trivyn, not about whethe
 - **Not** a replacement for GROWL. GROWL remains the production RL materialization/enrichment engine.
 - **Not** a tableau reasoner. No model construction, backtracking, or blocking.
 - **Not** OWL 2 Full, rule extensions (SWRL), or datatype reasoning. No rung has a concrete domain.
-  The property axioms of *idle* data properties are inert by the data lemma
-  ([§5.2](#52-the-exact-v0-language)), because they provably change no answer. Every other datatype
+  The property axioms of *idle* data properties, and the string assertions and ranges of
+  *string-asserted* ones, are inert by the data lemma ([§5.2](#52-the-exact-v0-language)), because
+  they provably change no answer. Every other datatype
   axiom is enumerated as out-of-profile, and the consumer partitions those off and keeps its own
   told-coherence side-check rather than HOWL growing a concrete domain to absorb them. Keeping the language honest is worth more here than
   absorbing one more construct.

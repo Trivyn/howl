@@ -63,7 +63,8 @@ The HOWL column uses five values:
 | `HasKey` | | ✓ | not yet | DL-safe over named individuals, and it infers equality; outside `el++` too |
 | ***Concrete domains*** | | | | |
 | Domain, range, sub-property, equivalence, disjointness and functionality axioms of *idle* data properties (neither the property nor any data property below it is used in a class expression, assertion or key) | ✓ | ✓ | **inert, every rung** | the data lemma ([SPEC §5.2](../SPEC.md#52-the-exact-v0-language)): emptying an idle property changes no answer |
-| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data assertions, `DatatypeDefinition`, and the property axioms of data properties that are used | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
+| Assertions and ranges of *string-asserted* data properties (every use is an `xsd:string` or `rdf:langString` assertion on a named individual, and every range is `rdfs:Literal`, `rdf:PlainLiteral`, `xsd:string` or `rdf:langString` and holds each literal) | ✓ | ✓ | **inert, every rung** | the data lemma ([SPEC §5.2](../SPEC.md#52-the-exact-v0-language)): fixing the property's extension to its assertions changes no answer (#133) |
+| `DataSomeValuesFrom`, `DataHasValue`, `DataOneOf`, `DataIntersectionOf`, data assertions of typed literals or on other used properties, `DatatypeDefinition`, and the property axioms of data properties that are used | ✓ | ✓ | **non-goal** | the consumer partitions datatype axioms off rather than HOWL growing a concrete domain |
 
 † Sound and complete by the argument in
 [SPEC §5.3](../SPEC.md#53-the-abox-reduction-is-sound-and-complete), reviewed 2026-09-30 as M1 (f).
@@ -73,7 +74,7 @@ because the published completeness proof for nominals fails (KKS12). It also cov
 specific to HOWL's direct-edge encoding. `make abox-fuzz` checks the code against it: 400 generated
 ontologies with ABoxes, each matching HermiT.
 
-**21 of the 24 rows are done**: 14 under `el`, and 7 more under `el++`. Still open are `HasKey`,
+**21 of the 25 rows are done**: 14 under `el`, and 7 more under `el++`. Still open are `HasKey`,
 `owl:topObjectProperty` outside a super-role position, and concrete domains, which are a non-goal.
 
 `el++` is built on Krötzsch's Ksc calculus. It is the one published proof that covers nominals
