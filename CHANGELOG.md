@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 — 2026-11-02
+
+Valid `xsd:dateTime` and `xsd:dateTimeStamp` data assertions no longer make probe answers `unknown`
+(part of #135), so SPDX 3.0.1's model, with its SHACL shapes removed, is coherent with no omissions
+under `el++` and `sriq`. There are no API changes, and every existing report golden is
+byte-identical; only an input with date-time data assertions reports differently. The
+slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged.
 
 ### Changed
 
@@ -13,6 +19,16 @@
   `dateTimeStamp` without a timezone, and every other typed literal (`xsd:integer`, `xsd:decimal`,
   `xsd:boolean`, `xsd:anyURI`, `xsd:date`, …) stay out of profile. The concept is renamed from
   *string-asserted* to *literal-asserted*, in SPEC and in the decoder.
+
+### Fixed
+
+- **The corpus reads literals as written.** The projector, the census, the corpus differential and
+  the benchmark's input check had parsed with rdflib's literal normalization. It rewrites a
+  date-time's `Z` as `+00:00`, and even repairs an invalid form. Projections are now written as
+  N-Triples. RO's and OBI's projected ground hashes change in every profile, since their kept
+  annotation timestamps now hash as written. No removal, count, report or oracle result changes.
+- **`make corpus` fetches GO again.** GO's dated 2026-07-26 URL returns 404. The manifest now names
+  its 2026-08-05 release, whose bytes match the pinned SHA-256.
 
 ## 0.8.0 — 2026-11-01
 
