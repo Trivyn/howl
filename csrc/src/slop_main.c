@@ -34,31 +34,31 @@ void howl_cli_main_print_ask_fault(slop_arena* arena, howl_types_Fault f);
 int64_t howl_cli_main_ask_exit_code(slop_result_howl_probe_Probing_howl_types_Fault r);
 int main(int argc, char** _c_argv);
 
-typedef struct { slop_arena* arena; howl_termstore_Encoded* enc; } howl_cli_main__lambda_1879_env_t;
+typedef struct { slop_arena* arena; howl_termstore_Encoded* enc; } howl_cli_main__lambda_1918_env_t;
 
-static void howl_cli_main__lambda_1879(howl_cli_main__lambda_1879_env_t* _env, slop_rdf_rdf_Triple t) { howl_termstore_encoded_add(_env->arena, _env->enc, t); }
+static void howl_cli_main__lambda_1918(howl_cli_main__lambda_1918_env_t* _env, slop_rdf_rdf_Triple t) { howl_termstore_encoded_add(_env->arena, _env->enc, t); }
 
 int64_t howl_cli_main_exit_code_for(slop_result_howl_types_Outcome_howl_types_Fault r) {
     int64_t _retval = {0};
-    __auto_type _mv_1876 = r;
-    if (_mv_1876.is_ok) {
-        __auto_type o = _mv_1876.data.ok;
-        __auto_type _mv_1877 = howl_types_verdict(o);
-        if (_mv_1877 == howl_types_Verdict_verdict_coherent) {
+    __auto_type _mv_1915 = r;
+    if (_mv_1915.is_ok) {
+        __auto_type o = _mv_1915.data.ok;
+        __auto_type _mv_1916 = howl_types_verdict(o);
+        if (_mv_1916 == howl_types_Verdict_verdict_coherent) {
             _retval = 0;
             goto _slop_post;
-        } else if (_mv_1877 == howl_types_Verdict_verdict_incoherent) {
+        } else if (_mv_1916 == howl_types_Verdict_verdict_incoherent) {
             _retval = 1;
             goto _slop_post;
-        } else if (_mv_1877 == howl_types_Verdict_verdict_inconclusive) {
+        } else if (_mv_1916 == howl_types_Verdict_verdict_inconclusive) {
             _retval = 2;
             goto _slop_post;
         }
         SLOP_UNREACHABLE();
-    } else if (!_mv_1876.is_ok) {
-        __auto_type f = _mv_1876.data.err;
-        __auto_type _mv_1878 = f;
-        switch (_mv_1878.tag) {
+    } else if (!_mv_1915.is_ok) {
+        __auto_type f = _mv_1915.data.err;
+        __auto_type _mv_1917 = f;
+        switch (_mv_1917.tag) {
             case howl_types_Fault_cancelled:
             {
                 _retval = 2;
@@ -66,19 +66,19 @@ int64_t howl_cli_main_exit_code_for(slop_result_howl_types_Outcome_howl_types_Fa
             }
             case howl_types_Fault_refused:
             {
-                __auto_type _ = _mv_1878.data.refused;
+                __auto_type _ = _mv_1917.data.refused;
                 _retval = 2;
                 goto _slop_post;
             }
             case howl_types_Fault_input_error:
             {
-                __auto_type _ = _mv_1878.data.input_error;
+                __auto_type _ = _mv_1917.data.input_error;
                 _retval = 3;
                 goto _slop_post;
             }
             case howl_types_Fault_unavailable:
             {
-                __auto_type _ = _mv_1878.data.unavailable;
+                __auto_type _ = _mv_1917.data.unavailable;
                 _retval = 3;
                 goto _slop_post;
             }
@@ -96,7 +96,7 @@ int64_t howl_cli_main_exit_code_for(slop_result_howl_types_Outcome_howl_types_Fa
 uint8_t howl_cli_main_parse_into(slop_arena* arena, howl_termstore_Encoded* enc, slop_string path) {
     {
         __auto_type parse = ({ slop_arena* _new_arena = malloc(sizeof(slop_arena)); if (!_new_arena) { fprintf(stderr, "SLOP: arena-new malloc failed\n"); abort(); } *_new_arena = slop_arena_new(16777216); _new_arena; });
-        __auto_type ok = ({ __auto_type _mv = slop_rdf_ttl_parse_ttl_file_for_each_triple(parse, path, ({ howl_cli_main__lambda_1879_env_t* howl_cli_main__lambda_1879_env = (howl_cli_main__lambda_1879_env_t*)slop_arena_alloc(arena, sizeof(howl_cli_main__lambda_1879_env_t)); *howl_cli_main__lambda_1879_env = (howl_cli_main__lambda_1879_env_t){ .arena = arena, .enc = enc }; (slop_closure_t){ (void*)howl_cli_main__lambda_1879, (void*)howl_cli_main__lambda_1879_env }; })); uint8_t _mr; if (_mv.is_ok) { __auto_type _ = _mv.data.ok; _mr = 1; } else { __auto_type _ = _mv.data.err; _mr = 0; } _mr; });
+        __auto_type ok = ({ __auto_type _mv = slop_rdf_ttl_parse_ttl_file_for_each_triple(parse, path, ({ howl_cli_main__lambda_1918_env_t* howl_cli_main__lambda_1918_env = (howl_cli_main__lambda_1918_env_t*)slop_arena_alloc(arena, sizeof(howl_cli_main__lambda_1918_env_t)); *howl_cli_main__lambda_1918_env = (howl_cli_main__lambda_1918_env_t){ .arena = arena, .enc = enc }; (slop_closure_t){ (void*)howl_cli_main__lambda_1918, (void*)howl_cli_main__lambda_1918_env }; })); uint8_t _mr; if (_mv.is_ok) { __auto_type _ = _mv.data.ok; _mr = 1; } else { __auto_type _ = _mv.data.err; _mr = 0; } _mr; });
         (void)(({ slop_arena_free(parse); free(parse); }));
         return ok;
     }
@@ -113,23 +113,23 @@ slop_option_slop_rdf_rdf_IRI howl_cli_main_ontology_iri_from(howl_termstore_Enco
                 if (k >= from) {
                     {
                         __auto_type t = howl_termstore_triple_of(e.dict, it);
-                        __auto_type _mv_1880 = t.predicate;
-                        switch (_mv_1880.tag) {
+                        __auto_type _mv_1919 = t.predicate;
+                        switch (_mv_1919.tag) {
                             case slop_rdf_rdf_Term_term_iri:
                             {
-                                __auto_type p = _mv_1880.data.term_iri;
+                                __auto_type p = _mv_1919.data.term_iri;
                                 if (howl_canon_string_cmp(p.value, slop_rdf_vocab_RDF_TYPE) == 0) {
-                                    __auto_type _mv_1881 = t.object;
-                                    switch (_mv_1881.tag) {
+                                    __auto_type _mv_1920 = t.object;
+                                    switch (_mv_1920.tag) {
                                         case slop_rdf_rdf_Term_term_iri:
                                         {
-                                            __auto_type o = _mv_1881.data.term_iri;
+                                            __auto_type o = _mv_1920.data.term_iri;
                                             if (howl_canon_string_cmp(o.value, slop_rdf_vocab_OWL_ONTOLOGY) == 0) {
-                                                __auto_type _mv_1882 = t.subject;
-                                                switch (_mv_1882.tag) {
+                                                __auto_type _mv_1921 = t.subject;
+                                                switch (_mv_1921.tag) {
                                                     case slop_rdf_rdf_Term_term_iri:
                                                     {
-                                                        __auto_type sub = _mv_1882.data.term_iri;
+                                                        __auto_type sub = _mv_1921.data.term_iri;
                                                         found = (slop_option_slop_rdf_rdf_IRI){.has_value = 1, .value = sub};
                                                         break;
                                                     }
@@ -225,14 +225,14 @@ void howl_cli_main_print_usage(void) {
 }
 
 void howl_cli_main_print_step_down(slop_arena* arena, slop_result_howl_types_Outcome_howl_types_Fault r) {
-    __auto_type _mv_1883 = r;
-    if (_mv_1883.is_ok) {
-        __auto_type o = _mv_1883.data.ok;
+    __auto_type _mv_1922 = r;
+    if (_mv_1922.is_ok) {
+        __auto_type o = _mv_1922.data.ok;
         if (o.stepped_down) {
             howl_cli_main_eprint(string_concat(arena, SLOP_STR("howl: auto stepped down from sriq to "), string_concat(arena, howl_select_profile_name(o.profile), SLOP_STR(": sriq's run passed its clause budget with nothing definitive\n"))));
         }
-    } else if (!_mv_1883.is_ok) {
-        __auto_type _ = _mv_1883.data.err;
+    } else if (!_mv_1922.is_ok) {
+        __auto_type _ = _mv_1922.data.err;
     }
 }
 
@@ -293,12 +293,12 @@ slop_result_howl_Prepared_howl_types_Fault howl_cli_main_prepare_from(slop_arena
 }
 
 slop_result_howl_types_Outcome_howl_types_Fault howl_cli_main_reason_prepared(slop_arena* arena, slop_result_howl_Prepared_howl_types_Fault p, howl_types_ReasonerConfig config) {
-    __auto_type _mv_1884 = p;
-    if (!_mv_1884.is_ok) {
-        __auto_type f = _mv_1884.data.err;
+    __auto_type _mv_1923 = p;
+    if (!_mv_1923.is_ok) {
+        __auto_type f = _mv_1923.data.err;
         return ((slop_result_howl_types_Outcome_howl_types_Fault){ .is_ok = false, .data.err = f });
-    } else if (_mv_1884.is_ok) {
-        __auto_type pp = _mv_1884.data.ok;
+    } else if (_mv_1923.is_ok) {
+        __auto_type pp = _mv_1923.data.ok;
         return howl_reason(arena, pp, config);
     }
     SLOP_UNREACHABLE();
@@ -317,17 +317,17 @@ slop_option_howl_termstore_Encoded_ptr howl_cli_main_probe_input(slop_arena* are
 }
 
 slop_option_result_howl_probe_Probing_howl_types_Fault howl_cli_main_probe_of(slop_arena* arena, slop_option_howl_termstore_Encoded_ptr doc, slop_list_slop_rdf_rdf_IRI resolved, slop_list_howl_probe_Query queries, howl_types_ReasonerConfig config, slop_result_howl_types_Outcome_howl_types_Fault main) {
-    __auto_type _mv_1885 = main;
-    if (!_mv_1885.is_ok) {
-        __auto_type _ = _mv_1885.data.err;
+    __auto_type _mv_1924 = main;
+    if (!_mv_1924.is_ok) {
+        __auto_type _ = _mv_1924.data.err;
         return (slop_option_result_howl_probe_Probing_howl_types_Fault){.has_value = false};
-    } else if (_mv_1885.is_ok) {
-        __auto_type _ = _mv_1885.data.ok;
-        __auto_type _mv_1886 = doc;
-        if (!_mv_1886.has_value) {
+    } else if (_mv_1924.is_ok) {
+        __auto_type _ = _mv_1924.data.ok;
+        __auto_type _mv_1925 = doc;
+        if (!_mv_1925.has_value) {
             return (slop_option_result_howl_probe_Probing_howl_types_Fault){.has_value = false};
-        } else if (_mv_1886.has_value) {
-            __auto_type d = _mv_1886.value;
+        } else if (_mv_1925.has_value) {
+            __auto_type d = _mv_1925.value;
             return (slop_option_result_howl_probe_Probing_howl_types_Fault){.has_value = 1, .value = howl_probe_encoded(arena, (*d), resolved, queries, config, 0)};
         }
         SLOP_UNREACHABLE();
@@ -336,17 +336,17 @@ slop_option_result_howl_probe_Probing_howl_types_Fault howl_cli_main_probe_of(sl
 }
 
 slop_result_howl_types_Outcome_howl_types_Fault howl_cli_main_with_probe(slop_arena* arena, slop_result_howl_types_Outcome_howl_types_Fault main, slop_option_result_howl_probe_Probing_howl_types_Fault probed) {
-    __auto_type _mv_1887 = probed;
-    if (!_mv_1887.has_value) {
+    __auto_type _mv_1926 = probed;
+    if (!_mv_1926.has_value) {
         return main;
-    } else if (_mv_1887.has_value) {
-        __auto_type pr = _mv_1887.value;
-        __auto_type _mv_1888 = pr;
-        if (_mv_1888.is_ok) {
-            __auto_type _ = _mv_1888.data.ok;
+    } else if (_mv_1926.has_value) {
+        __auto_type pr = _mv_1926.value;
+        __auto_type _mv_1927 = pr;
+        if (_mv_1927.is_ok) {
+            __auto_type _ = _mv_1927.data.ok;
             return main;
-        } else if (!_mv_1888.is_ok) {
-            __auto_type f = _mv_1888.data.err;
+        } else if (!_mv_1927.is_ok) {
+            __auto_type f = _mv_1927.data.err;
             return ((slop_result_howl_types_Outcome_howl_types_Fault){ .is_ok = false, .data.err = ({ __auto_type _mv = f; howl_types_Fault _mr = {0}; switch (_mv.tag) { case howl_types_Fault_input_error: { __auto_type m = _mv.data.input_error; _mr = ((howl_types_Fault){ .tag = howl_types_Fault_input_error, .data.input_error = string_concat(arena, SLOP_STR("probe run: "), m) }); break; } default: { _mr = f; break; }  } _mr; }) });
         }
         SLOP_UNREACHABLE();
@@ -355,23 +355,23 @@ slop_result_howl_types_Outcome_howl_types_Fault howl_cli_main_with_probe(slop_ar
 }
 
 void howl_cli_main_print_probes(slop_arena* arena, slop_option_result_howl_probe_Probing_howl_types_Fault probed) {
-    __auto_type _mv_1889 = probed;
-    if (_mv_1889.has_value) {
-        __auto_type pr = _mv_1889.value;
-        __auto_type _mv_1890 = pr;
-        if (_mv_1890.is_ok) {
-            __auto_type p = _mv_1890.data.ok;
+    __auto_type _mv_1928 = probed;
+    if (_mv_1928.has_value) {
+        __auto_type pr = _mv_1928.value;
+        __auto_type _mv_1929 = pr;
+        if (_mv_1929.is_ok) {
+            __auto_type p = _mv_1929.data.ok;
             {
                 __auto_type _coll = howl_report_probe_lines(arena, p);
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type l = _coll.data[_i];
-                    ({ slop_string _ps_1891 = (l); printf("%.*s\n", (int)_ps_1891.len, _ps_1891.data); });
+                    ({ slop_string _ps_1930 = (l); printf("%.*s\n", (int)_ps_1930.len, _ps_1930.data); });
                 }
             }
-        } else if (!_mv_1890.is_ok) {
-            __auto_type _ = _mv_1890.data.err;
+        } else if (!_mv_1929.is_ok) {
+            __auto_type _ = _mv_1929.data.err;
         }
-    } else if (!_mv_1889.has_value) {
+    } else if (!_mv_1928.has_value) {
     }
 }
 
@@ -385,7 +385,7 @@ void howl_cli_main_print_omissions(slop_arena* arena, slop_list_howl_types_Omiss
         for (size_t _i = 0; _i < _coll.len; _i++) {
             __auto_type o = _coll.data[_i];
             printf("%s", "  omitted: ");
-            (void)(({ slop_string _ps_1892 = (howl_owl2_render_omission(arena, o)); printf("%.*s\n", (int)_ps_1892.len, _ps_1892.data); }));
+            (void)(({ slop_string _ps_1931 = (howl_owl2_render_omission(arena, o)); printf("%.*s\n", (int)_ps_1931.len, _ps_1931.data); }));
         }
     }
 }
@@ -412,44 +412,44 @@ int64_t howl_cli_main_validate_run(slop_arena* arena, slop_arena* front, howl_te
             howl_cli_main_print_timings(arena, t_start, t_parsed, t_decoded, t_prepared, t_reasoned);
         }
         howl_cli_main_print_step_down(arena, result);
-        __auto_type _mv_1893 = result;
-        if (_mv_1893.is_ok) {
-            __auto_type o = _mv_1893.data.ok;
+        __auto_type _mv_1932 = result;
+        if (_mv_1932.is_ok) {
+            __auto_type o = _mv_1932.data.ok;
             if (report_mode) {
                 {
                     __auto_type _coll = howl_report_report_lines(arena, o);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type l = _coll.data[_i];
-                        ({ slop_string _ps_1894 = (l); printf("%.*s\n", (int)_ps_1894.len, _ps_1894.data); });
+                        ({ slop_string _ps_1933 = (l); printf("%.*s\n", (int)_ps_1933.len, _ps_1933.data); });
                     }
                 }
             } else {
                 printf("%s", "howl: ");
-                ({ slop_string _ps_1895 = (int_to_string(arena, ((int64_t)(((int64_t)((o.findings.subsumptions).len)))))); printf("%.*s", (int)_ps_1895.len, _ps_1895.data); });
+                ({ slop_string _ps_1934 = (int_to_string(arena, ((int64_t)(((int64_t)((o.findings.subsumptions).len)))))); printf("%.*s", (int)_ps_1934.len, _ps_1934.data); });
                 printf("%s", " subsumptions, ");
-                ({ slop_string _ps_1896 = (int_to_string(arena, ((int64_t)(((int64_t)((o.findings.unsatisfiable).len)))))); printf("%.*s", (int)_ps_1896.len, _ps_1896.data); });
+                ({ slop_string _ps_1935 = (int_to_string(arena, ((int64_t)(((int64_t)((o.findings.unsatisfiable).len)))))); printf("%.*s", (int)_ps_1935.len, _ps_1935.data); });
                 printf("%s", " unsatisfiable, ");
-                ({ slop_string _ps_1897 = (int_to_string(arena, ((int64_t)(((int64_t)((o.coverage.omitted).len)))))); printf("%.*s", (int)_ps_1897.len, _ps_1897.data); });
+                ({ slop_string _ps_1936 = (int_to_string(arena, ((int64_t)(((int64_t)((o.coverage.omitted).len)))))); printf("%.*s", (int)_ps_1936.len, _ps_1936.data); });
                 printf("%s\n", " omitted");
                 howl_cli_main_print_omissions(arena, o.coverage.omitted);
-                __auto_type _mv_1898 = howl_types_verdict(o);
-                if (_mv_1898 == howl_types_Verdict_verdict_coherent) {
+                __auto_type _mv_1937 = howl_types_verdict(o);
+                if (_mv_1937 == howl_types_Verdict_verdict_coherent) {
                     printf("%s\n", "howl: coherent");
-                } else if (_mv_1898 == howl_types_Verdict_verdict_incoherent) {
+                } else if (_mv_1937 == howl_types_Verdict_verdict_incoherent) {
                     printf("%s\n", "howl: INCOHERENT");
-                } else if (_mv_1898 == howl_types_Verdict_verdict_inconclusive) {
+                } else if (_mv_1937 == howl_types_Verdict_verdict_inconclusive) {
                     printf("%s\n", "howl: INCONCLUSIVE — coverage gaps, this is NOT a pass");
                 }
             }
-        } else if (!_mv_1893.is_ok) {
-            __auto_type f = _mv_1893.data.err;
-            __auto_type _mv_1899 = f;
-            switch (_mv_1899.tag) {
+        } else if (!_mv_1932.is_ok) {
+            __auto_type f = _mv_1932.data.err;
+            __auto_type _mv_1938 = f;
+            switch (_mv_1938.tag) {
                 case howl_types_Fault_input_error:
                 {
-                    __auto_type msg = _mv_1899.data.input_error;
+                    __auto_type msg = _mv_1938.data.input_error;
                     printf("%s", "howl: ");
-                    ({ slop_string _ps_1900 = (msg); printf("%.*s\n", (int)_ps_1900.len, _ps_1900.data); });
+                    ({ slop_string _ps_1939 = (msg); printf("%.*s\n", (int)_ps_1939.len, _ps_1939.data); });
                     break;
                 }
                 case howl_types_Fault_cancelled:
@@ -459,16 +459,16 @@ int64_t howl_cli_main_validate_run(slop_arena* arena, slop_arena* front, howl_te
                 }
                 case howl_types_Fault_unavailable:
                 {
-                    __auto_type p = _mv_1899.data.unavailable;
+                    __auto_type p = _mv_1938.data.unavailable;
                     printf("%s", "howl: ");
-                    ({ slop_string _ps_1901 = (howl_select_unavailable_message(arena, p)); printf("%.*s\n", (int)_ps_1901.len, _ps_1901.data); });
+                    ({ slop_string _ps_1940 = (howl_select_unavailable_message(arena, p)); printf("%.*s\n", (int)_ps_1940.len, _ps_1940.data); });
                     break;
                 }
                 case howl_types_Fault_refused:
                 {
-                    __auto_type os = _mv_1899.data.refused;
+                    __auto_type os = _mv_1938.data.refused;
                     printf("%s", "howl: refused (--strict), no report — ");
-                    ({ slop_string _ps_1902 = (int_to_string(arena, ((int64_t)(((int64_t)((os).len)))))); printf("%.*s", (int)_ps_1902.len, _ps_1902.data); });
+                    ({ slop_string _ps_1941 = (int_to_string(arena, ((int64_t)(((int64_t)((os).len)))))); printf("%.*s", (int)_ps_1941.len, _ps_1941.data); });
                     printf("%s\n", " omitted");
                     howl_cli_main_print_omissions(arena, os);
                     break;
@@ -493,18 +493,18 @@ int64_t howl_cli_main_ask_run(slop_arena* arena, slop_arena* front, howl_termsto
             __auto_type doc = howl_probe_probe_document(pfront, (*enc), (*penc), asked);
             __auto_type res = howl_probe_encoded(arena, (*doc), resolved, asked, cfg, 1);
             (void)(({ slop_arena_free(front); free(front); }));
-            __auto_type _mv_1903 = res;
-            if (_mv_1903.is_ok) {
-                __auto_type p = _mv_1903.data.ok;
+            __auto_type _mv_1942 = res;
+            if (_mv_1942.is_ok) {
+                __auto_type p = _mv_1942.data.ok;
                 {
                     __auto_type _coll = howl_report_answer_lines(arena, p, 1);
                     for (size_t _i = 0; _i < _coll.len; _i++) {
                         __auto_type l = _coll.data[_i];
-                        ({ slop_string _ps_1904 = (l); printf("%.*s\n", (int)_ps_1904.len, _ps_1904.data); });
+                        ({ slop_string _ps_1943 = (l); printf("%.*s\n", (int)_ps_1943.len, _ps_1943.data); });
                     }
                 }
-            } else if (!_mv_1903.is_ok) {
-                __auto_type f = _mv_1903.data.err;
+            } else if (!_mv_1942.is_ok) {
+                __auto_type f = _mv_1942.data.err;
                 howl_cli_main_print_ask_fault(arena, f);
             }
             return howl_cli_main_ask_exit_code(res);
@@ -513,13 +513,13 @@ int64_t howl_cli_main_ask_run(slop_arena* arena, slop_arena* front, howl_termsto
 }
 
 void howl_cli_main_print_ask_fault(slop_arena* arena, howl_types_Fault f) {
-    __auto_type _mv_1905 = f;
-    switch (_mv_1905.tag) {
+    __auto_type _mv_1944 = f;
+    switch (_mv_1944.tag) {
         case howl_types_Fault_input_error:
         {
-            __auto_type msg = _mv_1905.data.input_error;
+            __auto_type msg = _mv_1944.data.input_error;
             printf("%s", "howl: ");
-            ({ slop_string _ps_1906 = (msg); printf("%.*s\n", (int)_ps_1906.len, _ps_1906.data); });
+            ({ slop_string _ps_1945 = (msg); printf("%.*s\n", (int)_ps_1945.len, _ps_1945.data); });
             break;
         }
         case howl_types_Fault_cancelled:
@@ -529,14 +529,14 @@ void howl_cli_main_print_ask_fault(slop_arena* arena, howl_types_Fault f) {
         }
         case howl_types_Fault_unavailable:
         {
-            __auto_type p = _mv_1905.data.unavailable;
+            __auto_type p = _mv_1944.data.unavailable;
             printf("%s", "howl: ");
-            ({ slop_string _ps_1907 = (howl_select_unavailable_message(arena, p)); printf("%.*s\n", (int)_ps_1907.len, _ps_1907.data); });
+            ({ slop_string _ps_1946 = (howl_select_unavailable_message(arena, p)); printf("%.*s\n", (int)_ps_1946.len, _ps_1946.data); });
             break;
         }
         case howl_types_Fault_refused:
         {
-            __auto_type _ = _mv_1905.data.refused;
+            __auto_type _ = _mv_1944.data.refused;
             printf("%s\n", "howl: refused, no answers");
             break;
         }
@@ -545,15 +545,15 @@ void howl_cli_main_print_ask_fault(slop_arena* arena, howl_types_Fault f) {
 
 int64_t howl_cli_main_ask_exit_code(slop_result_howl_probe_Probing_howl_types_Fault r) {
     int64_t _retval = {0};
-    __auto_type _mv_1908 = r;
-    if (_mv_1908.is_ok) {
-        __auto_type _ = _mv_1908.data.ok;
+    __auto_type _mv_1947 = r;
+    if (_mv_1947.is_ok) {
+        __auto_type _ = _mv_1947.data.ok;
         _retval = 0;
         goto _slop_post;
-    } else if (!_mv_1908.is_ok) {
-        __auto_type f = _mv_1908.data.err;
-        __auto_type _mv_1909 = f;
-        switch (_mv_1909.tag) {
+    } else if (!_mv_1947.is_ok) {
+        __auto_type f = _mv_1947.data.err;
+        __auto_type _mv_1948 = f;
+        switch (_mv_1948.tag) {
             case howl_types_Fault_cancelled:
             {
                 _retval = 2;
@@ -561,19 +561,19 @@ int64_t howl_cli_main_ask_exit_code(slop_result_howl_probe_Probing_howl_types_Fa
             }
             case howl_types_Fault_refused:
             {
-                __auto_type _ = _mv_1909.data.refused;
+                __auto_type _ = _mv_1948.data.refused;
                 _retval = 2;
                 goto _slop_post;
             }
             case howl_types_Fault_input_error:
             {
-                __auto_type _ = _mv_1909.data.input_error;
+                __auto_type _ = _mv_1948.data.input_error;
                 _retval = 3;
                 goto _slop_post;
             }
             case howl_types_Fault_unavailable:
             {
-                __auto_type _ = _mv_1909.data.unavailable;
+                __auto_type _ = _mv_1948.data.unavailable;
                 _retval = 3;
                 goto _slop_post;
             }
@@ -627,7 +627,7 @@ int main(int argc, char** _c_argv) {
                         __auto_type command = howl_cli_main_argv_to_string(argv, 1);
                         if (!((string_eq(command, SLOP_STR("validate")) || (string_eq(command, SLOP_STR("classify")) || string_eq(command, SLOP_STR("ask")))))) {
                             printf("%s", "howl: unknown or unimplemented command: ");
-                            (void)(({ slop_string _ps_1910 = (command); printf("%.*s\n", (int)_ps_1910.len, _ps_1910.data); }));
+                            (void)(({ slop_string _ps_1949 = (command); printf("%.*s\n", (int)_ps_1949.len, _ps_1949.data); }));
                             {
                                 int _wa_ret = howl_cli_main_EXIT_ERROR;
                                 slop_arena_free(&_arena_3);
@@ -652,7 +652,7 @@ int main(int argc, char** _c_argv) {
                                 __auto_type input = howl_cli_main_argv_to_string(argv, 2);
                                 if (!(howl_cli_main_parse_into(front, enc, input))) {
                                     printf("%s", "howl: cannot parse ");
-                                    (void)(({ slop_string _ps_1911 = (input); printf("%.*s\n", (int)_ps_1911.len, _ps_1911.data); }));
+                                    (void)(({ slop_string _ps_1950 = (input); printf("%.*s\n", (int)_ps_1950.len, _ps_1950.data); }));
                                     failed = 1;
                                 }
                                 while (i < argc) {
@@ -674,16 +674,16 @@ int main(int argc, char** _c_argv) {
                                                     howl_termstore_encoded_next_document(front, enc);
                                                     if (!(howl_cli_main_parse_into(front, enc, path))) {
                                                         printf("%s", "howl: cannot parse import ");
-                                                        (void)(({ slop_string _ps_1912 = (path); printf("%.*s\n", (int)_ps_1912.len, _ps_1912.data); }));
+                                                        (void)(({ slop_string _ps_1951 = (path); printf("%.*s\n", (int)_ps_1951.len, _ps_1951.data); }));
                                                         failed = 1;
                                                     } else {
-                                                        __auto_type _mv_1913 = howl_cli_main_ontology_iri_from((*enc), from);
-                                                        if (!_mv_1913.has_value) {
+                                                        __auto_type _mv_1952 = howl_cli_main_ontology_iri_from((*enc), from);
+                                                        if (!_mv_1952.has_value) {
                                                             printf("%s", "howl: import declares no owl:Ontology IRI, so it attests nothing: ");
-                                                            ({ slop_string _ps_1914 = (path); printf("%.*s\n", (int)_ps_1914.len, _ps_1914.data); });
+                                                            ({ slop_string _ps_1953 = (path); printf("%.*s\n", (int)_ps_1953.len, _ps_1953.data); });
                                                             failed = 1;
-                                                        } else if (_mv_1913.has_value) {
-                                                            __auto_type o = _mv_1913.value;
+                                                        } else if (_mv_1952.has_value) {
+                                                            __auto_type o = _mv_1952.value;
                                                             ({ __auto_type _lst_p = &(resolved); __auto_type _item = (o); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; });
                                                         }
                                                     }
@@ -710,13 +710,13 @@ int main(int argc, char** _c_argv) {
                                                     if (string_eq(p, SLOP_STR("auto"))) {
                                                         cfg.selection = ((howl_types_ProfileSelection){ .tag = howl_types_ProfileSelection_slop_auto });
                                                     } else {
-                                                        __auto_type _mv_1915 = howl_select_parse_profile(p);
-                                                        if (_mv_1915.has_value) {
-                                                            __auto_type q = _mv_1915.value;
+                                                        __auto_type _mv_1954 = howl_select_parse_profile(p);
+                                                        if (_mv_1954.has_value) {
+                                                            __auto_type q = _mv_1954.value;
                                                             cfg.selection = ((howl_types_ProfileSelection){ .tag = howl_types_ProfileSelection_explicit, .data.explicit = q });
-                                                        } else if (!_mv_1915.has_value) {
+                                                        } else if (!_mv_1954.has_value) {
                                                             printf("%s", "howl: unknown profile: ");
-                                                            ({ slop_string _ps_1916 = (p); printf("%.*s", (int)_ps_1916.len, _ps_1916.data); });
+                                                            ({ slop_string _ps_1955 = (p); printf("%.*s", (int)_ps_1955.len, _ps_1955.data); });
                                                             printf("%s\n", " (expected auto, el, el++ or sriq)");
                                                             failed = 1;
                                                         }
@@ -743,7 +743,7 @@ int main(int argc, char** _c_argv) {
                                                     pdocs = (pdocs + 1);
                                                     if (!(howl_cli_main_parse_into(pfront, penc, path))) {
                                                         printf("%s", "howl: cannot parse probe document ");
-                                                        (void)(({ slop_string _ps_1917 = (path); printf("%.*s\n", (int)_ps_1917.len, _ps_1917.data); }));
+                                                        (void)(({ slop_string _ps_1956 = (path); printf("%.*s\n", (int)_ps_1956.len, _ps_1956.data); }));
                                                         failed = 1;
                                                     }
                                                 }
@@ -787,17 +787,17 @@ int main(int argc, char** _c_argv) {
                                                         printf("%s\n", "howl: --max-iterations needs a whole number 0..10000");
                                                         failed = 1;
                                                     } else {
-                                                        __auto_type _mv_1918 = std_strlib_parse_int(v);
-                                                        if (_mv_1918.is_ok) {
-                                                            __auto_type n = _mv_1918.data.ok;
+                                                        __auto_type _mv_1957 = std_strlib_parse_int(v);
+                                                        if (_mv_1957.is_ok) {
+                                                            __auto_type n = _mv_1957.data.ok;
                                                             if (n <= 10000) {
                                                                 cfg.max_iterations = ((int64_t)(n));
                                                             } else {
                                                                 printf("%s\n", "howl: --max-iterations must be 0..10000");
                                                                 failed = 1;
                                                             }
-                                                        } else if (!_mv_1918.is_ok) {
-                                                            __auto_type _ = _mv_1918.data.err;
+                                                        } else if (!_mv_1957.is_ok) {
+                                                            __auto_type _ = _mv_1957.data.err;
                                                             printf("%s\n", "howl: --max-iterations needs a whole number 0..10000");
                                                             failed = 1;
                                                         }
@@ -819,17 +819,17 @@ int main(int argc, char** _c_argv) {
                                                         printf("%s\n", "howl: --workers needs a whole number 1..64");
                                                         failed = 1;
                                                     } else {
-                                                        __auto_type _mv_1919 = std_strlib_parse_int(v);
-                                                        if (_mv_1919.is_ok) {
-                                                            __auto_type n = _mv_1919.data.ok;
+                                                        __auto_type _mv_1958 = std_strlib_parse_int(v);
+                                                        if (_mv_1958.is_ok) {
+                                                            __auto_type n = _mv_1958.data.ok;
                                                             if ((n >= 1) && (n <= 64)) {
                                                                 cfg.worker_count = ((int64_t)(n));
                                                             } else {
                                                                 printf("%s\n", "howl: --workers must be 1..64");
                                                                 failed = 1;
                                                             }
-                                                        } else if (!_mv_1919.is_ok) {
-                                                            __auto_type _ = _mv_1919.data.err;
+                                                        } else if (!_mv_1958.is_ok) {
+                                                            __auto_type _ = _mv_1958.data.err;
                                                             printf("%s\n", "howl: --workers needs a whole number 1..64");
                                                             failed = 1;
                                                         }
@@ -843,13 +843,13 @@ int main(int argc, char** _c_argv) {
                                                 step = 2;
                                             }
                                             printf("%s", "howl: ");
-                                            (void)(({ slop_string _ps_1920 = (arg); printf("%.*s", (int)_ps_1920.len, _ps_1920.data); }));
+                                            (void)(({ slop_string _ps_1959 = (arg); printf("%.*s", (int)_ps_1959.len, _ps_1959.data); }));
                                             printf("%s\n", " is not implemented until M3");
                                             failed = 1;
                                         }
                                         if (!(known)) {
                                             printf("%s", "howl: unknown argument: ");
-                                            (void)(({ slop_string _ps_1921 = (arg); printf("%.*s\n", (int)_ps_1921.len, _ps_1921.data); }));
+                                            (void)(({ slop_string _ps_1960 = (arg); printf("%.*s\n", (int)_ps_1960.len, _ps_1960.data); }));
                                             failed = 1;
                                         }
                                         i = (i + step);

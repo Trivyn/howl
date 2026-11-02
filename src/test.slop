@@ -2601,6 +2601,108 @@
         ":d a owl:DatatypeProperty ; rdfs:domain _:x .\n_:x owl:intersectionOf ( :C :D ) ; rdfs:subClassOf owl:Nothing ."
         ":d a owl:DatatypeProperty .\n[ owl:intersectionOf ( :C :D ) ] rdfs:subClassOf owl:Nothing .")))
 
+  (fn string-row ((arena Arena) (label String) (ttl String) (want Int))
+    (@intent "A string-asserted row: :v declared a data property, xsd: bound; omissions under both rungs")
+    (@spec ((Arena String String Int) -> Bool))
+    (@alloc arena)
+    (rungs-omit arena label
+      (string-concat arena "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n:v a owl:DatatypeProperty .\n" ttl)
+      want want))
+
+  (fn test-data-lemma-strings ((arena Arena))
+    (@intent "§5.2's data lemma, string-asserted half: string assertions and their ranges are inert, and nothing near them is")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Issue #133. The rows at 0 are inert: every use of :v is an
+    ;; assertion of a string-like literal on a named individual, and every
+    ;; range of :v contains each asserted literal. Every other row breaks
+    ;; one condition, and gates exactly as it did before the lemma: each
+    ;; assertion and each axiom on :v is omitted.
+    (and
+      (string-row arena "the issue: a plain literal, ranged xsd:string"
+        ":v rdfs:range xsd:string . :a a :D ; :v \"x\" ." 0)
+      (string-row arena "an xsd:string literal, ranged xsd:string"
+        ":v rdfs:range xsd:string . :a :v \"x\"^^xsd:string ." 0)
+      (string-row arena "a language-tagged literal, ranged rdfs:Literal"
+        ":v rdfs:range rdfs:Literal . :a :v \"x\"@en ." 0)
+      (string-row arena "no range at all"
+        ":a :v \"x\" ." 0)
+      (string-row arena "two assertions, two literals, two ranges that hold them"
+        ":v rdfs:range rdfs:Literal , <http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral> .\n:a :v \"x\" . :b :v \"y\"@en ." 0)
+      (string-row arena "a language-tagged literal, ranged rdf:langString"
+        ":v rdfs:range <http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> . :a :v \"x\"@en ." 0)
+      (string-row arena "an annotated assertion, and a reified-only one: stage 0 rebuilds both"
+        ":a :v \"x\" .\n[ a owl:Axiom ; owl:annotatedSource :a ; owl:annotatedProperty :v ; owl:annotatedTarget \"x\" ; rdfs:comment \"why\" ] .\n[ a owl:Axiom ; owl:annotatedSource :b ; owl:annotatedProperty :v ; owl:annotatedTarget \"y\" ; rdfs:comment \"why\" ] ." 0)
+      (string-row arena "an annotation on the property is not a use"
+        ":v rdfs:comment \"a name\" . :a :v \"x\" ." 0)
+      ;; Out of profile, every one.
+      (string-row arena "a language-tagged literal is not an xsd:string"
+        ":v rdfs:range xsd:string . :a :v \"x\"@en ." 2)
+      (string-row arena "a plain literal is not an rdf:langString"
+        ":v rdfs:range <http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> . :a :v \"x\" ." 2)
+      ;; The parser refuses these as \u escapes, but not raw: the next two
+      ;; literals hold a raw U+FFFE and U+FFFF.
+      (string-row arena "U+FFFE is outside XML's Char, so outside xsd:string: ill-typed"
+        ":a :v \"x￾y\" ." 1)
+      (string-row arena "so is U+FFFF, in a tagged literal"
+        ":a :v \"x￿y\"@en ." 1)
+      (string-row arena "tab, line feed and carriage return are Chars"
+        ":a :v \"x\\t\\n\\ry\" ." 0)
+      (string-row arena "a typed literal: no lexical validation yet"
+        ":a :v \"1\"^^xsd:integer ." 1)
+      (string-row arena "a string literal outside its range"
+        ":v rdfs:range xsd:integer . :a :v \"x\" ." 2)
+      (string-row arena "a domain"
+        ":v rdfs:domain :C . :a :v \"x\" ." 2)
+      (string-row arena "functional"
+        ":v a owl:FunctionalProperty . :a :v \"x\" ." 2)
+      (string-row arena "a sub-property"
+        ":w a owl:DatatypeProperty . :v rdfs:subPropertyOf :w . :a :v \"x\" ." 2)
+      ;; :w is idle, so the idle half sets these two axioms aside; the
+      ;; assertion still stays.
+      (string-row arena "a super-property"
+        ":w a owl:DatatypeProperty . :w rdfs:subPropertyOf :v . :a :v \"x\" ." 1)
+      (string-row arena "a disjointness with an idle property"
+        ":w a owl:DatatypeProperty . :v owl:propertyDisjointWith :w . :a :v \"x\" ." 1)
+      (string-row arena "a negative assertion"
+        ":a :v \"x\" .\n[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :b ; owl:assertionProperty :v ; owl:targetValue \"y\" ] ." 2)
+      (string-row arena "a restriction"
+        ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :v ; owl:someValuesFrom xsd:string ] . :a :v \"x\" ." 2)
+      (string-row arena "a key"
+        ":C owl:hasKey ( :v ) . :a :v \"x\" ." 2)
+      (string-row arena "a blank-node subject spoils the named one's too"
+        ":a :v \"x\" . [] :v \"y\" ." 2)
+      (string-row arena "reserved vocabulary as the subject"
+        "owl:Thing :v \"x\" . :a :v \"y\" ." 2)
+      (string-row arena "an individual as the value"
+        ":a :v :b ." 1)
+      (string-row arena "a data property as another's value is named there too"
+        ":w a owl:DatatypeProperty . :a :w \"x\" . :b :v :w ." 2)
+      (string-row arena "a blank-node data range"
+        ":v rdfs:range [ a rdfs:Datatype ; owl:onDatatype xsd:string ; owl:withRestrictions ( [ xsd:maxLength 5 ] ) ] .\n:a :v \"x\" ." 5)
+      (rungs-omit arena "owl:bottomDataProperty as the predicate"
+        ":a owl:bottomDataProperty \"x\" ." 1 1)
+      (rungs-omit arena "owl:topDataProperty as the predicate"
+        ":a owl:topDataProperty \"x\" ." 1 1)))
+
+  (fn test-string-asserted-probe ((arena Arena))
+    (@intent "Issue #133: a string assertion outside the query no longer makes the probe's module unknown")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    (let ((in (input-new))
+          (mut o (default-options)))
+      (do
+        (set! o profile 'profile-el)
+        (input-add-turtle in (string-concat arena (probe-prefixes)
+          "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .\n:A a owl:Class . :B a owl:Class . :D a owl:Class .\n:A owl:disjointWith :B .\n:v a owl:DatatypeProperty ; rdfs:range xsd:string .\n:j a :D ; :v \"x\" .\n"))
+        (input-add-probe-turtle in (string-concat arena (probe-prefixes) ":Q rdfs:subClassOf :A .\n"))
+        (input-ask-unsatisfiable in "http://example.org/t#Q")
+        (let ((r   (run-answer in o))
+              (out (lines-text arena r)))
+          (do (run-free r) (input-free in)
+              (let ((ok (string-eq out "profile el\nprobes 1\nprobe-inconsistent false\nprobe-omitted 0\nprobe unsatisfiable http://example.org/t#Q no\n")))
+                (do (when (not ok) (do (println "  [#133] answer:") (print out))) ok)))))))
+
   ;; ============================================================
   ;; sriq slice 4a: every ObjectInverseOf decodes whole, and data is data
   ;; ============================================================
@@ -13489,6 +13591,14 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
 
           (let ((r (test-data-lemma arena)))
             (print-test-result "§5.2: data axioms on idle data properties are inert in both rungs" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-data-lemma-strings arena)))
+            (print-test-result "§5.2: string assertions and their ranges are inert in both rungs (#133)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-string-asserted-probe arena)))
+            (print-test-result "§5.2: a string assertion outside the module answers no (#133)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
           (let ((r (test-sriq-ids-row arena)))

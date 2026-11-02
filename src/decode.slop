@@ -120,7 +120,8 @@
                  OWL_IRREFLEXIVE_PROPERTY OWL_RESTRICTION
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF
                  OWL_WITH_RESTRICTIONS OWL_DATA_RANGE RDF_LANG_RANGE OWL_ON_PROPERTIES
-                 OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE))
+                 OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE
+                 RDFS_LITERAL RDF_PLAIN_LITERAL XSD_STRING RDF_LANG_STRING))
   (import owl2 (RawConcept CardKind Signature make-signature RawDisjointUnion
                 RawAxiom RawChain RawEdge RawClassAssertion
                 RawDeclaration PropCharacteristic Disposition disposition
@@ -128,7 +129,7 @@
                 signature-has-object-property
                 signature-has-data-property))
   (import types (Omission UndeclaredProperty Fault Node RoleId InputRef EntityKind))
-  (import strlib (parse-int starts-with replace-all))
+  (import strlib (parse-int starts-with replace-all char-at))
   (import canon (string-cmp iri-cmp sort-iris sort-omissions sort-range str-at iri-at))
 
   (export
@@ -2572,8 +2573,9 @@
       (record-new UndeclaredProperty (property p) (referring refs))))
 
 ;; ============================================================
-  ;; The data lemma (§5.2): the property axioms of an IDLE data property
-  ;; are inert, in every rung
+  ;; The data lemma (§5.2): the property axioms of an IDLE data property,
+  ;; and the assertions and ranges of a STRING-ASSERTED one, are inert, in
+  ;; every rung
   ;; ============================================================
   ;;
   ;; A data property is idle when neither it nor any data property below
@@ -2598,6 +2600,23 @@
   ;; domain's or range's blank filler go with its axiom. RO's idle range
   ;; is a DatatypeRestriction, whose internals would otherwise leak as an
   ;; anonymous individual and three reserved-vocabulary omissions.
+  ;;
+  ;; A data property is STRING-ASSERTED (issue #133) when every occurrence
+  ;; but its declaration, its ranges and annotations is the predicate of
+  ;; an assertion `a P lit`, with `a` a named individual and `lit` an
+  ;; xsd:string (plain or typed) or an rdf:langString whose form is all
+  ;; XML Chars (string-kind); and when each of its ranges is a named
+  ;; datatype holding every literal asserted: rdfs:Literal and
+  ;; rdf:PlainLiteral hold both kinds, xsd:string and rdf:langString one
+  ;; each. So a domain, functionality, any hierarchy or
+  ;; disjointness triple at either end, a restriction, a key, a negative
+  ;; assertion, a blank or reserved subject, a typed literal, any other
+  ;; range, and owl:topDataProperty or owl:bottomDataProperty each keep it
+  ;; out. Its assertions and ranges are set aside. Such a property is used,
+  ;; so never idle, and no triple between it and an idle one survives the
+  ;; test, so the two halves of the proof never meet. A reified assertion
+  ;; is rebuilt by stage 0 before the lemma runs, like any reified axiom,
+  ;; so it is one more assertion here.
 
   (type DataVocab (record
     (rdf-type      Int)
@@ -2609,11 +2628,16 @@
     (equivalent    Int)     ; owl:equivalentProperty
     (disjoint      Int)     ; owl:propertyDisjointWith
     (top           Int)     ; owl:topDataProperty
-    (on-datatype   Int)))   ; owl:onDatatype, which marks a DatatypeRestriction
+    (on-datatype   Int)     ; owl:onDatatype, which marks a DatatypeRestriction
+    (literal       Int)     ; rdfs:Literal
+    (plain-literal Int)     ; rdf:PlainLiteral
+    (xsd-string    Int)     ; xsd:string
+    (lang-string   Int)))   ; rdf:langString
 
   (type DataLemma (record
     (data (Set Int))        ; the declared data properties, built-ins included
     (idle (Set Int))        ; the ones nothing uses, even below them
+    (strings (Set Int))     ; the string-asserted ones
     (tree (Set Int))))      ; blank nodes set aside with an inert domain or range
 
   (fn data-vocab ((arena Arena) (dict TermStore))
@@ -2630,7 +2654,11 @@
       (equivalent    (vocab-id arena dict OWL_EQUIVALENT_PROPERTY))
       (disjoint      (vocab-id arena dict OWL_PROPERTY_DISJOINT_WITH))
       (top           (vocab-id arena dict OWL_TOP_DATA_PROPERTY))
-      (on-datatype   (vocab-id arena dict OWL_ON_DATATYPE))))
+      (on-datatype   (vocab-id arena dict OWL_ON_DATATYPE))
+      (literal       (vocab-id arena dict RDFS_LITERAL))
+      (plain-literal (vocab-id arena dict RDF_PLAIN_LITERAL))
+      (xsd-string    (vocab-id arena dict XSD_STRING))
+      (lang-string   (vocab-id arena dict RDF_LANG_STRING))))
 
   (fn promote-use ((v DataVocab) (used (Set Int)) (it IdTriple))
     (@intent "Carry a use up one hierarchy triple between data properties, both ways for an equivalence; did it move?")
@@ -2667,12 +2695,13 @@
         (set-put idle bottom))))
 
   (fn data-lemma ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (triples (List IdTriple)))
-    (@intent "§5.2's data lemma over a document: its data properties, the idle ones, and the trees set aside")
+    (@intent "§5.2's data lemma over a document: its data properties, the idle and string-asserted ones, and the trees set aside")
     (@spec ((Arena TermStore Signature DataVocab (List IdTriple)) -> DataLemma))
     (@alloc arena)
     (let ((data (set-new arena Int))
           (used (set-new arena Int))
           (idle (set-new arena Int))
+          (strings (set-new arena Int))
           (tree (set-new arena Int))
           (bottom (vocab-id arena dict OWL_BOTTOM_DATA_PROPERTY))
           (mut any false)
@@ -2696,8 +2725,9 @@
             (while changed
               (set! changed (promote-uses v data used triples)))
             (collect-idle v used idle bottom triples)
+            (collect-string-asserted arena dict sig v data bottom strings triples)
             (collect-inert-trees arena dict v idle tree triples)))
-        (record-new DataLemma (data data) (idle idle) (tree tree)))))
+        (record-new DataLemma (data data) (idle idle) (strings strings) (tree tree)))))
 
   (fn mark-data-uses ((dict TermStore) (sig Signature) (v DataVocab) (data (Set Int)) (used (Set Int))
                       (it IdTriple))
@@ -2730,6 +2760,130 @@
             (when (set-has data s) (set-put used s))
             (when (set-has data p) (set-put used p))
             (when (set-has data o) (set-put used o)))))))
+
+  (type StringUses (record
+    (spoiled   (Set Int))   ; occurs otherwise than the lemma allows
+    (plain     (Set Int))   ; asserted an xsd:string, plain or typed
+    (tagged    (Set Int))   ; asserted an rdf:langString
+    (no-plain  (Set Int))   ; ranged rdf:langString, which holds no xsd:string
+    (no-tagged (Set Int)))) ; ranged xsd:string, which holds no rdf:langString
+
+  (type StringKind (enum sk-string sk-lang sk-other))
+
+  (fn collect-string-asserted ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (data (Set Int))
+                               (bottom Int) (strings (Set Int)) (triples (List IdTriple)))
+    (@intent "Into strings: every data property asserted only strings on named individuals, each within every range")
+    (@spec ((Arena TermStore Signature DataVocab (Set Int) Int (Set Int) (List IdTriple)) -> Unit))
+    (@alloc arena)
+    ;; One pass marks; a second reads, at each assertion, whether its
+    ;; predicate qualifies. Order-free: a range or a spoiling use may
+    ;; follow the assertions it rules out.
+    (let ((u (record-new StringUses
+               (spoiled (set-new arena Int)) (plain (set-new arena Int)) (tagged (set-new arena Int))
+               (no-plain (set-new arena Int)) (no-tagged (set-new arena Int)))))
+      (do
+        (for-each (it triples)
+          (mark-string-uses dict sig v data u it))
+        (for-each (it triples)
+          (let ((p (. it p)))
+            (when (and (or (set-has (. u plain) p) (set-has (. u tagged) p))
+                       (not (set-has (. u spoiled) p))
+                       (not (and (set-has (. u plain) p) (set-has (. u no-plain) p)))
+                       (not (and (set-has (. u tagged) p) (set-has (. u no-tagged) p)))
+                       (not (== p (. v top))) (not (== p bottom)))
+              (set-put strings p)))))))
+
+  (fn mark-string-uses ((dict TermStore) (sig Signature) (v DataVocab) (data (Set Int)) (u StringUses)
+                        (it IdTriple))
+    (@intent "Mark what this triple tells of each data property it names: a string assertion, a range, or a spoiling use")
+    (@spec ((TermStore Signature DataVocab (Set Int) StringUses IdTriple) -> Unit))
+    (let ((s (. it s)) (p (. it p)) (o (. it o)))
+      (cond
+        ;; The declaration is the one type a string-asserted property may
+        ;; carry. A data property typed anything else, functional
+        ;; included, or as the object of rdf:type, is spoiled.
+        ((== p (. v rdf-type))
+          (do
+            (when (set-has data o) (set-put (. u spoiled) o))
+            (when (and (set-has data s) (not (== o (. v data-property))))
+              (set-put (. u spoiled) s))))
+        ;; Annotations mention properties without constraining them.
+        ((predicate-is-annotation dict sig p) (do))
+        ;; A range is allowed only as one of the four named datatypes.
+        ((== p (. v range))
+          (do
+            (when (set-has data o) (set-put (. u spoiled) o))
+            (when (set-has data s)
+              (cond
+                ((or (== o (. v literal)) (== o (. v plain-literal))) (do))
+                ((== o (. v xsd-string))  (set-put (. u no-tagged) s))
+                ((== o (. v lang-string)) (set-put (. u no-plain) s))
+                (else (set-put (. u spoiled) s))))))
+        ;; An assertion: on a named individual, of a string-like literal.
+        ((set-has data p)
+          (do
+            (when (set-has data s) (set-put (. u spoiled) s))
+            (when (set-has data o) (set-put (. u spoiled) o))
+            (match (individual-term (term-of dict s))
+              ((named-individual _)
+                (match (string-kind dict o)
+                  ('sk-string (set-put (. u plain) p))
+                  ('sk-lang   (set-put (. u tagged) p))
+                  ('sk-other  (set-put (. u spoiled) p))))
+              (_ (set-put (. u spoiled) p)))))
+        ;; Anything else, a domain and every hierarchy or disjointness
+        ;; triple included, spoils each data property it names.
+        (else
+          (do
+            (when (set-has data s) (set-put (. u spoiled) s))
+            (when (set-has data o) (set-put (. u spoiled) o)))))))
+
+  (fn string-kind ((dict TermStore) (id Int))
+    (@intent "Is this term an xsd:string literal (plain or typed), an rdf:langString one, or neither?")
+    (@spec ((TermStore Int) -> StringKind))
+    ;; A plain "x" and "x"^^xsd:string are distinct terms with one value.
+    ;; A tag with any datatype but rdf:langString is malformed: neither.
+    ;; So is a form outside XML's Char, which is ill-typed: "\u0000" is
+    ;; in no string datatype's value space, and makes the ontology
+    ;; inconsistent.
+    (match (term-of dict id)
+      ((term-literal l)
+        (cond
+          ((not (xml-chars (. l value))) 'sk-other)
+          (else
+            (match (. l lang)
+              ((some _) (if (datatype-absent-or (. l datatype) RDF_LANG_STRING) 'sk-lang 'sk-other))
+              ((none)   (if (datatype-absent-or (. l datatype) XSD_STRING) 'sk-string 'sk-other))))))
+      (_ 'sk-other)))
+
+  (fn xml-chars ((s String))
+    (@intent "Is every character of this UTF-8 string an XML 1.0 Char, the alphabet of xsd:string?")
+    (@spec ((String) -> Bool))
+    (@pure)
+    (@example ("a\tb") -> true)
+    ;; Char excludes the C0 controls but tab, line feed and carriage
+    ;; return; the surrogates, ED A0..BF in UTF-8; and U+FFFE and U+FFFF,
+    ;; EF BF BE and EF BF BF.
+    (let ((n (string-len s)) (mut ok true) (mut i 0))
+      (do
+        (while (and ok (< i n))
+          (let ((c  (cast Int (char-at s i)))
+                (c1 (cast Int (char-at s (+ i 1))))
+                (c2 (cast Int (char-at s (+ i 2)))))
+            (do
+              (when (and (< c 32) (not (== c 9)) (not (== c 10)) (not (== c 13))) (set! ok false))
+              (when (and (== c 237) (>= c1 160)) (set! ok false))
+              (when (and (== c 239) (== c1 191) (>= c2 190)) (set! ok false))
+              (set! i (+ i 1)))))
+        ok)))
+
+  (fn datatype-absent-or ((dt (Option String)) (iri String))
+    (@intent "Is a literal's datatype absent, or this IRI?")
+    (@spec (((Option String) String) -> Bool))
+    (@pure)
+    (match dt
+      ((none)   true)
+      ((some d) (== (string-cmp d iri) 0))))
 
   (fn predicate-is-annotation ((dict TermStore) (sig Signature) (p Int))
     (@intent "Is this predicate id a built-in or declared annotation property?")
@@ -2827,7 +2981,8 @@
     (let ((s (. it s)) (p (. it p)) (o (. it o))
           (data (. lemma data)) (idle (. lemma idle)))
       (cond
-        ((or (== p (. v domain)) (== p (. v range))) (set-has idle s))
+        ((== p (. v domain)) (set-has idle s))
+        ((== p (. v range)) (or (set-has idle s) (set-has (. lemma strings) s)))
         ((== p (. v rdf-type)) (and (== o (. v functional)) (set-has idle s)))
         ;; SubDataPropertyOf(P owl:topDataProperty) is a tautology.
         ((== p (. v sub-property))
@@ -2839,6 +2994,9 @@
           (and (set-has data s) (set-has data o)
                (not (== s (. v top))) (not (== o (. v top)))
                (or (set-has idle s) (set-has idle o))))
+        ;; Every triple on a string-asserted predicate is one of its
+        ;; qualifying assertions, or it would not be string-asserted.
+        ((set-has (. lemma strings) p) true)
         (else false))))
 
   ;; A NegativePropertyAssertion's parts (owl:sourceIndividual,
