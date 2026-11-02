@@ -1373,6 +1373,11 @@
   (fn repair-options-problem ((o RepairOptions))
     (@intent "Reject negative search limits instead of silently clamping them")
     (@spec ((RepairOptions) -> (Option String)))
+    (@post (match $result
+             ((none)   (and {(. o conflict-calls) >= 0} {(. o conflict-nodes) >= 0}
+                            {(. o hitting-nodes) >= 0} {(. o verification-calls) >= 0}))
+             ((some _) (or {(. o conflict-calls) < 0} {(. o conflict-nodes) < 0}
+                           {(. o hitting-nodes) < 0} {(. o verification-calls) < 0}))))
     (if (or (< (. o conflict-calls) 0) (< (. o conflict-nodes) 0)
             (< (. o hitting-nodes) 0) (< (. o verification-calls) 0))
       (some "repair budgets must be nonnegative integers")

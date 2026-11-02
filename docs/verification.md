@@ -73,8 +73,9 @@ unknown. None verified.
 
 ## M4 alignment repair
 
-The repair search's local contracts check set membership/removal, default allowances, and the
-predicates that distinguish complete coherence from definitive incoherence. They do not prove
+The repair search's local contracts check set membership, removal and difference, default
+allowances, that repair options are refused exactly when a limit is negative, and the predicates
+that distinguish complete coherence from definitive incoherence. They do not prove
 the conflict enumeration or minimal-transversal algorithm complete.
 
 `make alignment-test` checks those algorithms against an independent powerset reference for all

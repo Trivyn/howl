@@ -176,6 +176,7 @@ slop_list_int howl_repair_remove_index(slop_arena* arena, slop_list_int xs, int6
 }
 
 slop_list_int howl_repair_difference(slop_arena* arena, slop_list_int xs, slop_list_int ys) {
+    slop_list_int _retval = {0};
     {
         __auto_type out = ((slop_list_int){ .data = NULL, .len = 0, .cap = 0, .arena = arena });
         {
@@ -187,8 +188,12 @@ slop_list_int howl_repair_difference(slop_arena* arena, slop_list_int xs, slop_l
                 }
             }
         }
-        return out;
+        _retval = out;
+        goto _slop_post;
     }
+    _slop_post: ;
+    SLOP_POST(((((int64_t)((_retval).len)) <= ((int64_t)((xs).len)))), "(<= (list-len $result) (list-len xs))");
+    return _retval;
 }
 
 int64_t howl_repair_set_cmp(slop_list_int xs, slop_list_int ys) {

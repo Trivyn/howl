@@ -1119,11 +1119,17 @@ howl_RepairOptions howl_default_repair_options(void) {
 }
 
 slop_option_string howl_repair_options_problem(howl_RepairOptions o) {
+    slop_option_string _retval = {0};
     if (((o.conflict_calls < 0)) || ((o.conflict_nodes < 0)) || ((o.hitting_nodes < 0)) || ((o.verification_calls < 0))) {
-        return (slop_option_string){.has_value = 1, .value = SLOP_STR("repair budgets must be nonnegative integers")};
+        _retval = (slop_option_string){.has_value = 1, .value = SLOP_STR("repair budgets must be nonnegative integers")};
+        goto _slop_post;
     } else {
-        return (slop_option_string){.has_value = false};
+        _retval = (slop_option_string){.has_value = false};
+        goto _slop_post;
     }
+    _slop_post: ;
+    SLOP_POST((({ __auto_type _mv = _retval; _mv.has_value ? ({ __auto_type _ = _mv.value; (((o.conflict_calls < 0)) || ((o.conflict_nodes < 0)) || ((o.hitting_nodes < 0)) || ((o.verification_calls < 0))); }) : ((((o.conflict_calls >= 0)) && ((o.conflict_nodes >= 0)) && ((o.hitting_nodes >= 0)) && ((o.verification_calls >= 0)))); })), "(match $result ((none) (and (>= (. o conflict-calls) 0) (>= (. o conflict-nodes) 0) (>= (. o hitting-nodes) 0) (>= (. o verification-calls) 0))) ((some _) (or (< (. o conflict-calls) 0) (< (. o conflict-nodes) 0) (< (. o hitting-nodes) 0) (< (. o verification-calls) 0))))");
+    return _retval;
 }
 
 howl_repair_SearchOptions howl_repair_config(howl_RepairOptions o, int64_t cancel) {
