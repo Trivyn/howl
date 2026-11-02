@@ -595,9 +595,10 @@ def cmd_corpus(update, also, timeout):
         if not os.path.exists(path):
             raise HarnessError(f"{rel(path)} is missing: run `make materialize`")
         # ONE PARSE per entry, shared by the projection check, census's
-        # construct routing and the OWL API blind-spot scan.
+        # construct routing and the OWL API blind-spot scan. Read as written,
+        # as project.py pins it: normalizing rewrites a date-time's Z as +00:00.
         g = Graph()
-        g.parse(path, format="turtle")
+        census.parse_as_written(g, path, "turtle")
         # The SAME check as `project-verify`: ground triples, blank-node
         # structure and count against the pinned removal list, census 0 out.
         with open(project.removals_path(e, PROFILE), encoding="utf-8") as fh:

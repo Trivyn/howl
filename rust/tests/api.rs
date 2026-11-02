@@ -463,14 +463,40 @@ fn probes_are_answered_apart_from_the_report() {
     assert!(plain.probes.is_empty());
 }
 
-/// Issue #133: the string-asserted data property in the fixture (SPEC §5.2)
+/// Issue #133: the literal-asserted data property in the fixture (SPEC §5.2)
 /// is inert, so a probe outside it answers `no`, not `unknown`, and nothing
 /// is omitted. Both the report's probe run and the answer run agree.
 #[test]
-fn string_asserted_data_does_not_block_a_probe_answer() {
+fn literal_asserted_data_does_not_block_a_probe_answer() {
     use howl::{Answer, ProbeAnswer, Query};
     let input_probe = "@prefix : <https://example.org/> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . :Q rdfs:subClassOf :A .";
-    let mut input = turtle(&fixture("data/string-asserted.ttl"));
+    let mut input = turtle(&fixture("data/literal-asserted.ttl"));
+    input.add_probe_turtle(input_probe).unwrap();
+    input.ask_unsatisfiable("https://example.org/Q");
+
+    let r = Reasoner::new().classify(&input).unwrap();
+    assert_eq!(r.verdict, Verdict::Coherent);
+    assert!(r.omissions.is_empty(), "{:?}", r.omissions);
+    assert_eq!(
+        r.probes,
+        vec![ProbeAnswer { query: Query::Unsatisfiable("https://example.org/Q".into()), answer: Answer::No }]
+    );
+    assert!(r.probe_omissions.is_empty(), "{:?}", r.probe_omissions);
+
+    let a = Reasoner::new().answer(&input).unwrap();
+    assert_eq!(a.probes, r.probes);
+    assert!(a.omissions.is_empty(), "{:?}", a.omissions);
+}
+
+/// Issue #135: the SPDX-shaped date-time data properties in
+/// `data/datetime-asserted.ttl` (SPEC §5.2) are literal-asserted, so they are
+/// inert: the verdict is coherent, nothing is omitted, and a probe outside
+/// them answers `no`. The report's probe run and the answer run agree.
+#[test]
+fn datetime_asserted_data_does_not_block_a_probe_answer() {
+    use howl::{Answer, ProbeAnswer, Query};
+    let input_probe = "@prefix : <https://example.org/> . @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> . :Q rdfs:subClassOf :A .";
+    let mut input = turtle(&fixture("data/datetime-asserted.ttl"));
     input.add_probe_turtle(input_probe).unwrap();
     input.ask_unsatisfiable("https://example.org/Q");
 

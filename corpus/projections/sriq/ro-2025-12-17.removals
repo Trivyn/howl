@@ -9,7 +9,7 @@
 # triples_removed         733
 # in_v0_swept_in          1   <- collateral from blank-node closures
 # projected_triples       10,907
-# projected_ground_sha256 f769f5cd5827e27f66bada763d287ea15dcba969772252f688fe094f1ee931a7
+# projected_ground_sha256 528c8df8c798986461770c120cd688c45fc6d47e3635634b60e2fc2ec4d3f46d
 # projected_bnode_triples 3,209
 # projected_bnode_sha256  d2234de757774f1b10648936d7aec5f6580e491dfe27068f0b81e120d5393fe2
 #

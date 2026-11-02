@@ -1,0 +1,29 @@
+# THE DATA LEMMA, DATE-TIME HALF, OUT OF PROFILE (SPEC.md §5.2; issue #135): the
+# datetime-asserted.ttl shape with one :created assertion changed to a day that
+# does not exist, 2023-02-30 (February has 28 days in 2023). That literal is not
+# a valid dateTimeStamp, so :created is NOT literal-asserted: its range and all
+# of its assertions stay out of profile as omissions. :issued is still valid
+# and inert. The verdict is INCONCLUSIVE (exit 2). The disjointness and the
+# typing of :j are still read.
+
+@prefix :     <https://example.org/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class .
+:C rdfs:subClassOf :A .
+:A owl:disjointWith :B .
+
+:created a owl:DatatypeProperty ;
+    rdfs:comment "The date and time at which the element was created." ;
+    rdfs:range xsd:dateTimeStamp .
+:issued a owl:DatatypeProperty ;
+    rdfs:range xsd:dateTime .
+
+:j a :C ; :created "2024-11-22T03:00:01Z"^^xsd:dateTimeStamp .
+:k a :B ; :created "2023-02-30T00:00:00Z"^^xsd:dateTimeStamp .
+:l a :D ; :created "2024-11-22T03:00:01Z"^^xsd:dateTimeStamp .
+
+:j :issued "2024-02-29T24:00:00"^^xsd:dateTime .
+:k :issued "2024-02-29T12:00:00+05:00"^^xsd:dateTime .

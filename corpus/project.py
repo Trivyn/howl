@@ -48,7 +48,7 @@ import profiles  # noqa: E402
 from rdflib import Graph, BNode, URIRef
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from census import (signature, classify_triple, census, inadmissible_chains,  # noqa: E402
+from census import (parse_as_written, signature, classify_triple, census, inadmissible_chains,  # noqa: E402
                     OUT, IN, _expression_key)
 from rdflib import RDF, OWL   # noqa: E402
 
@@ -196,7 +196,7 @@ def project(name, version, src_path, expect_sha):
                  f"   expected {expect_sha}\n   got      {got}")
 
     g = Graph()
-    g.parse(src_path, format="turtle" if src_path.endswith(".ttl") else None)
+    parse_as_written(g, src_path, "turtle" if src_path.endswith(".ttl") else None)
     sig = signature(g, PROFILE)
 
     # DETERMINISM. Graph iteration order depends on blank-node labelling, which
@@ -420,19 +420,25 @@ def check_materialized(e, r):
     """Errors in the materialized file, read back from disk: [] when it is the projection."""
     path = materialized_path(e)
     g = Graph()
-    g.parse(path, format="turtle")
+    parse_as_written(g, path, "turtle")
     return check_graph(g, r, path)
 
 
 def materialize(e, r):
-    """Write the projected ontology as Turtle, aside then renamed, and check it."""
+    """Write the projected ontology aside then renamed, and check it.
+
+    Written as N-Triples (valid Turtle, so the .ttl still parses everywhere):
+    the Turtle serializer abbreviates integer/decimal/double/boolean literals to
+    bare tokens, assuming canonical forms, which rewrites "1"^^xsd:boolean as 1
+    and "01"^^xsd:integer as 1. N-Triples writes every lexical form and datatype
+    as it is. Nothing reads the file's prefixes."""
     path = materialized_path(e)
     g = Graph()
     for prefix, ns in r["namespaces"]:
         g.bind(prefix, ns, override=True)
     for t in r["projected"]:
         g.add(t)
-    g.serialize(path + ".part", format="turtle")
+    g.serialize(path + ".part", format="nt")
     os.replace(path + ".part", path)
     return check_materialized(e, r)
 

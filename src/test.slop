@@ -2601,8 +2601,8 @@
         ":d a owl:DatatypeProperty ; rdfs:domain _:x .\n_:x owl:intersectionOf ( :C :D ) ; rdfs:subClassOf owl:Nothing ."
         ":d a owl:DatatypeProperty .\n[ owl:intersectionOf ( :C :D ) ] rdfs:subClassOf owl:Nothing .")))
 
-  (fn string-row ((arena Arena) (label String) (ttl String) (want Int))
-    (@intent "A string-asserted row: :v declared a data property, xsd: bound; omissions under both rungs")
+  (fn literal-row ((arena Arena) (label String) (ttl String) (want Int))
+    (@intent "A literal-asserted row: :v declared a data property, xsd: bound; omissions under both rungs")
     (@spec ((Arena String String Int) -> Bool))
     (@alloc arena)
     (rungs-omit arena label
@@ -2610,7 +2610,7 @@
       want want))
 
   (fn test-data-lemma-strings ((arena Arena))
-    (@intent "§5.2's data lemma, string-asserted half: string assertions and their ranges are inert, and nothing near them is")
+    (@intent "§5.2's data lemma, literal-asserted half, strings: string assertions and their ranges are inert, and nothing near them is")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
     ;; Issue #133. The rows at 0 are inert: every use of :v is an
@@ -2619,55 +2619,55 @@
     ;; one condition, and gates exactly as it did before the lemma: each
     ;; assertion and each axiom on :v is omitted.
     (and
-      (string-row arena "the issue: a plain literal, ranged xsd:string"
+      (literal-row arena "the issue: a plain literal, ranged xsd:string"
         ":v rdfs:range xsd:string . :a a :D ; :v \"x\" ." 0)
-      (string-row arena "an xsd:string literal, ranged xsd:string"
+      (literal-row arena "an xsd:string literal, ranged xsd:string"
         ":v rdfs:range xsd:string . :a :v \"x\"^^xsd:string ." 0)
-      (string-row arena "a language-tagged literal, ranged rdfs:Literal"
+      (literal-row arena "a language-tagged literal, ranged rdfs:Literal"
         ":v rdfs:range rdfs:Literal . :a :v \"x\"@en ." 0)
-      (string-row arena "no range at all"
+      (literal-row arena "no range at all"
         ":a :v \"x\" ." 0)
-      (string-row arena "two assertions, two literals, two ranges that hold them"
+      (literal-row arena "two assertions, two literals, two ranges that hold them"
         ":v rdfs:range rdfs:Literal , <http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral> .\n:a :v \"x\" . :b :v \"y\"@en ." 0)
-      (string-row arena "a language-tagged literal, ranged rdf:langString"
+      (literal-row arena "a language-tagged literal, ranged rdf:langString"
         ":v rdfs:range <http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> . :a :v \"x\"@en ." 0)
-      (string-row arena "an annotated assertion, and a reified-only one: stage 0 rebuilds both"
+      (literal-row arena "an annotated assertion, and a reified-only one: stage 0 rebuilds both"
         ":a :v \"x\" .\n[ a owl:Axiom ; owl:annotatedSource :a ; owl:annotatedProperty :v ; owl:annotatedTarget \"x\" ; rdfs:comment \"why\" ] .\n[ a owl:Axiom ; owl:annotatedSource :b ; owl:annotatedProperty :v ; owl:annotatedTarget \"y\" ; rdfs:comment \"why\" ] ." 0)
-      (string-row arena "an annotation on the property is not a use"
+      (literal-row arena "an annotation on the property is not a use"
         ":v rdfs:comment \"a name\" . :a :v \"x\" ." 0)
       ;; Out of profile, every one.
-      (string-row arena "a language-tagged literal is not an xsd:string"
+      (literal-row arena "a language-tagged literal is not an xsd:string"
         ":v rdfs:range xsd:string . :a :v \"x\"@en ." 2)
-      (string-row arena "a plain literal is not an rdf:langString"
+      (literal-row arena "a plain literal is not an rdf:langString"
         ":v rdfs:range <http://www.w3.org/1999/02/22-rdf-syntax-ns#langString> . :a :v \"x\" ." 2)
       ;; The parser refuses these as \u escapes, but not raw: the next two
       ;; literals hold a raw U+FFFE and U+FFFF.
-      (string-row arena "U+FFFE is outside XML's Char, so outside xsd:string: ill-typed"
+      (literal-row arena "U+FFFE is outside XML's Char, so outside xsd:string: ill-typed"
         ":a :v \"x￾y\" ." 1)
-      (string-row arena "so is U+FFFF, in a tagged literal"
+      (literal-row arena "so is U+FFFF, in a tagged literal"
         ":a :v \"x￿y\"@en ." 1)
-      (string-row arena "tab, line feed and carriage return are Chars"
+      (literal-row arena "tab, line feed and carriage return are Chars"
         ":a :v \"x\\t\\n\\ry\" ." 0)
       ;; A tag is set aside only in the subset HOWL checks:
       ;; language[-script][-region], case-insensitive. The parser and the
       ;; triple API take any tag, and RDF 1.1 requires a well-formed one.
-      (string-row arena "a script and a region are in the subset"
+      (literal-row arena "a script and a region are in the subset"
         ":a :v \"x\"@zh-Hans-CN , \"y\"@es-419 , \"z\"@EN-us ." 0)
-      (string-row arena "a nine-letter primary subtag is not well-formed"
+      (literal-row arena "a nine-letter primary subtag is not well-formed"
         ":a :v \"x\"@abcdefghi ." 1)
-      (string-row arena "a too-long second subtag"
+      (literal-row arena "a too-long second subtag"
         ":a :v \"x\"@en-abcdefghi ." 1)
-      (string-row arena "an empty subtag after a hyphen"
+      (literal-row arena "an empty subtag after a hyphen"
         ":a :v \"x\"@en- ." 1)
-      (string-row arena "an empty subtag between hyphens"
+      (literal-row arena "an empty subtag between hyphens"
         ":a :v \"x\"@en--US ." 1)
-      (string-row arena "a one-letter primary subtag"
+      (literal-row arena "a one-letter primary subtag"
         ":a :v \"x\"@e ." 1)
-      (string-row arena "a numeric primary subtag"
+      (literal-row arena "a numeric primary subtag"
         ":a :v \"x\"@123 ." 1)
-      (string-row arena "two regions"
+      (literal-row arena "two regions"
         ":a :v \"x\"@en-US-US ." 1)
-      (string-row arena "well-formed, but private use is outside the subset"
+      (literal-row arena "well-formed, but private use is outside the subset"
         ":a :v \"x\"@en-US-x-private ." 1)
       ;; Reserved vocabulary declared a data property is not a free data
       ;; property. rdfs:label is a built-in annotation property, so the
@@ -2678,44 +2678,142 @@
         "<http://www.w3.org/1999/02/22-rdf-syntax-ns#value> a owl:DatatypeProperty . :a <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> \"x\" ." 1 1)
       (rungs-omit arena "rdfs:label declared a data property is a declaration conflict"
         "rdfs:label a owl:DatatypeProperty . :a rdfs:label \"x\" ." -1 -1)
-      (string-row arena "a typed literal: no lexical validation yet"
+      (literal-row arena "an xsd:integer literal: not a kind the lemma validates"
         ":a :v \"1\"^^xsd:integer ." 1)
-      (string-row arena "a string literal outside its range"
+      (literal-row arena "a string literal outside its range"
         ":v rdfs:range xsd:integer . :a :v \"x\" ." 2)
-      (string-row arena "a domain"
+      (literal-row arena "a domain"
         ":v rdfs:domain :C . :a :v \"x\" ." 2)
-      (string-row arena "functional"
+      (literal-row arena "functional"
         ":v a owl:FunctionalProperty . :a :v \"x\" ." 2)
-      (string-row arena "a sub-property"
+      (literal-row arena "a sub-property"
         ":w a owl:DatatypeProperty . :v rdfs:subPropertyOf :w . :a :v \"x\" ." 2)
       ;; :w is idle, so the idle half sets these two axioms aside; the
       ;; assertion still stays.
-      (string-row arena "a super-property"
+      (literal-row arena "a super-property"
         ":w a owl:DatatypeProperty . :w rdfs:subPropertyOf :v . :a :v \"x\" ." 1)
-      (string-row arena "a disjointness with an idle property"
+      (literal-row arena "a disjointness with an idle property"
         ":w a owl:DatatypeProperty . :v owl:propertyDisjointWith :w . :a :v \"x\" ." 1)
-      (string-row arena "a negative assertion"
+      (literal-row arena "a negative assertion"
         ":a :v \"x\" .\n[ a owl:NegativePropertyAssertion ; owl:sourceIndividual :b ; owl:assertionProperty :v ; owl:targetValue \"y\" ] ." 2)
-      (string-row arena "a restriction"
+      (literal-row arena "a restriction"
         ":C rdfs:subClassOf [ a owl:Restriction ; owl:onProperty :v ; owl:someValuesFrom xsd:string ] . :a :v \"x\" ." 2)
-      (string-row arena "a key"
+      (literal-row arena "a key"
         ":C owl:hasKey ( :v ) . :a :v \"x\" ." 2)
-      (string-row arena "a blank-node subject spoils the named one's too"
+      (literal-row arena "a blank-node subject spoils the named one's too"
         ":a :v \"x\" . [] :v \"y\" ." 2)
-      (string-row arena "reserved vocabulary as the subject"
+      (literal-row arena "reserved vocabulary as the subject"
         "owl:Thing :v \"x\" . :a :v \"y\" ." 2)
-      (string-row arena "an individual as the value"
+      (literal-row arena "an individual as the value"
         ":a :v :b ." 1)
-      (string-row arena "a data property as another's value is named there too"
+      (literal-row arena "a data property as another's value is named there too"
         ":w a owl:DatatypeProperty . :a :w \"x\" . :b :v :w ." 2)
-      (string-row arena "a blank-node data range"
+      (literal-row arena "a blank-node data range"
         ":v rdfs:range [ a rdfs:Datatype ; owl:onDatatype xsd:string ; owl:withRestrictions ( [ xsd:maxLength 5 ] ) ] .\n:a :v \"x\" ." 5)
       (rungs-omit arena "owl:bottomDataProperty as the predicate"
         ":a owl:bottomDataProperty \"x\" ." 1 1)
       (rungs-omit arena "owl:topDataProperty as the predicate"
         ":a owl:topDataProperty \"x\" ." 1 1)))
 
-  (fn test-string-asserted-probe ((arena Arena))
+  (fn test-data-lemma-datetimes ((arena Arena))
+    (@intent "§5.2's data lemma, literal-asserted half, dates: valid dateTime and dateTimeStamp assertions are inert, and nothing near them is")
+    (@spec ((Arena) -> Bool))
+    (@alloc arena)
+    ;; Issue #135. The rows at 0 assert only valid xsd:dateTime or
+    ;; xsd:dateTimeStamp forms, each within every range of :v. Every other
+    ;; row breaks one condition, and gates as it did before: each assertion
+    ;; and each range on :v is omitted.
+    (and
+      (literal-row arena "the SPDX shape: created, ranged xsd:dateTimeStamp"
+        ":v rdfs:range xsd:dateTimeStamp ; rdfs:comment \"when\" .\n:a a :D ; :v \"2024-11-22T03:00:01Z\"^^xsd:dateTimeStamp .\n:b :v \"2024-11-22T03:00:01Z\"^^xsd:dateTimeStamp ." 0)
+      (literal-row arena "a dateTime without a timezone, ranged xsd:dateTime"
+        ":v rdfs:range xsd:dateTime . :a :v \"2024-11-22T03:00:01\"^^xsd:dateTime ." 0)
+      (literal-row arena "a dateTimeStamp, ranged xsd:dateTime"
+        ":v rdfs:range xsd:dateTime . :a :v \"2024-11-22T03:00:01Z\"^^xsd:dateTimeStamp ." 0)
+      (literal-row arena "a dateTime with a timezone is a dateTimeStamp"
+        ":v rdfs:range xsd:dateTimeStamp . :a :v \"2024-11-22T03:00:01+05:30\"^^xsd:dateTime ." 0)
+      (literal-row arena "24:00:00, with and without a zero fraction"
+        ":a :v \"2024-12-31T24:00:00\"^^xsd:dateTime , \"2024-12-31T24:00:00.000Z\"^^xsd:dateTime ." 0)
+      (literal-row arena "the widest timezones"
+        ":a :v \"2024-01-01T00:00:00+14:00\"^^xsd:dateTime , \"2024-01-01T00:00:00-14:00\"^^xsd:dateTimeStamp ." 0)
+      (literal-row arena "leap days: by 4, and by 400"
+        ":a :v \"2024-02-29T00:00:00\"^^xsd:dateTime , \"2000-02-29T00:00:00\"^^xsd:dateTime ." 0)
+      (literal-row arena "year 0000 is leap"
+        ":a :v \"0000-02-29T00:00:00\"^^xsd:dateTime ." 0)
+      (literal-row arena "a negative year"
+        ":a :v \"-0001-01-01T00:00:00Z\"^^xsd:dateTime ." 0)
+      (literal-row arena "fractional seconds"
+        ":a :v \"2024-01-01T10:20:30.123\"^^xsd:dateTime ." 0)
+      (literal-row arena "a five-digit year"
+        ":a :v \"12024-12-31T23:59:59Z\"^^xsd:dateTime ." 0)
+      (literal-row arena "a string property and a dateTime property together"
+        ":w a owl:DatatypeProperty ; rdfs:range xsd:string .\n:v rdfs:range xsd:dateTime .\n:a :w \"x\" ; :v \"2024-01-01T00:00:00\"^^xsd:dateTime ." 0)
+      (literal-row arena "rdfs:Literal holds a string and a dateTime"
+        ":v rdfs:range rdfs:Literal . :a :v \"x\" , \"2024-01-01T00:00:00Z\"^^xsd:dateTime ." 0)
+      (literal-row arena "an annotated dateTime assertion"
+        ":a :v \"2024-01-01T00:00:00\"^^xsd:dateTime .\n[ a owl:Axiom ; owl:annotatedSource :a ; owl:annotatedProperty :v ; owl:annotatedTarget \"2024-01-01T00:00:00\"^^xsd:dateTime ; rdfs:comment \"why\" ] ." 0)
+      ;; Out of profile, every one: no such date or time.
+      (literal-row arena "2023 is not leap"
+        ":v rdfs:range xsd:dateTime . :a :v \"2023-02-29T00:00:00\"^^xsd:dateTime ." 2)
+      (literal-row arena "1900 is not leap"
+        ":a :v \"1900-02-29T00:00:00\"^^xsd:dateTime ." 1)
+      (literal-row arena "April has 30 days"
+        ":a :v \"2024-04-31T00:00:00\"^^xsd:dateTime ." 1)
+      (literal-row arena "month 13"
+        ":a :v \"2024-13-01T00:00:00\"^^xsd:dateTime ." 1)
+      (literal-row arena "day 00"
+        ":a :v \"2024-01-00T00:00:00\"^^xsd:dateTime ." 1)
+      (literal-row arena "24:00:01"
+        ":a :v \"2024-01-01T24:00:01\"^^xsd:dateTime ." 1)
+      (literal-row arena "24:00:00 with a fraction past it"
+        ":a :v \"2024-01-01T24:00:00.5\"^^xsd:dateTime ." 1)
+      (literal-row arena "a leap second"
+        ":a :v \"2024-01-01T23:59:60Z\"^^xsd:dateTime ." 1)
+      (literal-row arena "minute 60"
+        ":a :v \"2024-01-01T23:60:00Z\"^^xsd:dateTime ." 1)
+      (literal-row arena "a fraction point with no digits"
+        ":a :v \"2024-01-01T10:00:00.\"^^xsd:dateTime ." 1)
+      (literal-row arena "+14:01"
+        ":a :v \"2024-01-01T00:00:00+14:01\"^^xsd:dateTime ." 1)
+      (literal-row arena "+15:00"
+        ":a :v \"2024-01-01T00:00:00+15:00\"^^xsd:dateTime ." 1)
+      (literal-row arena "a one-digit timezone hour"
+        ":a :v \"2024-01-01T00:00:00+5:30\"^^xsd:dateTime ." 1)
+      (literal-row arena "a lower-case z"
+        ":a :v \"2024-01-01T00:00:00z\"^^xsd:dateTime ." 1)
+      (literal-row arena "missing seconds"
+        ":a :v \"2024-01-01T10:00Z\"^^xsd:dateTime ." 1)
+      (literal-row arena "a five-digit year with a leading zero"
+        ":a :v \"02024-01-01T00:00:00Z\"^^xsd:dateTime ." 1)
+      (literal-row arena "a three-digit year"
+        ":a :v \"999-01-01T00:00:00Z\"^^xsd:dateTime ." 1)
+      (literal-row arena "leading whitespace"
+        ":a :v \" 2024-01-01T00:00:00Z\"^^xsd:dateTime ." 1)
+      (literal-row arena "trailing whitespace"
+        ":a :v \"2024-01-01T00:00:00Z \"^^xsd:dateTime ." 1)
+      ;; Valid forms outside a range, or of another datatype.
+      (literal-row arena "a dateTimeStamp needs a timezone"
+        ":a :v \"2024-01-01T00:00:00\"^^xsd:dateTimeStamp ." 1)
+      (literal-row arena "a dateTime without a timezone is no dateTimeStamp"
+        ":v rdfs:range xsd:dateTimeStamp . :a :v \"2024-01-01T00:00:00\"^^xsd:dateTime ." 2)
+      (literal-row arena "a dateTime is no xsd:string"
+        ":v rdfs:range xsd:string . :a :v \"2024-01-01T00:00:00Z\"^^xsd:dateTime ." 2)
+      (literal-row arena "a dateTime is no plain literal"
+        ":v rdfs:range <http://www.w3.org/1999/02/22-rdf-syntax-ns#PlainLiteral> . :a :v \"2024-01-01T00:00:00Z\"^^xsd:dateTime ." 2)
+      (literal-row arena "a string is no xsd:dateTime"
+        ":v rdfs:range xsd:dateTime . :a :v \"2024-01-01T00:00:00Z\" ." 2)
+      (literal-row arena "an xsd:date range"
+        ":v rdfs:range xsd:date . :a :v \"2024-01-01T00:00:00Z\"^^xsd:dateTime ." 2)
+      (literal-row arena "an xsd:date literal"
+        ":a :v \"2024-01-01\"^^xsd:date ." 1)
+      (literal-row arena "an xsd:integer literal"
+        ":a :v \"2024\"^^xsd:integer ." 1)
+      (literal-row arena "an xsd:boolean literal"
+        ":a :v \"true\"^^xsd:boolean ." 1)
+      (literal-row arena "a blank-node subject"
+        "[] :v \"2024-01-01T00:00:00Z\"^^xsd:dateTime ." 1)))
+
+  (fn test-literal-asserted-probe ((arena Arena))
     (@intent "Issue #133: a string assertion outside the query no longer makes the probe's module unknown")
     (@spec ((Arena) -> Bool))
     (@alloc arena)
@@ -13627,7 +13725,11 @@ subConj(_:0, <http://example.org/t#D>, <http://www.w3.org/2002/07/owl#Nothing>)
             (print-test-result "§5.2: string assertions and their ranges are inert in both rungs (#133)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
-          (let ((r (test-string-asserted-probe arena)))
+          (let ((r (test-data-lemma-datetimes arena)))
+            (print-test-result "§5.2: valid dateTime assertions and their ranges are inert in both rungs (#135)" r)
+            (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
+
+          (let ((r (test-literal-asserted-probe arena)))
             (print-test-result "§5.2: a string assertion outside the module answers no (#133)" r)
             (if r (set! passed (+ passed 1)) (set! failed (+ failed 1))))
 
