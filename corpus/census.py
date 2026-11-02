@@ -18,11 +18,17 @@ import os
 import re
 import sys
 from collections import Counter
+import rdflib
 from rdflib import Graph, RDF, RDFS, OWL, XSD, BNode, URIRef, Literal, Namespace
 from rdflib.collection import Collection
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import profiles  # noqa: E402
+
+# The census judges a date-time's lexical form as written, so rdflib must not
+# rewrite it on parse: normalizing turns "10:00Z" into a canonical-looking
+# "10:00:00+00:00" and hides the invalid form. Set before any graph is parsed.
+rdflib.NORMALIZE_LITERALS = False
 
 SWRL = Namespace("http://www.w3.org/2003/11/swrl#")
 
@@ -487,18 +493,29 @@ def _data_lemma(triples, data, ann):
     return idle, tree
 
 
-# Which string literals a range holds (SPEC.md §5.2's table): "str" is an
-# xsd:string, written plain or typed, "lang" an rdf:langString.
+# Which literal kinds a range holds (SPEC.md §5.2's table). The kinds: "str" is
+# an xsd:string, written plain or typed, "lang" an rdf:langString, "dt" an
+# xsd:dateTime without a timezone, "dtz" a timezoned xsd:dateTime or an
+# xsd:dateTimeStamp.
 _RANGE_HOLDS = {
-    RDFS.Literal: {"str", "lang"},
+    RDFS.Literal: {"str", "lang", "dt", "dtz"},
     RDF.PlainLiteral: {"str", "lang"},
     XSD.string: {"str"},
     RDF.langString: {"lang"},
+    XSD.dateTime: {"dt", "dtz"},
+    XSD.dateTimeStamp: {"dtz"},
 }
 
 
-# SPEC.md §5.2: the language tags a string-asserted property may carry.
+# SPEC.md §5.2: the language tags a literal-asserted property may carry.
 _LANG_TAG = re.compile(r"[a-z]{2,3}(-[a-z]{4})?(-([a-z]{2}|[0-9]{3}))?", re.I)
+
+# SPEC.md §5.2's dateTimeLexicalRep (XSD 1.1 Part 2 §3.3.7): year, date, time,
+# optional timezone. Digits are ASCII only; fullmatch admits no whitespace.
+_DATETIME = re.compile(
+    r"(?P<y>-?(?:[1-9][0-9]{3,}|0[0-9]{3}))-(?P<mo>[0-9]{2})-(?P<d>[0-9]{2})"
+    r"T(?P<h>[0-9]{2}):(?P<mi>[0-9]{2}):(?P<s>[0-9]{2})(?:\.(?P<f>[0-9]+))?"
+    r"(?P<tz>Z|[+-][0-9]{2}:[0-9]{2})?")
 
 
 def _is_char(c):
@@ -508,29 +525,68 @@ def _is_char(c):
             or 0x10000 <= n <= 0x10FFFF)
 
 
-def _string_kind(lit):
-    """'str' for an xsd:string literal (plain or typed), 'lang' for an
-    rdf:langString one, None for anything else or for a lexical form holding a
-    non-Char."""
-    if not isinstance(lit, Literal) or not all(_is_char(c) for c in str(lit)):
+def _datetime_kind(lex):
+    """'dt' / 'dtz' for a valid dateTimeLexicalRep without / with a timezone,
+    None for an invalid form. Plain arithmetic: Python's datetime has no year 0,
+    no negative years and no 24:00."""
+    m = _DATETIME.fullmatch(lex)
+    if m is None:
+        return None
+    year, month, day = int(m["y"]), int(m["mo"]), int(m["d"])
+    hour, minute, sec = int(m["h"]), int(m["mi"]), int(m["s"])
+    if not 1 <= month <= 12:
+        return None
+    leap = year % 400 == 0 or (year % 4 == 0 and year % 100 != 0)  # int("-0004") is -4
+    length = 29 if month == 2 and leap else (28 if month == 2 else
+                                               30 if month in (4, 6, 9, 11) else 31)
+    if not 1 <= day <= length:
+        return None
+    if hour == 24:
+        if minute or sec or (m["f"] and m["f"].strip("0")):
+            return None
+    elif hour > 23 or minute > 59 or sec > 59:
+        return None
+    tz = m["tz"]
+    if tz is None:
+        return "dt"
+    if tz != "Z":
+        th, tm = int(tz[1:3]), int(tz[4:6])
+        if not (th <= 13 and tm <= 59 or (th, tm) == (14, 0)):
+            return None
+    return "dtz"
+
+
+def _literal_kind(lit):
+    """The SPEC.md §5.2 kind of a supported literal ('str', 'lang', 'dt',
+    'dtz'), None for anything else: another datatype, an invalid date-time form,
+    a malformed tag, or a lexical form holding a non-Char. Reads the lexical
+    form as written (see NORMALIZE_LITERALS above)."""
+    if not isinstance(lit, Literal):
+        return None
+    lex = str(lit)
+    if lit.language is None and lit.datatype in (XSD.dateTime, XSD.dateTimeStamp):
+        kind = _datetime_kind(lex)
+        return None if kind == "dt" and lit.datatype == XSD.dateTimeStamp else kind  # needs a timezone
+    if not all(_is_char(c) for c in lex):
         return None
     if lit.language is not None:
         return "lang" if _LANG_TAG.fullmatch(lit.language) else None
     return "str" if lit.datatype is None or lit.datatype == XSD.string else None
 
 
-def _string_asserted(triples, data, ann):
-    """SPEC.md §5.2's string-asserted data properties: asserted at least once,
-    every assertion a string literal on a named individual, every range one that
-    holds them, and no other triple naming the property, in any position, but
-    its declaration and annotations. Read over decoder_triples, after stage 0."""
+def _literal_asserted(triples, data, ann):
+    """SPEC.md §5.2's literal-asserted data properties: asserted at least once,
+    every assertion a supported literal on a named individual, every range one
+    that holds them, and no other triple naming the property, in any position,
+    but its declaration and annotations. Read over decoder_triples, after
+    stage 0."""
     cand = {q for q in data if _named(q)}  # a reserved IRI is never eligible
     kinds, ranges, bad = {}, {}, set()
     for s, p, o in triples:
         if p in ann or p in BUILTIN_ANNOTATION:
             continue
         if p in cand:
-            k = _string_kind(o) if _named(s) else None
+            k = _literal_kind(o) if _named(s) else None
             if k is None:
                 bad.add(p)
             else:
@@ -552,7 +608,7 @@ def data_inert(sig, s, p, o):
     data, idle = sig["data"], sig["data_idle"]
     if s in sig["data_tree"]:
         return True
-    if p in sig["data_string"] or (p == RDFS.range and s in sig["data_string"]):
+    if p in sig["data_literal"] or (p == RDFS.range and s in sig["data_literal"]):
         return True
     if p in (RDFS.domain, RDFS.range):
         return s in idle
@@ -579,13 +635,13 @@ def _base_signature(g):
         | {OWL.topDataProperty, OWL.bottomDataProperty}
     ann = {s for s, p, o in triples if p == RDF.type and o == OWL.AnnotationProperty}
     data_idle, data_tree = _data_lemma(triples, data, ann)
-    data_string = _string_asserted(triples, data, ann)
+    data_literal = _literal_asserted(triples, data, ann)
     return {
         "ann":     ann,
         "data":    data,
         "data_idle": data_idle,
         "data_tree": data_tree,
-        "data_string": data_string,
+        "data_literal": data_literal,
         "obj":     set(g.subjects(RDF.type, OWL.ObjectProperty)),
         "classes": set(g.subjects(RDF.type, OWL.Class)),
         # Restrictions ON A DATA PROPERTY. owl:someValuesFrom is spelled the
