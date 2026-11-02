@@ -486,10 +486,68 @@ def _data_lemma(triples, data, ann):
     return idle, tree
 
 
+# Which string literals a range holds (SPEC.md §5.2's table): "str" is an
+# xsd:string, written plain or typed, "lang" an rdf:langString.
+_RANGE_HOLDS = {
+    RDFS.Literal: {"str", "lang"},
+    RDF.PlainLiteral: {"str", "lang"},
+    XSD.string: {"str"},
+    RDF.langString: {"lang"},
+}
+
+
+def _is_char(c):
+    """XML 1.0 Char."""
+    n = ord(c)
+    return (n in (0x9, 0xA, 0xD) or 0x20 <= n <= 0xD7FF or 0xE000 <= n <= 0xFFFD
+            or 0x10000 <= n <= 0x10FFFF)
+
+
+def _string_kind(lit):
+    """'str' for an xsd:string literal (plain or typed), 'lang' for an
+    rdf:langString one, None for anything else or for a lexical form holding a
+    non-Char."""
+    if not isinstance(lit, Literal) or not all(_is_char(c) for c in str(lit)):
+        return None
+    if lit.language is not None:
+        return "lang"
+    return "str" if lit.datatype is None or lit.datatype == XSD.string else None
+
+
+def _string_asserted(triples, data, ann):
+    """SPEC.md §5.2's string-asserted data properties: asserted at least once,
+    every assertion a string literal on a named individual, every range one that
+    holds them, and no other triple naming the property, in any position, but
+    its declaration and annotations. Read over decoder_triples, after stage 0."""
+    cand = data - {OWL.topDataProperty, OWL.bottomDataProperty}
+    kinds, ranges, bad = {}, {}, set()
+    for s, p, o in triples:
+        if p in ann or p in BUILTIN_ANNOTATION:
+            continue
+        if p in cand:
+            k = _string_kind(o) if _named(s) else None
+            if k is None:
+                bad.add(p)
+            else:
+                kinds.setdefault(p, set()).add(k)
+            bad.update(t for t in (s, o) if t in cand)
+        elif p == RDF.type and s in cand and o == OWL.DatatypeProperty:
+            pass
+        elif p == RDFS.range and s in cand:
+            ranges.setdefault(s, []).append(o)
+            bad.update(t for t in (o,) if t in cand)
+        else:
+            bad.update(t for t in (s, p, o) if t in cand)
+    return {q for q in kinds if q not in bad
+            and all(r in _RANGE_HOLDS and kinds[q] <= _RANGE_HOLDS[r] for r in ranges.get(q, ()))}
+
+
 def data_inert(sig, s, p, o):
     """Is this triple an axiom the data lemma sets aside, or part of one's filler?"""
     data, idle = sig["data"], sig["data_idle"]
     if s in sig["data_tree"]:
+        return True
+    if p in sig["data_string"] or (p == RDFS.range and s in sig["data_string"]):
         return True
     if p in (RDFS.domain, RDFS.range):
         return s in idle
@@ -516,11 +574,13 @@ def _base_signature(g):
         | {OWL.topDataProperty, OWL.bottomDataProperty}
     ann = {s for s, p, o in triples if p == RDF.type and o == OWL.AnnotationProperty}
     data_idle, data_tree = _data_lemma(triples, data, ann)
+    data_string = _string_asserted(triples, data, ann)
     return {
         "ann":     ann,
         "data":    data,
         "data_idle": data_idle,
         "data_tree": data_tree,
+        "data_string": data_string,
         "obj":     set(g.subjects(RDF.type, OWL.ObjectProperty)),
         "classes": set(g.subjects(RDF.type, OWL.Class)),
         # Restrictions ON A DATA PROPERTY. owl:someValuesFrom is spelled the
