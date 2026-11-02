@@ -545,6 +545,10 @@ class DataLemmaTest(unittest.TestCase):
             ("xsd:date stays", None, "2024-01-01", "date", 1),
             ("xsd:integer stays", None, "1", "integer", 1),
             ("xsd:boolean stays", None, "true", "boolean", 1),
+            ("5000-digit year", None, "1" + "0" * 4999 + "-01-01T00:00:00Z", "dateTime", 0),
+            ("5000-digit year, Feb 29 (divisible by 400)", None, "1" + "0" * 4999 + "-02-29T00:00:00Z", "dateTime", 0),
+            ("5000-digit year, Feb 30 stays", None, "1" + "0" * 4999 + "-02-30T00:00:00Z", "dateTime", 1),
+            ("5000-digit year, not divisible by 4: Feb 29 stays", None, "1" + "0" * 4998 + "1-02-29T00:00:00Z", "dateTime", 1),
         ]
     ] + [
         ("literal-asserted: a string under an xsd:dateTime range stays",
@@ -563,7 +567,8 @@ class DataLemmaTest(unittest.TestCase):
     ]
 
     def out(self, text, profile):
-        _, _, out, _, _ = census.census(None, graph=graph(self.HEAD_X + text), profile=profile)
+        g = census.parse_as_written(Graph(), None, "turtle", data=HEAD + self.HEAD_X + text)
+        _, _, out, _, _ = census.census(None, graph=g, profile=profile)
         return sum(out.values())
 
     def test_each_row_under_both_rungs(self):
@@ -571,6 +576,18 @@ class DataLemmaTest(unittest.TestCase):
             with self.subTest(label):
                 self.assertEqual(self.out(text, "el"), want, "el")
                 self.assertEqual(self.out(text, "el++"), want, "el++")
+
+    def test_importing_census_leaves_normalization_alone(self):
+        import rdflib
+        self.assertTrue(rdflib.NORMALIZE_LITERALS)
+
+    def test_parse_as_written_restores_the_flag(self):
+        import rdflib
+        census.parse_as_written(Graph(), None, "turtle", data="@prefix : <http://e/> . :a :p 1 .")
+        self.assertTrue(rdflib.NORMALIZE_LITERALS)
+        with self.assertRaises(Exception):
+            census.parse_as_written(Graph(), None, "turtle", data="not turtle (")
+        self.assertTrue(rdflib.NORMALIZE_LITERALS)
 
     def test_a_filler_that_heads_an_axiom_keeps_it(self):
         # Consuming the filler whole dropped the GCI, and with it D's

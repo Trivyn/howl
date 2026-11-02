@@ -25,10 +25,18 @@ from rdflib.collection import Collection
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import profiles  # noqa: E402
 
-# The census judges a date-time's lexical form as written, so rdflib must not
-# rewrite it on parse: normalizing turns "10:00Z" into a canonical-looking
-# "10:00:00+00:00" and hides the invalid form. Set before any graph is parsed.
-rdflib.NORMALIZE_LITERALS = False
+def parse_as_written(graph, source, format=None, **kw):
+    """Parse into `graph` with rdflib's literal normalization off, restoring the
+    previous setting afterwards. The census judges a date-time's lexical form as
+    written, and normalizing turns an invalid "10:00Z" into a valid-looking
+    "10:00:00+00:00". The flag is global, so it is held only around the parse."""
+    old = rdflib.NORMALIZE_LITERALS
+    rdflib.NORMALIZE_LITERALS = False
+    try:
+        return graph.parse(source, format=format, **kw)
+    finally:
+        rdflib.NORMALIZE_LITERALS = old
+
 
 SWRL = Namespace("http://www.w3.org/2003/11/swrl#")
 
@@ -532,11 +540,14 @@ def _datetime_kind(lex):
     m = _DATETIME.fullmatch(lex)
     if m is None:
         return None
-    year, month, day = int(m["y"]), int(m["mo"]), int(m["d"])
+    # Leap-ness depends on the year mod 400 only, and 10000 is a multiple of 400:
+    # the last four digits decide, whatever the sign or length (int() of a very
+    # long year would raise).
+    year, month, day = int(m["y"][-4:]), int(m["mo"]), int(m["d"])
     hour, minute, sec = int(m["h"]), int(m["mi"]), int(m["s"])
     if not 1 <= month <= 12:
         return None
-    leap = year % 400 == 0 or (year % 4 == 0 and year % 100 != 0)  # int("-0004") is -4
+    leap = year % 400 == 0 or (year % 4 == 0 and year % 100 != 0)
     length = 29 if month == 2 and leap else (28 if month == 2 else
                                                30 if month in (4, 6, 9, 11) else 31)
     if not 1 <= day <= length:
@@ -560,7 +571,7 @@ def _literal_kind(lit):
     """The SPEC.md §5.2 kind of a supported literal ('str', 'lang', 'dt',
     'dtz'), None for anything else: another datatype, an invalid date-time form,
     a malformed tag, or a lexical form holding a non-Char. Reads the lexical
-    form as written (see NORMALIZE_LITERALS above)."""
+    form as written (see parse_as_written)."""
     if not isinstance(lit, Literal):
         return None
     lex = str(lit)
@@ -965,9 +976,12 @@ def out_of_profile_seeds(g, sig=None):
 
 
 def census(path, fmt=None, graph=None, profile="el"):
+    """Classify a file, or a `graph` the caller parsed. A file is parsed with
+    literals as written (parse_as_written); a `graph=` is read as given, so a
+    caller that needs as-written date-time forms must parse it that way."""
     g = graph if graph is not None else Graph()
     if graph is None:
-        g.parse(path, format=fmt)
+        parse_as_written(g, path, fmt)
     sig = signature(g, profile)
     buckets = {IN: Counter(), OUT: Counter(), INERT: Counter(), CONSUMED: Counter()}
     for s, p, o in g:
