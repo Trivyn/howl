@@ -126,8 +126,28 @@
     (@alloc arena)
     (let ((order (sort-range arena (list-len xs)
                    (fn ((i Int) (j Int)) (set-cmp (set-at arena xs i) (set-at arena xs j)))))
-          (mut out (list-new arena MappingSet)))
-      (do (for-each (i order) (keep-set (addr out) (set-at arena xs i))) out)))
+          (mut out (list-new arena MappingSet)) (mut previous (Option MappingSet) (none)))
+      ;; Equal sets are adjacent once sorted: keep the first of each run.
+      (do (for-each (i order)
+            (let ((x (record-new MappingSet (items (set-at arena xs i)))))
+              (when (match previous ((none) true) ((some p) (!= (set-cmp (. p items) (. x items)) 0)))
+                (do (list-push out x) (set! previous (some x))))))
+          out)))
+
+  (fn set-key ((arena Arena) (xs (List Int)))
+    (@spec ((Arena (List Int)) -> String))
+    (@alloc arena)
+    ;; Hash key of a sorted index list: equal keys exactly for equal sets.
+    (let ((mut key ""))
+      (do (for-each (x xs) (set! key (string-concat arena key (string-concat arena (int-to-string arena x) ","))))
+          key)))
+
+  (fn fresh ((arena Arena) (seen (Set String)) (items (List Int)))
+    (@spec ((Arena (Set String) (List Int)) -> Bool))
+    (@alloc arena)
+    ;; True, recording ITEMS, when no equal set was seen before.
+    (let ((key (set-key arena items)) (mut yes false))
+      (do (when (not (set-has seen key)) (do (set-put seen key) (set! yes true))) yes)))
 
   (fn empty-phase ()
     (@spec (() -> Phase))
@@ -236,37 +256,62 @@
                 (do (set! valid false) (set! (. (. (deref st) conflict-phase) unresolved) true))))))
         (if valid (some (record-new MappingSet (items cur))) (none)))))
 
-  (fn canonical-next ((arena Arena) (queue (Ptr (List MappingSet))) (pos Int) (options SearchOptions))
-    (@spec ((Arena (Ptr (List MappingSet)) Int SearchOptions) -> Unit))
+  ;; The exclusion queue is a binary min-heap under set-cmp, the canonical
+  ;; order: cardinality, then lexicographic index order. Queued sets are
+  ;; distinct, so the order is strict and pops follow it exactly.
+  (fn heap-push ((arena Arena) (queue (Ptr (List MappingSet))) (items (List Int)))
+    (@spec ((Arena (Ptr (List MappingSet)) (List Int)) -> Unit))
     (@alloc arena)
-    ;; Queue insertion order is not globally lexicographic after dedup.
-    ;; Select the least unprocessed exclusion set before every expansion.
-    (let ((mut best pos) (mut i (+ pos 1)))
+    (let ((mut i (list-len (deref queue))) (mut moving true))
       (do
-        (while (and (< i (list-len (deref queue))) (not (cancel-requested (. options cancel))))
-          (do
-            (when (< (set-cmp (set-at arena (deref queue) i) (set-at arena (deref queue) best)) 0)
-              (set! best i))
-            (set! i (+ i 1))))
-        (when (!= best pos)
-          (let ((a (record-new MappingSet (items (set-at arena (deref queue) pos))))
-                (b (record-new MappingSet (items (set-at arena (deref queue) best)))))
-            (do (when (list-set (deref queue) pos b) (do))
-                (when (list-set (deref queue) best a) (do))))))))
+        (list-push (deref queue) (record-new MappingSet (items items)))
+        (while (and moving (> i 0))
+          (let ((parent (/ (- i 1) 2)))
+            (let ((up (set-at arena (deref queue) parent)))
+              (if (< (set-cmp items up) 0)
+                (do (when (list-set (deref queue) i (record-new MappingSet (items up))) (do)) (set! i parent))
+                (set! moving false)))))
+        (when (list-set (deref queue) i (record-new MappingSet (items items))) (do)))))
+
+  (fn heap-pop ((arena Arena) (queue (Ptr (List MappingSet))))
+    (@spec ((Arena (Ptr (List MappingSet))) -> (List Int)))
+    (@alloc arena)
+    ;; Remove and return the least set; the last entry sifts down from the root.
+    (let ((least (set-at arena (deref queue) 0)))
+      (do
+        (match (list-pop (deref queue))
+          ((none) (do))
+          ((some last)
+            (let ((n (list-len (deref queue))) (mut i 0) (mut moving (> (list-len (deref queue)) 0)))
+              (do
+                (while moving
+                  (let ((mut child (+ (* 2 i) 1)))
+                    (if (>= child n)
+                      (set! moving false)
+                      (do
+                        (when (and (< (+ child 1) n)
+                                   (< (set-cmp (set-at arena (deref queue) (+ child 1)) (set-at arena (deref queue) child)) 0))
+                          (set! child (+ child 1)))
+                        (if (< (set-cmp (set-at arena (deref queue) child) (. last items)) 0)
+                          (do (when (list-set (deref queue) i (record-new MappingSet (items (set-at arena (deref queue) child)))) (do))
+                              (set! i child))
+                          (set! moving false))))))
+                (when (< i n) (when (list-set (deref queue) i last) (do)))))))
+        least)))
 
   (fn enumerate-conflicts ((arena Arena) (st (Ptr SearchState)) (options SearchOptions) (all (List Int))
                            (check (Fn ((List Int)) Checked)))
     (@spec ((Arena (Ptr SearchState) SearchOptions (List Int) (Fn ((List Int)) Checked)) -> (List MappingSet)))
     (@alloc arena)
-    (let ((mut known (list-new arena MappingSet)) (mut queue (list-new arena MappingSet)) (mut pos 0))
+    ;; SEEN holds every set ever queued, so each is expanded at most once.
+    (let ((mut known (list-new arena MappingSet)) (mut queue (list-new arena MappingSet))
+          (seen (set-new arena String)) (empty (list-new arena Int)))
       (do
-        (keep-set (addr queue) (list-new arena Int))
-        (while (and (< pos (list-len queue)) (not (. (. (deref st) conflict-phase) capped)) (not (stopped st options)))
+        (when (fresh arena seen empty) (heap-push arena (addr queue) empty))
+        (while (and (> (list-len queue) 0) (not (. (. (deref st) conflict-phase) capped)) (not (stopped st options)))
          (do
-          (canonical-next arena (addr queue) pos options)
-          (let ((excluded (set-at arena queue pos)))
+          (let ((excluded (heap-pop arena (addr queue))))
             (do
-              (set! pos (+ pos 1))
               (let ((retained (difference arena all excluded)) (mut conflict (Option MappingSet) (none)))
                 (do
                   (set! conflict (find-conflict known retained))
@@ -292,8 +337,9 @@
                               (set! (. (. (deref st) conflict-phase) capped) true)
                               (do
                                 (set! (. (. (deref st) counts) conflict-nodes) (+ (. (. (deref st) counts) conflict-nodes) 1))
-                                (keep-set (addr queue) (set-add arena excluded x))))))))))))))))
-        (set! (. (. (deref st) conflict-phase) exhausted) (>= pos (list-len queue)))
+                                (let ((child (set-add arena excluded x)))
+                                  (when (fresh arena seen child) (heap-push arena (addr queue) child)))))))))))))))))
+        (set! (. (. (deref st) conflict-phase) exhausted) (== (list-len queue) 0))
         (sorted-sets arena known))))
 
   (fn intersects ((a (List Int)) (b (List Int)))
@@ -330,50 +376,57 @@
     (@spec ((Arena (Ptr SearchState) SearchOptions (List MappingSet)) -> (List MappingSet)))
     (@alloc arena)
     ;; Stack indices give an iterative DFS without native stack growth.
+    ;; SEEN deduplicates NODES, so each node is popped at most once.
     (let ((mut nodes (list-new arena MappingSet)) (mut stack (list-new arena Int))
-          (mut found (list-new arena MappingSet)) (mut top 0))
+          (mut found (list-new arena MappingSet)) (mut top 0) (seen (set-new arena String))
+          (empty (list-new arena Int)))
       (do
-        (keep-set (addr nodes) (list-new arena Int)) (list-push stack 0) (set! top 1)
+        (when (fresh arena seen empty) (list-push nodes (record-new MappingSet (items empty))))
+        (list-push stack 0) (set! top 1)
         (while (and (> top 0) (not (. (. (deref st) hitting-phase) capped)) (not (stopped st options)))
           (do
             (set! top (- top 1))
+            ;; A superset of a found transversal is itself a transversal and,
+            ;; never popped before, a proper superset: minimal-hit rejects it.
+            ;; So FOUND needs neither a superset scan nor a duplicate check.
             (let ((candidate (set-at arena nodes (index-at stack top))))
-              (when (not (match (find-conflict found candidate) ((some _) true) ((none) false)))
-                (match (unhit conflicts candidate)
-                  ((none) (when (minimal-hit conflicts candidate) (keep-set (addr found) candidate)))
-                  ((some c)
-                    (let ((mut i (- (list-len (. c items)) 1)))
-                      (while (and (>= i 0) (not (. (. (deref st) hitting-phase) capped)) (not (stopped st options)))
-                        (do
-                          (if (>= (. (. (deref st) counts) hitting-nodes) (. options hitting-nodes))
-                            (set! (. (. (deref st) hitting-phase) capped) true)
-                            (do
-                              (set! (. (. (deref st) counts) hitting-nodes) (+ (. (. (deref st) counts) hitting-nodes) 1))
-                              (let ((child (set-add arena candidate (index-at (. c items) i))))
-                                (when (not (known-set nodes child))
-                                  (do
-                                    (list-push nodes (record-new MappingSet (items child)))
-                                    (if (< top (list-len stack)) (when (list-set stack top (- (list-len nodes) 1)) (do))
-                                                                (list-push stack (- (list-len nodes) 1)))
-                                    (set! top (+ top 1)))))))
-                          (set! i (- i 1)))))))))))
+              (match (unhit conflicts candidate)
+                ((none) (when (minimal-hit conflicts candidate)
+                          (list-push found (record-new MappingSet (items candidate)))))
+                ((some c)
+                  (let ((mut i (- (list-len (. c items)) 1)))
+                    (while (and (>= i 0) (not (. (. (deref st) hitting-phase) capped)) (not (stopped st options)))
+                      (do
+                        (if (>= (. (. (deref st) counts) hitting-nodes) (. options hitting-nodes))
+                          (set! (. (. (deref st) hitting-phase) capped) true)
+                          (do
+                            (set! (. (. (deref st) counts) hitting-nodes) (+ (. (. (deref st) counts) hitting-nodes) 1))
+                            (let ((child (set-add arena candidate (index-at (. c items) i))))
+                              (when (fresh arena seen child)
+                                (do
+                                  (list-push nodes (record-new MappingSet (items child)))
+                                  (if (< top (list-len stack)) (when (list-set stack top (- (list-len nodes) 1)) (do))
+                                                              (list-push stack (- (list-len nodes) 1)))
+                                  (set! top (+ top 1)))))))
+                        (set! i (- i 1))))))))))
         (set! (. (. (deref st) hitting-phase) exhausted) (== top 0))
         (sorted-sets arena found))))
 
-  (fn keep-candidate ((out (Ptr (List Candidate))) (removed (List Int)) (reason CandidateReason))
-    (@spec (((Ptr (List Candidate)) (List Int) CandidateReason) -> Unit))
-    (let ((mut seen false))
-      (do (for-each (c (deref out)) (when (== (set-cmp (. c removed) removed) 0) (set! seen true)))
-          (when (not seen) (list-push (deref out) (record-new Candidate (removed removed) (reason reason)))))))
+  (fn keep-candidate ((arena Arena) (out (Ptr (List Candidate))) (seen (Set String)) (removed (List Int))
+                      (reason CandidateReason))
+    (@spec ((Arena (Ptr (List Candidate)) (Set String) (List Int) CandidateReason) -> Unit))
+    (@alloc arena)
+    ;; SEEN holds the removal sets already in OUT; the first reason wins.
+    (when (fresh arena seen removed) (list-push (deref out) (record-new Candidate (removed removed) (reason reason)))))
 
   (fn verify-candidate ((arena Arena) (st (Ptr SearchState)) (options SearchOptions) (removed (List Int))
                         (verified (Ptr (List MappingSet))) (candidates (Ptr (List Candidate)))
-                        (check (Fn ((List Int)) Checked)))
+                        (seen (Set String)) (check (Fn ((List Int)) Checked)))
     (@spec ((Arena (Ptr SearchState) SearchOptions (List Int) (Ptr (List MappingSet)) (Ptr (List Candidate))
-            (Fn ((List Int)) Checked)) -> Unit))
+            (Set String) (Fn ((List Int)) Checked)) -> Unit))
     (@alloc arena)
     (match (ask arena st options 2 removed check)
-      ((none) (keep-candidate candidates removed 'candidate-budget))
+      ((none) (keep-candidate arena candidates seen removed 'candidate-budget))
       ((some initial)
         (cond
           ((good initial)
@@ -389,9 +442,9 @@
                             ((good c) (set! cur trial))
                             ((and (. c complete) (bad c)) (do))
                             (else (do (set! certain false) (set! (. (. (deref st) verification-phase) unresolved) true)))))))))
-                (if certain (keep-set verified cur) (keep-candidate candidates cur reason)))))
+                (if certain (keep-set verified cur) (keep-candidate arena candidates seen cur reason)))))
           ((bad initial) (do))
-          (else (do (keep-candidate candidates removed 'candidate-unknown)
+          (else (do (keep-candidate arena candidates seen removed 'candidate-unknown)
                     (set! (. (. (deref st) verification-phase) unresolved) true)))))))
 
   (fn sorted-omissions ((arena Arena) (xs (List Omission)))
@@ -436,6 +489,7 @@
     (let ((all (indices arena n)) (empty (list-new arena Int))
           (st (cast (Ptr SearchState) (arena-alloc arena (sizeof SearchState))))
           (mut verified (list-new arena MappingSet)) (mut candidates (list-new arena Candidate))
+          (candidate-keys (set-new arena String))
           (mut conflicts (list-new arena MappingSet)) (mut already false) (mut unrepairable false)
           (mut shortcut false))
       (do
@@ -460,10 +514,10 @@
                     (do
                       ;; The fallback owns the first verification opportunity.
                       (when (and (not (phase-complete (. (deref st) conflict-phase))) (good background))
-                        (verify-candidate arena st options all (addr verified) (addr candidates) check))
+                        (verify-candidate arena st options all (addr verified) (addr candidates) candidate-keys check))
                       (for-each (h hits)
                         (when (not (stopped st options))
-                          (verify-candidate arena st options (. h items) (addr verified) (addr candidates) check)))
+                          (verify-candidate arena st options (. h items) (addr verified) (addr candidates) candidate-keys check)))
                       (set! (. (. (deref st) verification-phase) exhausted)
                         (and (not (. (. (deref st) verification-phase) capped))
                              (not (. (. (deref st) verification-phase) unresolved)))))))))))

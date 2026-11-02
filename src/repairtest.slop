@@ -266,11 +266,52 @@
                                   (== (list-len (. r omissions)) 1))))))
           (do (arena-free arena) yes)))))
 
+  (fn triples-check ((arena Arena) (removed (List Int)))
+    (@spec ((Arena (List Int)) -> Check))
+    (@alloc arena)
+    ;; Twelve disjoint conflicts {3j, 3j+1, 3j+2}: incoherent while any is unhit.
+    (let ((mut bad false) (mut j 0))
+      (do
+        (while (< j 12)
+          (do (when (not (or (has-index removed (* 3 j)) (has-index removed (+ (* 3 j) 1))
+                             (has-index removed (+ (* 3 j) 2))))
+                (set! bad true))
+              (set! j (+ j 1))))
+        (record-new Check (verdict (if bad 'verdict-incoherent 'verdict-coherent)) (complete true)
+          (omissions (list-new arena Omission)) (termination (union-new Termination fixpoint))))))
+
+  (fn node-caps ()
+    (@spec (() -> Bool))
+    ;; 3^12 transversals drive both trees to their default 100,000-node caps
+    ;; (minutes when queue order and dedup scanned every node). The counts
+    ;; pin the search order: they match the original linear-scan search.
+    (let ((arena (arena-new 1048576)))
+      (let ((yes (match (search arena 36 (triples-check arena (list-new arena Int)) (default-search-options)
+                           (fn ((removed (List Int))) (union-new Checked checked (triples-check arena removed))))
+                   ((error _) false)
+                   ((ok r)
+                     (let ((c (. r counts)) (mut shaped true))
+                       (do
+                         (for-each (k (. r conflicts))
+                           (match (list-get (. k items) 0)
+                             ((none) (set! shaped false))
+                             ((some x) (when (or (!= (list-len (. k items)) 3) (!= (% x 3) 0)
+                                                 (not (subset (list Int x (+ x 1) (+ x 2) :arena arena) (. k items))))
+                                         (set! shaped false)))))
+                         (for-each (v (. r verified))
+                           (when (!= (. (triples-check arena (. v items)) verdict) 'verdict-coherent) (set! shaped false)))
+                         (and shaped (not (. r complete)) (> (list-len (. r verified)) 0)
+                              (. (. r conflict-phase) capped) (. (. r hitting-phase) capped)
+                              (== (. c conflict-nodes) 100000) (== (. c hitting-nodes) 100000)
+                              (== (. c conflict-calls) 127) (== (. c cache-hits) 57)
+                              (== (list-len (. r conflicts)) 11))))))))
+        (do (arena-free arena) yes))))
+
   (fn main ()
     (@spec (() -> Int))
     (let ((a (all-families)) (b (budget-boundaries)) (c (unknowns)) (d (fallback)) (e (test-cancelled))
           (f (partial-positive)) (g (oracle-fault)) (h (zero-mappings)) (i (coverage-shortcut))
-          (j (incomplete-trials)))
+          (j (incomplete-trials)) (k (node-caps)))
       (do
         (if a (println "PASS: all 256 conflict families versus independent powerset oracle") (println "FAIL: conflict families"))
         (if b (println "PASS: every search-budget boundary") (println "FAIL: budget boundaries"))
@@ -282,5 +323,6 @@
         (if h (println "PASS: zero mappings and cached background") (println "FAIL: zero mappings"))
         (if i (println "PASS: coverage remains visible on unrepairable shortcut") (println "FAIL: shortcut coverage"))
         (if j (println "PASS: incomplete incoherent trials drive shrinking, never certify") (println "FAIL: incomplete trials"))
-        (if (and a b c d e f g h i j) 0 1))))
+        (if k (println "PASS: disjoint triples reach both node caps in canonical order") (println "FAIL: node caps"))
+        (if (and a b c d e f g h i j k) 0 1))))
 )
