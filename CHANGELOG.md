@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **Date-time assertions are inert, in every rung (part of #135).** SPEC §5.2's data lemma now
+  also accepts valid `xsd:dateTime` and `xsd:dateTimeStamp` literals, checked against XSD 1.1's
+  `dateTimeLexicalRep`, under an `xsd:dateTime`, `xsd:dateTimeStamp` or `rdfs:Literal` range. A
+  timezoned `xsd:dateTime` is held by an `xsd:dateTimeStamp` range. SPDX 3.0.1's `core:created`
+  assertions and range no longer leave its model inconclusive under `el++` and `sriq`. An invalid
+  form (Feb 29 of a common year, a leap second, `+15:00`, surrounding whitespace), a
+  `dateTimeStamp` without a timezone, and every other typed literal (`xsd:integer`, `xsd:decimal`,
+  `xsd:boolean`, `xsd:anyURI`, `xsd:date`, …) stay out of profile. The concept is renamed from
+  *string-asserted* to *literal-asserted*, in SPEC and in the decoder.
+
 ## 0.8.0 — 2026-11-01
 
 HOWL now checks ontology alignments: `howl align-check` classifies two fixed source ontologies plus

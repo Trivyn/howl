@@ -121,7 +121,8 @@
                  OWL_ON_DATA_RANGE OWL_ON_DATATYPE OWL_DATATYPE_COMPLEMENT_OF
                  OWL_WITH_RESTRICTIONS OWL_DATA_RANGE RDF_LANG_RANGE OWL_ON_PROPERTIES
                  OWL_SOURCE_INDIVIDUAL OWL_ASSERTION_PROPERTY OWL_TARGET_INDIVIDUAL OWL_TARGET_VALUE
-                 RDFS_LITERAL RDF_PLAIN_LITERAL XSD_STRING RDF_LANG_STRING))
+                 RDFS_LITERAL RDF_PLAIN_LITERAL XSD_STRING RDF_LANG_STRING
+                 XSD_DATE_TIME XSD_DATE_TIME_STAMP))
   (import owl2 (RawConcept CardKind Signature make-signature RawDisjointUnion
                 RawAxiom RawChain RawEdge RawClassAssertion
                 RawDeclaration PropCharacteristic Disposition disposition
@@ -2574,7 +2575,7 @@
 
 ;; ============================================================
   ;; The data lemma (§5.2): the property axioms of an IDLE data property,
-  ;; and the assertions and ranges of a STRING-ASSERTED one, are inert, in
+  ;; and the assertions and ranges of a LITERAL-ASSERTED one, are inert, in
   ;; every rung
   ;; ============================================================
   ;;
@@ -2601,19 +2602,20 @@
   ;; is a DatatypeRestriction, whose internals would otherwise leak as an
   ;; anonymous individual and three reserved-vocabulary omissions.
   ;;
-  ;; A data property is STRING-ASSERTED (issue #133) when every occurrence
-  ;; but its declaration, its ranges and annotations is the predicate of
-  ;; an assertion `a P lit`, with `a` a named individual and `lit` an
-  ;; xsd:string (plain or typed) or an rdf:langString whose form is all
-  ;; XML Chars (string-kind); and when each of its ranges is a named
-  ;; datatype holding every literal asserted: rdfs:Literal and
-  ;; rdf:PlainLiteral hold both kinds, xsd:string and rdf:langString one
-  ;; each. So a domain, functionality, any hierarchy or
+  ;; A data property is LITERAL-ASSERTED (issues #133, #135) when every
+  ;; occurrence but its declaration, its ranges and annotations is the
+  ;; predicate of an assertion `a P lit`, with `a` a named individual and
+  ;; `lit` of one of literal-kind's four kinds: an xsd:string (plain or
+  ;; typed) or an rdf:langString whose form is all XML Chars, or a valid
+  ;; xsd:dateTime or xsd:dateTimeStamp form, with or without a timezone;
+  ;; and when each of its ranges is a named datatype holding every kind
+  ;; asserted (range-holds). So a domain, functionality, any hierarchy or
   ;; disjointness triple at either end, a restriction, a key, a negative
-  ;; assertion, a blank or reserved subject, a typed literal, a tag
-  ;; outside simple-lang-tag's subset, any other range, and a reserved
-  ;; predicate (owl:topDataProperty, owl:bottomDataProperty, owl:sameAs
-  ;; declared a data property) each keep it out. Its assertions and ranges are set aside. Such a property is used,
+  ;; assertion, a blank or reserved subject, any other typed literal, an
+  ;; invalid date, a tag outside simple-lang-tag's subset, any other
+  ;; range, and a reserved predicate (owl:topDataProperty,
+  ;; owl:bottomDataProperty, owl:sameAs declared a data property) each
+  ;; keep it out. Its assertions and ranges are set aside. Such a property is used,
   ;; so never idle, and no triple between it and an idle one survives the
   ;; test, so the two halves of the proof never meet. A reified assertion
   ;; is rebuilt by stage 0 before the lemma runs, like any reified axiom,
@@ -2633,12 +2635,14 @@
     (literal       Int)     ; rdfs:Literal
     (plain-literal Int)     ; rdf:PlainLiteral
     (xsd-string    Int)     ; xsd:string
-    (lang-string   Int)))   ; rdf:langString
+    (lang-string   Int)     ; rdf:langString
+    (date-time     Int)     ; xsd:dateTime
+    (date-time-stamp Int))) ; xsd:dateTimeStamp
 
   (type DataLemma (record
     (data (Set Int))        ; the declared data properties, built-ins included
     (idle (Set Int))        ; the ones nothing uses, even below them
-    (strings (Set Int))     ; the string-asserted ones
+    (literals (Set Int))    ; the literal-asserted ones
     (tree (Set Int))))      ; blank nodes set aside with an inert domain or range
 
   (fn data-vocab ((arena Arena) (dict TermStore))
@@ -2659,7 +2663,9 @@
       (literal       (vocab-id arena dict RDFS_LITERAL))
       (plain-literal (vocab-id arena dict RDF_PLAIN_LITERAL))
       (xsd-string    (vocab-id arena dict XSD_STRING))
-      (lang-string   (vocab-id arena dict RDF_LANG_STRING))))
+      (lang-string   (vocab-id arena dict RDF_LANG_STRING))
+      (date-time     (vocab-id arena dict XSD_DATE_TIME))
+      (date-time-stamp (vocab-id arena dict XSD_DATE_TIME_STAMP))))
 
   (fn promote-use ((v DataVocab) (used (Set Int)) (it IdTriple))
     (@intent "Carry a use up one hierarchy triple between data properties, both ways for an equivalence; did it move?")
@@ -2696,13 +2702,13 @@
         (set-put idle bottom))))
 
   (fn data-lemma ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (triples (List IdTriple)))
-    (@intent "§5.2's data lemma over a document: its data properties, the idle and string-asserted ones, and the trees set aside")
+    (@intent "§5.2's data lemma over a document: its data properties, the idle and literal-asserted ones, and the trees set aside")
     (@spec ((Arena TermStore Signature DataVocab (List IdTriple)) -> DataLemma))
     (@alloc arena)
     (let ((data (set-new arena Int))
           (used (set-new arena Int))
           (idle (set-new arena Int))
-          (strings (set-new arena Int))
+          (literals (set-new arena Int))
           (tree (set-new arena Int))
           (bottom (vocab-id arena dict OWL_BOTTOM_DATA_PROPERTY))
           (mut any false)
@@ -2726,9 +2732,9 @@
             (while changed
               (set! changed (promote-uses v data used triples)))
             (collect-idle v used idle bottom triples)
-            (collect-string-asserted arena dict sig v data bottom strings triples)
+            (collect-literal-asserted arena dict sig v data bottom literals triples)
             (collect-inert-trees arena dict v idle tree triples)))
-        (record-new DataLemma (data data) (idle idle) (strings strings) (tree tree)))))
+        (record-new DataLemma (data data) (idle idle) (literals literals) (tree tree)))))
 
   (fn mark-data-uses ((dict TermStore) (sig Signature) (v DataVocab) (data (Set Int)) (used (Set Int))
                       (it IdTriple))
@@ -2762,45 +2768,60 @@
             (when (set-has data p) (set-put used p))
             (when (set-has data o) (set-put used o)))))))
 
-  (type StringUses (record
-    (spoiled   (Set Int))   ; occurs otherwise than the lemma allows
-    (plain     (Set Int))   ; asserted an xsd:string, plain or typed
-    (tagged    (Set Int))   ; asserted an rdf:langString
-    (no-plain  (Set Int))   ; ranged rdf:langString, which holds no xsd:string
-    (no-tagged (Set Int)))) ; ranged xsd:string, which holds no rdf:langString
+  ;; A literal's kind is a bit, so a property's asserted kinds, and the
+  ;; kinds one of its ranges does not hold, are each one Int.
+  (const KIND_STRING       Int 1)   ; xsd:string, plain or typed
+  (const KIND_LANG         Int 2)   ; rdf:langString
+  (const KIND_DATE_TIME    Int 4)   ; xsd:dateTime without a timezone
+  (const KIND_DATE_TIME_TZ Int 8)   ; xsd:dateTime with one, so an xsd:dateTimeStamp
+  (const KIND_ALL          Int 15)
 
-  (type StringKind (enum sk-string sk-lang sk-other))
+  (type LiteralUses (record
+    (spoiled  (Set Int))        ; occurs otherwise than the lemma allows
+    (asserted (Map Int Int))    ; the kinds of literal asserted
+    (excluded (Map Int Int))))  ; the kinds some range does not hold
 
-  (fn collect-string-asserted ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (data (Set Int))
-                               (bottom Int) (strings (Set Int)) (triples (List IdTriple)))
-    (@intent "Into strings: every data property asserted only strings on named individuals, each within every range")
+  (fn collect-literal-asserted ((arena Arena) (dict TermStore) (sig Signature) (v DataVocab) (data (Set Int))
+                                (bottom Int) (literals (Set Int)) (triples (List IdTriple)))
+    (@intent "Into literals: every data property asserted only supported literals on named individuals, each within every range")
     (@spec ((Arena TermStore Signature DataVocab (Set Int) Int (Set Int) (List IdTriple)) -> Unit))
     (@alloc arena)
     ;; One pass marks; a second reads, at each assertion, whether its
     ;; predicate qualifies. Order-free: a range or a spoiling use may
     ;; follow the assertions it rules out.
-    (let ((u (record-new StringUses
-               (spoiled (set-new arena Int)) (plain (set-new arena Int)) (tagged (set-new arena Int))
-               (no-plain (set-new arena Int)) (no-tagged (set-new arena Int)))))
+    (let ((u (record-new LiteralUses
+               (spoiled (set-new arena Int)) (asserted (map-new arena Int Int)) (excluded (map-new arena Int Int)))))
       (do
         (for-each (it triples)
-          (mark-string-uses dict sig v data u it))
+          (mark-literal-uses dict sig v data u it))
         (for-each (it triples)
           (let ((p (. it p)))
-            (when (and (or (set-has (. u plain) p) (set-has (. u tagged) p))
-                       (not (set-has (. u spoiled) p))
-                       (not (and (set-has (. u plain) p) (set-has (. u no-plain) p)))
-                       (not (and (set-has (. u tagged) p) (set-has (. u no-tagged) p)))
-                       (not (== p (. v top))) (not (== p bottom)))
-              (set-put strings p)))))))
+            (let ((kinds (kinds-of (. u asserted) p)))
+              (when (and (> kinds 0)
+                         (not (set-has (. u spoiled) p))
+                         (== (& kinds (kinds-of (. u excluded) p)) 0)
+                         (not (== p (. v top))) (not (== p bottom)))
+                (set-put literals p))))))))
 
-  (fn mark-string-uses ((dict TermStore) (sig Signature) (v DataVocab) (data (Set Int)) (u StringUses)
-                        (it IdTriple))
-    (@intent "Mark what this triple tells of each data property it names: a string assertion, a range, or a spoiling use")
-    (@spec ((TermStore Signature DataVocab (Set Int) StringUses IdTriple) -> Unit))
+  (fn kinds-of ((m (Map Int Int)) (p Int))
+    (@intent "The literal kinds marked against this property; none if it has no entry")
+    (@spec (((Map Int Int) Int) -> Int))
+    (match (map-get m p)
+      ((some k) k)
+      ((none)   0)))
+
+  (fn add-kinds ((m (Map Int Int)) (p Int) (kinds Int))
+    (@intent "Mark these literal kinds against this property, with any it has")
+    (@spec (((Map Int Int) Int Int) -> Unit))
+    (map-put m p (| (kinds-of m p) kinds)))
+
+  (fn mark-literal-uses ((dict TermStore) (sig Signature) (v DataVocab) (data (Set Int)) (u LiteralUses)
+                         (it IdTriple))
+    (@intent "Mark what this triple tells of each data property it names: a literal assertion, a range, or a spoiling use")
+    (@spec ((TermStore Signature DataVocab (Set Int) LiteralUses IdTriple) -> Unit))
     (let ((s (. it s)) (p (. it p)) (o (. it o)))
       (cond
-        ;; The declaration is the one type a string-asserted property may
+        ;; The declaration is the one type a literal-asserted property may
         ;; carry. A data property typed anything else, functional
         ;; included, or as the object of rdf:type, is spoiled.
         ((== p (. v rdf-type))
@@ -2810,17 +2831,16 @@
               (set-put (. u spoiled) s))))
         ;; Annotations mention properties without constraining them.
         ((predicate-is-annotation dict sig p) (do))
-        ;; A range is allowed only as one of the four named datatypes.
+        ;; A range is allowed only as one of range-holds' named datatypes.
         ((== p (. v range))
           (do
             (when (set-has data o) (set-put (. u spoiled) o))
             (when (set-has data s)
-              (cond
-                ((or (== o (. v literal)) (== o (. v plain-literal))) (do))
-                ((== o (. v xsd-string))  (set-put (. u no-tagged) s))
-                ((== o (. v lang-string)) (set-put (. u no-plain) s))
-                (else (set-put (. u spoiled) s))))))
-        ;; An assertion: on a named individual, of a string-like literal.
+              (let ((holds (range-holds v o)))
+                (if (== holds 0)
+                  (set-put (. u spoiled) s)
+                  (add-kinds (. u excluded) s (^ holds KIND_ALL)))))))
+        ;; An assertion: on a named individual, of a supported literal.
         ((set-has data p)
           (do
             (when (set-has data s) (set-put (. u spoiled) s))
@@ -2833,10 +2853,10 @@
               (else
                 (match (individual-term (term-of dict s))
                   ((named-individual _)
-                    (match (string-kind dict o)
-                      ('sk-string (set-put (. u plain) p))
-                      ('sk-lang   (set-put (. u tagged) p))
-                      ('sk-other  (set-put (. u spoiled) p))))
+                    (let ((kind (literal-kind dict o)))
+                      (if (== kind 0)
+                        (set-put (. u spoiled) p)
+                        (add-kinds (. u asserted) p kind))))
                   (_ (set-put (. u spoiled) p)))))))
         ;; Anything else, a domain and every hierarchy or disjointness
         ;; triple included, spoils each data property it names.
@@ -2845,26 +2865,182 @@
             (when (set-has data s) (set-put (. u spoiled) s))
             (when (set-has data o) (set-put (. u spoiled) o)))))))
 
-  (fn string-kind ((dict TermStore) (id Int))
-    (@intent "Is this term an xsd:string literal (plain or typed), an rdf:langString one, or neither?")
-    (@spec ((TermStore Int) -> StringKind))
+  (fn range-holds ((v DataVocab) (o Int))
+    (@intent "The literal kinds this range holds, or none if it is not a datatype the lemma reads")
+    (@spec ((DataVocab Int) -> Int))
+    ;; A dateTimeStamp is a dateTime with a timezone (XSD 1.1 Part 2
+    ;; §3.4.28), so its range holds a timezoned ^^xsd:dateTime too.
+    (cond
+      ((== o (. v literal))         KIND_ALL)
+      ((== o (. v plain-literal))   (| KIND_STRING KIND_LANG))
+      ((== o (. v xsd-string))      KIND_STRING)
+      ((== o (. v lang-string))     KIND_LANG)
+      ((== o (. v date-time))       (| KIND_DATE_TIME KIND_DATE_TIME_TZ))
+      ((== o (. v date-time-stamp)) KIND_DATE_TIME_TZ)
+      (else 0)))
+
+  (fn literal-kind ((dict TermStore) (id Int))
+    (@intent "This term's literal kind: a string, a langString, or a dateTime without or with a timezone; none for any other term")
+    (@spec ((TermStore Int) -> Int))
     ;; A plain "x" and "x"^^xsd:string are distinct terms with one value.
-    ;; A tag with any datatype but rdf:langString is malformed: neither.
+    ;; A tag with any datatype but rdf:langString is malformed: none.
     ;; So is a form outside XML's Char, which is ill-typed: "\u0000" is
     ;; in no string datatype's value space, and makes the ontology
     ;; inconsistent. And so is a tag outside simple-lang-tag's subset:
     ;; RDF 1.1 requires a BCP 47 well-formed tag, and neither the Turtle
-    ;; parser nor the triple API checks one ("x"@abcdefghi parses).
+    ;; parser nor the triple API checks one ("x"@abcdefghi parses). A
+    ;; dateTime form outside datetime-form's is ill-typed as well, and so
+    ;; is a dateTimeStamp without a timezone. Any other datatype is none:
+    ;; its forms are not checked.
     (match (term-of dict id)
       ((term-literal l)
         (cond
-          ((not (xml-chars (. l value))) 'sk-other)
+          ((not (xml-chars (. l value))) 0)
           (else
             (match (. l lang)
               ((some tag) (if (and (simple-lang-tag tag) (datatype-absent-or (. l datatype) RDF_LANG_STRING))
-                            'sk-lang 'sk-other))
-              ((none)   (if (datatype-absent-or (. l datatype) XSD_STRING) 'sk-string 'sk-other))))))
-      (_ 'sk-other)))
+                            KIND_LANG 0))
+              ;; An absent datatype is the first row's, so the others
+              ;; match only their own IRI.
+              ((none)
+                (cond
+                  ((datatype-absent-or (. l datatype) XSD_STRING) KIND_STRING)
+                  ((datatype-absent-or (. l datatype) XSD_DATE_TIME)
+                    (match (datetime-form (. l value))
+                      ('dt-no-tz   KIND_DATE_TIME)
+                      ('dt-tz      KIND_DATE_TIME_TZ)
+                      ('dt-invalid 0)))
+                  ((datatype-absent-or (. l datatype) XSD_DATE_TIME_STAMP)
+                    (match (datetime-form (. l value))
+                      ('dt-tz      KIND_DATE_TIME_TZ)
+                      ('dt-no-tz   0)
+                      ('dt-invalid 0)))
+                  (else 0)))))))
+      (_ 0)))
+
+  (type DateTimeForm (enum dt-invalid dt-no-tz dt-tz))
+
+  (fn datetime-form ((s String))
+    (@intent "Is this an xsd:dateTime lexical form, and does it carry a timezone?")
+    (@spec ((String) -> DateTimeForm))
+    (@pure)
+    (@example ("2024-11-22T03:00:01Z") -> 'dt-tz)
+    (@example ("2024-02-29T24:00:00.000") -> 'dt-no-tz)
+    (@example ("0000-02-29T00:00:00") -> 'dt-no-tz)
+    (@example ("-0001-01-01T00:00:00-14:00") -> 'dt-tz)
+    (@example ("12024-12-31T23:59:59.5+05:30") -> 'dt-tz)
+    (@example ("2023-02-29T00:00:00") -> 'dt-invalid)
+    (@example ("1900-02-29T00:00:00") -> 'dt-invalid)
+    (@example ("2024-01-01T24:00:00.5") -> 'dt-invalid)
+    (@example ("2024-01-01T23:59:60Z") -> 'dt-invalid)
+    (@example ("2024-01-01T00:00:00+14:01") -> 'dt-invalid)
+    (@example ("02024-01-01T00:00:00") -> 'dt-invalid)
+    (@example ("2024-01-01T10:00Z") -> 'dt-invalid)
+    (@example (" 2024-01-01T00:00:00") -> 'dt-invalid)
+    ;; XSD 1.1 Part 2 §3.3.7's dateTimeLexicalRep, exactly: nothing is
+    ;; trimmed. The year is an optional minus and four digits or more,
+    ;; with no leading zero past four; 0000 is year 0, which is leap.
+    ;; Then -MM-DD within the month's length, and Thh:mm:ss with an
+    ;; optional fraction; 24:00:00 is the one hour past 23, with only a
+    ;; zero fraction, and a leap second is no form. Last, an optional
+    ;; timezone. Past the year's digits, s[y0, y1), the form is
+    ;; fixed-width up to the fraction, s[frac, f).
+    (let ((n (string-len s))
+          (y0 (if (byte-is s 0 45) 1 0)))
+      (let ((y1 (byte-run-end s y0 48 57)))
+        (let ((frac (+ y1 15)))
+          (let ((f (if (byte-is s frac 46) (byte-run-end s (+ frac 1) 48 57) frac))
+                (year   (digits-value s (- y1 4) 4))
+                (month  (digits-value s (+ y1 1) 2))
+                (day    (digits-value s (+ y1 4) 2))
+                (hour   (digits-value s (+ y1 7) 2))
+                (minute (digits-value s (+ y1 10) 2))
+                (second (digits-value s (+ y1 13) 2)))
+            (if (and (>= (- y1 y0) 4) (or (== (- y1 y0) 4) (not (byte-is s y0 48)))
+                     (byte-is s y1 45) (byte-is s (+ y1 3) 45) (byte-is s (+ y1 6) 84)
+                     (byte-is s (+ y1 9) 58) (byte-is s (+ y1 12) 58)
+                     (>= month 1) (<= month 12)
+                     (>= day 1) (<= day (days-in-month year month))
+                     (not (== f (+ frac 1)))
+                     (or (and (>= hour 0) (<= hour 23) (>= minute 0) (<= minute 59)
+                              (>= second 0) (<= second 59))
+                         (and (== hour 24) (== minute 0) (== second 0)
+                              (or (== f frac) (== (byte-run-end s (+ frac 1) 48 48) f)))))
+              (cond
+                ((== f n) 'dt-no-tz)
+                ((timezone-form s f) 'dt-tz)
+                (else 'dt-invalid))
+              'dt-invalid))))))
+
+  (fn days-in-month ((year Int) (month Int))
+    (@intent "The days in this month of this year, in the proleptic Gregorian calendar XSD's dates use")
+    (@spec ((Int Int) -> Int))
+    (@pure)
+    (@post {$result >= 28})
+    (@post {$result <= 31})
+    (@post (implies {month == 2}
+                    (== {$result == 29}
+                        (or {(% year 400) == 0} (and {(% year 4) == 0} {(% year 100) != 0})))))
+    (@example (2024 2) -> 29)
+    (@example (2023 2) -> 28)
+    (@example (1900 2) -> 28)
+    (@example (2000 2) -> 29)
+    (@example (0 2) -> 29)
+    (@example (2024 4) -> 30)
+    (@example (2024 12) -> 31)
+    ;; Divisibility by 4, 100 and 400 does not depend on the sign, and
+    ;; 10000 is a multiple of 400, so the year's last four digits decide:
+    ;; datetime-form passes those, whatever the year's length.
+    (cond
+      ((== month 2)
+        (if (or (== (% year 400) 0) (and (== (% year 4) 0) (not (== (% year 100) 0)))) 29 28))
+      ((or (== month 4) (== month 6) (== month 9) (== month 11)) 30)
+      (else 31)))
+
+  (fn timezone-form ((s String) (z Int))
+    (@intent "Is s from z on a dateTime timezone: Z, or +hh:mm or -hh:mm up to 14:00?")
+    (@spec ((String Int) -> Bool))
+    (@pure)
+    (let ((h (digits-value s (+ z 1) 2))
+          (m (digits-value s (+ z 4) 2)))
+      (or (and (== (string-len s) (+ z 1)) (byte-is s z 90))
+          (and (== (string-len s) (+ z 6))
+               (or (byte-is s z 43) (byte-is s z 45)) (byte-is s (+ z 3) 58)
+               (>= h 0) (>= m 0)
+               (or (and (<= h 13) (<= m 59)) (and (== h 14) (== m 0)))))))
+
+  (fn digits-value ((s String) (i Int) (k Int))
+    (@intent "The value of the k ASCII digits at s[i], or -1 if any is not a digit")
+    (@spec ((String Int Int) -> Int))
+    (@pure)
+    ;; A span off either end is -1.
+    (let ((mut v (if (and (>= i 0) (<= (+ i k) (string-len s))) 0 -1))
+          (mut j i))
+      (do
+        (while (and (>= v 0) (< j (+ i k)))
+          (let ((c (cast Int (char-at s j))))
+            (do
+              (if (and (>= c 48) (<= c 57))
+                (set! v (+ (* v 10) (- c 48)))
+                (set! v -1))
+              (set! j (+ j 1)))))
+        v)))
+
+  (fn byte-run-end ((s String) (i Int) (lo Int) (hi Int))
+    (@intent "The index of the first byte at or after i outside [lo, hi], or the string's length")
+    (@spec ((String Int Int Int) -> Int))
+    (@pure)
+    (let ((n (string-len s)) (mut j i))
+      (do
+        (while (and (< j n) (>= (cast Int (char-at s j)) lo) (<= (cast Int (char-at s j)) hi))
+          (set! j (+ j 1)))
+        j)))
+
+  (fn byte-is ((s String) (i Int) (c Int))
+    (@intent "Is the byte at s[i] this one? Never, out of range")
+    (@spec ((String Int Int) -> Bool))
+    (@pure)
+    (and (>= i 0) (< i (string-len s)) (== (cast Int (char-at s i)) c)))
 
   (fn simple-lang-tag ((t String))
     (@intent "Is this tag language[-script][-region], a subset of BCP 47's well-formed tags?")
@@ -3062,7 +3238,7 @@
           (data (. lemma data)) (idle (. lemma idle)))
       (cond
         ((== p (. v domain)) (set-has idle s))
-        ((== p (. v range)) (or (set-has idle s) (set-has (. lemma strings) s)))
+        ((== p (. v range)) (or (set-has idle s) (set-has (. lemma literals) s)))
         ((== p (. v rdf-type)) (and (== o (. v functional)) (set-has idle s)))
         ;; SubDataPropertyOf(P owl:topDataProperty) is a tautology.
         ((== p (. v sub-property))
@@ -3074,9 +3250,9 @@
           (and (set-has data s) (set-has data o)
                (not (== s (. v top))) (not (== o (. v top)))
                (or (set-has idle s) (set-has idle o))))
-        ;; Every triple on a string-asserted predicate is one of its
-        ;; qualifying assertions, or it would not be string-asserted.
-        ((set-has (. lemma strings) p) true)
+        ;; Every triple on a literal-asserted predicate is one of its
+        ;; qualifying assertions, or it would not be literal-asserted.
+        ((set-has (. lemma literals) p) true)
         (else false))))
 
   ;; A NegativePropertyAssertion's parts (owl:sourceIndividual,

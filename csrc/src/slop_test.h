@@ -1364,9 +1364,10 @@ uint8_t howl_test_gate_alike_under(slop_arena* arena, slop_string label, slop_st
 uint8_t howl_test_rungs_gate_alike(slop_arena* arena, slop_string label, slop_string ttl_a, slop_string ttl_b);
 uint8_t howl_test_rungs_omit(slop_arena* arena, slop_string label, slop_string ttl, int64_t el_want, int64_t elpp_want);
 uint8_t howl_test_test_data_lemma(slop_arena* arena);
-uint8_t howl_test_string_row(slop_arena* arena, slop_string label, slop_string ttl, int64_t want);
+uint8_t howl_test_literal_row(slop_arena* arena, slop_string label, slop_string ttl, int64_t want);
 uint8_t howl_test_test_data_lemma_strings(slop_arena* arena);
-uint8_t howl_test_test_string_asserted_probe(slop_arena* arena);
+uint8_t howl_test_test_data_lemma_datetimes(slop_arena* arena);
+uint8_t howl_test_test_literal_asserted_probe(slop_arena* arena);
 slop_string howl_test_inv_decls(void);
 uint8_t howl_test_test_inverses_decode_whole(slop_arena* arena);
 uint8_t howl_test_test_data_constructs_decode_as_data(slop_arena* arena);
