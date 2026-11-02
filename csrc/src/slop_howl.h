@@ -544,6 +544,8 @@ uint8_t howl_add_triple_to(howl_Input in, uint8_t probe, howl_TermIn s, howl_Ter
 howl_TurtleResult howl_input_add_turtle(howl_Input in, slop_string text);
 howl_TurtleResult howl_input_add_probe_turtle(howl_Input in, slop_string text);
 howl_TurtleResult howl_add_turtle_to(howl_Input in, uint8_t probe, slop_string text);
+uint8_t howl_source_free(slop_list_slop_rdf_rdf_IRI sources, int64_t except, slop_string source);
+uint8_t howl_input_source_available(howl_Input in, slop_string source);
 uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping);
 void howl_input_attest_import(howl_Input in, slop_string iri);
 void howl_input_ask_unsatisfiable(howl_Input in, slop_string cls);

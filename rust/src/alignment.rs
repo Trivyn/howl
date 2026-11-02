@@ -50,6 +50,7 @@ impl AlignmentInput {
     }
 
     fn add_turtle(&mut self, source_iri: &str, turtle: &str, mapping: bool) -> Result<(), Fault> {
+        self.check_source(source_iri)?;
         self.input.add_turtle(turtle)?;
         self.set_document(source_iri, mapping)
     }
@@ -60,8 +61,22 @@ impl AlignmentInput {
         triples: &[(Term, Term, Term)],
         mapping: bool,
     ) -> Result<(), Fault> {
+        self.check_source(source_iri)?;
         self.input.add_triples(triples);
         self.set_document(source_iri, mapping)
+    }
+
+    /// Refuse a source before anything is added, so a refusal changes nothing.
+    fn check_source(&self, source_iri: &str) -> Result<(), Fault> {
+        let free = unsafe {
+            ffi::howl_input_source_available(self.input.raw, ffi::SlopString::borrow(source_iri))
+        };
+        if free == 0 {
+            return Err(Fault::InputError(format!(
+                "invalid or duplicate alignment source IRI: {source_iri}"
+            )));
+        }
+        Ok(())
     }
 
     fn set_document(&mut self, source_iri: &str, mapping: bool) -> Result<(), Fault> {

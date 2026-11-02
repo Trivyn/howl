@@ -187,6 +187,7 @@ extern "C" {
     pub fn howl_input_add_triple(input: Input, s: TermIn, p: TermIn, o: TermIn) -> u8;
     pub fn howl_input_add_turtle(input: Input, text: SlopString) -> TurtleResult;
     pub fn howl_input_attest_import(input: Input, iri: SlopString);
+    pub fn howl_input_source_available(input: Input, source: SlopString) -> u8;
     pub fn howl_input_set_document(input: Input, index: i64, source: SlopString, mapping: u8) -> u8;
     pub fn howl_input_begin_probe_document(input: Input);
     pub fn howl_input_add_probe_triple(input: Input, s: TermIn, p: TermIn, o: TermIn) -> u8;

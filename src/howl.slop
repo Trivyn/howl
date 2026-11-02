@@ -83,7 +83,7 @@
     input-attest-import
     default-options run-classify run-free
     RepairOptions AlignmentOutcome default-repair-options repair-options-problem
-    align-encoded input-set-document run-align
+    align-encoded input-set-document input-source-available run-align
     run-ok run-fault run-fault-message run-fault-profile
     run-profile run-verdict run-inconsistent run-termination run-rounds
     run-unsat-len run-unsat run-sub-len run-sub run-super
@@ -1243,25 +1243,37 @@
                 (set! (deref ptr) st)))
             res)))))
 
+  (fn source-free ((sources (List IRI)) (except Int) (source String))
+    (@intent "A valid absolute source IRI that no document other than `except` already has")
+    (@spec (((List IRI) Int String) -> Bool))
+    (let ((mut free (source-iri-valid source)) (mut i 0))
+      (do
+        (for-each (s sources)
+          (do
+            (when (and (!= i except) (string-eq (. s value) source)) (set! free false))
+            (set! i (+ i 1))))
+        free)))
+
+  (fn input-source-available ((in Input) (source String))
+    (@intent "Whether a new document could take this source IRI: absolute and not already used")
+    (@spec ((Input String) -> Bool))
+    :c-name "howl_input_source_available"
+    (source-free (. (deref (input-state in)) sources) -1 source))
+
   (fn input-set-document ((in Input) (index Int) (source String) (mapping Bool))
     (@intent "Name an input document for alignment and designate its logical axioms as fixed or removable")
     (@spec ((Input Int String Bool) -> Bool))
     :c-name "howl_input_set_document"
-    (let ((ptr (input-state in)) (mut st (deref ptr)) (mut valid (source-iri-valid source)) (mut i 0))
-      (do
-        (when (or (< index 0) (>= index (. st documents))) (set! valid false))
-        (for-each (s (. st sources))
-          (do
-            (when (and (!= i index) (string-eq (. s value) source)) (set! valid false))
-            (set! i (+ i 1))))
-        (if valid
-          (do
-            (list-set (. st sources) index (record-new IRI (value (string-concat (. st arena) "" source))))
-            (list-set (. st mapping-docs) index mapping)
-            (do))
-          (set! st failed (some "alignment documents need distinct absolute source IRIs and valid document indices")))
-        (set! (deref ptr) st)
-        valid)))
+    ;; A refused name is the caller's error and changes nothing: the input is
+    ;; not poisoned, and the index can be named again. An unnamed document
+    ;; keeps its empty source, which `alignment-base` refuses.
+    (let ((ptr (input-state in)) (st (deref ptr)))
+      (if (and (>= index 0) (< index (. st documents)) (source-free (. st sources) index source))
+        (do
+          (list-set (. st sources) index (record-new IRI (value (string-concat (. st arena) "" source))))
+          (list-set (. st mapping-docs) index mapping)
+          true)
+        false)))
 
   (fn input-attest-import ((in Input) (iri String))
     (@intent "Attest that an owl:imports target is resolved: its document has been added")

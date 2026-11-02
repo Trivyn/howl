@@ -157,6 +157,7 @@ void howl_input_begin_probe_document(howl_Input in);
 void howl_input_free(howl_Input in);
 howl_Input howl_input_new(void);
 uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping);
+uint8_t howl_input_source_available(howl_Input in, slop_string source);
 howl_Run howl_run_align(howl_Input in, howl_Options o, uint8_t repair, howl_RepairOptions limits);
 uint8_t howl_run_already_coherent(howl_Run r);
 howl_Run howl_run_answer(howl_Input in, howl_Options o);

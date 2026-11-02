@@ -4,7 +4,9 @@
 
 - Add M4 alignment checks and source-aware minimal mapping repair through the CLI, C, and Rust.
   Search results distinguish verified repairs, unverified candidates, and incomplete enumeration.
-  Source ontologies stay fixed and inputs are never rewritten.
+  Source ontologies stay fixed and inputs are never rewritten. A refused document name
+  (`howl_input_set_document`, Rust `add_*`) changes nothing and can be retried;
+  `howl_input_source_available` asks whether a name would be accepted.
 - Preserve identical reified/asserted axiom occurrences across documents so a mapping removal
   cannot remove a fixed source axiom. Subset trials retain declarations and recompute contextual
   preprocessing and profile gates.

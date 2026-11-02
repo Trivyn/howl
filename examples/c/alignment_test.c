@@ -25,14 +25,37 @@ static const char* fixed_source = "http://example.org/source/fixed";
 static const char* mapping_source = "http://example.org/source/mappings";
 
 int main(void) {
+    howl_Options options = howl_default_options();
+    howl_RepairOptions repair_options = howl_default_repair_options();
+
+    /* A rejected name is a caller error, not a poisoned input. */
+    howl_Input retry = howl_input_new();
+    CHECK(howl_input_add_turtle(retry, string(fixed)).ok, "retry: fixed Turtle parses");
+    CHECK(!howl_input_set_document(retry, 0, string("relative/source"), 0), "relative source refused");
+    CHECK(!howl_input_set_document(retry, 1, string(fixed_source), 0), "out-of-range index refused");
+    howl_Run unnamed = howl_run_align(retry, options, 0, repair_options);
+    CHECK(!howl_run_ok(unnamed) && howl_run_fault(unnamed) == howl_FaultKind_fault_input_error,
+          "an unnamed document is an input error");
+    howl_run_free(unnamed);
+    CHECK(howl_input_source_available(retry, string(fixed_source)) &&
+          !howl_input_source_available(retry, string("relative/source")),
+          "availability query accepts a fresh absolute IRI only");
+    CHECK(howl_input_set_document(retry, 0, string(fixed_source), 0), "retry names the same index");
+    CHECK(howl_input_add_turtle(retry, string(mappings)).ok, "retry: mapping Turtle parses");
+    CHECK(!howl_input_source_available(retry, string(fixed_source)), "a used source is unavailable");
+    CHECK(!howl_input_set_document(retry, 1, string(fixed_source), 1), "duplicate source refused");
+    CHECK(howl_input_set_document(retry, 1, string(mapping_source), 1), "retry names the duplicate's index");
+    howl_Run retried = howl_run_align(retry, options, 0, repair_options);
+    CHECK(howl_run_ok(retried), "align succeeds after refused names were retried");
+    howl_run_free(retried);
+    howl_input_free(retry);
+
     howl_Input input = howl_input_new();
     CHECK(howl_input_add_turtle(input, string(fixed)).ok, "fixed Turtle parses");
     CHECK(howl_input_set_document(input, 0, string(fixed_source), 0), "fixed document source assigned");
     CHECK(howl_input_add_turtle(input, string(mappings)).ok, "mapping Turtle parses");
     CHECK(howl_input_set_document(input, 1, string(mapping_source), 1), "mapping document source assigned");
 
-    howl_Options options = howl_default_options();
-    howl_RepairOptions repair_options = howl_default_repair_options();
     CHECK(repair_options.conflict_calls > 0 && repair_options.conflict_nodes > 0 &&
           repair_options.hitting_nodes > 0 && repair_options.verification_calls > 0,
           "repair defaults allow bounded work");

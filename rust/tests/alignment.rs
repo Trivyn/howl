@@ -136,6 +136,33 @@ fn alignment_sources_must_be_absolute_and_distinct() {
 }
 
 #[test]
+fn a_rejected_source_leaves_the_input_unchanged() {
+    let fixed = format!("{PREFIXES} :A a owl:Class . :B a owl:Class . :C a owl:Class . :A owl:disjointWith :B .");
+    let maps = format!("{PREFIXES} :C rdfs:subClassOf :A . :C rdfs:subClassOf :B .");
+    let clean = conflicting_input();
+    let reasoner = Reasoner::new();
+    let expected = reasoner.align(&clean, Some(RepairOptions::default())).unwrap();
+
+    // A relative IRI, then a duplicate: each is refused, and each retry works.
+    let mut input = AlignmentInput::new();
+    assert!(matches!(
+        input.add_fixed_turtle("relative/x", &format!("{PREFIXES} :Z a owl:Class .")),
+        Err(Fault::InputError(_))
+    ));
+    input.add_fixed_turtle(FIXED_SOURCE, &fixed).unwrap();
+    assert!(matches!(
+        input.add_mapping_turtle(FIXED_SOURCE, &format!("{PREFIXES} :Z a owl:Class .")),
+        Err(Fault::InputError(_))
+    ));
+    input.add_mapping_turtle(MAPPING_SOURCE, &maps).unwrap();
+
+    let got = reasoner.align(&input, Some(RepairOptions::default())).unwrap();
+    assert_eq!(got.merged.verdict, expected.merged.verdict);
+    assert_eq!(got.repair, expected.repair);
+    assert_eq!(got.merged.lines(), expected.merged.lines());
+}
+
+#[test]
 fn merged_report_lines_are_the_plain_classification_report() {
     let input = conflicting_input();
     let reasoner = Reasoner::new();

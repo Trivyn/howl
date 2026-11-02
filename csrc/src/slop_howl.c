@@ -64,6 +64,8 @@ uint8_t howl_add_triple_to(howl_Input in, uint8_t probe, howl_TermIn s, howl_Ter
 howl_TurtleResult howl_input_add_turtle(howl_Input in, slop_string text);
 howl_TurtleResult howl_input_add_probe_turtle(howl_Input in, slop_string text);
 howl_TurtleResult howl_add_turtle_to(howl_Input in, uint8_t probe, slop_string text);
+uint8_t howl_source_free(slop_list_slop_rdf_rdf_IRI sources, int64_t except, slop_string source);
+uint8_t howl_input_source_available(howl_Input in, slop_string source);
 uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping);
 void howl_input_attest_import(howl_Input in, slop_string iri);
 void howl_input_ask_unsatisfiable(howl_Input in, slop_string cls);
@@ -992,33 +994,39 @@ howl_TurtleResult howl_add_turtle_to(howl_Input in, uint8_t probe, slop_string t
     }
 }
 
-uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping) {
+uint8_t howl_source_free(slop_list_slop_rdf_rdf_IRI sources, int64_t except, slop_string source) {
     {
-        __auto_type ptr = howl_input_state(in);
-        __auto_type st = (*ptr);
-        uint8_t valid = howl_aligninput_source_iri_valid(source);
+        uint8_t free = howl_aligninput_source_iri_valid(source);
         int64_t i = 0;
-        if ((index < 0) || (index >= st.documents)) {
-            valid = 0;
-        }
         {
-            __auto_type _coll = st.sources;
+            __auto_type _coll = sources;
             for (size_t _i = 0; _i < _coll.len; _i++) {
                 __auto_type s = _coll.data[_i];
-                if ((i != index) && string_eq(s.value, source)) {
-                    valid = 0;
+                if ((i != except) && string_eq(s.value, source)) {
+                    free = 0;
                 }
                 i = (i + 1);
             }
         }
-        if (valid) {
+        return free;
+    }
+}
+
+uint8_t howl_input_source_available(howl_Input in, slop_string source) {
+    return howl_source_free((*howl_input_state(in)).sources, -1, source);
+}
+
+uint8_t howl_input_set_document(howl_Input in, int64_t index, slop_string source, uint8_t mapping) {
+    {
+        __auto_type ptr = howl_input_state(in);
+        __auto_type st = (*ptr);
+        if (((index >= 0)) && ((index < st.documents)) && (howl_source_free(st.sources, index, source))) {
             (void)(({ __auto_type _set_lst = &(st.sources); size_t _set_idx = (size_t)(index); __auto_type _set_val = (((slop_rdf_rdf_IRI){.value = string_concat(st.arena, SLOP_STR(""), source)})); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; }));
             (void)(({ __auto_type _set_lst = &(st.mapping_docs); size_t _set_idx = (size_t)(index); __auto_type _set_val = (mapping); bool _set_ok = _set_idx < _set_lst->len; if (_set_ok) { _set_lst->data[_set_idx] = _set_val; } _set_ok; }));
+            return 1;
         } else {
-            st.failed = (slop_option_string){.has_value = 1, .value = SLOP_STR("alignment documents need distinct absolute source IRIs and valid document indices")};
+            return 0;
         }
-        (*ptr) = st;
-        return valid;
     }
 }
 
@@ -1097,8 +1105,8 @@ howl_types_ReasonerConfig howl_options_config(howl_Options o) {
     SLOP_PRE(((o.max_iterations <= 10000)), "(<= (. o max-iterations) 10000)");
     {
         __auto_type c = howl_types_default_config();
-        c.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, o.workers, 1, 1, 1, 64, "(Int 1 .. 64) at howl.slop:1345:50")));
-        c.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, o.max_iterations, 1, 1, 0, 10000, "(Int 0 .. 10000) at howl.slop:1346:55")));
+        c.worker_count = ((uint8_t)(SLOP_RANGE(uint8_t, o.workers, 1, 1, 1, 64, "(Int 1 .. 64) at howl.slop:1357:50")));
+        c.max_iterations = ((uint16_t)(SLOP_RANGE(uint16_t, o.max_iterations, 1, 1, 0, 10000, "(Int 0 .. 10000) at howl.slop:1358:55")));
         c.selection = ((o.auto_select) ? ((howl_types_ProfileSelection){ .tag = howl_types_ProfileSelection_slop_auto }) : ((howl_types_ProfileSelection){ .tag = howl_types_ProfileSelection_explicit, .data.explicit = o.profile }));
         c.strict_profile = 0;
         c.cancel_ptr = o.cancel;
