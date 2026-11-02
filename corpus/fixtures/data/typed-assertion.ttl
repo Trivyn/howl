@@ -1,7 +1,7 @@
 # THE DATA LEMMA, OUT OF PROFILE (SPEC.md §5.2; issue #133): the string half
 # covers only xsd:string and rdf:langString literals on named individuals. Here
 # :v is asserted "1"^^xsd:integer with range xsd:integer, a typed literal that is
-# not a string, so :v is NOT string-asserted. Its assertion and range stay out
+# neither a string nor a date-time, so :v is NOT literal-asserted. Its assertion and range stay out
 # of profile as omissions, and the verdict is INCONCLUSIVE (exit 2). The
 # disjointness and the typing of :j are still read.
 

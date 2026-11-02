@@ -1,0 +1,31 @@
+# THE DATA LEMMA, DATE-TIME HALF (SPEC.md §5.2; issue #135), SPDX-shaped: the
+# SPDX 3.0.1 core:created pattern. :created is an xsd:dateTimeStamp property and
+# :issued an xsd:dateTime property, both asserted only with valid date-time
+# literals on named individuals, and each assertion lies in its range. So both
+# properties are literal-asserted, and their assertions and ranges are inert in
+# every rung. :issued carries a no-timezone value, 2024-02-29T24:00:00 (a valid
+# XSD 1.1 end-of-day in a leap year), and a timezoned one. :A and :B are
+# disjoint, :C is a subclass of :A, and :D is unrelated, so the verdict is
+# COHERENT (exit 0) with nothing omitted.
+
+@prefix :     <https://example.org/> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+
+:A a owl:Class . :B a owl:Class . :C a owl:Class . :D a owl:Class .
+:C rdfs:subClassOf :A .
+:A owl:disjointWith :B .
+
+:created a owl:DatatypeProperty ;
+    rdfs:comment "The date and time at which the element was created." ;
+    rdfs:range xsd:dateTimeStamp .
+:issued a owl:DatatypeProperty ;
+    rdfs:range xsd:dateTime .
+
+:j a :C ; :created "2024-11-22T03:00:01Z"^^xsd:dateTimeStamp .
+:k a :B ; :created "2024-11-23T10:15:00Z"^^xsd:dateTimeStamp .
+:l a :D ; :created "2024-11-22T03:00:01Z"^^xsd:dateTimeStamp .
+
+:j :issued "2024-02-29T24:00:00"^^xsd:dateTime .
+:k :issued "2024-02-29T12:00:00+05:00"^^xsd:dateTime .

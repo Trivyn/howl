@@ -355,8 +355,12 @@ acceptance: cli
 	check corpus/fixtures/data/used-below.ttl 2; \
 	check corpus/fixtures/data/shared-filler.ttl 1; \
 	check corpus/fixtures/data/shared-filler.ttl 1 --profile el++; \
-	check corpus/fixtures/data/string-asserted.ttl 0; \
-	check corpus/fixtures/data/string-asserted.ttl 0 --profile el++; \
+	check corpus/fixtures/data/literal-asserted.ttl 0; \
+	check corpus/fixtures/data/literal-asserted.ttl 0 --profile el++; \
+	check corpus/fixtures/data/datetime-asserted.ttl 0; \
+	check corpus/fixtures/data/datetime-asserted.ttl 0 --profile el++; \
+	check corpus/fixtures/data/datetime-asserted.ttl 0 --profile sriq; \
+	check corpus/fixtures/data/datetime-invalid.ttl 2; \
 	check corpus/fixtures/data/typed-assertion.ttl 2; \
 	checkmsg corpus/fixtures/v0/litmus.ttl 3 "horn-sriq was dropped; sriq covers its language" --profile horn-sriq; \
 	check corpus/fixtures/v0/litmus.ttl 0 --profile sriq; \

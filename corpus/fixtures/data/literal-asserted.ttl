@@ -1,6 +1,6 @@
 # THE DATA LEMMA, STRING HALF (SPEC.md §5.2; issue #133): a data property whose
 # only uses are string literals on named individuals, and whose ranges hold
-# them, is string-asserted, and its assertions and ranges are inert in every
+# them, is literal-asserted, and its assertions and ranges are inert in every
 # rung. :v is asserted "x" (plain) with range xsd:string, and :w is asserted
 # "y"@en with range rdfs:Literal. Both hold, so both are inert, and nothing is
 # omitted. :A and :B are disjoint and :D is unrelated to them, so the verdict

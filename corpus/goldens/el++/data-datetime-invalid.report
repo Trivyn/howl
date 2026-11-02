@@ -1,0 +1,24 @@
+howl-report 2
+profile el++
+verdict inconclusive
+termination fixpoint
+rounds 6
+inconsistent false
+omitted 4
+omission DataAxiom(<https://example.org/created> <http://www.w3.org/2000/01/rdf-schema#range> <http://www.w3.org/2001/XMLSchema#dateTimeStamp> .)
+omission DataAxiom(<https://example.org/j> <https://example.org/created> "2024-11-22T03:00:01Z" .)
+omission DataAxiom(<https://example.org/k> <https://example.org/created> "2023-02-30T00:00:00Z" .)
+omission DataAxiom(<https://example.org/l> <https://example.org/created> "2024-11-22T03:00:01Z" .)
+unsatisfiable 0
+subsumptions 10
+sub http://www.w3.org/2002/07/owl#Thing http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/A http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/A https://example.org/A
+sub https://example.org/B http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/B https://example.org/B
+sub https://example.org/C http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/C https://example.org/A
+sub https://example.org/C https://example.org/C
+sub https://example.org/D http://www.w3.org/2002/07/owl#Thing
+sub https://example.org/D https://example.org/D
+exit 2
