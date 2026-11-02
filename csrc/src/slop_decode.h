@@ -687,6 +687,10 @@ void howl_decode_mark_data_uses(howl_termstore_TermStore dict, howl_owl2_Signatu
 void howl_decode_collect_string_asserted(slop_arena* arena, howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, int64_t bottom, slop_map* strings, slop_list_howl_termstore_IdTriple triples);
 void howl_decode_mark_string_uses(howl_termstore_TermStore dict, howl_owl2_Signature sig, howl_decode_DataVocab v, slop_map* data, howl_decode_StringUses u, howl_termstore_IdTriple it);
 howl_decode_StringKind howl_decode_string_kind(howl_termstore_TermStore dict, int64_t id);
+uint8_t howl_decode_simple_lang_tag(slop_string t);
+int64_t howl_decode_tag_subtag_end(slop_string t, int64_t i);
+uint8_t howl_decode_tag_span_is(slop_string t, int64_t i, int64_t j, uint8_t letters);
+uint8_t howl_decode_reserved_id(howl_termstore_TermStore dict, int64_t id);
 uint8_t howl_decode_xml_chars(slop_string s);
 uint8_t howl_decode_datatype_absent_or(slop_option_string dt, slop_string iri);
 uint8_t howl_decode_predicate_is_annotation(howl_termstore_TermStore dict, howl_owl2_Signature sig, int64_t p);

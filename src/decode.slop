@@ -2610,9 +2610,10 @@
   ;; rdf:PlainLiteral hold both kinds, xsd:string and rdf:langString one
   ;; each. So a domain, functionality, any hierarchy or
   ;; disjointness triple at either end, a restriction, a key, a negative
-  ;; assertion, a blank or reserved subject, a typed literal, any other
-  ;; range, and owl:topDataProperty or owl:bottomDataProperty each keep it
-  ;; out. Its assertions and ranges are set aside. Such a property is used,
+  ;; assertion, a blank or reserved subject, a typed literal, a tag
+  ;; outside simple-lang-tag's subset, any other range, and a reserved
+  ;; predicate (owl:topDataProperty, owl:bottomDataProperty, owl:sameAs
+  ;; declared a data property) each keep it out. Its assertions and ranges are set aside. Such a property is used,
   ;; so never idle, and no triple between it and an idle one survives the
   ;; test, so the two halves of the proof never meet. A reified assertion
   ;; is rebuilt by stage 0 before the lemma runs, like any reified axiom,
@@ -2824,13 +2825,19 @@
           (do
             (when (set-has data s) (set-put (. u spoiled) s))
             (when (set-has data o) (set-put (. u spoiled) o))
-            (match (individual-term (term-of dict s))
-              ((named-individual _)
-                (match (string-kind dict o)
-                  ('sk-string (set-put (. u plain) p))
-                  ('sk-lang   (set-put (. u tagged) p))
-                  ('sk-other  (set-put (. u spoiled) p))))
-              (_ (set-put (. u spoiled) p)))))
+            (cond
+              ;; Reserved vocabulary declared a data property (owl:sameAs,
+              ;; rdf:value) is not a free one: its meaning is fixed
+              ;; elsewhere.
+              ((reserved-id dict p) (set-put (. u spoiled) p))
+              (else
+                (match (individual-term (term-of dict s))
+                  ((named-individual _)
+                    (match (string-kind dict o)
+                      ('sk-string (set-put (. u plain) p))
+                      ('sk-lang   (set-put (. u tagged) p))
+                      ('sk-other  (set-put (. u spoiled) p))))
+                  (_ (set-put (. u spoiled) p)))))))
         ;; Anything else, a domain and every hierarchy or disjointness
         ;; triple included, spoils each data property it names.
         (else
@@ -2845,16 +2852,89 @@
     ;; A tag with any datatype but rdf:langString is malformed: neither.
     ;; So is a form outside XML's Char, which is ill-typed: "\u0000" is
     ;; in no string datatype's value space, and makes the ontology
-    ;; inconsistent.
+    ;; inconsistent. And so is a tag outside simple-lang-tag's subset:
+    ;; RDF 1.1 requires a BCP 47 well-formed tag, and neither the Turtle
+    ;; parser nor the triple API checks one ("x"@abcdefghi parses).
     (match (term-of dict id)
       ((term-literal l)
         (cond
           ((not (xml-chars (. l value))) 'sk-other)
           (else
             (match (. l lang)
-              ((some _) (if (datatype-absent-or (. l datatype) RDF_LANG_STRING) 'sk-lang 'sk-other))
+              ((some tag) (if (and (simple-lang-tag tag) (datatype-absent-or (. l datatype) RDF_LANG_STRING))
+                            'sk-lang 'sk-other))
               ((none)   (if (datatype-absent-or (. l datatype) XSD_STRING) 'sk-string 'sk-other))))))
       (_ 'sk-other)))
+
+  (fn simple-lang-tag ((t String))
+    (@intent "Is this tag language[-script][-region], a subset of BCP 47's well-formed tags?")
+    (@spec ((String) -> Bool))
+    (@pure)
+    (@example ("en") -> true)
+    (@example ("zh-Hans-CN") -> true)
+    (@example ("es-419") -> true)
+    (@example ("EN-us") -> true)
+    (@example ("abcdefghi") -> false)
+    (@example ("en-") -> false)
+    (@example ("en-US-x-private") -> false)
+    ;; Case-insensitive: a language of 2-3 letters, then optionally a
+    ;; script of 4 letters, then optionally a region of 2 letters or 3
+    ;; digits. Every such tag is well-formed; a wider subset (extlang,
+    ;; variants, extensions, private use) is left out of profile rather
+    ;; than checked. One subtag per pass: `state` is 0 before the
+    ;; language, 1 after it, 2 after a script, 3 after a region.
+    (let ((n (string-len t)) (mut i 0) (mut state 0) (mut ok true))
+      (do
+        (while (and ok (<= i n))
+          (let ((j (tag-subtag-end t i)))
+            (let ((len (- j i))
+                  (alpha (tag-span-is t i j true))
+                  (digit (tag-span-is t i j false)))
+              (do
+                (cond
+                  ((and (== state 0) alpha (>= len 2) (<= len 3)) (set! state 1))
+                  ((and (== state 1) alpha (== len 4)) (set! state 2))
+                  ((and (or (== state 1) (== state 2))
+                        (or (and alpha (== len 2)) (and digit (== len 3))))
+                    (set! state 3))
+                  (else (set! ok false)))
+                (set! i (+ j 1))))))
+        (and ok (>= state 1)))))
+
+  (fn tag-subtag-end ((t String) (i Int))
+    (@intent "The index of the hyphen ending the subtag at i, or the tag's length")
+    (@spec ((String Int) -> Int))
+    (@pure)
+    (let ((n (string-len t)) (mut j i))
+      (do
+        (while (and (< j n) (not (== (cast Int (char-at t j)) 45)))
+          (set! j (+ j 1)))
+        j)))
+
+  (fn tag-span-is ((t String) (i Int) (j Int) (letters Bool))
+    (@intent "Is t[i, j) all ASCII letters (or all ASCII digits)?")
+    (@spec ((String Int Int Bool) -> Bool))
+    (@pure)
+    ;; An empty span is neither: a tag ending in, or doubling, a hyphen
+    ;; has an empty subtag.
+    (let ((mut ok (< i j)) (mut k i))
+      (do
+        (while (and ok (< k j))
+          (let ((c (cast Int (char-at t k))))
+            (do
+              (when (not (if letters
+                           (or (and (>= c 65) (<= c 90)) (and (>= c 97) (<= c 122)))
+                           (and (>= c 48) (<= c 57))))
+                (set! ok false))
+              (set! k (+ k 1)))))
+        ok)))
+
+  (fn reserved-id ((dict TermStore) (id Int))
+    (@intent "Is this term id an IRI in a specification-reserved namespace?")
+    (@spec ((TermStore Int) -> Bool))
+    (match (term-iri-value (term-of dict id))
+      ((some i) (is-reserved-iri (. i value)))
+      ((none)   false)))
 
   (fn xml-chars ((s String))
     (@intent "Is every character of this UTF-8 string an XML 1.0 Char, the alphabet of xsd:string?")

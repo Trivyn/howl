@@ -1021,18 +1021,32 @@ only job is to attach strings to named individuals, such as an identifier or a t
   data-property hierarchy occurs in a class expression, an assertion or a key. The hierarchy is
   `SubDataPropertyOf` and `EquivalentDataProperties`, reflexive and transitive.
   `owl:topDataProperty` is never idle.
-- **String-asserted.** A data property `P`, neither `owl:topDataProperty` nor
-  `owl:bottomDataProperty`, is *string-asserted* if it has at least one assertion and all of these
-  hold.
+- **String-asserted.** A data property `P` whose IRI is not reserved vocabulary (so neither
+  `owl:topDataProperty` nor `owl:bottomDataProperty`, and not `owl:sameAs` or `rdf:value` declared a
+  data property: a reserved IRI's meaning is fixed by its specification, not by this lemma) is
+  *string-asserted* if it has at least one assertion and all of these hold.
   - **Its assertions are strings on named individuals.** In every `DataPropertyAssertion(P a lit)`,
     `a` is a named individual: an IRI, not a blank node and not reserved vocabulary. And `lit` is a
     *string literal*: an `xsd:string`, written plain (`"x"`, no datatype and no tag) or typed
     (`"x"^^xsd:string`), or an `rdf:langString` (`"x"@en`), whose lexical form is a sequence of
-    XML 1.0 `Char`s. The two spellings of an `xsd:string` are distinct RDF terms with one value. Any
-    other literal keeps `P` out: a typed one, a tag with any datatype but `rdf:langString`, and a
-    form holding a character outside `Char` (a C0 control but tab, line feed and carriage return; a
-    surrogate; U+FFFE or U+FFFF). That last form is ill-typed, since no string datatype's value
-    space contains it. So does an individual as the value.
+    XML 1.0 `Char`s. An `rdf:langString`'s tag must also match, ignoring case,
+
+    ```
+    [a-z]{2,3} ( "-" [a-z]{4} )? ( "-" ( [a-z]{2} | [0-9]{3} ) )?
+    ```
+
+    that is, a language, then optionally a script, then optionally a region: `en`, `en-US`,
+    `zh-Hans-CN`, `es-419`. RDF 1.1 requires a tag well-formed under BCP 47, and neither the Turtle
+    parser nor the triple API checks one, so `"x"@abcdefghi` arrives as a literal. Every tag the
+    pattern matches is well-formed. HOWL keeps out what it does not check, so a well-formed tag
+    outside the pattern also keeps `P` out: an extlang, a variant, an extension, private use
+    (`en-US-x-private`).
+
+    The two spellings of an `xsd:string` are distinct RDF terms with one value. Any other literal
+    keeps `P` out: a typed one, a tag with any datatype but `rdf:langString`, a tag outside the
+    pattern, and a form holding a character outside `Char` (a C0 control but tab, line feed and
+    carriage return; a surrogate; U+FFFE or U+FFFF). That last form is ill-typed, since no string
+    datatype's value space contains it. So does an individual as the value.
   - **Its ranges hold them.** Every `DataPropertyRange(P DR)` has `DR` a named datatype that holds
     every literal asserted on `P`:
 
@@ -1070,8 +1084,8 @@ only job is to attach strings to named individuals, such as an identifier or a t
   - Typed literals, such as dates and numbers, even inside a range that names their datatype. An
     ill-typed literal (`"x"^^xsd:integer`) is inconsistent, and no rung validates a lexical form
     yet. They stay out of profile until one does (a follow-up issue). A string literal's only
-    ill-typed forms are the non-`Char` ones above, which the definition already excludes. That is
-    why string literals can go.
+    ill-formed or ill-typed forms are a non-`Char` form and a malformed tag, and the definition
+    already excludes both. That is why string literals can go.
   - Any other use of `owl:topDataProperty`. OWL 2 DL forbids it (Structural Specification §11.2),
     and the argument below cannot cover it. The property's extension is never empty, so a range on
     it is inconsistent and a domain on it puts every individual into the class.
@@ -1088,8 +1102,8 @@ only job is to attach strings to named individuals, such as an identifier or a t
     disjointness in which every pair has an empty member.
   - **`A₂` holds in `I′`.** Each assertion holds by construction. Each range holds by the table
     above: every value in `P`'s extension is a value of some asserted literal, and `DR`'s value
-    space contains it. Each literal's value exists, since its form is a sequence of `Char`s, which
-    is a lexical form of `xsd:string`.
+    space contains it. Each literal's value exists: its form is a sequence of `Char`s, which is a
+    lexical form of `xsd:string`, and its tag, if any, is well-formed.
   - **`O ∖ (A ∪ A₂)` still holds.** The only axiom of `O ∖ (A ∪ A₂)` that can mention an idle `P`
     is a `DisjointDataProperties`, because every other data-property axiom naming `P` is in `A`:
     the sub-properties of an idle property are idle. Emptying `P` keeps a disjointness true. No

@@ -2648,6 +2648,36 @@
         ":a :v \"x￿y\"@en ." 1)
       (string-row arena "tab, line feed and carriage return are Chars"
         ":a :v \"x\\t\\n\\ry\" ." 0)
+      ;; A tag is set aside only in the subset HOWL checks:
+      ;; language[-script][-region], case-insensitive. The parser and the
+      ;; triple API take any tag, and RDF 1.1 requires a well-formed one.
+      (string-row arena "a script and a region are in the subset"
+        ":a :v \"x\"@zh-Hans-CN , \"y\"@es-419 , \"z\"@EN-us ." 0)
+      (string-row arena "a nine-letter primary subtag is not well-formed"
+        ":a :v \"x\"@abcdefghi ." 1)
+      (string-row arena "a too-long second subtag"
+        ":a :v \"x\"@en-abcdefghi ." 1)
+      (string-row arena "an empty subtag after a hyphen"
+        ":a :v \"x\"@en- ." 1)
+      (string-row arena "an empty subtag between hyphens"
+        ":a :v \"x\"@en--US ." 1)
+      (string-row arena "a one-letter primary subtag"
+        ":a :v \"x\"@e ." 1)
+      (string-row arena "a numeric primary subtag"
+        ":a :v \"x\"@123 ." 1)
+      (string-row arena "two regions"
+        ":a :v \"x\"@en-US-US ." 1)
+      (string-row arena "well-formed, but private use is outside the subset"
+        ":a :v \"x\"@en-US-x-private ." 1)
+      ;; Reserved vocabulary declared a data property is not a free data
+      ;; property. rdfs:label is a built-in annotation property, so the
+      ;; declaration is refused as a conflict, as before the lemma.
+      (rungs-omit arena "owl:sameAs declared a data property"
+        "owl:sameAs a owl:DatatypeProperty . :a owl:sameAs \"x\" ." 1 1)
+      (rungs-omit arena "rdf:value declared a data property"
+        "<http://www.w3.org/1999/02/22-rdf-syntax-ns#value> a owl:DatatypeProperty . :a <http://www.w3.org/1999/02/22-rdf-syntax-ns#value> \"x\" ." 1 1)
+      (rungs-omit arena "rdfs:label declared a data property is a declaration conflict"
+        "rdfs:label a owl:DatatypeProperty . :a rdfs:label \"x\" ." -1 -1)
       (string-row arena "a typed literal: no lexical validation yet"
         ":a :v \"1\"^^xsd:integer ." 1)
       (string-row arena "a string literal outside its range"
