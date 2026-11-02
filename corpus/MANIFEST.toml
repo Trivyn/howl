@@ -61,7 +61,7 @@ role           = "PRIMARY v0 ENTRY. Only 1.5% out-of-profile over 26k in-profile
 [[ontology]]
 name           = "go"
 version        = "2026-07-26"
-url            = "http://purl.obolibrary.org/obo/go/releases/2026-07-26/go.owl"
+url            = "https://release.geneontology.org/2026-08-05/ontology/go.owl"
 sha256         = "653ce47cd7b02304e67eb67c54d3be02ec5b0ba5e00eb7384dfa0da00f9682ec"
 bytes          = 135_000_000
 licence        = "CC BY 4.0"
@@ -70,7 +70,7 @@ in_v0          = 117790
 out_of_profile = 1
 projection     = "corpus/projections/go-2026-07-26.removals"
 projection_removes = { axioms = 1, triples = 1, in_v0_swept_in = 0 }
-role           = "BENCHMARK, and the headline result of the census: 1.4M triples, 117,790 in-profile logical axioms, and exactly ONE out-of-profile axiom — a single owl:inverseOf. The canonical EL benchmark named in §12 is essentially inside v0 already, and its projection is a one-axiom diff that a human can audit by eye. The hash above is from the latest-PURL fetch; the versioned URL is pinned on the strength of ro.owl's verified byte-identical match, and fetch.sh catches it loudly if that assumption is wrong."
+role           = "BENCHMARK, and the headline result of the census: 1.4M triples, 117,790 in-profile logical axioms, and exactly ONE out-of-profile axiom — a single owl:inverseOf. The canonical EL benchmark named in §12 is essentially inside v0 already, and its projection is a one-axiom diff that a human can audit by eye. The hash above is from the latest-PURL fetch. GO publishes no 2026-07-26 release (its archive goes from 2026-06-19 to 2026-08-05) and the dated PURL 404s, but the 2026-08-05 release is byte-identical to the pinned file (checked 2026-11-02), so the URL names that release; the version stays 2026-07-26, the name every pin and record already uses."
 
 # EL-GALEN, the variant CEL, Snorocket and ELK benchmark as "EL-GALEN" /
 # "GALEN-EL": §12 requires GALEN and warns that the name covers ontologies of
