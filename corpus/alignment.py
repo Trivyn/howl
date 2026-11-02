@@ -135,6 +135,13 @@ class Acceptance(unittest.TestCase):
             with self.subTest(flags=flags):
                 self.assertEqual(run(flags=flags).returncode, 3)
 
+    def test_missing_document_names_the_file(self):
+        missing = str(WORK / "absent-left.ttl")
+        cmd = [str(HOWL), "align-check", missing, str(FIX / "empty.ttl"), str(FIX / "mappings.ttl"), "--report"]
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+        self.assertEqual(p.returncode, 3)
+        self.assertIn(missing, p.stdout + p.stderr)
+
 
 PINNED = [
     ("bfo-core-2024-02-07.ttl", "128f5fe1dab7ee804a3037a836813e5953c846eeeefee883a47d5db0b37a106b"),

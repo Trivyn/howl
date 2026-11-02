@@ -122,7 +122,6 @@ typedef struct { bool is_ok; union { howl_normalize_Decoded ok; howl_types_Fault
 
 int64_t howl_aligninput_int_at(slop_list_int xs, int64_t i);
 uint8_t howl_aligninput_bool_at(slop_list_u8 xs, int64_t i);
-howl_types_AxiomRef howl_aligninput_copy_axiom_ref(slop_arena* arena, howl_types_AxiomRef r);
 slop_string howl_aligninput_ref_key(slop_arena* arena, howl_types_AxiomRef r);
 uint8_t howl_aligninput_concept_usable(howl_owl2_RawConcept c);
 uint8_t howl_aligninput_concepts_usable(slop_list_howl_owl2_RawConcept cs);

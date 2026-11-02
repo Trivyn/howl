@@ -12,7 +12,7 @@
   (import canon (string-cmp iri-cmp axiom-ref-cmp sort-axiom-refs sort-nodes role-cmp sort-range))
   (export AlignmentBase alignment-base subset-decoded canonical-mapping-axiom source-iri-valid)
   (import strlib (char-at))
-  (import types (copy-iri))
+  (import types (copy-iri copy-axiom-ref))
 
   (type AlignmentBase (record
     (stage Stage0)
@@ -32,12 +32,6 @@
   (fn bool-at ((xs (List Bool)) (i Int))
     (@spec (((List Bool) Int) -> Bool))
     (match (list-get xs i) ((some b) b) ((none) false)))
-
-  (fn copy-axiom-ref ((arena Arena) (r AxiomRef))
-    (@spec ((Arena AxiomRef) -> AxiomRef))
-    (record-new AxiomRef
-      (source (match (. r source) ((some s) (some (copy-iri arena s))) ((none) (none))))
-      (text (string-concat arena "" (. r text)))))
 
   (fn ref-key ((arena Arena) (r AxiomRef))
     (@spec ((Arena AxiomRef) -> String))

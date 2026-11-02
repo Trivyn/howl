@@ -629,7 +629,7 @@
     ;; arguments and unimplemented flags all exit 3.
     (with-arena 268435456
       (if (and (> argc 1) (string-eq (argv-to-string argv 1) "align-check"))
-        (align-main argc argv)
+        (align-main arena argc argv)
       (if (is-version-request argc argv)
         ;; The build's version, from the HOWL_VERSION every Makefile build
         ;; defines (slop.toml's, or the release tag's). It is never part of

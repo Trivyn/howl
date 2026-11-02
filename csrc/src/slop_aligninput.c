@@ -3,7 +3,6 @@
 
 int64_t howl_aligninput_int_at(slop_list_int xs, int64_t i);
 uint8_t howl_aligninput_bool_at(slop_list_u8 xs, int64_t i);
-howl_types_AxiomRef howl_aligninput_copy_axiom_ref(slop_arena* arena, howl_types_AxiomRef r);
 slop_string howl_aligninput_ref_key(slop_arena* arena, howl_types_AxiomRef r);
 uint8_t howl_aligninput_concept_usable(howl_owl2_RawConcept c);
 uint8_t howl_aligninput_concepts_usable(slop_list_howl_owl2_RawConcept cs);
@@ -48,10 +47,6 @@ uint8_t howl_aligninput_bool_at(slop_list_u8 xs, int64_t i) {
         return 0;
     }
     SLOP_UNREACHABLE();
-}
-
-howl_types_AxiomRef howl_aligninput_copy_axiom_ref(slop_arena* arena, howl_types_AxiomRef r) {
-    return ((howl_types_AxiomRef){.source = ({ __auto_type _mv = r.source; _mv.has_value ? ({ __auto_type s = _mv.value; (slop_option_slop_rdf_rdf_IRI){.has_value = 1, .value = howl_types_copy_iri(arena, s)}; }) : ((slop_option_slop_rdf_rdf_IRI){.has_value = false}); }), .text = string_concat(arena, SLOP_STR(""), r.text)});
 }
 
 slop_string howl_aligninput_ref_key(slop_arena* arena, howl_types_AxiomRef r) {
@@ -412,7 +407,7 @@ uint8_t howl_aligninput_source_iri_valid(slop_string s) {
         int64_t i = 0;
         while (i < string_len(s)) {
             {
-                __auto_type c = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at aligninput.slop:162:41"))));
+                __auto_type c = ((int64_t)(std_strlib_char_at(s, SLOP_RANGE(int64_t, i, 1, 0, 0, 0, "(Int 0 ..) at aligninput.slop:156:41"))));
                 if (((c <= 32)) || ((c == 127)) || ((c == 60)) || ((c == 62)) || ((c == 34)) || ((c == 123)) || ((c == 125)) || ((c == 124)) || ((c == 92)) || ((c == 94)) || ((c == 96))) {
                     ok = 0;
                 }
@@ -531,7 +526,7 @@ howl_aligninput_AlignmentBase howl_aligninput_inventory(slop_arena* arena, howl_
                     __auto_type key = howl_aligninput_ref_key(arena, r);
                     if (!(slop_map_has(by_key, &(key)))) {
                         (void)(({ int64_t _val = ((int64_t)(((int64_t)((mappings).len)))); slop_map_put(NULL, by_key, &(key), &_val, sizeof(_val)); }));
-                        (void)(({ __auto_type _lst_p = &(mappings); __auto_type _item = (howl_aligninput_copy_axiom_ref(arena, r)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                        (void)(({ __auto_type _lst_p = &(mappings); __auto_type _item = (howl_types_copy_axiom_ref(arena, r)); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                     }
                 }
             }

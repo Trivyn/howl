@@ -32,6 +32,7 @@ SLOP_OPTION_DEFINE(slop_rdf_rdf_IRI, slop_option_slop_rdf_rdf_IRI)
 int64_t howl_cli_aligncli_peak_mb(void);
 slop_string howl_cli_aligncli_arg(uint8_t** argv, int64_t i);
 slop_string howl_cli_aligncli_file_source(slop_arena* a, slop_string path);
+uint8_t howl_cli_aligncli_file_opens(slop_string path);
 uint8_t howl_cli_aligncli_parse_into(slop_arena* arena, howl_termstore_Encoded* enc, slop_string path);
 slop_option_slop_rdf_rdf_IRI howl_cli_aligncli_ontology_iri_from(howl_termstore_Encoded e, int64_t from);
 uint8_t howl_cli_aligncli_all_digits(slop_string s);
@@ -40,7 +41,7 @@ void howl_cli_aligncli_print_fault(slop_arena* a, howl_types_Fault f);
 int64_t howl_cli_aligncli_fault_exit(howl_types_Fault f);
 int64_t howl_cli_aligncli_outcome_exit(howl_types_Outcome o);
 slop_string howl_cli_aligncli_source_of(slop_arena* a, slop_string path, slop_string override);
-int64_t howl_cli_aligncli_align_main(int64_t argc, uint8_t** argv);
+int64_t howl_cli_aligncli_align_main(slop_arena* arena, int64_t argc, uint8_t** argv);
 
 #ifndef SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
 #define SLOP_OPTION_SLOP_RDF_RDF_IRI_DEFINED
