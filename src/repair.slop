@@ -138,9 +138,12 @@
     (@spec ((Arena (List Int)) -> String))
     (@alloc arena)
     ;; Hash key of a sorted index list: equal keys exactly for equal sets.
-    (let ((mut key ""))
-      (do (for-each (x xs) (set! key (string-concat arena key (string-concat arena (int-to-string arena x) ","))))
-          key)))
+    ;; Text "i,j,k," sized first, then written into one allocation, so
+    ;; space and time are linear in the set (concatenation is quadratic).
+    (let ((mut key String ""))
+      (do
+        (c-inline "{ char d[24]; size_t n = 0, k = 0;\n for (size_t i = 0; i < xs.len; i++) n += (size_t)snprintf(d, sizeof d, \"%lld,\", (long long)xs.data[i]);\n char *buf = (char*)slop_arena_alloc(arena, n + 1);\n for (size_t i = 0; i < xs.len; i++) k += (size_t)snprintf(buf + k, n + 1 - k, \"%lld,\", (long long)xs.data[i]);\n key = (slop_string){n, buf}; }")
+        key)))
 
   (fn fresh ((arena Arena) (seen (Set String)) (items (List Int)))
     (@spec ((Arena (Set String) (List Int)) -> Bool))

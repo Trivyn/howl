@@ -270,14 +270,12 @@ slop_list_howl_repair_MappingSet howl_repair_sorted_sets(slop_arena* arena, slop
 
 slop_string howl_repair_set_key(slop_arena* arena, slop_list_int xs) {
     {
-        __auto_type key = SLOP_STR("");
-        {
-            __auto_type _coll = xs;
-            for (size_t _i = 0; _i < _coll.len; _i++) {
-                __auto_type x = _coll.data[_i];
-                key = string_concat(arena, key, string_concat(arena, int_to_string(arena, x), SLOP_STR(",")));
-            }
-        }
+        slop_string key = SLOP_STR("");
+        { char d[24]; size_t n = 0, k = 0;
+ for (size_t i = 0; i < xs.len; i++) n += (size_t)snprintf(d, sizeof d, "%lld,", (long long)xs.data[i]);
+ char *buf = (char*)slop_arena_alloc(arena, n + 1);
+ for (size_t i = 0; i < xs.len; i++) k += (size_t)snprintf(buf + k, n + 1 - k, "%lld,", (long long)xs.data[i]);
+ key = (slop_string){n, buf}; };
         return key;
     }
 }
