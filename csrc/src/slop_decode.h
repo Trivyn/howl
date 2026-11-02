@@ -21,6 +21,7 @@ typedef struct howl_decode_ListFault howl_decode_ListFault;
 typedef struct howl_decode_Stage0 howl_decode_Stage0;
 typedef struct howl_decode_TypedOccurrences howl_decode_TypedOccurrences;
 typedef struct howl_decode_Rebuilt howl_decode_Rebuilt;
+typedef struct howl_decode_DocTriple howl_decode_DocTriple;
 typedef struct howl_decode_IndividualTerm howl_decode_IndividualTerm;
 typedef struct howl_decode_NodeList howl_decode_NodeList;
 typedef struct howl_decode_Stage1 howl_decode_Stage1;
@@ -211,6 +212,25 @@ typedef struct howl_decode_Rebuilt howl_decode_Rebuilt;
 #ifndef SLOP_OPTION_HOWL_DECODE_REBUILT_DEFINED
 #define SLOP_OPTION_HOWL_DECODE_REBUILT_DEFINED
 SLOP_OPTION_DEFINE(howl_decode_Rebuilt, slop_option_howl_decode_Rebuilt)
+#endif
+
+struct howl_decode_DocTriple {
+    int64_t d;
+    int64_t s;
+    int64_t p;
+    int64_t o;
+};
+typedef struct howl_decode_DocTriple howl_decode_DocTriple;
+
+#ifndef SLOP_OPTION_HOWL_DECODE_DOCTRIPLE_DEFINED
+#define SLOP_OPTION_HOWL_DECODE_DOCTRIPLE_DEFINED
+SLOP_OPTION_DEFINE(howl_decode_DocTriple, slop_option_howl_decode_DocTriple)
+#endif
+
+#ifndef SLOP_LIST_HOWL_DECODE_DOCTRIPLE_DEFINED
+#define SLOP_LIST_HOWL_DECODE_DOCTRIPLE_DEFINED
+#define SLOP_LIST_HOWL_DECODE_DOCTRIPLE_IMPL_DEFINED
+SLOP_LIST_DEFINE(howl_decode_DocTriple, slop_list_howl_decode_DocTriple)
 #endif
 
 typedef enum {
@@ -435,6 +455,29 @@ static inline bool slop_eq_howl_termstore_IdTriple(const void* a, const void* b)
 }
 #endif
 
+#ifndef HOWL_DECODE_DOCTRIPLE_HASH_EQ_DEFINED
+#define HOWL_DECODE_DOCTRIPLE_HASH_EQ_DEFINED
+static inline uint64_t slop_hash_howl_decode_DocTriple(const void* key) {
+    const howl_decode_DocTriple* _k = (const howl_decode_DocTriple*)key;
+    uint64_t hash = 14695981039346656037ULL;
+    hash ^= slop_hash_int(&_k->d); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->s); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->p); hash *= 1099511628211ULL;
+    hash ^= slop_hash_int(&_k->o); hash *= 1099511628211ULL;
+    return hash;
+}
+static inline bool slop_eq_howl_decode_DocTriple(const void* a, const void* b) {
+    const howl_decode_DocTriple* _a = (const howl_decode_DocTriple*)a;
+    const howl_decode_DocTriple* _b = (const howl_decode_DocTriple*)b;
+    return true
+        && (_a->d == _b->d)
+        && (_a->s == _b->s)
+        && (_a->p == _b->p)
+        && (_a->o == _b->o)
+    ;
+}
+#endif
+
 #ifndef SLOP_RESULT_SLOP_RDF_RDF_TERM_HOWL_DECODE_LOOKUPFAULT_DEFINED
 #define SLOP_RESULT_SLOP_RDF_RDF_TERM_HOWL_DECODE_LOOKUPFAULT_DEFINED
 typedef struct { bool is_ok; union { slop_rdf_rdf_Term ok; howl_decode_LookupFault err; } data; } slop_result_slop_rdf_rdf_Term_howl_decode_LookupFault;
@@ -522,7 +565,7 @@ howl_termstore_TermStore howl_decode_annotated_store(slop_arena* arena, howl_ter
 int64_t howl_decode_term_id(howl_termstore_TermStore st, slop_rdf_rdf_Term t);
 slop_result_howl_termstore_IdTriple_string howl_decode_rebuild_one(slop_arena* arena, howl_termstore_TermStore st, slop_rdf_rdf_Term a, slop_rdf_rdf_Term src_pred, slop_rdf_rdf_Term prop_pred, slop_rdf_rdf_Term tgt_pred);
 howl_decode_Rebuilt howl_decode_rebuild_candidates(slop_arena* arena, howl_termstore_TermStore st, slop_list_int ax_subjs, slop_list_int ax_docs);
-slop_string howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d);
+howl_decode_DocTriple howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d);
 slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore_IdTriple candidates, howl_termstore_Encoded doc);
 slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_arena* arena, slop_arena* scratch, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved);
 howl_owl2_RawConcept* howl_decode_box_concept(slop_arena* arena, howl_owl2_RawConcept c);
@@ -673,6 +716,11 @@ SLOP_OPTION_DEFINE(howl_decode_TypedOccurrences, slop_option_howl_decode_TypedOc
 #ifndef SLOP_OPTION_HOWL_DECODE_REBUILT_DEFINED
 #define SLOP_OPTION_HOWL_DECODE_REBUILT_DEFINED
 SLOP_OPTION_DEFINE(howl_decode_Rebuilt, slop_option_howl_decode_Rebuilt)
+#endif
+
+#ifndef SLOP_OPTION_HOWL_DECODE_DOCTRIPLE_DEFINED
+#define SLOP_OPTION_HOWL_DECODE_DOCTRIPLE_DEFINED
+SLOP_OPTION_DEFINE(howl_decode_DocTriple, slop_option_howl_decode_DocTriple)
 #endif
 
 #ifndef SLOP_OPTION_HOWL_TYPES_ROLEID_DEFINED

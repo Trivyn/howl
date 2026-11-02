@@ -29,7 +29,7 @@ howl_termstore_TermStore howl_decode_annotated_store(slop_arena* arena, howl_ter
 int64_t howl_decode_term_id(howl_termstore_TermStore st, slop_rdf_rdf_Term t);
 slop_result_howl_termstore_IdTriple_string howl_decode_rebuild_one(slop_arena* arena, howl_termstore_TermStore st, slop_rdf_rdf_Term a, slop_rdf_rdf_Term src_pred, slop_rdf_rdf_Term prop_pred, slop_rdf_rdf_Term tgt_pred);
 howl_decode_Rebuilt howl_decode_rebuild_candidates(slop_arena* arena, howl_termstore_TermStore st, slop_list_int ax_subjs, slop_list_int ax_docs);
-slop_string howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d);
+howl_decode_DocTriple howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d);
 slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore_IdTriple candidates, howl_termstore_Encoded doc);
 slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_arena* arena, slop_arena* scratch, howl_termstore_Encoded doc, slop_list_slop_rdf_rdf_IRI imports_resolved);
 howl_owl2_RawConcept* howl_decode_box_concept(slop_arena* arena, howl_owl2_RawConcept c);
@@ -415,6 +415,7 @@ slop_list_int howl_decode_typed_ids_in_order(slop_arena* arena, howl_termstore_E
 
 howl_decode_TypedOccurrences howl_decode_typed_occurrences(slop_arena* arena, howl_termstore_Encoded doc, slop_string type_iri) {
     {
+        __auto_type multi = (((int64_t)((doc.starts).len)) > 1);
         __auto_type type_pred = doc.dict.rdf_type;
         __auto_type type_id = howl_decode_vocab_id(arena, doc.dict, type_iri);
         __auto_type seen = ({ static const slop_map_desc _d = SLOP_SET_DESC(int64_t, slop_hash_int, slop_eq_int, SLOP_KEY_BITS); slop_map_new_ptr(arena, 0, &_d); });
@@ -435,7 +436,9 @@ howl_decode_TypedOccurrences howl_decode_typed_occurrences(slop_arena* arena, ho
                     if (((it.p == type_pred)) && ((it.o == type_id)) && (!(slop_map_has(seen, &(int64_t){it.s})))) {
                         (void)(({ slop_map_put(NULL, seen, &(int64_t){it.s}, NULL, 0); }));
                         (void)(({ __auto_type _lst_p = &(ids); __auto_type _item = (it.s); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
-                        (void)(({ __auto_type _lst_p = &(docs); __auto_type _item = (cur); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                        if (multi) {
+                            (void)(({ __auto_type _lst_p = &(docs); __auto_type _item = (cur); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
+                        }
                     }
                     pos = (pos + 1);
                 }
@@ -713,14 +716,14 @@ howl_decode_Rebuilt howl_decode_rebuild_candidates(slop_arena* arena, howl_terms
     }
 }
 
-slop_string howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d) {
-    return string_concat(arena, int_to_string(arena, d), string_concat(arena, SLOP_STR(":"), string_concat(arena, int_to_string(arena, t.s), string_concat(arena, SLOP_STR(":"), string_concat(arena, int_to_string(arena, t.p), string_concat(arena, SLOP_STR(":"), int_to_string(arena, t.o)))))));
+howl_decode_DocTriple howl_decode_source_triple_key(slop_arena* arena, howl_termstore_IdTriple t, int64_t d) {
+    return ((howl_decode_DocTriple){.d = d, .s = t.s, .p = t.p, .o = t.o});
 }
 
 slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore_IdTriple candidates, howl_termstore_Encoded doc) {
     {
         __auto_type cands = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_termstore_IdTriple, slop_hash_howl_termstore_IdTriple, slop_eq_howl_termstore_IdTriple, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
-        __auto_type found = ({ static const slop_map_desc _d = SLOP_SET_DESC(slop_string, slop_hash_string, slop_eq_string, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
+        __auto_type found = ({ static const slop_map_desc _d = SLOP_SET_DESC(howl_decode_DocTriple, slop_hash_howl_decode_DocTriple, slop_eq_howl_decode_DocTriple, SLOP_KEY_HASHED); slop_map_new_ptr(arena, 0, &_d); });
         int64_t pos = 0;
         int64_t cur = 0;
         {
@@ -736,7 +739,7 @@ slop_map* howl_decode_asserted_among(slop_arena* arena, slop_list_howl_termstore
                 __auto_type it = _coll.data[_i];
                 cur = howl_termstore_doc_at(doc.starts, pos, cur);
                 if (slop_map_has(cands, &(it))) {
-                    (void)(({ slop_string _key_863 = (howl_decode_source_triple_key(arena, it, cur)); slop_map_put(NULL, found, &_key_863, NULL, 0); }));
+                    (void)(({ howl_decode_DocTriple _key_863 = (howl_decode_source_triple_key(arena, it, cur)); slop_map_put(NULL, found, &_key_863, NULL, 0); }));
                 }
                 pos = (pos + 1);
             }
@@ -787,7 +790,7 @@ slop_result_howl_decode_Stage0_howl_types_Fault howl_decode_stage0_scan(slop_are
                 __auto_type _coll = rb.triples;
                 for (size_t _i = 0; _i < _coll.len; _i++) {
                     __auto_type c = _coll.data[_i];
-                    if (!(({ slop_string _key_865 = (howl_decode_source_triple_key(scratch, c, ({ __auto_type _mv = ({ __auto_type _lst = rb.docs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type d = _mv.value; d; }) : (0); }))); slop_map_has(asserted, &_key_865); }))) {
+                    if (!(({ howl_decode_DocTriple _key_865 = (howl_decode_source_triple_key(scratch, c, ({ __auto_type _mv = ({ __auto_type _lst = rb.docs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; }); _mv.has_value ? ({ __auto_type d = _mv.value; d; }) : (0); }))); slop_map_has(asserted, &_key_865); }))) {
                         (void)(({ __auto_type _lst_p = &(out); __auto_type _item = (c); if (_lst_p->len >= _lst_p->cap) { _lst_p->data = (__typeof__(_lst_p->data))slop_list_grow_raw(_lst_p->arena, _lst_p->data, &_lst_p->cap, _lst_p->len, sizeof(*_lst_p->data)); } _lst_p->data[_lst_p->len++] = _item; (void)0; }));
                         if (multi) {
                             __auto_type _mv_866 = ({ __auto_type _lst = rb.docs; size_t _idx = (size_t)k; slop_option_int _r = {0}; if (_idx < _lst.len) { _r.has_value = true; _r.value = _lst.data[_idx]; } else { _r.has_value = false; } _r; });

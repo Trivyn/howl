@@ -425,7 +425,9 @@
   (fn typed-occurrences ((arena Arena) (doc Encoded) (type-iri String))
     (@intent "Typed roots once per source document, including IRI-named roots shared across documents")
     (@spec ((Arena Encoded String) -> TypedOccurrences))
-    (let ((type-pred (. (. doc dict) rdf-type))
+    ;; docs stays empty for a single document: every root is in document 0.
+    (let ((multi (> (list-len (. doc starts)) 1))
+          (type-pred (. (. doc dict) rdf-type))
           (type-id (vocab-id arena (. doc dict) type-iri))
           (mut seen (set-new arena Int))
           (ids (list-new arena Int)) (docs (list-new arena Int))
@@ -437,7 +439,8 @@
               (when (!= d cur) (set! seen (set-new arena Int)))
               (set! cur d)
               (when (and (== (. it p) type-pred) (== (. it o) type-id) (not (set-has seen (. it s))))
-                (do (set-put seen (. it s)) (list-push ids (. it s)) (list-push docs cur)))
+                (do (set-put seen (. it s)) (list-push ids (. it s))
+                    (when multi (list-push docs cur))))
               (set! pos (+ pos 1)))))
         (record-new TypedOccurrences (ids ids) (docs docs)))))
 
@@ -676,18 +679,18 @@
             (set! k (+ k 1))))
         (record-new Rebuilt (triples out) (docs docs) (fault fault)))))
 
+  (type DocTriple (record (d Int) (s Int) (p Int) (o Int)))
+
   (fn source-triple-key ((arena Arena) (t IdTriple) (d Int))
-    (@intent "Injective source/triple key for suppression within one document")
-    (@spec ((Arena IdTriple Int) -> String))
-    (string-concat arena (int-to-string arena d)
-      (string-concat arena ":" (string-concat arena (int-to-string arena (. t s))
-        (string-concat arena ":" (string-concat arena (int-to-string arena (. t p))
-          (string-concat arena ":" (int-to-string arena (. t o)))))))))
+    (@intent "Source/triple key for suppression within one document")
+    (@spec ((Arena IdTriple Int) -> DocTriple))
+    (@alloc arena)
+    (record-new DocTriple (d d) (s (. t s)) (p (. t p)) (o (. t o))))
 
   (fn asserted-among ((arena Arena) (candidates (List IdTriple)) (doc Encoded))
     (@intent "Candidate triples already asserted, keyed by their source as well as their terms")
-    (@spec ((Arena (List IdTriple) Encoded) -> (Set String)))
-    (let ((cands (set-new arena IdTriple)) (found (set-new arena String))
+    (@spec ((Arena (List IdTriple) Encoded) -> (Set DocTriple)))
+    (let ((cands (set-new arena IdTriple)) (found (set-new arena DocTriple))
           (mut pos 0) (mut cur 0))
       (do
         (for-each (c candidates) (set-put cands c))
