@@ -274,7 +274,7 @@ tested.
 
 ## Toolchain
 
-HOWL is generated with **slop 0.5.1** and **slop-rdf 0.6.0**. The Rust crate's `slop-std-sys` 0.5
+HOWL is generated with **slop 0.5.3** and **slop-rdf 0.6.2**. The Rust crate's `slop-std-sys` 0.5
 and `slop-rdf-sys` 0.6 are generated on slop 0.5.0, which has the same runtime ABI
 (`SLOP_RUNTIME_ABI` 202601).
 

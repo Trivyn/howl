@@ -1,6 +1,6 @@
 [package]
 name = "howl-reasoner"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2021"
 rust-version = "1.63"
 description = "Rust bindings for the HOWL consequence-based description-logic reasoner"
@@ -29,11 +29,11 @@ name = "howl"
 
 [dependencies]
 # The -sys crates generated on slop 0.5.0, runtime ABI 202601 (HOWL's C is
-# generated on 0.5.1, the same ABI). Caret ranges: a later -sys release on
+# generated on 0.5.3, the same ABI). Caret ranges: a later -sys release on
 # another runtime ABI fails to compile against HOWL's runtime header (the
 # generated headers' SLOP_RUNTIME_ABI check) instead of linking skewed.
 slop-std-sys = "0.5.0"
-slop-rdf-sys = "0.6.1"
+slop-rdf-sys = "0.6.2"
 
 [build-dependencies]
 cc = "1"
