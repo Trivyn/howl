@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.2 — 2026-11-10
+
+Generated on slop 0.5.3 with slop-rdf 0.6.2, and the crate needs `slop-rdf-sys` 0.6.2. The
+regenerated C is byte-identical to 0.8.1's: slop-rdf 0.6.2 changes only the Turtle serializer, which
+HOWL does not use, and slop 0.5.2–0.5.3's fixes touch no construct HOWL's source uses. There are no
+API or report changes. The slop-std-sys 0.5 / slop-rdf-sys 0.6 ranges are unchanged, and the runtime
+ABI is still 202601.
+
 ## 0.8.1 — 2026-11-02
 
 Valid `xsd:dateTime` and `xsd:dateTimeStamp` data assertions no longer make probe answers `unknown`
